@@ -12,7 +12,7 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/blog/$slug")({
   head: ({ loaderData }: { loaderData?: { post: BlogPost } }) => {
     const post = loaderData?.post;
-    const url = post ? `https://oi-playful-pal.lovable.app/blog/${post.slug}` : "https://oi-playful-pal.lovable.app/blog";
+    const url = post ? `/blog/${post.slug}` : "/blog";
     return {
       meta: [
         { title: post ? `${post.titulo} — Blog NOX Fiança` : "Artigo — Blog NOX Fiança" },

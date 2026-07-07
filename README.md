@@ -58,16 +58,16 @@ npm run build    # gera .output/ (SSR, adaptador Cloudflare via Nitro/wrangler.j
 npx vite preview # testa o build localmente
 ```
 
-### Deploy
+### Deploy (Vercel)
 
-O build (`npm run build`) já gera o `.output/` no formato do adaptador Cloudflare
-(`wrangler.jsonc`), pronto para `npx wrangler deploy` (ou o pipeline de deploy que a
-Lovable/Cloudflare Pages já tiver configurado para este projeto). Se estiver publicando pelo
-próprio Lovable, o deploy é feito pela interface do Lovable — não é necessário rodar o build
-manualmente nesse caso.
+O `npm run build` gera `.vercel/output/` no formato Build Output API v3 (preset `vercel` do
+Nitro, configurado em `vite.config.ts`) — zero-config: basta importar o repositório na Vercel,
+sem precisar de `vercel.json`. Configure as mesmas variáveis de ambiente da tabela acima em
+Project Settings → Environment Variables — sem elas o app sobe mas falha ao conectar no
+Supabase.
 
-Configure as mesmas variáveis de ambiente da tabela acima no painel de deploy (Cloudflare
-Pages/Workers ou equivalente) — sem isso o app sobe mas falha ao conectar no Supabase.
+`wrangler.jsonc` continua no repositório apenas para quem também publicar via Cloudflare
+Workers/Pages (ex.: publicação direta pelo próprio Lovable) — a Vercel ignora esse arquivo.
 
 ### Rodar a automação em uma VPS separada
 

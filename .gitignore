@@ -41,3 +41,6 @@ automation/chrome-profile-credpago/
 
 # Cache local do Supabase CLI (link do projeto, versões) — específico da máquina, não do projeto
 supabase/.temp/
+
+# Vercel CLI/build output (link do projeto + build gerado por `vite build`/`vercel build`)
+.vercel

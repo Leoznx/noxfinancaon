@@ -6,7 +6,11 @@ import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
 function createSupabaseAdminClient() {
-  const SUPABASE_URL = process.env.SUPABASE_URL;
+  // SUPABASE_URL isn't secret, so it's safe to fall back to the VITE_-prefixed value if only
+  // that one is configured on the host (e.g. a Vercel project that only has the frontend env
+  // vars set). SUPABASE_SERVICE_ROLE_KEY has no such fallback — it must never carry a VITE_
+  // prefix, since that would bundle it into the browser build.
+  const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
