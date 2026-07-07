@@ -1,0 +1,2 @@
+ALTER TABLE public.consultas_credito DROP CONSTRAINT IF EXISTS consultas_credito_status_check;
+ALTER TABLE public.consultas_credito ADD CONSTRAINT consultas_credito_status_check CHECK (status = ANY (ARRAY['aprovado'::text, 'pendente'::text, 'reprovado'::text, 'pendente_documentacao'::text, 'dados_complementares'::text, 'finalizada'::text]));

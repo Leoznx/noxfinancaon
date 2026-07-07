@@ -1,0 +1,1 @@
+ALTER TABLE public.documentos_proposta ADD COLUMN IF NOT EXISTS document_subtype TEXT;

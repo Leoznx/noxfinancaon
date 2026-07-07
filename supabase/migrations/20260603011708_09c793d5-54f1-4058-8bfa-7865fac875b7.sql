@@ -1,0 +1,9 @@
+ALTER TABLE public.imoveis ALTER COLUMN proprietario_id DROP NOT NULL;
+ALTER TABLE public.imoveis ALTER COLUMN endereco DROP NOT NULL;
+ALTER TABLE public.imoveis ALTER COLUMN logradouro DROP NOT NULL;
+ALTER TABLE public.imoveis ALTER COLUMN numero DROP NOT NULL;
+ALTER TABLE public.imoveis ALTER COLUMN complemento DROP NOT NULL;
+ALTER TABLE public.imoveis ALTER COLUMN bairro DROP NOT NULL;
+ALTER TABLE public.imoveis ALTER COLUMN cidade DROP NOT NULL;
+ALTER TABLE public.imoveis ALTER COLUMN estado DROP NOT NULL;
+ALTER TABLE public.imoveis ALTER COLUMN cep DROP NOT NULL;

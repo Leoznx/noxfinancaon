@@ -1,0 +1,2 @@
+ALTER TABLE public.leads_contato DROP CONSTRAINT leads_contato_perfil_check;
+ALTER TABLE public.leads_contato ADD CONSTRAINT leads_contato_perfil_check CHECK (perfil = ANY (ARRAY['corretor'::text, 'imobiliaria'::text, 'proprietario'::text, 'inquilino'::text, 'influenciador'::text, 'candidato'::text, 'parceiro'::text, 'outro'::text]));

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 90" aria-label="NOX FIANÇA">
+  <g transform="translate(8, 14)">
+    <rect x="0" y="0" width="62" height="62" rx="14" fill="#FFD60A"/>
+    <circle cx="33" cy="33" r="17.5" fill="#0A0A0A"/>
+    <circle cx="26" cy="29.5" r="14.5" fill="#FFD60A"/>
+    <circle cx="46.5" cy="18" r="2.1" fill="#0A0A0A"/>
+  </g>
+  <text x="86" y="48" fill="#0A0A0A" font-family="Inter, system-ui, sans-serif" font-size="34" font-weight="500" letter-spacing="3">NOX</text>
+  <text x="88" y="68" fill="#0A0A0A" font-family="Inter, system-ui, sans-serif" font-size="9" font-weight="500" letter-spacing="2.7">FIANÇA</text>
+</svg>
