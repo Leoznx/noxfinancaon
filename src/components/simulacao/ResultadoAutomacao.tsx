@@ -668,8 +668,8 @@ function FormularioAnaliseComplementar({ consulta }: { consulta: ConsultaCredito
   if (jaEnviado) {
     return (
       <div className="rounded-[22px] border border-yellow-300 bg-yellow-50 overflow-hidden shadow-sm">
-        <div className="flex flex-col gap-6 p-6 sm:flex-row sm:items-center sm:justify-between sm:p-8">
-          <div className="max-w-2xl">
+        <div className="flex flex-col sm:flex-row sm:items-stretch sm:justify-between">
+          <div className="max-w-2xl p-6 sm:p-8 flex flex-col justify-center">
             <div className="mb-4 grid h-12 w-12 place-items-center rounded-full bg-green-600 text-white shadow-lg shadow-green-100">
               <Check className="h-6 w-6" strokeWidth={3} />
             </div>
@@ -691,11 +691,11 @@ function FormularioAnaliseComplementar({ consulta }: { consulta: ConsultaCredito
             </div>
           </div>
 
-          <div className="flex justify-center sm:justify-end">
+          <div className="flex items-end justify-center sm:justify-end overflow-hidden px-6 sm:pr-8">
             <img
               src="/assets/nox-obrigado-analise.webp"
               alt="Dados enviados para análise"
-              className="block h-[240px] sm:h-[300px] w-auto object-contain object-bottom"
+              className="block h-[300px] sm:h-[380px] w-auto object-contain object-bottom translate-y-[24px] sm:translate-y-[32px] pointer-events-none select-none"
             />
           </div>
         </div>
