@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import {
   CheckCircle2, Circle, Lock, ShieldCheck, FileText, MapPin, User, Building2, CreditCard,
   QrCode, Receipt as ReceiptIcon, Info, AlertTriangle, ArrowLeft, ArrowRight, Send,
-  Mail, MessageSquare, Sparkles, Clock, Home, FileCheck2,
+  Mail, MessageSquare, Sparkles, Clock, Home, FileCheck2, Flame, Zap, Wind,
 } from "lucide-react";
 import {
   salvarConfiguracaoSeguro,
@@ -118,12 +118,17 @@ function FinalizarPage() {
   useEffect(() => {
     (async () => {
       try {
-        const { data, error } = await supabase
-          .from("consultas_credito")
-          .select(`*, inquilinos(*), imoveis(*), planos(*)`)
-          .eq("id", id)
-          .single();
-        if (error) throw error;
+        // consulta/documentos/histórico não dependem uns dos outros — buscar em paralelo
+        // em vez de em sequência corta o tempo de carregamento da página praticamente ao
+        // tempo da requisição mais lenta, em vez da soma das três.
+        const [consultaRes, docsRes, histRes] = await Promise.all([
+          supabase.from("consultas_credito").select(`*, inquilinos(*), imoveis(*), planos(*)`).eq("id", id).single(),
+          supabase.from("documentos_proposta").select("id, file_name, document_type, document_subtype").eq("consulta_id", id),
+          fnHist({ data: { consultaId: id } }).catch(() => null),
+        ]);
+
+        if (consultaRes.error) throw consultaRes.error;
+        const data = consultaRes.data;
         setConsulta(data);
 
         if ((data as any).insurance_coverages?.length) setCoberturas((data as any).insurance_coverages);
@@ -134,16 +139,8 @@ function FinalizarPage() {
         if ((data as any).terms_accepted) setAceiteTermos(true);
         if ((data as any).substatus === "aguardando_assinatura") setEtapa("enviada");
 
-        const { data: docs } = await supabase
-          .from("documentos_proposta")
-          .select("id, file_name, document_type, document_subtype")
-          .eq("consulta_id", id);
-        setDocumentos(docs ?? []);
-
-        try {
-          const h = await fnHist({ data: { consultaId: id } });
-          setHistorico(h.historico);
-        } catch { /* ignore */ }
+        setDocumentos(docsRes.data ?? []);
+        if (histRes) setHistorico(histRes.historico);
       } catch (e: any) {
         toast.error("Erro ao carregar: " + e.message);
       } finally {
@@ -694,24 +691,26 @@ function ResumoPropostaLoft(p: any) {
                     <p className="text-sm text-slate-600">A cobertura de incêndio já está inclusa e serve de base para calcular as demais.</p>
                     {COBERTURAS.map((c) => {
                       const selected = coberturas.includes(c.id);
-                      const Icon = c.id === "incendio" ? ShieldCheck : c.id === "danos_eletricos" ? Sparkles : c.id === "vendaval" ? WindIcon : c.id === "rc_familiar" ? Home : ReceiptIcon;
+                      const Icon = c.id === "incendio" ? Flame : c.id === "danos_eletricos" ? Zap : c.id === "vendaval" ? Wind : c.id === "rc_familiar" ? Home : ReceiptIcon;
                       return (
-                        <button
+                        <div
                           key={c.id}
-                          type="button"
+                          role="button"
+                          tabIndex={0}
                           onClick={() => toggleCobertura(c.id)}
-                          className="flex min-h-[92px] w-full items-center justify-between rounded-md border border-slate-300 bg-white p-5 text-left transition-colors hover:border-slate-500"
+                          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleCobertura(c.id); } }}
+                          className="flex min-h-[92px] w-full cursor-pointer items-center justify-between rounded-md border border-slate-300 bg-white p-5 text-left transition-colors hover:border-slate-500"
                         >
                           <div className="flex gap-4">
-                            <Icon size={20} className="mt-1 text-neutral-950" />
+                            <Icon size={20} className="mt-1 shrink-0 text-neutral-950" />
                             <div>
                               {c.obrigatoria && <p className="mb-2 text-[10px] font-bold uppercase text-neutral-950">Cobertura obrigatória</p>}
                               <p className="max-w-[330px] text-base font-bold text-neutral-950">{c.nome}</p>
                               <p className="mt-2 text-sm text-slate-600">Ver detalhes</p>
                             </div>
                           </div>
-                          <Switch checked={selected} disabled={c.obrigatoria} onCheckedChange={() => toggleCobertura(c.id)} />
-                        </button>
+                          <Switch checked={selected} disabled={c.obrigatoria} className="pointer-events-none" />
+                        </div>
                       );
                     })}
                   </div>
