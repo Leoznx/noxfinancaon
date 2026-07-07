@@ -1,4 +1,4 @@
-import { createLazyFileRoute, Link } from "@tanstack/react-router";
+import { createLazyFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useState, useEffect } from "react";
@@ -23,6 +23,16 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { VerificacaoDocumento } from "@/components/configuracoes/VerificacaoDocumento";
 
 export const Route = createLazyFileRoute("/configuracoes")({
@@ -262,7 +272,16 @@ function TabPerfil() {
 
   async function handleUploadFoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
+    e.target.value = "";
     if (!file || !profile) return;
+    if (!["image/jpeg", "image/jpg", "image/png", "image/webp"].includes(file.type)) {
+      toast.error("Formato inválido. Envie um JPG, PNG ou WEBP.");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("A imagem deve ter até 2MB.");
+      return;
+    }
     setSalvando(true);
     const fileExt = file.name.split('.').pop();
     const fileName = `${profile.id}-${Date.now()}.${fileExt}`;
@@ -399,15 +418,16 @@ function TabConta() {
   const [erroProfissional, setErroProfissional] = useState<string | null>(null);
   const [creci, setCreci] = useState("");
   const [cnpj, setCnpj] = useState("");
+  const [novoEmail, setNovoEmail] = useState("");
   const [salvando, setSalvando] = useState(false);
 
   useEffect(() => {
     if (!usuario) return;
     let ativo = true;
-    const localKey = `nox_config_conta_${usuario.email}`;
-    const local = JSON.parse(localStorage.getItem(localKey) || "{}");
     setLoadingProfissional(true);
     setErroProfissional(null);
+    setNovoEmail(usuario.email);
+    setCnpj(usuario.profile?.cnpj ?? "");
 
     (async () => {
       try {
@@ -420,18 +440,13 @@ function TabConta() {
           if (error) throw error;
           if (!ativo) return;
           setProfissional(data);
-          setCreci((data as any)?.creci ?? local.creci ?? "");
+          setCreci((data as any)?.creci ?? "");
         } else {
           setProfissional(null);
-          setCreci(local.creci ?? "");
+          setCreci("");
         }
-        setCnpj(local.cnpj ?? "");
       } catch (e: any) {
-        if (ativo) {
-          setErroProfissional("Não foi possível carregar os dados. Tente novamente.");
-          setCreci(local.creci ?? "");
-          setCnpj(local.cnpj ?? "");
-        }
+        if (ativo) setErroProfissional("Não foi possível carregar os dados. Tente novamente.");
       } finally {
         if (ativo) setLoadingProfissional(false);
       }
@@ -446,10 +461,7 @@ function TabConta() {
     }
     setSalvando(true);
     setErroProfissional(null);
-    const localKey = `nox_config_conta_${usuario.email}`;
     try {
-      localStorage.setItem(localKey, JSON.stringify({ creci, cnpj }));
-
       if (usuario.role === "corretor" && usuario.authId && usuario.profileId) {
         const payload = { profile_id: usuario.profileId, creci: creci.trim() || null } as any;
         const query = profissional?.id
@@ -460,10 +472,25 @@ function TabConta() {
         setProfissional(data);
       }
 
-      toast.success("Dados da conta salvos com sucesso.");
+      if (usuario.role === "imobiliaria" && usuario.profileId) {
+        const { error } = await supabase
+          .from("profiles")
+          .update({ cnpj: cnpj.trim() || null } as any)
+          .eq("id", usuario.profileId);
+        if (error) throw error;
+      }
+
+      const emailMudou = usuario.authId && novoEmail.trim() && novoEmail.trim().toLowerCase() !== usuario.email.toLowerCase();
+      if (emailMudou) {
+        const { error } = await supabase.auth.updateUser({ email: novoEmail.trim() });
+        if (error) throw error;
+        toast.success("Dados salvos! Confira sua caixa de entrada (o e-mail atual e o novo) para confirmar a troca de e-mail.");
+      } else {
+        toast.success("Dados da conta salvos com sucesso.");
+      }
     } catch (e: any) {
       setErroProfissional("Não foi possível salvar seus dados agora. Tente novamente.");
-      toast.error("Não foi possível salvar seus dados agora. Tente novamente.");
+      toast.error("Não foi possível salvar: " + (e?.message || "erro desconhecido"));
     } finally {
       setSalvando(false);
     }
@@ -496,7 +523,16 @@ function TabConta() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-1.5">
             <label className="text-xs font-black uppercase tracking-widest text-neutral-500 ml-1">E-mail de Acesso</label>
-            <Input value={usuario.email} disabled className="h-12 rounded-xl bg-neutral-50 text-neutral-500" />
+            {usuario.authId ? (
+              <Input
+                type="email"
+                value={novoEmail}
+                onChange={(e) => setNovoEmail(e.target.value)}
+                className="h-12 rounded-xl"
+              />
+            ) : (
+              <Input value={usuario.email} disabled className="h-12 rounded-xl bg-neutral-50 text-neutral-500" />
+            )}
           </div>
           <div className="space-y-1.5">
             <label className="text-xs font-black uppercase tracking-widest text-neutral-500 ml-1">Tipo de conta</label>
@@ -834,22 +870,112 @@ function TabFinanceiro() {
 }
 
 function TabSeguranca() {
+  const { usuario } = useUsuarioConfiguracoes();
+  const navigate = useNavigate();
+
+  const [senhaAtual, setSenhaAtual] = useState("");
+  const [novaSenha, setNovaSenha] = useState("");
+  const [confirmarSenha, setConfirmarSenha] = useState("");
+  const [trocandoSenha, setTrocandoSenha] = useState(false);
+
+  const [confirmacaoExclusao, setConfirmacaoExclusao] = useState("");
+  const [excluindo, setExcluindo] = useState(false);
+  const [dialogAberto, setDialogAberto] = useState(false);
+
+  async function handleAlterarSenha() {
+    if (!usuario?.email) {
+      toast.error("Sessão expirada. Faça login novamente.");
+      return;
+    }
+    if (novaSenha.length < 8) {
+      toast.error("A nova senha deve ter no mínimo 8 caracteres.");
+      return;
+    }
+    if (novaSenha !== confirmarSenha) {
+      toast.error("A confirmação não bate com a nova senha.");
+      return;
+    }
+    setTrocandoSenha(true);
+    try {
+      const { error: reauthError } = await supabase.auth.signInWithPassword({
+        email: usuario.email,
+        password: senhaAtual,
+      });
+      if (reauthError) throw new Error("Senha atual incorreta.");
+
+      const { error } = await supabase.auth.updateUser({ password: novaSenha });
+      if (error) throw error;
+
+      toast.success("Senha alterada com sucesso!");
+      setSenhaAtual("");
+      setNovaSenha("");
+      setConfirmarSenha("");
+    } catch (e: any) {
+      toast.error(e?.message || "Não foi possível alterar a senha agora.");
+    } finally {
+      setTrocandoSenha(false);
+    }
+  }
+
+  async function handleExcluirConta() {
+    setExcluindo(true);
+    try {
+      const { error } = await supabase.functions.invoke("delete-account");
+      if (error) throw error;
+      toast.success("Conta excluída. Você será desconectado.");
+      await supabase.auth.signOut();
+      try { localStorage.removeItem("nox_user"); } catch {}
+      window.location.href = "/";
+    } catch (e: any) {
+      toast.error("Não foi possível excluir sua conta agora: " + (e?.message || "erro desconhecido"));
+      setExcluindo(false);
+      setDialogAberto(false);
+    }
+  }
+
   return (
     <div className="space-y-8">
       <CardSecao titulo="Segurança da Conta" descricao="Gerencie sua senha e acessos ativos.">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-1.5">
             <label className="text-xs font-black uppercase tracking-widest text-neutral-500 ml-1">Senha Atual</label>
-            <Input type="password" placeholder="••••••••" className="h-12 rounded-xl" />
+            <Input
+              type="password"
+              placeholder="••••••••"
+              className="h-12 rounded-xl"
+              value={senhaAtual}
+              onChange={(e) => setSenhaAtual(e.target.value)}
+            />
           </div>
+          <div />
           <div className="space-y-1.5">
             <label className="text-xs font-black uppercase tracking-widest text-neutral-500 ml-1">Nova Senha</label>
-            <Input type="password" placeholder="Mínimo 8 caracteres" className="h-12 rounded-xl" />
+            <Input
+              type="password"
+              placeholder="Mínimo 8 caracteres"
+              className="h-12 rounded-xl"
+              value={novaSenha}
+              onChange={(e) => setNovaSenha(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-black uppercase tracking-widest text-neutral-500 ml-1">Confirmar Nova Senha</label>
+            <Input
+              type="password"
+              placeholder="Repita a nova senha"
+              className="h-12 rounded-xl"
+              value={confirmarSenha}
+              onChange={(e) => setConfirmarSenha(e.target.value)}
+            />
           </div>
         </div>
         <div className="mt-8 flex justify-end">
-          <Button className="bg-neutral-900 text-white hover:bg-neutral-800 px-8 h-12 rounded-xl font-bold">
-            Alterar senha
+          <Button
+            onClick={handleAlterarSenha}
+            disabled={trocandoSenha || !senhaAtual || !novaSenha}
+            className="bg-neutral-900 text-white hover:bg-neutral-800 px-8 h-12 rounded-xl font-bold"
+          >
+            {trocandoSenha ? "Alterando..." : "Alterar senha"}
           </Button>
         </div>
       </CardSecao>
@@ -858,52 +984,195 @@ function TabSeguranca() {
         <div className="flex flex-col md:flex-row items-center justify-between gap-6 p-6 bg-red-50 border-2 border-red-100 rounded-2xl">
           <div>
             <p className="font-black text-red-900 tracking-tight">Excluir minha conta definitivamente</p>
-            <p className="text-xs text-red-700 font-medium mt-1">Todos os seus dados, contratos e histórico de comissões serão apagados.</p>
+            <p className="text-xs text-red-700 font-medium mt-1">Todos os seus dados, contratos e histórico de comissões serão apagados. Essa ação não pode ser desfeita.</p>
           </div>
-          <Button variant="destructive" className="h-12 px-8 rounded-xl font-bold shadow-lg shadow-red-100">
+          <Button
+            variant="destructive"
+            className="h-12 px-8 rounded-xl font-bold shadow-lg shadow-red-100"
+            onClick={() => setDialogAberto(true)}
+          >
             Encerrar conta
           </Button>
         </div>
       </CardSecao>
+
+      <AlertDialog open={dialogAberto} onOpenChange={(open) => { if (!excluindo) { setDialogAberto(open); if (!open) setConfirmacaoExclusao(""); } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir sua conta definitivamente?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Isso vai apagar seu acesso e todos os seus dados da plataforma NOX FIANÇA de forma
+              irreversível. Para confirmar, digite <strong className="text-neutral-900">EXCLUIR</strong> no campo abaixo.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Input
+            value={confirmacaoExclusao}
+            onChange={(e) => setConfirmacaoExclusao(e.target.value)}
+            placeholder="Digite EXCLUIR"
+            className="h-12 rounded-xl"
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={excluindo}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={confirmacaoExclusao !== "EXCLUIR" || excluindo}
+              onClick={(e) => { e.preventDefault(); handleExcluirConta(); }}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {excluindo ? "Excluindo..." : "Excluir conta"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
 
+const NOTIF_PREFS_PADRAO = {
+  nova_comissao: true,
+  saque_aprovado: true,
+  subiu_nivel: true,
+  consulta_pre_aprovada: true,
+  canal_app: true,
+  canal_email: true,
+  canal_whatsapp: false,
+};
+
+type NotifPrefs = typeof NOTIF_PREFS_PADRAO;
+
 function TabNotificacoes() {
+  const { usuario, loading: loadingUser, erro: erroUser, recarregar } = useUsuarioConfiguracoes();
+  const [prefs, setPrefs] = useState<NotifPrefs>(NOTIF_PREFS_PADRAO);
+  const [loading, setLoading] = useState(true);
+  const [salvando, setSalvando] = useState(false);
+
+  useEffect(() => {
+    if (!usuario?.authId) {
+      setLoading(false);
+      return;
+    }
+    let ativo = true;
+    setLoading(true);
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("notification_preferences" as any)
+          .select("*")
+          .eq("user_id", usuario.authId)
+          .maybeSingle();
+        if (error) throw error;
+        if (!ativo) return;
+        if (data) {
+          const d = data as any;
+          setPrefs({
+            nova_comissao: d.nova_comissao,
+            saque_aprovado: d.saque_aprovado,
+            subiu_nivel: d.subiu_nivel,
+            consulta_pre_aprovada: d.consulta_pre_aprovada,
+            canal_app: d.canal_app,
+            canal_email: d.canal_email,
+            canal_whatsapp: d.canal_whatsapp,
+          });
+        } else {
+          setPrefs(NOTIF_PREFS_PADRAO);
+        }
+      } catch {
+        if (ativo) setPrefs(NOTIF_PREFS_PADRAO);
+      } finally {
+        if (ativo) setLoading(false);
+      }
+    })();
+    return () => { ativo = false; };
+  }, [usuario?.authId]);
+
+  function toggle(campo: keyof NotifPrefs) {
+    setPrefs((p) => ({ ...p, [campo]: !p[campo] }));
+  }
+
+  async function handleSalvar() {
+    if (!usuario?.authId) {
+      toast.error("Faça login com uma conta real para salvar preferências.");
+      return;
+    }
+    setSalvando(true);
+    try {
+      const { error } = await supabase
+        .from("notification_preferences" as any)
+        .upsert({ user_id: usuario.authId, ...prefs } as any, { onConflict: "user_id" });
+      if (error) throw error;
+      toast.success("Preferências salvas com sucesso.");
+    } catch (e: any) {
+      toast.error("Não foi possível salvar agora: " + (e?.message || "erro desconhecido"));
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  if (loadingUser || loading) {
+    return <div className="p-10 text-center"><Loader2 className="animate-spin mx-auto text-neutral-300" /></div>;
+  }
+  if (erroUser) {
+    return (
+      <CardSecao titulo="Preferências de Alerta" descricao="Não foi possível carregar suas preferências.">
+        <p className="text-sm text-red-600 font-medium mb-4">{erroUser}</p>
+        <Button onClick={recarregar}>Tentar novamente</Button>
+      </CardSecao>
+    );
+  }
+
   return (
     <CardSecao titulo="Preferências de Alerta" descricao="Escolha como você quer ser notificado sobre novidades.">
       <div className="space-y-4">
-        <SwitchOpcao titulo="Nova comissão registrada" descricao="Aviso instantâneo quando um contrato vincula uma comissão" />
-        <SwitchOpcao titulo="Saque aprovado / pago" descricao="Confirmação de transferência para sua chave PIX" />
-        <SwitchOpcao titulo="Subiu de nível" descricao="Celebração e novos benefícios desbloqueados" />
-        <SwitchOpcao titulo="Consulta pré-aprovada" descricao="Quando um inquilino passa na análise de crédito" />
-        
+        <SwitchOpcao
+          titulo="Nova comissão registrada"
+          descricao="Aviso instantâneo quando um contrato vincula uma comissão"
+          ativo={prefs.nova_comissao}
+          onToggle={() => toggle("nova_comissao")}
+        />
+        <SwitchOpcao
+          titulo="Saque aprovado / pago"
+          descricao="Confirmação de transferência para sua chave PIX"
+          ativo={prefs.saque_aprovado}
+          onToggle={() => toggle("saque_aprovado")}
+        />
+        <SwitchOpcao
+          titulo="Subiu de nível"
+          descricao="Celebração e novos benefícios desbloqueados"
+          ativo={prefs.subiu_nivel}
+          onToggle={() => toggle("subiu_nivel")}
+        />
+        <SwitchOpcao
+          titulo="Consulta pré-aprovada"
+          descricao="Quando um inquilino passa na análise de crédito"
+          ativo={prefs.consulta_pre_aprovada}
+          onToggle={() => toggle("consulta_pre_aprovada")}
+        />
+
         <div className="pt-8 mt-4 border-t border-neutral-50">
           <h4 className="text-xs font-black uppercase tracking-widest text-neutral-400 mb-6">Canais de Recebimento</h4>
-          <SwitchOpcao titulo="Notificação no App (Sino)" padrao={true} />
-          <SwitchOpcao titulo="E-mail Institucional" padrao={true} />
-          <SwitchOpcao titulo="WhatsApp (Alertas Críticos)" padrao={false} />
+          <SwitchOpcao titulo="Notificação no App (Sino)" ativo={prefs.canal_app} onToggle={() => toggle("canal_app")} />
+          <SwitchOpcao titulo="E-mail Institucional" ativo={prefs.canal_email} onToggle={() => toggle("canal_email")} />
+          <SwitchOpcao titulo="WhatsApp (Alertas Críticos)" ativo={prefs.canal_whatsapp} onToggle={() => toggle("canal_whatsapp")} />
         </div>
       </div>
       <div className="mt-10 flex justify-end">
-        <Button className="bg-neutral-900 text-white hover:bg-neutral-800 px-8 h-12 rounded-xl font-bold">
-          Salvar preferências
+        <Button onClick={handleSalvar} disabled={salvando} className="bg-neutral-900 text-white hover:bg-neutral-800 px-8 h-12 rounded-xl font-bold">
+          {salvando ? "Salvando..." : "Salvar preferências"}
         </Button>
       </div>
     </CardSecao>
   );
 }
 
-function SwitchOpcao({ titulo, descricao, padrao = true }: any) {
-  const [ativo, setAtivo] = useState(padrao);
+function SwitchOpcao({ titulo, descricao, ativo, onToggle }: { titulo: string; descricao?: string; ativo: boolean; onToggle: () => void }) {
   return (
     <div className="flex items-center justify-between py-4 border-b border-neutral-50 last:border-b-0">
       <div>
         <p className="text-sm font-bold text-neutral-900 tracking-tight">{titulo}</p>
         {descricao && <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest mt-1">{descricao}</p>}
       </div>
-      <button 
-        onClick={() => setAtivo(!ativo)}
+      <button
+        type="button"
+        onClick={onToggle}
         className={`w-12 h-6 rounded-full relative transition-all duration-300 ${ativo ? 'bg-yellow-400' : 'bg-neutral-200'}`}
       >
         <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-all duration-300 ${ativo ? 'left-7' : 'left-1'}`} />
@@ -912,9 +1181,94 @@ function SwitchOpcao({ titulo, descricao, padrao = true }: any) {
   );
 }
 
+const ROLE_PARA_COLUNA_APOLICE: Record<string, string> = {
+  corretor: "corretor_profile_id",
+  imobiliaria: "imobiliaria_profile_id",
+  proprietario: "proprietario_profile_id",
+};
+
 function TabComissoesNivel() {
-  const { user } = useAuth();
-  
+  const { usuario, loading: loadingUser } = useUsuarioConfiguracoes();
+  const [carregando, setCarregando] = useState(true);
+  const [erro, setErro] = useState<string | null>(null);
+  const [nivelAtual, setNivelAtual] = useState<any>(null);
+  const [proximoNivel, setProximoNivel] = useState<any>(null);
+  const [contratosAtivos, setContratosAtivos] = useState(0);
+  const [saldo, setSaldo] = useState({ saldo_disponivel: 0, saldo_pendente: 0, total_sacado: 0 });
+
+  const coluna = usuario ? ROLE_PARA_COLUNA_APOLICE[usuario.role] : undefined;
+
+  useEffect(() => {
+    if (!usuario?.profileId || !coluna) {
+      setCarregando(false);
+      return;
+    }
+    let ativo = true;
+    setCarregando(true);
+    setErro(null);
+    (async () => {
+      try {
+        const [niveisRes, apolicesRes, saldoRes] = await Promise.all([
+          supabase.from("niveis_perfil" as any).select("*").eq("tipo_perfil", usuario.role).eq("ativo", true).order("ordem", { ascending: true }),
+          supabase.from("apolices").select("id, status").eq(coluna as any, usuario.profileId),
+          supabase.from("saldos_comissao" as any).select("*").eq("profile_id", usuario.profileId).maybeSingle(),
+        ]);
+        if (niveisRes.error) throw niveisRes.error;
+        if (apolicesRes.error) throw apolicesRes.error;
+        if (saldoRes.error) throw saldoRes.error;
+        if (!ativo) return;
+
+        const count = (apolicesRes.data || []).filter((a: any) => a.status === "ativa").length;
+        setContratosAtivos(count);
+
+        const niveis = (niveisRes.data || []) as any[];
+        if (niveis.length > 0) {
+          const decrescente = [...niveis].reverse();
+          const atual = decrescente.find((n: any) => count >= n.min_contratos) || niveis[0];
+          const idxAtual = niveis.findIndex((n: any) => n.id === atual.id);
+          setNivelAtual(atual);
+          setProximoNivel(niveis[idxAtual + 1] || null);
+        }
+
+        const s = saldoRes.data as any;
+        setSaldo({
+          saldo_disponivel: s?.saldo_disponivel || 0,
+          saldo_pendente: s?.saldo_pendente || 0,
+          total_sacado: s?.total_sacado || 0,
+        });
+      } catch {
+        if (ativo) setErro("Não foi possível carregar seus dados de nível/comissão agora.");
+      } finally {
+        if (ativo) setCarregando(false);
+      }
+    })();
+    return () => { ativo = false; };
+  }, [usuario?.profileId, usuario?.role, coluna]);
+
+  const formatarBRL = (v: number) => (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+  if (loadingUser || carregando) {
+    return <div className="p-10 text-center"><Loader2 className="animate-spin mx-auto text-neutral-300" /></div>;
+  }
+
+  if (!coluna) {
+    return (
+      <CardSecao titulo="Plano e Nível" descricao="Regras de comissionamento por nível.">
+        <p className="text-sm text-neutral-500 font-medium">Este recurso é exclusivo para contas de corretor, imobiliária ou proprietário.</p>
+      </CardSecao>
+    );
+  }
+
+  if (erro) {
+    return (
+      <CardSecao titulo="Plano e Nível" descricao="Não foi possível carregar seus dados agora.">
+        <p className="text-sm text-red-600 font-medium">{erro}</p>
+      </CardSecao>
+    );
+  }
+
+  const faltam = proximoNivel ? Math.max(0, proximoNivel.min_contratos - contratosAtivos) : 0;
+
   return (
     <div className="space-y-6">
       <div className="bg-neutral-900 rounded-3xl p-8 relative overflow-hidden shadow-2xl">
@@ -926,26 +1280,38 @@ function TabComissoesNivel() {
             </div>
             <div>
               <p className="text-[10px] uppercase font-black tracking-[0.3em] text-yellow-400 mb-1">Seu Nível Atual</p>
-              <h2 className="text-4xl font-black text-white tracking-tighter uppercase">PRATA</h2>
-              <p className="text-sm text-neutral-400 font-bold mt-1">15 contratos ativos vinculados</p>
+              <h2 className="text-4xl font-black text-white tracking-tighter uppercase">{nivelAtual?.nome_nivel || "—"}</h2>
+              <p className="text-sm text-neutral-400 font-bold mt-1">
+                {contratosAtivos} contrato{contratosAtivos === 1 ? "" : "s"} ativo{contratosAtivos === 1 ? "" : "s"} vinculado{contratosAtivos === 1 ? "" : "s"}
+              </p>
             </div>
           </div>
           <div className="text-right">
             <p className="text-[10px] uppercase font-black tracking-[0.3em] text-neutral-400 mb-1">Sua Comissão</p>
-            <p className="text-5xl font-black text-white tracking-tighter">7%</p>
+            <p className="text-5xl font-black text-white tracking-tighter">
+              {nivelAtual?.percentual_comissao != null ? `${nivelAtual.percentual_comissao}%` : "—"}
+            </p>
             <p className="text-xs text-yellow-400/80 font-bold uppercase tracking-widest mt-1">Sobre o aluguel</p>
           </div>
         </div>
-        
+
         <div className="mt-10 pt-8 border-t border-white/10 flex items-center justify-between">
           <Link to="/plano-carreira" className="text-xs font-bold text-neutral-400 hover:text-white flex items-center gap-2 transition-colors uppercase tracking-widest">
             Ver plano de carreira completo
             <ChevronRight size={14} />
           </Link>
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-black uppercase text-neutral-500">Faltam 6 contratos para</span>
-            <span className="text-sm font-black text-yellow-400 uppercase tracking-widest">OURO (9%)</span>
-          </div>
+          {proximoNivel ? (
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-black uppercase text-neutral-500">
+                Faltam {faltam} contrato{faltam === 1 ? "" : "s"} para
+              </span>
+              <span className="text-sm font-black text-yellow-400 uppercase tracking-widest">
+                {proximoNivel.nome_nivel} ({proximoNivel.percentual_comissao}%)
+              </span>
+            </div>
+          ) : (
+            <span className="text-sm font-black text-yellow-400 uppercase tracking-widest">Nível máximo atingido</span>
+          )}
         </div>
       </div>
 
@@ -953,18 +1319,18 @@ function TabComissoesNivel() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
           <div className="p-6 bg-neutral-50 rounded-2xl border border-neutral-100">
             <p className="text-[10px] uppercase font-black tracking-widest text-neutral-400 mb-2">Disponível</p>
-            <p className="text-2xl font-black text-green-700">R$ 1.250,00</p>
+            <p className="text-2xl font-black text-green-700">{formatarBRL(saldo.saldo_disponivel)}</p>
           </div>
           <div className="p-6 bg-neutral-50 rounded-2xl border border-neutral-100">
             <p className="text-[10px] uppercase font-black tracking-widest text-neutral-400 mb-2">Pendente</p>
-            <p className="text-2xl font-black text-neutral-900">R$ 420,00</p>
+            <p className="text-2xl font-black text-neutral-900">{formatarBRL(saldo.saldo_pendente)}</p>
           </div>
           <div className="p-6 bg-neutral-50 rounded-2xl border border-neutral-100">
             <p className="text-[10px] uppercase font-black tracking-widest text-neutral-400 mb-2">Total Sacado</p>
-            <p className="text-2xl font-black text-neutral-400">R$ 8.450,00</p>
+            <p className="text-2xl font-black text-neutral-400">{formatarBRL(saldo.total_sacado)}</p>
           </div>
         </div>
-        
+
         <Link to="/minhas-comissoes" className="mt-8 inline-flex items-center gap-3 text-sm font-black text-neutral-900 hover:text-yellow-600 transition-colors group">
           Acessar histórico financeiro completo
           <ChevronRight size={16} className="transition-transform group-hover:translate-x-1" />
