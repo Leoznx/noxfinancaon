@@ -38,3 +38,6 @@ automation/.env
 
 # Automação local CredPago — perfil persistente do Chrome (sessão/login do usuário)
 automation/chrome-profile-credpago/
+
+# Cache local do Supabase CLI (link do projeto, versões) — específico da máquina, não do projeto
+supabase/.temp/

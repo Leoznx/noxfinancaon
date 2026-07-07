@@ -1,6 +1,90 @@
 # NOX FINANÇA
 
-Sistema para corretores e administradores de seguro fiança locatícia. Frontend em React/Vite/TanStack Start + TypeScript, backend em Supabase.
+Sistema para corretores e administradores de seguro fiança locatícia. Frontend em React/Vite/TanStack Start + TypeScript, backend em Supabase. Projeto criado e sincronizado com o [Lovable](https://lovable.dev) — veja `.lovable/project.json`.
+
+## Guia rápido
+
+### Instalar
+
+```bash
+npm install
+```
+
+### Rodar localmente
+
+```bash
+cp .env.example .env   # preencha com os valores do seu projeto Supabase (veja abaixo)
+npm run dev
+```
+
+Abre em `http://localhost:8080`.
+
+### Variáveis de ambiente
+
+O `.env` da raiz alimenta tanto o frontend (bundle do navegador, via `import.meta.env.VITE_*`)
+quanto o código servidor desta mesma app (SSR do TanStack Start, via `process.env.*` sem
+prefixo). Copie `.env.example` para `.env` e preencha:
+
+| Variável | Uso | Onde conseguir |
+|---|---|---|
+| `VITE_SUPABASE_URL` / `SUPABASE_URL` | URL do projeto (frontend / SSR) | Painel Supabase → Project Settings → API |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` / `SUPABASE_PUBLISHABLE_KEY` | Chave pública anon/publishable (frontend / SSR) | Painel Supabase → Project Settings → API |
+| `VITE_SUPABASE_PROJECT_ID` / `SUPABASE_PROJECT_ID` | Ref do projeto | Painel Supabase → Project Settings → General |
+| `SUPABASE_SERVICE_ROLE_KEY` | Secreta — só usada em código server-side desta app (`client.server.ts`) | Painel Supabase → Project Settings → API → `service_role` |
+
+**Nunca** prefixe `SUPABASE_SERVICE_ROLE_KEY` com `VITE_` — isso a exporia no bundle do
+navegador. O `.env` real nunca deve ser commitado (já está no `.gitignore`).
+
+A automação local (`automation/`) tem suas próprias variáveis, em `automation/.env` — veja a
+seção [Automação de simulação de crédito](#automação-de-simulação-de-crédito-credpago) abaixo.
+
+### Conectar o Supabase
+
+Este projeto usa o Supabase gerenciado pelo Lovable Cloud (projeto já provisionado). Para
+apontar para o seu próprio projeto Supabase:
+
+1. Crie/abra um projeto em [supabase.com](https://supabase.com).
+2. Copie URL, `anon`/`publishable key` e `service_role key` de Project Settings → API para o
+   `.env` (veja a tabela acima).
+3. Aplique as migrations existentes: `npx supabase link --project-ref SEU_PROJECT_REF` e depois
+   `npx supabase db push` (veja a lista completa em
+   [Migrations do Supabase aplicadas neste trabalho](#migrations-do-supabase-aplicadas-neste-trabalho)).
+4. Se for usar a automação de crédito, crie também `automation/.env` (veja a seção específica).
+
+### Build de produção
+
+```bash
+npm run build    # gera .output/ (SSR, adaptador Cloudflare via Nitro/wrangler.jsonc)
+npx vite preview # testa o build localmente
+```
+
+### Deploy
+
+O build (`npm run build`) já gera o `.output/` no formato do adaptador Cloudflare
+(`wrangler.jsonc`), pronto para `npx wrangler deploy` (ou o pipeline de deploy que a
+Lovable/Cloudflare Pages já tiver configurado para este projeto). Se estiver publicando pelo
+próprio Lovable, o deploy é feito pela interface do Lovable — não é necessário rodar o build
+manualmente nesse caso.
+
+Configure as mesmas variáveis de ambiente da tabela acima no painel de deploy (Cloudflare
+Pages/Workers ou equivalente) — sem isso o app sobe mas falha ao conectar no Supabase.
+
+### Rodar a automação em uma VPS separada
+
+O worker de automação (`automation/`) é um processo Node **separado** do frontend — não faz
+parte do build/deploy da app principal, porque abre um Chrome real via Playwright (precisa de
+um SO com interface gráfica disponível ao menos na primeira vez, para o login manual). Para
+rodar em uma VPS:
+
+1. Suba só a pasta do projeto (ou `git clone`) na VPS, com Node 18+ instalado.
+2. `npm install && npx playwright install chromium --with-deps` (`--with-deps` instala as
+   bibliotecas de sistema que o Chromium precisa em Linux).
+3. Crie `automation/.env` (veja [Configurar `.env`](#configurar-env) na seção da automação).
+4. Na **primeira** execução, rode com `HEADLESS=false` e um servidor gráfico/VNC disponível
+   (ou localmente, copiando depois a pasta `automation/chrome-profile-credpago/` já logada
+   para a VPS) — o login na CredPago é sempre manual.
+5. Depois de logado, ative `HEADLESS=true` e rode `npm run automation:credpago` sob um
+   supervisor de processo (`pm2`, `systemd`, etc.) para manter o worker no ar.
 
 ## Automação de simulação de crédito (CredPago)
 
