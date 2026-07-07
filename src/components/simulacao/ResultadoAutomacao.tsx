@@ -151,7 +151,7 @@ export function ResultadoAutomacao({
 
             <div className="flex flex-1 items-end justify-center sm:justify-end overflow-hidden order-first sm:order-last sm:pr-6">
               <img
-                src="/assets/nox-aprovado-personagens.png"
+                src="/assets/nox-aprovado-personagens.webp"
                 alt="Personagens comemorando aprovação da simulação"
                 className="block h-[285px] sm:h-[335px] w-auto self-end object-contain object-bottom translate-y-[22px] pointer-events-none select-none"
               />
@@ -237,7 +237,7 @@ export function ResultadoAutomacao({
 
             <div className="flex flex-1 items-end justify-center sm:justify-end overflow-hidden order-first sm:order-last sm:pr-6">
               <img
-                src="/assets/nox-recusado-personagens.png"
+                src="/assets/nox-recusado-personagens.webp"
                 alt="Personagens tristes com simulação recusada"
                 className="block h-[275px] sm:h-[325px] w-auto self-end object-contain object-bottom translate-y-[18px] pointer-events-none select-none"
               />
@@ -326,7 +326,7 @@ export function ResultadoAutomacao({
 
                 <div className="flex flex-1 items-end justify-center sm:justify-end overflow-hidden order-first sm:order-last sm:pr-6">
                   <img
-                    src="/assets/nox-em-analise-personagens.png"
+                    src="/assets/nox-em-analise-personagens.webp"
                     alt="Personagens analisando a simulação"
                     className="block h-[275px] sm:h-[325px] w-auto self-end object-contain object-bottom translate-y-[18px] pointer-events-none select-none"
                   />
@@ -693,7 +693,7 @@ function FormularioAnaliseComplementar({ consulta }: { consulta: ConsultaCredito
 
           <div className="flex justify-center sm:justify-end">
             <img
-              src="/assets/nox-obrigado-analise.png"
+              src="/assets/nox-obrigado-analise.webp"
               alt="Dados enviados para análise"
               className="block h-[240px] sm:h-[300px] w-auto object-contain object-bottom"
             />

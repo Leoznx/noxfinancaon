@@ -1,6 +1,7 @@
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Settings, AlertTriangle, RotateCcw } from "lucide-react";
+import { useEffect } from "react";
 
 interface ModalConsultandoProps {
   open: boolean;
@@ -10,12 +11,29 @@ interface ModalConsultandoProps {
   onFechar?: () => void;
 }
 
+// As imagens de resultado (ResultadoAutomacao) só entram na tela quando o worker termina
+// e o status muda — aquecemos o cache do navegador com elas assim que este modal abre, pra
+// não ter um piscar de carregamento no exato momento em que o resultado aparece.
+const IMAGENS_RESULTADO = [
+  "/assets/nox-aprovado-personagens.webp",
+  "/assets/nox-recusado-personagens.webp",
+  "/assets/nox-em-analise-personagens.webp",
+];
+
 /**
  * Modal bloqueante exibido enquanto o worker local consulta a CredPago.
  * Não fecha com clique fora nem com ESC — o fluxo termina por Realtime/polling
  * (redirecionamento) ou pelo estado de erro.
  */
 export function ModalConsultando({ open, erro, onTentarNovamente, onFechar }: ModalConsultandoProps) {
+  useEffect(() => {
+    if (!open) return;
+    IMAGENS_RESULTADO.forEach((src) => {
+      const img = new Image();
+      img.src = src;
+    });
+  }, [open]);
+
   return (
     <Dialog open={open}>
       <DialogContent

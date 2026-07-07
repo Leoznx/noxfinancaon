@@ -172,9 +172,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         }`}
       >
         <div className="px-6 py-7 lg:px-7 lg:py-8 border-b border-neutral-100 flex items-center justify-between">
-          <div className="flex items-center gap-3" aria-label="NOX Fiança">
+          <Link to="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity" aria-label="Ir para a página inicial">
             <LogoNox variant="claro" size="md" />
-          </div>
+          </Link>
           <button
             className="lg:hidden p-2 text-neutral-500 hover:text-neutral-900"
             onClick={() => setMobileOpen(false)}
