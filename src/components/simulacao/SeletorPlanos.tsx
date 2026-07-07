@@ -552,38 +552,31 @@ export function SeletorPlanos({
               <motion.div
                 layout
                 onClick={() => setPinturaEnabled(v => !v)}
-                className={`relative overflow-hidden min-h-[360px] p-5 rounded-2xl border-2 cursor-pointer transition-all duration-300 flex flex-col ${
+                className={`relative overflow-hidden p-5 rounded-2xl border-2 cursor-pointer transition-all duration-300 flex flex-col md:flex-row md:items-center gap-3 md:gap-4 ${
                   pinturaEnabled
                     ? 'bg-neutral-900 border-neutral-900 shadow-xl shadow-neutral-200'
                     : 'bg-white border-neutral-100 hover:border-yellow-400 hover:shadow-md'
                 }`}
               >
-                <div className="relative flex items-center justify-between mb-3">
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
-                    pinturaEnabled ? 'bg-yellow-400 text-neutral-900' : 'bg-neutral-100 text-neutral-700'
-                  }`}>
-                    <PaintRoller size={16} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                      pinturaEnabled ? 'bg-yellow-400 text-neutral-900' : 'bg-neutral-100 text-neutral-700'
+                    }`}>
+                      <PaintRoller size={16} />
+                    </div>
+                    <span className={`text-[9px] font-black uppercase tracking-[0.18em] px-2 py-0.5 rounded-full ${
+                      pinturaEnabled ? 'bg-yellow-400 text-neutral-900' : 'bg-orange-50 text-orange-600'
+                    }`}>
+                      Opcional
+                    </span>
                   </div>
-                  <span className={`text-[9px] font-black uppercase tracking-[0.18em] px-2 py-0.5 rounded-full ${
-                    pinturaEnabled ? 'bg-yellow-400 text-neutral-900' : 'bg-orange-50 text-orange-600'
-                  }`}>
-                    Opcional
-                  </span>
-                </div>
-                <h3 className={`relative text-base font-black tracking-tight ${pinturaEnabled ? 'text-white' : 'text-neutral-900'}`}>
-                  Pintura interna
-                </h3>
-                <p className={`relative md:max-w-[180px] text-[11px] font-medium mb-3 mt-0.5 ${pinturaEnabled ? 'text-neutral-400' : 'text-neutral-500'}`}>
-                  Reforce a proteção do imóvel com cobertura de pintura interna.
-                </p>
-                {/* Mobile: imagem em fluxo normal, centralizada, sem risco de sobrepor o texto.
-                    Em sm+, vira decoração absoluta no canto inferior direito do card. */}
-                <img
-                  src="/assets/nox-pintura-personagem.webp"
-                  alt="Personagem NOX Fiança pintor, representando a cobertura de pintura interna"
-                  className="pointer-events-none select-none block mx-auto h-36 w-auto object-contain md:absolute md:m-0 md:right-2 md:bottom-2 md:h-44 md:object-bottom"
-                />
-                <div className="relative mt-3 md:max-w-[180px]">
+                  <h3 className={`text-base font-black tracking-tight ${pinturaEnabled ? 'text-white' : 'text-neutral-900'}`}>
+                    Pintura interna
+                  </h3>
+                  <p className={`text-[11px] font-medium mb-3 mt-0.5 ${pinturaEnabled ? 'text-neutral-400' : 'text-neutral-500'}`}>
+                    Reforce a proteção do imóvel com cobertura de pintura interna.
+                  </p>
                   <div className="flex items-baseline gap-1 mb-0.5">
                     <span className={`text-sm font-black ${pinturaEnabled ? 'text-yellow-400' : 'text-orange-500'}`}>+</span>
                     <span className={`text-xl font-black tracking-tight ${pinturaEnabled ? 'text-white' : 'text-neutral-900'}`}>
@@ -617,88 +610,96 @@ export function SeletorPlanos({
                     {pinturaEnabled ? (<><CheckCircle2 size={12} className="text-green-500" /> Adicionado · remover</>) : 'Adicionar'}
                   </div>
                 </div>
+                <div className="flex justify-center md:justify-end shrink-0">
+                  <img
+                    src="/assets/nox-pintura-personagem.webp"
+                    alt="Personagem NOX Fiança pintor, representando a cobertura de pintura interna"
+                    className="pointer-events-none select-none h-40 md:h-56 w-auto"
+                  />
+                </div>
               </motion.div>
 
 
               {/* Taxa de ativação */}
               <motion.div
                 layout
-                className={`relative overflow-hidden min-h-[360px] p-5 rounded-2xl border-2 transition-all duration-300 flex flex-col ${
+                className={`relative overflow-hidden p-5 rounded-2xl border-2 transition-all duration-300 flex flex-col md:flex-row md:items-center gap-3 md:gap-4 ${
                   activationAmount > 0
                     ? 'bg-neutral-900 border-neutral-900 shadow-xl shadow-neutral-200'
                     : 'bg-white border-neutral-100 hover:border-yellow-400 hover:shadow-md'
                 }`}
               >
-                <div className="relative flex items-center justify-between mb-3">
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
-                    activationAmount > 0 ? 'bg-yellow-400 text-neutral-900' : 'bg-neutral-100 text-neutral-700'
-                  }`}>
-                    <Sparkles size={16} />
-                  </div>
-                  <span className={`text-[9px] font-black uppercase tracking-[0.18em] px-2 py-0.5 rounded-full ${
-                    activationAmount > 0 ? 'bg-yellow-400 text-neutral-900' : 'bg-orange-50 text-orange-600'
-                  }`}>
-                    Opcional
-                  </span>
-                </div>
-                <h3 className={`relative text-base font-black tracking-tight ${activationAmount > 0 ? 'text-white' : 'text-neutral-900'}`}>
-                  Taxa de ativação
-                </h3>
-                <p className={`relative md:max-w-[180px] text-[11px] font-medium mb-3 mt-0.5 ${activationAmount > 0 ? 'text-neutral-400' : 'text-neutral-500'}`}>
-                  Defina uma taxa opcional de ativação para o novo contrato.
-                </p>
-
-                <Select
-                  value={String(activationAmount)}
-                  onValueChange={(v) => setActivationAmount(Number(v))}
-                >
-                  <SelectTrigger
-                    className={`relative md:max-w-[180px] h-10 rounded-xl text-xs font-bold ${
-                      activationAmount > 0
-                        ? 'bg-neutral-800 border-neutral-700 text-white hover:bg-neutral-700'
-                        : 'bg-white border-neutral-200 text-neutral-900'
-                    }`}
-                  >
-                    <SelectValue placeholder="Selecione a taxa de ativação" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="0">Sem taxa</SelectItem>
-                    {ACTIVATION_FEE_OPTIONS.map(opt => (
-                      <SelectItem key={opt.value} value={String(opt.value)}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                {/* Mobile: imagem em fluxo normal, centralizada. Em sm+, vira decoração
-                    absoluta no canto inferior direito do card, como no card de Pintura. */}
-                <img
-                  src="/assets/nox-ativacao-personagem.webp"
-                  alt="Personagem NOX Fiança segurando prancheta de taxa de ativação"
-                  className="pointer-events-none select-none block mx-auto mt-3 h-36 w-auto object-contain md:absolute md:m-0 md:right-2 md:bottom-2 md:h-44 md:object-bottom"
-                />
-
-                <div className="relative mt-3 md:max-w-[180px]">
-                  {activationAmount > 0 ? (
-                    <div className="pt-3 border-t border-neutral-800 space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Taxa escolhida</span>
-                        <span className="text-sm font-black text-white">{formatarBRL(activationAmount)}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Comissão do corretor</span>
-                        <span className="text-sm font-black text-yellow-400">{formatarBRL(activationCommission)}</span>
-                      </div>
-                      <p className="text-[10px] font-medium text-neutral-500 pt-1">
-                        Parte da taxa de ativação é convertida em comissão para o corretor/imobiliária.
-                      </p>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                      activationAmount > 0 ? 'bg-yellow-400 text-neutral-900' : 'bg-neutral-100 text-neutral-700'
+                    }`}>
+                      <Sparkles size={16} />
                     </div>
-                  ) : (
-                    <p className="text-[10px] font-medium text-neutral-400 pt-3 border-t border-neutral-100">
-                      Ao contratar este extra, o corretor recebe 50% da taxa de ativação.
-                    </p>
-                  )}
+                    <span className={`text-[9px] font-black uppercase tracking-[0.18em] px-2 py-0.5 rounded-full ${
+                      activationAmount > 0 ? 'bg-yellow-400 text-neutral-900' : 'bg-orange-50 text-orange-600'
+                    }`}>
+                      Opcional
+                    </span>
+                  </div>
+                  <h3 className={`text-base font-black tracking-tight ${activationAmount > 0 ? 'text-white' : 'text-neutral-900'}`}>
+                    Taxa de ativação
+                  </h3>
+                  <p className={`text-[11px] font-medium mb-3 mt-0.5 ${activationAmount > 0 ? 'text-neutral-400' : 'text-neutral-500'}`}>
+                    Defina uma taxa opcional de ativação para o novo contrato.
+                  </p>
+
+                  <Select
+                    value={String(activationAmount)}
+                    onValueChange={(v) => setActivationAmount(Number(v))}
+                  >
+                    <SelectTrigger
+                      className={`h-10 rounded-xl text-xs font-bold ${
+                        activationAmount > 0
+                          ? 'bg-neutral-800 border-neutral-700 text-white hover:bg-neutral-700'
+                          : 'bg-white border-neutral-200 text-neutral-900'
+                      }`}
+                    >
+                      <SelectValue placeholder="Selecione a taxa de ativação" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">Sem taxa</SelectItem>
+                      {ACTIVATION_FEE_OPTIONS.map(opt => (
+                        <SelectItem key={opt.value} value={String(opt.value)}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  <div className="mt-3">
+                    {activationAmount > 0 ? (
+                      <div className="pt-3 border-t border-neutral-800 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Taxa escolhida</span>
+                          <span className="text-sm font-black text-white">{formatarBRL(activationAmount)}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Comissão do corretor</span>
+                          <span className="text-sm font-black text-yellow-400">{formatarBRL(activationCommission)}</span>
+                        </div>
+                        <p className="text-[10px] font-medium text-neutral-500 pt-1">
+                          Parte da taxa de ativação é convertida em comissão para o corretor/imobiliária.
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-[10px] font-medium text-neutral-400 pt-3 border-t border-neutral-100">
+                        Ao contratar este extra, o corretor recebe 50% da taxa de ativação.
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex justify-center md:justify-end shrink-0">
+                  <img
+                    src="/assets/nox-ativacao-personagem.webp"
+                    alt="Personagem NOX Fiança segurando prancheta de taxa de ativação"
+                    className="pointer-events-none select-none h-40 md:h-56 w-auto"
+                  />
                 </div>
               </motion.div>
 
