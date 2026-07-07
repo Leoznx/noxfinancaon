@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Upload, X, Building2, User, FileText, ClipboardCheck, IdCard, Receipt, CheckCircle2 } from "lucide-react";
+import { Upload, X, Building2, User, FileText, ClipboardCheck, IdCard, Receipt, CheckCircle2, AlertTriangle } from "lucide-react";
 
 export const Route = createLazyFileRoute("/consultas/$id/dados-complementares")({
   component: () => (
@@ -31,6 +31,15 @@ const SUBTIPOS = [
   "Terreno",
   "Outro",
 ];
+
+const DOCUMENTOS_BUCKETS = ["approval-documents", "anexos", "documentos-proposta"];
+
+function safeFileName(name: string) {
+  return name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9._-]+/g, "-");
+}
 
 function maskCPF(v: string) {
   return v.replace(/\D/g, "").slice(0, 11)
@@ -80,14 +89,16 @@ function DadosComplementaresPage() {
   // Documentos (4 obrigatórios)
   const [docVistoria, setDocVistoria] = useState<File | null>(null);
   const [docContrato, setDocContrato] = useState<File | null>(null);
+  const [contratoAssinado, setContratoAssinado] = useState<"sim" | "nao" | "">("");
   const [docInquilino, setDocInquilino] = useState<File | null>(null);
   const [docInquilinoSubtype, setDocInquilinoSubtype] = useState<"cnh" | "rg" | "">("");
-  const [docComprovante, setDocComprovante] = useState<File | null>(null);
-  const [docComprovanteSubtype, setDocComprovanteSubtype] = useState<string>("");
+  const [docResidencia, setDocResidencia] = useState<File | null>(null);
+  const [docRenda, setDocRenda] = useState<File | null>(null);
 
   const [errors, setErrors] = useState<Record<string, boolean>>({});
   const err = (k: string) => errors[k] ? "border-red-500 ring-1 ring-red-500" : "";
-  const hasExistingDoc = (type: string) => existingDocs.some((doc) => doc.document_type === type);
+  const hasExistingDoc = (...types: string[]) => existingDocs.some((doc) => types.includes(doc.document_type));
+  const findExistingDoc = (...types: string[]) => existingDocs.find((doc) => types.includes(doc.document_type));
 
   useEffect(() => {
     (async () => {
@@ -121,10 +132,11 @@ function DadosComplementaresPage() {
           .select("id, file_name, document_type, document_subtype")
           .eq("consulta_id", id);
         setExistingDocs(docs ?? []);
-        const docInq = (docs ?? []).find((doc: any) => doc.document_type === "documento_inquilino");
-        const docComp = (docs ?? []).find((doc: any) => doc.document_type === "comprovante_residencia_imovel");
+        const docContratoExistente = (docs ?? []).find((doc: any) => doc.document_type === "contrato_locacao");
+        const docInq = (docs ?? []).find((doc: any) => doc.document_type === "documento_foto" || doc.document_type === "documento_inquilino");
         if (docInq?.document_subtype) setDocInquilinoSubtype(docInq.document_subtype as "cnh" | "rg");
-        if (docComp?.document_subtype) setDocComprovanteSubtype(docComp.document_subtype);
+        if (docContratoExistente?.document_subtype === "assinado_todas_partes") setContratoAssinado("sim");
+        if (docContratoExistente?.document_subtype === "pendente_assinatura") setContratoAssinado("nao");
       } catch (e: any) {
         toast.error("Erro ao carregar consulta: " + e.message);
       } finally {
@@ -181,14 +193,34 @@ function DadosComplementaresPage() {
     if (!paymentType) e.paymentType = true;
     if (!docVistoria && !hasExistingDoc("vistoria_imovel")) e.docVistoria = true;
     if (!docContrato && !hasExistingDoc("contrato_locacao")) e.docContrato = true;
+    if (!contratoAssinado) e.contratoAssinado = true;
     if (!docInquilinoSubtype) e.docInquilinoSubtype = true;
-    if (!docInquilino && !hasExistingDoc("documento_inquilino")) e.docInquilino = true;
-    if (!docComprovante && !hasExistingDoc("comprovante_residencia_imovel")) e.docComprovante = true;
+    if (!docInquilino && !hasExistingDoc("documento_foto", "documento_inquilino")) e.docInquilino = true;
+    if (!docResidencia && !hasExistingDoc("comprovante_residencia", "comprovante_residencia_imovel")) e.docResidencia = true;
+    if (!docRenda && !hasExistingDoc("comprovante_renda")) e.docRenda = true;
 
     setErrors(e);
     if (Object.keys(e).length > 0) {
       const labels: Record<string, string> = {
-        cep: "CEP", subtipo: "Subtipo do imóvel", endereco: "Endereço", bairro: "Bairro", cidade: "Cidade", estado: "Estado", numero: "Número", nome: "Nome", cpf: "CPF", email: "E-mail", telefone: "Telefone", paymentType: "Tipo de pagamento", docVistoria: "Vistoria do imóvel", docContrato: "Contrato de locação", docInquilinoSubtype: "Tipo do documento do inquilino", docInquilino: "Documento do inquilino", docComprovante: "Comprovante de residência do imóvel",
+        cep: "CEP",
+        subtipo: "Subtipo do imóvel",
+        endereco: "Endereço",
+        bairro: "Bairro",
+        cidade: "Cidade",
+        estado: "Estado",
+        numero: "Número",
+        nome: "Nome",
+        cpf: "CPF",
+        email: "E-mail",
+        telefone: "Telefone",
+        paymentType: "Tipo de pagamento",
+        docVistoria: "Vistoria do imóvel",
+        docContrato: "Contrato de locação",
+        contratoAssinado: "Contrato assinado por todas as partes",
+        docInquilinoSubtype: "Tipo do documento com foto",
+        docInquilino: "Documento com foto",
+        docResidencia: "Comprovante de residência",
+        docRenda: "Comprovante de renda",
       };
       const missing = Object.keys(e).map((key) => labels[key] ?? key);
       const msg = `Preencha os campos destacados em vermelho: ${missing.join(", ")}.`;
@@ -215,20 +247,33 @@ function DadosComplementaresPage() {
       }
 
       // 1. Cria/recupera user inquilino
-      const { tenantUserId } = await ensureTenantFn({
-        data: {
-          consultaId: id,
-          email,
-          nome,
-          cpf: cpf.replace(/\D/g, ""),
-          telefone,
-        },
-      });
+      await supabase.auth.refreshSession();
+
+      let tenantUserId = (consulta as any)?.tenant_user_id ?? null;
+      try {
+        const tenantResult = await ensureTenantFn({
+          data: {
+            consultaId: id,
+            email,
+            nome,
+            cpf: cpf.replace(/\D/g, ""),
+            telefone,
+          },
+        });
+        tenantUserId = tenantResult.tenantUserId ?? tenantUserId;
+      } catch (tenantErr) {
+        console.warn("Nao foi possivel vincular o inquilino neste momento.", tenantErr);
+        toast.warning("Dados salvos sem vincular o acesso do inquilino agora.");
+      }
 
 
       // 2. Atualiza consulta
       const billingRole = paymentType === "imobiliaria" ? "imobiliaria" : "inquilino";
       const billingUserId = paymentType === "inquilino" ? tenantUserId : null;
+      const previousDocumentos = ((consulta as any)?.documentos && typeof (consulta as any).documentos === "object")
+        ? (consulta as any).documentos
+        : {};
+      const contratoPendente = contratoAssinado === "nao";
       const { error: updErr } = await supabase
         .from("consultas_credito")
         .update({
@@ -248,6 +293,23 @@ function DadosComplementaresPage() {
           billing_responsible_role: billingRole,
           billing_responsible_user_id: billingUserId,
           dados_complementares_em: new Date().toISOString(),
+          documentos: {
+            ...previousDocumentos,
+            dados_complementares: {
+              ...(previousDocumentos as any).dados_complementares,
+              contrato_locacao_assinado: contratoAssinado === "sim",
+              contrato_locacao_pendencia: contratoPendente
+                ? "Enviar contrato de locação assinado e atualizado após finalizar."
+                : null,
+              documentos_obrigatorios: [
+                "vistoria_imovel",
+                "contrato_locacao",
+                "comprovante_residencia",
+                "comprovante_renda",
+                "documento_foto",
+              ],
+            },
+          },
         } as any)
         .eq("id", id);
       if (updErr) throw updErr;
@@ -259,17 +321,28 @@ function DadosComplementaresPage() {
 
       const docs: Array<{ file: File; type: string; subtype: string | null }> = [
         docVistoria ? { file: docVistoria, type: "vistoria_imovel", subtype: null } : null,
-        docContrato ? { file: docContrato, type: "contrato_locacao", subtype: null } : null,
-        docInquilino ? { file: docInquilino, type: "documento_inquilino", subtype: docInquilinoSubtype } : null,
-        docComprovante ? { file: docComprovante, type: "comprovante_residencia_imovel", subtype: docComprovanteSubtype || null } : null,
+        docContrato ? { file: docContrato, type: "contrato_locacao", subtype: contratoAssinado === "sim" ? "assinado_todas_partes" : "pendente_assinatura" } : null,
+        docResidencia ? { file: docResidencia, type: "comprovante_residencia", subtype: "pode_ser_imovel_antigo" } : null,
+        docRenda ? { file: docRenda, type: "comprovante_renda", subtype: null } : null,
+        docInquilino ? { file: docInquilino, type: "documento_foto", subtype: docInquilinoSubtype } : null,
       ].filter(Boolean) as Array<{ file: File; type: string; subtype: string | null }>;
 
       for (const d of docs) {
-        const path = `${uploaderId}/${id}/${d.type}-${Date.now()}-${d.file.name}`;
-        const { error: upErr } = await supabase.storage
-          .from("documentos-proposta")
-          .upload(path, d.file, { upsert: false, contentType: d.file.type });
-        if (upErr) throw new Error(`Falha ao enviar ${d.file.name}: ${upErr.message}`);
+        const path = `${uploaderId}/${id}/${d.type}-${Date.now()}-${safeFileName(d.file.name)}`;
+        let uploadError: any = null;
+        for (const bucket of DOCUMENTOS_BUCKETS) {
+          const { error } = await supabase.storage
+            .from(bucket)
+            .upload(path, d.file, { cacheControl: "3600", upsert: true, contentType: d.file.type });
+          if (!error) {
+            uploadError = null;
+            break;
+          }
+          uploadError = error;
+          const msg = String(error.message ?? "").toLowerCase();
+          if (!msg.includes("bucket not found")) break;
+        }
+        if (uploadError) throw new Error(`Falha ao enviar ${d.file.name}: ${uploadError.message}`);
         const { error: insErr } = await supabase.from("documentos_proposta").insert({
           consulta_id: id,
           tenant_user_id: tenantUserId,
@@ -374,13 +447,13 @@ function DadosComplementaresPage() {
               <p className="text-sm text-neutral-500 mt-1">Envie os documentos obrigatórios para concluir a proposta.</p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               <UploadCard
                 icon={<ClipboardCheck size={18} />}
                 title="Vistoria do Imóvel"
                 description="Envie a vistoria do imóvel em PDF, JPG, PNG ou WEBP."
                 file={docVistoria}
-                existingFileName={existingDocs.find((doc) => doc.document_type === "vistoria_imovel")?.file_name}
+                existingFileName={findExistingDoc("vistoria_imovel")?.file_name}
                 error={errors.docVistoria}
                 onPick={(files) => { pickFile(files, setDocVistoria); setErrors(p => ({ ...p, docVistoria: false })); }}
                 onClear={() => setDocVistoria(null)}
@@ -391,18 +464,45 @@ function DadosComplementaresPage() {
                 title="Contrato de Locação"
                 description="Envie o contrato de locação assinado ou em andamento, em PDF, JPG, PNG ou WEBP."
                 file={docContrato}
-                existingFileName={existingDocs.find((doc) => doc.document_type === "contrato_locacao")?.file_name}
-                error={errors.docContrato}
+                existingFileName={findExistingDoc("contrato_locacao")?.file_name}
+                error={errors.docContrato || errors.contratoAssinado}
                 onPick={(files) => { pickFile(files, setDocContrato); setErrors(p => ({ ...p, docContrato: false })); }}
                 onClear={() => setDocContrato(null)}
+                extraHeader={
+                  <div data-error={errors.contratoAssinado || undefined} className={`space-y-2 rounded-lg ${errors.contratoAssinado ? "ring-1 ring-red-500 p-2" : ""}`}>
+                    <Label className="text-xs">Já foi assinado por todas as partes? *</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {(["sim", "nao"] as const).map((value) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => { setContratoAssinado(value); setErrors(p => ({ ...p, contratoAssinado: false })); }}
+                          className={`h-9 rounded-lg border text-xs font-bold transition-colors ${
+                            contratoAssinado === value
+                              ? "border-yellow-400 bg-yellow-50 text-neutral-900"
+                              : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300"
+                          }`}
+                        >
+                          {value === "sim" ? "Sim" : "Não"}
+                        </button>
+                      ))}
+                    </div>
+                    {contratoAssinado === "nao" && (
+                      <div className="flex gap-2 rounded-lg border border-yellow-300 bg-yellow-50 p-2 text-[11px] leading-relaxed text-neutral-700">
+                        <AlertTriangle size={14} className="mt-0.5 shrink-0 text-yellow-700" />
+                        <span>Será criada uma pendência para enviar o contrato assinado e atualizado após finalizar.</span>
+                      </div>
+                    )}
+                  </div>
+                }
               />
 
               <UploadCard
                 icon={<IdCard size={18} />}
-                title="Documento do Inquilino"
+                title="Documento com Foto"
                 description="Envie CNH ou RG do inquilino em PDF, JPG, PNG ou WEBP."
                 file={docInquilino}
-                existingFileName={existingDocs.find((doc) => doc.document_type === "documento_inquilino")?.file_name}
+                existingFileName={findExistingDoc("documento_foto", "documento_inquilino")?.file_name}
                 error={errors.docInquilino}
                 onPick={(files) => { pickFile(files, setDocInquilino); setErrors(p => ({ ...p, docInquilino: false })); }}
                 onClear={() => setDocInquilino(null)}
@@ -422,33 +522,24 @@ function DadosComplementaresPage() {
 
               <UploadCard
                 icon={<Receipt size={18} />}
-                title="Comprovante de Residência do Imóvel"
-                description="Envie um comprovante do imóvel, podendo ser conta de condomínio, água, luz ou internet. Pode estar em nome de terceiros."
-                file={docComprovante}
-                existingFileName={existingDocs.find((doc) => doc.document_type === "comprovante_residencia_imovel")?.file_name}
-                error={errors.docComprovante}
-                onPick={(files) => { pickFile(files, setDocComprovante); setErrors(p => ({ ...p, docComprovante: false })); }}
-                onClear={() => setDocComprovante(null)}
-                extraHeader={
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Tipo de comprovante (opcional)</Label>
-                    <Select value={docComprovanteSubtype} onValueChange={setDocComprovanteSubtype}>
-                      <SelectTrigger className="h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="condominio">Condomínio</SelectItem>
-                        <SelectItem value="agua">Água</SelectItem>
-                        <SelectItem value="luz">Luz</SelectItem>
-                        <SelectItem value="internet">Internet</SelectItem>
-                        <SelectItem value="outro">Outro</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                }
-                footer={
-                  <p className="text-[11px] text-neutral-500 leading-relaxed">
-                    O comprovante pode estar em nome de terceiros, desde que corresponda ao imóvel informado.
-                  </p>
-                }
+                title="Comprovante de Residência"
+                description="Envie um comprovante de residência. Pode ser de um imóvel antigo."
+                file={docResidencia}
+                existingFileName={findExistingDoc("comprovante_residencia", "comprovante_residencia_imovel")?.file_name}
+                error={errors.docResidencia}
+                onPick={(files) => { pickFile(files, setDocResidencia); setErrors(p => ({ ...p, docResidencia: false })); }}
+                onClear={() => setDocResidencia(null)}
+              />
+
+              <UploadCard
+                icon={<Receipt size={18} />}
+                title="Comprovante de Renda"
+                description="Envie o comprovante de renda do inquilino em PDF, JPG, PNG ou WEBP."
+                file={docRenda}
+                existingFileName={findExistingDoc("comprovante_renda")?.file_name}
+                error={errors.docRenda}
+                onPick={(files) => { pickFile(files, setDocRenda); setErrors(p => ({ ...p, docRenda: false })); }}
+                onClear={() => setDocRenda(null)}
               />
             </div>
           </section>
@@ -498,7 +589,7 @@ function UploadCard({
   const inputId = `upload-${title.replace(/\s+/g, "-").toLowerCase()}`;
 
   return (
-    <div data-error={error || undefined} className={`bg-white rounded-xl border p-4 flex flex-col gap-3 ${error ? "border-red-500 ring-1 ring-red-500" : "border-neutral-200"}`}>
+    <div data-error={error || undefined} className={`bg-white rounded-xl border p-4 min-h-[280px] flex flex-col gap-3 ${error ? "border-red-500 ring-1 ring-red-500" : "border-neutral-200"}`}>
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2">
           <span className="w-8 h-8 rounded-lg bg-neutral-100 flex items-center justify-center text-neutral-700">{icon}</span>

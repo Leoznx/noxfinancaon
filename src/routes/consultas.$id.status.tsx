@@ -112,16 +112,14 @@ function StatusConsulta() {
         valor_anual: anual,
         status: "pendente_documentacao",
       };
-      if (extras) {
-        Object.assign(updatePayload, extras);
-        updatePayload.proposal_summary = extras;
-      }
-      if (planoCalculado) {
-        updatePayload.proposal_summary = {
-          ...(extras ?? {}),
-          plano_calculado: planoCalculado,
-        };
-      }
+      const previousDocumentos = (consulta as any)?.documentos && typeof (consulta as any).documentos === "object"
+        ? (consulta as any).documentos
+        : {};
+      updatePayload.documentos = {
+        ...previousDocumentos,
+        extras: extras ?? {},
+        plano_calculado: planoCalculado ?? null,
+      };
 
       const { error } = await supabase.from("consultas_credito").update(updatePayload).eq("id", id);
       if (error) throw error;

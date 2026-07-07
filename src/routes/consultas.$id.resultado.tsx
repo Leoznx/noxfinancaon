@@ -95,16 +95,14 @@ function ConsultaResultado() {
         valor_anual: anual,
         status: "pendente_documentacao",
       };
-      if (extras) {
-        Object.assign(updatePayload, extras);
-        updatePayload.proposal_summary = extras;
-      }
-      if (planoCalculado) {
-        updatePayload.proposal_summary = {
-          ...(extras ?? {}),
-          plano_calculado: planoCalculado,
-        };
-      }
+      const previousDocumentos = consulta?.documentos && typeof consulta.documentos === "object"
+        ? consulta.documentos
+        : {};
+      updatePayload.documentos = {
+        ...previousDocumentos,
+        extras: extras ?? {},
+        plano_calculado: planoCalculado ?? null,
+      };
 
       const { error } = await supabase
         .from("consultas_credito")
@@ -192,12 +190,12 @@ function ConsultaResultado() {
             isSubmittingPlano={submitting}
             planoIdInicial={consulta.plano_id ?? null}
             extrasIniciais={{
-              external_painting_enabled: !!consulta.external_painting_enabled,
-              external_painting_total: Number(consulta.external_painting_total) || 0,
-              external_painting_installment: Number(consulta.external_painting_installment) || 0,
-              activation_fee_enabled: !!consulta.activation_fee_enabled,
-              activation_fee_amount: Number(consulta.activation_fee_amount) || 0,
-              activation_fee_commission: Number(consulta.activation_fee_commission) || 0,
+              external_painting_enabled: !!(consulta.external_painting_enabled ?? consulta.documentos?.extras?.external_painting_enabled),
+              external_painting_total: Number(consulta.external_painting_total ?? consulta.documentos?.extras?.external_painting_total) || 0,
+              external_painting_installment: Number(consulta.external_painting_installment ?? consulta.documentos?.extras?.external_painting_installment) || 0,
+              activation_fee_enabled: !!(consulta.activation_fee_enabled ?? consulta.documentos?.extras?.activation_fee_enabled),
+              activation_fee_amount: Number(consulta.activation_fee_amount ?? consulta.documentos?.extras?.activation_fee_amount) || 0,
+              activation_fee_commission: Number(consulta.activation_fee_commission ?? consulta.documentos?.extras?.activation_fee_commission) || 0,
             }}
           />
         </div>

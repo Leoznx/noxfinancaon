@@ -62,6 +62,22 @@ const PAGAMENTOS = [
 ];
 
 const COMISSAO_OPCOES = [0, 5, 8, 10, 12, 15, 18, 20];
+const RESIDENCIAL_OPCOES = ["Casa", "Apartamento"];
+const COMERCIAL_OPCOES = ["Consultório ou Clínica", "Indústria", "Serviço", "Comércio", "Armazém"];
+const COBERTURA_VALORES: Record<string, number> = {
+  incendio: 104.96,
+  danos_eletricos: 11.9,
+  vendaval: 8.7,
+  rc_familiar: 6.4,
+  perda_aluguel: 14.8,
+};
+const ASSISTENCIA_VALORES: Record<string, number> = {
+  none: 0,
+  basic: 9.9,
+  essential: 15.9,
+  complete: 24.9,
+  complete_pet: 34.9,
+};
 
 function fmt(n: number) {
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -77,6 +93,7 @@ function FinalizarPage() {
   const [etapa, setEtapa] = useState<EtapaKey>("resumo");
   const [enviando, setEnviando] = useState(false);
   const [termosOpen, setTermosOpen] = useState(false);
+  const [seguroEtapa, setSeguroEtapa] = useState<"config" | "coberturas" | "pagamento" | "concluido">("config");
 
   // Configuração seguro
   const [coberturas, setCoberturas] = useState<string[]>(["incendio"]);
@@ -87,6 +104,11 @@ function FinalizarPage() {
   const [pagamento, setPagamento] = useState<"credit_card" | "pix" | "boleto" | "">("");
   const [naoMadeira, setNaoMadeira] = useState(false);
   const [aceiteTermos, setAceiteTermos] = useState(false);
+  const [tipoSeguroImovel, setTipoSeguroImovel] = useState<"residencial" | "comercial">("residencial");
+  const [residencialSubtipo, setResidencialSubtipo] = useState("Apartamento");
+  const [comercialSubtipo, setComercialSubtipo] = useState("");
+  const [valorImovelSeguro, setValorImovelSeguro] = useState(250000);
+  const [historicoAberto, setHistoricoAberto] = useState(false);
 
   const fnSalvarConfig = useServerFn(salvarConfiguracaoSeguro);
   const fnSalvarPagamento = useServerFn(salvarFormaPagamento);
@@ -142,13 +164,26 @@ function FinalizarPage() {
   const premioMensal = Number(consulta?.valor_premio_mensal) || 0;
   const premioAnual = Number(consulta?.valor_anual) || premioMensal * 12;
   const cobertura = totalLoc * (Number(plano?.cobertura_multiplicador) || 12);
+  const documentosMeta = consulta?.documentos && typeof consulta.documentos === "object" ? consulta.documentos : {};
+  const extrasSummary = (documentosMeta as any).extras ?? {};
+  const dadosComplementaresSummary = (documentosMeta as any).dados_complementares ?? {};
 
-  const taxaAtivacao = consulta?.activation_fee_enabled ? Number(consulta?.activation_fee_amount) || 0 : 0;
-  const pinturaTotal = consulta?.external_painting_enabled ? Number(consulta?.external_painting_total) || 0 : 0;
+  const taxaAtivacao = (consulta?.activation_fee_enabled ?? extrasSummary?.activation_fee_enabled)
+    ? Number(consulta?.activation_fee_amount ?? extrasSummary?.activation_fee_amount) || 0
+    : 0;
+  const pinturaTotal = (consulta?.external_painting_enabled ?? extrasSummary?.external_painting_enabled)
+    ? Number(consulta?.external_painting_total ?? extrasSummary?.external_painting_total) || 0
+    : 0;
+  const contratoAssinadoPendente = !!dadosComplementaresSummary?.contrato_locacao_pendencia;
   const custoSaida = Number(plano?.custo_saida) || 0;
 
   const valorComissao = useMemo(() => premioAnual * (comissaoPct / 100), [premioAnual, comissaoPct]);
   const totalFinal = useMemo(() => premioAnual + taxaAtivacao + pinturaTotal, [premioAnual, taxaAtivacao, pinturaTotal]);
+  const totalSeguroImobiliario = useMemo(() => {
+    const coberturasTotal = coberturas.reduce((acc, cid) => acc + (COBERTURA_VALORES[cid] ?? 0), 0);
+    return coberturasTotal + (ASSISTENCIA_VALORES[assistencia] ?? 0);
+  }, [coberturas, assistencia]);
+  const parcelaSeguro = useMemo(() => totalSeguroImobiliario / 12, [totalSeguroImobiliario]);
 
   function toggleCobertura(cid: string) {
     const c = COBERTURAS.find((x) => x.id === cid);
@@ -193,9 +228,63 @@ function FinalizarPage() {
     }
   }
 
+  // Mini-wizard do card "Seguro Imobiliário" dentro de ResumoPropostaLoft (config → coberturas → pagamento).
+  async function avancarSeguroParaPagamento() {
+    try {
+      await fnSalvarConfig({
+        data: {
+          consultaId: id,
+          insurance_coverages: coberturas,
+          insurance_assistance: assistencia,
+          insurance_commission_pct: comissaoPct,
+        },
+      });
+      setSeguroEtapa("pagamento");
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  }
+
+  async function concluirConfigSeguro() {
+    if (!pagamento || !naoMadeira || !aceiteTermos) return;
+    try {
+      const label = PAGAMENTOS.find((p) => p.id === pagamento)?.label ?? "";
+      await fnSalvarPagamento({
+        data: {
+          consultaId: id,
+          insurance_payment_method: pagamento as any,
+          insurance_payment_method_label: label,
+          property_not_wood_confirmed: naoMadeira,
+          terms_accepted: aceiteTermos,
+        },
+      });
+      setSeguroEtapa("concluido");
+      toast.success("Configuração do seguro salva.");
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  }
+
   async function handleEnviar() {
     setEnviando(true);
     try {
+      await fnSalvarConfig({
+        data: {
+          consultaId: id,
+          insurance_coverages: coberturas,
+          insurance_assistance: assistencia,
+          insurance_commission_pct: comissaoPct,
+        },
+      });
+      await fnSalvarPagamento({
+        data: {
+          consultaId: id,
+          insurance_payment_method: (pagamento || "credit_card") as any,
+          insurance_payment_method_label: PAGAMENTOS.find((p) => p.id === pagamento)?.label ?? "Cartão de crédito",
+          property_not_wood_confirmed: naoMadeira,
+          terms_accepted: aceiteTermos,
+        },
+      });
       const r = await fnEnviar({ data: { consultaId: id } });
       const h = await fnHist({ data: { consultaId: id } });
       setHistorico(h.historico);
@@ -214,6 +303,90 @@ function FinalizarPage() {
   }
 
   const numeroProposta = `NOX-${String(id).slice(0, 8).toUpperCase()}`;
+
+  const seguroConcluido = !!(pagamento && naoMadeira && aceiteTermos);
+
+  return (
+    <DashboardLayout>
+      <ResumoPropostaLoft
+        id={id}
+        numeroProposta={numeroProposta}
+        consulta={consulta}
+        inquilino={inquilino}
+        imovel={imovel}
+        plano={plano}
+        documentos={documentos}
+        historico={historico}
+        historicoAberto={historicoAberto}
+        setHistoricoAberto={setHistoricoAberto}
+        tipoSeguroImovel={tipoSeguroImovel}
+        setTipoSeguroImovel={setTipoSeguroImovel}
+        residencialSubtipo={residencialSubtipo}
+        setResidencialSubtipo={setResidencialSubtipo}
+        comercialSubtipo={comercialSubtipo}
+        setComercialSubtipo={setComercialSubtipo}
+        valorImovelSeguro={valorImovelSeguro}
+        setValorImovelSeguro={setValorImovelSeguro}
+        coberturas={coberturas}
+        toggleCobertura={toggleCobertura}
+        assistencia={assistencia}
+        setAssistencia={setAssistencia}
+        comissaoPct={comissaoPct}
+        setComissaoPct={setComissaoPct}
+        valorComissao={valorComissao}
+        totalSeguroImobiliario={totalSeguroImobiliario}
+        parcelaSeguro={parcelaSeguro}
+        aluguel={aluguel}
+        condominio={condominio}
+        taxas={taxas}
+        totalLoc={totalLoc}
+        premioMensal={premioMensal}
+        taxaAtivacao={taxaAtivacao}
+        custoSaida={custoSaida}
+        contratoAssinadoPendente={contratoAssinadoPendente}
+        enviando={enviando}
+        seguroEtapa={seguroEtapa}
+        setSeguroEtapa={setSeguroEtapa}
+        pagamento={pagamento}
+        setPagamento={setPagamento}
+        naoMadeira={naoMadeira}
+        setNaoMadeira={setNaoMadeira}
+        aceiteTermos={aceiteTermos}
+        setAceiteTermos={setAceiteTermos}
+        abrirTermos={() => setTermosOpen(true)}
+        seguroConcluido={seguroConcluido}
+        onAvancarConfig={() => setSeguroEtapa("coberturas")}
+        onAvancarPagamento={avancarSeguroParaPagamento}
+        onConcluirSeguro={concluirConfigSeguro}
+        onEditarDados={() => navigate({ to: `/consultas/${id}/dados-complementares` as any })}
+        onCancelar={() => navigate({ to: `/consultas/${id}/resultado` as any })}
+        onEnviar={handleEnviar}
+      />
+
+      <Dialog open={termosOpen} onOpenChange={setTermosOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Termos e Condições do Seguro</DialogTitle>
+            <DialogDescription>NOX Fiança — Contrato de seguro imobiliário (180 Seguros)</DialogDescription>
+          </DialogHeader>
+          <div className="text-sm text-neutral-700 space-y-3 leading-relaxed">
+            <p><strong>1. Objeto.</strong> O presente seguro tem por objeto garantir, dentro dos limites contratados, prejuízos diretos causados aos bens segurados em decorrência de riscos cobertos.</p>
+            <p><strong>2. Coberturas.</strong> As coberturas selecionadas durante a contratação compõem a apólice. Coberturas obrigatórias não podem ser removidas.</p>
+            <p><strong>3. Imóveis aceitos.</strong> A apólice cobre imóveis em alvenaria. Imóveis de madeira ou com estrutura predominantemente madeireira não são aceitos.</p>
+            <p><strong>4. Pagamento.</strong> O pagamento é realizado conforme a forma escolhida (cartão de crédito, Pix ou boleto). Alterações posteriores podem exigir nova cotação.</p>
+            <p><strong>5. Restrições.</strong> Caso seja identificada característica impeditiva para emissão do seguro, a apólice poderá não ser emitida e a proposta poderá ser cancelada.</p>
+            <p><strong>6. Vigência.</strong> A apólice vigora por 12 meses a contar da data de ativação pelo inquilino.</p>
+            <p><strong>7. Sinistros.</strong> Sinistros devem ser comunicados em até 5 dias úteis pelos canais oficiais da NOX.</p>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => { setAceiteTermos(true); setTermosOpen(false); }} className="bg-yellow-400 text-neutral-900 hover:bg-yellow-300">
+              Li e aceito os termos
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </DashboardLayout>
+  );
 
   return (
     <DashboardLayout>
@@ -236,6 +409,7 @@ function FinalizarPage() {
             <EtapaResumo
               consulta={consulta} inquilino={inquilino} imovel={imovel} plano={plano}
               documentos={documentos}
+              contratoAssinadoPendente={contratoAssinadoPendente}
               totalLoc={totalLoc} cobertura={cobertura}
               premioMensal={premioMensal} taxaAtivacao={taxaAtivacao} custoSaida={custoSaida}
               onVoltar={() => navigate({ to: `/consultas/${id}/dados-complementares` as any })}
@@ -263,6 +437,7 @@ function FinalizarPage() {
               numeroProposta={numeroProposta}
               consulta={consulta} inquilino={inquilino} imovel={imovel} plano={plano}
               documentos={documentos} historico={historico}
+              contratoAssinadoPendente={contratoAssinadoPendente}
               coberturas={coberturas} assistencia={assistencia} comissaoPct={comissaoPct}
               pagamento={pagamento}
               totalLoc={totalLoc} premioMensal={premioMensal} premioAnual={premioAnual} totalFinal={totalFinal}
@@ -309,6 +484,502 @@ function FinalizarPage() {
       </Dialog>
     </DashboardLayout>
   );
+}
+
+function ResumoPropostaLoft(p: any) {
+  const {
+    id, numeroProposta, consulta, inquilino, imovel, plano, documentos, historico,
+    historicoAberto, setHistoricoAberto, tipoSeguroImovel, setTipoSeguroImovel,
+    residencialSubtipo, setResidencialSubtipo, comercialSubtipo, setComercialSubtipo,
+    valorImovelSeguro, setValorImovelSeguro, coberturas, toggleCobertura,
+    assistencia, setAssistencia, comissaoPct, setComissaoPct, valorComissao,
+    totalSeguroImobiliario, parcelaSeguro, aluguel, condominio, taxas, totalLoc,
+    premioMensal, taxaAtivacao, custoSaida, contratoAssinadoPendente, enviando,
+    seguroEtapa, setSeguroEtapa, pagamento, setPagamento, naoMadeira, setNaoMadeira,
+    aceiteTermos, setAceiteTermos, abrirTermos, seguroConcluido,
+    onAvancarConfig, onAvancarPagamento, onConcluirSeguro,
+    onEditarDados, onCancelar, onEnviar,
+  } = p;
+  const dataNascimento = consulta?.tenant_data_nascimento
+    ? new Date(`${consulta.tenant_data_nascimento}T00:00:00`).toLocaleDateString("pt-BR")
+    : "—";
+  const planoNome = (plano?.nome ?? "—").replace(/^NOX\s+/i, "");
+  const tipoPagador = consulta?.payment_type === "imobiliaria" ? "Recorrência via Imobiliária" : "Recorrência via Inquilino";
+  const solicitacao = String(id).slice(0, 8).replace(/\D/g, "") || numeroProposta.replace("NOX-", "");
+  const historicoPadrao = `Criada solicitação ${numeroProposta} no produto ${planoNome}. Aluguel ${fmt(aluguel)}, condomínio ${fmt(condominio)}, outras taxas ${fmt(taxas)} e total ${fmt(totalLoc)}.`;
+  const assistLabel = ASSISTENCIAS.find((a) => a.id === assistencia)?.nome ?? "Sem assistência";
+  const coberturaObrigatoria = COBERTURAS.find((c) => c.id === "incendio");
+  const valorSetup = taxaAtivacao;
+  const coberturaTotal = `${Number(plano?.cobertura_multiplicador) || 35}x`;
+  const custoSaidaTexto = `${Number(custoSaida) || 3}x`;
+  const documentosNomes = documentos.map((doc: any) => doc.file_name).filter(Boolean);
+
+  return (
+    <div className="min-h-screen bg-[#eef1f5] pb-28">
+      <div className="mx-auto w-full max-w-[780px] px-4 py-10 space-y-5">
+        <header className="flex items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-md bg-slate-200 text-slate-800">
+            <FileText size={24} />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-neutral-950">Resumo da proposta</h1>
+            <p className="text-sm text-neutral-700">Solicitação {solicitacao}</p>
+          </div>
+        </header>
+
+        <section className="rounded-md border border-slate-300 bg-white p-6">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="mb-4 text-sm font-bold text-neutral-950">Situação da proposta</h2>
+              <span className="inline-flex items-center gap-1 rounded-sm bg-emerald-100 px-2 py-1 text-sm text-neutral-950">
+                <Info size={16} /> Rascunho • Aprovado
+              </span>
+            </div>
+            <Button variant="outline" onClick={onCancelar} className="h-11 rounded-md border-neutral-900 px-6 text-neutral-950">
+              Cancelar proposta
+            </Button>
+          </div>
+        </section>
+
+        <ResumoBox title="Dados do plano" onEdit={onEditarDados}>
+          <ResumoRow label="Plano" value={<strong>{planoNome}</strong>} />
+          <ResumoRow label="Tipo de pagador" value={tipoPagador} />
+          <ResumoRow label="Valor da taxa" value={fmt(premioMensal * 12)} />
+          <ResumoRow label="Valor do setup" value={fmt(valorSetup)} />
+          <ResumoRow label="Custo de saída" value={custoSaidaTexto} />
+          <ResumoRow label="Cobertura total" value={coberturaTotal} />
+        </ResumoBox>
+
+        <ResumoBox title="Dados da locação" onEdit={onEditarDados}>
+          <ResumoRow label="Tipo de imóvel" value={<strong>{consulta?.imovel_subtipo || imovel?.tipo || "Residencial"}</strong>} />
+          <ResumoRow label="Valor do aluguel" value={fmt(aluguel)} />
+          <ResumoRow label="Valor do condomínio" value={fmt(condominio)} />
+          <ResumoRow label="Outras taxas" value={fmt(taxas)} />
+          <div className="mt-3 border-t border-slate-300 pt-3">
+            <ResumoRow label="Total" value={fmt(totalLoc)} />
+          </div>
+        </ResumoBox>
+
+        <ResumoBox title="Endereço do imóvel" onEdit={onEditarDados}>
+          <div className="space-y-5 text-sm text-neutral-950">
+            <div>
+              <p className="font-bold">CEP</p>
+              <p>{consulta?.imovel_cep || imovel?.cep || "—"}</p>
+            </div>
+            <div>
+              <p className="font-bold">Endereço</p>
+              <p>
+                {[consulta?.imovel_endereco, consulta?.imovel_numero, consulta?.imovel_bairro, consulta?.imovel_cidade].filter(Boolean).join(", ")}
+                {consulta?.imovel_estado ? ` - ${consulta.imovel_estado}` : ""}
+              </p>
+            </div>
+            <div>
+              <p className="font-bold">Complemento</p>
+              <p>{consulta?.imovel_complemento || "—"}</p>
+            </div>
+          </div>
+        </ResumoBox>
+
+        <ResumoBox title="Dados do inquilino" onEdit={onEditarDados}>
+          <div className="rounded-sm border border-slate-300">
+            <span className="inline-flex bg-sky-700 px-2 py-1 text-xs font-bold text-white">Pagador</span>
+            <div className="grid gap-4 p-5 text-sm sm:grid-cols-[1.5fr_0.8fr_0.8fr_0.8fr]">
+              <div>
+                <p className="font-bold">Nome</p>
+                <p>{inquilino?.nome ?? consulta?.tenant_name ?? "—"}</p>
+                {contratoAssinadoPendente && <p className="text-neutral-700">(Pendente)</p>}
+              </div>
+              <div>
+                <p className="font-bold">CPF</p>
+                <p>{inquilino?.cpf ?? consulta?.tenant_document ?? "—"}</p>
+              </div>
+              <div>
+                <p className="font-bold">Telefone</p>
+                <p>{consulta?.tenant_telefone || inquilino?.telefone || "—"}</p>
+              </div>
+              <div>
+                <p className="font-bold">Data nascimento</p>
+                <p>{dataNascimento}</p>
+              </div>
+              <div className="sm:col-span-4">
+                <p className="mb-4 font-bold">Documentos</p>
+                <div className="space-y-2">
+                  {documentosNomes.length ? documentosNomes.map((name: string) => <p key={name}>{name}</p>) : <p className="text-neutral-500">Nenhum documento enviado.</p>}
+                </div>
+              </div>
+            </div>
+          </div>
+        </ResumoBox>
+
+        <section className="rounded-md border border-slate-300 bg-white">
+          <button
+            type="button"
+            onClick={() => setHistoricoAberto(!historicoAberto)}
+            className="flex w-full items-center justify-between px-6 py-5 text-left text-lg font-bold text-neutral-950"
+          >
+            Histórico
+            <span className="text-lg">{historicoAberto ? "⌃" : "⌄"}</span>
+          </button>
+          {historicoAberto && (
+            <div className="mx-6 border-t border-slate-300 py-5 text-sm leading-relaxed text-slate-700">
+              {historico.length ? historico.map((h: any) => (
+                <p key={h.id} className="mb-3">
+                  {new Date(h.created_at).toLocaleString("pt-BR")} - {h.descricao}
+                </p>
+              )) : <p>{historicoPadrao}</p>}
+            </div>
+          )}
+        </section>
+
+        <section className="rounded-md border border-slate-300 bg-white p-6">
+          <h2 className="mb-5 text-lg font-bold text-neutral-950">Seguro Imobiliário</h2>
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_235px]">
+            <div className="space-y-6 border-slate-300 pr-0 lg:border-r lg:pr-6">
+              {seguroEtapa === "config" && (
+                <>
+                  <div>
+                    <p className="mb-4 text-sm font-medium">Tipo de imóvel</p>
+                    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                      <TipoImovelCard
+                        title="Residencial"
+                        selected={tipoSeguroImovel === "residencial"}
+                        onClick={() => setTipoSeguroImovel("residencial")}
+                        icon={<Home size={17} />}
+                        selectValue={residencialSubtipo}
+                        onSelect={setResidencialSubtipo}
+                        placeholder="Tipo de residência"
+                        options={RESIDENCIAL_OPCOES}
+                      />
+                      <TipoImovelCard
+                        title="Comercial"
+                        selected={tipoSeguroImovel === "comercial"}
+                        onClick={() => setTipoSeguroImovel("comercial")}
+                        icon={<Building2 size={17} />}
+                        selectValue={comercialSubtipo}
+                        onSelect={setComercialSubtipo}
+                        placeholder="Tipo de comércio"
+                        options={COMERCIAL_OPCOES}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-neutral-950">Valor do imóvel</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm">R$</span>
+                      <input
+                        type="number"
+                        min={50000}
+                        max={1000000}
+                        value={valorImovelSeguro}
+                        onChange={(e) => setValorImovelSeguro(Number(e.target.value) || 0)}
+                        className="h-11 w-full rounded-md border border-slate-400 bg-white pl-10 pr-3 text-sm outline-none focus:border-neutral-900"
+                      />
+                    </div>
+                    <p className="mt-2 text-xs text-neutral-950">O valor do imóvel deve estar entre R$ 50.000,00 e R$ 1.000.000,00</p>
+                  </div>
+
+                  <div className="flex justify-end pt-2">
+                    <Button onClick={onAvancarConfig} className="h-11 rounded-md bg-yellow-400 px-6 font-bold text-neutral-900 hover:bg-yellow-300">
+                      Continuar <ArrowRight size={16} className="ml-2" />
+                    </Button>
+                  </div>
+                </>
+              )}
+
+              {seguroEtapa === "coberturas" && (
+                <>
+                  <div className="space-y-3">
+                    <h3 className="text-lg font-bold">Coberturas</h3>
+                    <p className="text-sm text-slate-600">A cobertura de incêndio já está inclusa e serve de base para calcular as demais.</p>
+                    {COBERTURAS.map((c) => {
+                      const selected = coberturas.includes(c.id);
+                      const Icon = c.id === "incendio" ? ShieldCheck : c.id === "danos_eletricos" ? Sparkles : c.id === "vendaval" ? WindIcon : c.id === "rc_familiar" ? Home : ReceiptIcon;
+                      return (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => toggleCobertura(c.id)}
+                          className="flex min-h-[92px] w-full items-center justify-between rounded-md border border-slate-300 bg-white p-5 text-left transition-colors hover:border-slate-500"
+                        >
+                          <div className="flex gap-4">
+                            <Icon size={20} className="mt-1 text-neutral-950" />
+                            <div>
+                              {c.obrigatoria && <p className="mb-2 text-[10px] font-bold uppercase text-neutral-950">Cobertura obrigatória</p>}
+                              <p className="max-w-[330px] text-base font-bold text-neutral-950">{c.nome}</p>
+                              <p className="mt-2 text-sm text-slate-600">Ver detalhes</p>
+                            </div>
+                          </div>
+                          <Switch checked={selected} disabled={c.obrigatoria} onCheckedChange={() => toggleCobertura(c.id)} />
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="space-y-3">
+                    <h3 className="text-lg font-bold">Assistências</h3>
+                    <p className="text-sm text-slate-600">Escolha qual assistência será adicionada no seguro:</p>
+                    {ASSISTENCIAS.map((a) => {
+                      const selected = assistencia === a.id;
+                      return (
+                        <button
+                          key={a.id}
+                          type="button"
+                          onClick={() => setAssistencia(a.id)}
+                          className={`flex min-h-[92px] w-full items-center justify-between rounded-md border p-5 text-left transition-colors ${
+                            selected ? "border-emerald-500 bg-white" : "border-slate-300 bg-white hover:border-slate-500"
+                          }`}
+                        >
+                          <div>
+                            <p className="text-base font-bold text-neutral-950">{a.nome}</p>
+                            <p className="mt-3 text-sm text-slate-600">Ver detalhes</p>
+                          </div>
+                          <span className={`h-4 w-4 rounded-full border ${selected ? "border-emerald-600 bg-emerald-500" : "border-neutral-900"}`} />
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-bold">Comissão</h3>
+                    <p className="text-sm text-slate-600">Escolha a % de comissão que deseja aplicar neste contrato de seguro.</p>
+                    <div>
+                      <label className="mb-2 block text-sm text-neutral-950">Valor de comissão:</label>
+                      <Select value={String(comissaoPct)} onValueChange={(v) => setComissaoPct(Number(v))}>
+                        <SelectTrigger className="h-11 rounded-md border-slate-400"><SelectValue /></SelectTrigger>
+                        <SelectContent>{COMISSAO_OPCOES.map((o) => <SelectItem key={o} value={String(o)}>{o}%</SelectItem>)}</SelectContent>
+                      </Select>
+                      <p className="mt-2 text-xs text-neutral-950">Esse valor é incluso no custo final ao inquilino.</p>
+                    </div>
+                    <div className="overflow-hidden rounded-md bg-slate-50">
+                      <div className="p-5">
+                        <p className="text-sm">Valor total de comissão a receber:</p>
+                        <p className="mt-2 text-3xl font-bold">{fmt(valorComissao || 0)} <span className="text-sm font-normal text-slate-600">em 12x</span></p>
+                      </div>
+                      {comissaoPct >= 10 && (
+                        <div className="bg-emerald-500 p-5 text-center text-sm font-bold text-white">
+                          Bônus NOX de R$ 20 aplicado ao valor final de comissão!
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between gap-3 pt-2">
+                    <Button variant="outline" onClick={() => setSeguroEtapa("config")} className="h-11 rounded-md border-neutral-900 px-6">
+                      <ArrowLeft size={16} className="mr-2" /> Voltar
+                    </Button>
+                    <Button onClick={onAvancarPagamento} className="h-11 rounded-md bg-yellow-400 px-6 font-bold text-neutral-900 hover:bg-yellow-300">
+                      Continuar <ArrowRight size={16} className="ml-2" />
+                    </Button>
+                  </div>
+                </>
+              )}
+
+              {seguroEtapa === "pagamento" && (
+                <>
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-bold">Forma de pagamento do seguro</h3>
+                    <p className="text-sm text-slate-600">Selecione a forma de pagamento que o cliente deseja utilizar na contratação do seguro:</p>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                      {PAGAMENTOS.map((m) => {
+                        const Icon = m.icon;
+                        const selected = pagamento === m.id;
+                        return (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => setPagamento(m.id)}
+                            className={`flex flex-col items-center gap-2 rounded-md border p-5 text-center transition-colors ${
+                              selected ? "border-emerald-500 bg-white" : "border-slate-300 bg-white hover:border-slate-500"
+                            }`}
+                          >
+                            <Icon size={20} className="text-neutral-950" />
+                            <span className="text-sm font-bold text-neutral-950">{m.label}</span>
+                            <span className={`h-4 w-4 rounded-full border ${selected ? "border-emerald-600 bg-emerald-500" : "border-neutral-900"}`} />
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="flex gap-2 rounded-md border border-sky-200 bg-sky-50 p-4 text-xs text-neutral-700">
+                      <Info size={14} className="mt-0.5 shrink-0 text-sky-600" />
+                      <span>Caso seja necessário alterar a forma de pagamento, uma nova cotação deve ser criada.</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4 rounded-md border border-slate-300 p-5">
+                    <label className="flex cursor-pointer items-start gap-3">
+                      <Checkbox checked={naoMadeira} onCheckedChange={(v) => setNaoMadeira(!!v)} />
+                      <span className="text-sm text-neutral-800">Confirmo que o imóvel a ser segurado <strong>não é de madeira</strong>.</span>
+                    </label>
+                    <label className="flex cursor-pointer items-start gap-3">
+                      <Checkbox checked={aceiteTermos} onCheckedChange={(v) => setAceiteTermos(!!v)} />
+                      <span className="text-sm text-neutral-800">
+                        Li e concordo com os{" "}
+                        <button type="button" onClick={abrirTermos} className="font-bold text-yellow-700 underline">Termos e Condições</button>{" "}
+                        da 180 Seguros.
+                      </span>
+                    </label>
+                  </div>
+
+                  <div className="flex gap-3 rounded-md border border-yellow-300 bg-yellow-50 p-4 text-sm text-neutral-800">
+                    <AlertTriangle size={18} className="mt-0.5 shrink-0 text-yellow-700" />
+                    <p>Caso seja identificado que o imóvel possui alguma dessas características, a apólice do seguro não será emitida, e a proposta será cancelada.</p>
+                  </div>
+
+                  <div className="flex justify-between gap-3 pt-2">
+                    <Button variant="outline" onClick={() => setSeguroEtapa("coberturas")} className="h-11 rounded-md border-neutral-900 px-6">
+                      <ArrowLeft size={16} className="mr-2" /> Voltar
+                    </Button>
+                    <Button
+                      onClick={onConcluirSeguro}
+                      disabled={!(pagamento && naoMadeira && aceiteTermos)}
+                      className={`h-11 rounded-md px-6 font-bold ${
+                        pagamento && naoMadeira && aceiteTermos ? "bg-yellow-400 text-neutral-900 hover:bg-yellow-300" : "bg-neutral-200 text-neutral-400"
+                      }`}
+                    >
+                      Continuar <ArrowRight size={16} className="ml-2" />
+                    </Button>
+                  </div>
+                </>
+              )}
+
+              {seguroEtapa === "concluido" && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="inline-flex items-center gap-2 text-sm font-bold text-emerald-700">
+                      <CheckCircle2 size={16} /> Configuração do seguro concluída
+                    </span>
+                    <button type="button" onClick={() => setSeguroEtapa("config")} className="text-sm font-bold text-emerald-700 underline">
+                      Editar
+                    </button>
+                  </div>
+                  <div className="space-y-2 rounded-md border border-slate-300 p-5 text-sm text-neutral-800">
+                    <p><strong>Tipo de imóvel:</strong> {tipoSeguroImovel === "residencial" ? residencialSubtipo || "Residencial" : comercialSubtipo || "Comercial"}</p>
+                    <p><strong>Valor do imóvel:</strong> {fmt(valorImovelSeguro)}</p>
+                    <p><strong>Coberturas:</strong> {coberturas.length} selecionada{coberturas.length === 1 ? "" : "s"}</p>
+                    <p><strong>Assistência:</strong> {assistLabel}</p>
+                    <p><strong>Forma de pagamento:</strong> {PAGAMENTOS.find((m: any) => m.id === pagamento)?.label ?? "—"}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <SeguroResumoPanel
+              total={totalSeguroImobiliario}
+              parcela={parcelaSeguro}
+              coberturas={coberturas}
+              assistenciaLabel={assistLabel}
+              valorImovel={valorImovelSeguro}
+            />
+          </div>
+        </section>
+      </div>
+
+      <div className="fixed bottom-0 left-0 right-0 z-20 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur">
+        <div className="mx-auto flex w-full max-w-[780px] flex-col gap-1">
+          <Button
+            onClick={onEnviar}
+            disabled={enviando || !seguroConcluido}
+            className="h-11 w-fit rounded-md bg-yellow-400 px-6 font-bold text-neutral-900 hover:bg-yellow-300 disabled:opacity-50"
+          >
+            {enviando ? "Enviando..." : "Enviar proposta"} <ArrowRight size={16} className="ml-2" />
+          </Button>
+          {!seguroConcluido && (
+            <p className="text-xs text-neutral-500">Conclua a configuração do Seguro Imobiliário (coberturas e forma de pagamento) para enviar a proposta.</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ResumoBox({ title, children, onEdit }: { title: string; children: React.ReactNode; onEdit?: () => void }) {
+  return (
+    <section className="rounded-md border border-slate-300 bg-white p-6">
+      <div className="mb-4 flex items-center justify-between border-b border-slate-300 pb-4">
+        <h2 className="text-sm font-bold text-neutral-950">{title}</h2>
+        {onEdit && <button type="button" onClick={onEdit} className="text-sm text-emerald-700 underline">Editar dados</button>}
+      </div>
+      <div className="space-y-4">{children}</div>
+    </section>
+  );
+}
+
+function ResumoRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex items-start justify-between gap-6 text-sm">
+      <span className="text-neutral-950">{label}</span>
+      <span className="text-right text-neutral-950">{value || "—"}</span>
+    </div>
+  );
+}
+
+function TipoImovelCard(p: {
+  title: string;
+  selected: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  selectValue: string;
+  onSelect: (value: string) => void;
+  placeholder: string;
+  options: string[];
+}) {
+  return (
+    <div className={`rounded-md border p-5 ${p.selected ? "border-slate-400" : "border-slate-300"}`}>
+      <button type="button" onClick={p.onClick} className="mb-4 flex w-full items-center justify-between text-left">
+        <span className="flex items-center gap-2 text-sm font-bold text-neutral-950">{p.icon}{p.title}</span>
+        <span className={`h-4 w-4 rounded-full border ${p.selected ? "border-emerald-700 bg-emerald-500" : "border-neutral-900 bg-white"}`} />
+      </button>
+      <Select value={p.selectValue} onValueChange={(v) => { p.onClick(); p.onSelect(v); }}>
+        <SelectTrigger className="h-11 rounded-md border-slate-400">
+          <SelectValue placeholder={p.placeholder} />
+        </SelectTrigger>
+        <SelectContent>
+          {p.options.map((opt) => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+function SeguroResumoPanel({ total, parcela, coberturas, assistenciaLabel, valorImovel }: any) {
+  const coberturaItems = coberturas.map((cid: string) => COBERTURAS.find((c) => c.id === cid)).filter(Boolean);
+  return (
+    <aside className="mt-6 bg-slate-100 p-6 lg:mt-0">
+      <div className="sticky top-6 space-y-6">
+        <p className="text-sm text-neutral-950">Resumo</p>
+        <div className="rounded-md bg-slate-200 p-5">
+          <p className="text-sm text-slate-600">Total de</p>
+          <p className="text-3xl font-bold text-neutral-900">{fmt(total)}</p>
+          <p className="text-sm text-slate-600">em 12x de {fmt(parcela)} no cartão de crédito</p>
+        </div>
+        <div>
+          <p className="mb-4 text-sm text-slate-600">{coberturaItems.length} Cobertura{coberturaItems.length === 1 ? "" : "s"}</p>
+          <div className="space-y-3">
+            {coberturaItems.map((c: any) => (
+              <div key={c.id} className="flex justify-between gap-4 text-sm">
+                <span className="max-w-[120px] text-neutral-950">{c.nome}</span>
+                <span className="text-slate-600">{fmt(COBERTURA_VALORES[c.id] ?? 0)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="border-t border-slate-200 pt-6">
+          <p className="mb-4 text-sm text-slate-600">1 Assistência</p>
+          <p className="text-sm text-neutral-950">{assistenciaLabel}</p>
+        </div>
+        <div className="border-t border-slate-200 pt-6 text-sm text-neutral-950">
+          <Building2 size={18} className="mb-5" />
+          <p>Todas as simulações efetuadas são calculadas com valor base do imóvel de:</p>
+          <p className="mt-2 text-lg font-bold">{fmt(valorImovel)}</p>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+function WindIcon({ size = 20, className = "" }: { size?: number; className?: string }) {
+  return <Sparkles size={size} className={className} />;
 }
 
 /* ---------------- Sub-componentes ---------------- */
@@ -382,9 +1053,24 @@ function Linha({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
+const DOCUMENTO_LABELS: Record<string, string> = {
+  vistoria_imovel: "Vistoria do imóvel",
+  contrato_locacao: "Contrato de locação",
+  comprovante_residencia: "Comprovante de residência",
+  comprovante_residencia_imovel: "Comprovante de residência",
+  comprovante_renda: "Comprovante de renda",
+  documento_foto: "Documento com foto",
+  documento_inquilino: "Documento com foto",
+};
+
+function documentoLabel(type?: string | null) {
+  if (!type) return "Documento";
+  return DOCUMENTO_LABELS[type] ?? type.replace(/_/g, " ");
+}
+
 /* Etapa 1 — Resumo */
 function EtapaResumo(p: any) {
-  const { consulta, inquilino, imovel, plano, documentos, totalLoc, cobertura, premioMensal, taxaAtivacao, custoSaida, onVoltar, onAvancar } = p;
+  const { consulta, inquilino, imovel, plano, documentos, contratoAssinadoPendente, totalLoc, cobertura, premioMensal, taxaAtivacao, custoSaida, onVoltar, onAvancar } = p;
   return (
     <div className="space-y-6">
       <div>
@@ -443,11 +1129,17 @@ function EtapaResumo(p: any) {
             {documentos.map((d: any) => (
               <li key={d.id} className="flex items-center gap-2 text-xs">
                 <CheckCircle2 size={14} className="text-emerald-500 shrink-0" />
-                <span className="font-semibold text-neutral-800">{d.document_type?.replace(/_/g, " ")}</span>
+                <span className="font-semibold text-neutral-800">{documentoLabel(d.document_type)}</span>
                 <span className="text-neutral-400 truncate">— {d.file_name}</span>
               </li>
             ))}
           </ul>
+          {contratoAssinadoPendente && (
+            <div className="mt-3 flex gap-2 rounded-lg border border-yellow-300 bg-yellow-50 p-3 text-xs text-neutral-800">
+              <AlertTriangle size={14} className="mt-0.5 shrink-0 text-yellow-700" />
+              <span><strong>Pendência:</strong> enviar o contrato de locação assinado e atualizado após finalizar.</span>
+            </div>
+          )}
         </Card>
       </div>
 
@@ -550,15 +1242,15 @@ function EtapaPersonalizar(p: any) {
           </Card>
 
           {/* Extras */}
-          {(consulta?.external_painting_enabled || consulta?.activation_fee_enabled) && (
+          {(pinturaTotal > 0 || taxaAtivacao > 0) && (
             <Card icon={<Info size={14} />} title="Extras opcionais">
-              {consulta?.external_painting_enabled && (
+              {pinturaTotal > 0 && (
                 <div className="p-3 rounded-lg bg-neutral-50 border border-neutral-200 mb-2">
                   <p className="text-xs font-black">Pintura externa — {fmt(pinturaTotal)}</p>
                   <p className="text-[11px] text-neutral-500">Cobertura válida para pinturas com mal uso ou danificadas por vontade própria. Pintura com desgaste natural de uso não cobre.</p>
                 </div>
               )}
-              {consulta?.activation_fee_enabled && (
+              {taxaAtivacao > 0 && (
                 <div className="p-3 rounded-lg bg-neutral-50 border border-neutral-200">
                   <p className="text-xs font-black">Taxa de ativação — {fmt(taxaAtivacao)}</p>
                 </div>
@@ -675,7 +1367,7 @@ function EtapaPagamento(p: any) {
 /* Etapa 4 — Revisão */
 function EtapaRevisao(p: any) {
   const {
-    numeroProposta, consulta, inquilino, imovel, plano, documentos, historico,
+    numeroProposta, consulta, inquilino, imovel, plano, documentos, historico, contratoAssinadoPendente,
     coberturas, assistencia, comissaoPct, pagamento, totalLoc, premioMensal,
     premioAnual, totalFinal, taxaAtivacao, pinturaTotal, enviando,
     onVoltar, onEnviar,
@@ -727,10 +1419,16 @@ function EtapaRevisao(p: any) {
             {documentos.map((d: any) => (
               <li key={d.id} className="text-xs flex items-center gap-2">
                 <CheckCircle2 size={14} className="text-emerald-500" />
-                <span className="font-semibold">{d.document_type?.replace(/_/g, " ")}</span>
+                <span className="font-semibold">{documentoLabel(d.document_type)}</span>
               </li>
             ))}
           </ul>
+          {contratoAssinadoPendente && (
+            <div className="mt-3 flex gap-2 rounded-lg border border-yellow-300 bg-yellow-50 p-3 text-xs text-neutral-800">
+              <AlertTriangle size={14} className="mt-0.5 shrink-0 text-yellow-700" />
+              <span><strong>Pendência:</strong> enviar o contrato de locação assinado e atualizado após finalizar.</span>
+            </div>
+          )}
         </Card>
 
         <Card icon={<ShieldCheck size={14} />} title="Seguro imobiliário">

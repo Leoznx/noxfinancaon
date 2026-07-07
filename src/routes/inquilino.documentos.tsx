@@ -22,6 +22,8 @@ const TIPO_META: Record<string, { label: string; icon: any; tint: string }> = {
   garantia: { label: "Garantia", icon: FileBadge,      tint: "bg-amber-50 text-amber-700" },
 };
 
+const STORAGE_BUCKETS = ["approval-documents", "anexos", "documentos-proposta"];
+
 function DocumentosInquilino() {
   const { user } = useAuth();
   const [docs, setDocs] = useState<any[]>([]);
@@ -47,24 +49,36 @@ function DocumentosInquilino() {
     })();
   }, [user?.email]);
 
-  function abrir(url: string) {
-    if (!url) return;
-    if (/^https?:\/\//.test(url)) {
-      window.open(url, "_blank", "noopener,noreferrer");
-    }
+  function bucketCandidates(bucketHint?: string | null) {
+    const hint = bucketHint && STORAGE_BUCKETS.includes(bucketHint) ? bucketHint : null;
+    return hint ? [hint, ...STORAGE_BUCKETS.filter((bucket) => bucket !== hint)] : STORAGE_BUCKETS;
   }
+
+  async function signedUrl(d: any) {
+    if (!d?.file_url) return null;
+    if (/^https?:\/\//.test(d.file_url)) return d.file_url;
+    for (const bucket of bucketCandidates(d.document_subtype)) {
+      const { data } = await supabase.storage.from(bucket).createSignedUrl(d.file_url, 300);
+      if (data?.signedUrl) return data.signedUrl;
+    }
+    return null;
+  }
+
+  async function abrir(d: any) {
+    const url = await signedUrl(d);
+    if (url) window.open(url, "_blank", "noopener,noreferrer");
+  }
+
   async function baixar(d: any) {
     if (!d?.file_url) return;
-    if (/^https?:\/\//.test(d.file_url)) {
+    const url = await signedUrl(d);
+    if (url) {
       const a = document.createElement("a");
-      a.href = d.file_url; a.download = d.file_name || "documento.pdf";
-      a.target = "_blank"; a.rel = "noopener noreferrer"; a.click();
-      return;
-    }
-    // path no storage
-    const { data } = await supabase.storage.from("documentos-proposta").createSignedUrl(d.file_url, 300);
-    if (data?.signedUrl) {
-      const a = document.createElement("a"); a.href = data.signedUrl; a.download = d.file_name; a.click();
+      a.href = url;
+      a.download = d.file_name || "documento.pdf";
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.click();
     }
   }
 
@@ -110,7 +124,7 @@ function DocumentosInquilino() {
                     </div>
                   </div>
                   <div className="flex gap-2 mt-4">
-                    <Button size="sm" variant="outline" className="flex-1" onClick={() => abrir(d.file_url)}>
+                    <Button size="sm" variant="outline" className="flex-1" onClick={() => abrir(d)}>
                       <Eye size={14} className="mr-1.5" /> Visualizar
                     </Button>
                     <Button size="sm" className="flex-1 bg-neutral-900 hover:bg-neutral-800 text-white" onClick={() => baixar(d)}>

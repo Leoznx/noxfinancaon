@@ -65,11 +65,14 @@ function SimularResultado() {
         userEmail: user.email,
         userRole: user.role,
       });
-      const updatePayload: any = { plano_id: planoId, origem: "simulacao_publica" };
-      if (extras) {
-        Object.assign(updatePayload, extras);
-        updatePayload.proposal_summary = extras;
-      }
+      const updatePayload: any = {
+        plano_id: planoId,
+        origem: "simulacao_publica",
+        status: "pendente_documentacao",
+        documentos: {
+          extras: extras ?? {},
+        },
+      };
       const { error } = await supabase
         .from("consultas_credito")
         .update(updatePayload)
@@ -77,8 +80,8 @@ function SimularResultado() {
       if (error) throw error;
 
       localStorage.removeItem("nox_simulacao_pendente");
-      toast.success("Simulação finalizada com sucesso!");
-      navigate({ to: `/consultas/${consultaId}/resultado` as any });
+      toast.success("Plano selecionado! Vamos completar os dados da proposta.");
+      navigate({ to: `/consultas/${consultaId}/dados-complementares` as any });
     } catch (error: any) {
       toast.error("Erro ao salvar simulação: " + error.message);
     } finally {
