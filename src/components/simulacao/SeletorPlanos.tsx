@@ -581,7 +581,7 @@ export function SeletorPlanos({
                 <img
                   src="/assets/nox-pintura-personagem.webp"
                   alt="Personagem NOX Fiança pintor, representando a cobertura de pintura interna"
-                  className="pointer-events-none select-none block mx-auto h-36 w-auto object-contain md:absolute md:m-0 md:right-2 md:bottom-2 md:h-64 md:object-bottom"
+                  className="pointer-events-none select-none block mx-auto h-36 w-auto object-contain md:absolute md:m-0 md:right-2 md:bottom-2 md:h-44 md:object-bottom"
                 />
                 <div className="relative mt-3 md:max-w-[180px]">
                   <div className="flex items-baseline gap-1 mb-0.5">
@@ -676,7 +676,7 @@ export function SeletorPlanos({
                 <img
                   src="/assets/nox-ativacao-personagem.webp"
                   alt="Personagem NOX Fiança segurando prancheta de taxa de ativação"
-                  className="pointer-events-none select-none block mx-auto mt-3 h-36 w-auto object-contain md:absolute md:m-0 md:right-2 md:bottom-2 md:h-64 md:object-bottom"
+                  className="pointer-events-none select-none block mx-auto mt-3 h-36 w-auto object-contain md:absolute md:m-0 md:right-2 md:bottom-2 md:h-44 md:object-bottom"
                 />
 
                 <div className="relative mt-3 md:max-w-[180px]">
