@@ -552,13 +552,13 @@ export function SeletorPlanos({
               <motion.div
                 layout
                 onClick={() => setPinturaEnabled(v => !v)}
-                className={`relative p-5 rounded-2xl border-2 cursor-pointer transition-all duration-300 flex flex-col ${
+                className={`relative overflow-hidden min-h-[460px] p-5 rounded-2xl border-2 cursor-pointer transition-all duration-300 flex flex-col ${
                   pinturaEnabled
                     ? 'bg-neutral-900 border-neutral-900 shadow-xl shadow-neutral-200'
                     : 'bg-white border-neutral-100 hover:border-yellow-400 hover:shadow-md'
                 }`}
               >
-                <div className="flex items-center justify-between mb-3">
+                <div className="relative flex items-center justify-between mb-3">
                   <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
                     pinturaEnabled ? 'bg-yellow-400 text-neutral-900' : 'bg-neutral-100 text-neutral-700'
                   }`}>
@@ -570,13 +570,20 @@ export function SeletorPlanos({
                     Opcional
                   </span>
                 </div>
-                <h3 className={`text-base font-black tracking-tight ${pinturaEnabled ? 'text-white' : 'text-neutral-900'}`}>
+                <h3 className={`relative text-base font-black tracking-tight ${pinturaEnabled ? 'text-white' : 'text-neutral-900'}`}>
                   Pintura interna
                 </h3>
-                <p className={`text-[11px] font-medium mb-3 mt-0.5 ${pinturaEnabled ? 'text-neutral-400' : 'text-neutral-500'}`}>
+                <p className={`relative sm:max-w-[60%] text-[11px] font-medium mb-3 mt-0.5 ${pinturaEnabled ? 'text-neutral-400' : 'text-neutral-500'}`}>
                   Reforce a proteção do imóvel com cobertura de pintura interna.
                 </p>
-                <div className="mt-auto">
+                {/* Mobile: imagem em fluxo normal, centralizada, sem risco de sobrepor o texto.
+                    Em sm+, vira decoração absoluta no canto inferior direito do card. */}
+                <img
+                  src="/assets/nox-pintura-personagem.webp"
+                  alt="Personagem NOX Fiança pintor, representando a cobertura de pintura interna"
+                  className="pointer-events-none select-none block mx-auto h-36 w-auto object-contain sm:absolute sm:m-0 sm:right-2 sm:bottom-2 sm:h-64 sm:object-bottom"
+                />
+                <div className="relative mt-auto sm:max-w-[60%]">
                   <div className="flex items-baseline gap-1 mb-0.5">
                     <span className={`text-sm font-black ${pinturaEnabled ? 'text-yellow-400' : 'text-orange-500'}`}>+</span>
                     <span className={`text-xl font-black tracking-tight ${pinturaEnabled ? 'text-white' : 'text-neutral-900'}`}>
@@ -616,7 +623,7 @@ export function SeletorPlanos({
               {/* Taxa de ativação */}
               <motion.div
                 layout
-                className={`relative p-5 rounded-2xl border-2 transition-all duration-300 flex flex-col ${
+                className={`relative min-h-[460px] p-5 rounded-2xl border-2 transition-all duration-300 flex flex-col ${
                   activationAmount > 0
                     ? 'bg-neutral-900 border-neutral-900 shadow-xl shadow-neutral-200'
                     : 'bg-white border-neutral-100 hover:border-yellow-400 hover:shadow-md'
@@ -664,25 +671,27 @@ export function SeletorPlanos({
                   </SelectContent>
                 </Select>
 
-                {activationAmount > 0 ? (
-                  <div className="mt-3 pt-3 border-t border-neutral-800 space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Taxa escolhida</span>
-                      <span className="text-sm font-black text-white">{formatarBRL(activationAmount)}</span>
+                <div className="mt-auto">
+                  {activationAmount > 0 ? (
+                    <div className="pt-3 border-t border-neutral-800 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Taxa escolhida</span>
+                        <span className="text-sm font-black text-white">{formatarBRL(activationAmount)}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Comissão do corretor</span>
+                        <span className="text-sm font-black text-yellow-400">{formatarBRL(activationCommission)}</span>
+                      </div>
+                      <p className="text-[10px] font-medium text-neutral-500 pt-1">
+                        Parte da taxa de ativação é convertida em comissão para o corretor/imobiliária.
+                      </p>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Comissão do corretor</span>
-                      <span className="text-sm font-black text-yellow-400">{formatarBRL(activationCommission)}</span>
-                    </div>
-                    <p className="text-[10px] font-medium text-neutral-500 pt-1">
-                      Parte da taxa de ativação é convertida em comissão para o corretor/imobiliária.
+                  ) : (
+                    <p className="text-[10px] font-medium text-neutral-400 pt-3 border-t border-neutral-100">
+                      Ao contratar este extra, o corretor recebe 50% da taxa de ativação.
                     </p>
-                  </div>
-                ) : (
-                  <p className="text-[10px] font-medium text-neutral-400 mt-3 pt-3 border-t border-neutral-100">
-                    Ao contratar este extra, o corretor recebe 50% da taxa de ativação.
-                  </p>
-                )}
+                  )}
+                </div>
               </motion.div>
 
             </div>
