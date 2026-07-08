@@ -85,21 +85,28 @@ export function ResultadoAutomacao({
   extrasIniciais,
 }: ResultadoAutomacaoProps) {
   const navigate = useNavigate();
-  const status = consulta.status as StatusConsulta;
+  // `resultado` guarda o veredito da consulta de crédito de forma permanente — a
+  // automação só grava aprovado/recusado/em_analise/erro ali e nunca mais mexe depois.
+  // Já `consulta.status` é o ponteiro de etapa da proposta inteira (pendente_documentacao,
+  // aguardando_ativacao, ativado, etc.) e avança conforme o corretor progride a proposta.
+  // Preferir `resultado` aqui evita que essa tela fique presa em "Consultando..." para
+  // sempre assim que a proposta avança para as próximas etapas.
+  const resultadoConhecido = STATUS_FINAIS.includes(String(consulta.resultado ?? "").toLowerCase() as StatusConsulta);
+  const status = (resultadoConhecido ? (consulta.resultado as StatusConsulta) : consulta.status) as StatusConsulta;
   const emAndamento = !STATUS_FINAIS.includes(status);
   const ui = STATUS_UI[status];
   const statusNormalizado = String(status ?? "").toLowerCase();
   const isRecusado = statusNormalizado.includes("recusado") || statusNormalizado.includes("reprovado");
+  const isDocumentacaoPendente = statusNormalizado.includes("pendente_documentacao");
   const isEmAnalise =
     statusNormalizado.includes("em_analise") ||
     statusNormalizado.includes("em análise") ||
     statusNormalizado.includes("em analise") ||
     statusNormalizado.includes("análise") ||
     statusNormalizado.includes("analise") ||
-    statusNormalizado.includes("pendente_documentacao") ||
     (statusNormalizado === "pendente" && !!consulta.automation_finished_at);
 
-  if (status === "aprovado") {
+  if (status === "aprovado" || isDocumentacaoPendente) {
     return (
       <div className="space-y-6">
         <button
@@ -326,9 +333,9 @@ export function ResultadoAutomacao({
 
                 <div className="flex flex-1 items-end justify-center sm:justify-end overflow-hidden order-first sm:order-last sm:pr-6">
                   <img
-                    src="/assets/nox-em-analise-personagens.webp"
+                    src="/assets/nox-em-analise-personagens-novo.png"
                     alt="Personagens analisando a simulação"
-                    className="block h-[275px] sm:h-[325px] w-auto self-end object-contain object-bottom translate-y-[18px] pointer-events-none select-none"
+                    className="block h-[280px] w-auto max-w-full self-end object-contain object-bottom translate-y-[18px] pointer-events-none select-none sm:h-[335px]"
                   />
                 </div>
               </div>
