@@ -18,6 +18,9 @@ export type PerfilLandingProProps = {
     imagemAlt: string;
     ctas: Cta[];
     chips?: string[];
+    /** Ilustração de personagem (fundo branco/transparente) — substitui a foto em card à direita. */
+    personagemImagem?: string;
+    personagemAlt?: string;
   };
   comoFunciona: { titulo: string; passos: IconBlock[] };
   beneficios: { titulo: string; items: IconBlock[] };
@@ -103,8 +106,21 @@ export function PerfilLandingPro(props: PerfilLandingProProps) {
               )}
             </div>
             <div className="order-1 lg:order-2 relative animate-in fade-in slide-in-from-right duration-1000">
-              <div className="absolute -inset-4 bg-yellow-400/10 rounded-[2rem] blur-3xl -z-10" />
-              <img src={hero.imagem} alt={hero.imagemAlt} loading="eager" decoding="async" fetchPriority="high" width={1200} height={900} className="w-full h-auto rounded-3xl shadow-2xl border-4 border-white object-cover aspect-[4/3]" />
+              {hero.personagemImagem ? (
+                <img
+                  src={hero.personagemImagem}
+                  alt={hero.personagemAlt ?? hero.imagemAlt}
+                  loading="eager"
+                  decoding="async"
+                  fetchPriority="high"
+                  className="mx-auto h-auto w-full max-w-md object-contain lg:mx-0 lg:ml-auto lg:max-w-none"
+                />
+              ) : (
+                <>
+                  <div className="absolute -inset-4 bg-yellow-400/10 rounded-[2rem] blur-3xl -z-10" />
+                  <img src={hero.imagem} alt={hero.imagemAlt} loading="eager" decoding="async" fetchPriority="high" width={1200} height={900} className="w-full h-auto rounded-3xl shadow-2xl border-4 border-white object-cover aspect-[4/3]" />
+                </>
+              )}
             </div>
           </div>
         </section>
