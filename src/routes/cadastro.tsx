@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Building2, UserRound, ArrowLeft, ArrowRight, CheckCircle2, Search, Home, Info, FileText } from "lucide-react";
+import { Building2, UserRound, ArrowLeft, ArrowRight, CheckCircle2, Search, Home, Info, FileText, Mail } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -108,7 +108,10 @@ function CadastroComponent() {
   const [step, setStep] = useState(1);
   const [accountType, setAccountType] = useState<"imobiliaria" | "corretor" | "proprietario" | "inquilino" | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false);
+  // 'confirmacao': só falta confirmar o e-mail (inquilino, sem aprovação manual).
+  // 'aprovacao': e-mail + aprovação da equipe (imobiliária/corretor/proprietário).
+  const [successType, setSuccessType] = useState<"confirmacao" | "aprovacao" | null>(null);
+  const [successEmail, setSuccessEmail] = useState("");
   const [imobiliarias, setImobiliarias] = useState<any[]>([]);
   const navigate = useNavigate();
   const search = useSearch({ from: '/cadastro' });
@@ -222,13 +225,14 @@ function CadastroComponent() {
           password: data.senha,
           options: {
             emailRedirectTo: window.location.origin,
-            data: { nome: data.nome, role: 'inquilino', cpf: cpfNorm },
+            data: { nome: data.nome, role: 'inquilino', cpf: cpfNorm, telefone: data.telefone },
           },
         });
         if (authError) throw authError;
         if (!authData.user) throw new Error("Erro ao criar usuário");
 
-        // Profile já é criado por trigger — atualiza com role/nome/telefone
+        // O profile já é criado pelo trigger handle_new_user (auth.users -> profiles) —
+        // aqui só complementamos com os campos que o trigger não tem (telefone).
         await supabase.from('profiles').update({
           status: 'ativo',
           nome: data.nome,
@@ -248,15 +252,18 @@ function CadastroComponent() {
         try {
           const r = await linkTenantFn({ data: { cpf: cpfNorm } });
           if (r.linkedConsultas > 0) {
-            toast.success(`Conta criada! Vinculamos ${r.linkedConsultas} contrato(s) ao seu CPF.`);
-          } else {
-            toast.success("Conta criada com sucesso!");
+            toast.success(`Vinculamos ${r.linkedConsultas} contrato(s) ao seu CPF.`);
           }
         } catch {
-          toast.success("Conta criada com sucesso!");
+          // vínculo é um extra — segue o fluxo mesmo se falhar
         }
 
-        navigate({ to: '/inquilino/documentos' as any });
+        // A conta só fica utilizável depois de confirmar o e-mail (mailer_autoconfirm
+        // está desligado no projeto) — navegar direto pra /inquilino/documentos aqui
+        // só resultaria num redirect silencioso pro /login, já que ainda não há sessão
+        // válida. Mostra a tela de "confirme seu e-mail" em vez disso.
+        setSuccessEmail(emailLower);
+        setSuccessType('confirmacao');
         return;
       }
 
@@ -265,6 +272,7 @@ function CadastroComponent() {
         email: data.email,
         password: data.senha,
         options: {
+          emailRedirectTo: window.location.origin,
           data: {
             nome: accountType === 'imobiliaria' ? data.razaoSocial : data.nome,
             role: accountType,
@@ -373,7 +381,8 @@ function CadastroComponent() {
         toast.success('Conta criada. Seu cadastro será analisado em até 24h.');
         navigate({ to: '/simular/resultado' });
       } else {
-        setIsSuccess(true);
+        setSuccessEmail(data.email);
+        setSuccessType('aprovacao');
       }
     } catch (error: any) {
       toast.error(error.message || "Erro ao realizar cadastro");
@@ -382,7 +391,28 @@ function CadastroComponent() {
     }
   };
 
-  if (isSuccess) {
+  if (successType === 'confirmacao') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-neutral-50 p-6 text-center">
+        <div className="w-20 h-20 bg-yellow-100 rounded-full flex items-center justify-center mb-8 text-yellow-600">
+          <Mail size={44} />
+        </div>
+        <h1 className="text-3xl font-bold text-neutral-900 mb-4">Confirme seu e-mail</h1>
+        <div className="max-w-md text-neutral-600 space-y-4 mb-10">
+          <p>
+            Enviamos um link de confirmação para <strong className="text-neutral-900">{successEmail}</strong>. Clique
+            nele para ativar sua conta — você será redirecionado automaticamente para a Home já conectado.
+          </p>
+          <p className="text-sm italic">Não recebeu? Confira a caixa de spam ou tente novamente em alguns minutos.</p>
+        </div>
+        <Button variant="outline" onClick={() => navigate({ to: "/" })}>
+          Voltar para a Home
+        </Button>
+      </div>
+    );
+  }
+
+  if (successType === 'aprovacao') {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-neutral-50 p-6 text-center">
         <div className="w-20 h-20 bg-yellow-100 rounded-full flex items-center justify-center mb-8 text-yellow-600">
@@ -390,7 +420,11 @@ function CadastroComponent() {
         </div>
         <h1 className="text-3xl font-bold text-neutral-900 mb-4">Cadastro recebido!</h1>
         <div className="max-w-md text-neutral-600 space-y-4 mb-10">
-          <p>Sua solicitação está em análise pela nossa equipe. Você receberá um e-mail em até 24 horas úteis confirmando a liberação do seu acesso.</p>
+          <p>
+            Enviamos um link de confirmação para <strong className="text-neutral-900">{successEmail}</strong> — confirme
+            seu e-mail primeiro. Depois disso, sua solicitação entra em análise pela nossa equipe, e você recebe um
+            aviso em até 24 horas úteis confirmando a liberação do seu acesso.
+          </p>
           <p className="text-sm italic">Enquanto isso, fique à vontade para conhecer nossos planos e materiais para imobiliárias.</p>
         </div>
         <Button variant="outline" onClick={() => navigate({ to: "/" })}>

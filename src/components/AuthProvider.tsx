@@ -68,6 +68,80 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(false);
   }, []);
 
+  // Reconcilia com a sessão REAL do Supabase (além do "nox_user" no localStorage acima).
+  // Necessário para os casos em que o app nunca chamou login() explicitamente mas já existe
+  // uma sessão válida — ex.: o usuário confirma o e-mail de cadastro e volta pra Home com a
+  // sessão só na URL/no client do Supabase, ou o token é revogado/expira em outra aba.
+  useEffect(() => {
+    let active = true;
+    let unsubscribe: (() => void) | null = null;
+
+    (async () => {
+      const { supabase } = await import("@/integrations/supabase/client");
+
+      const syncFromSession = async (userId: string, email: string, authUser?: any, isFreshSignIn?: boolean) => {
+        try {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("role")
+            .eq("id", userId)
+            .maybeSingle();
+          if (!active) return;
+          const role = (profile as any)?.role as Role | undefined;
+          if (!role) return; // profile ainda não existe (ex.: trigger em voo) — não força estado incompleto
+          login(email, role);
+
+          // Só na hora do SIGNED_IN de verdade (ex.: acabou de confirmar o e-mail do
+          // cadastro) — não no getSession() passivo de todo carregamento de página —
+          // finaliza o que o cadastro.tsx não conseguiu fazer sem sessão ativa: vincular
+          // contratos por CPF e gravar o telefone (bloqueados por RLS no signUp, já que
+          // não há sessão até o e-mail ser confirmado).
+          const cpf = authUser?.user_metadata?.cpf as string | undefined;
+          if (isFreshSignIn && role === "inquilino" && cpf) {
+            import("@/lib/inquilino-signup.functions")
+              .then(({ linkTenantByCpf }) =>
+                (linkTenantByCpf as any)({
+                  data: { cpf, telefone: authUser.user_metadata.telefone },
+                }),
+              )
+              .catch((e) => console.warn("[Auth] finalizar cadastro inquilino falhou", e));
+          }
+        } catch (e) {
+          console.warn("[Auth] syncFromSession failed", e);
+        }
+      };
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (active && session?.user?.email) {
+        await syncFromSession(session.user.id, session.user.email);
+      }
+
+      const {
+        data: { subscription },
+      } = supabase.auth.onAuthStateChange((event, newSession) => {
+        if (event === "SIGNED_OUT") {
+          setUser(null);
+          try {
+            localStorage.removeItem("nox_user");
+          } catch {}
+        } else if (event === "SIGNED_IN" && newSession?.user?.email) {
+          syncFromSession(newSession.user.id, newSession.user.email, newSession.user, true);
+        }
+      });
+
+      if (active) unsubscribe = () => subscription.unsubscribe();
+      else subscription.unsubscribe();
+    })();
+
+    return () => {
+      active = false;
+      unsubscribe?.();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const resolveInternalRole = async (role: Role): Promise<InternalRole | null> => {
     if (INTERNAL_ROLES.includes(role as InternalRole)) {
       return role as InternalRole;

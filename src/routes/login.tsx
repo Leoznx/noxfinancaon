@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { LogoNox } from "@/components/LogoNox";
 import { z } from "zod";
+import { redirectPathForRole } from "@/lib/authRedirect";
 
 
 const loginSearchSchema = z.object({
@@ -77,23 +78,6 @@ function LoginComponent() {
       return;
     }
 
-    const redirectByRole = (role: string) => {
-      switch (role) {
-        case 'admin':         return '/dashboard';
-        case 'admin_master':  return '/dashboard';
-        case 'imobiliaria':   return '/dashboard';
-        case 'corretor':      return '/dashboard';
-        case 'proprietario':  return '/dashboard';
-        case 'inquilino':     return '/inquilino/documentos';
-        case 'juridico':      return '/admin/aprovacoes';
-        case 'financeiro':    return '/admin/financeiro';
-        case 'marketing':     return '/admin/leads';
-        case 'suporte':       return '/suporte';
-        case 'vendedor':      return '/vendedor';
-        default:              return '/dashboard';
-      }
-    };
-
     // Prioriza internalRole quando existir (cargo interno sobre profile.role='admin')
     let effectiveRole: string = profile.role;
     let internalRole: string | null = internalRoleHint && INTERNAL_ROLE_SET.has(internalRoleHint) ? internalRoleHint : null;
@@ -113,7 +97,7 @@ function LoginComponent() {
     }
     if (internalRole) effectiveRole = internalRole;
 
-    navigate({ to: (returnTo && returnTo !== "/login" ? returnTo : redirectByRole(effectiveRole)) as any });
+    navigate({ to: (returnTo && returnTo !== "/login" ? returnTo : redirectPathForRole(effectiveRole)) as any });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

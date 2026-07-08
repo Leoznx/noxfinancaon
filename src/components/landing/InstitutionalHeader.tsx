@@ -2,18 +2,184 @@ import React from 'react';
 import { Link } from '@tanstack/react-router';
 import { Button } from '@/components/ui/button';
 import { LogoNox } from '../LogoNox';
-import { UserRound, Building2, Home, KeyRound, Menu, X } from 'lucide-react';
-import { useState } from 'react';
+import {
+  UserRound, Building2, Home, KeyRound, Menu, X,
+  User, Wallet, Lock, Bell, Award, LayoutDashboard, LogOut,
+} from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useAuth } from '@/components/AuthProvider';
+import { redirectPathForRole } from '@/lib/authRedirect';
+import { supabase } from '@/integrations/supabase/client';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
 
 function PerfilTab({ to, icon: Icon, label }: { to: string; icon: any; label: string }) {
   return (
-    <Link 
+    <Link
       to={to}
       className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-base font-medium text-neutral-600 hover:bg-yellow-50 hover:text-neutral-900 transition-colors"
     >
       <Icon className="w-4 h-4 text-neutral-900" strokeWidth={2.75} />
       {label}
     </Link>
+  );
+}
+
+// Mesmos ícones/rótulos/chaves de aba usados em src/routes/configuracoes.lazy.tsx —
+// mantém o dropdown do header e a navegação interna de Configurações consistentes.
+const PERFIL_MENU_ITEMS = [
+  { tab: 'perfil', label: 'Perfil', icon: User },
+  { tab: 'conta', label: 'Conta', icon: Building2 },
+  { tab: 'financeiro', label: 'Financeiro', icon: Wallet },
+  { tab: 'seguranca', label: 'Segurança', icon: Lock },
+  { tab: 'notificacoes', label: 'Notificações', icon: Bell },
+  { tab: 'comissoes', label: 'Plano e Nível', icon: Award },
+] as const;
+
+/** Busca nome/avatar do profile pra exibir no header — AuthProvider só guarda email/role/internalRole. */
+function useHeaderProfile(email: string | null | undefined) {
+  const [profile, setProfile] = useState<{ nome: string | null; avatar_url: string | null } | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    if (!email) {
+      setProfile(null);
+      return;
+    }
+    supabase
+      .from('profiles')
+      .select('nome, avatar_url')
+      .eq('email', email)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (active) setProfile((data as any) ?? null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [email]);
+
+  return profile;
+}
+
+function HeaderUserMenu({ align }: { align: 'desktop' | 'mobile' }) {
+  const { user, logout } = useAuth();
+  const profile = useHeaderProfile(user?.email);
+
+  if (!user) {
+    if (align === 'desktop') {
+      return (
+        <>
+          <Link to="/login">
+            <Button variant="ghost" className="text-neutral-700 font-medium text-base">Entrar</Button>
+          </Link>
+          <Link to="/simular">
+            <Button className="bg-neutral-900 text-white hover:bg-neutral-800 px-5 py-2 rounded-lg font-bold text-base shadow-xl shadow-neutral-100 transition-all active:scale-95">
+              Solicitar Análise
+            </Button>
+          </Link>
+        </>
+      );
+    }
+    return (
+      <>
+        <Link to="/login">
+          <Button variant="outline" className="w-full h-12 font-bold text-neutral-900 border-neutral-200">Entrar</Button>
+        </Link>
+        <Link to="/simular">
+          <Button className="w-full h-12 bg-neutral-900 text-white font-bold">Solicitar Análise</Button>
+        </Link>
+      </>
+    );
+  }
+
+  const dashboardTo = redirectPathForRole(user.internalRole || user.role);
+  const inicial = (profile?.nome || user.email || '?').substring(0, 1).toUpperCase();
+
+  if (align === 'mobile') {
+    return (
+      <>
+        <Link to={dashboardTo as any}>
+          <Button className="w-full h-12 bg-neutral-900 text-white font-bold gap-2">
+            <LayoutDashboard className="w-4 h-4" /> Dashboard
+          </Button>
+        </Link>
+        <div className="rounded-xl border border-neutral-200 overflow-hidden">
+          <div className="flex items-center gap-3 px-4 py-3 bg-neutral-50">
+            <Avatar className="w-9 h-9">
+              <AvatarImage src={profile?.avatar_url ?? undefined} alt={profile?.nome ?? user.email} />
+              <AvatarFallback className="bg-yellow-400 text-neutral-900 font-bold">{inicial}</AvatarFallback>
+            </Avatar>
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-neutral-900 truncate">{profile?.nome || user.email}</p>
+              <p className="text-xs text-neutral-500 truncate">{user.email}</p>
+            </div>
+          </div>
+          <nav className="flex flex-col divide-y divide-neutral-100">
+            {PERFIL_MENU_ITEMS.map(({ tab, label, icon: Icon }) => (
+              <Link
+                key={tab}
+                to="/configuracoes"
+                search={{ tab } as any}
+                className="flex items-center gap-2.5 px-4 py-3 text-sm font-medium text-neutral-700 hover:bg-neutral-50"
+              >
+                <Icon className="w-4 h-4 text-neutral-900" strokeWidth={2.2} /> {label}
+              </Link>
+            ))}
+            <button
+              type="button"
+              onClick={() => logout()}
+              className="flex items-center gap-2.5 px-4 py-3 text-sm font-medium text-red-600 hover:bg-red-50 text-left"
+            >
+              <LogOut className="w-4 h-4" strokeWidth={2.2} /> Sair
+            </button>
+          </nav>
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Link to={dashboardTo as any}>
+        <Button className="bg-neutral-900 text-white hover:bg-neutral-800 px-5 py-2 rounded-lg font-bold text-base shadow-xl shadow-neutral-100 transition-all active:scale-95 gap-2">
+          <LayoutDashboard className="w-4 h-4" /> Dashboard
+        </Button>
+      </Link>
+      <DropdownMenu>
+        <DropdownMenuTrigger className="outline-none rounded-full ring-offset-2 focus-visible:ring-2 focus-visible:ring-yellow-400">
+          <Avatar className="w-10 h-10 border border-neutral-200 hover:border-yellow-400 transition-colors">
+            <AvatarImage src={profile?.avatar_url ?? undefined} alt={profile?.nome ?? user.email} />
+            <AvatarFallback className="bg-yellow-400 text-neutral-900 font-bold">{inicial}</AvatarFallback>
+          </Avatar>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-64">
+          <DropdownMenuLabel className="font-normal">
+            <p className="text-sm font-bold text-neutral-900 truncate">{profile?.nome || 'Minha conta'}</p>
+            <p className="text-xs text-neutral-500 truncate">{user.email}</p>
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          {PERFIL_MENU_ITEMS.map(({ tab, label, icon: Icon }) => (
+            <DropdownMenuItem key={tab} asChild>
+              <Link to="/configuracoes" search={{ tab } as any} className="flex items-center gap-2 cursor-pointer">
+                <Icon className="w-4 h-4 text-neutral-900" strokeWidth={2.2} /> {label}
+              </Link>
+            </DropdownMenuItem>
+          ))}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => logout()} className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600">
+            <LogOut className="w-4 h-4" strokeWidth={2.2} /> Sair
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
   );
 }
 
@@ -27,15 +193,15 @@ export const InstitutionalHeader = () => {
         <Link to="/" className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity shrink-0">
           <LogoNox variant="claro" size="md" />
         </Link>
-        
+
         {/* Centro: Menu principal + abas de perfil (Desktop) */}
         <nav className="hidden lg:flex items-center gap-1">
           <Link to="/#comparativo" className="px-3 py-1.5 text-base font-medium text-neutral-600 hover:text-neutral-900 transition-colors">Seguro Fiança</Link>
           <Link to="/#planos" className="px-3 py-1.5 text-base font-medium text-neutral-600 hover:text-neutral-900 transition-colors">Planos</Link>
           <Link to="/contato" className="px-3 py-1.5 text-base font-medium text-neutral-600 hover:text-neutral-900 transition-colors">Contato</Link>
-          
+
           <span className="w-px h-5 bg-neutral-200 mx-3"></span>
-          
+
           <PerfilTab to="/corretor" icon={UserRound} label="Corretor" />
           <PerfilTab to="/imobiliaria" icon={Building2} label="Imobiliária" />
           <PerfilTab to="/proprietario" icon={Home} label="Proprietário" />
@@ -45,18 +211,11 @@ export const InstitutionalHeader = () => {
         {/* Direita: Botões (Desktop) */}
         <div className="hidden lg:flex items-center gap-4">
           <span className="w-px h-5 bg-neutral-200"></span>
-          <Link to="/login">
-            <Button variant="ghost" className="text-neutral-700 font-medium text-base">Entrar</Button>
-          </Link>
-          <Link to="/simular">
-            <Button className="bg-neutral-900 text-white hover:bg-neutral-800 px-5 py-2 rounded-lg font-bold text-base shadow-xl shadow-neutral-100 transition-all active:scale-95">
-              Solicitar Análise
-            </Button>
-          </Link>
+          <HeaderUserMenu align="desktop" />
         </div>
 
         {/* Menu Mobile Button */}
-        <button 
+        <button
           className="lg:hidden p-2 text-neutral-600 hover:text-neutral-900"
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
         >
@@ -92,13 +251,8 @@ export const InstitutionalHeader = () => {
                 </nav>
               </div>
 
-              <div className="pt-4 flex flex-col gap-3">
-                <Link to="/login" onClick={() => setIsMobileMenuOpen(false)}>
-                  <Button variant="outline" className="w-full h-12 font-bold text-neutral-900 border-neutral-200">Entrar</Button>
-                </Link>
-                <Link to="/simular" onClick={() => setIsMobileMenuOpen(false)}>
-                  <Button className="w-full h-12 bg-neutral-900 text-white font-bold">Solicitar Análise</Button>
-                </Link>
+              <div className="pt-4 flex flex-col gap-3" onClick={() => setIsMobileMenuOpen(false)}>
+                <HeaderUserMenu align="mobile" />
               </div>
             </div>
           </div>

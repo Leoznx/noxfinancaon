@@ -1,0 +1,91 @@
+<!--
+  Template "Confirm signup" da NOX Fiança.
+
+  Isso NÃO tem efeito sozinho — o Supabase só usa o template configurado no
+  Dashboard (não lê arquivos deste repositório). Este arquivo existe só como
+  fonte de verdade versionada; para aplicar de verdade:
+
+    1. Painel Supabase do projeto (njheoytyidsghittjilr) > Authentication >
+       Email Templates > "Confirm signup".
+    2. Cole o HTML abaixo no campo "Message body" (mantendo o Subject como
+       preferir, ex.: "Confirme seu e-mail — NOX Fiança").
+    3. Salve. Nenhuma variável de ambiente/env var controla isso — é 100%
+       configuração do painel.
+
+  Variáveis do Supabase usadas aqui: {{ .ConfirmationURL }} (link de confirmação,
+  já aponta para o emailRedirectTo configurado no signUp() — a Home do site,
+  window.location.origin, conforme wired em src/routes/cadastro.tsx).
+-->
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <body style="margin:0; padding:0; background-color:#f5f5f5; font-family:Arial, Helvetica, sans-serif;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f5f5; padding:40px 16px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="max-width:480px; width:100%; background-color:#ffffff; border-radius:16px; overflow:hidden; border:1px solid #e5e5e5;">
+
+            <!-- Cabeçalho -->
+            <tr>
+              <td align="center" style="background-color:#111111; padding:32px 24px;">
+                <img src="https://www.noxfianca.com/favicon-512.png" width="48" height="48" alt="NOX Fiança" style="display:block; border-radius:10px;" />
+                <p style="margin:12px 0 0; color:#ffffff; font-size:18px; font-weight:800; letter-spacing:0.02em;">NOX FIANÇA</p>
+              </td>
+            </tr>
+
+            <!-- Faixa amarela -->
+            <tr>
+              <td style="height:4px; background-color:#FACC15; font-size:0; line-height:0;">&nbsp;</td>
+            </tr>
+
+            <!-- Corpo -->
+            <tr>
+              <td style="padding:40px 32px;">
+                <p style="margin:0 0 8px; font-size:12px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#ca8a04;">
+                  Confirmação de cadastro
+                </p>
+                <h1 style="margin:0 0 16px; font-size:24px; line-height:1.3; font-weight:800; color:#111111;">
+                  Confirme seu e-mail
+                </h1>
+                <p style="margin:0 0 28px; font-size:15px; line-height:1.6; color:#404040;">
+                  Falta só um passo para ativar sua conta na NOX Fiança. Clique no botão abaixo para
+                  confirmar seu e-mail — você será redirecionado direto para a plataforma, já conectado.
+                </p>
+
+                <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 28px;">
+                  <tr>
+                    <td align="center" style="border-radius:10px; background-color:#FACC15;">
+                      <a href="{{ .ConfirmationURL }}"
+                         style="display:inline-block; padding:14px 32px; font-size:15px; font-weight:800; color:#111111; text-decoration:none; border-radius:10px;">
+                        Confirmar e-mail
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+
+                <p style="margin:0 0 4px; font-size:13px; line-height:1.6; color:#737373;">
+                  Se o botão não funcionar, copie e cole este link no navegador:
+                </p>
+                <p style="margin:0; font-size:13px; line-height:1.6; word-break:break-all;">
+                  <a href="{{ .ConfirmationURL }}" style="color:#ca8a04; text-decoration:underline;">{{ .ConfirmationURL }}</a>
+                </p>
+              </td>
+            </tr>
+
+            <!-- Rodapé -->
+            <tr>
+              <td style="padding:20px 32px; background-color:#fafafa; border-top:1px solid #e5e5e5;">
+                <p style="margin:0; font-size:12px; line-height:1.6; color:#a3a3a3;">
+                  Se você não criou uma conta na NOX Fiança, pode ignorar este e-mail com segurança.
+                </p>
+                <p style="margin:8px 0 0; font-size:12px; color:#a3a3a3;">
+                  © NOX FIANÇA — Plataforma Institucional de Seguro Fiança Locatícia
+                </p>
+              </td>
+            </tr>
+
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

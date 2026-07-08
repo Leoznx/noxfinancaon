@@ -1,3 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { z } from "zod";
 
-export const Route = createFileRoute("/configuracoes")({});
+const configuracoesSearchSchema = z.object({
+  tab: z.enum(["perfil", "conta", "financeiro", "seguranca", "notificacoes", "comissoes"]).optional(),
+});
+
+export const Route = createFileRoute("/configuracoes")({
+  validateSearch: (search) => configuracoesSearchSchema.parse(search),
+});

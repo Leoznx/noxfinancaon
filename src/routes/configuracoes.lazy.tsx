@@ -1,4 +1,4 @@
-import { createLazyFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createLazyFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useState, useEffect } from "react";
@@ -44,9 +44,23 @@ export const Route = createLazyFileRoute("/configuracoes")({
 });
 
 function ConfiguracoesPage() {
-  const [abaAtiva, setAbaAtiva] = useState('perfil');
+  const search = useSearch({ from: "/configuracoes" });
+  const navigate = useNavigate();
+  const [abaAtiva, setAbaAtivaState] = useState<string>(search.tab ?? 'perfil');
   const { user } = useAuth();
-  
+
+  // Mantém a URL em sincronia com a aba ativa — permite deep-link (ex.: um dropdown
+  // externo linkando direto pra /configuracoes?tab=seguranca) e sobrevive a um reload.
+  useEffect(() => {
+    if (search.tab && search.tab !== abaAtiva) setAbaAtivaState(search.tab);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search.tab]);
+
+  const setAbaAtiva = (aba: string) => {
+    setAbaAtivaState(aba);
+    navigate({ to: "/configuracoes", search: { tab: aba as any }, replace: true });
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-8 max-w-6xl mx-auto">

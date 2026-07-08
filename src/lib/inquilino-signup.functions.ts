@@ -4,6 +4,9 @@ import { z } from "zod";
 
 const linkSchema = z.object({
   cpf: z.string().min(11).max(20),
+  // Preenchido no cadastro, mas o próprio .update() do cadastro.tsx roda sem sessão
+  // ainda (e-mail não confirmado) e é bloqueado por RLS — reaplica aqui, já autenticado.
+  telefone: z.string().optional(),
 });
 
 /**
@@ -17,6 +20,14 @@ export const linkTenantByCpf = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const cpfNorm = data.cpf.replace(/\D/g, "");
     const userId = context.userId;
+
+    if (data.telefone) {
+      await supabaseAdmin
+        .from("profiles")
+        .update({ telefone: data.telefone } as any)
+        .eq("id", userId)
+        .is("telefone", null);
+    }
 
     // 1. Vincular consultas que tenham tenant_document = cpf
     const { data: consultas } = await supabaseAdmin
