@@ -83,6 +83,18 @@ function fmt(n: number) {
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+// Alíquota do seguro incêndio (obrigatório) sobre o valor do aluguel, por tipo de imóvel.
+function calcularPercentualIncendio(tipo: "residencial" | "comercial", aluguelValor: number): number {
+  if (tipo === "comercial") {
+    if (aluguelValor <= 3000) return 5;
+    if (aluguelValor <= 8000) return 8;
+    return 10;
+  }
+  if (aluguelValor > 12000) return 10;
+  if (aluguelValor > 5000) return 5;
+  return 3;
+}
+
 function FinalizarPage() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
@@ -93,7 +105,6 @@ function FinalizarPage() {
   const [etapa, setEtapa] = useState<EtapaKey>("resumo");
   const [enviando, setEnviando] = useState(false);
   const [termosOpen, setTermosOpen] = useState(false);
-  const [seguroEtapa, setSeguroEtapa] = useState<"coberturas" | "pagamento" | "concluido">("coberturas");
 
   // Configuração seguro
   const [coberturas, setCoberturas] = useState<string[]>(["incendio"]);
@@ -175,10 +186,15 @@ function FinalizarPage() {
 
   const valorComissao = useMemo(() => premioAnual * (comissaoPct / 100), [premioAnual, comissaoPct]);
   const totalFinal = useMemo(() => premioAnual + taxaAtivacao + pinturaTotal, [premioAnual, taxaAtivacao, pinturaTotal]);
+  const percentualIncendio = useMemo(
+    () => calcularPercentualIncendio(tipoSeguroImovel, aluguel),
+    [tipoSeguroImovel, aluguel],
+  );
+  const premioIncendioMensal = useMemo(() => aluguel * (percentualIncendio / 100), [aluguel, percentualIncendio]);
+  const premioIncendioAnual = useMemo(() => premioIncendioMensal * 12, [premioIncendioMensal]);
   const totalSeguroImobiliario = useMemo(() => {
-    const coberturasTotal = coberturas.reduce((acc, cid) => acc + (COBERTURA_VALORES[cid] ?? 0), 0);
-    return coberturasTotal + (ASSISTENCIA_VALORES[assistencia] ?? 0);
-  }, [coberturas, assistencia]);
+    return premioIncendioMensal + (ASSISTENCIA_VALORES[assistencia] ?? 0);
+  }, [premioIncendioMensal, assistencia]);
   const parcelaSeguro = useMemo(() => totalSeguroImobiliario / 12, [totalSeguroImobiliario]);
 
   function toggleCobertura(cid: string) {
@@ -219,43 +235,6 @@ function FinalizarPage() {
         },
       });
       setEtapa("revisao");
-    } catch (e: any) {
-      toast.error(e.message);
-    }
-  }
-
-  // Mini-wizard do card "Seguro Imobiliário" dentro de ResumoPropostaLoft (config → coberturas → pagamento).
-  async function avancarSeguroParaPagamento() {
-    try {
-      await fnSalvarConfig({
-        data: {
-          consultaId: id,
-          insurance_coverages: coberturas,
-          insurance_assistance: assistencia,
-          insurance_commission_pct: comissaoPct,
-        },
-      });
-      setSeguroEtapa("pagamento");
-    } catch (e: any) {
-      toast.error(e.message);
-    }
-  }
-
-  async function concluirConfigSeguro() {
-    if (!pagamento || !naoMadeira || !aceiteTermos) return;
-    try {
-      const label = PAGAMENTOS.find((p) => p.id === pagamento)?.label ?? "";
-      await fnSalvarPagamento({
-        data: {
-          consultaId: id,
-          insurance_payment_method: pagamento as any,
-          insurance_payment_method_label: label,
-          property_not_wood_confirmed: naoMadeira,
-          terms_accepted: aceiteTermos,
-        },
-      });
-      setSeguroEtapa("concluido");
-      toast.success("Configuração do seguro salva.");
     } catch (e: any) {
       toast.error(e.message);
     }
@@ -330,6 +309,9 @@ function FinalizarPage() {
         valorComissao={valorComissao}
         totalSeguroImobiliario={totalSeguroImobiliario}
         parcelaSeguro={parcelaSeguro}
+        percentualIncendio={percentualIncendio}
+        premioIncendioMensal={premioIncendioMensal}
+        premioIncendioAnual={premioIncendioAnual}
         aluguel={aluguel}
         condominio={condominio}
         taxas={taxas}
@@ -339,8 +321,6 @@ function FinalizarPage() {
         custoSaida={custoSaida}
         contratoAssinadoPendente={contratoAssinadoPendente}
         enviando={enviando}
-        seguroEtapa={seguroEtapa}
-        setSeguroEtapa={setSeguroEtapa}
         pagamento={pagamento}
         setPagamento={setPagamento}
         naoMadeira={naoMadeira}
@@ -349,8 +329,6 @@ function FinalizarPage() {
         setAceiteTermos={setAceiteTermos}
         abrirTermos={() => setTermosOpen(true)}
         seguroConcluido={seguroConcluido}
-        onAvancarPagamento={avancarSeguroParaPagamento}
-        onConcluirSeguro={concluirConfigSeguro}
         onEditarDados={() => navigate({ to: `/consultas/${id}/dados-complementares` as any })}
         onCancelar={() => navigate({ to: `/consultas/${id}/resultado` as any })}
         onEnviar={handleEnviar}
@@ -486,11 +464,11 @@ function ResumoPropostaLoft(p: any) {
     residencialSubtipo, setResidencialSubtipo, comercialSubtipo, setComercialSubtipo,
     coberturas, toggleCobertura,
     assistencia, setAssistencia, comissaoPct, setComissaoPct, valorComissao,
-    totalSeguroImobiliario, parcelaSeguro, aluguel, condominio, taxas, totalLoc,
+    totalSeguroImobiliario, parcelaSeguro, percentualIncendio, premioIncendioMensal, premioIncendioAnual,
+    aluguel, condominio, taxas, totalLoc,
     premioMensal, taxaAtivacao, custoSaida, contratoAssinadoPendente, enviando,
-    seguroEtapa, setSeguroEtapa, pagamento, setPagamento, naoMadeira, setNaoMadeira,
+    pagamento, setPagamento, naoMadeira, setNaoMadeira,
     aceiteTermos, setAceiteTermos, abrirTermos, seguroConcluido,
-    onAvancarPagamento, onConcluirSeguro,
     onEditarDados, onCancelar, onEnviar,
   } = p;
   const dataNascimento = consulta?.tenant_data_nascimento
@@ -626,234 +604,156 @@ function ResumoPropostaLoft(p: any) {
 
         <section className="rounded-md border border-slate-300 bg-white p-6">
           <h2 className="mb-5 text-lg font-bold text-neutral-950">Seguro Imobiliário</h2>
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_235px]">
-            <div className="space-y-6 border-slate-300 pr-0 lg:border-r lg:pr-6">
-              {seguroEtapa === "coberturas" && (
-                <>
-                  <div>
-                    <p className="mb-4 text-sm font-medium">Tipo de imóvel</p>
-                    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                      <TipoImovelCard
-                        title="Residencial"
-                        selected={tipoSeguroImovel === "residencial"}
-                        onClick={() => setTipoSeguroImovel("residencial")}
-                        icon={<Home size={17} />}
-                        selectValue={residencialSubtipo}
-                        onSelect={setResidencialSubtipo}
-                        placeholder="Tipo de residência"
-                        options={RESIDENCIAL_OPCOES}
-                      />
-                      <TipoImovelCard
-                        title="Comercial"
-                        selected={tipoSeguroImovel === "comercial"}
-                        onClick={() => setTipoSeguroImovel("comercial")}
-                        icon={<Building2 size={17} />}
-                        selectValue={comercialSubtipo}
-                        onSelect={setComercialSubtipo}
-                        placeholder="Tipo de comércio"
-                        options={COMERCIAL_OPCOES}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <h3 className="text-lg font-bold">Coberturas</h3>
-                    <p className="text-sm text-slate-600">A cobertura de incêndio já está inclusa e serve de base para calcular as demais.</p>
-
-                    {/* Cobertura obrigatória — cartão em destaque, com espaço reservado para um personagem */}
-                    <div className="relative flex min-h-[220px] items-center justify-between gap-4 overflow-hidden rounded-md bg-neutral-900 p-6">
-                      <div className="max-w-[70%]">
-                        <div className="mb-3 flex items-center gap-3">
-                          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-yellow-400 text-neutral-900">
-                            <Flame size={18} />
-                          </div>
-                          <span className="rounded-full bg-yellow-400 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-neutral-900">
-                            Cobertura obrigatória
-                          </span>
-                        </div>
-                        <p className="text-base font-bold text-white">Incêndio, explosão, queda de raio, fumaça e queda de aeronave</p>
-                        <p className="mt-2 text-sm text-neutral-400">Cobertura básica obrigatória contra sinistros estruturais graves.</p>
-                        <p className="mt-4 text-lg font-bold text-white">
-                          + {fmt(COBERTURA_VALORES.incendio)} <span className="text-xs font-normal text-neutral-400">/mês</span>
-                        </p>
-                      </div>
-                    </div>
-
-                    {COBERTURAS.filter((c) => c.id !== "incendio").map((c) => {
-                      const selected = coberturas.includes(c.id);
-                      const Icon = c.id === "danos_eletricos" ? Zap : c.id === "vendaval" ? Wind : c.id === "rc_familiar" ? Home : ReceiptIcon;
-                      return (
-                        <div
-                          key={c.id}
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => toggleCobertura(c.id)}
-                          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleCobertura(c.id); } }}
-                          className="flex min-h-[92px] w-full cursor-pointer items-center justify-between rounded-md border border-slate-300 bg-white p-5 text-left transition-colors hover:border-slate-500"
-                        >
-                          <div className="flex gap-4">
-                            <Icon size={20} className="mt-1 shrink-0 text-neutral-950" />
-                            <div>
-                              <p className="max-w-[330px] text-base font-bold text-neutral-950">{c.nome}</p>
-                              <p className="mt-2 text-sm text-slate-600">Ver detalhes</p>
-                            </div>
-                          </div>
-                          <Switch checked={selected} className="pointer-events-none" />
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <div className="space-y-3">
-                    <h3 className="text-lg font-bold">Assistências</h3>
-                    <p className="text-sm text-slate-600">Escolha qual assistência será adicionada no seguro:</p>
-                    {ASSISTENCIAS.map((a) => {
-                      const selected = assistencia === a.id;
-                      return (
-                        <button
-                          key={a.id}
-                          type="button"
-                          onClick={() => setAssistencia(a.id)}
-                          className={`flex min-h-[92px] w-full items-center justify-between rounded-md border p-5 text-left transition-colors ${
-                            selected ? "border-emerald-500 bg-white" : "border-slate-300 bg-white hover:border-slate-500"
-                          }`}
-                        >
-                          <div>
-                            <p className="text-base font-bold text-neutral-950">{a.nome}</p>
-                            <p className="mt-3 text-sm text-slate-600">Ver detalhes</p>
-                          </div>
-                          <span className={`h-4 w-4 rounded-full border ${selected ? "border-emerald-600 bg-emerald-500" : "border-neutral-900"}`} />
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-bold">Comissão</h3>
-                    <p className="text-sm text-slate-600">Escolha a % de comissão que deseja aplicar neste contrato de seguro.</p>
-                    <div>
-                      <label className="mb-2 block text-sm text-neutral-950">Valor de comissão:</label>
-                      <Select value={String(comissaoPct)} onValueChange={(v) => setComissaoPct(Number(v))}>
-                        <SelectTrigger className="h-11 rounded-md border-slate-400"><SelectValue /></SelectTrigger>
-                        <SelectContent>{COMISSAO_OPCOES.map((o) => <SelectItem key={o} value={String(o)}>{o}%</SelectItem>)}</SelectContent>
-                      </Select>
-                      <p className="mt-2 text-xs text-neutral-950">Esse valor é incluso no custo final ao inquilino.</p>
-                    </div>
-                    <div className="overflow-hidden rounded-md bg-slate-50">
-                      <div className="p-5">
-                        <p className="text-sm">Valor total de comissão a receber:</p>
-                        <p className="mt-2 text-3xl font-bold">{fmt(valorComissao || 0)} <span className="text-sm font-normal text-slate-600">em 12x</span></p>
-                      </div>
-                      {comissaoPct >= 10 && (
-                        <div className="bg-emerald-500 p-5 text-center text-sm font-bold text-white">
-                          Bônus NOX de R$ 20 aplicado ao valor final de comissão!
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end gap-3 pt-2">
-                    <Button onClick={onAvancarPagamento} className="h-11 rounded-md bg-yellow-400 px-6 font-bold text-neutral-900 hover:bg-yellow-300">
-                      Continuar <ArrowRight size={16} className="ml-2" />
-                    </Button>
-                  </div>
-                </>
-              )}
-
-              {seguroEtapa === "pagamento" && (
-                <>
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-bold">Forma de pagamento do seguro</h3>
-                    <p className="text-sm text-slate-600">Selecione a forma de pagamento que o cliente deseja utilizar na contratação do seguro:</p>
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                      {PAGAMENTOS.map((m) => {
-                        const Icon = m.icon;
-                        const selected = pagamento === m.id;
-                        return (
-                          <button
-                            key={m.id}
-                            type="button"
-                            onClick={() => setPagamento(m.id)}
-                            className={`flex flex-col items-center gap-2 rounded-md border p-5 text-center transition-colors ${
-                              selected ? "border-emerald-500 bg-white" : "border-slate-300 bg-white hover:border-slate-500"
-                            }`}
-                          >
-                            <Icon size={20} className="text-neutral-950" />
-                            <span className="text-sm font-bold text-neutral-950">{m.label}</span>
-                            <span className={`h-4 w-4 rounded-full border ${selected ? "border-emerald-600 bg-emerald-500" : "border-neutral-900"}`} />
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <div className="flex gap-2 rounded-md border border-sky-200 bg-sky-50 p-4 text-xs text-neutral-700">
-                      <Info size={14} className="mt-0.5 shrink-0 text-sky-600" />
-                      <span>Caso seja necessário alterar a forma de pagamento, uma nova cotação deve ser criada.</span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4 rounded-md border border-slate-300 p-5">
-                    <label className="flex cursor-pointer items-start gap-3">
-                      <Checkbox checked={naoMadeira} onCheckedChange={(v) => setNaoMadeira(!!v)} />
-                      <span className="text-sm text-neutral-800">Confirmo que o imóvel a ser segurado <strong>não é de madeira</strong>.</span>
-                    </label>
-                    <label className="flex cursor-pointer items-start gap-3">
-                      <Checkbox checked={aceiteTermos} onCheckedChange={(v) => setAceiteTermos(!!v)} />
-                      <span className="text-sm text-neutral-800">
-                        Li e concordo com os{" "}
-                        <button type="button" onClick={abrirTermos} className="font-bold text-yellow-700 underline">Termos e Condições</button>{" "}
-                        da 180 Seguros.
-                      </span>
-                    </label>
-                  </div>
-
-                  <div className="flex gap-3 rounded-md border border-yellow-300 bg-yellow-50 p-4 text-sm text-neutral-800">
-                    <AlertTriangle size={18} className="mt-0.5 shrink-0 text-yellow-700" />
-                    <p>Caso seja identificado que o imóvel possui alguma dessas características, a apólice do seguro não será emitida, e a proposta será cancelada.</p>
-                  </div>
-
-                  <div className="flex justify-between gap-3 pt-2">
-                    <Button variant="outline" onClick={() => setSeguroEtapa("coberturas")} className="h-11 rounded-md border-neutral-900 px-6">
-                      <ArrowLeft size={16} className="mr-2" /> Voltar
-                    </Button>
-                    <Button
-                      onClick={onConcluirSeguro}
-                      disabled={!(pagamento && naoMadeira && aceiteTermos)}
-                      className={`h-11 rounded-md px-6 font-bold ${
-                        pagamento && naoMadeira && aceiteTermos ? "bg-yellow-400 text-neutral-900 hover:bg-yellow-300" : "bg-neutral-200 text-neutral-400"
-                      }`}
-                    >
-                      Continuar <ArrowRight size={16} className="ml-2" />
-                    </Button>
-                  </div>
-                </>
-              )}
-
-              {seguroEtapa === "concluido" && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="inline-flex items-center gap-2 text-sm font-bold text-emerald-700">
-                      <CheckCircle2 size={16} /> Configuração do seguro concluída
-                    </span>
-                    <button type="button" onClick={() => setSeguroEtapa("coberturas")} className="text-sm font-bold text-emerald-700 underline">
-                      Editar
-                    </button>
-                  </div>
-                  <div className="space-y-2 rounded-md border border-slate-300 p-5 text-sm text-neutral-800">
-                    <p><strong>Tipo de imóvel:</strong> {tipoSeguroImovel === "residencial" ? residencialSubtipo || "Residencial" : comercialSubtipo || "Comercial"}</p>
-                    <p><strong>Coberturas:</strong> {coberturas.length} selecionada{coberturas.length === 1 ? "" : "s"}</p>
-                    <p><strong>Assistência:</strong> {assistLabel}</p>
-                    <p><strong>Forma de pagamento:</strong> {PAGAMENTOS.find((m: any) => m.id === pagamento)?.label ?? "—"}</p>
-                  </div>
-                </div>
-              )}
+          <div className="space-y-6">
+            <div>
+              <p className="mb-4 text-sm font-medium">Tipo de imóvel</p>
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                <TipoImovelCard
+                  title="Residencial"
+                  selected={tipoSeguroImovel === "residencial"}
+                  onClick={() => setTipoSeguroImovel("residencial")}
+                  icon={<Home size={17} />}
+                  selectValue={residencialSubtipo}
+                  onSelect={setResidencialSubtipo}
+                  placeholder="Tipo de residência"
+                  options={RESIDENCIAL_OPCOES}
+                />
+                <TipoImovelCard
+                  title="Comercial"
+                  selected={tipoSeguroImovel === "comercial"}
+                  onClick={() => setTipoSeguroImovel("comercial")}
+                  icon={<Building2 size={17} />}
+                  selectValue={comercialSubtipo}
+                  onSelect={setComercialSubtipo}
+                  placeholder="Tipo de comércio"
+                  options={COMERCIAL_OPCOES}
+                />
+              </div>
             </div>
 
-            <SeguroResumoPanel
-              total={totalSeguroImobiliario}
-              parcela={parcelaSeguro}
-              coberturas={coberturas}
-              assistenciaLabel={assistLabel}
-            />
+            <div className="space-y-3">
+              <h3 className="text-lg font-bold">Coberturas</h3>
+              <p className="text-sm text-slate-600">Cobertura básica obrigatória, calculada sobre o valor do aluguel do imóvel.</p>
+
+              {/* Cobertura obrigatória — cartão em destaque, com espaço reservado para um personagem */}
+              <div className="relative flex min-h-[280px] items-center justify-between gap-4 overflow-hidden rounded-md border border-slate-300 bg-white p-8">
+                <div className="max-w-[70%]">
+                  <div className="mb-3 flex items-center gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-yellow-400 text-neutral-900">
+                      <Flame size={18} />
+                    </div>
+                    <span className="rounded-full bg-yellow-400 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-neutral-900">
+                      Cobertura obrigatória
+                    </span>
+                  </div>
+                  <p className="text-lg font-bold text-neutral-950">Incêndio, explosão, queda de raio, fumaça e queda de aeronave</p>
+                  <p className="mt-2 text-sm text-slate-600">Cobertura básica obrigatória contra sinistros estruturais graves.</p>
+                  <p className="mt-4 text-2xl font-bold text-neutral-950">
+                    {fmt(premioIncendioMensal)} <span className="text-sm font-normal text-slate-500">/mês</span>
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Total anual de {fmt(premioIncendioAnual)}, dividido em 12x de {fmt(premioIncendioMensal)} ({percentualIncendio}% do aluguel).
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <h3 className="text-lg font-bold">Assistências</h3>
+              <p className="text-sm text-slate-600">Escolha qual assistência será adicionada no seguro:</p>
+              {ASSISTENCIAS.map((a) => {
+                const selected = assistencia === a.id;
+                return (
+                  <button
+                    key={a.id}
+                    type="button"
+                    onClick={() => setAssistencia(a.id)}
+                    className={`flex min-h-[92px] w-full items-center justify-between rounded-md border p-5 text-left transition-colors ${
+                      selected ? "border-emerald-500 bg-white" : "border-slate-300 bg-white hover:border-slate-500"
+                    }`}
+                  >
+                    <div>
+                      <p className="text-base font-bold text-neutral-950">{a.nome}</p>
+                      <p className="mt-3 text-sm text-slate-600">Ver detalhes</p>
+                    </div>
+                    <span className={`h-4 w-4 rounded-full border ${selected ? "border-emerald-600 bg-emerald-500" : "border-neutral-900"}`} />
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="space-y-4">
+              <h3 className="text-lg font-bold">Comissão</h3>
+              <p className="text-sm text-slate-600">Escolha a % de comissão que deseja aplicar neste contrato de seguro.</p>
+              <div>
+                <label className="mb-2 block text-sm text-neutral-950">Valor de comissão:</label>
+                <Select value={String(comissaoPct)} onValueChange={(v) => setComissaoPct(Number(v))}>
+                  <SelectTrigger className="h-11 rounded-md border-slate-400"><SelectValue /></SelectTrigger>
+                  <SelectContent>{COMISSAO_OPCOES.map((o) => <SelectItem key={o} value={String(o)}>{o}%</SelectItem>)}</SelectContent>
+                </Select>
+                <p className="mt-2 text-xs text-neutral-950">Esse valor é incluso no custo final ao inquilino.</p>
+              </div>
+              <div className="overflow-hidden rounded-md bg-slate-50">
+                <div className="p-5">
+                  <p className="text-sm">Valor total de comissão a receber:</p>
+                  <p className="mt-2 text-3xl font-bold">{fmt(valorComissao || 0)} <span className="text-sm font-normal text-slate-600">em 12x</span></p>
+                </div>
+                {comissaoPct >= 10 && (
+                  <div className="bg-emerald-500 p-5 text-center text-sm font-bold text-white">
+                    Bônus NOX de R$ 20 aplicado ao valor final de comissão!
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h3 className="text-lg font-bold">Forma de pagamento do seguro</h3>
+              <p className="text-sm text-slate-600">Selecione a forma de pagamento que o cliente deseja utilizar na contratação do seguro:</p>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                {PAGAMENTOS.map((m) => {
+                  const Icon = m.icon;
+                  const selected = pagamento === m.id;
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setPagamento(m.id)}
+                      className={`flex flex-col items-center gap-2 rounded-md border p-5 text-center transition-colors ${
+                        selected ? "border-emerald-500 bg-white" : "border-slate-300 bg-white hover:border-slate-500"
+                      }`}
+                    >
+                      <Icon size={20} className="text-neutral-950" />
+                      <span className="text-sm font-bold text-neutral-950">{m.label}</span>
+                      <span className={`h-4 w-4 rounded-full border ${selected ? "border-emerald-600 bg-emerald-500" : "border-neutral-900"}`} />
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex gap-2 rounded-md border border-sky-200 bg-sky-50 p-4 text-xs text-neutral-700">
+                <Info size={14} className="mt-0.5 shrink-0 text-sky-600" />
+                <span>Caso seja necessário alterar a forma de pagamento, uma nova cotação deve ser criada.</span>
+              </div>
+            </div>
+
+            <div className="space-y-4 rounded-md border border-slate-300 p-5">
+              <label className="flex cursor-pointer items-start gap-3">
+                <Checkbox checked={naoMadeira} onCheckedChange={(v) => setNaoMadeira(!!v)} />
+                <span className="text-sm text-neutral-800">Confirmo que o imóvel a ser segurado <strong>não é de madeira</strong>.</span>
+              </label>
+              <label className="flex cursor-pointer items-start gap-3">
+                <Checkbox checked={aceiteTermos} onCheckedChange={(v) => setAceiteTermos(!!v)} />
+                <span className="text-sm text-neutral-800">
+                  Li e concordo com os{" "}
+                  <button type="button" onClick={abrirTermos} className="font-bold text-yellow-700 underline">Termos e Condições</button>{" "}
+                  da 180 Seguros.
+                </span>
+              </label>
+            </div>
+
+            <div className="flex gap-3 rounded-md border border-yellow-300 bg-yellow-50 p-4 text-sm text-neutral-800">
+              <AlertTriangle size={18} className="mt-0.5 shrink-0 text-yellow-700" />
+              <p>Caso seja identificado que o imóvel possui alguma dessas características, a apólice do seguro não será emitida, e a proposta será cancelada.</p>
+            </div>
           </div>
         </section>
       </div>
@@ -922,37 +822,6 @@ function TipoImovelCard(p: {
         </SelectContent>
       </Select>
     </div>
-  );
-}
-
-function SeguroResumoPanel({ total, parcela, coberturas, assistenciaLabel }: any) {
-  const coberturaItems = coberturas.map((cid: string) => COBERTURAS.find((c) => c.id === cid)).filter(Boolean);
-  return (
-    <aside className="mt-6 bg-slate-100 p-6 lg:mt-0">
-      <div className="sticky top-6 space-y-6">
-        <p className="text-sm text-neutral-950">Resumo</p>
-        <div className="rounded-md bg-slate-200 p-5">
-          <p className="text-sm text-slate-600">Total de</p>
-          <p className="text-3xl font-bold text-neutral-900">{fmt(total)}</p>
-          <p className="text-sm text-slate-600">em 12x de {fmt(parcela)} no cartão de crédito</p>
-        </div>
-        <div>
-          <p className="mb-4 text-sm text-slate-600">{coberturaItems.length} Cobertura{coberturaItems.length === 1 ? "" : "s"}</p>
-          <div className="space-y-3">
-            {coberturaItems.map((c: any) => (
-              <div key={c.id} className="flex justify-between gap-4 text-sm">
-                <span className="max-w-[120px] text-neutral-950">{c.nome}</span>
-                <span className="text-slate-600">{fmt(COBERTURA_VALORES[c.id] ?? 0)}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="border-t border-slate-200 pt-6">
-          <p className="mb-4 text-sm text-slate-600">1 Assistência</p>
-          <p className="text-sm text-neutral-950">{assistenciaLabel}</p>
-        </div>
-      </div>
-    </aside>
   );
 }
 
