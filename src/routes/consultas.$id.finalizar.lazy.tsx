@@ -93,7 +93,7 @@ function FinalizarPage() {
   const [etapa, setEtapa] = useState<EtapaKey>("resumo");
   const [enviando, setEnviando] = useState(false);
   const [termosOpen, setTermosOpen] = useState(false);
-  const [seguroEtapa, setSeguroEtapa] = useState<"config" | "coberturas" | "pagamento" | "concluido">("config");
+  const [seguroEtapa, setSeguroEtapa] = useState<"coberturas" | "pagamento" | "concluido">("coberturas");
 
   // Configuração seguro
   const [coberturas, setCoberturas] = useState<string[]>(["incendio"]);
@@ -107,7 +107,6 @@ function FinalizarPage() {
   const [tipoSeguroImovel, setTipoSeguroImovel] = useState<"residencial" | "comercial">("residencial");
   const [residencialSubtipo, setResidencialSubtipo] = useState("Apartamento");
   const [comercialSubtipo, setComercialSubtipo] = useState("");
-  const [valorImovelSeguro, setValorImovelSeguro] = useState(250000);
   const [historicoAberto, setHistoricoAberto] = useState(false);
 
   const fnSalvarConfig = useServerFn(salvarConfiguracaoSeguro);
@@ -322,8 +321,6 @@ function FinalizarPage() {
         setResidencialSubtipo={setResidencialSubtipo}
         comercialSubtipo={comercialSubtipo}
         setComercialSubtipo={setComercialSubtipo}
-        valorImovelSeguro={valorImovelSeguro}
-        setValorImovelSeguro={setValorImovelSeguro}
         coberturas={coberturas}
         toggleCobertura={toggleCobertura}
         assistencia={assistencia}
@@ -352,7 +349,6 @@ function FinalizarPage() {
         setAceiteTermos={setAceiteTermos}
         abrirTermos={() => setTermosOpen(true)}
         seguroConcluido={seguroConcluido}
-        onAvancarConfig={() => setSeguroEtapa("coberturas")}
         onAvancarPagamento={avancarSeguroParaPagamento}
         onConcluirSeguro={concluirConfigSeguro}
         onEditarDados={() => navigate({ to: `/consultas/${id}/dados-complementares` as any })}
@@ -488,13 +484,13 @@ function ResumoPropostaLoft(p: any) {
     id, numeroProposta, consulta, inquilino, imovel, plano, documentos, historico,
     historicoAberto, setHistoricoAberto, tipoSeguroImovel, setTipoSeguroImovel,
     residencialSubtipo, setResidencialSubtipo, comercialSubtipo, setComercialSubtipo,
-    valorImovelSeguro, setValorImovelSeguro, coberturas, toggleCobertura,
+    coberturas, toggleCobertura,
     assistencia, setAssistencia, comissaoPct, setComissaoPct, valorComissao,
     totalSeguroImobiliario, parcelaSeguro, aluguel, condominio, taxas, totalLoc,
     premioMensal, taxaAtivacao, custoSaida, contratoAssinadoPendente, enviando,
     seguroEtapa, setSeguroEtapa, pagamento, setPagamento, naoMadeira, setNaoMadeira,
     aceiteTermos, setAceiteTermos, abrirTermos, seguroConcluido,
-    onAvancarConfig, onAvancarPagamento, onConcluirSeguro,
+    onAvancarPagamento, onConcluirSeguro,
     onEditarDados, onCancelar, onEnviar,
   } = p;
   const dataNascimento = consulta?.tenant_data_nascimento
@@ -632,7 +628,7 @@ function ResumoPropostaLoft(p: any) {
           <h2 className="mb-5 text-lg font-bold text-neutral-950">Seguro Imobiliário</h2>
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_235px]">
             <div className="space-y-6 border-slate-300 pr-0 lg:border-r lg:pr-6">
-              {seguroEtapa === "config" && (
+              {seguroEtapa === "coberturas" && (
                 <>
                   <div>
                     <p className="mb-4 text-sm font-medium">Tipo de imóvel</p>
@@ -660,38 +656,32 @@ function ResumoPropostaLoft(p: any) {
                     </div>
                   </div>
 
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-neutral-950">Valor do imóvel</label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm">R$</span>
-                      <input
-                        type="number"
-                        min={50000}
-                        max={1000000}
-                        value={valorImovelSeguro}
-                        onChange={(e) => setValorImovelSeguro(Number(e.target.value) || 0)}
-                        className="h-11 w-full rounded-md border border-slate-400 bg-white pl-10 pr-3 text-sm outline-none focus:border-neutral-900"
-                      />
-                    </div>
-                    <p className="mt-2 text-xs text-neutral-950">O valor do imóvel deve estar entre R$ 50.000,00 e R$ 1.000.000,00</p>
-                  </div>
-
-                  <div className="flex justify-end pt-2">
-                    <Button onClick={onAvancarConfig} className="h-11 rounded-md bg-yellow-400 px-6 font-bold text-neutral-900 hover:bg-yellow-300">
-                      Continuar <ArrowRight size={16} className="ml-2" />
-                    </Button>
-                  </div>
-                </>
-              )}
-
-              {seguroEtapa === "coberturas" && (
-                <>
                   <div className="space-y-3">
                     <h3 className="text-lg font-bold">Coberturas</h3>
                     <p className="text-sm text-slate-600">A cobertura de incêndio já está inclusa e serve de base para calcular as demais.</p>
-                    {COBERTURAS.map((c) => {
+
+                    {/* Cobertura obrigatória — cartão em destaque, com espaço reservado para um personagem */}
+                    <div className="relative flex min-h-[220px] items-center justify-between gap-4 overflow-hidden rounded-md bg-neutral-900 p-6">
+                      <div className="max-w-[70%]">
+                        <div className="mb-3 flex items-center gap-3">
+                          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-yellow-400 text-neutral-900">
+                            <Flame size={18} />
+                          </div>
+                          <span className="rounded-full bg-yellow-400 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-neutral-900">
+                            Cobertura obrigatória
+                          </span>
+                        </div>
+                        <p className="text-base font-bold text-white">Incêndio, explosão, queda de raio, fumaça e queda de aeronave</p>
+                        <p className="mt-2 text-sm text-neutral-400">Cobertura básica obrigatória contra sinistros estruturais graves.</p>
+                        <p className="mt-4 text-lg font-bold text-white">
+                          + {fmt(COBERTURA_VALORES.incendio)} <span className="text-xs font-normal text-neutral-400">/mês</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    {COBERTURAS.filter((c) => c.id !== "incendio").map((c) => {
                       const selected = coberturas.includes(c.id);
-                      const Icon = c.id === "incendio" ? Flame : c.id === "danos_eletricos" ? Zap : c.id === "vendaval" ? Wind : c.id === "rc_familiar" ? Home : ReceiptIcon;
+                      const Icon = c.id === "danos_eletricos" ? Zap : c.id === "vendaval" ? Wind : c.id === "rc_familiar" ? Home : ReceiptIcon;
                       return (
                         <div
                           key={c.id}
@@ -704,12 +694,11 @@ function ResumoPropostaLoft(p: any) {
                           <div className="flex gap-4">
                             <Icon size={20} className="mt-1 shrink-0 text-neutral-950" />
                             <div>
-                              {c.obrigatoria && <p className="mb-2 text-[10px] font-bold uppercase text-neutral-950">Cobertura obrigatória</p>}
                               <p className="max-w-[330px] text-base font-bold text-neutral-950">{c.nome}</p>
                               <p className="mt-2 text-sm text-slate-600">Ver detalhes</p>
                             </div>
                           </div>
-                          <Switch checked={selected} disabled={c.obrigatoria} className="pointer-events-none" />
+                          <Switch checked={selected} className="pointer-events-none" />
                         </div>
                       );
                     })}
@@ -763,10 +752,7 @@ function ResumoPropostaLoft(p: any) {
                     </div>
                   </div>
 
-                  <div className="flex justify-between gap-3 pt-2">
-                    <Button variant="outline" onClick={() => setSeguroEtapa("config")} className="h-11 rounded-md border-neutral-900 px-6">
-                      <ArrowLeft size={16} className="mr-2" /> Voltar
-                    </Button>
+                  <div className="flex justify-end gap-3 pt-2">
                     <Button onClick={onAvancarPagamento} className="h-11 rounded-md bg-yellow-400 px-6 font-bold text-neutral-900 hover:bg-yellow-300">
                       Continuar <ArrowRight size={16} className="ml-2" />
                     </Button>
@@ -848,13 +834,12 @@ function ResumoPropostaLoft(p: any) {
                     <span className="inline-flex items-center gap-2 text-sm font-bold text-emerald-700">
                       <CheckCircle2 size={16} /> Configuração do seguro concluída
                     </span>
-                    <button type="button" onClick={() => setSeguroEtapa("config")} className="text-sm font-bold text-emerald-700 underline">
+                    <button type="button" onClick={() => setSeguroEtapa("coberturas")} className="text-sm font-bold text-emerald-700 underline">
                       Editar
                     </button>
                   </div>
                   <div className="space-y-2 rounded-md border border-slate-300 p-5 text-sm text-neutral-800">
                     <p><strong>Tipo de imóvel:</strong> {tipoSeguroImovel === "residencial" ? residencialSubtipo || "Residencial" : comercialSubtipo || "Comercial"}</p>
-                    <p><strong>Valor do imóvel:</strong> {fmt(valorImovelSeguro)}</p>
                     <p><strong>Coberturas:</strong> {coberturas.length} selecionada{coberturas.length === 1 ? "" : "s"}</p>
                     <p><strong>Assistência:</strong> {assistLabel}</p>
                     <p><strong>Forma de pagamento:</strong> {PAGAMENTOS.find((m: any) => m.id === pagamento)?.label ?? "—"}</p>
@@ -868,7 +853,6 @@ function ResumoPropostaLoft(p: any) {
               parcela={parcelaSeguro}
               coberturas={coberturas}
               assistenciaLabel={assistLabel}
-              valorImovel={valorImovelSeguro}
             />
           </div>
         </section>
@@ -941,7 +925,7 @@ function TipoImovelCard(p: {
   );
 }
 
-function SeguroResumoPanel({ total, parcela, coberturas, assistenciaLabel, valorImovel }: any) {
+function SeguroResumoPanel({ total, parcela, coberturas, assistenciaLabel }: any) {
   const coberturaItems = coberturas.map((cid: string) => COBERTURAS.find((c) => c.id === cid)).filter(Boolean);
   return (
     <aside className="mt-6 bg-slate-100 p-6 lg:mt-0">
@@ -966,11 +950,6 @@ function SeguroResumoPanel({ total, parcela, coberturas, assistenciaLabel, valor
         <div className="border-t border-slate-200 pt-6">
           <p className="mb-4 text-sm text-slate-600">1 Assistência</p>
           <p className="text-sm text-neutral-950">{assistenciaLabel}</p>
-        </div>
-        <div className="border-t border-slate-200 pt-6 text-sm text-neutral-950">
-          <Building2 size={18} className="mb-5" />
-          <p>Todas as simulações efetuadas são calculadas com valor base do imóvel de:</p>
-          <p className="mt-2 text-lg font-bold">{fmt(valorImovel)}</p>
         </div>
       </div>
     </aside>
