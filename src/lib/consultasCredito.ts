@@ -34,9 +34,32 @@ export interface ConsultaCredito {
   origem: string | null;
   automation_started_at: string | null;
   automation_finished_at: string | null;
+  automation_step: string | null;
   error_message: string | null;
   raw_response: unknown;
   substatus: string | null;
+}
+
+/** Etapas que o worker local grava em `automation_step` enquanto processa a consulta. */
+export type AutomationStep = "abrindo" | "preenchendo" | "enviando" | "aguardando_resultado";
+
+const PROGRESSO_POR_ETAPA: Record<AutomationStep, number> = {
+  abrindo: 15,
+  preenchendo: 40,
+  enviando: 65,
+  aguardando_resultado: 85,
+};
+
+/**
+ * Percentual de progresso (0-100) para a barrinha do modal "Consultando crédito",
+ * a partir do status/etapa gravados pelo worker. Nunca inventa progresso: sem etapa
+ * conhecida, mostra só o mínimo (consulta enfileirada) até a próxima atualização real.
+ */
+export function progressoConsulta(status?: string | null, step?: string | null): number {
+  if (status && STATUS_FINAIS.includes(status as StatusConsulta)) return 100;
+  if (step && step in PROGRESSO_POR_ETAPA) return PROGRESSO_POR_ETAPA[step as AutomationStep];
+  if (status === "processando") return PROGRESSO_POR_ETAPA.abrindo;
+  return 5;
 }
 
 /**
@@ -121,6 +144,7 @@ export async function criarConsultaParaAutomacao({
     error_message: null,
     automation_started_at: null,
     automation_finished_at: null,
+    automation_step: null,
     raw_response: null,
   };
 
@@ -137,7 +161,7 @@ export async function getConsultaCredito(id: string): Promise<ConsultaCredito | 
   const { data, error } = await supabase
     .from("consultas_credito")
     .select(
-      "id, created_at, updated_at, tipo_pessoa, documento, documento_masked, tenant_name, tipo_imovel, cep, valor_aluguel, valor_condominio, valor_taxas, status, resultado, mensagem, origem, automation_started_at, automation_finished_at, error_message, raw_response, substatus",
+      "id, created_at, updated_at, tipo_pessoa, documento, documento_masked, tenant_name, tipo_imovel, cep, valor_aluguel, valor_condominio, valor_taxas, status, resultado, mensagem, origem, automation_started_at, automation_finished_at, automation_step, error_message, raw_response, substatus",
     )
     .eq("id", id)
     .maybeSingle();
@@ -156,6 +180,7 @@ export async function reenviarConsulta(id: string): Promise<void> {
       error_message: null,
       automation_started_at: null,
       automation_finished_at: null,
+      automation_step: null,
     } as any)
     .eq("id", id);
   if (error) throw error;

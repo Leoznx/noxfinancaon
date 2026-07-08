@@ -64,10 +64,31 @@ export async function fillTipoImovel(page: Page, tipo: "Residencial" | "Comercia
   await clickButtonByText(page, [new RegExp(tipo, "i")]);
 }
 
+/**
+ * Preenche o CEP e aguarda o autocomplete de endereço (ex.: "Blumenau, SC") aparecer,
+ * em vez de um `waitForTimeout` fixo — sai assim que detectar a cidade/UF resolvida
+ * (deixa a automação mais rápida no caminho feliz), com um teto de segurança para
+ * o caso do autocomplete não existir ou não responder.
+ */
 export async function fillCep(page: Page, cep: string): Promise<void> {
   const field = await locateField(page, { label: /cep/i, placeholder: /cep/i, role: { name: /cep/i } });
   await field.fill(cep);
-  await page.waitForTimeout(800); // dá tempo pro autocomplete de endereço, se houver
+
+  const TETO_MS = 2500;
+  const POLL_MS = 150;
+  const inicio = Date.now();
+  while (Date.now() - inicio < TETO_MS) {
+    const texto = await page
+      .locator("body")
+      .innerText()
+      .catch(() => "");
+    // Restringe a checagem ao trecho entre os rótulos "CEP" e "Valores" (onde a
+    // CredPago mostra a cidade/UF resolvida, ex.: "Blumenau, SC") — evita falso
+    // positivo com algum outro "Texto, UF" que já exista em outra parte da página.
+    const trechoCep = texto.split(/\bCEP\b/i)[1]?.split(/\bValores\b/i)[0] ?? "";
+    if (/[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s]*,\s*[A-Z]{2}\b/.test(trechoCep)) return;
+    await page.waitForTimeout(POLL_MS);
+  }
 }
 
 export async function fillValores(

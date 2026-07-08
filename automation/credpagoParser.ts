@@ -23,6 +23,21 @@ const MENSAGEM_POR_STATUS: Record<Exclude<ResultadoStatus, "erro">, string> = {
 
 const TIMEOUT_MS = 30000;
 const POLL_INTERVAL_MS = 1000;
+/**
+ * Se a página ficar com o texto EXATAMENTE igual por esse tempo depois do clique em
+ * "Simular Crédito" (nem um spinner, nem uma navegação, nada), assumimos que o clique
+ * não registrou e tentamos de novo — foi a causa raiz observada em produção (consulta
+ * ficou 30s travada na tela do formulário, com "Simular Crédito" ainda visível).
+ */
+const RETRY_APOS_MS = 7000;
+const MAX_RECLIQUES = 2;
+
+export interface ParseResultadoOpts {
+  /** Chamado quando a página parece travada (sem nenhuma mudança) após o envio — deve reenviar o clique. */
+  onRetryClick?: (tentativa: number) => Promise<void>;
+  /** Log opcional de progresso (o worker usa para deixar rastro no console). */
+  onLog?: (mensagem: string) => void;
+}
 
 /**
  * Aguarda o resultado da simulação aparecer na página e o identifica.
@@ -32,9 +47,15 @@ const POLL_INTERVAL_MS = 1000;
  * Nunca inventa uma resposta: se nenhum padrão bater dentro do timeout, retorna
  * status "erro" com o texto capturado para diagnóstico manual.
  */
-export async function parseResultado(page: Page): Promise<ResultadoParse> {
+export async function parseResultado(page: Page, opts: ParseResultadoOpts = {}): Promise<ResultadoParse> {
   const inicio = Date.now();
   let bodyText = "";
+  let baseline = await page
+    .locator("body")
+    .innerText()
+    .catch(() => "");
+  let ultimoReclique = Date.now();
+  let tentativasReclique = 0;
 
   while (Date.now() - inicio < TIMEOUT_MS) {
     bodyText = await page
@@ -53,6 +74,27 @@ export async function parseResultado(page: Page): Promise<ResultadoParse> {
           rawSummary: buildSummary(page, bodyText),
         };
       }
+    }
+
+    // Nada mudou desde a última "foto" (nem um spinner, nem uma navegação) — sinal
+    // mais confiável de que o clique não surtiu efeito. Não reclicamos enquanto algo
+    // estiver visivelmente mudando (ex.: "Sua análise está pronta!"), só quando a
+    // página está totalmente parada — evita clicar duas vezes numa simulação real.
+    const semMudancaNenhuma = bodyText === baseline;
+    const tempoTravado = Date.now() - ultimoReclique;
+    if (semMudancaNenhuma && opts.onRetryClick && tentativasReclique < MAX_RECLIQUES && tempoTravado >= RETRY_APOS_MS) {
+      tentativasReclique++;
+      opts.onLog?.(
+        `Página sem nenhuma mudança após ${Math.round(tempoTravado / 1000)}s — tentativa ${tentativasReclique}/${MAX_RECLIQUES} de reenviar o clique em "Simular Crédito".`,
+      );
+      await opts.onRetryClick(tentativasReclique).catch(() => {});
+      ultimoReclique = Date.now();
+      await page.waitForTimeout(500); // dá um instante pro clique surtir efeito antes da próxima "foto"
+      baseline = await page
+        .locator("body")
+        .innerText()
+        .catch(() => bodyText);
+      continue;
     }
 
     await page.waitForTimeout(POLL_INTERVAL_MS);

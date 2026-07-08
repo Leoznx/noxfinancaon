@@ -9,6 +9,8 @@ interface ModalConsultandoProps {
   erro?: string | null;
   onTentarNovamente?: () => void;
   onFechar?: () => void;
+  /** Progresso real (0-100) vindo do worker via Realtime — ver progressoConsulta() em consultasCredito.ts. */
+  progresso?: number;
 }
 
 // As imagens de resultado (ResultadoAutomacao) só entram na tela quando o worker termina
@@ -25,7 +27,7 @@ const IMAGENS_RESULTADO = [
  * Não fecha com clique fora nem com ESC — o fluxo termina por Realtime/polling
  * (redirecionamento) ou pelo estado de erro.
  */
-export function ModalConsultando({ open, erro, onTentarNovamente, onFechar }: ModalConsultandoProps) {
+export function ModalConsultando({ open, erro, onTentarNovamente, onFechar, progresso = 5 }: ModalConsultandoProps) {
   useEffect(() => {
     if (!open) return;
     IMAGENS_RESULTADO.forEach((src) => {
@@ -56,6 +58,12 @@ export function ModalConsultando({ open, erro, onTentarNovamente, onFechar }: Mo
             <DialogDescription className="text-base text-neutral-600 leading-relaxed">
               Estamos consultando a simulação aguarde...
             </DialogDescription>
+            <div className="w-full h-1.5 rounded-full bg-neutral-100 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-yellow-400 transition-[width] duration-700 ease-out"
+                style={{ width: `${Math.min(100, Math.max(5, progresso))}%` }}
+              />
+            </div>
             <div className="flex items-center gap-2 text-xs font-bold text-neutral-400 uppercase tracking-widest">
               <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
               Consultando crédito na NOX FINANÇA

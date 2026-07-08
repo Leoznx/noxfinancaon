@@ -106,12 +106,25 @@ async function fetchConsultasPendentes(limite: number): Promise<ConsultaCreditoR
 async function marcarProcessando(id: string): Promise<boolean> {
   const { data, error } = await supabaseAdmin
     .from("consultas_credito")
-    .update({ status: "processando", automation_started_at: new Date().toISOString() })
+    .update({ status: "processando", automation_step: "abrindo", automation_started_at: new Date().toISOString() })
     .eq("id", id)
     .eq("status", "pendente")
     .select("id");
   if (error) throw error;
   return Array.isArray(data) && data.length > 0;
+}
+
+/**
+ * Grava a etapa atual para a barra de progresso do modal "Consultando crédito"
+ * no frontend (Realtime já escuta UPDATEs desta tabela). Falha aqui nunca deve
+ * derrubar a consulta — é só um indicador visual, não parte do resultado.
+ */
+async function atualizarStep(id: string, step: "abrindo" | "preenchendo" | "enviando" | "aguardando_resultado"): Promise<void> {
+  try {
+    await supabaseAdmin.from("consultas_credito").update({ automation_step: step }).eq("id", id);
+  } catch {
+    // indicador visual apenas — nunca deve derrubar a consulta
+  }
 }
 
 async function atualizarResultado(
@@ -131,6 +144,7 @@ async function atualizarResultado(
     error_message: resultado.status === "erro" ? resultado.mensagem : null,
     raw_response: resultado.rawSummary as any,
     automacao_origem: "automacao_local",
+    automation_step: null,
     automation_finished_at: new Date().toISOString(),
   };
 
@@ -195,6 +209,7 @@ async function processarConsulta(
     }
 
     log(`[${cid}] Preenchendo dados`);
+    await atualizarStep(consulta.id, "preenchendo");
     await fillPessoa(page, consulta.tipo_pessoa || "PF");
     await fillDocumento(page, consulta.documento || "", consulta.tipo_pessoa || "PF");
     await fillTipoImovel(page, (consulta.tipo_imovel as "Residencial" | "Comercial") || "Residencial");
@@ -206,10 +221,19 @@ async function processarConsulta(
     });
 
     log(`[${cid}] Enviando simulação`);
+    await atualizarStep(consulta.id, "enviando");
     await submitSimulation(page);
 
     log(`[${cid}] Aguardando resultado`);
-    const resultado = await parseResultado(page);
+    await atualizarStep(consulta.id, "aguardando_resultado");
+    const resultado = await parseResultado(page, {
+      onLog: (msg) => log(`[${cid}] ${msg}`),
+      // Causa raiz observada em produção: o clique em "Simular Crédito" às vezes não
+      // registra (nada na página muda por dezenas de segundos). Reenviar o mesmo clique
+      // resolve sem precisar preencher tudo de novo — só reclicamos quando a página está
+      // 100% parada (ver heurística em parseResultado), nunca durante progresso real.
+      onRetryClick: () => submitSimulation(page),
+    });
     log(`[${cid}] Resultado identificado: ${resultado.status}`);
 
     if (estado.finalizado) {

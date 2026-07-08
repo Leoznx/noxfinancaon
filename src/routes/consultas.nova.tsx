@@ -10,6 +10,7 @@ import {
   criarConsultaParaAutomacao,
   reenviarConsulta,
   watchConsultaCredito,
+  progressoConsulta,
   STATUS_FINAIS,
   type StatusConsulta,
 } from "@/lib/consultasCredito";
@@ -28,6 +29,7 @@ function NovaConsulta() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [consultaId, setConsultaId] = useState<string | null>(null);
   const [erroAutomacao, setErroAutomacao] = useState<string | null>(null);
+  const [progresso, setProgresso] = useState(5);
   const stopWatchRef = useRef<(() => void) | null>(null);
 
   const pararEscuta = () => {
@@ -41,6 +43,7 @@ function NovaConsulta() {
     pararEscuta();
     stopWatchRef.current = watchConsultaCredito(id, (consulta) => {
       const status = consulta.status as StatusConsulta;
+      setProgresso(progressoConsulta(consulta.status, consulta.automation_step));
       if (!STATUS_FINAIS.includes(status)) return;
       if (status === "erro") {
         setErroAutomacao(
@@ -63,6 +66,7 @@ function NovaConsulta() {
     }
     setIsSubmitting(true);
     setErroAutomacao(null);
+    setProgresso(5);
     try {
       const id = await criarConsultaParaAutomacao({
         dados,
@@ -83,6 +87,7 @@ function NovaConsulta() {
     try {
       await reenviarConsulta(consultaId);
       setErroAutomacao(null);
+      setProgresso(5);
       escutarConsulta(consultaId);
     } catch (e: any) {
       toast.error("Erro ao reenviar consulta: " + (e?.message || "desconhecido"));
@@ -112,6 +117,7 @@ function NovaConsulta() {
       <ModalConsultando
         open={modalAberto}
         erro={erroAutomacao}
+        progresso={progresso}
         onTentarNovamente={handleTentarNovamente}
         onFechar={handleFecharModal}
       />
