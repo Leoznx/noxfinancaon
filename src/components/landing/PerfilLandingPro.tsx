@@ -107,14 +107,16 @@ export function PerfilLandingPro(props: PerfilLandingProProps) {
             </div>
             <div className="order-1 lg:order-2 relative animate-in fade-in slide-in-from-right duration-1000">
               {hero.personagemImagem ? (
-                <img
-                  src={hero.personagemImagem}
-                  alt={hero.personagemAlt ?? hero.imagemAlt}
-                  loading="eager"
-                  decoding="async"
-                  fetchPriority="high"
-                  className="mx-auto h-auto w-full max-w-md object-contain lg:mx-0 lg:ml-auto lg:max-w-none"
-                />
+                <div className="flex w-full items-center justify-center overflow-visible lg:justify-end">
+                  <img
+                    src={hero.personagemImagem}
+                    alt={hero.personagemAlt ?? hero.imagemAlt}
+                    loading="eager"
+                    decoding="async"
+                    fetchPriority="high"
+                    className="block h-auto w-full max-w-[420px] object-contain object-right sm:max-w-[520px] lg:max-w-[720px]"
+                  />
+                </div>
               ) : (
                 <>
                   <div className="absolute -inset-4 bg-yellow-400/10 rounded-[2rem] blur-3xl -z-10" />
