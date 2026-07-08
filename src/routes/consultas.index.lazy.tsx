@@ -104,7 +104,15 @@ function Consultas() {
 
 
 
-  const getStatusBadge = (status: string) => {
+  // `resultado` guarda o veredito da consulta de crédito de forma permanente — a
+  // automação só grava aprovado/recusado/em_analise ali e nunca mais mexe depois.
+  // Já `status` é o ponteiro de etapa da proposta inteira (pendente_documentacao,
+  // ativo, etc.) e muda conforme o corretor avança (ex.: escolhe um plano). Preferir
+  // `resultado` aqui garante que "Minhas Consultas" sempre mostre o resultado real
+  // da análise, mesmo depois de a proposta avançar para as próximas etapas.
+  const getStatusBadge = (c: any) => {
+    const resultadosFinais = ['aprovado', 'recusado', 'em_analise'];
+    const status = resultadosFinais.includes(c.resultado) ? c.resultado : c.status;
     switch (status) {
       case 'aprovado':
         return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 font-bold px-3">Aprovado</Badge>;
@@ -265,10 +273,14 @@ function Consultas() {
                     </div>
                   </td>
                   <td className="px-6 py-6">
-                    <span className="text-xs font-black text-neutral-500 uppercase tracking-wider">{c.planos?.nome || 'N/D'}</span>
+                    {/* Plano só aparece depois que o pagamento é confirmado — antes disso,
+                        escolher um plano na tela de resultado não significa que foi comprado. */}
+                    <span className="text-xs font-black text-neutral-500 uppercase tracking-wider">
+                      {c.payment_status === 'aprovado' ? (c.planos?.nome || 'N/D') : 'NENHUM'}
+                    </span>
                   </td>
                   <td className="px-6 py-6 text-center">
-                    {getStatusBadge(c.status)}
+                    {getStatusBadge(c)}
                   </td>
                   <td className="px-6 py-6 text-center">
                     <div className="flex flex-col items-center">
