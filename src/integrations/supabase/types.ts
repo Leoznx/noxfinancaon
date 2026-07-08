@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       affiliate_applications: {
@@ -238,83 +263,6 @@ export type Database = {
           },
         ]
       }
-      automacao_config: {
-        Row: {
-          chave: string
-          descricao: string | null
-          updated_at: string
-          updated_by: string | null
-          valor: Json
-        }
-        Insert: {
-          chave: string
-          descricao?: string | null
-          updated_at?: string
-          updated_by?: string | null
-          valor: Json
-        }
-        Update: {
-          chave?: string
-          descricao?: string | null
-          updated_at?: string
-          updated_by?: string | null
-          valor?: Json
-        }
-        Relationships: []
-      }
-      automacao_logs: {
-        Row: {
-          acao: string
-          consulta_id: string | null
-          cpf: string | null
-          created_at: string
-          detalhes: Json | null
-          duration_ms: number | null
-          error_message: string | null
-          id: string
-          resultado_credpago: string | null
-          screenshot_url: string | null
-          status: string
-          worker_id: string | null
-        }
-        Insert: {
-          acao: string
-          consulta_id?: string | null
-          cpf?: string | null
-          created_at?: string
-          detalhes?: Json | null
-          duration_ms?: number | null
-          error_message?: string | null
-          id?: string
-          resultado_credpago?: string | null
-          screenshot_url?: string | null
-          status: string
-          worker_id?: string | null
-        }
-        Update: {
-          acao?: string
-          consulta_id?: string | null
-          cpf?: string | null
-          created_at?: string
-          detalhes?: Json | null
-          duration_ms?: number | null
-          error_message?: string | null
-          id?: string
-          resultado_credpago?: string | null
-          screenshot_url?: string | null
-          status?: string
-          worker_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "automacao_logs_consulta_id_fkey"
-            columns: ["consulta_id"]
-            isOneToOne: false
-            referencedRelation: "consultas_credito"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       blog_post_reactions: {
         Row: {
           dislike_count: number
@@ -362,6 +310,77 @@ export type Database = {
           vote_type?: string
         }
         Relationships: []
+      }
+      cakto_payments: {
+        Row: {
+          amount: number
+          cakto_payment_id: string | null
+          cakto_ref_id: string | null
+          checkout_url: string | null
+          consultation_id: string | null
+          contract_id: string | null
+          created_at: string
+          customer_email: string
+          customer_name: string
+          customer_phone: string | null
+          id: string
+          idempotency_key: string
+          paid_at: string | null
+          payment_method: string
+          raw_response: Json | null
+          selected_fire_insurance_mode: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          cakto_payment_id?: string | null
+          cakto_ref_id?: string | null
+          checkout_url?: string | null
+          consultation_id?: string | null
+          contract_id?: string | null
+          created_at?: string
+          customer_email: string
+          customer_name: string
+          customer_phone?: string | null
+          id?: string
+          idempotency_key: string
+          paid_at?: string | null
+          payment_method: string
+          raw_response?: Json | null
+          selected_fire_insurance_mode?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          cakto_payment_id?: string | null
+          cakto_ref_id?: string | null
+          checkout_url?: string | null
+          consultation_id?: string | null
+          contract_id?: string | null
+          created_at?: string
+          customer_email?: string
+          customer_name?: string
+          customer_phone?: string | null
+          id?: string
+          idempotency_key?: string
+          paid_at?: string | null
+          payment_method?: string
+          raw_response?: Json | null
+          selected_fire_insurance_mode?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cakto_payments_consultation_id_fkey"
+            columns: ["consultation_id"]
+            isOneToOne: false
+            referencedRelation: "consultas_credito"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       cargo_permissoes: {
         Row: {
@@ -533,194 +552,39 @@ export type Database = {
         }
         Relationships: []
       }
-      consulta_inquilinos: {
-        Row: {
-          consulta_id: string
-          created_at: string
-          documento_cifrado: string
-          documento_mascarado: string
-          id: string
-          nome: string | null
-          tipo_pessoa: string
-        }
-        Insert: {
-          consulta_id: string
-          created_at?: string
-          documento_cifrado: string
-          documento_mascarado: string
-          id?: string
-          nome?: string | null
-          tipo_pessoa: string
-        }
-        Update: {
-          consulta_id?: string
-          created_at?: string
-          documento_cifrado?: string
-          documento_mascarado?: string
-          id?: string
-          nome?: string | null
-          tipo_pessoa?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "consulta_inquilinos_consulta_id_fkey"
-            columns: ["consulta_id"]
-            isOneToOne: false
-            referencedRelation: "consultas_credito_v2"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      consulta_logs: {
-        Row: {
-          acao: string
-          consulta_id: string
-          created_at: string
-          id: string
-          ip: string | null
-          metadata: Json | null
-          status_anterior: string | null
-          status_novo: string | null
-          user_agent: string | null
-          user_id: string | null
-        }
-        Insert: {
-          acao: string
-          consulta_id: string
-          created_at?: string
-          id?: string
-          ip?: string | null
-          metadata?: Json | null
-          status_anterior?: string | null
-          status_novo?: string | null
-          user_agent?: string | null
-          user_id?: string | null
-        }
-        Update: {
-          acao?: string
-          consulta_id?: string
-          created_at?: string
-          id?: string
-          ip?: string | null
-          metadata?: Json | null
-          status_anterior?: string | null
-          status_novo?: string | null
-          user_agent?: string | null
-          user_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "consulta_logs_consulta_id_fkey"
-            columns: ["consulta_id"]
-            isOneToOne: false
-            referencedRelation: "consultas_credito_v2"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      consultas: {
-        Row: {
-          corretor_id: string | null
-          created_at: string
-          id: string
-          locatario_cpf: string
-          locatario_nome: string
-          mensagem_erro: string | null
-          plano: string
-          resultado_payload: Json | null
-          status: string
-          tentativas: number
-          updated_at: string
-          valor_locaticio: number
-        }
-        Insert: {
-          corretor_id?: string | null
-          created_at?: string
-          id?: string
-          locatario_cpf: string
-          locatario_nome: string
-          mensagem_erro?: string | null
-          plano: string
-          resultado_payload?: Json | null
-          status?: string
-          tentativas?: number
-          updated_at?: string
-          valor_locaticio: number
-        }
-        Update: {
-          corretor_id?: string | null
-          created_at?: string
-          id?: string
-          locatario_cpf?: string
-          locatario_nome?: string
-          mensagem_erro?: string | null
-          plano?: string
-          resultado_payload?: Json | null
-          status?: string
-          tentativas?: number
-          updated_at?: string
-          valor_locaticio?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "consultas_corretor_id_fkey"
-            columns: ["corretor_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "consultas_corretor_id_fkey"
-            columns: ["corretor_id"]
-            isOneToOne: false
-            referencedRelation: "saldos_comissao"
-            referencedColumns: ["profile_id"]
-          },
-        ]
-      }
       consultas_credito: {
         Row: {
           accepted_ip: string | null
           accepted_user_agent: string | null
           activation_completed_at: string | null
           activation_cpf_attempts: number
-          activation_fee_amount: number | null
-          activation_fee_commission: number | null
-          activation_fee_enabled: boolean | null
           activation_last_access_at: string | null
           activation_status: string | null
           activation_token: string | null
           activation_token_expires_at: string | null
           approved_at: string | null
           approved_by: string | null
-          automacao_attempts: number
-          automacao_credpago_resultado: Json | null
-          automacao_credpago_status: string | null
-          automacao_last_error: string | null
           automacao_origem: string | null
-          automacao_processed_at: string | null
+          automation_finished_at: string | null
+          automation_started_at: string | null
+          automation_step: string | null
           base_calculo: number | null
           billing_responsible_role: string | null
           billing_responsible_user_id: string | null
           biometria_image_url: string | null
           biometria_sent_at: string | null
           biometria_status: string | null
+          cep: string | null
           commission_enabled: boolean | null
           contract_accepted: boolean | null
           contract_accepted_at: string | null
           corretor_id: string | null
           created_at: string
           dados_complementares_em: string | null
+          documento: string | null
+          documento_masked: string | null
           documentos: Json | null
-          external_error: string | null
-          external_history: Json
-          external_painting_enabled: boolean | null
-          external_painting_installment: number | null
-          external_painting_total: number | null
-          external_provider: string | null
-          external_request_id: string | null
-          external_response: Json | null
-          external_status: string | null
+          error_message: string | null
           id: string
           imovel_bairro: string | null
           imovel_cep: string | null
@@ -740,6 +604,7 @@ export type Database = {
           insurance_restriction_warning_acknowledged: boolean | null
           internal_notes: string | null
           link_ativacao_enviado_em: string | null
+          mensagem: string | null
           observacoes: string | null
           origem: string | null
           payment_confirmed_at: string | null
@@ -749,17 +614,16 @@ export type Database = {
           profile_id_solicitante: string | null
           property_address: string | null
           property_not_wood_confirmed: boolean | null
-          proposal_summary: Json | null
           proposta_enviada_em: string | null
-          provider_returned_at: string | null
+          raw_response: Json | null
           rejected_at: string | null
           rejected_by: string | null
           rejection_reason: string | null
           rent_value: number | null
+          resultado: string | null
           role_solicitante: string | null
           score_interno: number | null
           selected_exit_cost: number | null
-          sent_to_provider_at: string | null
           status: string
           substatus: string | null
           tenant_data_nascimento: string | null
@@ -771,52 +635,47 @@ export type Database = {
           tenant_user_id: string | null
           terms_accepted: boolean | null
           terms_accepted_at: string | null
+          tipo_imovel: string | null
+          tipo_pessoa: string | null
           updated_at: string
+          valor_aluguel: number | null
           valor_anual: number | null
+          valor_condominio: number | null
           valor_premio_mensal: number | null
+          valor_taxas: number | null
         }
         Insert: {
           accepted_ip?: string | null
           accepted_user_agent?: string | null
           activation_completed_at?: string | null
           activation_cpf_attempts?: number
-          activation_fee_amount?: number | null
-          activation_fee_commission?: number | null
-          activation_fee_enabled?: boolean | null
           activation_last_access_at?: string | null
           activation_status?: string | null
           activation_token?: string | null
           activation_token_expires_at?: string | null
           approved_at?: string | null
           approved_by?: string | null
-          automacao_attempts?: number
-          automacao_credpago_resultado?: Json | null
-          automacao_credpago_status?: string | null
-          automacao_last_error?: string | null
           automacao_origem?: string | null
-          automacao_processed_at?: string | null
+          automation_finished_at?: string | null
+          automation_started_at?: string | null
+          automation_step?: string | null
           base_calculo?: number | null
           billing_responsible_role?: string | null
           billing_responsible_user_id?: string | null
           biometria_image_url?: string | null
           biometria_sent_at?: string | null
           biometria_status?: string | null
+          cep?: string | null
           commission_enabled?: boolean | null
           contract_accepted?: boolean | null
           contract_accepted_at?: string | null
           corretor_id?: string | null
           created_at?: string
           dados_complementares_em?: string | null
+          documento?: string | null
+          documento_masked?: string | null
           documentos?: Json | null
-          external_error?: string | null
-          external_history?: Json
-          external_painting_enabled?: boolean | null
-          external_painting_installment?: number | null
-          external_painting_total?: number | null
-          external_provider?: string | null
-          external_request_id?: string | null
-          external_response?: Json | null
-          external_status?: string | null
+          error_message?: string | null
           id?: string
           imovel_bairro?: string | null
           imovel_cep?: string | null
@@ -836,6 +695,7 @@ export type Database = {
           insurance_restriction_warning_acknowledged?: boolean | null
           internal_notes?: string | null
           link_ativacao_enviado_em?: string | null
+          mensagem?: string | null
           observacoes?: string | null
           origem?: string | null
           payment_confirmed_at?: string | null
@@ -845,17 +705,16 @@ export type Database = {
           profile_id_solicitante?: string | null
           property_address?: string | null
           property_not_wood_confirmed?: boolean | null
-          proposal_summary?: Json | null
           proposta_enviada_em?: string | null
-          provider_returned_at?: string | null
+          raw_response?: Json | null
           rejected_at?: string | null
           rejected_by?: string | null
           rejection_reason?: string | null
           rent_value?: number | null
+          resultado?: string | null
           role_solicitante?: string | null
           score_interno?: number | null
           selected_exit_cost?: number | null
-          sent_to_provider_at?: string | null
           status?: string
           substatus?: string | null
           tenant_data_nascimento?: string | null
@@ -867,52 +726,47 @@ export type Database = {
           tenant_user_id?: string | null
           terms_accepted?: boolean | null
           terms_accepted_at?: string | null
+          tipo_imovel?: string | null
+          tipo_pessoa?: string | null
           updated_at?: string
+          valor_aluguel?: number | null
           valor_anual?: number | null
+          valor_condominio?: number | null
           valor_premio_mensal?: number | null
+          valor_taxas?: number | null
         }
         Update: {
           accepted_ip?: string | null
           accepted_user_agent?: string | null
           activation_completed_at?: string | null
           activation_cpf_attempts?: number
-          activation_fee_amount?: number | null
-          activation_fee_commission?: number | null
-          activation_fee_enabled?: boolean | null
           activation_last_access_at?: string | null
           activation_status?: string | null
           activation_token?: string | null
           activation_token_expires_at?: string | null
           approved_at?: string | null
           approved_by?: string | null
-          automacao_attempts?: number
-          automacao_credpago_resultado?: Json | null
-          automacao_credpago_status?: string | null
-          automacao_last_error?: string | null
           automacao_origem?: string | null
-          automacao_processed_at?: string | null
+          automation_finished_at?: string | null
+          automation_started_at?: string | null
+          automation_step?: string | null
           base_calculo?: number | null
           billing_responsible_role?: string | null
           billing_responsible_user_id?: string | null
           biometria_image_url?: string | null
           biometria_sent_at?: string | null
           biometria_status?: string | null
+          cep?: string | null
           commission_enabled?: boolean | null
           contract_accepted?: boolean | null
           contract_accepted_at?: string | null
           corretor_id?: string | null
           created_at?: string
           dados_complementares_em?: string | null
+          documento?: string | null
+          documento_masked?: string | null
           documentos?: Json | null
-          external_error?: string | null
-          external_history?: Json
-          external_painting_enabled?: boolean | null
-          external_painting_installment?: number | null
-          external_painting_total?: number | null
-          external_provider?: string | null
-          external_request_id?: string | null
-          external_response?: Json | null
-          external_status?: string | null
+          error_message?: string | null
           id?: string
           imovel_bairro?: string | null
           imovel_cep?: string | null
@@ -932,6 +786,7 @@ export type Database = {
           insurance_restriction_warning_acknowledged?: boolean | null
           internal_notes?: string | null
           link_ativacao_enviado_em?: string | null
+          mensagem?: string | null
           observacoes?: string | null
           origem?: string | null
           payment_confirmed_at?: string | null
@@ -941,17 +796,16 @@ export type Database = {
           profile_id_solicitante?: string | null
           property_address?: string | null
           property_not_wood_confirmed?: boolean | null
-          proposal_summary?: Json | null
           proposta_enviada_em?: string | null
-          provider_returned_at?: string | null
+          raw_response?: Json | null
           rejected_at?: string | null
           rejected_by?: string | null
           rejection_reason?: string | null
           rent_value?: number | null
+          resultado?: string | null
           role_solicitante?: string | null
           score_interno?: number | null
           selected_exit_cost?: number | null
-          sent_to_provider_at?: string | null
           status?: string
           substatus?: string | null
           tenant_data_nascimento?: string | null
@@ -963,9 +817,14 @@ export type Database = {
           tenant_user_id?: string | null
           terms_accepted?: boolean | null
           terms_accepted_at?: string | null
+          tipo_imovel?: string | null
+          tipo_pessoa?: string | null
           updated_at?: string
+          valor_aluguel?: number | null
           valor_anual?: number | null
+          valor_condominio?: number | null
           valor_premio_mensal?: number | null
+          valor_taxas?: number | null
         }
         Relationships: [
           {
@@ -1040,175 +899,6 @@ export type Database = {
           },
         ]
       }
-      consultas_credito_v2: {
-        Row: {
-          aluguel: number
-          available_assistances_json: Json | null
-          available_plans_json: Json | null
-          cargo_solicitante: string
-          cep: string
-          commercial_premium: number | null
-          condominio: number
-          consent_at: string | null
-          consent_lgpd: boolean
-          created_at: string
-          dados_cotacao: Json | null
-          erro_interno: string | null
-          gross_premium: number | null
-          id: string
-          imobiliaria_id: string | null
-          installments: number | null
-          iof: number | null
-          payment_type: string | null
-          policy_id: string | null
-          policy_number: string | null
-          processed_at: string | null
-          proposal_id: string | null
-          protocolo_externo: string | null
-          provedor: string | null
-          provider_environment: string | null
-          quote_id: string | null
-          quote_number: string | null
-          request_payload_sanitized: Json | null
-          response_payload_sanitized: Json | null
-          selected_assistance: string | null
-          selected_plan: string | null
-          status: string
-          status_pottencial: string | null
-          taxas: number
-          tenant_approved_limit: number | null
-          tipo_imovel: string
-          underwriting_status: string | null
-          updated_at: string
-          user_id: string
-          valor_aprovado: number | null
-        }
-        Insert: {
-          aluguel: number
-          available_assistances_json?: Json | null
-          available_plans_json?: Json | null
-          cargo_solicitante: string
-          cep: string
-          commercial_premium?: number | null
-          condominio?: number
-          consent_at?: string | null
-          consent_lgpd?: boolean
-          created_at?: string
-          dados_cotacao?: Json | null
-          erro_interno?: string | null
-          gross_premium?: number | null
-          id?: string
-          imobiliaria_id?: string | null
-          installments?: number | null
-          iof?: number | null
-          payment_type?: string | null
-          policy_id?: string | null
-          policy_number?: string | null
-          processed_at?: string | null
-          proposal_id?: string | null
-          protocolo_externo?: string | null
-          provedor?: string | null
-          provider_environment?: string | null
-          quote_id?: string | null
-          quote_number?: string | null
-          request_payload_sanitized?: Json | null
-          response_payload_sanitized?: Json | null
-          selected_assistance?: string | null
-          selected_plan?: string | null
-          status?: string
-          status_pottencial?: string | null
-          taxas?: number
-          tenant_approved_limit?: number | null
-          tipo_imovel: string
-          underwriting_status?: string | null
-          updated_at?: string
-          user_id: string
-          valor_aprovado?: number | null
-        }
-        Update: {
-          aluguel?: number
-          available_assistances_json?: Json | null
-          available_plans_json?: Json | null
-          cargo_solicitante?: string
-          cep?: string
-          commercial_premium?: number | null
-          condominio?: number
-          consent_at?: string | null
-          consent_lgpd?: boolean
-          created_at?: string
-          dados_cotacao?: Json | null
-          erro_interno?: string | null
-          gross_premium?: number | null
-          id?: string
-          imobiliaria_id?: string | null
-          installments?: number | null
-          iof?: number | null
-          payment_type?: string | null
-          policy_id?: string | null
-          policy_number?: string | null
-          processed_at?: string | null
-          proposal_id?: string | null
-          protocolo_externo?: string | null
-          provedor?: string | null
-          provider_environment?: string | null
-          quote_id?: string | null
-          quote_number?: string | null
-          request_payload_sanitized?: Json | null
-          response_payload_sanitized?: Json | null
-          selected_assistance?: string | null
-          selected_plan?: string | null
-          status?: string
-          status_pottencial?: string | null
-          taxas?: number
-          tenant_approved_limit?: number | null
-          tipo_imovel?: string
-          underwriting_status?: string | null
-          updated_at?: string
-          user_id?: string
-          valor_aprovado?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "consultas_credito_v2_imobiliaria_id_fkey"
-            columns: ["imobiliaria_id"]
-            isOneToOne: false
-            referencedRelation: "imobiliarias"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      consultas_log: {
-        Row: {
-          consulta_id: string
-          created_at: string
-          detalhe: Json | null
-          etapa: string
-          id: string
-        }
-        Insert: {
-          consulta_id: string
-          created_at?: string
-          detalhe?: Json | null
-          etapa: string
-          id?: string
-        }
-        Update: {
-          consulta_id?: string
-          created_at?: string
-          detalhe?: Json | null
-          etapa?: string
-          id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "consultas_log_consulta_id_fkey"
-            columns: ["consulta_id"]
-            isOneToOne: false
-            referencedRelation: "consultas"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       corretores: {
         Row: {
           cidade: string | null
@@ -1276,62 +966,6 @@ export type Database = {
             isOneToOne: true
             referencedRelation: "saldos_comissao"
             referencedColumns: ["profile_id"]
-          },
-        ]
-      }
-      credpago_credentials: {
-        Row: {
-          active: boolean
-          cookies: Json | null
-          created_at: string
-          created_by: string | null
-          id: string
-          imobiliaria_id: string | null
-          label: string
-          last_login_at: string | null
-          last_used_at: string | null
-          notes: string | null
-          password_cifrada: string
-          updated_at: string
-          username: string
-        }
-        Insert: {
-          active?: boolean
-          cookies?: Json | null
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          imobiliaria_id?: string | null
-          label: string
-          last_login_at?: string | null
-          last_used_at?: string | null
-          notes?: string | null
-          password_cifrada: string
-          updated_at?: string
-          username: string
-        }
-        Update: {
-          active?: boolean
-          cookies?: Json | null
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          imobiliaria_id?: string | null
-          label?: string
-          last_login_at?: string | null
-          last_used_at?: string | null
-          notes?: string | null
-          password_cifrada?: string
-          updated_at?: string
-          username?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "credpago_credentials_imobiliaria_id_fkey"
-            columns: ["imobiliaria_id"]
-            isOneToOne: false
-            referencedRelation: "imobiliarias"
-            referencedColumns: ["id"]
           },
         ]
       }
@@ -2238,6 +1872,48 @@ export type Database = {
         }
         Relationships: []
       }
+      notification_preferences: {
+        Row: {
+          canal_app: boolean
+          canal_email: boolean
+          canal_whatsapp: boolean
+          consulta_pre_aprovada: boolean
+          created_at: string
+          id: string
+          nova_comissao: boolean
+          saque_aprovado: boolean
+          subiu_nivel: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          canal_app?: boolean
+          canal_email?: boolean
+          canal_whatsapp?: boolean
+          consulta_pre_aprovada?: boolean
+          created_at?: string
+          id?: string
+          nova_comissao?: boolean
+          saque_aprovado?: boolean
+          subiu_nivel?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          canal_app?: boolean
+          canal_email?: boolean
+          canal_whatsapp?: boolean
+          consulta_pre_aprovada?: boolean
+          created_at?: string
+          id?: string
+          nova_comissao?: boolean
+          saque_aprovado?: boolean
+          subiu_nivel?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       permissoes: {
         Row: {
           acao: string
@@ -2310,116 +1986,12 @@ export type Database = {
         }
         Relationships: []
       }
-      pottencial_config: {
-        Row: {
-          beneficiary_cellphone: string | null
-          beneficiary_document: string | null
-          beneficiary_email: string | null
-          beneficiary_endereco: Json | null
-          beneficiary_name: string | null
-          beneficiary_tipo_pessoa: string | null
-          broker_commission_percentage: number | null
-          broker_document: string | null
-          created_at: string
-          default_assistance: string | null
-          default_inhabited: boolean | null
-          default_installments: number | null
-          default_multiple: number | null
-          default_payment_type: string | null
-          default_plan: string | null
-          default_vigencia_meses: number | null
-          id: string
-          insured_cellphone: string | null
-          insured_document: string | null
-          insured_email: string | null
-          insured_endereco: Json | null
-          insured_name: string | null
-          insured_tipo_pessoa: string | null
-          insured_use_beneficiary: boolean | null
-          policy_owner_document: string | null
-          sandbox_property_complement: string | null
-          sandbox_property_number: string | null
-          sandbox_tenant_cellphone: string | null
-          sandbox_tenant_email: string | null
-          sandbox_tenant_name: string | null
-          singleton: boolean
-          updated_at: string
-        }
-        Insert: {
-          beneficiary_cellphone?: string | null
-          beneficiary_document?: string | null
-          beneficiary_email?: string | null
-          beneficiary_endereco?: Json | null
-          beneficiary_name?: string | null
-          beneficiary_tipo_pessoa?: string | null
-          broker_commission_percentage?: number | null
-          broker_document?: string | null
-          created_at?: string
-          default_assistance?: string | null
-          default_inhabited?: boolean | null
-          default_installments?: number | null
-          default_multiple?: number | null
-          default_payment_type?: string | null
-          default_plan?: string | null
-          default_vigencia_meses?: number | null
-          id?: string
-          insured_cellphone?: string | null
-          insured_document?: string | null
-          insured_email?: string | null
-          insured_endereco?: Json | null
-          insured_name?: string | null
-          insured_tipo_pessoa?: string | null
-          insured_use_beneficiary?: boolean | null
-          policy_owner_document?: string | null
-          sandbox_property_complement?: string | null
-          sandbox_property_number?: string | null
-          sandbox_tenant_cellphone?: string | null
-          sandbox_tenant_email?: string | null
-          sandbox_tenant_name?: string | null
-          singleton?: boolean
-          updated_at?: string
-        }
-        Update: {
-          beneficiary_cellphone?: string | null
-          beneficiary_document?: string | null
-          beneficiary_email?: string | null
-          beneficiary_endereco?: Json | null
-          beneficiary_name?: string | null
-          beneficiary_tipo_pessoa?: string | null
-          broker_commission_percentage?: number | null
-          broker_document?: string | null
-          created_at?: string
-          default_assistance?: string | null
-          default_inhabited?: boolean | null
-          default_installments?: number | null
-          default_multiple?: number | null
-          default_payment_type?: string | null
-          default_plan?: string | null
-          default_vigencia_meses?: number | null
-          id?: string
-          insured_cellphone?: string | null
-          insured_document?: string | null
-          insured_email?: string | null
-          insured_endereco?: Json | null
-          insured_name?: string | null
-          insured_tipo_pessoa?: string | null
-          insured_use_beneficiary?: boolean | null
-          policy_owner_document?: string | null
-          sandbox_property_complement?: string | null
-          sandbox_property_number?: string | null
-          sandbox_tenant_cellphone?: string | null
-          sandbox_tenant_email?: string | null
-          sandbox_tenant_name?: string | null
-          singleton?: boolean
-          updated_at?: string
-        }
-        Relationships: []
-      }
       profiles: {
         Row: {
           aprovado_em: string | null
           aprovado_por: string | null
           avatar_url: string | null
+          cnpj: string | null
           contratos_ativos_count: number | null
           created_at: string
           email: string
@@ -2441,6 +2013,7 @@ export type Database = {
           aprovado_em?: string | null
           aprovado_por?: string | null
           avatar_url?: string | null
+          cnpj?: string | null
           contratos_ativos_count?: number | null
           created_at?: string
           email: string
@@ -2462,6 +2035,7 @@ export type Database = {
           aprovado_em?: string | null
           aprovado_por?: string | null
           avatar_url?: string | null
+          cnpj?: string | null
           contratos_ativos_count?: number | null
           created_at?: string
           email?: string
@@ -3545,26 +3119,6 @@ export type Database = {
         Returns: number
       }
       current_imobiliaria_id: { Args: never; Returns: string }
-      decrypt_credpago: {
-        Args: { _cifrado: string; _key: string }
-        Returns: string
-      }
-      decrypt_documento: {
-        Args: { _inquilino_id: string; _key: string }
-        Returns: string
-      }
-      decrypt_documento_worker: {
-        Args: { _inquilino_id: string; _key: string }
-        Returns: string
-      }
-      encrypt_credpago: {
-        Args: { _key: string; _plain: string }
-        Returns: string
-      }
-      encrypt_documento: {
-        Args: { _doc: string; _key: string }
-        Returns: string
-      }
       ensure_nox_demo_auth_user: {
         Args: {
           p_email: string
@@ -3575,7 +3129,6 @@ export type Database = {
         }
         Returns: string
       }
-      finalizar_consultas_travadas: { Args: never; Returns: number }
       find_corretor: {
         Args: { p_by: string; p_query: string }
         Returns: {
@@ -3623,29 +3176,9 @@ export type Database = {
       is_admin: { Args: { _uid: string }; Returns: boolean }
       is_internal: { Args: { _uid: string }; Returns: boolean }
       liberar_reservas_vendedor: { Args: never; Returns: number }
-      listar_propostas_pendentes_automacao: {
-        Args: { _limit?: number }
-        Returns: {
-          attempts: number
-          consulta_id: string
-          cpf: string
-          created_at: string
-          credential_id: string
-          credpago_username: string
-          email: string
-          imobiliaria_id: string
-          nome: string
-          property_address: string
-          rent_value: number
-        }[]
-      }
       materializar_comissoes_vendedor: {
         Args: { p_ano?: number; p_mes?: number }
         Returns: number
-      }
-      resetar_consulta_para_reprocessar: {
-        Args: { _consulta_id: string }
-        Returns: undefined
       }
       validar_ativacao_token: {
         Args: { _cpf: string; _token: string }
@@ -3800,6 +3333,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       internal_role: [

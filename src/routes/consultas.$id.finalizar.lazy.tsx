@@ -1,5 +1,5 @@
 import { createLazyFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -9,7 +9,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { ModalPagamentoCakto } from "@/components/simulacao/ModalPagamentoCakto";
 import { toast } from "sonner";
+import { criarPagamentoCakto } from "@/lib/pagamentoCakto.functions";
+import { coletarPerfilAntifraude, preAquecerAntifraude } from "@/lib/caktoAntifraud";
+import type { NormalizedCaktoPayment } from "@/lib/cakto.service";
 import {
   CheckCircle2, Circle, Lock, ShieldCheck, FileText, MapPin, User, Building2, CreditCard,
   QrCode, Receipt as ReceiptIcon, Info, AlertTriangle, ArrowLeft, ArrowRight, Send,
@@ -31,6 +35,7 @@ export const Route = createLazyFileRoute("/consultas/$id/finalizar")({
 });
 
 type EtapaKey = "resumo" | "pagamento" | "revisao" | "enviada";
+type IncendioPagamento = "a_vista" | "parcelado";
 
 const ETAPAS: { key: EtapaKey; label: string }[] = [
   { key: "resumo", label: "Resumo da proposta" },
@@ -113,7 +118,7 @@ function FinalizarPage() {
 
   // Pagamento
   const [pagamento, setPagamento] = useState<"credit_card" | "pix" | "boleto" | "">("credit_card");
-  const [naoMadeira, setNaoMadeira] = useState(false);
+  const [incendioPagamento, setIncendioPagamento] = useState<IncendioPagamento>("parcelado");
   const [aceiteTermos, setAceiteTermos] = useState(false);
   const [tipoSeguroImovel, setTipoSeguroImovel] = useState<"residencial" | "comercial">("residencial");
   const [residencialSubtipo, setResidencialSubtipo] = useState("Apartamento");
@@ -124,6 +129,7 @@ function FinalizarPage() {
   const fnSalvarPagamento = useServerFn(salvarFormaPagamento);
   const fnEnviar = useServerFn(enviarProposta);
   const fnHist = useServerFn(listarHistoricoProposta);
+  const fnCriarPagamentoCakto = useServerFn(criarPagamentoCakto);
 
   useEffect(() => {
     (async () => {
@@ -145,7 +151,6 @@ function FinalizarPage() {
         if ((data as any).insurance_assistance) setAssistencia((data as any).insurance_assistance);
         if ((data as any).insurance_commission_pct != null) setComissaoPct(Number((data as any).insurance_commission_pct));
         if ((data as any).insurance_payment_method) setPagamento((data as any).insurance_payment_method);
-        if ((data as any).property_not_wood_confirmed) setNaoMadeira(true);
         if ((data as any).terms_accepted) setAceiteTermos(true);
         if ((data as any).substatus === "aguardando_assinatura") setEtapa("enviada");
 
@@ -181,6 +186,9 @@ function FinalizarPage() {
   const pinturaTotal = (consulta?.external_painting_enabled ?? extrasSummary?.external_painting_enabled)
     ? Number(consulta?.external_painting_total ?? extrasSummary?.external_painting_total) || 0
     : 0;
+  const pinturaMensal = (consulta?.external_painting_enabled ?? extrasSummary?.external_painting_enabled)
+    ? Number(consulta?.external_painting_installment ?? extrasSummary?.external_painting_installment) || (pinturaTotal > 0 ? +(pinturaTotal / 3).toFixed(2) : 0)
+    : 0;
   const contratoAssinadoPendente = !!dadosComplementaresSummary?.contrato_locacao_pendencia;
   const custoSaida = Number(plano?.custo_saida) || 0;
 
@@ -190,11 +198,11 @@ function FinalizarPage() {
     () => calcularPercentualIncendio(tipoSeguroImovel, aluguel),
     [tipoSeguroImovel, aluguel],
   );
-  const premioIncendioMensal = useMemo(() => aluguel * (percentualIncendio / 100), [aluguel, percentualIncendio]);
-  const premioIncendioAnual = useMemo(() => premioIncendioMensal * 12, [premioIncendioMensal]);
+  const premioIncendioAnual = useMemo(() => aluguel * (percentualIncendio / 100), [aluguel, percentualIncendio]);
+  const premioIncendioMensal = useMemo(() => premioIncendioAnual / 12, [premioIncendioAnual]);
   const totalSeguroImobiliario = useMemo(() => {
-    return premioIncendioMensal + (ASSISTENCIA_VALORES[assistencia] ?? 0);
-  }, [premioIncendioMensal, assistencia]);
+    return premioIncendioAnual + ((ASSISTENCIA_VALORES[assistencia] ?? 0) * 12);
+  }, [premioIncendioAnual, assistencia]);
   const parcelaSeguro = useMemo(() => totalSeguroImobiliario / 12, [totalSeguroImobiliario]);
 
   function toggleCobertura(cid: string) {
@@ -221,7 +229,6 @@ function FinalizarPage() {
 
   async function avancarParaRevisao() {
     if (!pagamento) return toast.error("Selecione uma forma de pagamento.");
-    if (!naoMadeira) return toast.error("Confirme que o imóvel não é de madeira para continuar.");
     if (!aceiteTermos) return toast.error("Aceite os Termos e Condições para continuar.");
     try {
       const label = PAGAMENTOS.find((p) => p.id === pagamento)?.label ?? "";
@@ -230,7 +237,7 @@ function FinalizarPage() {
           consultaId: id,
           insurance_payment_method: pagamento as any,
           insurance_payment_method_label: label,
-          property_not_wood_confirmed: naoMadeira,
+          property_not_wood_confirmed: true,
           terms_accepted: aceiteTermos,
         },
       });
@@ -251,12 +258,14 @@ function FinalizarPage() {
           insurance_commission_pct: comissaoPct,
         },
       });
+      const formaPagamentoLabel = PAGAMENTOS.find((p) => p.id === pagamento)?.label ?? "Cartão de crédito";
+      const incendioPagamentoLabel = incendioPagamento === "a_vista" ? "incêndio à vista" : "incêndio embutido na parcela";
       await fnSalvarPagamento({
         data: {
           consultaId: id,
           insurance_payment_method: (pagamento || "credit_card") as any,
-          insurance_payment_method_label: PAGAMENTOS.find((p) => p.id === pagamento)?.label ?? "Cartão de crédito",
-          property_not_wood_confirmed: naoMadeira,
+          insurance_payment_method_label: `${formaPagamentoLabel} - ${incendioPagamentoLabel}`,
+          property_not_wood_confirmed: true,
           terms_accepted: aceiteTermos,
         },
       });
@@ -279,7 +288,7 @@ function FinalizarPage() {
 
   const numeroProposta = `NOX-${String(id).slice(0, 8).toUpperCase()}`;
 
-  const seguroConcluido = !!(pagamento && naoMadeira && aceiteTermos);
+  const seguroConcluido = !!(pagamento && aceiteTermos);
 
   return (
     <DashboardLayout>
@@ -318,13 +327,15 @@ function FinalizarPage() {
         totalLoc={totalLoc}
         premioMensal={premioMensal}
         taxaAtivacao={taxaAtivacao}
+        pinturaTotal={pinturaTotal}
+        pinturaMensal={pinturaMensal}
         custoSaida={custoSaida}
         contratoAssinadoPendente={contratoAssinadoPendente}
         enviando={enviando}
         pagamento={pagamento}
         setPagamento={setPagamento}
-        naoMadeira={naoMadeira}
-        setNaoMadeira={setNaoMadeira}
+        incendioPagamento={incendioPagamento}
+        setIncendioPagamento={setIncendioPagamento}
         aceiteTermos={aceiteTermos}
         setAceiteTermos={setAceiteTermos}
         abrirTermos={() => setTermosOpen(true)}
@@ -332,6 +343,7 @@ function FinalizarPage() {
         onEditarDados={() => navigate({ to: `/consultas/${id}/dados-complementares` as any })}
         onCancelar={() => navigate({ to: `/consultas/${id}/resultado` as any })}
         onEnviar={handleEnviar}
+        fnCriarPagamentoCakto={fnCriarPagamentoCakto}
       />
 
       <Dialog open={termosOpen} onOpenChange={setTermosOpen}>
@@ -391,7 +403,6 @@ function FinalizarPage() {
           {etapa === "pagamento" && (
             <EtapaPagamento
               pagamento={pagamento} setPagamento={setPagamento}
-              naoMadeira={naoMadeira} setNaoMadeira={setNaoMadeira}
               aceiteTermos={aceiteTermos} setAceiteTermos={setAceiteTermos}
               abrirTermos={() => setTermosOpen(true)}
               premioMensal={premioMensal} premioAnual={premioAnual} totalFinal={totalFinal}
@@ -466,10 +477,10 @@ function ResumoPropostaLoft(p: any) {
     assistencia, setAssistencia, comissaoPct, setComissaoPct, valorComissao,
     totalSeguroImobiliario, parcelaSeguro, percentualIncendio, premioIncendioMensal, premioIncendioAnual,
     aluguel, condominio, taxas, totalLoc,
-    premioMensal, taxaAtivacao, custoSaida, contratoAssinadoPendente, enviando,
-    pagamento, setPagamento, naoMadeira, setNaoMadeira,
+    premioMensal, taxaAtivacao, pinturaTotal, pinturaMensal, custoSaida, contratoAssinadoPendente, enviando,
+    pagamento, setPagamento, incendioPagamento, setIncendioPagamento,
     aceiteTermos, setAceiteTermos, abrirTermos, seguroConcluido,
-    onEditarDados, onCancelar, onEnviar,
+    onEditarDados, onCancelar, onEnviar, fnCriarPagamentoCakto,
   } = p;
   const dataNascimento = consulta?.tenant_data_nascimento
     ? new Date(`${consulta.tenant_data_nascimento}T00:00:00`).toLocaleDateString("pt-BR")
@@ -484,6 +495,85 @@ function ResumoPropostaLoft(p: any) {
   const coberturaTotal = `${Number(plano?.cobertura_multiplicador) || 35}x`;
   const custoSaidaTexto = `${Number(custoSaida) || 3}x`;
   const documentosNomes = documentos.map((doc: any) => doc.file_name).filter(Boolean);
+  const [pagamentoAberto, setPagamentoAberto] = useState(false);
+  const mensalidadeBaseComPintura = premioMensal + pinturaMensal;
+  const mensalidadeFinal = incendioPagamento === "parcelado" ? mensalidadeBaseComPintura + premioIncendioMensal : mensalidadeBaseComPintura;
+  const pagamentoInicial = (incendioPagamento === "a_vista" ? premioIncendioAnual : 0) + taxaAtivacao;
+  const pagamentoSelecionado = PAGAMENTOS.find((item) => item.id === pagamento);
+  const pagamentoOpcoes = ["boleto", "pix", "credit_card"].map((id) => PAGAMENTOS.find((item) => item.id === id)).filter(Boolean) as typeof PAGAMENTOS;
+  const irParaPagamento = () => {
+    setPagamentoAberto(true);
+    window.setTimeout(() => document.getElementById("pagamento-proposta")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+  };
+  const voltarParaResumo = () => {
+    setPagamentoAberto(false);
+    window.setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 50);
+  };
+
+  // Integração Cakto — cobra o valor inicial/à vista (seguro incêndio à vista + taxa de
+  // ativação, se houver) via Pix/Boleto/Cartão. A mensalidade recorrente da fiança
+  // continua fora daqui, faturada pelo fluxo de mensalidades já existente.
+  const [pagando, setPagando] = useState(false);
+  const [pagamentoCaktoResultado, setPagamentoCaktoResultado] = useState<NormalizedCaktoPayment | null>(null);
+  const [modalCaktoAberto, setModalCaktoAberto] = useState(false);
+  const pagandoRef = useRef(false);
+
+  useEffect(() => {
+    if (pagamentoAberto) preAquecerAntifraude();
+  }, [pagamentoAberto]);
+
+  async function handlePagarComCakto() {
+    if (pagandoRef.current) return;
+
+    // Nada a cobrar agora (seguro incêndio embutido na parcela e sem taxa de ativação) —
+    // mantém o comportamento já existente de só enviar a proposta.
+    if (pagamentoInicial <= 0) {
+      await onEnviar();
+      return;
+    }
+
+    const nome = consulta?.tenant_name || inquilino?.nome || "";
+    const email = consulta?.tenant_email || "";
+    const telefone = consulta?.tenant_telefone || inquilino?.telefone || "";
+    const documento = consulta?.tenant_document || inquilino?.cpf || inquilino?.cnpj || "";
+    const docType = consulta?.tenant_type === "PJ" ? "cnpj" : "cpf";
+
+    if (!nome || !email || !telefone || !documento) {
+      toast.error("Complete os dados do inquilino (nome, e-mail, telefone e CPF/CNPJ) antes de pagar.");
+      return;
+    }
+
+    pagandoRef.current = true;
+    setPagando(true);
+    try {
+      const perfil = await coletarPerfilAntifraude();
+      const resposta = await fnCriarPagamentoCakto({
+        data: {
+          paymentMethod: pagamento,
+          selectedFireInsuranceMode: incendioPagamento === "a_vista" ? "avista" : "embutido",
+          amount: pagamentoInicial,
+          consultationId: id,
+          customer: { name: nome, email, phone: telefone, docType, docNumber: documento },
+          antifraudProfilingAttemptReference: perfil.antifraudProfilingAttemptReference,
+          fingerprint: perfil.fingerprint,
+        },
+      });
+
+      await onEnviar();
+
+      if (resposta.paymentMethod === "credit_card" && resposta.checkoutUrl) {
+        window.location.href = resposta.checkoutUrl;
+        return;
+      }
+      setPagamentoCaktoResultado(resposta);
+      setModalCaktoAberto(true);
+    } catch (e: any) {
+      toast.error(e?.message || "Não foi possível gerar o pagamento agora. Tente novamente.");
+    } finally {
+      pagandoRef.current = false;
+      setPagando(false);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-[#eef1f5] pb-28">
@@ -665,15 +755,10 @@ function ResumoPropostaLoft(p: any) {
 
             <div className="space-y-4 rounded-md border border-slate-300 p-5">
               <label className="flex cursor-pointer items-start gap-3">
-                <Checkbox checked={naoMadeira} onCheckedChange={(v) => setNaoMadeira(!!v)} />
-                <span className="text-sm text-neutral-800">Confirmo que o imóvel a ser segurado <strong>não é de madeira</strong>.</span>
-              </label>
-              <label className="flex cursor-pointer items-start gap-3">
                 <Checkbox checked={aceiteTermos} onCheckedChange={(v) => setAceiteTermos(!!v)} />
                 <span className="text-sm text-neutral-800">
                   Li e concordo com os{" "}
-                  <button type="button" onClick={abrirTermos} className="font-bold text-yellow-700 underline">Termos e Condições</button>{" "}
-                  da 180 Seguros.
+                  <button type="button" onClick={abrirTermos} className="font-bold text-yellow-700 underline">Termos e Condições</button>.
                 </span>
               </label>
             </div>
@@ -682,24 +767,124 @@ function ResumoPropostaLoft(p: any) {
               <AlertTriangle size={18} className="mt-0.5 shrink-0 text-yellow-700" />
               <p>Caso seja identificado que o imóvel possui alguma dessas características, a apólice do seguro não será emitida, e a proposta será cancelada.</p>
             </div>
+
+            {pagamentoAberto && (
+              <section id="pagamento-proposta" className="space-y-5 rounded-md border border-slate-300 bg-white p-5">
+                <div>
+                  <h3 className="text-lg font-bold text-neutral-950">Pagamento</h3>
+                  <p className="mt-1 text-sm text-slate-600">Escolha a forma de pagamento e como cobrar o seguro incêndio.</p>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  {pagamentoOpcoes.map((opcao) => {
+                    const Icon = opcao.icon;
+                    const selected = pagamento === opcao.id;
+                    return (
+                      <button
+                        key={opcao.id}
+                        type="button"
+                        onClick={() => setPagamento(opcao.id)}
+                        className={`flex min-h-[118px] flex-col justify-between rounded-md border p-4 text-left transition ${
+                          selected ? "border-yellow-400 bg-yellow-50 ring-1 ring-yellow-400" : "border-slate-300 bg-white hover:border-slate-400"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <Icon size={22} className="text-neutral-800" />
+                          <span className={`h-4 w-4 rounded-full border-2 ${selected ? "border-neutral-900 bg-yellow-400" : "border-slate-300"}`} />
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-neutral-950">{opcao.label}</p>
+                          <p className="mt-1 text-xs leading-relaxed text-slate-600">{opcao.desc}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => setIncendioPagamento("a_vista")}
+                    className={`rounded-md border p-4 text-left transition ${
+                      incendioPagamento === "a_vista" ? "border-yellow-400 bg-yellow-50 ring-1 ring-yellow-400" : "border-slate-300 bg-white hover:border-slate-400"
+                    }`}
+                  >
+                    <p className="text-sm font-bold text-neutral-950">Pagar incêndio à vista</p>
+                    <p className="mt-1 text-xs text-slate-600">Cobra {fmt(premioIncendioAnual)} separado e mantém a mensalidade da fiança em {fmt(premioMensal)}.</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIncendioPagamento("parcelado")}
+                    className={`rounded-md border p-4 text-left transition ${
+                      incendioPagamento === "parcelado" ? "border-yellow-400 bg-yellow-50 ring-1 ring-yellow-400" : "border-slate-300 bg-white hover:border-slate-400"
+                    }`}
+                  >
+                    <p className="text-sm font-bold text-neutral-950">Embutir na parcela</p>
+                    <p className="mt-1 text-xs text-slate-600">Soma {fmt(premioIncendioMensal)} por mês na parcela da fiança.</p>
+                  </button>
+                </div>
+
+                <div className="rounded-md bg-black p-5 text-white">
+                  <p className="text-[11px] font-bold uppercase tracking-widest text-yellow-400">Resumo do pagamento</p>
+                  <div className="mt-4 space-y-2 text-sm">
+                    <div className="flex justify-between gap-4"><span className="text-neutral-200">Mensalidade da fiança</span><strong>{fmt(premioMensal)}</strong></div>
+                    <div className="flex justify-between gap-4"><span className="text-neutral-200">Seguro incêndio</span><strong>{incendioPagamento === "parcelado" ? `${fmt(premioIncendioMensal)} / mês` : `${fmt(premioIncendioAnual)} à vista`}</strong></div>
+                    {taxaAtivacao > 0 && <div className="flex justify-between gap-4"><span className="text-neutral-200">Taxa de ativação</span><strong>{fmt(taxaAtivacao)}</strong></div>}
+                    {pinturaMensal > 0 && <div className="flex justify-between gap-4"><span className="text-neutral-200">Pintura interna</span><strong>{fmt(pinturaMensal)} / mês</strong></div>}
+                    <div className="border-t border-neutral-700 pt-3">
+                      <div className="flex items-end justify-between gap-4">
+                        <span className="text-neutral-200">Total mensal</span>
+                        <strong className="text-2xl text-yellow-400">{fmt(mensalidadeFinal)}</strong>
+                      </div>
+                      {pagamentoInicial > 0 && <p className="mt-1 text-xs text-neutral-300">Pagamento inicial/à vista: {fmt(pagamentoInicial)}.</p>}
+                      {pagamentoSelecionado && <p className="mt-1 text-xs text-neutral-300">Forma selecionada: {pagamentoSelecionado.label}.</p>}
+                    </div>
+                  </div>
+                </div>
+              </section>
+            )}
           </div>
         </section>
       </div>
 
       <div className="fixed bottom-0 left-0 right-0 z-20 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur">
         <div className="mx-auto flex w-full max-w-[780px] flex-col gap-1">
-          <Button
-            onClick={onEnviar}
-            disabled={enviando || !seguroConcluido}
-            className="h-11 w-fit rounded-md bg-yellow-400 px-6 font-bold text-neutral-900 hover:bg-yellow-300 disabled:opacity-50"
-          >
-            {enviando ? "Enviando..." : "Enviar proposta"} <ArrowRight size={16} className="ml-2" />
-          </Button>
+          <div className="flex w-full items-center justify-between gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={pagamentoAberto ? voltarParaResumo : onCancelar}
+              className="h-11 rounded-md border-slate-300 bg-white px-5 font-bold text-neutral-900 hover:bg-slate-50"
+            >
+              <ArrowLeft size={16} className="mr-2" /> Voltar
+            </Button>
+            <Button
+              onClick={pagamentoAberto ? handlePagarComCakto : irParaPagamento}
+              disabled={pagando || enviando || !seguroConcluido || (pagamentoAberto && !pagamento)}
+              className="ml-auto h-11 w-fit rounded-md bg-yellow-400 px-6 font-bold text-neutral-900 hover:bg-yellow-300 disabled:opacity-50"
+            >
+              {pagamentoAberto
+                ? pagando
+                  ? "Gerando pagamento..."
+                  : enviando
+                    ? "Processando..."
+                    : "Pagar"
+                : "Seguir para pagamento"}{" "}
+              <ArrowRight size={16} className="ml-2" />
+            </Button>
+          </div>
           {!seguroConcluido && (
-            <p className="text-xs text-neutral-500">Confirme que o imóvel não é de madeira e aceite os Termos e Condições do Seguro Imobiliário para enviar a proposta.</p>
+            <p className="text-xs text-neutral-500">Aceite os Termos e Condições para seguir para o pagamento.</p>
           )}
+          {pagamentoAberto && !pagamento && <p className="text-xs text-neutral-500">Escolha uma forma de pagamento para enviar a proposta.</p>}
         </div>
       </div>
+
+      <ModalPagamentoCakto
+        open={modalCaktoAberto}
+        resultado={pagamentoCaktoResultado}
+        onFechar={() => setModalCaktoAberto(false)}
+      />
     </div>
   );
 }
@@ -1021,7 +1206,7 @@ function EtapaPersonalizar(p: any) {
             <Card icon={<Info size={14} />} title="Extras opcionais">
               {pinturaTotal > 0 && (
                 <div className="p-3 rounded-lg bg-neutral-50 border border-neutral-200 mb-2">
-                  <p className="text-xs font-black">Pintura externa — {fmt(pinturaTotal)}</p>
+                  <p className="text-xs font-black">Pintura interna — {fmt(pinturaTotal)}</p>
                   <p className="text-[11px] text-neutral-500">Cobertura válida para pinturas com mal uso ou danificadas por vontade própria. Pintura com desgaste natural de uso não cobre.</p>
                 </div>
               )}
@@ -1055,12 +1240,12 @@ function EtapaPersonalizar(p: any) {
 /* Etapa 3 — Pagamento */
 function EtapaPagamento(p: any) {
   const {
-    pagamento, setPagamento, naoMadeira, setNaoMadeira, aceiteTermos, setAceiteTermos,
+    pagamento, setPagamento, aceiteTermos, setAceiteTermos,
     abrirTermos, premioMensal, premioAnual, totalFinal,
     coberturas, assistencia, comissaoPct, taxaAtivacao, pinturaTotal, imovel,
     onVoltar, onAvancar,
   } = p;
-  const enabled = pagamento && naoMadeira && aceiteTermos;
+  const enabled = pagamento && aceiteTermos;
   return (
     <div className="space-y-6">
       <div>
@@ -1098,15 +1283,10 @@ function EtapaPagamento(p: any) {
 
           <div className="bg-white border border-neutral-200 rounded-2xl p-5 space-y-4">
             <label className="flex items-start gap-3 cursor-pointer">
-              <Checkbox checked={naoMadeira} onCheckedChange={(v) => setNaoMadeira(!!v)} />
-              <span className="text-sm text-neutral-800">Confirmo que o imóvel a ser segurado <strong>não é de madeira</strong>.</span>
-            </label>
-            <label className="flex items-start gap-3 cursor-pointer">
               <Checkbox checked={aceiteTermos} onCheckedChange={(v) => setAceiteTermos(!!v)} />
               <span className="text-sm text-neutral-800">
                 Li e concordo com os{" "}
-                <button type="button" onClick={abrirTermos} className="text-yellow-700 underline font-bold">Termos e Condições</button>{" "}
-                do seguro.
+                <button type="button" onClick={abrirTermos} className="text-yellow-700 underline font-bold">Termos e Condições</button>.
               </span>
             </label>
           </div>
@@ -1211,12 +1391,11 @@ function EtapaRevisao(p: any) {
           <Linha label="Assistência" value={assistLabel} />
           <Linha label="Comissão" value={`${comissaoPct}%`} />
           <Linha label="Taxa de ativação" value={fmt(taxaAtivacao)} />
-          <Linha label="Pintura externa" value={pinturaTotal ? fmt(pinturaTotal) : "—"} />
+          <Linha label="Pintura interna" value={pinturaTotal ? fmt(pinturaTotal) : "—"} />
           <Linha label="Forma de pagamento" value={pagLabel} />
         </Card>
 
         <Card icon={<CheckCircle2 size={14} />} title="Confirmações">
-          <Linha label="Imóvel não é de madeira" value="Confirmado" />
           <Linha label="Termos e condições" value="Aceitos" />
           <Linha label="Data do aceite" value={consulta?.terms_accepted_at ? new Date(consulta.terms_accepted_at).toLocaleString("pt-BR") : "—"} />
         </Card>
@@ -1237,7 +1416,7 @@ function EtapaRevisao(p: any) {
           <Linha label="Prêmio mensal" value={fmt(premioMensal)} />
           <Linha label="Prêmio anual" value={fmt(premioAnual)} />
           <Linha label="Taxa de ativação" value={fmt(taxaAtivacao)} />
-          <Linha label="Pintura" value={pinturaTotal ? fmt(pinturaTotal) : "—"} />
+          <Linha label="Pintura interna" value={pinturaTotal ? fmt(pinturaTotal) : "—"} />
           <div className="border-t border-neutral-100 mt-2 pt-2">
             <Linha label="Total final" value={<strong className="text-neutral-900">{fmt(totalFinal)}</strong>} />
           </div>
@@ -1331,7 +1510,7 @@ function ResumoSticky(p: any) {
         <div className="flex justify-between"><span className="text-neutral-400">Prêmio anual</span><span>{fmt(premioAnual)}</span></div>
         <div className="flex justify-between"><span className="text-neutral-400">Comissão</span><span>{comissaoPct}%</span></div>
         <div className="flex justify-between"><span className="text-neutral-400">Taxa ativação</span><span>{fmt(taxaAtivacao)}</span></div>
-        {pinturaTotal > 0 && <div className="flex justify-between"><span className="text-neutral-400">Pintura</span><span>{fmt(pinturaTotal)}</span></div>}
+        {pinturaTotal > 0 && <div className="flex justify-between"><span className="text-neutral-400">Pintura interna</span><span>{fmt(pinturaTotal)}</span></div>}
         {valorBaseImovel ? <div className="flex justify-between"><span className="text-neutral-400">Aluguel base</span><span>{fmt(valorBaseImovel)}</span></div> : null}
       </div>
 
