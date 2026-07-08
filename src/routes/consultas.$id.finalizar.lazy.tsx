@@ -112,7 +112,7 @@ function FinalizarPage() {
   const [comissaoPct, setComissaoPct] = useState<number>(10);
 
   // Pagamento
-  const [pagamento, setPagamento] = useState<"credit_card" | "pix" | "boleto" | "">("");
+  const [pagamento, setPagamento] = useState<"credit_card" | "pix" | "boleto" | "">("credit_card");
   const [naoMadeira, setNaoMadeira] = useState(false);
   const [aceiteTermos, setAceiteTermos] = useState(false);
   const [tipoSeguroImovel, setTipoSeguroImovel] = useState<"residencial" | "comercial">("residencial");
@@ -635,9 +635,9 @@ function ResumoPropostaLoft(p: any) {
               <h3 className="text-lg font-bold">Coberturas</h3>
               <p className="text-sm text-slate-600">Cobertura básica obrigatória, calculada sobre o valor do aluguel do imóvel.</p>
 
-              {/* Cobertura obrigatória — cartão em destaque, com espaço reservado para um personagem */}
+              {/* Cobertura obrigatória — cartão em destaque, com personagem à direita */}
               <div className="relative flex min-h-[280px] items-center justify-between gap-4 overflow-hidden rounded-md border border-slate-300 bg-white p-8">
-                <div className="max-w-[70%]">
+                <div className="max-w-[60%]">
                   <div className="mb-3 flex items-center gap-3">
                     <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-yellow-400 text-neutral-900">
                       <Flame size={18} />
@@ -655,83 +655,11 @@ function ResumoPropostaLoft(p: any) {
                     Total anual de {fmt(premioIncendioAnual)}, dividido em 12x de {fmt(premioIncendioMensal)} ({percentualIncendio}% do aluguel).
                   </p>
                 </div>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <h3 className="text-lg font-bold">Assistências</h3>
-              <p className="text-sm text-slate-600">Escolha qual assistência será adicionada no seguro:</p>
-              {ASSISTENCIAS.map((a) => {
-                const selected = assistencia === a.id;
-                return (
-                  <button
-                    key={a.id}
-                    type="button"
-                    onClick={() => setAssistencia(a.id)}
-                    className={`flex min-h-[92px] w-full items-center justify-between rounded-md border p-5 text-left transition-colors ${
-                      selected ? "border-emerald-500 bg-white" : "border-slate-300 bg-white hover:border-slate-500"
-                    }`}
-                  >
-                    <div>
-                      <p className="text-base font-bold text-neutral-950">{a.nome}</p>
-                      <p className="mt-3 text-sm text-slate-600">Ver detalhes</p>
-                    </div>
-                    <span className={`h-4 w-4 rounded-full border ${selected ? "border-emerald-600 bg-emerald-500" : "border-neutral-900"}`} />
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="space-y-4">
-              <h3 className="text-lg font-bold">Comissão</h3>
-              <p className="text-sm text-slate-600">Escolha a % de comissão que deseja aplicar neste contrato de seguro.</p>
-              <div>
-                <label className="mb-2 block text-sm text-neutral-950">Valor de comissão:</label>
-                <Select value={String(comissaoPct)} onValueChange={(v) => setComissaoPct(Number(v))}>
-                  <SelectTrigger className="h-11 rounded-md border-slate-400"><SelectValue /></SelectTrigger>
-                  <SelectContent>{COMISSAO_OPCOES.map((o) => <SelectItem key={o} value={String(o)}>{o}%</SelectItem>)}</SelectContent>
-                </Select>
-                <p className="mt-2 text-xs text-neutral-950">Esse valor é incluso no custo final ao inquilino.</p>
-              </div>
-              <div className="overflow-hidden rounded-md bg-slate-50">
-                <div className="p-5">
-                  <p className="text-sm">Valor total de comissão a receber:</p>
-                  <p className="mt-2 text-3xl font-bold">{fmt(valorComissao || 0)} <span className="text-sm font-normal text-slate-600">em 12x</span></p>
-                </div>
-                {comissaoPct >= 10 && (
-                  <div className="bg-emerald-500 p-5 text-center text-sm font-bold text-white">
-                    Bônus NOX de R$ 20 aplicado ao valor final de comissão!
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <h3 className="text-lg font-bold">Forma de pagamento do seguro</h3>
-              <p className="text-sm text-slate-600">Selecione a forma de pagamento que o cliente deseja utilizar na contratação do seguro:</p>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                {PAGAMENTOS.map((m) => {
-                  const Icon = m.icon;
-                  const selected = pagamento === m.id;
-                  return (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => setPagamento(m.id)}
-                      className={`flex flex-col items-center gap-2 rounded-md border p-5 text-center transition-colors ${
-                        selected ? "border-emerald-500 bg-white" : "border-slate-300 bg-white hover:border-slate-500"
-                      }`}
-                    >
-                      <Icon size={20} className="text-neutral-950" />
-                      <span className="text-sm font-bold text-neutral-950">{m.label}</span>
-                      <span className={`h-4 w-4 rounded-full border ${selected ? "border-emerald-600 bg-emerald-500" : "border-neutral-900"}`} />
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="flex gap-2 rounded-md border border-sky-200 bg-sky-50 p-4 text-xs text-neutral-700">
-                <Info size={14} className="mt-0.5 shrink-0 text-sky-600" />
-                <span>Caso seja necessário alterar a forma de pagamento, uma nova cotação deve ser criada.</span>
+                <img
+                  src="/assets/nox-incendio-personagem.webp"
+                  alt="Personagem NOX Fiança bombeiro, representando a cobertura de incêndio"
+                  className="pointer-events-none absolute right-4 top-1/2 h-[280px] w-auto -translate-y-1/2 select-none sm:right-8"
+                />
               </div>
             </div>
 
@@ -768,7 +696,7 @@ function ResumoPropostaLoft(p: any) {
             {enviando ? "Enviando..." : "Enviar proposta"} <ArrowRight size={16} className="ml-2" />
           </Button>
           {!seguroConcluido && (
-            <p className="text-xs text-neutral-500">Conclua a configuração do Seguro Imobiliário (coberturas e forma de pagamento) para enviar a proposta.</p>
+            <p className="text-xs text-neutral-500">Confirme que o imóvel não é de madeira e aceite os Termos e Condições do Seguro Imobiliário para enviar a proposta.</p>
           )}
         </div>
       </div>
