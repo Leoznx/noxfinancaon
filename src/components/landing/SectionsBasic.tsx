@@ -1,12 +1,35 @@
 import React from 'react';
-import { Check } from 'lucide-react';
+import { Check, ShieldCheck } from 'lucide-react';
 import { Link } from '@tanstack/react-router';
 import { Button } from '@/components/ui/button';
 
 export const InstitutionalHero = () => (
-  <section className="pt-28 sm:pt-40 pb-16 sm:pb-24 px-4 sm:px-6 bg-white overflow-hidden">
-    <div className="container mx-auto max-w-7xl grid lg:grid-cols-[1.2fr_0.8fr] gap-10 lg:gap-16 items-center">
-      <div>
+  <section className="relative w-full overflow-hidden bg-white lg:min-h-[680px]">
+    {/* Fundo: foto + degradês em camadas */}
+    <div className="absolute inset-0">
+      <div className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-amber-100/40 blur-3xl" />
+      <img
+        src="/assets/nox-hero-casa-chaves.webp"
+        alt="Chaveiro NOX em frente a um imóvel moderno"
+        loading="eager"
+        decoding="async"
+        fetchPriority="high"
+        className="h-full w-full object-cover object-[72%_42%]"
+      />
+      {/* Degradê branco -> transparente, da esquerda para a direita */}
+      <div
+        className="absolute inset-0"
+        style={{
+          backgroundImage:
+            'linear-gradient(to right, #ffffff 0%, #ffffff 35%, rgba(255,255,255,0.85) 48%, rgba(255,255,255,0.25) 65%, rgba(255,255,255,0) 100%)',
+        }}
+      />
+      {/* Reforço de legibilidade só no mobile, onde não há coluna dedicada ao texto */}
+      <div className="absolute inset-0 bg-white/80 sm:hidden" />
+    </div>
+
+    <div className="relative container mx-auto max-w-7xl px-4 pb-16 pt-28 sm:px-6 sm:pb-24 sm:pt-40 lg:flex lg:min-h-[680px] lg:items-center">
+      <div className="max-w-[620px]">
         <span className="inline-block px-3 py-1 bg-neutral-100 text-neutral-700 text-sm font-bold tracking-wider rounded-full mb-6">
           SEGURO FIANÇA LOCATÍCIA
         </span>
@@ -42,22 +65,15 @@ export const InstitutionalHero = () => (
           ))}
         </div>
       </div>
+    </div>
 
-      <div className="relative block">
-        <div className="relative rounded-2xl overflow-hidden shadow-2xl">
-          <img 
-            src="https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80" 
-            alt="Imóvel moderno" 
-            loading="eager"
-            decoding="async"
-            fetchPriority="high"
-            width={1000}
-            height={600}
-            className="w-full h-64 sm:h-80 lg:h-[600px] object-cover"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
-        </div>
+    {/* Card flutuante sobre a imagem (vira overlay apenas a partir do desktop, onde há espaço sobrando à direita) */}
+    <div className="relative z-10 mx-4 mt-6 mb-6 max-w-[260px] rounded-2xl bg-white p-5 shadow-xl sm:mx-6 lg:absolute lg:right-10 lg:bottom-10 lg:mx-0 lg:mt-0 lg:mb-0">
+      <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-[#FACC15]/15">
+        <ShieldCheck size={20} className="text-[#FACC15]" strokeWidth={2.2} />
       </div>
+      <p className="text-sm font-bold leading-snug text-neutral-900">Proteção completa<br />para proprietários.</p>
+      <p className="mt-1 text-xs text-neutral-500">Mais segurança, zero inadimplência.</p>
     </div>
   </section>
 );
