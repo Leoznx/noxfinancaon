@@ -1,4 +1,3 @@
-import { Trophy, ArrowUpRight } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 
 interface NivelInfo {
@@ -11,21 +10,27 @@ interface NivelInfo {
   metaProximo?: number;
 }
 
+const ICONE_NIVEL: Record<string, string> = {
+  BRONZE: "/assets/nox-icon-fidelidade-bronze.png",
+  PRATA: "/assets/nox-icon-fidelidade-prata.png",
+  OURO: "/assets/nox-icon-fidelidade-ouro.png",
+  DIAMANTE: "/assets/nox-icon-fidelidade-diamante.png",
+};
+
 export function NivelCorretorCard({ info }: { info: NivelInfo }) {
   const isOuro = info.nome.toLowerCase() === 'ouro';
   const progress = info.metaProximo ? Math.min(100, (info.contratos / info.metaProximo) * 100) : 100;
+  const iconeNivel = ICONE_NIVEL[info.nome.toUpperCase()] ?? ICONE_NIVEL.BRONZE;
 
   return (
-    <div className={`relative overflow-hidden p-5 rounded-2xl border transition-all ${isOuro ? 'bg-gradient-to-br from-neutral-900 via-neutral-900 to-neutral-800 border-yellow-400 shadow-xl shadow-yellow-400/10' : 'bg-white border-neutral-100 shadow-sm'}`}>
+    <div className={`relative overflow-hidden p-6 rounded-2xl border transition-all ${isOuro ? 'bg-gradient-to-br from-neutral-900 via-neutral-900 to-neutral-800 border-yellow-400 shadow-xl shadow-yellow-400/10' : 'bg-white border-neutral-100 shadow-sm'}`}>
       {isOuro && (
         <div className="absolute top-0 right-0 w-48 h-48 bg-yellow-400 opacity-[0.03] rounded-full blur-[80px] -mr-24 -mt-24"></div>
       )}
 
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative z-10">
-        <div className="flex items-center gap-4">
-          <div className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-md shrink-0 ${isOuro ? 'bg-yellow-400 text-neutral-900' : 'bg-neutral-50 text-neutral-600 border border-neutral-100'}`}>
-            <info.icone size={24} strokeWidth={2.5} />
-          </div>
+        <div className="flex items-center gap-7">
+          <img src={iconeNivel} alt={info.nome} className="w-16 h-16 shrink-0 object-contain" />
           <div>
             <div className="flex flex-col gap-0.5 mb-1.5">
               <p className={`text-[9px] font-black uppercase tracking-[0.3em] ${isOuro ? 'text-yellow-400' : 'text-neutral-400'}`}>
