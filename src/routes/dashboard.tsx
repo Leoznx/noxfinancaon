@@ -125,14 +125,14 @@ function Dashboard() {
       <div className="space-y-4 sm:space-y-8 lg:space-y-10">
         <DashboardEquipeBanner />
 
+        {(isCorretor || isImobiliaria) && nivelCardInfo && <NivelCorretorCard info={nivelCardInfo} />}
+
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
           <CardStats title={isProprietario ? "Imóveis Cadastrados" : "Consultas Pendentes"} value={isAdmin ? "42" : isImobiliaria ? "18" : isProprietario ? "3" : "7"} icon={isAdmin || isImobiliaria || isCorretor ? Search : Home} trend="+2 hoje" trendUp={true} />
           <CardStats title={isProprietario ? "Renda Mensal Total" : "Apólices Ativas"} value={isAdmin ? "1.240" : isImobiliaria ? "42" : isProprietario ? "R$ 14.500" : "15"} icon={FileText} />
           <CardStats title={isProprietario ? "Recebimentos no Mês" : "Inquilinos sob Gestão"} value={isAdmin ? "850" : isImobiliaria ? "38" : isProprietario ? "R$ 12.850" : "12"} icon={Users} />
           <CardStats title={isProprietario ? "Sinistros Ativos" : "Comissões Acumuladas"} value={isAdmin ? "R$ 142.500" : isImobiliaria ? "R$ 8.420" : isProprietario ? "0" : "R$ 2.850"} icon={isProprietario ? AlertCircle : DollarSign} isCurrency={true} />
         </div>
-
-        {(isCorretor || isImobiliaria) && nivelCardInfo && <NivelCorretorCard info={nivelCardInfo} />}
 
         {isProprietario && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-4 sm:p-6">
