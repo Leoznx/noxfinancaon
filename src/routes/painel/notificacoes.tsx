@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useState, useEffect } from "react";
@@ -64,6 +64,7 @@ const CORES_NOTIFICACAO: Record<string, { fundo: string; icone: string; badge: s
 
 function NotificacoesPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [notificacoes, setNotificacoes] = useState<any[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [filtro, setFiltro] = useState('todas'); // 'todas', 'nao_lidas'
@@ -237,9 +238,13 @@ function NotificacoesPage() {
                         </div>
                         
                         {notif.link && (
-                          <Button 
-                            variant="ghost" 
+                          <Button
+                            variant="ghost"
                             className="text-xs font-black text-neutral-900 hover:bg-neutral-50 h-9 px-4 rounded-xl gap-2 group/btn"
+                            onClick={() => {
+                              if (!notif.lida) marcarLida(notif.id);
+                              navigate({ to: notif.link as any });
+                            }}
                           >
                             Acessar detalhes
                             <ChevronRight size={14} className="transition-transform group-hover/btn:translate-x-1" />

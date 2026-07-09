@@ -99,6 +99,14 @@ export function SinoNotificacoes() {
     setNotificacoes(prev => prev.map(n => ({ ...n, lida: true })));
   }
 
+  async function marcarUmaComoLida(id: string) {
+    setNotificacoes(prev => prev.map(n => (n.id === id ? { ...n, lida: true } : n)));
+    await supabase
+      .from('notificacoes')
+      .update({ lida: true, lida_em: new Date().toISOString() })
+      .eq('id', id);
+  }
+
   function formatarTempoRelativo(timestamp: string) {
     const agora = Date.now();
     const data = new Date(timestamp).getTime();
@@ -176,6 +184,7 @@ export function SinoNotificacoes() {
                       <button
                         key={notif.id}
                         onClick={() => {
+                          if (!notif.lida) marcarUmaComoLida(notif.id);
                           if (notif.link) navigate({ to: notif.link as any });
                           setAberto(false);
                         }}
