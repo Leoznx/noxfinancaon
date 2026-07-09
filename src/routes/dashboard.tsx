@@ -9,9 +9,12 @@ import { MarketingDashboard } from "@/components/MarketingDashboard";
 import { Trophy, Search, FileText, Users, DollarSign, ArrowUpRight, TrendingUp, Home, AlertCircle, CheckCircle2 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { Card } from "@/components/ui/card";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchNivelInfo, type NivelInfo } from "@/lib/niveis-parceria";
+import { fetchDashboardStats, type DashboardStats } from "@/lib/dashboard-stats";
+
+const formatarBRL = (v: number) => (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 
 export const Route = createFileRoute("/dashboard")({
@@ -61,52 +64,76 @@ function Dashboard() {
   const [consultasRecentes, setConsultasRecentes] = useState<any[]>([]);
   const [loadingConsultas, setLoadingConsultas] = useState(true);
   const [nivelInfo, setNivelInfo] = useState<NivelInfo | null>(null);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+
+  // profileIds === null significa admin (sem filtro, vê o total geral).
+  // Pra imobiliária, agrega o próprio profile + o de todos os corretores vinculados —
+  // mesma regra já usada aqui pra "consultas recentes", agora reaproveitada pros cards.
+  const carregarDados = useCallback(async () => {
+    if (!user?.email) { setLoadingConsultas(false); return; }
+    try {
+      const { data: meuProfile } = await supabase
+        .from('profiles')
+        .select('id, role')
+        .eq('email', user.email)
+        .maybeSingle();
+
+      if (meuProfile && (isCorretor || isImobiliaria)) {
+        fetchNivelInfo(meuProfile.id, meuProfile.role).then(setNivelInfo).catch(() => setNivelInfo(null));
+      }
+
+      let profileIds: string[] | null = null;
+      if (!isAdmin) {
+        if (!meuProfile) {
+          profileIds = [];
+        } else if (isImobiliaria) {
+          const { data: imob } = await supabase
+            .from('imobiliarias').select('id').eq('contato_email', user.email).maybeSingle();
+          let ids = [meuProfile.id];
+          if (imob?.id) {
+            const { data: corretoresData } = await supabase
+              .from('corretores').select('profile_id').eq('imobiliaria_id', imob.id);
+            ids = [...ids, ...(corretoresData || []).map((c: any) => c.profile_id).filter(Boolean)];
+          }
+          profileIds = ids;
+        } else {
+          profileIds = [meuProfile.id];
+        }
+      }
+
+      let q = supabase
+        .from('consultas_credito')
+        .select(`id, status, created_at, inquilinos (nome, cpf, cnpj), imoveis (valor_aluguel)`)
+        .order('created_at', { ascending: false })
+        .limit(5);
+      if (profileIds !== null) q = q.in('profile_id_solicitante', profileIds);
+
+      const [{ data: consultasData }, statsData] = await Promise.all([
+        q,
+        fetchDashboardStats(profileIds),
+      ]);
+      setConsultasRecentes(consultasData || []);
+      setStats(statsData);
+    } finally {
+      setLoadingConsultas(false);
+    }
+  }, [user?.email, isAdmin, isImobiliaria, isCorretor]);
 
   useEffect(() => {
-    (async () => {
-      if (!user?.email) { setLoadingConsultas(false); return; }
-      try {
-        const { data: meuProfile } = await supabase
-          .from('profiles')
-          .select('id, role')
-          .eq('email', user.email)
-          .maybeSingle();
+    carregarDados();
+  }, [carregarDados]);
 
-        if (meuProfile && (isCorretor || isImobiliaria)) {
-          fetchNivelInfo(meuProfile.id, meuProfile.role).then(setNivelInfo).catch(() => setNivelInfo(null));
-        }
-
-        let q = supabase
-          .from('consultas_credito')
-          .select(`id, status, created_at, inquilinos (nome, cpf, cnpj), imoveis (valor_aluguel)`)
-          .order('created_at', { ascending: false })
-          .limit(5);
-
-        if (!isAdmin && meuProfile) {
-          if (isImobiliaria) {
-            const { data: imob } = await supabase
-              .from('imobiliarias').select('id').eq('contato_email', user.email).maybeSingle();
-            let ids = [meuProfile.id];
-            if (imob?.id) {
-              const { data: corretoresData } = await supabase
-                .from('corretores').select('profile_id').eq('imobiliaria_id', imob.id);
-              ids = [...ids, ...(corretoresData || []).map((c: any) => c.profile_id).filter(Boolean)];
-            }
-            q = q.in('profile_id_solicitante', ids);
-          } else {
-            q = q.eq('profile_id_solicitante', meuProfile.id);
-          }
-        } else if (!isAdmin) {
-          setConsultasRecentes([]); setLoadingConsultas(false); return;
-        }
-
-        const { data } = await q;
-        setConsultasRecentes(data || []);
-      } finally {
-        setLoadingConsultas(false);
-      }
-    })();
-  }, [user?.email, isAdmin, isImobiliaria, isCorretor]);
+  // Sem Realtime configurado nessas tabelas ainda — reconsulta ao voltar pra aba,
+  // que já cobre o caso comum de "criei uma consulta/apólice em outra aba e voltei".
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === 'visible') carregarDados(); };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', carregarDados);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', carregarDados);
+    };
+  }, [carregarDados]);
 
   const nivelCardInfo = nivelInfo?.nivelAtual
     ? {
@@ -128,10 +155,21 @@ function Dashboard() {
         {(isCorretor || isImobiliaria) && nivelCardInfo && <NivelCorretorCard info={nivelCardInfo} />}
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
-          <CardStats title={isProprietario ? "Imóveis Cadastrados" : "Consultas Pendentes"} value={isAdmin ? "42" : isImobiliaria ? "18" : isProprietario ? "3" : "7"} icon={isAdmin || isImobiliaria || isCorretor ? Search : Home} trend="+2 hoje" trendUp={true} />
-          <CardStats title={isProprietario ? "Renda Mensal Total" : "Apólices Ativas"} value={isAdmin ? "1.240" : isImobiliaria ? "42" : isProprietario ? "R$ 14.500" : "15"} icon={FileText} />
-          <CardStats title={isProprietario ? "Recebimentos no Mês" : "Inquilinos sob Gestão"} value={isAdmin ? "850" : isImobiliaria ? "38" : isProprietario ? "R$ 12.850" : "12"} icon={Users} />
-          <CardStats title={isProprietario ? "Sinistros Ativos" : "Comissões Acumuladas"} value={isAdmin ? "R$ 142.500" : isImobiliaria ? "R$ 8.420" : isProprietario ? "0" : "R$ 2.850"} icon={isProprietario ? AlertCircle : DollarSign} isCurrency={true} />
+          {isProprietario ? (
+            <>
+              <CardStats title="Imóveis Cadastrados" value="3" icon={Home} />
+              <CardStats title="Renda Mensal Total" value="R$ 14.500" icon={FileText} isCurrency />
+              <CardStats title="Recebimentos no Mês" value="R$ 12.850" icon={Users} isCurrency />
+              <CardStats title="Sinistros Ativos" value="0" icon={AlertCircle} />
+            </>
+          ) : (
+            <>
+              <CardStats title="Consultas Pendentes" value={loadingConsultas ? "…" : String(stats?.consultasPendentes ?? 0)} icon={Search} />
+              <CardStats title="Apólices Ativas" value={loadingConsultas ? "…" : String(stats?.apolicesAtivas ?? 0)} icon={FileText} />
+              <CardStats title="Inquilinos sob Gestão" value={loadingConsultas ? "…" : String(stats?.inquilinosGestao ?? 0)} icon={Users} />
+              <CardStats title="Comissões Acumuladas" value={loadingConsultas ? "…" : formatarBRL(stats?.comissoesAcumuladas ?? 0)} icon={DollarSign} isCurrency />
+            </>
+          )}
         </div>
 
         {isProprietario && (

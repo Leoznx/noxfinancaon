@@ -1,32 +1,39 @@
 import { supabase } from "@/integrations/supabase/client";
 
-// Mesmo mapeamento usado em src/routes/configuracoes.lazy.tsx (aba Plano e Nível) —
-// qual coluna de apolices identifica o "dono" do contrato pra cada papel.
-export const ROLE_PARA_COLUNA_APOLICE: Record<string, string> = {
-  corretor: "corretor_profile_id",
-  imobiliaria: "imobiliaria_profile_id",
-  proprietario: "proprietario_profile_id",
-};
-
 export type NivelInfo = {
   nivelAtual: any;
   proximoNivel: any;
   contratosAtivos: number;
 };
 
-/** Calcula o nível de parceria real (contratos ativos vinculados) — nada de dado fixo/demo. */
+/**
+ * Calcula o nível de parceria real (contratos ativos vinculados) — nada de
+ * dado fixo/demo. Conta apólices ativas via consultas_credito.profile_id_solicitante,
+ * não pelas colunas apolices.corretor_profile_id/imobiliaria_profile_id/
+ * proprietario_profile_id — confirmado direto no banco que essas colunas não
+ * são preenchidas pelo fluxo atual de criação de apólice, então contar por
+ * elas sempre dava 0 mesmo com contratos reais vinculados ao profile.
+ */
 export async function fetchNivelInfo(profileId: string, role: string): Promise<NivelInfo | null> {
-  const coluna = ROLE_PARA_COLUNA_APOLICE[role];
-  if (!coluna) return null;
-
-  const [niveisRes, apolicesRes] = await Promise.all([
+  const [niveisRes, consultasRes] = await Promise.all([
     supabase.from("niveis_perfil" as any).select("*").eq("tipo_perfil", role).eq("ativo", true).order("ordem", { ascending: true }),
-    supabase.from("apolices").select("id, status").eq(coluna as any, profileId),
+    supabase.from("consultas_credito").select("id").eq("profile_id_solicitante", profileId),
   ]);
   if (niveisRes.error) throw niveisRes.error;
-  if (apolicesRes.error) throw apolicesRes.error;
+  if (consultasRes.error) throw consultasRes.error;
 
-  const contratosAtivos = (apolicesRes.data || []).filter((a: any) => a.status === "ativa").length;
+  const consultaIds = (consultasRes.data ?? []).map((c: any) => c.id);
+  let contratosAtivos = 0;
+  if (consultaIds.length > 0) {
+    const { count, error: apolicesErr } = await supabase
+      .from("apolices")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "ativa")
+      .in("consulta_id", consultaIds);
+    if (apolicesErr) throw apolicesErr;
+    contratosAtivos = count ?? 0;
+  }
+
   const niveis = (niveisRes.data || []) as any[];
 
   let nivelAtual: any = null;
