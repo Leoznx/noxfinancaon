@@ -16,7 +16,8 @@ import { validateCPF, validateCNPJ, maskCPF, maskCNPJ, maskPhone } from "@/utils
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
-import { checkInquilinoExists, linkTenantByCpf } from "@/lib/inquilino-signup.functions";
+import { checkInquilinoExists } from "@/lib/inquilino-signup.functions";
+import { signUpInquilino, signUpProfissional, resendVerificationEmail } from "@/lib/auth-signup.functions";
 
 const cadastroSearchSchema = z.z.object({
   returnTo: z.z.string().optional(),
@@ -117,7 +118,27 @@ function CadastroComponent() {
   const search = useSearch({ from: '/cadastro' });
   const returnTo = search.returnTo || '/dashboard';
   const checkInquilinoFn = useServerFn(checkInquilinoExists);
-  const linkTenantFn = useServerFn(linkTenantByCpf);
+  const signUpInquilinoFn = useServerFn(signUpInquilino);
+  const signUpProfissionalFn = useServerFn(signUpProfissional);
+  const resendFn = useServerFn(resendVerificationEmail);
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const t = setTimeout(() => setResendCooldown((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendCooldown]);
+
+  const handleResend = async () => {
+    if (resendCooldown > 0 || !successEmail) return;
+    setResendCooldown(60);
+    try {
+      await resendFn({ data: { email: successEmail } });
+      toast.success("Se o e-mail existir e ainda não tiver sido confirmado, reenviamos o link.");
+    } catch {
+      toast.error("Não foi possível reenviar agora. Tente novamente em instantes.");
+    }
+  };
 
   useEffect(() => {
     if (search.perfil) {
@@ -220,42 +241,23 @@ function CadastroComponent() {
           return;
         }
 
-        const { data: authData, error: authError } = await supabase.auth.signUp({
-          email: emailLower,
-          password: data.senha,
-          options: {
-            emailRedirectTo: window.location.origin,
-            data: { nome: data.nome, role: 'inquilino', cpf: cpfNorm, telefone: data.telefone },
-          },
+        // signUpInquilino cria a conta (via admin.generateLink, sem sessão necessária),
+        // grava profile/inquilinos e vincula consultas por CPF — tudo já autenticado
+        // (supabaseAdmin), e envia o e-mail de verificação pela Resend.
+        const result = await signUpInquilinoFn({
+          data: { nome: data.nome, cpf: cpfNorm, email: emailLower, telefone: data.telefone, senha: data.senha },
         });
-        if (authError) throw authError;
-        if (!authData.user) throw new Error("Erro ao criar usuário");
-
-        // O profile já é criado pelo trigger handle_new_user (auth.users -> profiles) —
-        // aqui só complementamos com os campos que o trigger não tem (telefone).
-        await supabase.from('profiles').update({
-          status: 'ativo',
-          nome: data.nome,
-          telefone: data.telefone,
-          role: 'inquilino' as any,
-        } as any).eq('id', authData.user.id);
-
-        // Upsert em inquilinos (cpf único)
-        await supabase.from('inquilinos').upsert({
-          profile_id: authData.user.id,
-          nome: data.nome,
-          cpf: cpfNorm,
-          tipo: 'PF',
-        } as any, { onConflict: 'cpf' });
-
-        // Vincular registros existentes pelo CPF
-        try {
-          const r = await linkTenantFn({ data: { cpf: cpfNorm } });
-          if (r.linkedConsultas > 0) {
-            toast.success(`Vinculamos ${r.linkedConsultas} contrato(s) ao seu CPF.`);
-          }
-        } catch {
-          // vínculo é um extra — segue o fluxo mesmo se falhar
+        if (!result.ok) {
+          toast.error(
+            result.error === 'ja_existe'
+              ? "Já existe uma conta vinculada a este CPF ou e-mail. Faça login para acessar seus documentos e faturas."
+              : "Erro ao criar usuário"
+          );
+          setIsSubmitting(false);
+          return;
+        }
+        if (result.linkedConsultas > 0) {
+          toast.success(`Vinculamos ${result.linkedConsultas} contrato(s) ao seu CPF.`);
         }
 
         // A conta só fica utilizável depois de confirmar o e-mail (mailer_autoconfirm
@@ -268,106 +270,84 @@ function CadastroComponent() {
       }
 
 
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: data.email,
-        password: data.senha,
-        options: {
-          emailRedirectTo: window.location.origin,
-          data: {
-            nome: accountType === 'imobiliaria' ? data.razaoSocial : data.nome,
-            role: accountType,
-          }
-        }
+      const emailLower = (data.email as string).toLowerCase().trim();
+
+      // signUpProfissional cria a conta (admin.generateLink) e já grava profile +
+      // imobiliarias/corretores/proprietarios via supabaseAdmin — esses INSERTs eram
+      // feitos aqui no cliente sem sessão (e-mail ainda não confirmado) e eram
+      // bloqueados por RLS (42501) pras 3 tabelas; mover pro servidor corrige isso.
+      const result = await signUpProfissionalFn({
+        data: {
+          role: accountType as 'imobiliaria' | 'corretor' | 'proprietario',
+          email: emailLower,
+          senha: data.senha,
+          telefone: data.telefone,
+          razaoSocial: data.razaoSocial,
+          nomeFantasia: data.nomeFantasia,
+          cnpj: data.cnpj,
+          creciJuridico: accountType === 'imobiliaria' ? data.creci : undefined,
+          cargo: data.cargo,
+          responsavelNome: data.responsavelNome,
+          nome: data.nome,
+          cpf: data.cpf,
+          creci: accountType === 'corretor' ? data.creci : undefined,
+          vinculadoImobiliaria: data.vinculadoImobiliaria === 'sim',
+          imobiliariaId: data.imobiliariaId,
+          pix: data.pix,
+          cpfCnpj: data.cpfCnpj,
+          cidade: data.cidade,
+          estado: data.estado,
+        },
       });
 
-      if (authError) throw authError;
-      if (!authData.user) throw new Error("Erro ao criar usuário");
-
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({ 
-          status: 'pendente_aprovacao',
-          nome: accountType === 'imobiliaria' ? data.razaoSocial : data.nome,
-          telefone: data.telefone
-        })
-        .eq('id', authData.user.id);
-
-      if (accountType === 'imobiliaria') {
-        await supabase
-          .from('imobiliarias')
-          .insert({
-            razao_social: data.razaoSocial,
-            nome_fantasia: data.nomeFantasia,
-            cnpj: data.cnpj,
-            creci: data.creci,
-            cargo: data.cargo,
-            cidade: data.cidade,
-            estado: data.estado,
-            contato_nome: data.responsavelNome,
-            contato_email: data.email,
-            contato_telefone: data.telefone
-          });
-      } else if (accountType === 'corretor') {
-        await supabase
-          .from('corretores')
-          .insert({
-            profile_id: authData.user.id,
-            cpf: data.cpf,
-            creci: data.creci,
-            cidade: data.cidade,
-            estado: data.estado,
-            vinculado_imobiliaria: data.vinculadoImobiliaria === 'sim',
-            imobiliaria_id: data.imobiliariaId || null,
-            pix: data.pix
-          });
-      } else if (accountType === 'proprietario') {
-        await supabase
-          .from('proprietarios')
-          .insert({
-            profile_id: authData.user.id,
-            nome: data.nome,
-            cpf_cnpj: data.cpfCnpj,
-            email: data.email,
-            telefone: data.telefone
-          });
+      if (!result.ok) {
+        toast.error(result.error === 'ja_existe' ? "Já existe uma conta com este e-mail." : "Erro ao criar usuário");
+        setIsSubmitting(false);
+        return;
       }
+      const userId = result.userId;
 
-      // Vínculo de indicação (?ref=CODIGO)
-      const refCode = (search as any)?.ref as string | undefined;
-      if (refCode) {
-        const { data: indicador } = await supabase
-          .from('profiles')
-          .select('id, role')
-          .eq('referral_code', refCode)
-          .maybeSingle();
-        if (indicador && indicador.id !== authData.user.id) {
-          await supabase.from('profiles').update({
-            referred_by_user_id: indicador.id,
-            referred_by_code: refCode,
-            referred_at: new Date().toISOString(),
-          }).eq('id', authData.user.id);
+      // Vínculo de indicação (?ref=CODIGO) — extra, não pode derrubar o cadastro (a
+      // conta já foi criada com sucesso acima independente do que acontece aqui).
+      try {
+        const refCode = (search as any)?.ref as string | undefined;
+        if (refCode) {
+          const { data: indicador } = await supabase
+            .from('profiles')
+            .select('id, role')
+            .eq('referral_code', refCode)
+            .maybeSingle();
+          if (indicador && indicador.id !== userId) {
+            await supabase.from('profiles').update({
+              referred_by_user_id: indicador.id,
+              referred_by_code: refCode,
+              referred_at: new Date().toISOString(),
+            }).eq('id', userId);
 
-          const referredEmail = data.email;
-          const referredDoc = data.cpf ?? data.cnpj ?? data.cpfCnpj ?? null;
-          // antifraude básico: mesmo CPF/email
-          const sameDocOrEmail = await supabase.from('profiles').select('id').or(
-            `email.eq.${referredEmail}`
-          ).neq('id', authData.user.id).limit(1);
-          const fraudStatus = (sameDocOrEmail.data?.length ?? 0) > 0 ? 'suspeito' : 'aprovado';
+            const referredEmail = emailLower;
+            const referredDoc = data.cpf ?? data.cnpj ?? data.cpfCnpj ?? null;
+            // antifraude básico: mesmo CPF/email
+            const sameDocOrEmail = await supabase.from('profiles').select('id').or(
+              `email.eq.${referredEmail}`
+            ).neq('id', userId).limit(1);
+            const fraudStatus = (sameDocOrEmail.data?.length ?? 0) > 0 ? 'suspeito' : 'aprovado';
 
-          await supabase.from('referrals').insert({
-            referrer_user_id: indicador.id,
-            referrer_role: indicador.role,
-            referred_user_id: authData.user.id,
-            referred_role: accountType,
-            referral_code: refCode,
-            referred_email: referredEmail,
-            referred_document: referredDoc,
-            referred_phone: data.telefone,
-            reward_status: 'aguardando_contrato',
-            fraud_status: fraudStatus,
-          });
+            await supabase.from('referrals').insert({
+              referrer_user_id: indicador.id,
+              referrer_role: indicador.role,
+              referred_user_id: userId,
+              referred_role: accountType,
+              referral_code: refCode,
+              referred_email: referredEmail,
+              referred_document: referredDoc,
+              referred_phone: data.telefone,
+              reward_status: 'aguardando_contrato',
+              fraud_status: fraudStatus,
+            });
+          }
         }
+      } catch {
+        // vínculo de indicação é um extra — segue o fluxo mesmo se falhar
       }
 
       await supabase.from('notificacoes').insert({
@@ -381,7 +361,7 @@ function CadastroComponent() {
         toast.success('Conta criada. Seu cadastro será analisado em até 24h.');
         navigate({ to: '/simular/resultado' });
       } else {
-        setSuccessEmail(data.email);
+        setSuccessEmail(emailLower);
         setSuccessType('aprovacao');
       }
     } catch (error: any) {
@@ -405,9 +385,14 @@ function CadastroComponent() {
           </p>
           <p className="text-sm italic">Não recebeu? Confira a caixa de spam ou tente novamente em alguns minutos.</p>
         </div>
-        <Button variant="outline" onClick={() => navigate({ to: "/" })}>
-          Voltar para a Home
-        </Button>
+        <div className="flex flex-col sm:flex-row items-center gap-3">
+          <Button variant="outline" onClick={() => navigate({ to: "/" })}>
+            Voltar para a Home
+          </Button>
+          <Button variant="ghost" onClick={handleResend} disabled={resendCooldown > 0}>
+            {resendCooldown > 0 ? `Reenviar e-mail (${resendCooldown}s)` : "Reenviar e-mail"}
+          </Button>
+        </div>
       </div>
     );
   }
@@ -427,9 +412,14 @@ function CadastroComponent() {
           </p>
           <p className="text-sm italic">Enquanto isso, fique à vontade para conhecer nossos planos e materiais para imobiliárias.</p>
         </div>
-        <Button variant="outline" onClick={() => navigate({ to: "/" })}>
-          Voltar para a Home
-        </Button>
+        <div className="flex flex-col sm:flex-row items-center gap-3">
+          <Button variant="outline" onClick={() => navigate({ to: "/" })}>
+            Voltar para a Home
+          </Button>
+          <Button variant="ghost" onClick={handleResend} disabled={resendCooldown > 0}>
+            {resendCooldown > 0 ? `Reenviar e-mail (${resendCooldown}s)` : "Reenviar e-mail"}
+          </Button>
+        </div>
       </div>
     );
   }
@@ -688,12 +678,20 @@ function CadastroComponent() {
                                 placeholder="Ex: Diretor, Gerente" 
                               />
                               
-                              <Input 
-                                label="E-mail Corporativo" 
-                                {...formImobiliaria.register("email")} 
-                                placeholder="nome@empresa.com.br" 
+                              <Input
+                                label="E-mail Corporativo"
+                                {...formImobiliaria.register("email")}
+                                placeholder="nome@empresa.com.br"
                               />
                               {errors.email && <p className="text-[10px] text-red-500 -mt-3">{errors.email.message}</p>}
+
+                              <Input
+                                label="Telefone / WhatsApp"
+                                {...formImobiliaria.register("telefone")}
+                                placeholder="(00) 00000-0000"
+                                onChange={(e) => formImobiliaria.setValue("telefone", maskPhone(e.target.value))}
+                              />
+                              {errors.telefone && <p className="text-[10px] text-red-500 -mt-3">{errors.telefone.message}</p>}
 
                               <div className="grid grid-cols-3 gap-2">
                                 <div className="col-span-2">

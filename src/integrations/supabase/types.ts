@@ -1115,6 +1115,24 @@ export type Database = {
           },
         ]
       }
+      email_verification_sends: {
+        Row: {
+          email: string
+          id: string
+          sent_at: string
+        }
+        Insert: {
+          email: string
+          id?: string
+          sent_at?: string
+        }
+        Update: {
+          email?: string
+          id?: string
+          sent_at?: string
+        }
+        Relationships: []
+      }
       eventos_funil: {
         Row: {
           created_at: string | null

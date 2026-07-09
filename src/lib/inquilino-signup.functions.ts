@@ -10,6 +10,59 @@ const linkSchema = z.object({
 });
 
 /**
+ * Vincula um profile (por userId) a registros já existentes com o mesmo CPF
+ * (consultas, faturas, documentos, inquilinos). Compartilhado entre
+ * `linkTenantByCpf` (chamada autenticada, usada como rede de segurança pelo
+ * SIGNED_IN do AuthProvider) e `signUpInquilino` (auth-signup.functions.ts,
+ * que já roda com supabaseAdmin logo após criar a conta).
+ */
+export async function linkTenantRecordsByCpf(
+  supabaseAdmin: any,
+  userId: string,
+  cpfNorm: string,
+  telefone?: string,
+) {
+  if (telefone) {
+    await supabaseAdmin
+      .from("profiles")
+      .update({ telefone } as any)
+      .eq("id", userId)
+      .is("telefone", null);
+  }
+
+  // 1. Vincular consultas que tenham tenant_document = cpf
+  const { data: consultas } = await supabaseAdmin
+    .from("consultas_credito")
+    .update({ tenant_user_id: userId } as any)
+    .eq("tenant_document", cpfNorm)
+    .is("tenant_user_id", null)
+    .select("id");
+
+  const consultaIds = (consultas ?? []).map((c: any) => c.id);
+
+  // 2. Vincular faturas/documentos das consultas encontradas
+  if (consultaIds.length > 0) {
+    await supabaseAdmin
+      .from("faturas_inquilino")
+      .update({ tenant_user_id: userId } as any)
+      .in("consulta_id", consultaIds);
+
+    await supabaseAdmin
+      .from("documentos_proposta")
+      .update({ tenant_user_id: userId } as any)
+      .in("consulta_id", consultaIds);
+  }
+
+  // 3. Vincular o registro em inquilinos (cpf único) ao profile
+  await supabaseAdmin
+    .from("inquilinos")
+    .update({ profile_id: userId } as any)
+    .eq("cpf", cpfNorm);
+
+  return { linkedConsultas: consultaIds.length };
+}
+
+/**
  * Vincula o usuário inquilino logado a registros já existentes
  * que tenham o mesmo CPF (consultas, faturas, documentos, inquilinos).
  */
@@ -19,48 +72,7 @@ export const linkTenantByCpf = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const cpfNorm = data.cpf.replace(/\D/g, "");
-    const userId = context.userId;
-
-    if (data.telefone) {
-      await supabaseAdmin
-        .from("profiles")
-        .update({ telefone: data.telefone } as any)
-        .eq("id", userId)
-        .is("telefone", null);
-    }
-
-    // 1. Vincular consultas que tenham tenant_document = cpf
-    const { data: consultas } = await supabaseAdmin
-      .from("consultas_credito")
-      .update({ tenant_user_id: userId } as any)
-      .eq("tenant_document", cpfNorm)
-      .is("tenant_user_id", null)
-      .select("id");
-
-    const consultaIds = (consultas ?? []).map((c: any) => c.id);
-
-    // 2. Vincular faturas/documentos das consultas encontradas
-    if (consultaIds.length > 0) {
-      await supabaseAdmin
-        .from("faturas_inquilino")
-        .update({ tenant_user_id: userId } as any)
-        .in("consulta_id", consultaIds);
-
-      await supabaseAdmin
-        .from("documentos_proposta")
-        .update({ tenant_user_id: userId } as any)
-        .in("consulta_id", consultaIds);
-    }
-
-    // 3. Vincular o registro em inquilinos (cpf único) ao profile
-    await supabaseAdmin
-      .from("inquilinos")
-      .update({ profile_id: userId } as any)
-      .eq("cpf", cpfNorm);
-
-    return {
-      linkedConsultas: consultaIds.length,
-    };
+    return linkTenantRecordsByCpf(supabaseAdmin, context.userId, cpfNorm, data.telefone);
   });
 
 const checkSchema = z.object({
