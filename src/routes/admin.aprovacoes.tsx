@@ -36,7 +36,7 @@ function AprovacoesPage() {
     setLoading(true);
     const { data, error } = await supabase
       .from("consultas_credito")
-      .select("id, tenant_name, tenant_document, tenant_email, tenant_telefone, property_address, rent_value, role_solicitante, created_at, status, substatus, documentos, dados_complementares_em, plano:planos(nome), solicitante:profiles!consultas_credito_profile_id_solicitante_fkey(nome, email)")
+      .select("id, profile_id_solicitante, tenant_name, tenant_document, tenant_email, tenant_telefone, property_address, rent_value, role_solicitante, created_at, status, substatus, documentos, dados_complementares_em, plano:planos(nome), solicitante:profiles!consultas_credito_profile_id_solicitante_fkey(nome, email)")
       .in("status", ["pendente", "em_analise"])
       .order("created_at", { ascending: false });
     if (error) toast.error("Erro ao carregar pendências");
@@ -59,21 +59,53 @@ function AprovacoesPage() {
     );
   }, [linhas, busca]);
 
+  // Avisa o corretor/imobiliária/proprietário que pediu a consulta — o sino já
+  // escuta INSERT em notificacoes via Realtime (ver SinoNotificacoes.tsx).
+  const notificarSolicitante = async (consulta: any, opts: { titulo: string; mensagem: string; tipo: string; cor: string }) => {
+    if (!consulta?.profile_id_solicitante) return;
+    const { error } = await supabase.from("notificacoes").insert({
+      user_id: consulta.profile_id_solicitante,
+      titulo: opts.titulo,
+      mensagem: opts.mensagem,
+      tipo: opts.tipo,
+      cor_destaque: opts.cor,
+      link: `/consultas/${consulta.id}/status`,
+    } as any);
+    if (error) console.error("[admin.aprovacoes] falha ao notificar solicitante:", error);
+  };
+
   const aprovar = async (id: string) => {
+    const consulta = linhas.find((l) => l.id === id);
     const { error } = await supabase.from("consultas_credito").update({
       status: "aprovado", approved_by: adminId, approved_at: new Date().toISOString()
     }).eq("id", id);
-    if (error) toast.error("Erro ao aprovar"); else { toast.success("Consulta aprovada"); load(); }
+    if (error) { toast.error("Erro ao aprovar"); return; }
+    toast.success("Consulta aprovada");
+    await notificarSolicitante(consulta, {
+      titulo: "Consulta aprovada",
+      mensagem: `A consulta de ${consulta?.tenant_name ?? "cliente"} (${consulta?.tenant_document ?? "—"}) foi aprovada.`,
+      tipo: "contrato_aprovado",
+      cor: "verde",
+    });
+    load();
   };
 
   const reprovar = async () => {
     if (!rejectingId) return;
     if (!motivo.trim()) { toast.error("Informe o motivo"); return; }
+    const consulta = linhas.find((l) => l.id === rejectingId);
     const { error } = await supabase.from("consultas_credito").update({
       status: "reprovado", rejected_by: adminId, rejected_at: new Date().toISOString(), rejection_reason: motivo
     }).eq("id", rejectingId);
-    if (error) toast.error("Erro ao reprovar");
-    else { toast.success("Consulta reprovada"); setRejectingId(null); setMotivo(""); load(); }
+    if (error) { toast.error("Erro ao reprovar"); return; }
+    toast.success("Consulta reprovada");
+    await notificarSolicitante(consulta, {
+      titulo: "Consulta recusada",
+      mensagem: `A consulta de ${consulta?.tenant_name ?? "cliente"} (${consulta?.tenant_document ?? "—"}) foi recusada. Motivo: ${motivo}`,
+      tipo: "contrato_reprovado",
+      cor: "vermelho",
+    });
+    setRejectingId(null); setMotivo(""); load();
   };
 
   const abrirDetalhes = async (consulta: any) => {
