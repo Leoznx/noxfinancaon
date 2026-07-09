@@ -6,6 +6,7 @@ import { LogoNox } from "./LogoNox";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { Button } from "./ui/button";
 import { useAuth } from "./AuthProvider";
+import { getCachedHeaderProfile, setCachedHeaderProfile } from "@/lib/profile-cache";
 
 const adminItems = [
   { icon: LayoutDashboard, label: "Dashboard Admin", href: "/dashboard" },
@@ -74,7 +75,7 @@ const proprietarioItems = [
 const inquilinoItems = [
   { icon: FileText, label: "Documentos", href: "/inquilino/documentos" },
   { icon: Receipt, label: "Faturas", href: "/inquilino/faturas" },
-  { icon: UserCircle, label: "Meu Perfil", href: "/inquilino/perfil" },
+  { icon: UserCircle, label: "Meu Perfil", href: "/configuracoes" },
 ];
 
 // Equipe NOX — colaboradores internos
@@ -125,9 +126,70 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const perfilCacheInicial = getCachedHeaderProfile(user?.email);
+  const [nomeUsuario, setNomeUsuario] = useState(perfilCacheInicial?.nome || "");
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(perfilCacheInicial?.avatarUrl || null);
 
   // Fecha drawer ao trocar rota
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
+
+  useEffect(() => {
+    let ativo = true;
+
+    async function carregarPerfil() {
+      if (!user?.email) {
+        setNomeUsuario("");
+        setAvatarUrl(null);
+        return;
+      }
+
+      const perfilCache = getCachedHeaderProfile(user.email);
+      if (perfilCache) {
+        setNomeUsuario(perfilCache.nome || user.email.split("@")[0] || "Usuário");
+        setAvatarUrl(perfilCache.avatarUrl || null);
+      }
+
+      try {
+        const { supabase } = await import("@/integrations/supabase/client");
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+
+        const nomeMetadata = authUser?.user_metadata?.nome || authUser?.user_metadata?.full_name;
+        let perfil: any = null;
+        if (authUser?.id) {
+          const { data } = await supabase
+            .from("profiles")
+            .select("nome, avatar_url")
+            .eq("id", authUser.id)
+            .maybeSingle();
+          perfil = data;
+        }
+
+        if (!perfil) {
+          const { data } = await supabase
+            .from("profiles")
+            .select("nome, avatar_url")
+            .eq("email", user.email)
+            .maybeSingle();
+          perfil = data;
+        }
+
+        if (!ativo) return;
+        const nomeFinal = perfil?.nome || nomeMetadata || user.email.split("@")[0] || "Usuário";
+        const avatarFinal = perfil?.avatar_url || perfilCache?.avatarUrl || null;
+        setNomeUsuario(nomeFinal);
+        setAvatarUrl(avatarFinal);
+        setCachedHeaderProfile({ email: user.email, nome: nomeFinal, avatarUrl: avatarFinal });
+      } catch {
+        if (!ativo) return;
+        const nomeFallback = perfilCache?.nome || user.email.split("@")[0] || "Usuário";
+        setNomeUsuario(nomeFallback);
+        setAvatarUrl(perfilCache?.avatarUrl || null);
+      }
+    }
+
+    carregarPerfil();
+    return () => { ativo = false; };
+  }, [user?.email]);
 
   const isCorretor = user?.role === "corretor";
   const isImobiliaria = user?.role === "imobiliaria";
@@ -146,6 +208,15 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   if (user?.role === "marketing" || user?.internalRole === "marketing") menuItems = marketingItems;
   // Suporte não tem mais painel próprio — fica apenas dentro do Admin
   if (user?.role === "vendedor" || user?.internalRole === "vendedor") menuItems = vendedorItems;
+
+  const nomeTopo = nomeUsuario || user?.email?.split("@")[0] || "Usuário";
+  const iniciaisUsuario = nomeTopo
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((parte) => parte[0])
+    .join("")
+    .toUpperCase() || "US";
 
   const handleLogout = () => {
     try { localStorage.removeItem("nox_user"); } catch {}
@@ -238,27 +309,23 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               <Menu size={22} />
             </button>
             <div className="text-sm text-neutral-500 hidden sm:flex items-center gap-2 font-medium min-w-0">
-              Bem-vindo, <span className="text-neutral-900 font-bold capitalize truncate">{user?.role || "Usuário"}</span>
+              Bem-vindo, <span className="text-neutral-900 font-bold truncate">{nomeTopo}</span>
               {user?.role === 'corretor' && <Medal className="w-4 h-4 text-[#FACC15] ml-1 shrink-0" />}
               {user?.role === 'imobiliaria' && <Building2 className="w-4 h-4 text-neutral-400 ml-1 shrink-0" />}
               {user?.role === 'proprietario' && <Home className="w-4 h-4 text-neutral-400 ml-1 shrink-0" />}
-              <span className="w-1 h-1 rounded-full bg-neutral-300 mx-2 shrink-0"></span>
-              <span className="text-xs truncate">{user?.email}</span>
             </div>
-            <div className="sm:hidden text-sm font-bold text-neutral-900 capitalize truncate">
-              {user?.role || "Usuário"}
+            <div className="sm:hidden text-sm font-bold text-neutral-900 truncate">
+              {nomeTopo}
             </div>
           </div>
-          <div className="flex items-center gap-3 sm:gap-6 shrink-0">
-            <div className="flex items-center gap-4 sm:border-r sm:border-neutral-100 sm:pr-6">
-              <SinoNotificacoes />
-              <div className="hidden md:flex flex-col items-end">
-                <span className="text-xs font-bold text-neutral-900 leading-none">Status Institucional</span>
-                <span className="text-[10px] text-neutral-400 uppercase tracking-widest mt-1">Conectado</span>
-              </div>
-            </div>
-            <Link to="/configuracoes" className="w-9 h-9 rounded-lg bg-neutral-100 border border-neutral-200 flex items-center justify-center text-xs font-bold text-neutral-900 uppercase hover:bg-yellow-400 transition-colors shrink-0">
-              {user?.email?.substring(0, 2)}
+          <div className="flex items-center gap-2 shrink-0">
+            <SinoNotificacoes />
+            <Link to="/configuracoes" className="w-9 h-9 rounded-lg bg-neutral-100 border border-neutral-200 flex items-center justify-center overflow-hidden text-xs font-bold text-neutral-900 uppercase hover:bg-yellow-400 transition-colors shrink-0">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt={nomeTopo} className="h-full w-full object-cover" />
+              ) : (
+                iniciaisUsuario
+              )}
             </Link>
           </div>
 

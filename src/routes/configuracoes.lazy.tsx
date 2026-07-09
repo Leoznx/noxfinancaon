@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
+import { setCachedHeaderProfile } from "@/lib/profile-cache";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -43,11 +44,15 @@ export const Route = createLazyFileRoute("/configuracoes")({
   ),
 });
 
+// Inquilino não tem dados profissionais, comissão ou PIX — essas abas não se aplicam.
+const TABS_OCULTAS_PARA_INQUILINO = new Set(['conta', 'financeiro', 'comissoes']);
+
 function ConfiguracoesPage() {
   const search = useSearch({ from: "/configuracoes" });
   const navigate = useNavigate();
   const [abaAtiva, setAbaAtivaState] = useState<string>(search.tab ?? 'perfil');
   const { user } = useAuth();
+  const isInquilino = user?.role === 'inquilino';
 
   // Mantém a URL em sincronia com a aba ativa — permite deep-link (ex.: um dropdown
   // externo linkando direto pra /configuracoes?tab=seguranca) e sobrevive a um reload.
@@ -55,6 +60,13 @@ function ConfiguracoesPage() {
     if (search.tab && search.tab !== abaAtiva) setAbaAtivaState(search.tab);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search.tab]);
+
+  // Defesa extra contra deep-link direto (?tab=financeiro) numa aba que não existe
+  // pra esse papel — evita renderizar um Tab* pensado pra corretor/imobiliária.
+  useEffect(() => {
+    if (isInquilino && TABS_OCULTAS_PARA_INQUILINO.has(abaAtiva)) setAbaAtiva('perfil');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isInquilino, abaAtiva]);
 
   const setAbaAtiva = (aba: string) => {
     setAbaAtivaState(aba);
@@ -82,20 +94,24 @@ function ConfiguracoesPage() {
                 titulo="Perfil"
                 descricao="Foto, nome e dados"
               />
-              <NavItemConfig
-                ativo={abaAtiva === 'conta'}
-                onClick={() => setAbaAtiva('conta')}
-                icon={Building2}
-                titulo="Conta"
-                descricao="Documentos e profissional"
-              />
-              <NavItemConfig
-                ativo={abaAtiva === 'financeiro'}
-                onClick={() => setAbaAtiva('financeiro')}
-                icon={Wallet}
-                titulo="Financeiro"
-                descricao="Chave PIX e bancários"
-              />
+              {!isInquilino && (
+                <NavItemConfig
+                  ativo={abaAtiva === 'conta'}
+                  onClick={() => setAbaAtiva('conta')}
+                  icon={Building2}
+                  titulo="Conta"
+                  descricao="Documentos e profissional"
+                />
+              )}
+              {!isInquilino && (
+                <NavItemConfig
+                  ativo={abaAtiva === 'financeiro'}
+                  onClick={() => setAbaAtiva('financeiro')}
+                  icon={Wallet}
+                  titulo="Financeiro"
+                  descricao="Chave PIX e bancários"
+                />
+              )}
               <NavItemConfig
                 ativo={abaAtiva === 'seguranca'}
                 onClick={() => setAbaAtiva('seguranca')}
@@ -110,24 +126,26 @@ function ConfiguracoesPage() {
                 titulo="Notificações"
                 descricao="Alertas e preferências"
               />
-              <NavItemConfig
-                ativo={abaAtiva === 'comissoes'}
-                onClick={() => setAbaAtiva('comissoes')}
-                icon={Award}
-                titulo="Plano e Nível"
-                descricao="Regras de carreira"
-              />
+              {!isInquilino && (
+                <NavItemConfig
+                  ativo={abaAtiva === 'comissoes'}
+                  onClick={() => setAbaAtiva('comissoes')}
+                  icon={Award}
+                  titulo="Plano e Nível"
+                  descricao="Regras de carreira"
+                />
+              )}
             </nav>
           </aside>
           
           {/* CONTEÚDO DA TAB (9 cols) */}
           <main className="col-span-12 lg:col-span-9 animate-in fade-in slide-in-from-right-4 duration-500">
             {abaAtiva === 'perfil'       && <TabPerfil />}
-            {abaAtiva === 'conta'        && <TabConta />}
-            {abaAtiva === 'financeiro'   && <TabFinanceiro />}
+            {!isInquilino && abaAtiva === 'conta'        && <TabConta />}
+            {!isInquilino && abaAtiva === 'financeiro'   && <TabFinanceiro />}
             {abaAtiva === 'seguranca'    && <TabSeguranca />}
             {abaAtiva === 'notificacoes' && <TabNotificacoes />}
-            {abaAtiva === 'comissoes'    && <TabComissoesNivel />}
+            {!isInquilino && abaAtiva === 'comissoes'    && <TabComissoesNivel />}
           </main>
         </div>
       </div>
@@ -281,6 +299,11 @@ function TabPerfil() {
     setFoto(p?.avatar_url ?? null);
     setNome(p?.nome ?? "");
     setTelefone(p?.telefone ?? "");
+    setCachedHeaderProfile({
+      email: usuario.email,
+      nome: p?.nome ?? null,
+      avatarUrl: p?.avatar_url ?? null,
+    });
   }, [usuario]);
 
 
@@ -318,6 +341,11 @@ function TabPerfil() {
         .eq('id', profile.id);
       if (updateError) throw updateError;
       setFoto(publicUrl);
+      setCachedHeaderProfile({
+        email: usuario.email,
+        nome: nome || profile?.nome || usuario.email.split("@")[0],
+        avatarUrl: publicUrl,
+      });
       toast.success('Foto de perfil atualizada!');
     } catch (error: any) {
       toast.error('Erro ao subir foto: ' + error.message);
@@ -349,6 +377,11 @@ function TabPerfil() {
         .single();
       if (error) throw error;
       setProfile(data);
+      setCachedHeaderProfile({
+        email: usuario.email,
+        nome: data?.nome || payload.nome,
+        avatarUrl: data?.avatar_url || foto,
+      });
       toast.success('Perfil atualizado!');
     } catch (e: any) {
       toast.error('Não foi possível salvar seus dados agora. Tente novamente.');

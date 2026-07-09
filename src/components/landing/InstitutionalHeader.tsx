@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { redirectPathForRole } from '@/lib/authRedirect';
 import { supabase } from '@/integrations/supabase/client';
+import { getCachedHeaderProfile, setCachedHeaderProfile } from '@/lib/profile-cache';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -20,13 +21,12 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 
-function PerfilTab({ to, icon: Icon, label }: { to: string; icon: any; label: string }) {
+function PerfilTab({ to, label }: { to: string; label: string }) {
   return (
     <Link
       to={to}
-      className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-base font-medium text-neutral-600 hover:bg-yellow-50 hover:text-neutral-900 transition-colors"
+      className="flex items-center px-4 py-1.5 text-base font-medium text-neutral-600 hover:text-neutral-900 transition-colors"
     >
-      <Icon className="w-4 h-4 text-neutral-900" strokeWidth={2.75} />
       {label}
     </Link>
   );
@@ -43,9 +43,20 @@ const PERFIL_MENU_ITEMS = [
   { tab: 'comissoes', label: 'Plano e Nível', icon: Award },
 ] as const;
 
+// Inquilino não tem dados profissionais/comissão — essas 3 abas não se aplicam.
+const TABS_OCULTAS_PARA_INQUILINO = new Set(['conta', 'financeiro', 'comissoes']);
+
+function menuItemsParaRole(role: string | null | undefined) {
+  if (role !== 'inquilino') return PERFIL_MENU_ITEMS;
+  return PERFIL_MENU_ITEMS.filter((item) => !TABS_OCULTAS_PARA_INQUILINO.has(item.tab));
+}
+
 /** Busca nome/avatar do profile pra exibir no header — AuthProvider só guarda email/role/internalRole. */
 function useHeaderProfile(email: string | null | undefined) {
-  const [profile, setProfile] = useState<{ nome: string | null; avatar_url: string | null } | null>(null);
+  const [profile, setProfile] = useState<{ nome: string | null; avatar_url: string | null } | null>(() => {
+    const cached = getCachedHeaderProfile(email);
+    return cached ? { nome: cached.nome, avatar_url: cached.avatarUrl } : null;
+  });
 
   useEffect(() => {
     let active = true;
@@ -53,13 +64,33 @@ function useHeaderProfile(email: string | null | undefined) {
       setProfile(null);
       return;
     }
+
+    const cached = getCachedHeaderProfile(email);
+    if (cached) {
+      setProfile({ nome: cached.nome, avatar_url: cached.avatarUrl });
+    }
+
     supabase
       .from('profiles')
       .select('nome, avatar_url')
       .eq('email', email)
       .maybeSingle()
       .then(({ data }) => {
-        if (active) setProfile((data as any) ?? null);
+        if (!active) return;
+        const nextProfile = (data as any) ?? null;
+        const profileFinal = nextProfile
+          ? { nome: nextProfile.nome || cached?.nome || null, avatar_url: nextProfile.avatar_url || cached?.avatarUrl || null }
+          : cached
+            ? { nome: cached.nome, avatar_url: cached.avatarUrl }
+            : null;
+        setProfile(profileFinal);
+        if (nextProfile) {
+          setCachedHeaderProfile({
+            email,
+            nome: profileFinal?.nome || null,
+            avatarUrl: profileFinal?.avatar_url || null,
+          });
+        }
       });
     return () => {
       active = false;
@@ -123,7 +154,7 @@ function HeaderUserMenu({ align }: { align: 'desktop' | 'mobile' }) {
             </div>
           </div>
           <nav className="flex flex-col divide-y divide-neutral-100">
-            {PERFIL_MENU_ITEMS.map(({ tab, label, icon: Icon }) => (
+            {menuItemsParaRole(user.role).map(({ tab, label, icon: Icon }) => (
               <Link
                 key={tab}
                 to="/configuracoes"
@@ -166,7 +197,7 @@ function HeaderUserMenu({ align }: { align: 'desktop' | 'mobile' }) {
             <p className="text-xs text-neutral-500 truncate">{user.email}</p>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
-          {PERFIL_MENU_ITEMS.map(({ tab, label, icon: Icon }) => (
+          {menuItemsParaRole(user.role).map(({ tab, label, icon: Icon }) => (
             <DropdownMenuItem key={tab} asChild>
               <Link to="/configuracoes" search={{ tab } as any} className="flex items-center gap-2 cursor-pointer">
                 <Icon className="w-4 h-4 text-neutral-900" strokeWidth={2.2} /> {label}
@@ -202,10 +233,12 @@ export const InstitutionalHeader = () => {
 
           <span className="w-px h-5 bg-neutral-200 mx-3"></span>
 
-          <PerfilTab to="/corretor" icon={UserRound} label="Corretor" />
-          <PerfilTab to="/imobiliaria" icon={Building2} label="Imobiliária" />
-          <PerfilTab to="/proprietario" icon={Home} label="Proprietário" />
-          <PerfilTab to="/inquilino" icon={KeyRound} label="Inquilino" />
+          <div className="flex items-center divide-x divide-neutral-200/80">
+            <PerfilTab to="/corretor" label="Corretor" />
+            <PerfilTab to="/imobiliaria" label="Imobiliária" />
+            <PerfilTab to="/proprietario" label="Proprietário" />
+            <PerfilTab to="/inquilino" label="Inquilino" />
+          </div>
         </nav>
 
         {/* Direita: Botões (Desktop) */}

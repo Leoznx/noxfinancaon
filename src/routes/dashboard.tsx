@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { NivelCorretorCard } from "@/components/NivelCorretorCard";
+import { DashboardEquipeBanner } from "@/components/DashboardEquipeBanner";
 import { JuridicoDashboard } from "@/components/JuridicoDashboard";
 import { FinanceiroDashboard } from "@/components/FinanceiroDashboard";
 import { MarketingDashboard } from "@/components/MarketingDashboard";
@@ -10,6 +11,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { Card } from "@/components/ui/card";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchNivelInfo, type NivelInfo } from "@/lib/niveis-parceria";
 
 
 export const Route = createFileRoute("/dashboard")({
@@ -58,6 +60,7 @@ function Dashboard() {
 
   const [consultasRecentes, setConsultasRecentes] = useState<any[]>([]);
   const [loadingConsultas, setLoadingConsultas] = useState(true);
+  const [nivelInfo, setNivelInfo] = useState<NivelInfo | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -68,6 +71,10 @@ function Dashboard() {
           .select('id, role')
           .eq('email', user.email)
           .maybeSingle();
+
+        if (meuProfile && (isCorretor || isImobiliaria)) {
+          fetchNivelInfo(meuProfile.id, meuProfile.role).then(setNivelInfo).catch(() => setNivelInfo(null));
+        }
 
         let q = supabase
           .from('consultas_credito')
@@ -99,45 +106,24 @@ function Dashboard() {
         setLoadingConsultas(false);
       }
     })();
-  }, [user?.email, isAdmin, isImobiliaria]);
+  }, [user?.email, isAdmin, isImobiliaria, isCorretor]);
 
-  const demoNivel = {
-    nome: isCorretor ? "Prata" : "Ouro",
-    percentual: isCorretor ? 7 : 9,
-    cor: "#FACC15",
-    icone: Trophy,
-    contratos: isCorretor ? 15 : 24,
-    proximoNivel: isCorretor ? "Ouro" : "Diamante",
-    metaProximo: isCorretor ? 21 : 31
-  };
-
+  const nivelCardInfo = nivelInfo?.nivelAtual
+    ? {
+        nome: nivelInfo.nivelAtual.nome_nivel,
+        percentual: nivelInfo.nivelAtual.percentual_comissao ?? 0,
+        cor: "#FACC15",
+        icone: Trophy,
+        contratos: nivelInfo.contratosAtivos,
+        proximoNivel: nivelInfo.proximoNivel?.nome_nivel,
+        metaProximo: nivelInfo.proximoNivel?.min_contratos,
+      }
+    : null;
 
   return (
     <DashboardLayout>
       <div className="space-y-4 sm:space-y-8 lg:space-y-10">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-6">
-          <div className="min-w-0">
-            <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-neutral-900 tracking-tight truncate">
-              {isAdmin ? "Painel Administrativo" : isImobiliaria ? "Painel Imobiliária" : isProprietario ? "Painel Proprietário" : "Painel do Corretor"}
-            </h1>
-            <p className="text-neutral-500 mt-1 sm:mt-2 font-medium text-xs sm:text-sm lg:text-base">Acompanhe o desempenho e as operações da sua conta.</p>
-          </div>
-          {(isCorretor || isImobiliaria) && (
-            <div className="flex items-center gap-3 sm:gap-4 bg-white border border-neutral-200 p-2 sm:p-3 pr-4 sm:pr-6 rounded-lg shadow-sm shrink-0">
-              <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-lg bg-[#FACC15] flex items-center justify-center border border-neutral-200 shrink-0">
-                <Trophy className="text-neutral-900 w-5 h-5 sm:w-6 sm:h-6" strokeWidth={1.5} />
-              </div>
-              <div>
-                <p className="text-[9px] sm:text-[10px] text-neutral-400 font-bold uppercase tracking-widest">Nível de Parceria</p>
-                <p className="text-sm sm:text-lg font-bold text-neutral-900 leading-tight">
-                  {isCorretor ? "PRATA" : "OURO"}
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {(isCorretor || isImobiliaria) && <NivelCorretorCard info={demoNivel} />}
+        <DashboardEquipeBanner />
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
           <CardStats title={isProprietario ? "Imóveis Cadastrados" : "Consultas Pendentes"} value={isAdmin ? "42" : isImobiliaria ? "18" : isProprietario ? "3" : "7"} icon={isAdmin || isImobiliaria || isCorretor ? Search : Home} trend="+2 hoje" trendUp={true} />
@@ -145,6 +131,8 @@ function Dashboard() {
           <CardStats title={isProprietario ? "Recebimentos no Mês" : "Inquilinos sob Gestão"} value={isAdmin ? "850" : isImobiliaria ? "38" : isProprietario ? "R$ 12.850" : "12"} icon={Users} />
           <CardStats title={isProprietario ? "Sinistros Ativos" : "Comissões Acumuladas"} value={isAdmin ? "R$ 142.500" : isImobiliaria ? "R$ 8.420" : isProprietario ? "0" : "R$ 2.850"} icon={isProprietario ? AlertCircle : DollarSign} isCurrency={true} />
         </div>
+
+        {(isCorretor || isImobiliaria) && nivelCardInfo && <NivelCorretorCard info={nivelCardInfo} />}
 
         {isProprietario && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-4 sm:p-6">
