@@ -4,7 +4,8 @@ export function DashboardEquipeBanner() {
     <img
       src="/dashboard/banner-equipe.png"
       alt="Quanto mais contratos, mais comissão"
-      className="w-full max-w-2xl h-auto rounded-2xl"
+      className="w-full rounded-2xl object-fill"
+      style={{ aspectRatio: "5.8 / 1" }}
     />
   );
 }
