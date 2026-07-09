@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { sendVerificationEmail } from "@/lib/resend.service";
 import { linkTenantRecordsByCpf } from "@/lib/inquilino-signup.functions";
+import { defaultAvatarForName } from "@/lib/gender-avatar";
 
 function buildRedirectTo() {
   const base = (process.env.APP_URL || "").replace(/\/$/, "");
@@ -75,6 +76,15 @@ export const signUpInquilino = createServerFn({ method: "POST" })
       .from("profiles")
       .update({ status: "ativo", nome: data.nome, telefone: data.telefone, role: "inquilino" } as any)
       .eq("id", userId);
+
+    // Foto de perfil padrão (por gênero detectado no primeiro nome) — só se o
+    // usuário ainda não tiver nenhuma (perfil recém-criado, mas o .is() é uma
+    // garantia extra contra sobrescrever uma foto já existente).
+    await supabaseAdmin
+      .from("profiles")
+      .update({ avatar_url: defaultAvatarForName(data.nome) } as any)
+      .eq("id", userId)
+      .is("avatar_url", null);
 
     await supabaseAdmin
       .from("inquilinos")
@@ -156,6 +166,16 @@ export const signUpProfissional = createServerFn({ method: "POST" })
       .from("profiles")
       .update({ status: "pendente_aprovacao", nome: nomeExibicao, telefone: data.telefone } as any)
       .eq("id", userId);
+
+    // Foto de perfil padrão (por gênero detectado no primeiro nome) — só se o
+    // usuário ainda não tiver nenhuma. Pra imobiliária, usa o nome do
+    // responsável (pessoa física) em vez da razão social da empresa.
+    const nomePessoaFisica = data.role === "imobiliaria" ? data.responsavelNome : data.nome;
+    await supabaseAdmin
+      .from("profiles")
+      .update({ avatar_url: defaultAvatarForName(nomePessoaFisica) } as any)
+      .eq("id", userId)
+      .is("avatar_url", null);
 
     if (data.role === "imobiliaria") {
       await supabaseAdmin.from("imobiliarias").insert({
