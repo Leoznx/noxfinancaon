@@ -302,7 +302,7 @@ export function VerificacaoDocumento({ usuario }: { usuario?: UsuarioDocumento }
     }
     if (!verif.document_front_url) return toast.error("Envie a frente do documento.");
     if (!verif.document_back_url) return toast.error("Envie o verso do documento.");
-    if (!verif.selfie_url) return toast.error("Envie uma selfie do rosto.");
+    if (!verif.selfie_url) return toast.error("Envie uma foto sua segurando o documento.");
 
     setFinalizando(true);
     try {
@@ -358,7 +358,7 @@ export function VerificacaoDocumento({ usuario }: { usuario?: UsuarioDocumento }
         <div>
           <h3 className="text-lg font-black text-neutral-900 tracking-tight">Verificação de documento</h3>
           <p className="text-sm text-neutral-500 font-medium">
-            Envie seu documento e uma selfie para concluir a validação da conta.
+            Envie a frente, o verso e uma foto sua segurando o documento para concluir a validação da conta.
           </p>
         </div>
         <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-bold ${meta.tone}`}>
@@ -430,8 +430,8 @@ export function VerificacaoDocumento({ usuario }: { usuario?: UsuarioDocumento }
             onRemove={() => handleRemove("verso")}
           />
           <UploadCard
-            titulo="Selfie do rosto"
-            descricao="Envie uma selfie clara, sem óculos escuros ou documento cobrindo o rosto."
+            titulo="Segurando o documento"
+            descricao="Foto do seu rosto segurando o documento ao lado, ambos visíveis e legíveis."
             icon={Camera}
             previewUrl={signedUrls.selfie}
             enviando={enviando === "selfie"}

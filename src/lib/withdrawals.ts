@@ -162,6 +162,15 @@ export interface WithdrawalContractDetails {
   contract_url: string;
 }
 
+export interface WithdrawalVerification {
+  document_type: "cnh" | "rg" | null;
+  verification_status: "pendente" | "enviado" | "em_analise" | "aprovado" | "recusado" | null;
+  has_front: boolean;
+  has_back: boolean;
+  has_holder_photo: boolean;
+  submitted_at: string | null;
+}
+
 export interface WithdrawalDetails {
   withdrawal: UserWithdrawal & {
     user_id: string;
@@ -172,6 +181,7 @@ export interface WithdrawalDetails {
     receipt_mime_type: string | null;
     receipt_size_bytes: number | null;
   };
+  verification: WithdrawalVerification | null;
   requester: {
     id: string;
     name: string;
@@ -356,4 +366,30 @@ export async function getWithdrawalReceiptUrl(
     throw new WithdrawalError(data?.error || "O comprovante não está disponível.", data?.code);
   }
   return data.url as string;
+}
+
+export interface WithdrawalVerificationDocs {
+  front_url: string | null;
+  back_url: string | null;
+  holder_photo_url: string | null;
+}
+
+export async function getWithdrawalVerificationDocs(
+  withdrawalId: string,
+): Promise<WithdrawalVerificationDocs> {
+  const { data, error } = await supabase.functions.invoke("withdrawal-verification-docs", {
+    body: { withdrawal_id: withdrawalId },
+  });
+  if (error) throw toWithdrawalError(error);
+  if (!data?.ok) {
+    throw new WithdrawalError(
+      data?.error || "Os documentos de identidade não estão disponíveis.",
+      data?.code,
+    );
+  }
+  return {
+    front_url: data.front_url ?? null,
+    back_url: data.back_url ?? null,
+    holder_photo_url: data.holder_photo_url ?? null,
+  };
 }

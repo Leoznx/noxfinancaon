@@ -45,8 +45,10 @@ export const Route = createLazyFileRoute("/configuracoes")({
   ),
 });
 
-// Inquilino não tem dados profissionais, comissão ou PIX — essas abas não se aplicam.
-const TABS_OCULTAS_PARA_INQUILINO = new Set(["conta", "financeiro", "comissoes"]);
+// Inquilino não tem comissão nem PIX — essas abas não se aplicam. "Conta" fica
+// visível porque é onde mora a verificação de documento (frente/verso/segurando
+// o documento), que todo perfil precisa preencher.
+const TABS_OCULTAS_PARA_INQUILINO = new Set(["financeiro", "comissoes"]);
 
 function ConfiguracoesPage() {
   const search = useSearch({ from: "/configuracoes" });
@@ -99,15 +101,13 @@ function ConfiguracoesPage() {
                 titulo="Perfil"
                 descricao="Foto, nome e dados"
               />
-              {!isInquilino && (
-                <NavItemConfig
-                  ativo={abaAtiva === "conta"}
-                  onClick={() => setAbaAtiva("conta")}
-                  icon={Building2}
-                  titulo="Conta"
-                  descricao="Documentos e profissional"
-                />
-              )}
+              <NavItemConfig
+                ativo={abaAtiva === "conta"}
+                onClick={() => setAbaAtiva("conta")}
+                icon={Building2}
+                titulo="Conta"
+                descricao="Documentos e profissional"
+              />
               {!ocultarFinanceiro && (
                 <NavItemConfig
                   ativo={abaAtiva === "financeiro"}
@@ -146,7 +146,7 @@ function ConfiguracoesPage() {
           {/* CONTEÚDO DA TAB (9 cols) */}
           <main className="col-span-12 lg:col-span-9 animate-in fade-in slide-in-from-right-4 duration-500">
             {abaAtiva === "perfil" && <TabPerfil />}
-            {!isInquilino && abaAtiva === "conta" && <TabConta />}
+            {abaAtiva === "conta" && <TabConta />}
             {!ocultarFinanceiro && abaAtiva === "financeiro" && <TabFinanceiro />}
             {abaAtiva === "seguranca" && <TabSeguranca />}
             {abaAtiva === "notificacoes" && <TabNotificacoes />}
@@ -641,7 +641,7 @@ function TabConta() {
     <div className="space-y-6">
       <CardSecao
         titulo="Dados da Conta"
-        descricao="Informações profissionais e de identificação jurídica."
+        descricao="Acesso à plataforma e identificação."
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-1.5">

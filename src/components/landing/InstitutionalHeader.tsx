@@ -43,8 +43,9 @@ const PERFIL_MENU_ITEMS = [
   { tab: 'comissoes', label: 'Plano e Nível', icon: Award },
 ] as const;
 
-// Inquilino não tem dados profissionais/comissão — essas 3 abas não se aplicam.
-const TABS_OCULTAS_PARA_INQUILINO = new Set(['conta', 'financeiro', 'comissoes']);
+// Inquilino não tem comissão nem PIX — essas 2 abas não se aplicam. "Conta"
+// fica visível porque é onde mora a verificação de documento.
+const TABS_OCULTAS_PARA_INQUILINO = new Set(['financeiro', 'comissoes']);
 // Admin não recebe comissão/Pix — mesma regra de src/routes/configuracoes.lazy.tsx.
 const TABS_OCULTAS_PARA_ADMIN = new Set(["financeiro"]);
 

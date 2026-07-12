@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import {
   AlertTriangle,
+  Camera,
   CheckCircle2,
   Copy,
   Download,
   ExternalLink,
   Eye,
   FileText,
+  IdCard,
   Loader2,
   LockKeyhole,
   Receipt,
@@ -28,12 +30,30 @@ import {
   formatCents,
   getWithdrawalDetails,
   getWithdrawalReceiptUrl,
+  getWithdrawalVerificationDocs,
   revealWithdrawalPix,
   toWithdrawalError,
   WITHDRAWAL_STATUS_LABELS,
   type WithdrawalDetails,
   type WithdrawalStatus,
+  type WithdrawalVerificationDocs,
 } from "@/lib/withdrawals";
+
+const VERIFICATION_STATUS_LABELS: Record<string, string> = {
+  pendente: "Pendente",
+  enviado: "Enviado",
+  em_analise: "Em análise",
+  aprovado: "Verificado",
+  recusado: "Recusado",
+};
+
+const verificationStatusTone: Record<string, string> = {
+  pendente: "border-neutral-200 bg-neutral-100 text-neutral-700",
+  enviado: "border-blue-200 bg-blue-50 text-blue-800",
+  em_analise: "border-amber-200 bg-amber-50 text-amber-800",
+  aprovado: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  recusado: "border-red-200 bg-red-50 text-red-800",
+};
 
 type Props = {
   withdrawalId: string | null;
@@ -75,6 +95,11 @@ export function WithdrawalDetailsDialog({
   const [fullPix, setFullPix] = useState<string | null>(null);
   const [revealing, setRevealing] = useState(false);
   const [openingReceipt, setOpeningReceipt] = useState(false);
+  const [verificationDocs, setVerificationDocs] = useState<WithdrawalVerificationDocs | null>(
+    null,
+  );
+  const [loadingDocs, setLoadingDocs] = useState(false);
+  const [docsError, setDocsError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open || !withdrawalId) {
@@ -99,6 +124,34 @@ export function WithdrawalDetailsDialog({
       active = false;
     };
   }, [open, withdrawalId]);
+
+  const verification = details?.verification;
+  const hasAnyDocument =
+    !!verification && (verification.has_front || verification.has_back || verification.has_holder_photo);
+
+  useEffect(() => {
+    if (!open || !withdrawalId || !manager || !hasAnyDocument) {
+      setVerificationDocs(null);
+      setDocsError(null);
+      return;
+    }
+    let active = true;
+    setLoadingDocs(true);
+    setDocsError(null);
+    getWithdrawalVerificationDocs(withdrawalId)
+      .then((value) => {
+        if (active) setVerificationDocs(value);
+      })
+      .catch((error) => {
+        if (active) setDocsError(toWithdrawalError(error).message);
+      })
+      .finally(() => {
+        if (active) setLoadingDocs(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [open, withdrawalId, manager, hasAnyDocument]);
 
   const revealPix = async () => {
     if (!withdrawalId || !manager || revealing) return;
@@ -269,6 +322,58 @@ export function WithdrawalDetailsDialog({
               </div>
             </section>
 
+            {manager && (
+              <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <IdCard className="h-4 w-4 text-neutral-500" />
+                    <h3 className="font-black text-neutral-950">Documento de identidade</h3>
+                  </div>
+                  {verification?.verification_status && (
+                    <Badge
+                      className={
+                        verificationStatusTone[verification.verification_status] ||
+                        verificationStatusTone.pendente
+                      }
+                    >
+                      {VERIFICATION_STATUS_LABELS[verification.verification_status] ||
+                        verification.verification_status}
+                    </Badge>
+                  )}
+                </div>
+
+                {!hasAnyDocument ? (
+                  <div className="rounded-2xl border border-dashed p-8 text-center text-neutral-500">
+                    Nenhum documento de identidade foi enviado por este solicitante.
+                  </div>
+                ) : loadingDocs ? (
+                  <div className="flex items-center justify-center gap-3 py-10 text-neutral-500">
+                    <Loader2 className="h-5 w-5 animate-spin" /> Carregando documentos...
+                  </div>
+                ) : docsError ? (
+                  <p className="text-sm font-medium text-red-600">{docsError}</p>
+                ) : (
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    <DocumentoPhoto
+                      titulo="Frente do documento"
+                      icon={IdCard}
+                      url={verificationDocs?.front_url ?? null}
+                    />
+                    <DocumentoPhoto
+                      titulo="Verso do documento"
+                      icon={IdCard}
+                      url={verificationDocs?.back_url ?? null}
+                    />
+                    <DocumentoPhoto
+                      titulo="Segurando o documento"
+                      icon={Camera}
+                      url={verificationDocs?.holder_photo_url ?? null}
+                    />
+                  </div>
+                )}
+              </section>
+            )}
+
             <section>
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div>
@@ -418,6 +523,31 @@ export function WithdrawalDetailsDialog({
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+function DocumentoPhoto({
+  titulo,
+  icon: Icon,
+  url,
+}: {
+  titulo: string;
+  icon: typeof IdCard;
+  url: string | null;
+}) {
+  return (
+    <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-3">
+      <div className="flex h-40 items-center justify-center overflow-hidden rounded-lg border border-neutral-200 bg-white">
+        {url ? (
+          <a href={url} target="_blank" rel="noopener noreferrer" className="h-full w-full">
+            <img src={url} alt={titulo} className="h-full w-full object-cover" />
+          </a>
+        ) : (
+          <Icon className="h-8 w-8 text-neutral-300" />
+        )}
+      </div>
+      <p className="mt-2 text-center text-xs font-bold text-neutral-700">{titulo}</p>
+    </div>
   );
 }
 

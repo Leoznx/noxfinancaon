@@ -23,6 +23,54 @@ function isAlreadyRegisteredError(message: string | undefined) {
 }
 
 // ============================================================================
+// Documento de identidade (frente, verso e foto segurando o documento) —
+// enviado já no cadastro, gravado via supabaseAdmin (service role) porque
+// ainda não existe sessão (e-mail não confirmado). Mesma tabela/bucket que
+// VerificacaoDocumento usa em Configurações > Conta, então o usuário pode
+// revisar/reenviar depois por lá.
+const documentoSchema = z.object({
+  tipo: z.enum(["rg", "cnh"]),
+  frenteBase64: z.string().min(100),
+  versoBase64: z.string().min(100),
+  segurandoBase64: z.string().min(100),
+});
+
+async function uploadIdentityDocuments(
+  supabaseAdmin: any,
+  userId: string,
+  documento: z.infer<typeof documentoSchema>,
+) {
+  const slots: Array<["frente" | "verso" | "segurando", string]> = [
+    ["frente", documento.frenteBase64],
+    ["verso", documento.versoBase64],
+    ["segurando", documento.segurandoBase64],
+  ];
+  const paths: Record<string, string> = {};
+  for (const [slot, base64] of slots) {
+    const bytes = Buffer.from(base64, "base64");
+    const path = `${userId}/${slot}-${Date.now()}.jpg`;
+    const { error } = await supabaseAdmin.storage
+      .from("documentos-verificacao")
+      .upload(path, bytes, { contentType: "image/jpeg", upsert: true });
+    if (error) throw new Error(`Falha ao enviar ${slot}: ${error.message}`);
+    paths[slot] = path;
+  }
+  const { error: upsertError } = await supabaseAdmin.from("verificacoes_documento").upsert(
+    {
+      user_id: userId,
+      document_type: documento.tipo,
+      document_front_url: paths.frente,
+      document_back_url: paths.verso,
+      selfie_url: paths.segurando,
+      verification_status: "enviado",
+      submitted_at: new Date().toISOString(),
+    } as any,
+    { onConflict: "user_id" },
+  );
+  if (upsertError) throw new Error(upsertError.message);
+}
+
+// ============================================================================
 // Inquilino
 // ============================================================================
 
@@ -32,6 +80,7 @@ const inquilinoSchema = z.object({
   email: z.string().email(),
   telefone: z.string().min(8),
   senha: z.string().min(8),
+  documento: documentoSchema,
 });
 
 export const signUpInquilino = createServerFn({ method: "POST" })
@@ -92,13 +141,21 @@ export const signUpInquilino = createServerFn({ method: "POST" })
 
     const { linkedConsultas } = await linkTenantRecordsByCpf(supabaseAdmin, userId, cpfNorm);
 
+    let documentUploadFailed = false;
+    try {
+      await uploadIdentityDocuments(supabaseAdmin, userId, data.documento);
+    } catch (e) {
+      console.error("[signUpInquilino] falha ao enviar documento de identidade:", e);
+      documentUploadFailed = true;
+    }
+
     const emailResult = await sendVerificationEmail({
       email: emailLower,
       nome: data.nome,
       verificationLink: linkData.properties.action_link,
     });
 
-    return { ok: true as const, userId, emailSent: emailResult.sent, linkedConsultas };
+    return { ok: true as const, userId, emailSent: emailResult.sent, linkedConsultas, documentUploadFailed };
   });
 
 // ============================================================================
@@ -123,12 +180,12 @@ const profissionalSchema = z.object({
   creci: z.string().optional(),
   vinculadoImobiliaria: z.boolean().optional(),
   imobiliariaId: z.string().optional(),
-  pix: z.string().optional(),
   // Proprietário
   cpfCnpj: z.string().optional(),
   // Comuns a corretor/proprietário
   cidade: z.string().optional(),
   estado: z.string().optional(),
+  documento: documentoSchema,
 });
 
 export const signUpProfissional = createServerFn({ method: "POST" })
@@ -199,7 +256,6 @@ export const signUpProfissional = createServerFn({ method: "POST" })
         estado: data.estado,
         vinculado_imobiliaria: data.vinculadoImobiliaria ?? false,
         imobiliaria_id: data.imobiliariaId || null,
-        pix: data.pix,
       } as any);
     } else if (data.role === "proprietario") {
       await supabaseAdmin.from("proprietarios").insert({
@@ -211,13 +267,21 @@ export const signUpProfissional = createServerFn({ method: "POST" })
       } as any);
     }
 
+    let documentUploadFailed = false;
+    try {
+      await uploadIdentityDocuments(supabaseAdmin, userId, data.documento);
+    } catch (e) {
+      console.error("[signUpProfissional] falha ao enviar documento de identidade:", e);
+      documentUploadFailed = true;
+    }
+
     const emailResult = await sendVerificationEmail({
       email: emailLower,
       nome: nomeExibicao,
       verificationLink: linkData.properties.action_link,
     });
 
-    return { ok: true as const, userId, emailSent: emailResult.sent };
+    return { ok: true as const, userId, emailSent: emailResult.sent, documentUploadFailed };
   });
 
 // ============================================================================
