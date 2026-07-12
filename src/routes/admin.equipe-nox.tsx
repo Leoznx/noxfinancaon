@@ -43,7 +43,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Users,
-  ShieldCheck,
   Briefcase,
   History,
 } from "lucide-react";
@@ -54,19 +53,13 @@ import { useAuth } from "@/components/AuthProvider";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { formatMoney, formatDateTime, toDatetimeLocal } from "@/lib/vendedor-portal";
 import { META_PADRAO_VENDEDOR } from "@/lib/comissao-vendedor";
-import {
-  TabAuditoria,
-  TabColaboradores,
-  TabEquipeComercial,
-  TabPermissoes,
-} from "./admin.equipe-permissoes";
+import { TabAuditoria, TabColaboradores, TabEquipeComercial } from "./admin.equipe-permissoes";
 
 const VALID_TABS = [
   "metas",
   "agenda",
   "comissoes",
   "colaboradores",
-  "permissoes",
   "equipe-comercial",
   "auditoria",
 ] as const;
@@ -100,7 +93,7 @@ function EquipeNoxPage() {
           <div>
             <h1 className="text-2xl font-bold text-neutral-950">Equipe NOX</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Metas, agenda, comissoes, colaboradores, permissoes e auditoria em um so lugar.
+              Metas, agenda, comissoes, colaboradores e auditoria em um so lugar.
             </p>
           </div>
         </div>
@@ -123,10 +116,6 @@ function EquipeNoxPage() {
               <Users className="mr-2 h-4 w-4" />
               Colaboradores
             </TabsTrigger>
-            <TabsTrigger value="permissoes">
-              <ShieldCheck className="mr-2 h-4 w-4" />
-              Permissoes
-            </TabsTrigger>
             <TabsTrigger value="equipe-comercial">
               <Briefcase className="mr-2 h-4 w-4" />
               Equipe Comercial
@@ -147,9 +136,6 @@ function EquipeNoxPage() {
           </TabsContent>
           <TabsContent value="colaboradores" className="mt-4">
             <TabColaboradores />
-          </TabsContent>
-          <TabsContent value="permissoes" className="mt-4">
-            <TabPermissoes />
           </TabsContent>
           <TabsContent value="equipe-comercial" className="mt-4">
             <TabEquipeComercial />

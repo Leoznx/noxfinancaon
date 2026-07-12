@@ -201,6 +201,15 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     setMobileOpen(false);
   }, [location.pathname]);
 
+  // Esconde a barrinha visual do scroll da página no painel admin, sem travar a
+  // rolagem em si (classe global em styles.css, some ao sair do painel).
+  useEffect(() => {
+    document.documentElement.classList.add("no-scrollbar");
+    return () => {
+      document.documentElement.classList.remove("no-scrollbar");
+    };
+  }, []);
+
   useEffect(() => {
     let ativo = true;
 
@@ -397,7 +406,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           </button>
         </div>
 
-        <nav className="flex-1 overflow-y-auto p-4 py-6 space-y-1.5">
+        <nav className="flex-1 overflow-y-auto no-scrollbar p-4 py-6 space-y-1.5">
           {menuItems.map((item) => {
             const isActive = location.pathname === item.href;
             const isHighlight = item.highlight;

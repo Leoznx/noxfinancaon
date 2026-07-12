@@ -45,8 +45,17 @@ const PERFIL_MENU_ITEMS = [
 
 // Inquilino não tem dados profissionais/comissão — essas 3 abas não se aplicam.
 const TABS_OCULTAS_PARA_INQUILINO = new Set(['conta', 'financeiro', 'comissoes']);
+// Admin não recebe comissão/Pix — mesma regra de src/routes/configuracoes.lazy.tsx.
+const TABS_OCULTAS_PARA_ADMIN = new Set(["financeiro"]);
 
-function menuItemsParaRole(role: string | null | undefined) {
+function menuItemsParaRole(
+  role: string | null | undefined,
+  internalRole: string | null | undefined,
+) {
+  const isAdminGeral = role === "admin" || internalRole === "admin_master";
+  if (isAdminGeral) {
+    return PERFIL_MENU_ITEMS.filter((item) => !TABS_OCULTAS_PARA_ADMIN.has(item.tab));
+  }
   if (role !== 'inquilino') return PERFIL_MENU_ITEMS;
   return PERFIL_MENU_ITEMS.filter((item) => !TABS_OCULTAS_PARA_INQUILINO.has(item.tab));
 }
@@ -154,7 +163,7 @@ function HeaderUserMenu({ align }: { align: 'desktop' | 'mobile' }) {
             </div>
           </div>
           <nav className="flex flex-col divide-y divide-neutral-100">
-            {menuItemsParaRole(user.role).map(({ tab, label, icon: Icon }) => (
+            {menuItemsParaRole(user.role, user.internalRole).map(({ tab, label, icon: Icon }) => (
               <Link
                 key={tab}
                 to="/configuracoes"
@@ -197,7 +206,7 @@ function HeaderUserMenu({ align }: { align: 'desktop' | 'mobile' }) {
             <p className="text-xs text-neutral-500 truncate">{user.email}</p>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
-          {menuItemsParaRole(user.role).map(({ tab, label, icon: Icon }) => (
+          {menuItemsParaRole(user.role, user.internalRole).map(({ tab, label, icon: Icon }) => (
             <DropdownMenuItem key={tab} asChild>
               <Link to="/configuracoes" search={{ tab } as any} className="flex items-center gap-2 cursor-pointer">
                 <Icon className="w-4 h-4 text-neutral-900" strokeWidth={2.2} /> {label}
