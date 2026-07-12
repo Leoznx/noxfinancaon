@@ -54,6 +54,9 @@ function ConfiguracoesPage() {
   const [abaAtiva, setAbaAtivaState] = useState<string>(search.tab ?? "perfil");
   const { user } = useAuth();
   const isInquilino = user?.role === "inquilino";
+  // Admin não recebe comissão/Pix — a aba não se aplica a esse papel.
+  const isAdminGeral = user?.role === "admin" || user?.internalRole === "admin_master";
+  const ocultarFinanceiro = isInquilino || isAdminGeral;
 
   // Mantém a URL em sincronia com a aba ativa — permite deep-link (ex.: um dropdown
   // externo linkando direto pra /configuracoes?tab=seguranca) e sobrevive a um reload.
@@ -66,8 +69,9 @@ function ConfiguracoesPage() {
   // pra esse papel — evita renderizar um Tab* pensado pra corretor/imobiliária.
   useEffect(() => {
     if (isInquilino && TABS_OCULTAS_PARA_INQUILINO.has(abaAtiva)) setAbaAtiva("perfil");
+    else if (ocultarFinanceiro && abaAtiva === "financeiro") setAbaAtiva("perfil");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isInquilino, abaAtiva]);
+  }, [isInquilino, ocultarFinanceiro, abaAtiva]);
 
   const setAbaAtiva = (aba: string) => {
     setAbaAtivaState(aba);
@@ -104,7 +108,7 @@ function ConfiguracoesPage() {
                   descricao="Documentos e profissional"
                 />
               )}
-              {!isInquilino && (
+              {!ocultarFinanceiro && (
                 <NavItemConfig
                   ativo={abaAtiva === "financeiro"}
                   onClick={() => setAbaAtiva("financeiro")}
@@ -143,7 +147,7 @@ function ConfiguracoesPage() {
           <main className="col-span-12 lg:col-span-9 animate-in fade-in slide-in-from-right-4 duration-500">
             {abaAtiva === "perfil" && <TabPerfil />}
             {!isInquilino && abaAtiva === "conta" && <TabConta />}
-            {!isInquilino && abaAtiva === "financeiro" && <TabFinanceiro />}
+            {!ocultarFinanceiro && abaAtiva === "financeiro" && <TabFinanceiro />}
             {abaAtiva === "seguranca" && <TabSeguranca />}
             {abaAtiva === "notificacoes" && <TabNotificacoes />}
             {!isInquilino && abaAtiva === "comissoes" && <TabComissoesNivel />}
