@@ -227,6 +227,16 @@ function HeaderUserMenu({ align }: { align: 'desktop' | 'mobile' }) {
 export const InstitutionalHeader = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
+  // Sem isso, a página por trás continua rolável com o menu mobile aberto —
+  // arrastar pra rolar o menu acabava rolando a home por baixo dele.
+  useEffect(() => {
+    if (!isMobileMenuOpen) return;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isMobileMenuOpen]);
+
   return (
     <header className="fixed top-0 w-full z-50 bg-white/90 backdrop-blur-md border-b border-neutral-100">
       <div className="container mx-auto px-6 h-20 flex items-center justify-between max-w-7xl">
@@ -268,7 +278,7 @@ export const InstitutionalHeader = () => {
 
       {/* Mobile Menu Drawer */}
       {isMobileMenuOpen && (
-          <div className="lg:hidden bg-white border-t border-neutral-100 overflow-hidden">
+          <div className="lg:hidden bg-white border-t border-neutral-100 max-h-[calc(100dvh-5rem)] overflow-y-auto overscroll-contain">
             <div className="container mx-auto px-6 py-6 space-y-6">
               <nav className="flex flex-col gap-4">
                 <Link to="/#comparativo" onClick={() => setIsMobileMenuOpen(false)} className="text-base font-medium text-neutral-600">Seguro Fiança</Link>
