@@ -23,7 +23,21 @@ function required(name: string): string {
 export const env = {
   supabaseUrl: required("SUPABASE_URL"),
   supabaseServiceRoleKey: required("SUPABASE_SERVICE_ROLE_KEY"),
-  profileDir: process.env.CREDPAGO_PROFILE_DIR || path.resolve(__dirname, "chrome-profile-credpago"),
+  profileDir:
+    process.env.CREDPAGO_PROFILE_DIR || path.resolve(__dirname, "chrome-profile-credpago"),
+  /**
+   * Caminho de um arquivo de sessão portátil (Playwright storageState — cookies +
+   * localStorage em JSON puro, sem a criptografia OS-level do perfil do Chrome).
+   * Quando definido, o worker usa chromium.launch()+newContext({storageState}) em vez
+   * do perfil persistente — é o único jeito de levar uma sessão já logada localmente
+   * (Windows) para um servidor Linux, porque o perfil persistente criptografa os
+   * cookies com DPAPI do Windows, que não decodifica em outro SO/usuário. Gerado por
+   * `npm run automation:export-session`. Se vazio, mantém o comportamento local de
+   * sempre (perfil persistente em profileDir).
+   */
+  storageStatePath: process.env.CREDPAGO_STORAGE_STATE_PATH || "",
+  /** Porta do servidor HTTP só com /health — não expõe nenhuma rota de negócio. */
+  healthPort: Number(process.env.HEALTH_PORT) || 3000,
   pollIntervalMs: Number(process.env.AUTOMATION_POLL_INTERVAL_MS) || 5000,
   credpagoUrl: process.env.CREDPAGO_URL || "https://credpago.com/imobiliaria/proposta",
   keepBrowserOpen: process.env.AUTOMATION_KEEP_BROWSER_OPEN === "true",

@@ -1,39 +1,39 @@
 import React from 'react';
-import { Check, ShieldCheck } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { Link } from '@tanstack/react-router';
 import { Button } from '@/components/ui/button';
 
 export const InstitutionalHero = () => (
-  <section className="relative w-full overflow-hidden bg-white lg:min-h-[680px]">
+  <section className="relative w-full overflow-hidden bg-white lg:min-h-[620px] xl:min-h-[650px]">
     {/* Fundo: foto + degradês em camadas */}
     <div className="absolute inset-0">
       <div className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-amber-100/40 blur-3xl" />
       <img
-        src="/assets/nox-hero-casa-chaves.webp"
+        src="/assets/nox-hero-casa-chaves-banner.png"
         alt="Chaveiro NOX em frente a um imóvel moderno"
         loading="eager"
         decoding="async"
         fetchPriority="high"
-        className="h-full w-full object-cover object-[72%_42%]"
+        className="h-full w-full object-cover object-center lg:object-contain lg:object-right-bottom"
       />
       {/* Degradê branco -> transparente, da esquerda para a direita */}
       <div
         className="absolute inset-0"
         style={{
           backgroundImage:
-            'linear-gradient(to right, #ffffff 0%, #ffffff 35%, rgba(255,255,255,0.85) 48%, rgba(255,255,255,0.25) 65%, rgba(255,255,255,0) 100%)',
+            'linear-gradient(to right, #ffffff 0%, #ffffff 30%, rgba(255,255,255,0.96) 42%, rgba(255,255,255,0.56) 55%, rgba(255,255,255,0.12) 66%, rgba(255,255,255,0) 74%)',
         }}
       />
       {/* Reforço de legibilidade só no mobile, onde não há coluna dedicada ao texto */}
       <div className="absolute inset-0 bg-white/80 sm:hidden" />
     </div>
 
-    <div className="relative container mx-auto max-w-7xl px-4 pb-16 pt-28 sm:px-6 sm:pb-24 sm:pt-40 lg:flex lg:min-h-[680px] lg:items-center">
-      <div className="max-w-[620px]">
+    <div className="relative px-5 pb-16 pt-28 sm:px-10 sm:pb-24 sm:pt-40 lg:flex lg:min-h-[620px] lg:items-center lg:pb-14 lg:pl-[11vw] lg:pr-16 lg:pt-24 xl:min-h-[650px] xl:pl-[12vw] xl:pr-24 xl:pt-28 2xl:pl-[13vw] 2xl:pr-28">
+      <div className="max-w-[590px] xl:max-w-[620px]">
         <span className="inline-block px-3 py-1 bg-neutral-100 text-neutral-700 text-sm font-bold tracking-wider rounded-full mb-6">
           SEGURO FIANÇA LOCATÍCIA
         </span>
-        <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-6xl font-bold text-neutral-900 leading-[1.15] tracking-tight mb-6 sm:mb-8">
+        <h1 className="text-3xl sm:text-4xl md:text-[2.7rem] lg:text-[3.35rem] xl:text-[3.65rem] font-bold text-neutral-900 leading-[1.08] tracking-tight mb-6 sm:mb-7">
           Aluguel sem fiador, sem caução, com aprovação em até <span className="relative inline-block">
             <span className="text-[#FACC15]">1 minuto.</span>
             <svg className="absolute -bottom-2 sm:-bottom-2 lg:-bottom-3 left-0 w-full pointer-events-none" style={{ transform: 'translateY(6px)' }} height="10" viewBox="0 0 100 10" preserveAspectRatio="none">
@@ -41,17 +41,17 @@ export const InstitutionalHero = () => (
             </svg>
           </span>
         </h1>
-        <p className="text-base sm:text-lg md:text-xl text-neutral-600 mb-8 sm:mb-10 max-w-2xl leading-relaxed">
+        <p className="text-base sm:text-lg md:text-xl text-neutral-600 mb-8 sm:mb-8 max-w-[520px] leading-relaxed">
           A NOX FIANÇA é a plataforma de seguro fiança 100% digital que elimina a burocracia do aluguel e oferece segurança total ao proprietário.
         </p>
-        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-10 sm:mb-12">
+        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-10 sm:mb-9">
           <Link to="/simular" className="w-full sm:w-auto">
-            <Button className="w-full sm:w-auto min-h-[44px] h-14 px-6 sm:px-10 bg-neutral-900 text-white hover:bg-neutral-800 text-base sm:text-lg font-bold rounded-lg shadow-xl shadow-neutral-100 transition-all active:scale-95">
+            <Button className="w-full sm:w-auto min-h-[44px] h-12 px-6 sm:px-7 bg-neutral-900 text-white hover:bg-neutral-800 text-sm sm:text-base font-bold rounded-lg shadow-xl shadow-neutral-100 transition-all active:scale-95">
               Solicitar análise gratuita
             </Button>
           </Link>
           <Link to="/cadastro" className="w-full sm:w-auto">
-            <Button variant="outline" className="w-full sm:w-auto min-h-[44px] h-14 px-6 sm:px-10 border-neutral-300 text-neutral-900 hover:bg-neutral-50 text-base sm:text-lg font-medium rounded-lg">
+            <Button variant="outline" className="w-full sm:w-auto min-h-[44px] h-12 px-6 sm:px-7 border-neutral-300 text-neutral-900 hover:bg-neutral-50 text-sm sm:text-base font-medium rounded-lg">
               Sou imobiliária ou corretor
             </Button>
           </Link>
@@ -65,15 +65,6 @@ export const InstitutionalHero = () => (
           ))}
         </div>
       </div>
-    </div>
-
-    {/* Card flutuante sobre a imagem (vira overlay apenas a partir do desktop, onde há espaço sobrando à direita) */}
-    <div className="relative z-10 mx-4 mt-6 mb-6 max-w-[260px] rounded-2xl bg-white p-5 shadow-xl sm:mx-6 lg:absolute lg:right-10 lg:bottom-10 lg:mx-0 lg:mt-0 lg:mb-0">
-      <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-[#FACC15]/15">
-        <ShieldCheck size={20} className="text-[#FACC15]" strokeWidth={2.2} />
-      </div>
-      <p className="text-sm font-bold leading-snug text-neutral-900">Proteção completa<br />para proprietários.</p>
-      <p className="mt-1 text-xs text-neutral-500">Mais segurança, zero inadimplência.</p>
     </div>
   </section>
 );

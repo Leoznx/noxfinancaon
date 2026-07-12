@@ -34,13 +34,28 @@ dist-ssr
 # Env files (nunca commitar segredos)
 .env
 .env.local
+.env.*
+!.env.example
 automation/.env
+supabase/.env.local
 
 # Automação local CredPago — perfil persistente do Chrome (sessão/login do usuário)
 automation/chrome-profile-credpago/
+automation/chrome-profile-*/
+
+# Sessão portátil exportada (cookies/localStorage em JSON puro — ver exportSession.ts).
+# Tem o mesmo valor sensível de uma senha: nunca commitar, nunca enviar por
+# e-mail/chat, só transferir por canal seguro (scp/rsync sobre SSH).
+automation/credpago-session.json
+automation/*.session.json
+automation/data/
+automation/node_modules/
 
 # Cache local do Supabase CLI (link do projeto, versões) — específico da máquina, não do projeto
 supabase/.temp/
 
 # Vercel CLI/build output (link do projeto + build gerado por `vite build`/`vercel build`)
 .vercel
+
+.vercel
+.env*

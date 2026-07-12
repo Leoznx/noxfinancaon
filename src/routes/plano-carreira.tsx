@@ -65,6 +65,13 @@ const CORES_NIVEL = {
   },
 };
 
+const IMAGENS_CARD_NIVEL = {
+  BRONZE: '/assets/nox-icon-fidelidade-bronze.png',
+  PRATA: '/assets/nox-icon-fidelidade-prata.png',
+  OURO: '/assets/nox-icon-fidelidade-ouro.png',
+  DIAMANTE: '/assets/nox-icon-fidelidade-diamante.png',
+};
+
 const textosPorPerfil = {
   corretor: {
     titulo: 'Plano de Carreira',
@@ -125,6 +132,7 @@ function CardProgresso({ nivelAtual, proximoNivel, contratosAtivos, faltam, tipo
   const progresso = proximoNivel 
     ? Math.min(100, ((contratosAtivos - currentMin) / (meta - currentMin)) * 100)
     : 100;
+  const imagemProximoNivel = proximoNivel ? IMAGENS_CARD_NIVEL[proximoNivel.nome as keyof typeof IMAGENS_CARD_NIVEL] : null;
 
   return (
     <div className="bg-gradient-to-r from-neutral-900 to-neutral-800 rounded-2xl p-6 text-white shadow-xl shadow-neutral-200 border border-white/5">
@@ -139,8 +147,8 @@ function CardProgresso({ nivelAtual, proximoNivel, contratosAtivos, faltam, tipo
         
         {proximoNivel && (
           <div className="bg-white/5 rounded-2xl p-4 border border-white/10 flex items-center gap-4">
-            <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${CORES_NIVEL[proximoNivel.nome as keyof typeof CORES_NIVEL].icone}`}>
-              <IconePorNivel nivel={proximoNivel.nome} size={24} />
+            <div className={`flex items-center justify-center ${imagemProximoNivel ? 'h-14 w-14' : `w-12 h-12 rounded-xl ${CORES_NIVEL[proximoNivel.nome as keyof typeof CORES_NIVEL].icone}`}`}>
+              <IconePorNivel nivel={proximoNivel.nome} size={imagemProximoNivel ? 56 : 24} />
             </div>
             <div>
               <p className="text-[9px] uppercase tracking-widest text-neutral-500 font-black mb-1">Próximo Nível</p>
@@ -176,6 +184,19 @@ function CardProgresso({ nivelAtual, proximoNivel, contratosAtivos, faltam, tipo
 }
 
 function IconePorNivel({ nivel, size = 24 }: { nivel: string; size?: number }) {
+  const imagemIcone = IMAGENS_CARD_NIVEL[nivel as keyof typeof IMAGENS_CARD_NIVEL];
+  if (imagemIcone) {
+    return (
+      <img
+        src={imagemIcone}
+        alt={`Icone ${nivel}`}
+        className="object-contain drop-shadow-sm"
+        style={{ width: size, height: size }}
+        draggable={false}
+      />
+    );
+  }
+
   const config = CORES_NIVEL[nivel as keyof typeof CORES_NIVEL] || CORES_NIVEL.BRONZE;
   const Icone = config.Icone;
   return <Icone size={size} strokeWidth={2.5} />;
@@ -184,6 +205,7 @@ function IconePorNivel({ nivel, size = 24 }: { nivel: string; size?: number }) {
 function CardNivel({ nivel, atual, tipoPerfil }: { nivel: any; atual: boolean; tipoPerfil: string }) {
   const config = CORES_NIVEL[nivel.nome as keyof typeof CORES_NIVEL] || CORES_NIVEL.BRONZE;
   const Icone = config.Icone;
+  const imagemIcone = IMAGENS_CARD_NIVEL[nivel.nome as keyof typeof IMAGENS_CARD_NIVEL];
   const beneficios = beneficiosPorPerfilENivel[tipoPerfil as keyof typeof beneficiosPorPerfilENivel]?.[nivel.nome as keyof typeof CORES_NIVEL] || [];
 
   return (
@@ -198,9 +220,20 @@ function CardNivel({ nivel, atual, tipoPerfil }: { nivel: any; atual: boolean; t
         </div>
       )}
 
-      <div className={`w-14 h-14 mx-auto mb-4 rounded-2xl ${config.icone} flex items-center justify-center shadow-sm`}>
-        <Icone size={28} strokeWidth={2.5} />
-      </div>
+      {imagemIcone ? (
+        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center">
+          <img
+            src={imagemIcone}
+            alt={`Icone ${nivel.nome}`}
+            className="h-16 w-16 object-contain drop-shadow-sm"
+            draggable={false}
+          />
+        </div>
+      ) : (
+        <div className={`w-14 h-14 mx-auto mb-4 rounded-2xl ${config.icone} flex items-center justify-center shadow-sm`}>
+          <Icone size={28} strokeWidth={2.5} />
+        </div>
+      )}
 
       <h3 className={`text-center text-xl font-black tracking-tight ${config.texto} mb-1`}>
         {nivel.nome}
@@ -335,7 +368,12 @@ function PlanoCarreiraPage() {
     }
     
     carregar();
-    return () => { cancelado = true; };
+    const intervalo = window.setInterval(carregar, 15000);
+
+    return () => {
+      cancelado = true;
+      window.clearInterval(intervalo);
+    };
   }, [user, tipoPerfil]);
   
   if (carregando) {

@@ -43,7 +43,14 @@ export const CareerProgramSection = () => {
           {niveis.length > 0 ? niveis.map((nivel) => {
             const levelKey = (nivel.nome_nivel || '').toLowerCase();
             const iconByLevel: Record<string, any> = { bronze: Medal, prata: Award, ouro: Trophy, diamante: Gem };
+            const imageByLevel: Record<string, string> = {
+              bronze: '/assets/nox-icon-nivel-bronze.png',
+              prata: '/assets/nox-icon-nivel-prata.png',
+              ouro: '/assets/nox-icon-nivel-ouro.png',
+              diamante: '/assets/nox-icon-nivel-diamante.png',
+            };
             const Icon = iconByLevel[levelKey] || Medal;
+            const imageIcon = imageByLevel[levelKey];
             const styles = levelStyles[levelKey] || levelStyles.bronze;
             const isDiamante = levelKey === 'diamante';
             
@@ -61,8 +68,17 @@ export const CareerProgramSection = () => {
                 )}
 
                 <div className="flex items-center gap-4 sm:gap-6 flex-1 min-w-0">
-                  <div className={`shrink-0 w-12 h-12 sm:w-16 sm:h-16 flex items-center justify-center rounded-xl ${styles.iconBg} ${styles.iconText} shadow-sm transition-transform duration-300 group-hover:scale-105`}>
-                    <Icon className="w-6 h-6 sm:w-8 sm:h-8" strokeWidth={2} />
+                  <div className={`shrink-0 w-12 h-12 sm:w-16 sm:h-16 flex items-center justify-center transition-transform duration-300 group-hover:scale-105 ${imageIcon ? 'overflow-visible' : `rounded-xl ${styles.iconBg} ${styles.iconText} shadow-sm`}`}>
+                    {imageIcon ? (
+                      <img
+                        src={imageIcon}
+                        alt=""
+                        loading="lazy"
+                        className="h-full w-full object-contain drop-shadow-sm"
+                      />
+                    ) : (
+                      <Icon className="w-6 h-6 sm:w-8 sm:h-8" strokeWidth={2} />
+                    )}
                   </div>
                   <div className="min-w-0">
                     <h3 className={`text-lg sm:text-xl font-bold uppercase tracking-[0.05em] ${styles.text}`} style={{ color: styles.accent }}>

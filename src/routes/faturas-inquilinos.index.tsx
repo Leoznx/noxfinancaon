@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 
 export const Route = createFileRoute("/faturas-inquilinos/")({
   component: () => (
-    <ProtectedRoute>
+    <ProtectedRoute moduleKey="faturas">
       <ErrorBoundary nome="faturas-inquilinos">
         <FaturasInquilinosLista />
       </ErrorBoundary>

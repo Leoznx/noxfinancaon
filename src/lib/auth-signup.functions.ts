@@ -5,7 +5,7 @@ import { linkTenantRecordsByCpf } from "@/lib/inquilino-signup.functions";
 import { defaultAvatarForName } from "@/lib/gender-avatar";
 
 function buildRedirectTo() {
-  const base = (process.env.APP_URL || "").replace(/\/$/, "");
+  const base = (process.env.APP_URL || "https://noxfianca.com").replace(/\/$/, "");
   return `${base}/email-verificado`;
 }
 

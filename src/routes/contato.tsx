@@ -181,14 +181,29 @@ function FormularioContato({ perfil, setPerfil, linkVoltar, textoVoltar, onSucce
         origem: 'landing_page',
         status: 'novo',
       });
-      
+
       if (error) throw error;
-      
+
+      // Entra de verdade na esteira comercial (Distribuição de Leads no
+      // painel admin) e já cai pro vendedor da vez — leads_contato sozinho
+      // não aparece em nenhuma tela admin, então sem isso o contato se
+      // perderia. Best-effort: se não houver vendedor ativo na fila, não
+      // deve travar o envio do formulário pro visitante.
+      const { error: leadError } = await supabase.rpc('criar_lead_site_publico' as any, {
+        p_full_name: form.nome,
+        p_phone: form.telefone || null,
+        p_email: form.email || null,
+        p_city: form.cidade ? `${form.cidade}/${form.uf}` : null,
+        p_interest: perfil,
+        p_notes: form.mensagem || null,
+      });
+      if (leadError) console.error('criar_lead_site_publico falhou:', leadError);
+
       // Dispara e-mail interno via Edge Function
       await supabase.functions.invoke('notificar-time-comercial', {
         body: { perfil, ...form }
       });
-      
+
       onSuccess();
     } catch (err) {
       console.error(err);

@@ -7,6 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { STATUS_ATIVOS_APOLICE, formatMoney } from "@/lib/vendedor-portal";
 
 interface Props {
   open: boolean;
@@ -18,33 +19,53 @@ interface Props {
 
 export function FecharLeadModal({ open, onOpenChange, leadId, sellerInternalId, onSuccess }: Props) {
   const [apolices, setApolices] = useState<any[]>([]);
-  const [apoliceId, setApoliceId] = useState<string>("");
+  const [apoliceId, setApoliceId] = useState("");
   const [valor, setValor] = useState("");
   const [data, setData] = useState(new Date().toISOString().slice(0, 10));
   const [paga, setPaga] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadingApolices, setLoadingApolices] = useState(false);
 
   useEffect(() => {
     if (!open) return;
+
     (async () => {
-      const { data } = await supabase.from("apolices").select("id, numero, valor_premio").eq("status", "ativa").limit(50);
-      setApolices(data ?? []);
+      setLoadingApolices(true);
+      const { data, error } = await supabase
+        .from("apolices")
+        .select("id, numero, valor_premio, status")
+        .in("status", [...STATUS_ATIVOS_APOLICE])
+        .order("created_at", { ascending: false })
+        .limit(100);
+
+      if (error) toast.error(error.message);
+      setApolices((data as any[]) ?? []);
+      setLoadingApolices(false);
     })();
   }, [open]);
 
   const submit = async () => {
     if (!leadId || !sellerInternalId || !apoliceId) {
-      toast.error("Preencha contrato vinculado");
+      toast.error("Selecione uma apólice para vincular ao fechamento.");
       return;
     }
+
     setLoading(true);
     const now = new Date();
-    const { error: e1 } = await supabase.from("sales_leads").update({
-      status: "convertido",
-      notes: `Fechado em ${data}. Valor mensal: R$ ${valor}.`,
-    }).eq("id", leadId);
+    const status = paga ? "elegivel" : "aguardando_primeira_parcela";
 
-    const { error: e2 } = await supabase.from("seller_commissions" as any).insert({
+    const { error: leadError } = await supabase
+      .from("sales_leads" as any)
+      .update({
+        status: "convertido",
+        converted_consulta_id: null,
+        notes: `Fechado em ${data}. Valor mensal: R$ ${valor || "não informado"}.`,
+        last_interaction_at: now.toISOString(),
+        next_action_at: null,
+      })
+      .eq("id", leadId);
+
+    const { error: commissionError } = await supabase.from("seller_commissions" as any).insert({
       seller_id: sellerInternalId,
       contract_id: apoliceId,
       apolice_id: apoliceId,
@@ -52,13 +73,20 @@ export function FecharLeadModal({ open, onOpenChange, leadId, sellerInternalId, 
       year: now.getFullYear(),
       commission_amount: 0,
       bonus_amount: 0,
-      status: paga ? "elegivel" : "aguardando_primeira_parcela",
+      reserve_amount: 0,
+      released_amount: 0,
+      status,
       eligible_at: paga ? now.toISOString() : null,
     });
 
     setLoading(false);
-    if (e1 || e2) { toast.error((e1 ?? e2)?.message ?? "Erro ao fechar"); return; }
-    toast.success("Lead fechado e comissão vinculada");
+
+    if (leadError || commissionError) {
+      toast.error(leadError?.message || commissionError?.message || "Não foi possível fechar o lead.");
+      return;
+    }
+
+    toast.success("Lead fechado e comissão vinculada.");
     onSuccess();
     onOpenChange(false);
   };
@@ -69,13 +97,20 @@ export function FecharLeadModal({ open, onOpenChange, leadId, sellerInternalId, 
         <DialogHeader><DialogTitle>Fechar lead como contrato</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <div>
-            <Label>Contrato (apólice) vinculado</Label>
+            <Label>Contrato/apólice vinculado</Label>
             <Select value={apoliceId} onValueChange={setApoliceId}>
-              <SelectTrigger><SelectValue placeholder="Selecione…" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={loadingApolices ? "Carregando..." : "Selecione..."} /></SelectTrigger>
               <SelectContent>
-                {apolices.map((a) => <SelectItem key={a.id} value={a.id}>{a.numero} — R$ {a.valor_premio}</SelectItem>)}
+                {apolices.map((apolice) => (
+                  <SelectItem key={apolice.id} value={apolice.id}>
+                    {apolice.numero ?? apolice.id} - {formatMoney(apolice.valor_premio)}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
+            {!loadingApolices && apolices.length === 0 && (
+              <p className="mt-2 text-xs text-neutral-500">Nenhuma apólice ativa encontrada para vínculo.</p>
+            )}
           </div>
           <div>
             <Label>Valor mensal (R$)</Label>
@@ -86,13 +121,15 @@ export function FecharLeadModal({ open, onOpenChange, leadId, sellerInternalId, 
             <Input type="date" value={data} onChange={(e) => setData(e.target.value)} />
           </div>
           <div className="flex items-center gap-2">
-            <Checkbox id="paga" checked={paga} onCheckedChange={(v) => setPaga(v === true)} />
+            <Checkbox id="paga" checked={paga} onCheckedChange={(value) => setPaga(value === true)} />
             <Label htmlFor="paga" className="cursor-pointer">Primeira parcela já paga</Label>
           </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={submit} disabled={loading}>{loading ? "Salvando…" : "Confirmar fechamento"}</Button>
+          <Button onClick={submit} disabled={loading || loadingApolices || apolices.length === 0}>
+            {loading ? "Salvando..." : "Confirmar fechamento"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

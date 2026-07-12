@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, FileText, MapPin, Building2, Clock } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { Link } from '@tanstack/react-router';
 import { Button } from '@/components/ui/button';
 
@@ -74,15 +74,24 @@ const AnimatedNumber = ({ value }: { value: string }) => {
   return <span>{value}</span>;
 };
 
-const StatCard = ({ icon: Icon, value, label }: { icon: any, value: string, label: string }) => (
-  <div className="h-full min-h-[200px] sm:min-h-[260px] bg-white border border-neutral-200 rounded-xl p-5 sm:p-8 shadow-sm hover:border-neutral-900 group transition-all duration-300 flex flex-col items-start text-left">
-    <div className="inline-flex items-center justify-center p-2.5 rounded-lg bg-yellow-400 group-hover:bg-yellow-500 text-neutral-900 transition-colors mb-4 sm:mb-6">
-      <Icon size={24} strokeWidth={2} />
+const StatCard = ({ icon: Icon, imageIcon, title, value, label }: { icon?: any, imageIcon?: string, title: string, value: string, label: string }) => (
+  <div className="h-full min-h-[190px] sm:min-h-[230px] bg-white border border-neutral-200 rounded-xl p-5 sm:p-7 shadow-sm hover:border-neutral-900 group transition-all duration-300 flex flex-col items-start justify-between gap-5 text-left">
+    <div className="flex items-center gap-3">
+      {imageIcon ? (
+        <div className="flex h-12 w-12 items-center justify-center">
+          <img src={imageIcon} alt="" loading="lazy" className="h-12 w-12 object-contain drop-shadow-sm" />
+        </div>
+      ) : (
+        <div className="inline-flex items-center justify-center p-2.5 rounded-lg bg-yellow-400 group-hover:bg-yellow-500 text-neutral-900 transition-colors">
+          {Icon && <Icon size={24} strokeWidth={2} />}
+        </div>
+      )}
+      <span className="text-xs sm:text-sm font-black uppercase tracking-wide text-neutral-900">{title}</span>
     </div>
-    <div className="text-3xl sm:text-4xl md:text-5xl font-bold text-neutral-900 tabular-nums mb-2 tracking-tight">
+    <div className="text-3xl sm:text-4xl md:text-[2.8rem] font-bold text-neutral-900 tabular-nums tracking-tight">
       <AnimatedNumber value={value} />
     </div>
-    <p className="text-xs sm:text-sm text-neutral-600 font-medium leading-relaxed mt-auto">{label}</p>
+    <p className="text-[0.95rem] sm:text-[1.05rem] text-neutral-700 font-semibold leading-relaxed">{label}</p>
   </div>
 );
 
@@ -98,10 +107,10 @@ export const InstitutionalNumbers = () => (
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 items-stretch">
-        <Link to="/corretor" className="block h-full"><StatCard icon={FileText} value="20 mil+" label="contratos sob gestão no Brasil" /></Link>
-        <Link to="/imobiliaria" className="block h-full"><StatCard icon={MapPin} value="500+" label="cidades atendidas em território nacional" /></Link>
-        <Link to="/imobiliaria" className="block h-full"><StatCard icon={Building2} value="800+" label="imobiliárias parceiras" /></Link>
-        <Link to="/corretor" className="block h-full"><StatCard icon={Clock} value="1 minuto" label="tempo médio de aprovação de crédito" /></Link>
+        <StatCard imageIcon="/assets/nox-icon-contratos-gestao.png" title="Contratos" value="20 mil+" label="Contratos Sob Gestão No Brasil" />
+        <StatCard imageIcon="/assets/nox-icon-cidades-atendidas.png" title="Cidades" value="500+" label="Cidades Atendidas Em Território Nacional" />
+        <StatCard imageIcon="/assets/nox-icon-imobiliarias-parceiras.png" title="Imobiliárias" value="800+" label="Imobiliárias Parceiras" />
+        <StatCard imageIcon="/assets/nox-icon-tempo-aprovacao.png" title="Aprovação" value="1 minuto" label="Tempo Médio De Aprovação De Crédito" />
       </div>
     </div>
   </section>

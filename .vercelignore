@@ -1,0 +1,12 @@
+# O worker de automação (CredPago) roda separado, fora da Vercel (hoje local,
+# arquitetura final prevê VPS) — nunca deve entrar no bundle do frontend.
+# Contém inclusive um perfil de Chrome local que fica travado enquanto o
+# worker está rodando, o que já quebrou um deploy tentando ler esses arquivos.
+automation/
+
+# Scripts/dados locais que não fazem parte do app publicado.
+scripts/
+tests/
+supabase/tests/
+docs/
+*.log

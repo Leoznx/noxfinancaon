@@ -21,13 +21,14 @@ const corsHeaders = {
  */
 
 type StatusMapeado =
-  "pago" | "aguardando_pagamento" | "recusado" | "estornado" | "chargeback" | "desconhecido";
+  "pago" | "aguardando_pagamento" | "recusado" | "cancelado" | "estornado" | "chargeback" | "desconhecido";
 
 function mapearStatus(statusBruto: string | undefined | null): StatusMapeado {
   const s = (statusBruto || "").toLowerCase();
   if (s === "paid" || s === "approved") return "pago";
   if (s === "waiting_payment") return "aguardando_pagamento";
-  if (s === "refused" || s === "canceled" || s === "cancelled") return "recusado";
+  if (s === "refused") return "recusado";
+  if (s === "canceled" || s === "cancelled") return "cancelado";
   if (s === "refunded") return "estornado";
   if (s === "chargeback") return "chargeback";
   return "desconhecido";
@@ -110,7 +111,7 @@ serve(async (req) => {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  let query = supabaseAdmin.from("cakto_payments").select("id, status, paid_at");
+  let query = supabaseAdmin.from("cakto_payments").select("id, status, paid_at, consultation_id");
   query = caktoPaymentId
     ? query.eq("cakto_payment_id", caktoPaymentId)
     : query.eq("cakto_ref_id", caktoRefId as string);
@@ -134,7 +135,7 @@ serve(async (req) => {
   const statusMapeado = mapearStatus(statusBruto);
   const updatePayload: Record<string, unknown> = {
     status: statusBruto ?? existente.status,
-    raw_response: payload,
+    webhook_payload: payload,
   };
   if (statusMapeado === "pago" && !existente.paid_at) {
     updatePayload.paid_at = paidAt || new Date().toISOString();
@@ -147,6 +148,28 @@ serve(async (req) => {
   if (updateError) {
     console.error("[cakto-webhook] Falha ao atualizar pagamento", { error: updateError.message });
     return jsonResponse({ ok: false, error: "Falha ao atualizar pagamento." }, 500);
+  }
+
+  if (existente.consultation_id) {
+    const consultaPayload: Record<string, unknown> = {
+      payment_status: statusMapeado,
+    };
+    if (statusMapeado === "pago") {
+      consultaPayload.payment_confirmed_at = paidAt || new Date().toISOString();
+    }
+
+    const { error: consultaUpdateError } = await supabaseAdmin
+      .from("consultas_credito")
+      .update(consultaPayload)
+      .eq("id", existente.consultation_id);
+
+    if (consultaUpdateError) {
+      console.error("[cakto-webhook] Falha ao atualizar status da proposta", {
+        consultationId: existente.consultation_id,
+        error: consultaUpdateError.message,
+      });
+      return jsonResponse({ ok: false, error: "Falha ao atualizar proposta." }, 500);
+    }
   }
 
   console.log("[cakto-webhook] pagamento atualizado", {

@@ -71,7 +71,7 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
-    font-family: 'Inter', sans-serif;
+    font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     letter-spacing: -0.01em;
@@ -101,6 +101,122 @@
 
   .animate-shimmer {
     animation: shimmer 2s infinite;
+  }
+}
+
+@layer components {
+  .perfil-hero-section {
+    display: flex;
+    align-items: center;
+    min-height: 620px;
+    max-height: 720px;
+    padding-top: 0;
+    padding-bottom: 0;
+    overflow: hidden;
+  }
+
+  .perfil-hero-grid {
+    width: 100%;
+  }
+
+  .perfil-hero-visual {
+    height: 620px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+    overflow: visible;
+    padding-bottom: 0;
+  }
+
+  .perfil-hero-personagem-frame {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    align-items: flex-end;
+    justify-content: flex-end;
+    overflow: visible;
+  }
+
+  .perfil-hero-personagem-img {
+    display: block;
+    width: auto;
+    height: 100%;
+    max-height: 610px;
+    flex-shrink: 0;
+    object-fit: contain;
+    object-position: right bottom;
+  }
+
+  @media (min-width: 640px) {
+    .perfil-hero-personagem-img {
+      max-height: 610px;
+    }
+  }
+
+  @media (min-width: 768px) {
+    .perfil-hero-personagem-img {
+      max-height: 610px;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .perfil-hero-section {
+      width: 100% !important;
+      max-width: none !important;
+      margin-left: 0 !important;
+      margin-right: 0 !important;
+      padding-left: max(1.5rem, calc((100vw - 80rem) / 2 + 1.5rem)) !important;
+      padding-right: 0 !important;
+    }
+
+    .perfil-hero-copy {
+      max-width: 560px;
+    }
+
+    .perfil-hero-personagem-frame {
+      transform: none;
+    }
+
+    .perfil-hero-personagem-img {
+      max-width: min(57vw, 1060px);
+    }
+  }
+
+  @media (max-width: 1023px) {
+    .perfil-hero-section {
+      min-height: auto;
+      max-height: none;
+      padding-top: 48px;
+      padding-bottom: 0;
+      overflow: hidden;
+    }
+
+    .perfil-hero-grid {
+      align-items: start;
+    }
+
+    .perfil-hero-visual {
+      width: 100%;
+      height: calc((100vw - 3rem) * 0.9);
+      min-height: 240px;
+      max-height: 420px;
+      justify-content: flex-end;
+      overflow: hidden;
+      padding-bottom: 0;
+    }
+
+    .perfil-hero-personagem-frame {
+      justify-content: flex-end;
+    }
+
+    .perfil-hero-personagem-img {
+      width: auto;
+      max-width: none;
+      height: 100%;
+      max-height: none;
+      object-position: right bottom;
+    }
   }
 }
 

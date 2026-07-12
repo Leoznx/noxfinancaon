@@ -1,0 +1,20 @@
+# Nunca entram no contexto de build da imagem.
+node_modules
+chrome-profile-credpago/
+chrome-profile-*/
+credpago-session.json
+*.session.json
+data/
+.env
+.env.local
+.env.*
+!.env.example
+
+.git
+.gitignore
+*.log
+npm-debug.log*
+
+# Nada de macOS/editor lixo indo pra imagem.
+.DS_Store
+.vscode

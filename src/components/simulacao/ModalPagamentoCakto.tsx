@@ -43,6 +43,12 @@ export function ModalPagamentoCakto({ open, resultado, onFechar }: ModalPagament
   if (!resultado) return null;
   const isPix = resultado.paymentMethod === "pix" && resultado.pix;
   const isBoleto = resultado.paymentMethod === "boleto" && resultado.boleto;
+  const valor = resultado.amount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const pixImage = resultado.pix?.qrCodeBase64
+    ? resultado.pix.qrCodeBase64.startsWith("data:")
+      ? resultado.pix.qrCodeBase64
+      : `data:image/png;base64,${resultado.pix.qrCodeBase64}`
+    : "";
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onFechar()}>
@@ -56,9 +62,12 @@ export function ModalPagamentoCakto({ open, resultado, onFechar }: ModalPagament
             <DialogDescription className="text-sm text-neutral-600">
               Escaneie o QR Code ou copie o código abaixo no app do seu banco.
             </DialogDescription>
-            {resultado.pix.qrCodeBase64 && (
+            <div className="rounded-full bg-yellow-50 px-3 py-1 text-xs font-bold text-yellow-800">
+              Aguardando pagamento • {valor}
+            </div>
+            {pixImage && (
               <img
-                src={resultado.pix.qrCodeBase64}
+                src={pixImage}
                 alt="QR Code Pix"
                 className="h-56 w-56 rounded-lg border border-neutral-200 p-2"
               />
@@ -95,6 +104,9 @@ export function ModalPagamentoCakto({ open, resultado, onFechar }: ModalPagament
             <DialogDescription className="text-sm text-neutral-600">
               Copie a linha digitável ou abra o PDF para pagar no banco de sua preferência.
             </DialogDescription>
+            <div className="rounded-full bg-yellow-50 px-3 py-1 text-xs font-bold text-yellow-800">
+              Aguardando pagamento • {valor}
+            </div>
             <div className="flex w-full items-center gap-2">
               <Input readOnly value={resultado.boleto.barcode} className="font-mono text-xs" />
               <Button

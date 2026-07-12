@@ -69,27 +69,23 @@ function Dashboard() {
   // profileIds === null significa admin (sem filtro, vê o total geral).
   // Pra imobiliária, agrega o próprio profile + o de todos os corretores vinculados —
   // mesma regra já usada aqui pra "consultas recentes", agora reaproveitada pros cards.
+  // user.id já É o profile id (profiles.id = auth.users.id) e user.role já é o
+  // profiles.role — os dois já vêm prontos do AuthProvider, então dá pra pular de vez
+  // o roundtrip que existia aqui só pra buscar de novo o que já estava em mãos (era o
+  // maior gargalo do "demora pra carregar" do dashboard).
   const carregarDados = useCallback(async () => {
-    if (!user?.email) { setLoadingConsultas(false); return; }
+    if (!user?.id) { setLoadingConsultas(false); return; }
     try {
-      const { data: meuProfile } = await supabase
-        .from('profiles')
-        .select('id, role')
-        .eq('email', user.email)
-        .maybeSingle();
-
-      if (meuProfile && (isCorretor || isImobiliaria)) {
-        fetchNivelInfo(meuProfile.id, meuProfile.role).then(setNivelInfo).catch(() => setNivelInfo(null));
+      if (isCorretor || isImobiliaria) {
+        fetchNivelInfo(user.id, user.role).then(setNivelInfo).catch(() => setNivelInfo(null));
       }
 
       let profileIds: string[] | null = null;
       if (!isAdmin) {
-        if (!meuProfile) {
-          profileIds = [];
-        } else if (isImobiliaria) {
+        if (isImobiliaria) {
           const { data: imob } = await supabase
             .from('imobiliarias').select('id').eq('contato_email', user.email).maybeSingle();
-          let ids = [meuProfile.id];
+          let ids = [user.id];
           if (imob?.id) {
             const { data: corretoresData } = await supabase
               .from('corretores').select('profile_id').eq('imobiliaria_id', imob.id);
@@ -97,7 +93,7 @@ function Dashboard() {
           }
           profileIds = ids;
         } else {
-          profileIds = [meuProfile.id];
+          profileIds = [user.id];
         }
       }
 
@@ -117,7 +113,7 @@ function Dashboard() {
     } finally {
       setLoadingConsultas(false);
     }
-  }, [user?.email, isAdmin, isImobiliaria, isCorretor]);
+  }, [user?.id, user?.email, user?.role, isAdmin, isImobiliaria, isCorretor]);
 
   useEffect(() => {
     carregarDados();
@@ -145,7 +141,17 @@ function Dashboard() {
         proximoNivel: nivelInfo.proximoNivel?.nome_nivel,
         metaProximo: nivelInfo.proximoNivel?.min_contratos,
       }
-    : null;
+    : (isCorretor || isImobiliaria)
+      ? {
+          nome: "BRONZE",
+          percentual: 1,
+          cor: "#FACC15",
+          icone: Trophy,
+          contratos: 0,
+          proximoNivel: "PRATA",
+          metaProximo: 11,
+        }
+      : null;
 
   return (
     <DashboardLayout>

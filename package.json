@@ -12,7 +12,9 @@
     "format": "prettier --write .",
     "automation:credpago": "tsx automation/credpagoWorker.ts",
     "automation:once": "tsx automation/credpagoWorker.ts --once",
-    "automation:install-browsers": "playwright install chromium"
+    "automation:install-browsers": "playwright install chromium",
+    "automation:export-session": "tsx automation/exportSession.ts",
+    "test:withdrawals": "tsx --test tests/withdrawal-pix.test.ts"
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.25.5",
@@ -61,6 +63,7 @@
     "input-otp": "^1.4.2",
     "lucide-react": "^0.575.0",
     "nitro": "3.0.260603-beta",
+    "pdfjs-dist": "^6.1.200",
     "react": "^19.2.0",
     "react-currency-input-field": "^4.0.5",
     "react-day-picker": "^9.14.0",

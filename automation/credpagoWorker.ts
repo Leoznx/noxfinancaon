@@ -1,6 +1,7 @@
-import { chromium, type BrowserContext, type Page } from "playwright";
+import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
 import readline from "node:readline/promises";
 import { stdin, stdout } from "node:process";
+import http from "node:http";
 import { env } from "./env";
 import { supabaseAdmin } from "./supabaseAdmin";
 import { log, logErro, maskDocumento } from "./logger";
@@ -84,6 +85,20 @@ async function ensureLoggedIn(cid: string, page: Page): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Sessão ociosa: quando o worker fica muito tempo sem processar nenhuma
+// consulta (ex.: horas sem nenhuma pendente), a PRIMEIRA consulta real que
+// chega sempre travava no clique de "Simular Crédito" — a página não muda,
+// não dá nenhum erro visível, e nem o reclique automático (ver
+// credpagoParser.ts) resolve, porque ele só reclica no MESMO estado quebrado.
+// A consulta seguinte, processada logo em seguida, sempre funcionava normal.
+// Isso indica sessão/estado de página "frio" depois de ficar parado — a
+// correção é forçar um reload de verdade antes de preencher o formulário
+// sempre que a última atividade real foi há muito tempo.
+// ---------------------------------------------------------------------------
+let ultimaAtividadeEm = Date.now();
+const SESSAO_OCIOSA_MS = 3 * 60 * 1000; // 3 minutos
+
+// ---------------------------------------------------------------------------
 // Fila / persistência
 // ---------------------------------------------------------------------------
 
@@ -106,7 +121,11 @@ async function fetchConsultasPendentes(limite: number): Promise<ConsultaCreditoR
 async function marcarProcessando(id: string): Promise<boolean> {
   const { data, error } = await supabaseAdmin
     .from("consultas_credito")
-    .update({ status: "processando", automation_step: "abrindo", automation_started_at: new Date().toISOString() })
+    .update({
+      status: "processando",
+      automation_step: "abrindo",
+      automation_started_at: new Date().toISOString(),
+    })
     .eq("id", id)
     .eq("status", "pendente")
     .select("id");
@@ -119,7 +138,10 @@ async function marcarProcessando(id: string): Promise<boolean> {
  * no frontend (Realtime já escuta UPDATEs desta tabela). Falha aqui nunca deve
  * derrubar a consulta — é só um indicador visual, não parte do resultado.
  */
-async function atualizarStep(id: string, step: "abrindo" | "preenchendo" | "enviando" | "aguardando_resultado"): Promise<void> {
+async function atualizarStep(
+  id: string,
+  step: "abrindo" | "preenchendo" | "enviando" | "aguardando_resultado",
+): Promise<void> {
   try {
     await supabaseAdmin.from("consultas_credito").update({ automation_step: step }).eq("id", id);
   } catch {
@@ -192,7 +214,16 @@ async function processarConsulta(
   const page = await context.newPage();
   try {
     log(`[${cid}] Abrindo CredPago`);
+    const sessaoPodeEstarFria = Date.now() - ultimaAtividadeEm > SESSAO_OCIOSA_MS;
+    ultimaAtividadeEm = Date.now();
     await page.goto(env.credpagoUrl, { waitUntil: "domcontentloaded" });
+
+    if (sessaoPodeEstarFria) {
+      log(
+        `[${cid}] Sessão ociosa há mais de ${Math.round(SESSAO_OCIOSA_MS / 60000)}min — recarregando antes de preencher (evita o clique em "Simular Crédito" travar sem erro).`,
+      );
+      await page.reload({ waitUntil: "domcontentloaded" }).catch(() => {});
+    }
 
     await ensureLoggedIn(cid, page);
 
@@ -212,7 +243,10 @@ async function processarConsulta(
     await atualizarStep(consulta.id, "preenchendo");
     await fillPessoa(page, consulta.tipo_pessoa || "PF");
     await fillDocumento(page, consulta.documento || "", consulta.tipo_pessoa || "PF");
-    await fillTipoImovel(page, (consulta.tipo_imovel as "Residencial" | "Comercial") || "Residencial");
+    await fillTipoImovel(
+      page,
+      (consulta.tipo_imovel as "Residencial" | "Comercial") || "Residencial",
+    );
     await fillCep(page, consulta.cep || "");
     await fillValores(page, {
       aluguel: Number(consulta.valor_aluguel) || 0,
@@ -237,7 +271,9 @@ async function processarConsulta(
     log(`[${cid}] Resultado identificado: ${resultado.status}`);
 
     if (estado.finalizado) {
-      log(`[${cid}] Resultado chegou após o tempo limite já ter marcado erro — descartando para não sobrescrever.`);
+      log(
+        `[${cid}] Resultado chegou após o tempo limite já ter marcado erro — descartando para não sobrescrever.`,
+      );
       return;
     }
     estado.finalizado = true;
@@ -247,11 +283,15 @@ async function processarConsulta(
     const erroTecnico = err instanceof Error ? err.message : String(err);
     logErro(`[${cid}] Falha ao processar consulta`, err);
     if (estado.finalizado) {
-      log(`[${cid}] Erro chegou após o tempo limite já ter finalizado a consulta — ignorando gravação.`);
+      log(
+        `[${cid}] Erro chegou após o tempo limite já ter finalizado a consulta — ignorando gravação.`,
+      );
       return;
     }
     estado.finalizado = true;
-    await marcarErro(consulta.id, erroTecnico).catch((e) => logErro(`[${cid}] Falha ao gravar erro no Supabase`, e));
+    await marcarErro(consulta.id, erroTecnico).catch((e) =>
+      logErro(`[${cid}] Falha ao gravar erro no Supabase`, e),
+    );
   } finally {
     await page.close().catch(() => {});
     log(`[${cid}] Aba fechada`);
@@ -259,7 +299,10 @@ async function processarConsulta(
 }
 
 /** Envolve processarConsulta com um limite de tempo próprio, sem afetar outras consultas em paralelo. */
-async function processarConsultaComTimeout(context: BrowserContext, consulta: ConsultaCreditoRow): Promise<void> {
+async function processarConsultaComTimeout(
+  context: BrowserContext,
+  consulta: ConsultaCreditoRow,
+): Promise<void> {
   const cid = consulta.id.slice(0, 8);
   const estado: EstadoConsulta = { finalizado: false };
 
@@ -290,20 +333,51 @@ async function processarConsultaComTimeout(context: BrowserContext, consulta: Co
 // Bootstrap do navegador — UMA única instância/contexto persistente para todo o
 // worker; cada consulta abre sua própria aba dentro dele (nunca outro contexto).
 //
-// ATENÇÃO: este é um perfil DEDICADO à automação (CREDPAGO_PROFILE_DIR), separado
-// do Chrome pessoal do usuário — não é o profile do dia a dia. Ainda assim, NÃO abra
-// esta mesma pasta de perfil manualmente em outra janela do Chrome enquanto o worker
-// estiver rodando: o Chrome trava o perfil com um lock de processo único (mesmo em
-// modo headless) e, se dois processos tentarem usá-lo ao mesmo tempo, o segundo falha
-// ao iniciar (ou pior, pode invalidar a sessão do outro). Rode só um worker por vez.
+// Dois modos, escolhidos por env.storageStatePath:
+//
+// 1) Perfil persistente (padrão, uso local/Windows): ATENÇÃO — este é um perfil
+//    DEDICADO à automação (CREDPAGO_PROFILE_DIR), separado do Chrome pessoal do
+//    usuário. NÃO abra essa mesma pasta manualmente em outra janela do Chrome
+//    enquanto o worker estiver rodando: o Chrome trava o perfil com um lock de
+//    processo único (mesmo headless) e um segundo processo usando a mesma pasta
+//    falha ao iniciar (ou invalida a sessão do outro). Rode só um worker por vez.
+//
+// 2) Sessão portátil (uso em servidor/Linux, ex.: VPS): browser "normal" +
+//    contexto novo carregado a partir de um storageState exportado por
+//    exportSession.ts. Não usa perfil em disco — só cookies/localStorage.
 // ---------------------------------------------------------------------------
 
-async function abrirContexto(): Promise<BrowserContext> {
+interface ContextoAberto {
+  context: BrowserContext;
+  browser: Browser | null; // null no modo perfil persistente (context.close() já basta)
+  persistirSessao: () => Promise<void>;
+}
+
+async function abrirContexto(): Promise<ContextoAberto> {
+  if (env.storageStatePath) {
+    log(`Usando sessão portátil: ${env.storageStatePath}`);
+    const browser = await chromium.launch({ headless: env.headless });
+    const context = await browser.newContext({
+      storageState: env.storageStatePath,
+      viewport: { width: 1366, height: 900 },
+    });
+    return {
+      context,
+      browser,
+      persistirSessao: async () => {
+        await context.storageState({ path: env.storageStatePath }).catch((e) => {
+          logErro("Falha ao salvar sessão atualizada", e);
+        });
+      },
+    };
+  }
+
   try {
-    return await chromium.launchPersistentContext(env.profileDir, {
+    const context = await chromium.launchPersistentContext(env.profileDir, {
       headless: env.headless,
       viewport: { width: 1366, height: 900 },
     });
+    return { context, browser: null, persistirSessao: async () => {} };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (/lock|already in use|singleton|profile.*use/i.test(msg)) {
@@ -317,18 +391,48 @@ async function abrirContexto(): Promise<BrowserContext> {
   }
 }
 
+/**
+ * Servidor HTTP mínimo só para health check (ex.: Docker healthcheck, monitoramento
+ * externo). Não expõe nenhuma rota de negócio, secret ou detalhe interno.
+ */
+function iniciarServidorHealth(): http.Server {
+  const server = http.createServer((req, res) => {
+    if (req.method === "GET" && req.url === "/health") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ status: "ok" }));
+      return;
+    }
+    res.writeHead(404, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ status: "not_found" }));
+  });
+  server.listen(env.healthPort, "0.0.0.0", () => {
+    log(`Servidor de health check ouvindo em 0.0.0.0:${env.healthPort}/health`);
+  });
+  return server;
+}
+
 async function loop(once: boolean): Promise<void> {
-  log(`Worker CredPago iniciado. Perfil persistente: ${env.profileDir}`);
-  log(`Limite de consultas simultâneas: ${env.maxConcurrentConsultas} | timeout por consulta: ${env.consultaTimeoutMs}ms`);
-  const context = await abrirContexto();
-  log(`Chrome iniciado em modo ${env.headless ? "headless (invisível)" : "visível"} — perfil: ${env.profileDir}`);
+  const origemSessao = env.storageStatePath
+    ? `sessão portátil (${env.storageStatePath})`
+    : `perfil persistente (${env.profileDir})`;
+  log(`Worker CredPago iniciado. Origem da sessão: ${origemSessao}`);
+  log(
+    `Limite de consultas simultâneas: ${env.maxConcurrentConsultas} | timeout por consulta: ${env.consultaTimeoutMs}ms`,
+  );
+  const { context, browser, persistirSessao } = await abrirContexto();
+  log(`Chrome iniciado em modo ${env.headless ? "headless (invisível)" : "visível"}`);
+
+  const healthServer = once ? null : iniciarServidorHealth();
 
   const emAndamento = new Map<string, Promise<void>>();
   let desligando = false;
 
   const finalizarWorker = async () => {
+    if (healthServer) await new Promise((resolve) => healthServer.close(resolve));
     if (!env.keepBrowserOpen) {
+      await persistirSessao();
       await context.close().catch(() => {});
+      if (browser) await browser.close().catch(() => {});
     } else {
       log("AUTOMATION_KEEP_BROWSER_OPEN=true — Chrome permanece aberto.");
     }
@@ -337,13 +441,23 @@ async function loop(once: boolean): Promise<void> {
   const handleSigint = async () => {
     if (desligando) return;
     desligando = true;
-    log(`Encerrando worker — aguardando ${emAndamento.size} consulta(s) em andamento terminar(em)...`);
+    log(
+      `Encerrando worker — aguardando ${emAndamento.size} consulta(s) em andamento terminar(em)...`,
+    );
     await Promise.allSettled(Array.from(emAndamento.values()));
     await finalizarWorker();
     process.exit(0);
   };
   process.once("SIGINT", handleSigint);
   process.once("SIGTERM", handleSigint);
+
+  // No modo sessão portátil, salva o estado atualizado periodicamente — a CredPago
+  // pode rotacionar/renovar cookies durante o uso, e sem isso o worker voltaria a
+  // depender só da sessão exportada no dia da migração (que eventualmente expira).
+  const persistTimer =
+    !once && env.storageStatePath
+      ? setInterval(() => void persistirSessao(), 15 * 60 * 1000)
+      : null;
 
   try {
     for (;;) {
@@ -378,6 +492,7 @@ async function loop(once: boolean): Promise<void> {
       await new Promise((r) => setTimeout(r, env.pollIntervalMs));
     }
   } finally {
+    if (persistTimer) clearInterval(persistTimer);
     process.removeListener("SIGINT", handleSigint);
     process.removeListener("SIGTERM", handleSigint);
     if (!desligando) {

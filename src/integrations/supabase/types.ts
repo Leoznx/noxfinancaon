@@ -314,6 +314,8 @@ export type Database = {
       cakto_payments: {
         Row: {
           amount: number
+          boleto_barcode: string | null
+          boleto_url: string | null
           cakto_payment_id: string | null
           cakto_ref_id: string | null
           checkout_url: string | null
@@ -327,13 +329,19 @@ export type Database = {
           idempotency_key: string
           paid_at: string | null
           payment_method: string
+          payment_url: string | null
+          pix_copy_paste: string | null
+          pix_qr_code: string | null
           raw_response: Json | null
           selected_fire_insurance_mode: string | null
           status: string
           updated_at: string
+          webhook_payload: Json | null
         }
         Insert: {
           amount: number
+          boleto_barcode?: string | null
+          boleto_url?: string | null
           cakto_payment_id?: string | null
           cakto_ref_id?: string | null
           checkout_url?: string | null
@@ -347,13 +355,19 @@ export type Database = {
           idempotency_key: string
           paid_at?: string | null
           payment_method: string
+          payment_url?: string | null
+          pix_copy_paste?: string | null
+          pix_qr_code?: string | null
           raw_response?: Json | null
           selected_fire_insurance_mode?: string | null
           status?: string
           updated_at?: string
+          webhook_payload?: Json | null
         }
         Update: {
           amount?: number
+          boleto_barcode?: string | null
+          boleto_url?: string | null
           cakto_payment_id?: string | null
           cakto_ref_id?: string | null
           checkout_url?: string | null
@@ -367,10 +381,14 @@ export type Database = {
           idempotency_key?: string
           paid_at?: string | null
           payment_method?: string
+          payment_url?: string | null
+          pix_copy_paste?: string | null
+          pix_qr_code?: string | null
           raw_response?: Json | null
           selected_fire_insurance_mode?: string | null
           status?: string
           updated_at?: string
+          webhook_payload?: Json | null
         }
         Relationships: [
           {
@@ -2442,6 +2460,7 @@ export type Database = {
       sales_leads: {
         Row: {
           assigned_seller_id: string | null
+          canal: string
           city: string | null
           converted_consulta_id: string | null
           created_at: string
@@ -2459,6 +2478,7 @@ export type Database = {
         }
         Insert: {
           assigned_seller_id?: string | null
+          canal?: string
           city?: string | null
           converted_consulta_id?: string | null
           created_at?: string
@@ -2476,6 +2496,7 @@ export type Database = {
         }
         Update: {
           assigned_seller_id?: string | null
+          canal?: string
           city?: string | null
           converted_consulta_id?: string | null
           created_at?: string
@@ -2539,6 +2560,7 @@ export type Database = {
           created_at: string
           id: string
           lead_id: string | null
+          meeting_group_id: string | null
           notes: string | null
           priority: string
           reminder_minutes: number | null
@@ -2553,6 +2575,7 @@ export type Database = {
           created_at?: string
           id?: string
           lead_id?: string | null
+          meeting_group_id?: string | null
           notes?: string | null
           priority?: string
           reminder_minutes?: number | null
@@ -2567,6 +2590,7 @@ export type Database = {
           created_at?: string
           id?: string
           lead_id?: string | null
+          meeting_group_id?: string | null
           notes?: string | null
           priority?: string
           reminder_minutes?: number | null

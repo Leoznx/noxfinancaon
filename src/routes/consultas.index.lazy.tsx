@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { toast } from "sonner";
 import { formatDocumento, isNomeValido } from "@/lib/consultasCredito";
 
@@ -29,6 +30,7 @@ function Consultas() {
   const [consultas, setConsultas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("todos");
 
   useEffect(() => {
     fetchConsultas();
@@ -105,14 +107,43 @@ function Consultas() {
 
 
   // `resultado` guarda o veredito da consulta de crédito de forma permanente — a
-  // automação só grava aprovado/recusado/em_analise ali e nunca mais mexe depois.
-  // Já `status` é o ponteiro de etapa da proposta inteira (pendente_documentacao,
-  // ativo, etc.) e muda conforme o corretor avança (ex.: escolhe um plano). Preferir
-  // `resultado` aqui garante que "Minhas Consultas" sempre mostre o resultado real
-  // da análise, mesmo depois de a proposta avançar para as próximas etapas.
-  const getStatusBadge = (c: any) => {
-    const resultadosFinais = ['aprovado', 'recusado', 'em_analise'];
+  // automação só grava aprovado/recusado/em_analise/erro ali e nunca mais mexe depois.
+  // Já `status` é o ponteiro de etapa da proposta inteira (pendente, processando,
+  // pendente_documentacao, aguardando_ativacao, ativo, etc.) e muda conforme o corretor
+  // avança (ex.: escolhe um plano). Preferir `resultado` aqui garante que "Minhas
+  // Consultas" sempre mostre o resultado real da análise, mesmo depois de a proposta
+  // avançar para as próximas etapas.
+  const getStatusConsulta = (c: any) => {
+    const resultadosFinais = ['aprovado', 'recusado', 'reprovado', 'em_analise'];
     const status = resultadosFinais.includes(c.resultado) ? c.resultado : c.status;
+
+    if (status === 'aprovado') return 'aprovado';
+    if (status === 'recusado' || status === 'reprovado') return 'recusado';
+    if (status === 'em_analise') return 'em_analise';
+    if (status === 'erro') return 'erro';
+    if (status === 'processando') return 'processando';
+    if (status === 'pendente' || !status) return 'pendente';
+    // Qualquer outro status (pendente_documentacao, aguardando_ativacao, ativo...) só foi
+    // alcançado porque a consulta já passou pela análise de crédito com aprovação — nunca
+    // deve cair em "Pendente" por falta do campo `resultado` (dados legados/manuais que
+    // avançaram a proposta sem nunca ter passado pela automação de verdade).
+    return 'aprovado';
+  };
+
+  const getStatusLabel = (status: string) => {
+    const labels: Record<string, string> = {
+      aprovado: 'Aprovado',
+      recusado: 'Recusado',
+      em_analise: 'Em análise',
+      erro: 'Erro',
+      processando: 'Consultando...',
+      pendente: 'Pendente',
+    };
+    return labels[status] ?? status;
+  };
+
+  const getStatusBadge = (c: any) => {
+    const status = getStatusConsulta(c);
     switch (status) {
       case 'aprovado':
         return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 font-bold px-3">Aprovado</Badge>;
@@ -144,26 +175,39 @@ function Consultas() {
     return 'Endereço não informado';
   };
 
+  const getDoc = (c: any) => c.documento || c.tenant_document || c.inquilinos?.cpf || c.inquilinos?.cnpj || '—';
+
   // `documento`/`tenant_name` são a fonte mais confiável para consultas passadas pela
   // automação (a CredPago confirma nome/documento do cliente) — o join com `inquilinos`
-  // só entra como fallback para consultas que nunca passaram pela automação.
+  // só entra como fallback para consultas que nunca passaram pela automação. Em telas de
+  // recusado a CredPago frequentemente não retorna nome nenhum (ver isNomeValido) — nesse
+  // caso mostra só os 3 primeiros dígitos do CPF/CNPJ em vez de "Nome não informado", pra
+  // ainda dar alguma referência de qual cliente foi recusado.
   const getNome = (c: any) => {
     if (isNomeValido(c.tenant_name)) return c.tenant_name;
     if (isNomeValido(c.inquilinos?.nome)) return c.inquilinos.nome;
+    if (getStatusConsulta(c) === 'recusado') {
+      const digits = getDoc(c).replace(/\D/g, '');
+      if (digits.length >= 3) return `CPF ${digits.slice(0, 3)}...`;
+    }
     return 'Nome não informado';
   };
-  const getDoc = (c: any) => c.documento || c.tenant_document || c.inquilinos?.cpf || c.inquilinos?.cnpj || '—';
   const getAluguel = (c: any) => Number(c.rent_value ?? c.imoveis?.valor_aluguel ?? 0);
 
   const q = searchQuery.toLowerCase();
   const qDigits = searchQuery.replace(/\D/g, '');
-  const filteredConsultas = consultas.filter(c =>
-    getNome(c).toLowerCase().includes(q) ||
-    (qDigits && getDoc(c).includes(qDigits)) ||
-    formatarEnderecoConsulta(c).toLowerCase().includes(q) ||
-    c.status?.toLowerCase().includes(q) ||
-    c.planos?.nome?.toLowerCase().includes(q)
-  );
+  const filteredConsultas = consultas.filter(c => {
+    const status = getStatusConsulta(c);
+    if (statusFilter !== 'todos' && status !== statusFilter) return false;
+
+    return (
+      getNome(c).toLowerCase().includes(q) ||
+      (qDigits && getDoc(c).includes(qDigits)) ||
+      formatarEnderecoConsulta(c).toLowerCase().includes(q) ||
+      getStatusLabel(status).toLowerCase().includes(q) ||
+      c.planos?.nome?.toLowerCase().includes(q)
+    );
+  });
 
 
   return (
@@ -186,10 +230,21 @@ function Consultas() {
             onChange={e => setSearchQuery(e.target.value)}
           />
         </div>
-        <Button variant="outline" className="h-14 px-6 rounded-xl border-neutral-200 bg-white font-bold gap-2 text-neutral-600 hover:bg-neutral-50">
-          <Filter size={18} />
-          FILTRAR
-        </Button>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="h-14 w-full justify-center rounded-xl border-neutral-200 bg-white px-4 text-xs font-normal text-neutral-700 shadow-sm hover:bg-neutral-50 md:w-44 [&>svg]:hidden">
+            <div className="flex items-center justify-center gap-2">
+              <Filter size={15} strokeWidth={1.8} className="text-neutral-500 shrink-0" />
+              <span className="tracking-wide">FILTRAR</span>
+            </div>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos os status</SelectItem>
+            <SelectItem value="aprovado">Aprovados</SelectItem>
+            <SelectItem value="recusado">Recusados</SelectItem>
+            <SelectItem value="em_analise">Em análise</SelectItem>
+            <SelectItem value="pendente">Pendentes</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <Card className="border-neutral-200 shadow-sm overflow-hidden bg-white">

@@ -31,6 +31,8 @@ function ProprietarioPage() {
         subtitulo: 'Acompanhe contratos, documentos, inquilinos e garantias vinculadas aos seus imóveis.',
         imagem: 'https://images.unsplash.com/photo-1582407947304-fd86f028f716?q=80&w=1400&auto=format&fit=crop',
         imagemAlt: 'Proprietário entregando chaves do imóvel',
+        personagemImagem: '/assets/nox-proprietario-personagens-x.png',
+        personagemAlt: 'Personagens NOX Fianca apresentando painel de pagamento para proprietarios com casa e mesa',
         ctas: [
           { label: 'Criar conta de proprietário', to: '/cadastro', search: { perfil: 'proprietario' }, variant: 'primary' },
           { label: 'Entrar no painel', to: '/login', variant: 'secondary' },

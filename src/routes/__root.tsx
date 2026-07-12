@@ -76,15 +76,27 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "NOX Fiança — Seguro Fiança Digital sem Fiador" },
-      { name: "description", content: "Aluguel sem fiador, sem caução e sem burocracia. A NOX é o seguro fiança digital com aprovação em 3 minutos. Camboriú, Balneário Camboriú e todo Santa Catarina." },
-      { name: "keywords", content: "seguro fiança, fiança aluguel, aluguel sem fiador, garantia locatícia, fiança digital, Camboriú, Santa Catarina" },
+      {
+        name: "description",
+        content:
+          "Aluguel sem fiador, sem caução e sem burocracia. A NOX é o seguro fiança digital com aprovação em 3 minutos. Camboriú, Balneário Camboriú e todo Santa Catarina.",
+      },
+      {
+        name: "keywords",
+        content:
+          "seguro fiança, fiança aluguel, aluguel sem fiador, garantia locatícia, fiança digital, Camboriú, Santa Catarina",
+      },
       { name: "author", content: "NOX Fiança" },
       { name: "robots", content: "index, follow" },
       { name: "theme-color", content: "#0A0A0A" },
       { property: "og:type", content: "website" },
       { property: "og:site_name", content: "NOX Fiança" },
       { property: "og:title", content: "NOX Fiança — Seguro Fiança Digital sem Fiador" },
-      { property: "og:description", content: "Aluguel sem fiador, sem caução e sem burocracia. Aprovação em 3 minutos. 100% digital." },
+      {
+        property: "og:description",
+        content:
+          "Aluguel sem fiador, sem caução e sem burocracia. Aprovação em 3 minutos. 100% digital.",
+      },
       { property: "og:url", content: "https://noxfianca.com.br" },
       { property: "og:image", content: "https://noxfianca.com.br/og-image.png" },
       { property: "og:image:width", content: "1200" },
@@ -94,7 +106,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:site", content: "@NoxFianca" },
       { name: "twitter:title", content: "NOX Fiança — Seguro Fiança Digital sem Fiador" },
-      { name: "twitter:description", content: "Aluguel sem fiador, sem caução e sem burocracia. Aprovação em 3 minutos. 100% digital." },
+      {
+        name: "twitter:description",
+        content:
+          "Aluguel sem fiador, sem caução e sem burocracia. Aprovação em 3 minutos. 100% digital.",
+      },
       { name: "twitter:image", content: "https://noxfianca.com.br/og-image.png" },
     ],
     links: [
@@ -105,7 +121,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "apple-touch-icon", sizes: "180x180", href: "/apple-touch-icon.png" },
       { rel: "preconnect", href: "https://images.unsplash.com", crossOrigin: "anonymous" },
       { rel: "dns-prefetch", href: "https://images.unsplash.com" },
-      { rel: "preconnect", href: "https://rrhmkpccyigildmbelir.supabase.co", crossOrigin: "anonymous" },
+      {
+        rel: "preconnect",
+        href: "https://rrhmkpccyigildmbelir.supabase.co",
+        crossOrigin: "anonymous",
+      },
     ],
     scripts: [
       {
@@ -118,7 +138,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
           url: "https://noxfianca.com.br",
           logo: "https://noxfianca.com.br/favicon-512.png",
           image: "https://noxfianca.com.br/og-image.png",
-          description: "Seguro fiança digital com aprovação em 3 minutos. Aluguel sem fiador, sem caução, 100% online.",
+          description:
+            "Seguro fiança digital com aprovação em 3 minutos. Aluguel sem fiador, sem caução, 100% online.",
           address: {
             "@type": "PostalAddress",
             addressLocality: "Camboriú",
@@ -159,6 +180,23 @@ function RootComponent() {
   }
   React.useEffect(() => {
     window.scrollTo(0, 0);
+  }, []);
+
+  // Quando um link de e-mail (recuperação de senha, confirmação de cadastro, troca de
+  // e-mail) expira ou já foi usado, o GoTrue do Supabase ignora o `redirect_to` original
+  // e sempre volta pro Site URL configurado no painel — no nosso caso, a Home (`/`) —
+  // anexando `#error=...&error_code=...` no hash. Sem isso, a Home simplesmente ignora
+  // o hash e mostra a página normal, dando a impressão de que o link "só abriu o site".
+  // Encaminha pra /redefinir-senha (preservando o hash) porque ela já trata exatamente
+  // esse formato de erro e mostra "link inválido/expirado" com opção de solicitar um novo.
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.location.pathname !== "/") return;
+    const temErro =
+      /error=|error_description=/.test(window.location.hash) ||
+      /error=|error_description=/.test(window.location.search);
+    if (!temErro) return;
+    window.location.replace("/redefinir-senha" + window.location.search + window.location.hash);
   }, []);
 
   return (

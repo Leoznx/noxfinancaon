@@ -58,7 +58,7 @@ export function NivelCorretorCard({ info }: { info: NivelInfo }) {
           </div>
           <div className={`h-1.5 rounded-full overflow-hidden ${isOuro ? 'bg-white/10' : 'bg-neutral-100'}`}>
             <div
-              className={`h-full transition-all duration-1000 ${isOuro ? 'bg-yellow-400' : 'bg-neutral-900'}`}
+              className={`h-full ${isOuro ? 'bg-yellow-400' : 'bg-neutral-900'}`}
               style={{ width: `${progress}%` }}
             />
           </div>

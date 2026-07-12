@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Upload, X, Building2, User, FileText, ClipboardCheck, IdCard, Receipt, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Upload, X, Building2, User, FileText, ClipboardCheck, IdCard, Receipt, CheckCircle2, AlertTriangle, ArrowLeft, ArrowRight } from "lucide-react";
 
 export const Route = createLazyFileRoute("/consultas/$id/dados-complementares")({
   component: () => (
@@ -373,7 +373,7 @@ function DadosComplementaresPage() {
 
   return (
     <DashboardLayout>
-      <div className="flex-1 flex flex-col px-4 sm:px-6 py-6">
+      <div className="flex-1 flex flex-col px-4 sm:px-6 py-6 pb-28">
         <div className="w-full max-w-4xl mx-auto space-y-6">
           <div>
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-neutral-900">Dados complementares</h1>
@@ -550,12 +550,25 @@ function DadosComplementaresPage() {
             </div>
           )}
 
-          <div className="flex flex-col sm:flex-row gap-3 justify-between sticky bottom-0 bg-gradient-to-t from-white via-white to-transparent pt-4 pb-2">
-            <Button variant="outline" onClick={() => navigate({ to: "/consultas/$id/resultado", params: { id } })}>Voltar</Button>
-            <Button onClick={handleSalvar} disabled={saving} className="bg-neutral-900 hover:bg-neutral-800 text-white px-8">
-              {saving ? "Salvando..." : "Próximo"}
-            </Button>
-          </div>
+        </div>
+      </div>
+      <div className="fixed bottom-0 left-0 right-0 z-20 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur">
+        <div className="mx-auto flex w-full max-w-4xl items-center justify-between gap-3">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => navigate({ to: "/consultas/$id/resultado", params: { id } })}
+            className="h-11 rounded-md border-slate-300 bg-white px-5 font-bold text-neutral-900 hover:bg-slate-50"
+          >
+            <ArrowLeft size={16} className="mr-2" /> Voltar
+          </Button>
+          <Button
+            onClick={handleSalvar}
+            disabled={saving}
+            className="ml-auto h-11 rounded-md bg-neutral-900 px-8 font-bold text-white hover:bg-neutral-800 disabled:opacity-50"
+          >
+            {saving ? "Salvando..." : "Próximo"} <ArrowRight size={16} className="ml-2" />
+          </Button>
         </div>
       </div>
     </DashboardLayout>

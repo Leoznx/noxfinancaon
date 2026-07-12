@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 
 export const Route = createLazyFileRoute("/sinistros")({
   component: () => (
-    <ProtectedRoute>
+    <ProtectedRoute moduleKey="sinistros">
       <Sinistros />
     </ProtectedRoute>
   ),

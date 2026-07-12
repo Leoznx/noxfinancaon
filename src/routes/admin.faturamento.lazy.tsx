@@ -9,14 +9,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Search, AlertTriangle, Clock, CheckCircle2, Wallet, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, AlertTriangle, Clock, CheckCircle2, Wallet, ChevronLeft, ChevronRight, RefreshCw, Copy, FileText } from "lucide-react";
 import { toast } from "sonner";
+import { statusPagamentoLabel, isPagamentoConcluido } from "@/lib/asaas-payment";
 
 export const Route = createLazyFileRoute("/admin/faturamento")({
   component: () => (
-    <ProtectedRoute roles={["admin", "analista", "financeiro"]}>
+    <ProtectedRoute roles={["admin", "analista", "financeiro"]} moduleKey="faturamento">
       <FaturamentoAdminPage />
     </ProtectedRoute>
   ),
@@ -24,43 +23,61 @@ export const Route = createLazyFileRoute("/admin/faturamento")({
 
 const brl = (n: number) => `R$ ${Number(n || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 const hoje = () => new Date().toISOString().slice(0, 10);
+function formatEndereco(imovel: { endereco?: string | null; cidade?: string | null; estado?: string | null } | null | undefined) {
+  if (!imovel) return "—";
+  const cidadeEstado = [imovel.cidade, imovel.estado].filter(Boolean).join("/");
+  return [imovel.endereco, cidadeEstado].filter(Boolean).join(", ") || "—";
+}
 const meses = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 const mesLabel = (y: number, m: number) => `${meses[m]}/${y}`;
 const ymKey = (d: string) => d.slice(0, 7); // YYYY-MM
+
+// Status vindos do Asaas via mapAsaasStatus/mapAsaasEvent (webhook) - a mesma
+// fonte de verdade usada em Minhas Faturas / Carteira de Cobranças. "Pago"
+// cobre confirmed/paid/paid_via_consolidated (ver PAYMENT_STATUS_SYNC); status
+// cancelado/estornado/recusado ficam fora dos 3 totais (nem devido nem pago).
+const STATUS_ABERTO = ["pending", "risk_analysis", "approved"];
+const STATUS_EXCLUIDOS_DOS_TOTAIS = ["cancelled", "refunded", "partially_refunded", "refused", "chargeback", "chargeback_dispute", "refund_processing", "refund_denied"];
 
 function FaturamentoAdminPage() {
   const [parcelas, setParcelas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState("");
+  const [atualizandoId, setAtualizandoId] = useState<string | null>(null);
   const now = new Date();
   // selectedYM: 'YYYY-MM' OR 'all'
   const [selectedYM, setSelectedYM] = useState<string>(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
-  const [tab, setTab] = useState("todos");
+  const [tab, setTab] = useState("receber");
 
-  // Modal de pagamento
-  const [payOpen, setPayOpen] = useState(false);
-  const [payParcela, setPayParcela] = useState<any>(null);
-  const [payDate, setPayDate] = useState(hoje());
-  const [paySaving, setPaySaving] = useState(false);
+  const carregar = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("faturas_inquilino")
+      .select(
+        `id, valor, vencimento, pago_em, status, numero_parcela, installment_total, boleto_url, linha_digitavel, payment_responsible,
+         asaas_payment:asaas_payments(asaas_payment_id),
+         consulta:consultas_credito(id, tenant_name, tenant_document, imovel:imoveis(endereco, cidade, estado))`,
+      )
+      .order("vencimento", { ascending: false })
+      .limit(5000);
+    if (error) toast.error("Erro ao carregar faturas");
+    else setParcelas(data ?? []);
+    setLoading(false);
+  };
 
   useEffect(() => {
-    (async () => {
-      const { data, error } = await supabase
-        .from("mensalidades")
-        .select("id, valor, data_vencimento, data_pagamento, status, numero_parcela, boleto_url, linha_digitavel, apolice_id, apolice:apolices(numero, consulta:consultas_credito(tenant_name, tenant_document, property_address, payment_type, billing_responsible_role))")
-        .order("data_vencimento", { ascending: false })
-        .limit(5000);
-      if (error) toast.error("Erro ao carregar faturas");
-      else setParcelas(data ?? []);
-      setLoading(false);
-    })();
+    carregar();
   }, []);
 
   const enriched = useMemo(() => parcelas.map(p => {
-    const status: "pago" | "vencido" | "a_vencer" = p.status === "pago"
+    const status: "pago" | "vencido" | "a_vencer" | "outro" = isPagamentoConcluido(p.status)
       ? "pago"
-      : (p.data_vencimento < hoje() ? "vencido" : "a_vencer");
-    return { ...p, _status: status, _ym: ymKey(p.data_vencimento) };
+      : p.status === "overdue"
+        ? "vencido"
+        : STATUS_ABERTO.includes(p.status)
+          ? "a_vencer"
+          : "outro";
+    return { ...p, _status: status, _ym: ymKey(p.vencimento) };
   }), [parcelas]);
 
   // Meses disponíveis ordenados desc
@@ -80,10 +97,9 @@ function FaturamentoAdminPage() {
     const q = busca.trim().toLowerCase();
     if (!q) return lista;
     return lista.filter(p =>
-      (p.apolice?.consulta?.tenant_name ?? "").toLowerCase().includes(q) ||
-      (p.apolice?.consulta?.tenant_document ?? "").toLowerCase().includes(q) ||
-      (p.apolice?.consulta?.property_address ?? "").toLowerCase().includes(q) ||
-      (p.apolice?.numero ?? "").toLowerCase().includes(q) ||
+      (p.consulta?.tenant_name ?? "").toLowerCase().includes(q) ||
+      (p.consulta?.tenant_document ?? "").toLowerCase().includes(q) ||
+      formatEndereco(p.consulta?.imovel).toLowerCase().includes(q) ||
       p._status.includes(q)
     );
   };
@@ -103,6 +119,7 @@ function FaturamentoAdminPage() {
   const resumoMeses = useMemo(() => {
     const map = new Map<string, { ym: string; venc: number; rec: number; pago: number; total: number }>();
     enriched.forEach(p => {
+      if (p._status === "outro") return;
       const cur = map.get(p._ym) ?? { ym: p._ym, venc: 0, rec: 0, pago: 0, total: 0 };
       const v = Number(p.valor);
       if (p._status === "vencido") cur.venc += v;
@@ -117,36 +134,27 @@ function FaturamentoAdminPage() {
       .slice(0, 12);
   }, [enriched, selectedYM]);
 
-  const abrirPagamento = (p: any) => {
-    setPayParcela(p);
-    setPayDate(hoje());
-    setPayOpen(true);
+  const atualizarStatus = async (p: any) => {
+    const paymentId = p.asaas_payment?.asaas_payment_id;
+    if (!paymentId) return;
+    setAtualizandoId(p.id);
+    try {
+      const { data, error } = await supabase.functions.invoke("asaas-get-payment", { body: { paymentId } });
+      if (error) throw new Error(error.message);
+      if ((data as any)?.error) throw new Error((data as any).error);
+      await carregar();
+      toast.success("Status atualizado.");
+    } catch (e: any) {
+      toast.error(e?.message || "Não foi possível consultar o pagamento agora.");
+    } finally {
+      setAtualizandoId(null);
+    }
   };
 
-  const confirmarPagamento = async () => {
-    if (!payParcela) return;
-    setPaySaving(true);
-    const dataIso = new Date(payDate + "T12:00:00").toISOString();
-    const { error } = await supabase
-      .from("mensalidades")
-      .update({ status: "pago", data_pagamento: dataIso })
-      .eq("id", payParcela.id);
-    if (error) { toast.error("Erro ao marcar como pago"); setPaySaving(false); return; }
-    // audit (best-effort)
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      await supabase.from("audit_logs").insert({
-        action: "pagamento_marcado",
-        module: "faturamento",
-        target_id: payParcela.id,
-        performed_by: user?.id,
-        details: { valor: payParcela.valor, data_pagamento: dataIso, parcela: payParcela.numero_parcela },
-      } as any);
-    } catch {}
-    toast.success("Pagamento registrado");
-    setParcelas(prev => prev.map(p => p.id === payParcela.id ? { ...p, status: "pago", data_pagamento: dataIso } : p));
-    setPayOpen(false);
-    setPaySaving(false);
+  const copiar = async (txt?: string | null) => {
+    if (!txt) return toast.error("Sem linha digitável");
+    await navigator.clipboard.writeText(txt);
+    toast.success("Linha digitável copiada");
   };
 
   const navegarMes = (delta: number) => {
@@ -166,7 +174,7 @@ function FaturamentoAdminPage() {
   const dAnt = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const ymAnt = `${dAnt.getFullYear()}-${String(dAnt.getMonth() + 1).padStart(2, "0")}`;
 
-  const tabLista = tab === "vencidos" ? vencidas : tab === "receber" ? aReceber : tab === "pagos" ? pagas : doMes;
+  const tabLista = tab === "vencidos" ? vencidas : tab === "pagos" ? pagas : aReceber;
 
   return (
     <DashboardLayout>
@@ -206,10 +214,10 @@ function FaturamentoAdminPage() {
 
         {/* Cards de resumo */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card titulo="Vencidos" valor={totVencido} cor="bg-red-50 border-red-200 text-red-700" icone={<AlertTriangle size={20} />} qtd={vencidas.length} />
           <Card titulo="A receber" valor={totReceber} cor="bg-amber-50 border-amber-200 text-amber-700" icone={<Clock size={20} />} qtd={aReceber.length} />
+          <Card titulo="Vencidos" valor={totVencido} cor="bg-red-50 border-red-200 text-red-700" icone={<AlertTriangle size={20} />} qtd={vencidas.length} />
           <Card titulo="Pagos" valor={totPago} cor="bg-emerald-50 border-emerald-200 text-emerald-700" icone={<CheckCircle2 size={20} />} qtd={pagas.length} />
-          <Card titulo="Total do mês" valor={totGeral} cor="bg-neutral-50 border-neutral-200 text-neutral-700" icone={<Wallet size={20} />} qtd={doMes.length} />
+          <Card titulo="Total do mês" valor={totGeral} cor="bg-neutral-50 border-neutral-200 text-neutral-700" icone={<Wallet size={20} />} qtd={vencidas.length + aReceber.length + pagas.length} />
         </div>
 
         {/* Busca */}
@@ -220,13 +228,12 @@ function FaturamentoAdminPage() {
 
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList>
-            <TabsTrigger value="todos">Todos ({doMes.length})</TabsTrigger>
-            <TabsTrigger value="vencidos">Vencidos ({vencidas.length})</TabsTrigger>
             <TabsTrigger value="receber">A receber ({aReceber.length})</TabsTrigger>
+            <TabsTrigger value="vencidos">Vencidos ({vencidas.length})</TabsTrigger>
             <TabsTrigger value="pagos">Pagos ({pagas.length})</TabsTrigger>
           </TabsList>
           <TabsContent value={tab} className="mt-6">
-            <TabelaFaturas loading={loading} parcelas={tabLista} onPagar={abrirPagamento} />
+            <TabelaFaturas loading={loading} parcelas={tabLista} atualizandoId={atualizandoId} onAtualizar={atualizarStatus} onCopiar={copiar} />
           </TabsContent>
         </Tabs>
 
@@ -258,7 +265,7 @@ function FaturamentoAdminPage() {
                       <TableCell className="text-right text-emerald-700">{brl(r.pago)}</TableCell>
                       <TableCell className="text-right font-semibold">{brl(r.total)}</TableCell>
                       <TableCell className="pr-6 text-right">
-                        <Button size="sm" variant="outline" onClick={() => { setSelectedYM(r.ym); setTab("todos"); }}>Ver mês</Button>
+                        <Button size="sm" variant="outline" onClick={() => { setSelectedYM(r.ym); setTab("receber"); }}>Ver mês</Button>
                       </TableCell>
                     </TableRow>
                   );
@@ -268,35 +275,6 @@ function FaturamentoAdminPage() {
           </div>
         </div>
       </div>
-
-      {/* Modal Marcar Pago */}
-      <Dialog open={payOpen} onOpenChange={setPayOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Marcar parcela como paga</DialogTitle>
-            <DialogDescription>Confirme os dados e a data do pagamento.</DialogDescription>
-          </DialogHeader>
-          {payParcela && (
-            <div className="space-y-4 py-2">
-              <div className="bg-neutral-50 border border-neutral-200 rounded-lg p-4 text-sm space-y-1">
-                <p><span className="text-neutral-500">Inquilino:</span> <span className="font-semibold">{payParcela.apolice?.consulta?.tenant_name ?? "—"}</span></p>
-                <p><span className="text-neutral-500">Contrato:</span> <span className="font-mono">{payParcela.apolice?.numero ?? "—"}</span></p>
-                <p><span className="text-neutral-500">Parcela:</span> #{payParcela.numero_parcela ?? "—"}</p>
-                <p><span className="text-neutral-500">Vencimento:</span> {new Date(payParcela.data_vencimento).toLocaleDateString("pt-BR")}</p>
-                <p><span className="text-neutral-500">Valor:</span> <span className="font-bold">{brl(payParcela.valor)}</span></p>
-              </div>
-              <div className="space-y-2">
-                <Label>Data do pagamento</Label>
-                <Input type="date" value={payDate} onChange={e => setPayDate(e.target.value)} />
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPayOpen(false)}>Cancelar</Button>
-            <Button onClick={confirmarPagamento} disabled={paySaving} className="bg-emerald-600 hover:bg-emerald-700 text-white">{paySaving ? "Salvando..." : "Confirmar pagamento"}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </DashboardLayout>
   );
 }
@@ -323,19 +301,26 @@ function Card({ titulo, valor, cor, icone, qtd }: { titulo: string; valor: numbe
   );
 }
 
-function TabelaFaturas({ loading, parcelas, onPagar }: { loading: boolean; parcelas: any[]; onPagar: (p: any) => void }) {
-  const copiar = async (txt?: string | null) => {
-    if (!txt) return toast.error("Sem linha digitável");
-    await navigator.clipboard.writeText(txt);
-    toast.success("Linha digitável copiada");
-  };
+function TabelaFaturas({
+  loading,
+  parcelas,
+  atualizandoId,
+  onAtualizar,
+  onCopiar,
+}: {
+  loading: boolean;
+  parcelas: any[];
+  atualizandoId: string | null;
+  onAtualizar: (p: any) => void;
+  onCopiar: (txt?: string | null) => void;
+}) {
   return (
     <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden shadow-sm">
       <Table>
         <TableHeader className="bg-neutral-50">
           <TableRow>
             <TableHead className="px-6">Inquilino</TableHead>
-            <TableHead>Contrato</TableHead>
+            <TableHead>Imóvel</TableHead>
             <TableHead>Parcela</TableHead>
             <TableHead>Valor</TableHead>
             <TableHead>Vencimento</TableHead>
@@ -350,37 +335,46 @@ function TabelaFaturas({ loading, parcelas, onPagar }: { loading: boolean; parce
           ) : !parcelas.length ? (
             <TableRow><TableCell colSpan={8} className="text-center py-16 text-neutral-500">Nenhuma parcela no período.</TableCell></TableRow>
           ) : parcelas.map(p => {
-            const pt = p.apolice?.consulta?.payment_type;
-            const respLabel = pt === "imobiliaria" ? "Imobiliária" : pt === "inquilino" ? "Inquilino" : "—";
-            const respCls = pt === "imobiliaria"
+            const resp = p.payment_responsible;
+            const respLabel = resp === "agency" ? "Imobiliária" : resp === "tenant" ? "Inquilino" : "—";
+            const respCls = resp === "agency"
               ? "bg-blue-50 text-blue-700 border-blue-200"
-              : pt === "inquilino"
+              : resp === "tenant"
                 ? "bg-purple-50 text-purple-700 border-purple-200"
                 : "bg-neutral-50 text-neutral-500 border-neutral-200";
+            const imovel = p.consulta?.imovel;
             return (
             <TableRow key={p.id}>
               <TableCell className="px-6">
-                <p className="font-semibold">{p.apolice?.consulta?.tenant_name ?? "—"}</p>
-                <p className="text-xs text-neutral-500">{p.apolice?.consulta?.tenant_document ?? ""}</p>
+                <p className="font-semibold">{p.consulta?.tenant_name ?? "—"}</p>
+                <p className="text-xs text-neutral-500">{p.consulta?.tenant_document ?? ""}</p>
               </TableCell>
-              <TableCell className="text-xs font-mono">{p.apolice?.numero ?? "—"}</TableCell>
-              <TableCell>{p.numero_parcela ? `#${p.numero_parcela}` : "—"}</TableCell>
+              <TableCell className="text-xs">{formatEndereco(imovel)}</TableCell>
+              <TableCell>{p.numero_parcela ? `${p.numero_parcela}/${p.installment_total}` : "—"}</TableCell>
               <TableCell className="font-semibold">{brl(p.valor)}</TableCell>
-              <TableCell className="text-xs">{new Date(p.data_vencimento).toLocaleDateString("pt-BR")}</TableCell>
+              <TableCell className="text-xs">{new Date(p.vencimento).toLocaleDateString("pt-BR")}</TableCell>
               <TableCell><Badge className={respCls}>{respLabel}</Badge></TableCell>
-              <TableCell><StatusFat status={p._status} /></TableCell>
-              <TableCell className="pr-6 text-right space-x-1">
+              <TableCell><StatusFat status={p.status} /></TableCell>
+              <TableCell className="pr-6 text-right space-x-1 whitespace-nowrap">
                 {p.boleto_url && (
                   <a href={p.boleto_url} target="_blank" rel="noreferrer">
-                    <Button size="sm" variant="ghost">Boleto</Button>
+                    <Button size="sm" variant="ghost"><FileText size={14} /></Button>
                   </a>
                 )}
                 {p.linha_digitavel && (
-                  <Button size="sm" variant="ghost" onClick={() => copiar(p.linha_digitavel)}>Copiar linha</Button>
+                  <Button size="sm" variant="ghost" onClick={() => onCopiar(p.linha_digitavel)}><Copy size={14} /></Button>
                 )}
-                {p._status === "pago"
-                  ? <Button size="sm" variant="outline" disabled>Ver pagamento</Button>
-                  : <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => onPagar(p)}>Marcar pago</Button>}
+                {p.asaas_payment?.asaas_payment_id && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={atualizandoId === p.id}
+                    onClick={() => onAtualizar(p)}
+                    title="Atualizar status"
+                  >
+                    <RefreshCw size={14} className={atualizandoId === p.id ? "animate-spin" : ""} />
+                  </Button>
+                )}
               </TableCell>
             </TableRow>
             );
@@ -391,12 +385,16 @@ function TabelaFaturas({ loading, parcelas, onPagar }: { loading: boolean; parce
   );
 }
 
+const STATUS_CLASS: Record<string, string> = {
+  paid: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  confirmed: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  paid_via_consolidated: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  overdue: "bg-red-100 text-red-700 border-red-200",
+  cancelled: "bg-neutral-100 text-neutral-700 border-neutral-200",
+  refunded: "bg-neutral-100 text-neutral-700 border-neutral-200",
+  partially_refunded: "bg-neutral-100 text-neutral-700 border-neutral-200",
+};
+
 function StatusFat({ status }: { status: string }) {
-  const map: Record<string, string> = {
-    pago: "bg-emerald-100 text-emerald-700 border-emerald-200",
-    vencido: "bg-red-100 text-red-700 border-red-200",
-    a_vencer: "bg-amber-100 text-amber-700 border-amber-200",
-  };
-  const labels: Record<string, string> = { pago: "Pago", vencido: "Vencido", a_vencer: "A vencer" };
-  return <Badge className={map[status]}>{labels[status]}</Badge>;
+  return <Badge className={`${STATUS_CLASS[status] || "bg-amber-100 text-amber-700 border-amber-200"} border`}>{statusPagamentoLabel(status)}</Badge>;
 }

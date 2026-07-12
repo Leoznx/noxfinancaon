@@ -18,6 +18,8 @@ import { Route as SinistrosRouteImport } from './routes/sinistros'
 import { Route as SimularRouteImport } from './routes/simular'
 import { Route as SejaParceiroRouteImport } from './routes/seja-parceiro'
 import { Route as RelatoriosRouteImport } from './routes/relatorios'
+import { Route as RedefinirSenhaRouteImport } from './routes/redefinir-senha'
+import { Route as RecuperarAcessoRouteImport } from './routes/recuperar-acesso'
 import { Route as ProprietarioRouteImport } from './routes/proprietario'
 import { Route as PrivacidadeRouteImport } from './routes/privacidade'
 import { Route as PlanoCarreiraRouteImport } from './routes/plano-carreira'
@@ -38,10 +40,12 @@ import { Route as ContatoRouteImport } from './routes/contato'
 import { Route as ConsultasRouteImport } from './routes/consultas'
 import { Route as ConsultaRapidaRouteImport } from './routes/consulta-rapida'
 import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
+import { Route as CarteiraCobrancasRouteImport } from './routes/carteira-cobrancas'
 import { Route as CarreirasRouteImport } from './routes/carreiras'
 import { Route as CadastroRouteImport } from './routes/cadastro'
 import { Route as ApolicesRouteImport } from './routes/apolices'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as VendedorIndexRouteImport } from './routes/vendedor.index'
 import { Route as SimularIndexRouteImport } from './routes/simular.index'
 import { Route as InquilinoIndexRouteImport } from './routes/inquilino.index'
 import { Route as FaturasInquilinosIndexRouteImport } from './routes/faturas-inquilinos.index'
@@ -58,6 +62,10 @@ import { Route as VendedorComissoesRouteImport } from './routes/vendedor.comisso
 import { Route as VendedorAgendaRouteImport } from './routes/vendedor.agenda'
 import { Route as SimularResultadoRouteImport } from './routes/simular.resultado'
 import { Route as PainelNotificacoesRouteImport } from './routes/painel/notificacoes'
+import { Route as LoginVendedornoxRouteImport } from './routes/login_.vendedornox'
+import { Route as LoginMarketingnoxRouteImport } from './routes/login_.marketingnox'
+import { Route as LoginJuridiconoxRouteImport } from './routes/login_.juridiconox'
+import { Route as LoginFinanceironoxRouteImport } from './routes/login_.financeironox'
 import { Route as InquilinoPerfilRouteImport } from './routes/inquilino.perfil'
 import { Route as InquilinoFaturasRouteImport } from './routes/inquilino.faturas'
 import { Route as InquilinoDocumentosRouteImport } from './routes/inquilino.documentos'
@@ -78,9 +86,12 @@ import { Route as AdminIndicacoesRouteImport } from './routes/admin.indicacoes'
 import { Route as AdminFinanceiroRouteImport } from './routes/admin.financeiro'
 import { Route as AdminFaturamentoRouteImport } from './routes/admin.faturamento'
 import { Route as AdminEquipePermissoesRouteImport } from './routes/admin.equipe-permissoes'
+import { Route as AdminEquipeNoxRouteImport } from './routes/admin.equipe-nox'
 import { Route as AdminEquipeComercialRouteImport } from './routes/admin.equipe-comercial'
 import { Route as AdminEquipeRouteImport } from './routes/admin.equipe'
+import { Route as AdminDistribuicaoLeadsRouteImport } from './routes/admin.distribuicao-leads'
 import { Route as AdminContratosRouteImport } from './routes/admin.contratos'
+import { Route as AdminContaNoxRouteImport } from './routes/admin.conta-nox'
 import { Route as AdminConsultasRouteImport } from './routes/admin.consultas'
 import { Route as AdminColaboradoresRouteImport } from './routes/admin.colaboradores'
 import { Route as AdminAprovacoesRouteImport } from './routes/admin.aprovacoes'
@@ -135,6 +146,16 @@ const SejaParceiroRoute = SejaParceiroRouteImport.update({
 const RelatoriosRoute = RelatoriosRouteImport.update({
   id: '/relatorios',
   path: '/relatorios',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RedefinirSenhaRoute = RedefinirSenhaRouteImport.update({
+  id: '/redefinir-senha',
+  path: '/redefinir-senha',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RecuperarAcessoRoute = RecuperarAcessoRouteImport.update({
+  id: '/recuperar-acesso',
+  path: '/recuperar-acesso',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProprietarioRoute = ProprietarioRouteImport.update({
@@ -241,6 +262,11 @@ const ConfiguracoesRoute = ConfiguracoesRouteImport.update({
   path: '/configuracoes',
   getParentRoute: () => rootRouteImport,
 } as any).lazy(() => import('./routes/configuracoes.lazy').then((d) => d.Route))
+const CarteiraCobrancasRoute = CarteiraCobrancasRouteImport.update({
+  id: '/carteira-cobrancas',
+  path: '/carteira-cobrancas',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CarreirasRoute = CarreirasRouteImport.update({
   id: '/carreiras',
   path: '/carreiras',
@@ -260,6 +286,11 @@ const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const VendedorIndexRoute = VendedorIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => VendedorRoute,
 } as any)
 const SimularIndexRoute = SimularIndexRouteImport.update({
   id: '/',
@@ -343,6 +374,26 @@ const SimularResultadoRoute = SimularResultadoRouteImport.update({
 const PainelNotificacoesRoute = PainelNotificacoesRouteImport.update({
   id: '/painel/notificacoes',
   path: '/painel/notificacoes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginVendedornoxRoute = LoginVendedornoxRouteImport.update({
+  id: '/login_/vendedornox',
+  path: '/login/vendedornox',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginMarketingnoxRoute = LoginMarketingnoxRouteImport.update({
+  id: '/login_/marketingnox',
+  path: '/login/marketingnox',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginJuridiconoxRoute = LoginJuridiconoxRouteImport.update({
+  id: '/login_/juridiconox',
+  path: '/login/juridiconox',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginFinanceironoxRoute = LoginFinanceironoxRouteImport.update({
+  id: '/login_/financeironox',
+  path: '/login/financeironox',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InquilinoPerfilRoute = InquilinoPerfilRouteImport.update({
@@ -452,6 +503,11 @@ const AdminEquipePermissoesRoute = AdminEquipePermissoesRouteImport.update({
   path: '/admin/equipe-permissoes',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminEquipeNoxRoute = AdminEquipeNoxRouteImport.update({
+  id: '/admin/equipe-nox',
+  path: '/admin/equipe-nox',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminEquipeComercialRoute = AdminEquipeComercialRouteImport.update({
   id: '/admin/equipe-comercial',
   path: '/admin/equipe-comercial',
@@ -462,9 +518,19 @@ const AdminEquipeRoute = AdminEquipeRouteImport.update({
   path: '/admin/equipe',
   getParentRoute: () => rootRouteImport,
 } as any).lazy(() => import('./routes/admin.equipe.lazy').then((d) => d.Route))
+const AdminDistribuicaoLeadsRoute = AdminDistribuicaoLeadsRouteImport.update({
+  id: '/admin/distribuicao-leads',
+  path: '/admin/distribuicao-leads',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminContratosRoute = AdminContratosRouteImport.update({
   id: '/admin/contratos',
   path: '/admin/contratos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminContaNoxRoute = AdminContaNoxRouteImport.update({
+  id: '/admin/conta-nox',
+  path: '/admin/conta-nox',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminConsultasRoute = AdminConsultasRouteImport.update({
@@ -530,6 +596,7 @@ export interface FileRoutesByFullPath {
   '/apolices': typeof ApolicesRouteWithChildren
   '/cadastro': typeof CadastroRoute
   '/carreiras': typeof CarreirasRoute
+  '/carteira-cobrancas': typeof CarteiraCobrancasRoute
   '/configuracoes': typeof ConfiguracoesRouteWithChildren
   '/consulta-rapida': typeof ConsultaRapidaRoute
   '/consultas': typeof ConsultasRouteWithChildren
@@ -550,6 +617,8 @@ export interface FileRoutesByFullPath {
   '/plano-carreira': typeof PlanoCarreiraRoute
   '/privacidade': typeof PrivacidadeRoute
   '/proprietario': typeof ProprietarioRoute
+  '/recuperar-acesso': typeof RecuperarAcessoRoute
+  '/redefinir-senha': typeof RedefinirSenhaRoute
   '/relatorios': typeof RelatoriosRoute
   '/seja-parceiro': typeof SejaParceiroRoute
   '/simular': typeof SimularRouteWithChildren
@@ -564,9 +633,12 @@ export interface FileRoutesByFullPath {
   '/admin/aprovacoes': typeof AdminAprovacoesRoute
   '/admin/colaboradores': typeof AdminColaboradoresRoute
   '/admin/consultas': typeof AdminConsultasRoute
+  '/admin/conta-nox': typeof AdminContaNoxRoute
   '/admin/contratos': typeof AdminContratosRoute
+  '/admin/distribuicao-leads': typeof AdminDistribuicaoLeadsRoute
   '/admin/equipe': typeof AdminEquipeRoute
   '/admin/equipe-comercial': typeof AdminEquipeComercialRoute
+  '/admin/equipe-nox': typeof AdminEquipeNoxRoute
   '/admin/equipe-permissoes': typeof AdminEquipePermissoesRoute
   '/admin/faturamento': typeof AdminFaturamentoRoute
   '/admin/financeiro': typeof AdminFinanceiroRoute
@@ -587,6 +659,10 @@ export interface FileRoutesByFullPath {
   '/inquilino/documentos': typeof InquilinoDocumentosRoute
   '/inquilino/faturas': typeof InquilinoFaturasRoute
   '/inquilino/perfil': typeof InquilinoPerfilRoute
+  '/login/financeironox': typeof LoginFinanceironoxRoute
+  '/login/juridiconox': typeof LoginJuridiconoxRoute
+  '/login/marketingnox': typeof LoginMarketingnoxRoute
+  '/login/vendedornox': typeof LoginVendedornoxRoute
   '/painel/notificacoes': typeof PainelNotificacoesRoute
   '/simular/resultado': typeof SimularResultadoRoute
   '/vendedor/agenda': typeof VendedorAgendaRoute
@@ -603,6 +679,7 @@ export interface FileRoutesByFullPath {
   '/faturas-inquilinos/': typeof FaturasInquilinosIndexRoute
   '/inquilino/': typeof InquilinoIndexRoute
   '/simular/': typeof SimularIndexRoute
+  '/vendedor/': typeof VendedorIndexRoute
   '/consultas/$id/dados-complementares': typeof ConsultasIdDadosComplementaresRoute
   '/consultas/$id/documentos': typeof ConsultasIdDocumentosRoute
   '/consultas/$id/finalizar': typeof ConsultasIdFinalizarRoute
@@ -613,6 +690,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/cadastro': typeof CadastroRoute
   '/carreiras': typeof CarreirasRoute
+  '/carteira-cobrancas': typeof CarteiraCobrancasRoute
   '/configuracoes': typeof ConfiguracoesRouteWithChildren
   '/consulta-rapida': typeof ConsultaRapidaRoute
   '/contato': typeof ContatoRoute
@@ -632,6 +710,8 @@ export interface FileRoutesByTo {
   '/plano-carreira': typeof PlanoCarreiraRoute
   '/privacidade': typeof PrivacidadeRoute
   '/proprietario': typeof ProprietarioRoute
+  '/recuperar-acesso': typeof RecuperarAcessoRoute
+  '/redefinir-senha': typeof RedefinirSenhaRoute
   '/relatorios': typeof RelatoriosRoute
   '/seja-parceiro': typeof SejaParceiroRoute
   '/sinistros': typeof SinistrosRoute
@@ -639,15 +719,17 @@ export interface FileRoutesByTo {
   '/suporte': typeof SuporteRoute
   '/termos': typeof TermosRoute
   '/trabalhe-conosco': typeof TrabalheConoscoRoute
-  '/vendedor': typeof VendedorRouteWithChildren
   '/admin/adicionar-usuarios': typeof AdminAdicionarUsuariosRoute
   '/admin/afiliados': typeof AdminAfiliadosRoute
   '/admin/aprovacoes': typeof AdminAprovacoesRoute
   '/admin/colaboradores': typeof AdminColaboradoresRoute
   '/admin/consultas': typeof AdminConsultasRoute
+  '/admin/conta-nox': typeof AdminContaNoxRoute
   '/admin/contratos': typeof AdminContratosRoute
+  '/admin/distribuicao-leads': typeof AdminDistribuicaoLeadsRoute
   '/admin/equipe': typeof AdminEquipeRoute
   '/admin/equipe-comercial': typeof AdminEquipeComercialRoute
+  '/admin/equipe-nox': typeof AdminEquipeNoxRoute
   '/admin/equipe-permissoes': typeof AdminEquipePermissoesRoute
   '/admin/faturamento': typeof AdminFaturamentoRoute
   '/admin/financeiro': typeof AdminFinanceiroRoute
@@ -668,6 +750,10 @@ export interface FileRoutesByTo {
   '/inquilino/documentos': typeof InquilinoDocumentosRoute
   '/inquilino/faturas': typeof InquilinoFaturasRoute
   '/inquilino/perfil': typeof InquilinoPerfilRoute
+  '/login/financeironox': typeof LoginFinanceironoxRoute
+  '/login/juridiconox': typeof LoginJuridiconoxRoute
+  '/login/marketingnox': typeof LoginMarketingnoxRoute
+  '/login/vendedornox': typeof LoginVendedornoxRoute
   '/painel/notificacoes': typeof PainelNotificacoesRoute
   '/simular/resultado': typeof SimularResultadoRoute
   '/vendedor/agenda': typeof VendedorAgendaRoute
@@ -684,6 +770,7 @@ export interface FileRoutesByTo {
   '/faturas-inquilinos': typeof FaturasInquilinosIndexRoute
   '/inquilino': typeof InquilinoIndexRoute
   '/simular': typeof SimularIndexRoute
+  '/vendedor': typeof VendedorIndexRoute
   '/consultas/$id/dados-complementares': typeof ConsultasIdDadosComplementaresRoute
   '/consultas/$id/documentos': typeof ConsultasIdDocumentosRoute
   '/consultas/$id/finalizar': typeof ConsultasIdFinalizarRoute
@@ -696,6 +783,7 @@ export interface FileRoutesById {
   '/apolices': typeof ApolicesRouteWithChildren
   '/cadastro': typeof CadastroRoute
   '/carreiras': typeof CarreirasRoute
+  '/carteira-cobrancas': typeof CarteiraCobrancasRoute
   '/configuracoes': typeof ConfiguracoesRouteWithChildren
   '/consulta-rapida': typeof ConsultaRapidaRoute
   '/consultas': typeof ConsultasRouteWithChildren
@@ -716,6 +804,8 @@ export interface FileRoutesById {
   '/plano-carreira': typeof PlanoCarreiraRoute
   '/privacidade': typeof PrivacidadeRoute
   '/proprietario': typeof ProprietarioRoute
+  '/recuperar-acesso': typeof RecuperarAcessoRoute
+  '/redefinir-senha': typeof RedefinirSenhaRoute
   '/relatorios': typeof RelatoriosRoute
   '/seja-parceiro': typeof SejaParceiroRoute
   '/simular': typeof SimularRouteWithChildren
@@ -730,9 +820,12 @@ export interface FileRoutesById {
   '/admin/aprovacoes': typeof AdminAprovacoesRoute
   '/admin/colaboradores': typeof AdminColaboradoresRoute
   '/admin/consultas': typeof AdminConsultasRoute
+  '/admin/conta-nox': typeof AdminContaNoxRoute
   '/admin/contratos': typeof AdminContratosRoute
+  '/admin/distribuicao-leads': typeof AdminDistribuicaoLeadsRoute
   '/admin/equipe': typeof AdminEquipeRoute
   '/admin/equipe-comercial': typeof AdminEquipeComercialRoute
+  '/admin/equipe-nox': typeof AdminEquipeNoxRoute
   '/admin/equipe-permissoes': typeof AdminEquipePermissoesRoute
   '/admin/faturamento': typeof AdminFaturamentoRoute
   '/admin/financeiro': typeof AdminFinanceiroRoute
@@ -753,6 +846,10 @@ export interface FileRoutesById {
   '/inquilino/documentos': typeof InquilinoDocumentosRoute
   '/inquilino/faturas': typeof InquilinoFaturasRoute
   '/inquilino/perfil': typeof InquilinoPerfilRoute
+  '/login_/financeironox': typeof LoginFinanceironoxRoute
+  '/login_/juridiconox': typeof LoginJuridiconoxRoute
+  '/login_/marketingnox': typeof LoginMarketingnoxRoute
+  '/login_/vendedornox': typeof LoginVendedornoxRoute
   '/painel/notificacoes': typeof PainelNotificacoesRoute
   '/simular/resultado': typeof SimularResultadoRoute
   '/vendedor/agenda': typeof VendedorAgendaRoute
@@ -769,6 +866,7 @@ export interface FileRoutesById {
   '/faturas-inquilinos/': typeof FaturasInquilinosIndexRoute
   '/inquilino/': typeof InquilinoIndexRoute
   '/simular/': typeof SimularIndexRoute
+  '/vendedor/': typeof VendedorIndexRoute
   '/consultas/$id/dados-complementares': typeof ConsultasIdDadosComplementaresRoute
   '/consultas/$id/documentos': typeof ConsultasIdDocumentosRoute
   '/consultas/$id/finalizar': typeof ConsultasIdFinalizarRoute
@@ -782,6 +880,7 @@ export interface FileRouteTypes {
     | '/apolices'
     | '/cadastro'
     | '/carreiras'
+    | '/carteira-cobrancas'
     | '/configuracoes'
     | '/consulta-rapida'
     | '/consultas'
@@ -802,6 +901,8 @@ export interface FileRouteTypes {
     | '/plano-carreira'
     | '/privacidade'
     | '/proprietario'
+    | '/recuperar-acesso'
+    | '/redefinir-senha'
     | '/relatorios'
     | '/seja-parceiro'
     | '/simular'
@@ -816,9 +917,12 @@ export interface FileRouteTypes {
     | '/admin/aprovacoes'
     | '/admin/colaboradores'
     | '/admin/consultas'
+    | '/admin/conta-nox'
     | '/admin/contratos'
+    | '/admin/distribuicao-leads'
     | '/admin/equipe'
     | '/admin/equipe-comercial'
+    | '/admin/equipe-nox'
     | '/admin/equipe-permissoes'
     | '/admin/faturamento'
     | '/admin/financeiro'
@@ -839,6 +943,10 @@ export interface FileRouteTypes {
     | '/inquilino/documentos'
     | '/inquilino/faturas'
     | '/inquilino/perfil'
+    | '/login/financeironox'
+    | '/login/juridiconox'
+    | '/login/marketingnox'
+    | '/login/vendedornox'
     | '/painel/notificacoes'
     | '/simular/resultado'
     | '/vendedor/agenda'
@@ -855,6 +963,7 @@ export interface FileRouteTypes {
     | '/faturas-inquilinos/'
     | '/inquilino/'
     | '/simular/'
+    | '/vendedor/'
     | '/consultas/$id/dados-complementares'
     | '/consultas/$id/documentos'
     | '/consultas/$id/finalizar'
@@ -865,6 +974,7 @@ export interface FileRouteTypes {
     | '/'
     | '/cadastro'
     | '/carreiras'
+    | '/carteira-cobrancas'
     | '/configuracoes'
     | '/consulta-rapida'
     | '/contato'
@@ -884,6 +994,8 @@ export interface FileRouteTypes {
     | '/plano-carreira'
     | '/privacidade'
     | '/proprietario'
+    | '/recuperar-acesso'
+    | '/redefinir-senha'
     | '/relatorios'
     | '/seja-parceiro'
     | '/sinistros'
@@ -891,15 +1003,17 @@ export interface FileRouteTypes {
     | '/suporte'
     | '/termos'
     | '/trabalhe-conosco'
-    | '/vendedor'
     | '/admin/adicionar-usuarios'
     | '/admin/afiliados'
     | '/admin/aprovacoes'
     | '/admin/colaboradores'
     | '/admin/consultas'
+    | '/admin/conta-nox'
     | '/admin/contratos'
+    | '/admin/distribuicao-leads'
     | '/admin/equipe'
     | '/admin/equipe-comercial'
+    | '/admin/equipe-nox'
     | '/admin/equipe-permissoes'
     | '/admin/faturamento'
     | '/admin/financeiro'
@@ -920,6 +1034,10 @@ export interface FileRouteTypes {
     | '/inquilino/documentos'
     | '/inquilino/faturas'
     | '/inquilino/perfil'
+    | '/login/financeironox'
+    | '/login/juridiconox'
+    | '/login/marketingnox'
+    | '/login/vendedornox'
     | '/painel/notificacoes'
     | '/simular/resultado'
     | '/vendedor/agenda'
@@ -936,6 +1054,7 @@ export interface FileRouteTypes {
     | '/faturas-inquilinos'
     | '/inquilino'
     | '/simular'
+    | '/vendedor'
     | '/consultas/$id/dados-complementares'
     | '/consultas/$id/documentos'
     | '/consultas/$id/finalizar'
@@ -947,6 +1066,7 @@ export interface FileRouteTypes {
     | '/apolices'
     | '/cadastro'
     | '/carreiras'
+    | '/carteira-cobrancas'
     | '/configuracoes'
     | '/consulta-rapida'
     | '/consultas'
@@ -967,6 +1087,8 @@ export interface FileRouteTypes {
     | '/plano-carreira'
     | '/privacidade'
     | '/proprietario'
+    | '/recuperar-acesso'
+    | '/redefinir-senha'
     | '/relatorios'
     | '/seja-parceiro'
     | '/simular'
@@ -981,9 +1103,12 @@ export interface FileRouteTypes {
     | '/admin/aprovacoes'
     | '/admin/colaboradores'
     | '/admin/consultas'
+    | '/admin/conta-nox'
     | '/admin/contratos'
+    | '/admin/distribuicao-leads'
     | '/admin/equipe'
     | '/admin/equipe-comercial'
+    | '/admin/equipe-nox'
     | '/admin/equipe-permissoes'
     | '/admin/faturamento'
     | '/admin/financeiro'
@@ -1004,6 +1129,10 @@ export interface FileRouteTypes {
     | '/inquilino/documentos'
     | '/inquilino/faturas'
     | '/inquilino/perfil'
+    | '/login_/financeironox'
+    | '/login_/juridiconox'
+    | '/login_/marketingnox'
+    | '/login_/vendedornox'
     | '/painel/notificacoes'
     | '/simular/resultado'
     | '/vendedor/agenda'
@@ -1020,6 +1149,7 @@ export interface FileRouteTypes {
     | '/faturas-inquilinos/'
     | '/inquilino/'
     | '/simular/'
+    | '/vendedor/'
     | '/consultas/$id/dados-complementares'
     | '/consultas/$id/documentos'
     | '/consultas/$id/finalizar'
@@ -1032,6 +1162,7 @@ export interface RootRouteChildren {
   ApolicesRoute: typeof ApolicesRouteWithChildren
   CadastroRoute: typeof CadastroRoute
   CarreirasRoute: typeof CarreirasRoute
+  CarteiraCobrancasRoute: typeof CarteiraCobrancasRoute
   ConfiguracoesRoute: typeof ConfiguracoesRouteWithChildren
   ConsultaRapidaRoute: typeof ConsultaRapidaRoute
   ConsultasRoute: typeof ConsultasRouteWithChildren
@@ -1052,6 +1183,8 @@ export interface RootRouteChildren {
   PlanoCarreiraRoute: typeof PlanoCarreiraRoute
   PrivacidadeRoute: typeof PrivacidadeRoute
   ProprietarioRoute: typeof ProprietarioRoute
+  RecuperarAcessoRoute: typeof RecuperarAcessoRoute
+  RedefinirSenhaRoute: typeof RedefinirSenhaRoute
   RelatoriosRoute: typeof RelatoriosRoute
   SejaParceiroRoute: typeof SejaParceiroRoute
   SimularRoute: typeof SimularRouteWithChildren
@@ -1066,9 +1199,12 @@ export interface RootRouteChildren {
   AdminAprovacoesRoute: typeof AdminAprovacoesRoute
   AdminColaboradoresRoute: typeof AdminColaboradoresRoute
   AdminConsultasRoute: typeof AdminConsultasRoute
+  AdminContaNoxRoute: typeof AdminContaNoxRoute
   AdminContratosRoute: typeof AdminContratosRoute
+  AdminDistribuicaoLeadsRoute: typeof AdminDistribuicaoLeadsRoute
   AdminEquipeRoute: typeof AdminEquipeRoute
   AdminEquipeComercialRoute: typeof AdminEquipeComercialRoute
+  AdminEquipeNoxRoute: typeof AdminEquipeNoxRoute
   AdminEquipePermissoesRoute: typeof AdminEquipePermissoesRoute
   AdminFaturamentoRoute: typeof AdminFaturamentoRoute
   AdminFinanceiroRoute: typeof AdminFinanceiroRoute
@@ -1086,6 +1222,10 @@ export interface RootRouteChildren {
   InquilinoDocumentosRoute: typeof InquilinoDocumentosRoute
   InquilinoFaturasRoute: typeof InquilinoFaturasRoute
   InquilinoPerfilRoute: typeof InquilinoPerfilRoute
+  LoginFinanceironoxRoute: typeof LoginFinanceironoxRoute
+  LoginJuridiconoxRoute: typeof LoginJuridiconoxRoute
+  LoginMarketingnoxRoute: typeof LoginMarketingnoxRoute
+  LoginVendedornoxRoute: typeof LoginVendedornoxRoute
   PainelNotificacoesRoute: typeof PainelNotificacoesRoute
   BlogIndexRoute: typeof BlogIndexRoute
   FaturasInquilinosIndexRoute: typeof FaturasInquilinosIndexRoute
@@ -1155,6 +1295,20 @@ declare module '@tanstack/react-router' {
       path: '/relatorios'
       fullPath: '/relatorios'
       preLoaderRoute: typeof RelatoriosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/redefinir-senha': {
+      id: '/redefinir-senha'
+      path: '/redefinir-senha'
+      fullPath: '/redefinir-senha'
+      preLoaderRoute: typeof RedefinirSenhaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/recuperar-acesso': {
+      id: '/recuperar-acesso'
+      path: '/recuperar-acesso'
+      fullPath: '/recuperar-acesso'
+      preLoaderRoute: typeof RecuperarAcessoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/proprietario': {
@@ -1297,6 +1451,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ConfiguracoesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/carteira-cobrancas': {
+      id: '/carteira-cobrancas'
+      path: '/carteira-cobrancas'
+      fullPath: '/carteira-cobrancas'
+      preLoaderRoute: typeof CarteiraCobrancasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/carreiras': {
       id: '/carreiras'
       path: '/carreiras'
@@ -1324,6 +1485,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/vendedor/': {
+      id: '/vendedor/'
+      path: '/'
+      fullPath: '/vendedor/'
+      preLoaderRoute: typeof VendedorIndexRouteImport
+      parentRoute: typeof VendedorRoute
     }
     '/simular/': {
       id: '/simular/'
@@ -1435,6 +1603,34 @@ declare module '@tanstack/react-router' {
       path: '/painel/notificacoes'
       fullPath: '/painel/notificacoes'
       preLoaderRoute: typeof PainelNotificacoesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login_/vendedornox': {
+      id: '/login_/vendedornox'
+      path: '/login/vendedornox'
+      fullPath: '/login/vendedornox'
+      preLoaderRoute: typeof LoginVendedornoxRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login_/marketingnox': {
+      id: '/login_/marketingnox'
+      path: '/login/marketingnox'
+      fullPath: '/login/marketingnox'
+      preLoaderRoute: typeof LoginMarketingnoxRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login_/juridiconox': {
+      id: '/login_/juridiconox'
+      path: '/login/juridiconox'
+      fullPath: '/login/juridiconox'
+      preLoaderRoute: typeof LoginJuridiconoxRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login_/financeironox': {
+      id: '/login_/financeironox'
+      path: '/login/financeironox'
+      fullPath: '/login/financeironox'
+      preLoaderRoute: typeof LoginFinanceironoxRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/inquilino/perfil': {
@@ -1577,6 +1773,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminEquipePermissoesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/equipe-nox': {
+      id: '/admin/equipe-nox'
+      path: '/admin/equipe-nox'
+      fullPath: '/admin/equipe-nox'
+      preLoaderRoute: typeof AdminEquipeNoxRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/equipe-comercial': {
       id: '/admin/equipe-comercial'
       path: '/admin/equipe-comercial'
@@ -1591,11 +1794,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminEquipeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/distribuicao-leads': {
+      id: '/admin/distribuicao-leads'
+      path: '/admin/distribuicao-leads'
+      fullPath: '/admin/distribuicao-leads'
+      preLoaderRoute: typeof AdminDistribuicaoLeadsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/contratos': {
       id: '/admin/contratos'
       path: '/admin/contratos'
       fullPath: '/admin/contratos'
       preLoaderRoute: typeof AdminContratosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/conta-nox': {
+      id: '/admin/conta-nox'
+      path: '/admin/conta-nox'
+      fullPath: '/admin/conta-nox'
+      preLoaderRoute: typeof AdminContaNoxRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/consultas': {
@@ -1743,6 +1960,7 @@ interface VendedorRouteChildren {
   VendedorPerfilRoute: typeof VendedorPerfilRoute
   VendedorPipelineRoute: typeof VendedorPipelineRoute
   VendedorRankingRoute: typeof VendedorRankingRoute
+  VendedorIndexRoute: typeof VendedorIndexRoute
 }
 
 const VendedorRouteChildren: VendedorRouteChildren = {
@@ -1754,6 +1972,7 @@ const VendedorRouteChildren: VendedorRouteChildren = {
   VendedorPerfilRoute: VendedorPerfilRoute,
   VendedorPipelineRoute: VendedorPipelineRoute,
   VendedorRankingRoute: VendedorRankingRoute,
+  VendedorIndexRoute: VendedorIndexRoute,
 }
 
 const VendedorRouteWithChildren = VendedorRoute._addFileChildren(
@@ -1765,6 +1984,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApolicesRoute: ApolicesRouteWithChildren,
   CadastroRoute: CadastroRoute,
   CarreirasRoute: CarreirasRoute,
+  CarteiraCobrancasRoute: CarteiraCobrancasRoute,
   ConfiguracoesRoute: ConfiguracoesRouteWithChildren,
   ConsultaRapidaRoute: ConsultaRapidaRoute,
   ConsultasRoute: ConsultasRouteWithChildren,
@@ -1785,6 +2005,8 @@ const rootRouteChildren: RootRouteChildren = {
   PlanoCarreiraRoute: PlanoCarreiraRoute,
   PrivacidadeRoute: PrivacidadeRoute,
   ProprietarioRoute: ProprietarioRoute,
+  RecuperarAcessoRoute: RecuperarAcessoRoute,
+  RedefinirSenhaRoute: RedefinirSenhaRoute,
   RelatoriosRoute: RelatoriosRoute,
   SejaParceiroRoute: SejaParceiroRoute,
   SimularRoute: SimularRouteWithChildren,
@@ -1799,9 +2021,12 @@ const rootRouteChildren: RootRouteChildren = {
   AdminAprovacoesRoute: AdminAprovacoesRoute,
   AdminColaboradoresRoute: AdminColaboradoresRoute,
   AdminConsultasRoute: AdminConsultasRoute,
+  AdminContaNoxRoute: AdminContaNoxRoute,
   AdminContratosRoute: AdminContratosRoute,
+  AdminDistribuicaoLeadsRoute: AdminDistribuicaoLeadsRoute,
   AdminEquipeRoute: AdminEquipeRoute,
   AdminEquipeComercialRoute: AdminEquipeComercialRoute,
+  AdminEquipeNoxRoute: AdminEquipeNoxRoute,
   AdminEquipePermissoesRoute: AdminEquipePermissoesRoute,
   AdminFaturamentoRoute: AdminFaturamentoRoute,
   AdminFinanceiroRoute: AdminFinanceiroRoute,
@@ -1819,6 +2044,10 @@ const rootRouteChildren: RootRouteChildren = {
   InquilinoDocumentosRoute: InquilinoDocumentosRoute,
   InquilinoFaturasRoute: InquilinoFaturasRoute,
   InquilinoPerfilRoute: InquilinoPerfilRoute,
+  LoginFinanceironoxRoute: LoginFinanceironoxRoute,
+  LoginJuridiconoxRoute: LoginJuridiconoxRoute,
+  LoginMarketingnoxRoute: LoginMarketingnoxRoute,
+  LoginVendedornoxRoute: LoginVendedornoxRoute,
   PainelNotificacoesRoute: PainelNotificacoesRoute,
   BlogIndexRoute: BlogIndexRoute,
   FaturasInquilinosIndexRoute: FaturasInquilinosIndexRoute,

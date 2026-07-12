@@ -33,6 +33,8 @@ function InquilinoLanding() {
         subtitulo: 'Acesse documentos, faturas e informações do seu seguro fiança vinculados ao seu CPF.',
         imagem: 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?q=80&w=1400&auto=format&fit=crop',
         imagemAlt: 'Inquilino acessando contrato digital pelo celular',
+        personagemImagem: '/assets/nox-inquilino-personagens.png',
+        personagemAlt: 'Personagens NOX Fianca apresentando o app do inquilino com faturas, casa e chaves',
         ctas: [
           { label: 'Criar acesso de inquilino', to: '/cadastro', search: { perfil: 'inquilino' }, variant: 'primary' },
           { label: 'Entrar no painel', to: '/login', variant: 'secondary' },

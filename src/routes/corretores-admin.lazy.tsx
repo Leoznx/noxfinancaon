@@ -17,7 +17,7 @@ import { Badge } from "@/components/ui/badge";
 
 export const Route = createLazyFileRoute("/corretores-admin")({
   component: () => (
-    <ProtectedRoute roles={["admin", "analista", "imobiliaria"]}>
+    <ProtectedRoute roles={["admin", "analista", "imobiliaria"]} moduleKey="corretores">
       <CorretoresAdmin />
     </ProtectedRoute>
   ),

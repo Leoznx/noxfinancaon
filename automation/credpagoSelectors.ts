@@ -1,9 +1,21 @@
 import type { Page, Locator } from "playwright";
 
+// Teto/intervalo de poll pra dar tempo do formulário (SPA) terminar de hidratar
+// antes de desistir de achar um campo/botão. Sem isso, uma checagem única logo
+// após "domcontentloaded" corre atrás do JS que ainda está montando a UI — no
+// desktop do usuário (Chrome com aceleração de hardware, headed) isso quase
+// sempre vencia a corrida por sorte; num container headless de VPS (mais lento
+// pra renderizar/hidratar) a mesma checagem única passou a falhar direto no
+// primeiro botão da tela ("Pessoa Física"), mesmo com a sessão/login corretos.
+const FIND_TIMEOUT_MS = 8000;
+const FIND_POLL_MS = 200;
+
 /**
  * Tenta localizar um campo por várias estratégias, na ordem: label, placeholder,
  * role+name. Necessário porque o site da CredPago pode alterar atributos
- * técnicos (id/name) sem aviso — preferimos o texto visível ao usuário.
+ * técnicos (id/name) sem aviso — preferimos o texto visível ao usuário. Faz
+ * polling até FIND_TIMEOUT_MS em vez de checar uma única vez (ver comentário
+ * acima de FIND_TIMEOUT_MS).
  */
 async function locateField(
   page: Page,
@@ -18,40 +30,82 @@ async function locateField(
   if (opts.placeholder) candidates.push(page.getByPlaceholder(opts.placeholder));
   if (opts.role) candidates.push(page.getByRole("textbox", { name: opts.role.name }));
 
-  for (const candidate of candidates) {
-    const count = await candidate.count().catch(() => 0);
-    if (count > 0) {
-      const first = candidate.first();
-      if (await first.isVisible().catch(() => false)) return first;
+  const inicio = Date.now();
+  do {
+    for (const candidate of candidates) {
+      const count = await candidate.count().catch(() => 0);
+      if (count > 0) {
+        const first = candidate.first();
+        if (await first.isVisible().catch(() => false)) return first;
+      }
     }
-  }
+    await page.waitForTimeout(FIND_POLL_MS);
+  } while (Date.now() - inicio < FIND_TIMEOUT_MS);
+
   throw new Error(
     `Campo não encontrado (label=${opts.label ?? "-"}, placeholder=${opts.placeholder ?? "-"}). O layout da CredPago pode ter mudado.`,
   );
 }
 
 async function clickButtonByText(page: Page, textos: (string | RegExp)[]): Promise<void> {
-  for (const t of textos) {
-    const byRole = page.getByRole("button", { name: t });
-    if ((await byRole.count().catch(() => 0)) > 0 && (await byRole.first().isVisible().catch(() => false))) {
-      await byRole.first().click();
-      return;
+  const inicio = Date.now();
+  do {
+    for (const t of textos) {
+      const byRole = page.getByRole("button", { name: t });
+      if (
+        (await byRole.count().catch(() => 0)) > 0 &&
+        (await byRole
+          .first()
+          .isVisible()
+          .catch(() => false))
+      ) {
+        await byRole.first().click();
+        return;
+      }
+      const byText = page.getByText(t, { exact: false });
+      if (
+        (await byText.count().catch(() => 0)) > 0 &&
+        (await byText
+          .first()
+          .isVisible()
+          .catch(() => false))
+      ) {
+        await byText.first().click();
+        return;
+      }
     }
-    const byText = page.getByText(t, { exact: false });
-    if ((await byText.count().catch(() => 0)) > 0 && (await byText.first().isVisible().catch(() => false))) {
-      await byText.first().click();
-      return;
-    }
-  }
-  throw new Error(`Botão não encontrado (tentativas: ${textos.map(String).join(", ")}). O layout da CredPago pode ter mudado.`);
+    await page.waitForTimeout(FIND_POLL_MS);
+  } while (Date.now() - inicio < FIND_TIMEOUT_MS);
+
+  // Diagnóstico temporário (ver DIAGNOSTICO_HEADLESS.md) — nunca deve conter
+  // dados do cliente, só o suficiente pra saber o que a CredPago realmente
+  // devolveu nesta tentativa (detecção de headless? captcha fora do padrão
+  // já checado? página completamente diferente?).
+  const urlAtual = page.url();
+  const amostraTexto = await page
+    .locator("body")
+    .innerText()
+    .then((t) => t.replace(/\s+/g, " ").trim().slice(0, 400))
+    .catch(() => "(não foi possível ler o corpo da página)");
+  throw new Error(
+    `Botão não encontrado (tentativas: ${textos.map(String).join(", ")}). O layout da CredPago pode ter mudado. ` +
+      `[diagnóstico] url=${urlAtual} | amostra="${amostraTexto}"`,
+  );
 }
 
 export async function fillPessoa(page: Page, tipo: "PF" | "PJ"): Promise<void> {
-  const textos = tipo === "PF" ? [/pessoa\s+f[ií]sica/i, /^\s*pf\s*$/i] : [/pessoa\s+jur[ií]dica/i, /^\s*pj\s*$/i];
+  const textos =
+    tipo === "PF"
+      ? [/pessoa\s+f[ií]sica/i, /^\s*pf\s*$/i]
+      : [/pessoa\s+jur[ií]dica/i, /^\s*pj\s*$/i];
   await clickButtonByText(page, textos);
 }
 
-export async function fillDocumento(page: Page, documento: string, tipo: "PF" | "PJ"): Promise<void> {
+export async function fillDocumento(
+  page: Page,
+  documento: string,
+  tipo: "PF" | "PJ",
+): Promise<void> {
   const field = await locateField(page, {
     label: tipo === "PF" ? /cpf/i : /cnpj/i,
     placeholder: tipo === "PF" ? /cpf/i : /cnpj/i,
@@ -71,7 +125,11 @@ export async function fillTipoImovel(page: Page, tipo: "Residencial" | "Comercia
  * o caso do autocomplete não existir ou não responder.
  */
 export async function fillCep(page: Page, cep: string): Promise<void> {
-  const field = await locateField(page, { label: /cep/i, placeholder: /cep/i, role: { name: /cep/i } });
+  const field = await locateField(page, {
+    label: /cep/i,
+    placeholder: /cep/i,
+    role: { name: /cep/i },
+  });
   await field.fill(cep);
 
   const TETO_MS = 2500;
@@ -136,10 +194,18 @@ export async function submitSimulation(page: Page): Promise<void> {
 export async function isLoginPage(page: Page): Promise<boolean> {
   if (/login|signin|entrar/i.test(page.url())) return true;
   const senhaField = page.getByLabel(/senha|password/i);
-  return (await senhaField.count().catch(() => 0)) > 0 && (await senhaField.first().isVisible().catch(() => false));
+  return (
+    (await senhaField.count().catch(() => 0)) > 0 &&
+    (await senhaField
+      .first()
+      .isVisible()
+      .catch(() => false))
+  );
 }
 
 export async function isCaptchaPresent(page: Page): Promise<boolean> {
-  const captcha = page.locator('iframe[src*="recaptcha"], iframe[title*="captcha" i], [class*="captcha" i]');
+  const captcha = page.locator(
+    'iframe[src*="recaptcha"], iframe[title*="captcha" i], [class*="captcha" i]',
+  );
   return (await captcha.count().catch(() => 0)) > 0;
 }

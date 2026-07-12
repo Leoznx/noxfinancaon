@@ -15,7 +15,7 @@ import { toast } from "sonner";
 
 export const Route = createFileRoute("/admin/aprovacoes")({
   component: () => (
-    <ProtectedRoute roles={["admin", "analista", "juridico", "admin_master"]}>
+    <ProtectedRoute roles={["admin", "analista", "juridico", "admin_master"]} moduleKey="aprovacoes">
       <AprovacoesPage />
     </ProtectedRoute>
   ),
@@ -38,6 +38,7 @@ function AprovacoesPage() {
       .from("consultas_credito")
       .select("id, profile_id_solicitante, tenant_name, tenant_document, tenant_email, tenant_telefone, property_address, rent_value, role_solicitante, created_at, status, substatus, documentos, dados_complementares_em, plano:planos(nome), solicitante:profiles!consultas_credito_profile_id_solicitante_fkey(nome, email)")
       .in("status", ["pendente", "em_analise"])
+      .eq("substatus", "documentacao_complementar_enviada")
       .order("created_at", { ascending: false });
     if (error) toast.error("Erro ao carregar pendências");
     else setLinhas(data ?? []);
@@ -77,7 +78,7 @@ function AprovacoesPage() {
   const aprovar = async (id: string) => {
     const consulta = linhas.find((l) => l.id === id);
     const { error } = await supabase.from("consultas_credito").update({
-      status: "aprovado", approved_by: adminId, approved_at: new Date().toISOString()
+      status: "aprovado", resultado: "aprovado", approved_by: adminId, approved_at: new Date().toISOString()
     }).eq("id", id);
     if (error) { toast.error("Erro ao aprovar"); return; }
     toast.success("Consulta aprovada");
@@ -95,7 +96,7 @@ function AprovacoesPage() {
     if (!motivo.trim()) { toast.error("Informe o motivo"); return; }
     const consulta = linhas.find((l) => l.id === rejectingId);
     const { error } = await supabase.from("consultas_credito").update({
-      status: "reprovado", rejected_by: adminId, rejected_at: new Date().toISOString(), rejection_reason: motivo
+      status: "reprovado", resultado: "recusado", rejected_by: adminId, rejected_at: new Date().toISOString(), rejection_reason: motivo
     }).eq("id", rejectingId);
     if (error) { toast.error("Erro ao reprovar"); return; }
     toast.success("Consulta reprovada");
@@ -153,7 +154,7 @@ function AprovacoesPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Aprovações</h1>
           <p className="text-neutral-500 mt-2">
-            Consultas com status <Badge className="bg-amber-100 text-amber-700 border-amber-200 ml-1">Pendente</Badge> ou <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200 ml-1">Em análise</Badge> aguardando análise.
+            Consultas em análise que já tiveram o formulário complementar enviado pelo solicitante.
           </p>
         </div>
 

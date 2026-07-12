@@ -16,7 +16,7 @@ import { toast } from "sonner";
 
 export const Route = createLazyFileRoute("/admin/vagas")({
   component: () => (
-    <ProtectedRoute roles={["admin"]}>
+    <ProtectedRoute roles={["admin"]} moduleKey="vagas_abertas">
       <DashboardLayout>
         <AdminVagasPage />
       </DashboardLayout>

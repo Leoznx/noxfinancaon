@@ -13,7 +13,7 @@ import { toast } from "sonner";
 
 export const Route = createFileRoute("/admin/contratos")({
   component: () => (
-    <ProtectedRoute roles={["admin", "analista", "juridico", "admin_master"]}>
+    <ProtectedRoute roles={["admin", "analista", "juridico", "admin_master"]} moduleKey="contratos">
       <ContratosAdminPage />
     </ProtectedRoute>
   ),

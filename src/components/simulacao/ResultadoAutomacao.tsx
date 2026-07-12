@@ -91,9 +91,22 @@ export function ResultadoAutomacao({
   // aguardando_ativacao, ativado, etc.) e avança conforme o corretor progride a proposta.
   // Preferir `resultado` aqui evita que essa tela fique presa em "Consultando..." para
   // sempre assim que a proposta avança para as próximas etapas.
+  const statusBruto = String(consulta.status ?? "").toLowerCase();
   const resultadoConhecido = STATUS_FINAIS.includes(String(consulta.resultado ?? "").toLowerCase() as StatusConsulta);
-  const status = (resultadoConhecido ? (consulta.resultado as StatusConsulta) : consulta.status) as StatusConsulta;
-  const emAndamento = !STATUS_FINAIS.includes(status);
+  // A automação em si só tem dois estados "ainda rodando": pendente (na fila) e
+  // processando (worker aberto). Qualquer outro `status` (pendente_documentacao,
+  // aguardando_ativacao, ativado...) significa que a proposta já avançou bem além da
+  // análise de crédito — nunca deve mostrar "Consultando..." nesse caso, mesmo que
+  // `resultado` tenha ficado null por ser um registro antigo/manual que nunca passou
+  // pela automação de verdade (confirmado com um caso real: status=aguardando_ativacao,
+  // resultado=null, ficava preso em "Consultando..." para sempre).
+  const aindaNaAnaliseDeCredito = statusBruto === "" || statusBruto === "pendente" || statusBruto === "processando";
+  const status = (resultadoConhecido
+    ? consulta.resultado
+    : aindaNaAnaliseDeCredito
+      ? consulta.status
+      : "aprovado") as StatusConsulta;
+  const emAndamento = !resultadoConhecido && aindaNaAnaliseDeCredito;
   const ui = STATUS_UI[status];
   const statusNormalizado = String(status ?? "").toLowerCase();
   const isRecusado = statusNormalizado.includes("recusado") || statusNormalizado.includes("reprovado");
@@ -624,6 +637,7 @@ function FormularioAnaliseComplementar({ consulta }: { consulta: ConsultaCredito
       const { error: updateError } = await supabase
         .from("consultas_credito")
         .update({
+          status: "em_analise",
           tenant_email: email.trim(),
           tenant_telefone: telefone.replace(/\D/g, ""),
           dados_complementares_em: enviadoEm,

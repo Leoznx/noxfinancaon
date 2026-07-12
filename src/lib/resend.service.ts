@@ -38,3 +38,35 @@ export async function sendVerificationEmail({
 
   return { sent: true as const, id: data?.id };
 }
+
+// Server-only — nunca importar a partir de código de cliente (RESEND_API_KEY não é público).
+export async function sendPasswordResetEmail({
+  email,
+  nome,
+  resetLink,
+}: {
+  email: string;
+  nome: string;
+  resetLink: string;
+}) {
+  const { data, error } = await getResend().emails.send({
+    from: process.env.RESEND_FROM_EMAIL!,
+    to: [email],
+    subject: "Redefina sua senha | NOX Fiança",
+    reply_to: process.env.RESEND_REPLY_TO,
+    template: {
+      id: process.env.RESEND_RESET_PASSWORD_TEMPLATE_ID!,
+      variables: {
+        nome: nome || "cliente",
+        reset_link: resetLink,
+      },
+    },
+  } as any);
+
+  if (error) {
+    console.error("[Resend] Falha ao enviar e-mail de redefinição de senha:", error);
+    return { sent: false as const };
+  }
+
+  return { sent: true as const, id: data?.id };
+}

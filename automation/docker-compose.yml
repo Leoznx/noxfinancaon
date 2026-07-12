@@ -1,0 +1,42 @@
+services:
+  credpago-worker:
+    build: .
+    image: nox-automacao-credpago:latest
+    container_name: nox-automacao-credpago
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      TZ: America/Sao_Paulo
+      # Sessão portátil dentro do container — ver ./data/README (montado abaixo).
+      CREDPAGO_STORAGE_STATE_PATH: /app/data/credpago-session.json
+      HEADLESS: "true"
+      HEALTH_PORT: "3000"
+    volumes:
+      # Só o arquivo de sessão (poucos KB) fica persistido no host — nunca o
+      # perfil completo do Chrome. Gerado localmente por
+      # `npm run automation:export-session` e copiado pra cá via scp/rsync.
+      - ./data:/app/data
+    # Só acessível localmente na própria VPS — o Nginx (rodando no host, fora
+    # deste compose) é quem expõe isso publicamente em
+    # https://automacao.noxfianca.com, via proxy reverso.
+    ports:
+      - "127.0.0.1:3000:3000"
+    shm_size: "1gb" # Chromium precisa de /dev/shm maior que o padrão de 64MB do Docker.
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+        reservations:
+          memory: 512m
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"

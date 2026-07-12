@@ -2,20 +2,20 @@ import { createLazyFileRoute, Link, useNavigate, useSearch } from "@tanstack/rea
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useState, useEffect } from "react";
-import { 
-  User, 
-  Building2, 
-  Wallet, 
-  Lock, 
-  Bell, 
-  Award, 
-  Camera, 
-  Monitor, 
-  Info, 
-  Trophy, 
+import {
+  User,
+  Building2,
+  Wallet,
+  Lock,
+  Bell,
+  Award,
+  Camera,
+  Monitor,
+  Info,
+  Trophy,
   ChevronRight,
   Loader2,
-  CheckCircle2
+  CheckCircle2,
 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { supabase } from "@/integrations/supabase/client";
@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { setCachedHeaderProfile } from "@/lib/profile-cache";
+import { buildAppUrl } from "@/lib/app-url";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -45,14 +46,14 @@ export const Route = createLazyFileRoute("/configuracoes")({
 });
 
 // Inquilino não tem dados profissionais, comissão ou PIX — essas abas não se aplicam.
-const TABS_OCULTAS_PARA_INQUILINO = new Set(['conta', 'financeiro', 'comissoes']);
+const TABS_OCULTAS_PARA_INQUILINO = new Set(["conta", "financeiro", "comissoes"]);
 
 function ConfiguracoesPage() {
   const search = useSearch({ from: "/configuracoes" });
   const navigate = useNavigate();
-  const [abaAtiva, setAbaAtivaState] = useState<string>(search.tab ?? 'perfil');
+  const [abaAtiva, setAbaAtivaState] = useState<string>(search.tab ?? "perfil");
   const { user } = useAuth();
-  const isInquilino = user?.role === 'inquilino';
+  const isInquilino = user?.role === "inquilino";
 
   // Mantém a URL em sincronia com a aba ativa — permite deep-link (ex.: um dropdown
   // externo linkando direto pra /configuracoes?tab=seguranca) e sobrevive a um reload.
@@ -64,7 +65,7 @@ function ConfiguracoesPage() {
   // Defesa extra contra deep-link direto (?tab=financeiro) numa aba que não existe
   // pra esse papel — evita renderizar um Tab* pensado pra corretor/imobiliária.
   useEffect(() => {
-    if (isInquilino && TABS_OCULTAS_PARA_INQUILINO.has(abaAtiva)) setAbaAtiva('perfil');
+    if (isInquilino && TABS_OCULTAS_PARA_INQUILINO.has(abaAtiva)) setAbaAtiva("perfil");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isInquilino, abaAtiva]);
 
@@ -82,22 +83,22 @@ function ConfiguracoesPage() {
             Gerencie sua conta, preferências e dados da plataforma.
           </p>
         </header>
-        
+
         <div className="grid grid-cols-12 gap-8">
           {/* SIDEBAR DAS TABS (3 cols) */}
           <aside className="col-span-12 lg:col-span-3">
             <nav className="bg-white border border-neutral-100 rounded-2xl p-2 sticky top-24 shadow-sm">
               <NavItemConfig
-                ativo={abaAtiva === 'perfil'}
-                onClick={() => setAbaAtiva('perfil')}
+                ativo={abaAtiva === "perfil"}
+                onClick={() => setAbaAtiva("perfil")}
                 icon={User}
                 titulo="Perfil"
                 descricao="Foto, nome e dados"
               />
               {!isInquilino && (
                 <NavItemConfig
-                  ativo={abaAtiva === 'conta'}
-                  onClick={() => setAbaAtiva('conta')}
+                  ativo={abaAtiva === "conta"}
+                  onClick={() => setAbaAtiva("conta")}
                   icon={Building2}
                   titulo="Conta"
                   descricao="Documentos e profissional"
@@ -105,31 +106,31 @@ function ConfiguracoesPage() {
               )}
               {!isInquilino && (
                 <NavItemConfig
-                  ativo={abaAtiva === 'financeiro'}
-                  onClick={() => setAbaAtiva('financeiro')}
+                  ativo={abaAtiva === "financeiro"}
+                  onClick={() => setAbaAtiva("financeiro")}
                   icon={Wallet}
                   titulo="Financeiro"
                   descricao="Chave PIX e bancários"
                 />
               )}
               <NavItemConfig
-                ativo={abaAtiva === 'seguranca'}
-                onClick={() => setAbaAtiva('seguranca')}
+                ativo={abaAtiva === "seguranca"}
+                onClick={() => setAbaAtiva("seguranca")}
                 icon={Lock}
                 titulo="Segurança"
                 descricao="Senha e sessões"
               />
               <NavItemConfig
-                ativo={abaAtiva === 'notificacoes'}
-                onClick={() => setAbaAtiva('notificacoes')}
+                ativo={abaAtiva === "notificacoes"}
+                onClick={() => setAbaAtiva("notificacoes")}
                 icon={Bell}
                 titulo="Notificações"
                 descricao="Alertas e preferências"
               />
               {!isInquilino && (
                 <NavItemConfig
-                  ativo={abaAtiva === 'comissoes'}
-                  onClick={() => setAbaAtiva('comissoes')}
+                  ativo={abaAtiva === "comissoes"}
+                  onClick={() => setAbaAtiva("comissoes")}
                   icon={Award}
                   titulo="Plano e Nível"
                   descricao="Regras de carreira"
@@ -137,15 +138,15 @@ function ConfiguracoesPage() {
               )}
             </nav>
           </aside>
-          
+
           {/* CONTEÚDO DA TAB (9 cols) */}
           <main className="col-span-12 lg:col-span-9 animate-in fade-in slide-in-from-right-4 duration-500">
-            {abaAtiva === 'perfil'       && <TabPerfil />}
-            {!isInquilino && abaAtiva === 'conta'        && <TabConta />}
-            {!isInquilino && abaAtiva === 'financeiro'   && <TabFinanceiro />}
-            {abaAtiva === 'seguranca'    && <TabSeguranca />}
-            {abaAtiva === 'notificacoes' && <TabNotificacoes />}
-            {!isInquilino && abaAtiva === 'comissoes'    && <TabComissoesNivel />}
+            {abaAtiva === "perfil" && <TabPerfil />}
+            {!isInquilino && abaAtiva === "conta" && <TabConta />}
+            {!isInquilino && abaAtiva === "financeiro" && <TabFinanceiro />}
+            {abaAtiva === "seguranca" && <TabSeguranca />}
+            {abaAtiva === "notificacoes" && <TabNotificacoes />}
+            {!isInquilino && abaAtiva === "comissoes" && <TabComissoesNivel />}
           </main>
         </div>
       </div>
@@ -158,19 +159,25 @@ function NavItemConfig({ ativo, onClick, icon: Icon, titulo, descricao }: any) {
     <button
       onClick={onClick}
       className={`w-full text-left px-4 py-3.5 rounded-xl flex items-center gap-4 transition-all mb-1 ${
-        ativo 
-          ? 'bg-neutral-900 text-white shadow-lg shadow-neutral-200' 
-          : 'hover:bg-neutral-50 text-neutral-600'
+        ativo
+          ? "bg-neutral-900 text-white shadow-lg shadow-neutral-200"
+          : "hover:bg-neutral-50 text-neutral-600"
       }`}
     >
-      <div className={`p-2 rounded-lg ${ativo ? 'bg-yellow-400 text-neutral-900' : 'bg-neutral-100 text-neutral-500'}`}>
+      <div
+        className={`p-2 rounded-lg ${ativo ? "bg-yellow-400 text-neutral-900" : "bg-neutral-100 text-neutral-500"}`}
+      >
         <Icon className="w-4 h-4" strokeWidth={ativo ? 2.5 : 2} />
       </div>
       <div className="flex-1 min-w-0">
-        <p className={`text-sm font-bold tracking-tight ${ativo ? 'text-white' : 'text-neutral-900'}`}>
+        <p
+          className={`text-sm font-bold tracking-tight ${ativo ? "text-white" : "text-neutral-900"}`}
+        >
           {titulo}
         </p>
-        <p className={`text-[10px] uppercase font-bold tracking-widest truncate ${ativo ? 'text-yellow-400/80' : 'text-neutral-400'}`}>
+        <p
+          className={`text-[10px] uppercase font-bold tracking-widest truncate ${ativo ? "text-yellow-400/80" : "text-neutral-400"}`}
+        >
           {descricao}
         </p>
       </div>
@@ -185,9 +192,7 @@ function CardSecao({ titulo, descricao, children }: any) {
         <h3 className="text-lg font-black text-neutral-900 tracking-tight">{titulo}</h3>
         <p className="text-sm text-neutral-500 font-medium">{descricao}</p>
       </div>
-      <div className="p-8">
-        {children}
-      </div>
+      <div className="p-8">{children}</div>
     </Card>
   );
 }
@@ -261,14 +266,18 @@ function useUsuarioConfiguracoes() {
         });
       } catch (e: any) {
         if (ativo) {
-          setUsuario(usuarioPainel?.email ? {
-            email: usuarioPainel.email,
-            role: usuarioPainel.role,
-            authId: null,
-            profileId: null,
-            profile: null,
-            origem: "painel",
-          } : null);
+          setUsuario(
+            usuarioPainel?.email
+              ? {
+                  email: usuarioPainel.email,
+                  role: usuarioPainel.role,
+                  authId: null,
+                  profileId: null,
+                  profile: null,
+                  origem: "painel",
+                }
+              : null,
+          );
           setErro("Não foi possível carregar os dados. Tente novamente.");
         }
       } finally {
@@ -276,10 +285,17 @@ function useUsuarioConfiguracoes() {
       }
     })();
 
-    return () => { ativo = false; };
+    return () => {
+      ativo = false;
+    };
   }, [authLoading, usuarioPainel?.email, usuarioPainel?.role, tentativa]);
 
-  return { usuario, loading: authLoading || loading, erro, recarregar: () => setTentativa((t) => t + 1) };
+  return {
+    usuario,
+    loading: authLoading || loading,
+    erro,
+    recarregar: () => setTentativa((t) => t + 1),
+  };
 }
 
 function TabPerfil() {
@@ -294,7 +310,11 @@ function TabPerfil() {
 
   useEffect(() => {
     if (!usuario) return;
-    const p = usuario.profile ?? { email: usuario.email, role: usuario.role, id: usuario.profileId };
+    const p = usuario.profile ?? {
+      email: usuario.email,
+      role: usuario.role,
+      id: usuario.profileId,
+    };
     setProfile(p);
     setFoto(p?.avatar_url ?? null);
     setNome(p?.nome ?? "");
@@ -305,7 +325,6 @@ function TabPerfil() {
       avatarUrl: p?.avatar_url ?? null,
     });
   }, [usuario]);
-
 
   async function handleUploadFoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -320,25 +339,25 @@ function TabPerfil() {
       return;
     }
     setSalvando(true);
-    const fileExt = file.name.split('.').pop();
+    const fileExt = file.name.split(".").pop();
     const fileName = `${profile.id}-${Date.now()}.${fileExt}`;
     // Prefixo com o uid do usuário para casar com as políticas RLS do bucket "anexos"
     const filePath = `${profile.id}/avatares/${fileName}`;
     try {
       const { error: uploadError } = await supabase.storage
-        .from('anexos')
+        .from("anexos")
         .upload(filePath, file, { upsert: true });
       if (uploadError) throw uploadError;
       // Bucket privado — usamos URL assinada de longa duração (1 ano)
       const { data: signed, error: signErr } = await supabase.storage
-        .from('anexos')
+        .from("anexos")
         .createSignedUrl(filePath, 60 * 60 * 24 * 365);
       if (signErr) throw signErr;
-      const publicUrl = signed?.signedUrl ?? '';
+      const publicUrl = signed?.signedUrl ?? "";
       const { error: updateError } = await supabase
-        .from('profiles')
+        .from("profiles")
         .update({ avatar_url: publicUrl })
-        .eq('id', profile.id);
+        .eq("id", profile.id);
       if (updateError) throw updateError;
       setFoto(publicUrl);
       setCachedHeaderProfile({
@@ -346,9 +365,9 @@ function TabPerfil() {
         nome: nome || profile?.nome || usuario.email.split("@")[0],
         avatarUrl: publicUrl,
       });
-      toast.success('Foto de perfil atualizada!');
+      toast.success("Foto de perfil atualizada!");
     } catch (error: any) {
-      toast.error('Erro ao subir foto: ' + error.message);
+      toast.error("Erro ao subir foto: " + error.message);
     } finally {
       setSalvando(false);
     }
@@ -370,11 +389,7 @@ function TabPerfil() {
       } as any;
       if (!payload.id) throw new Error("Perfil ainda não configurado para salvamento automático.");
 
-      const { data, error } = await supabase
-        .from('profiles')
-        .upsert(payload)
-        .select('*')
-        .single();
+      const { data, error } = await supabase.from("profiles").upsert(payload).select("*").single();
       if (error) throw error;
       setProfile(data);
       setCachedHeaderProfile({
@@ -382,22 +397,30 @@ function TabPerfil() {
         nome: data?.nome || payload.nome,
         avatarUrl: data?.avatar_url || foto,
       });
-      toast.success('Perfil atualizado!');
+      toast.success("Perfil atualizado!");
     } catch (e: any) {
-      toast.error('Não foi possível salvar seus dados agora. Tente novamente.');
+      toast.error("Não foi possível salvar seus dados agora. Tente novamente.");
     } finally {
       setSalvando(false);
     }
   }
 
   if (loading) {
-    return <div className="p-10 text-center"><Loader2 className="animate-spin mx-auto text-neutral-300" /></div>;
+    return (
+      <div className="p-10 text-center">
+        <Loader2 className="animate-spin mx-auto text-neutral-300" />
+      </div>
+    );
   }
   if (!usuario) {
     return (
       <CardSecao titulo="Meu Perfil" descricao="Sessão não encontrada.">
-        <p className="text-sm text-red-600 font-medium mb-4">Sessão expirada. Faça login novamente.</p>
-        <Link to="/login"><Button>Ir para login</Button></Link>
+        <p className="text-sm text-red-600 font-medium mb-4">
+          Sessão expirada. Faça login novamente.
+        </p>
+        <Link to="/login">
+          <Button>Ir para login</Button>
+        </Link>
       </CardSecao>
     );
   }
@@ -410,11 +433,13 @@ function TabPerfil() {
     );
   }
 
-
   const inicial = (nome || profile?.email || "?").substring(0, 1).toUpperCase();
 
   return (
-    <CardSecao titulo="Meu Perfil" descricao="Como você aparece para outros usuários da plataforma.">
+    <CardSecao
+      titulo="Meu Perfil"
+      descricao="Como você aparece para outros usuários da plataforma."
+    >
       <div className="flex flex-col md:flex-row items-center md:items-start gap-8 mb-10 pb-10 border-b border-neutral-50">
         <div className="relative group">
           <div className="w-32 h-32 rounded-3xl overflow-hidden bg-neutral-100 border-4 border-white shadow-xl flex items-center justify-center text-3xl font-black text-neutral-300">
@@ -426,32 +451,59 @@ function TabPerfil() {
           </div>
           <label className="absolute -bottom-2 -right-2 w-10 h-10 bg-yellow-400 rounded-xl flex items-center justify-center shadow-lg cursor-pointer hover:scale-110 transition-all border-4 border-white">
             <Camera className="w-5 h-5 text-neutral-900" strokeWidth={2.5} />
-            <input type="file" className="hidden" accept="image/*" onChange={handleUploadFoto} disabled={salvando} />
+            <input
+              type="file"
+              className="hidden"
+              accept="image/*"
+              onChange={handleUploadFoto}
+              disabled={salvando}
+            />
           </label>
         </div>
 
         <div className="flex-1 text-center md:text-left">
-          <h4 className="text-2xl font-black text-neutral-900 tracking-tight">{nome || "Sem nome"}</h4>
-          <p className="text-sm font-bold text-yellow-600 uppercase tracking-widest mt-1">{usuario.role}</p>
-          <p className="text-xs text-neutral-400 mt-4 max-w-sm font-medium">Formato recomendado: JPG ou PNG de até 2MB. Dimensões sugeridas: 400x400px.</p>
+          <h4 className="text-2xl font-black text-neutral-900 tracking-tight">
+            {nome || "Sem nome"}
+          </h4>
+          <p className="text-sm font-bold text-yellow-600 uppercase tracking-widest mt-1">
+            {usuario.role}
+          </p>
+          <p className="text-xs text-neutral-400 mt-4 max-w-sm font-medium">
+            Formato recomendado: JPG ou PNG de até 2MB. Dimensões sugeridas: 400x400px.
+          </p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-1.5">
-          <label className="text-xs font-black uppercase tracking-widest text-neutral-500 ml-1">Nome Completo</label>
-          <Input value={nome} onChange={(e) => setNome(e.target.value)} className="h-12 rounded-xl" />
+          <label className="text-xs font-black uppercase tracking-widest text-neutral-500 ml-1">
+            Nome Completo
+          </label>
+          <Input
+            value={nome}
+            onChange={(e) => setNome(e.target.value)}
+            className="h-12 rounded-xl"
+          />
         </div>
         <div className="space-y-1.5">
-          <label className="text-xs font-black uppercase tracking-widest text-neutral-500 ml-1">WhatsApp / Telefone</label>
-          <Input value={telefone} onChange={(e) => setTelefone(e.target.value)} className="h-12 rounded-xl" />
+          <label className="text-xs font-black uppercase tracking-widest text-neutral-500 ml-1">
+            WhatsApp / Telefone
+          </label>
+          <Input
+            value={telefone}
+            onChange={(e) => setTelefone(e.target.value)}
+            className="h-12 rounded-xl"
+          />
         </div>
       </div>
 
-
       <div className="mt-10 flex justify-end">
-        <Button onClick={handleSalvar} disabled={salvando} className="bg-neutral-900 text-white hover:bg-neutral-800 px-8 h-12 rounded-xl font-bold shadow-lg shadow-neutral-100">
-          {salvando ? 'Salvando...' : 'Salvar alterações'}
+        <Button
+          onClick={handleSalvar}
+          disabled={salvando}
+          className="bg-neutral-900 text-white hover:bg-neutral-800 px-8 h-12 rounded-xl font-bold shadow-lg shadow-neutral-100"
+        >
+          {salvando ? "Salvando..." : "Salvar alterações"}
         </Button>
       </div>
     </CardSecao>
@@ -498,7 +550,9 @@ function TabConta() {
         if (ativo) setLoadingProfissional(false);
       }
     })();
-    return () => { ativo = false; };
+    return () => {
+      ativo = false;
+    };
   }, [usuario]);
 
   async function handleSalvarConta() {
@@ -527,11 +581,19 @@ function TabConta() {
         if (error) throw error;
       }
 
-      const emailMudou = usuario.authId && novoEmail.trim() && novoEmail.trim().toLowerCase() !== usuario.email.toLowerCase();
+      const emailMudou =
+        usuario.authId &&
+        novoEmail.trim() &&
+        novoEmail.trim().toLowerCase() !== usuario.email.toLowerCase();
       if (emailMudou) {
-        const { error } = await supabase.auth.updateUser({ email: novoEmail.trim() });
+        const { error } = await supabase.auth.updateUser(
+          { email: novoEmail.trim() },
+          { emailRedirectTo: buildAppUrl("/email-verificado") },
+        );
         if (error) throw error;
-        toast.success("Dados salvos! Confira sua caixa de entrada (o e-mail atual e o novo) para confirmar a troca de e-mail.");
+        toast.success(
+          "Dados salvos! Confira sua caixa de entrada (o e-mail atual e o novo) para confirmar a troca de e-mail.",
+        );
       } else {
         toast.success("Dados da conta salvos com sucesso.");
       }
@@ -544,13 +606,21 @@ function TabConta() {
   }
 
   if (loading) {
-    return <div className="p-10 text-center"><Loader2 className="animate-spin mx-auto text-neutral-300" /></div>;
+    return (
+      <div className="p-10 text-center">
+        <Loader2 className="animate-spin mx-auto text-neutral-300" />
+      </div>
+    );
   }
   if (!usuario) {
     return (
       <CardSecao titulo="Dados da Conta" descricao="Sessão não encontrada.">
-        <p className="text-sm text-red-600 font-medium mb-4">Sessão expirada. Faça login novamente.</p>
-        <Link to="/login"><Button>Ir para login</Button></Link>
+        <p className="text-sm text-red-600 font-medium mb-4">
+          Sessão expirada. Faça login novamente.
+        </p>
+        <Link to="/login">
+          <Button>Ir para login</Button>
+        </Link>
       </CardSecao>
     );
   }
@@ -563,13 +633,17 @@ function TabConta() {
     );
   }
 
-
   return (
     <div className="space-y-6">
-      <CardSecao titulo="Dados da Conta" descricao="Informações profissionais e de identificação jurídica.">
+      <CardSecao
+        titulo="Dados da Conta"
+        descricao="Informações profissionais e de identificação jurídica."
+      >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-1.5">
-            <label className="text-xs font-black uppercase tracking-widest text-neutral-500 ml-1">E-mail de Acesso</label>
+            <label className="text-xs font-black uppercase tracking-widest text-neutral-500 ml-1">
+              E-mail de Acesso
+            </label>
             {usuario.authId ? (
               <Input
                 type="email"
@@ -578,23 +652,47 @@ function TabConta() {
                 className="h-12 rounded-xl"
               />
             ) : (
-              <Input value={usuario.email} disabled className="h-12 rounded-xl bg-neutral-50 text-neutral-500" />
+              <Input
+                value={usuario.email}
+                disabled
+                className="h-12 rounded-xl bg-neutral-50 text-neutral-500"
+              />
             )}
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-black uppercase tracking-widest text-neutral-500 ml-1">Tipo de conta</label>
-            <Input value={usuario.role} disabled className="h-12 rounded-xl bg-neutral-50 text-neutral-500 capitalize" />
+            <label className="text-xs font-black uppercase tracking-widest text-neutral-500 ml-1">
+              Tipo de conta
+            </label>
+            <Input
+              value={usuario.role}
+              disabled
+              className="h-12 rounded-xl bg-neutral-50 text-neutral-500 capitalize"
+            />
           </div>
-          {usuario.role === 'corretor' && (
+          {usuario.role === "corretor" && (
             <div className="space-y-1.5">
-              <label className="text-xs font-black uppercase tracking-widest text-neutral-500 ml-1">CRECI</label>
-              <Input value={creci} onChange={(e) => setCreci(e.target.value)} className="h-12 rounded-xl" placeholder="Informe seu CRECI" />
+              <label className="text-xs font-black uppercase tracking-widest text-neutral-500 ml-1">
+                CRECI
+              </label>
+              <Input
+                value={creci}
+                onChange={(e) => setCreci(e.target.value)}
+                className="h-12 rounded-xl"
+                placeholder="Informe seu CRECI"
+              />
             </div>
           )}
-          {usuario.role === 'imobiliaria' && (
+          {usuario.role === "imobiliaria" && (
             <div className="space-y-1.5">
-              <label className="text-xs font-black uppercase tracking-widest text-neutral-500 ml-1">CNPJ</label>
-              <Input value={cnpj} onChange={(e) => setCnpj(e.target.value)} className="h-12 rounded-xl" placeholder="Informe o CNPJ" />
+              <label className="text-xs font-black uppercase tracking-widest text-neutral-500 ml-1">
+                CNPJ
+              </label>
+              <Input
+                value={cnpj}
+                onChange={(e) => setCnpj(e.target.value)}
+                className="h-12 rounded-xl"
+                placeholder="Informe o CNPJ"
+              />
             </div>
           )}
         </div>
@@ -611,64 +709,89 @@ function TabConta() {
         )}
 
         <div className="mt-10 flex justify-end">
-          <Button onClick={handleSalvarConta} disabled={salvando || loadingProfissional} className="bg-neutral-900 text-white hover:bg-neutral-800 px-8 h-12 rounded-xl font-bold shadow-lg shadow-neutral-100">
-            {salvando ? 'Salvando...' : 'Salvar dados da conta'}
+          <Button
+            onClick={handleSalvarConta}
+            disabled={salvando || loadingProfissional}
+            className="bg-neutral-900 text-white hover:bg-neutral-800 px-8 h-12 rounded-xl font-bold shadow-lg shadow-neutral-100"
+          >
+            {salvando ? "Salvando..." : "Salvar dados da conta"}
           </Button>
         </div>
       </CardSecao>
 
-      <VerificacaoDocumento usuario={{ userId: usuario.authId, profileId: usuario.profileId, email: usuario.email, role: usuario.role, isRealSession: !!usuario.authId }} />
+      <VerificacaoDocumento
+        usuario={{
+          userId: usuario.authId,
+          profileId: usuario.profileId,
+          email: usuario.email,
+          role: usuario.role,
+          isRealSession: !!usuario.authId,
+        }}
+      />
     </div>
   );
 }
 
-type PixTipo = 'cpf' | 'cnpj' | 'email' | 'telefone' | 'aleatoria';
+type PixTipo = "cpf" | "cnpj" | "email" | "telefone" | "aleatoria";
 
 function maskPixCpf(v: string) {
-  return v.replace(/\D/g, '').slice(0, 11)
-    .replace(/(\d{3})(\d)/, '$1.$2')
-    .replace(/(\d{3})(\d)/, '$1.$2')
-    .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+  return v
+    .replace(/\D/g, "")
+    .slice(0, 11)
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
 }
 function maskPixCnpj(v: string) {
-  return v.replace(/\D/g, '').slice(0, 14)
-    .replace(/(\d{2})(\d)/, '$1.$2')
-    .replace(/(\d{3})(\d)/, '$1.$2')
-    .replace(/(\d{3})(\d)/, '$1/$2')
-    .replace(/(\d{4})(\d{1,2})$/, '$1-$2');
+  return v
+    .replace(/\D/g, "")
+    .slice(0, 14)
+    .replace(/(\d{2})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d)/, "$1/$2")
+    .replace(/(\d{4})(\d{1,2})$/, "$1-$2");
 }
 function maskPixTelefone(v: string) {
-  const d = v.replace(/\D/g, '').slice(0, 11);
-  if (d.length <= 10) return d.replace(/(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3').trim().replace(/-$/, '');
-  return d.replace(/(\d{2})(\d{5})(\d{0,4})/, '($1) $2-$3').trim().replace(/-$/, '');
+  const d = v.replace(/\D/g, "").slice(0, 11);
+  if (d.length <= 10)
+    return d
+      .replace(/(\d{2})(\d{4})(\d{0,4})/, "($1) $2-$3")
+      .trim()
+      .replace(/-$/, "");
+  return d
+    .replace(/(\d{2})(\d{5})(\d{0,4})/, "($1) $2-$3")
+    .trim()
+    .replace(/-$/, "");
 }
 function aplicarMascaraPix(tipo: PixTipo, v: string) {
-  if (tipo === 'cpf') return maskPixCpf(v);
-  if (tipo === 'cnpj') return maskPixCnpj(v);
-  if (tipo === 'telefone') return maskPixTelefone(v);
+  if (tipo === "cpf") return maskPixCpf(v);
+  if (tipo === "cnpj") return maskPixCnpj(v);
+  if (tipo === "telefone") return maskPixTelefone(v);
   return v;
 }
 function normalizarPix(tipo: PixTipo, v: string) {
-  if (tipo === 'cpf' || tipo === 'cnpj' || tipo === 'telefone') return v.replace(/\D/g, '');
+  if (tipo === "cpf" || tipo === "cnpj" || tipo === "telefone") return v.replace(/\D/g, "");
   return v.trim();
 }
 function validarPix(tipo: PixTipo, v: string): string | null {
   const limpo = normalizarPix(tipo, v);
-  if (!limpo) return 'Informe uma chave Pix válida.';
-  if (tipo === 'cpf' && limpo.length !== 11) return 'CPF deve ter 11 dígitos.';
-  if (tipo === 'cnpj' && limpo.length !== 14) return 'CNPJ deve ter 14 dígitos.';
-  if (tipo === 'telefone' && (limpo.length < 10 || limpo.length > 11)) return 'Telefone deve ter 10 ou 11 dígitos.';
-  if (tipo === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim())) return 'Informe um e-mail válido.';
-  if (tipo === 'aleatoria' && limpo.length < 8) return 'Informe a chave aleatória completa.';
+  if (!limpo) return "Informe uma chave Pix válida.";
+  if (tipo === "cpf" && limpo.length !== 11) return "CPF deve ter 11 dígitos.";
+  if (tipo === "cnpj" && limpo.length !== 14) return "CNPJ deve ter 14 dígitos.";
+  if (tipo === "telefone" && (limpo.length < 10 || limpo.length > 11))
+    return "Telefone deve ter 10 ou 11 dígitos.";
+  if (tipo === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim()))
+    return "Informe um e-mail válido.";
+  if (tipo === "aleatoria" && limpo.length < 8) return "Informe a chave aleatória completa.";
   return null;
 }
 
 const PIX_TIPOS: { value: PixTipo; label: string }[] = [
-  { value: 'cpf', label: 'CPF' },
-  { value: 'cnpj', label: 'CNPJ' },
-  { value: 'email', label: 'E-mail' },
-  { value: 'telefone', label: 'Telefone' },
-  { value: 'aleatoria', label: 'Aleatória' },
+  { value: "cpf", label: "CPF" },
+  { value: "cnpj", label: "CNPJ" },
+  { value: "email", label: "E-mail" },
+  { value: "telefone", label: "Telefone" },
+  { value: "aleatoria", label: "Aleatória" },
 ];
 
 function TabFinanceiro() {
@@ -678,11 +801,12 @@ function TabFinanceiro() {
   const [salvando, setSalvando] = useState(false);
   const [registroId, setRegistroId] = useState<string | null>(null);
 
-  const [receiverName, setReceiverName] = useState('');
-  const [bankName, setBankName] = useState('');
-  const [pixTipo, setPixTipo] = useState<PixTipo>('cpf');
-  const [pixKey, setPixKey] = useState('');
+  const [receiverName, setReceiverName] = useState("");
+  const [bankName, setBankName] = useState("");
+  const [pixTipo, setPixTipo] = useState<PixTipo>("cpf");
+  const [pixKey, setPixKey] = useState("");
   const [erros, setErros] = useState<Record<string, string>>({});
+  const [editandoPix, setEditandoPix] = useState(true);
 
   useEffect(() => {
     if (!usuario) return;
@@ -692,44 +816,55 @@ function TabFinanceiro() {
     (async () => {
       try {
         if (!usuario.authId) {
-          const local = JSON.parse(localStorage.getItem(`nox_financeiro_${usuario.email}`) || 'null');
+          const local = JSON.parse(
+            localStorage.getItem(`nox_financeiro_${usuario.email}`) || "null",
+          );
           if (local && ativo) {
-            setReceiverName(local.receiver_full_name || '');
-            setBankName(local.bank_name || '');
-            setPixTipo(local.pix_key_type || 'cpf');
-            setPixKey(local.pix_key || '');
+            setReceiverName(local.receiver_full_name || "");
+            setBankName(local.bank_name || "");
+            setPixTipo(local.pix_key_type || "cpf");
+            setPixKey(local.pix_key || "");
             setRegistroId(local.id || null);
+            setEditandoPix(false);
+          } else if (ativo) {
+            setEditandoPix(true);
           }
           return;
         }
         const { data, error } = await supabase
-          .from('dados_financeiros_recebimento' as any)
-          .select('*')
-          .eq('user_id', usuario.authId)
+          .from("dados_financeiros_recebimento" as any)
+          .select("*")
+          .eq("user_id", usuario.authId)
           .maybeSingle();
         if (error) throw error;
         if (!ativo) return;
         if (data) {
           const d = data as any;
           setRegistroId(d.id);
-          setReceiverName(d.receiver_full_name || '');
-          setBankName(d.bank_name || '');
-          setPixTipo((d.pix_key_type as PixTipo) || 'cpf');
-          setPixKey(d.pix_key || '');
+          setReceiverName(d.receiver_full_name || "");
+          setBankName(d.bank_name || "");
+          setPixTipo((d.pix_key_type as PixTipo) || "cpf");
+          setPixKey(d.pix_key || "");
+          setEditandoPix(false);
+        } else {
+          setEditandoPix(true);
         }
       } catch (e: any) {
-        if (ativo) setCarregaErro('Não foi possível carregar seus dados financeiros. Tente novamente.');
+        if (ativo)
+          setCarregaErro("Não foi possível carregar seus dados financeiros. Tente novamente.");
       } finally {
         if (ativo) setLoading(false);
       }
     })();
-    return () => { ativo = false; };
+    return () => {
+      ativo = false;
+    };
   }, [usuario]);
 
   function handleChangePixTipo(novoTipo: PixTipo) {
     setPixTipo(novoTipo);
-    setPixKey('');
-    setErros((e) => ({ ...e, pixKey: '' }));
+    setPixKey("");
+    setErros((e) => ({ ...e, pixKey: "" }));
   }
 
   function handleChangePixKey(valor: string) {
@@ -739,9 +874,9 @@ function TabFinanceiro() {
   function validar(): boolean {
     const novos: Record<string, string> = {};
     if (!receiverName.trim() || receiverName.trim().split(/\s+/).length < 2)
-      novos.receiverName = 'Informe o nome completo do recebedor.';
-    if (!bankName.trim()) novos.bankName = 'Informe o nome do banco.';
-    if (!pixTipo) novos.pixTipo = 'Selecione o tipo de chave Pix.';
+      novos.receiverName = "Informe o nome completo do recebedor.";
+    if (!bankName.trim()) novos.bankName = "Informe o nome do banco.";
+    if (!pixTipo) novos.pixTipo = "Selecione o tipo de chave Pix.";
     const erroPix = validarPix(pixTipo, pixKey);
     if (erroPix) novos.pixKey = erroPix;
     setErros(novos);
@@ -750,7 +885,7 @@ function TabFinanceiro() {
 
   async function handleSalvar() {
     if (!usuario) {
-      toast.error('Sessão expirada. Faça login novamente.');
+      toast.error("Sessão expirada. Faça login novamente.");
       return;
     }
     if (!validar()) return;
@@ -761,7 +896,7 @@ function TabFinanceiro() {
       pix_key_type: pixTipo,
       pix_key: pixKey.trim(),
       pix_key_normalized: normalizarPix(pixTipo, pixKey),
-      financial_data_status: 'ativo' as const,
+      financial_data_status: "ativo" as const,
     };
     const eraAtualizacao = !!registroId;
     try {
@@ -772,35 +907,51 @@ function TabFinanceiro() {
       } else {
         const completo = { ...payload, user_id: usuario.authId };
         const { data, error } = await supabase
-          .from('dados_financeiros_recebimento' as any)
-          .upsert(completo, { onConflict: 'user_id' })
-          .select('*')
+          .from("dados_financeiros_recebimento" as any)
+          .upsert(completo, { onConflict: "user_id" })
+          .select("*")
           .single();
         if (error) throw error;
         setRegistroId((data as any).id);
       }
-      toast.success(eraAtualizacao ? 'Dados financeiros atualizados com sucesso.' : 'Dados financeiros salvos com sucesso.');
+      setEditandoPix(false);
+      toast.success(
+        eraAtualizacao
+          ? "Dados financeiros atualizados com sucesso."
+          : "Dados financeiros salvos com sucesso.",
+      );
     } catch (e: any) {
-      toast.error('Não foi possível salvar agora: ' + (e.message || 'erro desconhecido'));
+      toast.error("Não foi possível salvar agora: " + (e.message || "erro desconhecido"));
     } finally {
       setSalvando(false);
     }
   }
 
   if (loadingUser || loading) {
-    return <div className="p-10 text-center"><Loader2 className="animate-spin mx-auto text-neutral-300" /></div>;
+    return (
+      <div className="p-10 text-center">
+        <Loader2 className="animate-spin mx-auto text-neutral-300" />
+      </div>
+    );
   }
   if (!usuario) {
     return (
       <CardSecao titulo="Dados para Recebimento" descricao="Sessão não encontrada.">
-        <p className="text-sm text-red-600 font-medium mb-4">Sessão expirada. Faça login novamente.</p>
-        <Link to="/login"><Button>Ir para login</Button></Link>
+        <p className="text-sm text-red-600 font-medium mb-4">
+          Sessão expirada. Faça login novamente.
+        </p>
+        <Link to="/login">
+          <Button>Ir para login</Button>
+        </Link>
       </CardSecao>
     );
   }
   if (erroUser || carregaErro) {
     return (
-      <CardSecao titulo="Dados para Recebimento" descricao="Não foi possível carregar seus dados financeiros.">
+      <CardSecao
+        titulo="Dados para Recebimento"
+        descricao="Não foi possível carregar seus dados financeiros."
+      >
         <p className="text-sm text-red-600 font-medium mb-4">{carregaErro || erroUser}</p>
         <Button onClick={recarregar}>Tentar novamente</Button>
       </CardSecao>
@@ -808,68 +959,157 @@ function TabFinanceiro() {
   }
 
   const placeholderPix =
-    pixTipo === 'cpf' ? '000.000.000-00'
-    : pixTipo === 'cnpj' ? '00.000.000/0000-00'
-    : pixTipo === 'telefone' ? '(00) 00000-0000'
-    : pixTipo === 'email' ? 'seuemail@exemplo.com'
-    : 'Cole sua chave aleatória';
+    pixTipo === "cpf"
+      ? "000.000.000-00"
+      : pixTipo === "cnpj"
+        ? "00.000.000/0000-00"
+        : pixTipo === "telefone"
+          ? "(00) 00000-0000"
+          : pixTipo === "email"
+            ? "seuemail@exemplo.com"
+            : "Cole sua chave aleatória";
+
+  const pixTipoLabel = PIX_TIPOS.find((t) => t.value === pixTipo)?.label ?? pixTipo.toUpperCase();
+  const temChavePixSalva = !!registroId && !!pixKey.trim();
+  const mostrarFormularioPix = editandoPix || !temChavePixSalva;
+
+  function editarChavePix() {
+    setEditandoPix(true);
+    window.setTimeout(() => {
+      document
+        .getElementById("dados-financeiros-form")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
+  }
 
   return (
-    <CardSecao titulo="Dados para Recebimento" descricao="Configure como você quer receber suas comissões.">
-      <div className="space-y-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-1.5">
-            <label className="text-xs font-black uppercase tracking-widest text-neutral-500 ml-1">Nome completo do recebedor</label>
-            <Input
-              value={receiverName}
-              onChange={(e) => setReceiverName(e.target.value)}
-              placeholder="Digite o nome completo do titular da conta"
-              className={`h-12 rounded-xl ${erros.receiverName ? 'border-red-400 focus-visible:ring-red-400' : ''}`}
-            />
-            {erros.receiverName && <p className="text-xs text-red-600 font-medium ml-1">{erros.receiverName}</p>}
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-black uppercase tracking-widest text-neutral-500 ml-1">Nome do banco</label>
-            <Input
-              value={bankName}
-              onChange={(e) => setBankName(e.target.value)}
-              placeholder="Ex: Nubank, Itaú, Bradesco, Banco do Brasil..."
-              className={`h-12 rounded-xl ${erros.bankName ? 'border-red-400 focus-visible:ring-red-400' : ''}`}
-            />
-            {erros.bankName && <p className="text-xs text-red-600 font-medium ml-1">{erros.bankName}</p>}
-          </div>
-        </div>
+    <CardSecao
+      titulo="Dados para Recebimento"
+      descricao="Configure como você quer receber suas comissões."
+    >
+      <div id="dados-financeiros-form" className="space-y-8 scroll-mt-24">
+        {mostrarFormularioPix && (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-1.5">
+                <label className="text-xs font-black uppercase tracking-widest text-neutral-500 ml-1">
+                  Nome completo do recebedor
+                </label>
+                <Input
+                  value={receiverName}
+                  onChange={(e) => setReceiverName(e.target.value)}
+                  placeholder="Digite o nome completo do titular da conta"
+                  className={`h-12 rounded-xl ${erros.receiverName ? "border-red-400 focus-visible:ring-red-400" : ""}`}
+                />
+                {erros.receiverName && (
+                  <p className="text-xs text-red-600 font-medium ml-1">{erros.receiverName}</p>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-black uppercase tracking-widest text-neutral-500 ml-1">
+                  Nome do banco
+                </label>
+                <Input
+                  value={bankName}
+                  onChange={(e) => setBankName(e.target.value)}
+                  placeholder="Ex: Nubank, Itaú, Bradesco, Banco do Brasil..."
+                  className={`h-12 rounded-xl ${erros.bankName ? "border-red-400 focus-visible:ring-red-400" : ""}`}
+                />
+                {erros.bankName && (
+                  <p className="text-xs text-red-600 font-medium ml-1">{erros.bankName}</p>
+                )}
+              </div>
+            </div>
 
-        <div>
-          <label className="text-xs font-black uppercase tracking-widest text-neutral-500 ml-1 mb-3 block">Tipo de chave Pix</label>
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-            {PIX_TIPOS.map((t) => (
-              <button
-                key={t.value}
+            <div>
+              <label className="text-xs font-black uppercase tracking-widest text-neutral-500 ml-1 mb-3 block">
+                Tipo de chave Pix
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                {PIX_TIPOS.map((t) => (
+                  <button
+                    key={t.value}
+                    type="button"
+                    onClick={() => handleChangePixTipo(t.value)}
+                    className={`text-[11px] font-black uppercase tracking-widest py-3 rounded-xl border-2 transition-all ${
+                      pixTipo === t.value
+                        ? "bg-neutral-900 text-white border-neutral-900 shadow-lg shadow-neutral-200"
+                        : "border-neutral-100 text-neutral-500 hover:border-neutral-300"
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-black uppercase tracking-widest text-neutral-500 ml-1">
+                Sua chave Pix
+              </label>
+              <Input
+                value={pixKey}
+                onChange={(e) => handleChangePixKey(e.target.value)}
+                placeholder={placeholderPix}
+                inputMode={
+                  pixTipo === "email" ? "email" : pixTipo === "aleatoria" ? "text" : "numeric"
+                }
+                className={`h-14 rounded-xl text-lg font-bold ${erros.pixKey ? "border-red-400 focus-visible:ring-red-400" : ""}`}
+              />
+              {erros.pixKey && (
+                <p className="text-xs text-red-600 font-medium ml-1">{erros.pixKey}</p>
+              )}
+            </div>
+          </>
+        )}
+
+        <div className="rounded-2xl border-2 border-neutral-100 bg-white p-6">
+          <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-black uppercase tracking-widest text-neutral-400">
+                Minhas chaves Pix
+              </p>
+              <p className="mt-1 text-sm text-neutral-500">
+                Chave usada automaticamente em Minhas Comissões.
+              </p>
+            </div>
+            {temChavePixSalva && (
+              <Button
                 type="button"
-                onClick={() => handleChangePixTipo(t.value)}
-                className={`text-[11px] font-black uppercase tracking-widest py-3 rounded-xl border-2 transition-all ${
-                  pixTipo === t.value
-                    ? 'bg-neutral-900 text-white border-neutral-900 shadow-lg shadow-neutral-200'
-                    : 'border-neutral-100 text-neutral-500 hover:border-neutral-300'
-                }`}
+                variant="outline"
+                onClick={editarChavePix}
+                className="h-10 rounded-xl px-4 text-xs font-black uppercase tracking-widest"
               >
-                {t.label}
-              </button>
-            ))}
+                Editar
+              </Button>
+            )}
           </div>
-        </div>
 
-        <div className="space-y-1.5">
-          <label className="text-xs font-black uppercase tracking-widest text-neutral-500 ml-1">Sua chave Pix</label>
-          <Input
-            value={pixKey}
-            onChange={(e) => handleChangePixKey(e.target.value)}
-            placeholder={placeholderPix}
-            inputMode={pixTipo === 'email' ? 'email' : pixTipo === 'aleatoria' ? 'text' : 'numeric'}
-            className={`h-14 rounded-xl text-lg font-bold ${erros.pixKey ? 'border-red-400 focus-visible:ring-red-400' : ''}`}
-          />
-          {erros.pixKey && <p className="text-xs text-red-600 font-medium ml-1">{erros.pixKey}</p>}
+          {temChavePixSalva ? (
+            <div className="rounded-2xl border border-yellow-100 bg-yellow-50 p-5">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <div className="mb-2 inline-flex items-center rounded-full bg-neutral-900 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-white">
+                    {pixTipoLabel}
+                  </div>
+                  <p className="truncate font-mono text-sm font-bold text-neutral-950">{pixKey}</p>
+                  <p className="mt-2 text-xs font-medium text-neutral-600">
+                    {receiverName || "Recebedor não informado"} ·{" "}
+                    {bankName || "Banco não informado"}
+                  </p>
+                </div>
+                <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-700">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Ativa
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-neutral-200 bg-neutral-50 p-6 text-sm font-medium text-neutral-500">
+              Nenhuma chave Pix salva ainda. Preencha os campos acima e salve para liberar saques
+              por Pix.
+            </div>
+          )}
         </div>
 
         <div className="bg-neutral-50 border-2 border-neutral-100 rounded-2xl p-6 flex items-start gap-4">
@@ -879,8 +1119,9 @@ function TabFinanceiro() {
           <div>
             <p className="font-black text-neutral-900 tracking-tight">Importante</p>
             <p className="text-sm text-neutral-600 mt-1 leading-relaxed">
-              Os dados bancários devem pertencer ao <strong className="text-neutral-900">titular da conta cadastrada</strong>.
-              Isso ajuda a manter os pagamentos seguros e evita divergências no saque.
+              Os dados bancários devem pertencer ao{" "}
+              <strong className="text-neutral-900">titular da conta cadastrada</strong>. Isso ajuda
+              a manter os pagamentos seguros e evita divergências no saque.
             </p>
           </div>
         </div>
@@ -892,26 +1133,28 @@ function TabFinanceiro() {
           <div>
             <p className="font-black text-neutral-900 tracking-tight">Regras de Saque</p>
             <p className="text-sm text-neutral-600 mt-1 leading-relaxed">
-              Taxa por saque: <strong className="text-neutral-900">R$ 3,50</strong>.
-              Prazo para depósito: <strong className="text-neutral-900">até 24h úteis</strong> após aprovação.
+              Taxa por saque: <strong className="text-neutral-900">R$ 3,50</strong>. Prazo para
+              depósito: <strong className="text-neutral-900">até 24h úteis</strong> após aprovação.
             </p>
           </div>
         </div>
       </div>
 
-      <div className="mt-10 flex justify-end">
-        <Button
-          onClick={handleSalvar}
-          disabled={salvando}
-          className="bg-neutral-900 text-white hover:bg-neutral-800 px-8 h-12 rounded-xl font-bold shadow-lg shadow-neutral-100"
-        >
-          {salvando
-            ? 'Salvando...'
-            : registroId
-              ? 'Atualizar dados financeiros'
-              : 'Salvar dados financeiros'}
-        </Button>
-      </div>
+      {mostrarFormularioPix && (
+        <div className="mt-10 flex justify-end">
+          <Button
+            onClick={handleSalvar}
+            disabled={salvando}
+            className="bg-neutral-900 text-white hover:bg-neutral-800 px-8 h-12 rounded-xl font-bold shadow-lg shadow-neutral-100"
+          >
+            {salvando
+              ? "Salvando..."
+              : registroId
+                ? "Atualizar dados financeiros"
+                : "Salvar dados financeiros"}
+          </Button>
+        </div>
+      )}
     </CardSecao>
   );
 }
@@ -971,10 +1214,14 @@ function TabSeguranca() {
       if (error) throw error;
       toast.success("Conta excluída. Você será desconectado.");
       await supabase.auth.signOut();
-      try { localStorage.removeItem("nox_user"); } catch {}
+      try {
+        localStorage.removeItem("nox_user");
+      } catch {}
       window.location.href = "/";
     } catch (e: any) {
-      toast.error("Não foi possível excluir sua conta agora: " + (e?.message || "erro desconhecido"));
+      toast.error(
+        "Não foi possível excluir sua conta agora: " + (e?.message || "erro desconhecido"),
+      );
       setExcluindo(false);
       setDialogAberto(false);
     }
@@ -985,7 +1232,9 @@ function TabSeguranca() {
       <CardSecao titulo="Segurança da Conta" descricao="Gerencie sua senha e acessos ativos.">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-1.5">
-            <label className="text-xs font-black uppercase tracking-widest text-neutral-500 ml-1">Senha Atual</label>
+            <label className="text-xs font-black uppercase tracking-widest text-neutral-500 ml-1">
+              Senha Atual
+            </label>
             <Input
               type="password"
               placeholder="••••••••"
@@ -996,7 +1245,9 @@ function TabSeguranca() {
           </div>
           <div />
           <div className="space-y-1.5">
-            <label className="text-xs font-black uppercase tracking-widest text-neutral-500 ml-1">Nova Senha</label>
+            <label className="text-xs font-black uppercase tracking-widest text-neutral-500 ml-1">
+              Nova Senha
+            </label>
             <Input
               type="password"
               placeholder="Mínimo 8 caracteres"
@@ -1006,7 +1257,9 @@ function TabSeguranca() {
             />
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-black uppercase tracking-widest text-neutral-500 ml-1">Confirmar Nova Senha</label>
+            <label className="text-xs font-black uppercase tracking-widest text-neutral-500 ml-1">
+              Confirmar Nova Senha
+            </label>
             <Input
               type="password"
               placeholder="Repita a nova senha"
@@ -1030,8 +1283,13 @@ function TabSeguranca() {
       <CardSecao titulo="Zona de Perigo" descricao="Ações irreversíveis na sua conta.">
         <div className="flex flex-col md:flex-row items-center justify-between gap-6 p-6 bg-red-50 border-2 border-red-100 rounded-2xl">
           <div>
-            <p className="font-black text-red-900 tracking-tight">Excluir minha conta definitivamente</p>
-            <p className="text-xs text-red-700 font-medium mt-1">Todos os seus dados, contratos e histórico de comissões serão apagados. Essa ação não pode ser desfeita.</p>
+            <p className="font-black text-red-900 tracking-tight">
+              Excluir minha conta definitivamente
+            </p>
+            <p className="text-xs text-red-700 font-medium mt-1">
+              Todos os seus dados, contratos e histórico de comissões serão apagados. Essa ação não
+              pode ser desfeita.
+            </p>
           </div>
           <Button
             variant="destructive"
@@ -1043,13 +1301,22 @@ function TabSeguranca() {
         </div>
       </CardSecao>
 
-      <AlertDialog open={dialogAberto} onOpenChange={(open) => { if (!excluindo) { setDialogAberto(open); if (!open) setConfirmacaoExclusao(""); } }}>
+      <AlertDialog
+        open={dialogAberto}
+        onOpenChange={(open) => {
+          if (!excluindo) {
+            setDialogAberto(open);
+            if (!open) setConfirmacaoExclusao("");
+          }
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir sua conta definitivamente?</AlertDialogTitle>
             <AlertDialogDescription>
               Isso vai apagar seu acesso e todos os seus dados da plataforma NOX FIANÇA de forma
-              irreversível. Para confirmar, digite <strong className="text-neutral-900">EXCLUIR</strong> no campo abaixo.
+              irreversível. Para confirmar, digite{" "}
+              <strong className="text-neutral-900">EXCLUIR</strong> no campo abaixo.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <Input
@@ -1062,7 +1329,10 @@ function TabSeguranca() {
             <AlertDialogCancel disabled={excluindo}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               disabled={confirmacaoExclusao !== "EXCLUIR" || excluindo}
-              onClick={(e) => { e.preventDefault(); handleExcluirConta(); }}
+              onClick={(e) => {
+                e.preventDefault();
+                handleExcluirConta();
+              }}
               className="bg-red-600 hover:bg-red-700"
             >
               {excluindo ? "Excluindo..." : "Excluir conta"}
@@ -1128,7 +1398,9 @@ function TabNotificacoes() {
         if (ativo) setLoading(false);
       }
     })();
-    return () => { ativo = false; };
+    return () => {
+      ativo = false;
+    };
   }, [usuario?.authId]);
 
   function toggle(campo: keyof NotifPrefs) {
@@ -1155,11 +1427,18 @@ function TabNotificacoes() {
   }
 
   if (loadingUser || loading) {
-    return <div className="p-10 text-center"><Loader2 className="animate-spin mx-auto text-neutral-300" /></div>;
+    return (
+      <div className="p-10 text-center">
+        <Loader2 className="animate-spin mx-auto text-neutral-300" />
+      </div>
+    );
   }
   if (erroUser) {
     return (
-      <CardSecao titulo="Preferências de Alerta" descricao="Não foi possível carregar suas preferências.">
+      <CardSecao
+        titulo="Preferências de Alerta"
+        descricao="Não foi possível carregar suas preferências."
+      >
         <p className="text-sm text-red-600 font-medium mb-4">{erroUser}</p>
         <Button onClick={recarregar}>Tentar novamente</Button>
       </CardSecao>
@@ -1167,7 +1446,10 @@ function TabNotificacoes() {
   }
 
   return (
-    <CardSecao titulo="Preferências de Alerta" descricao="Escolha como você quer ser notificado sobre novidades.">
+    <CardSecao
+      titulo="Preferências de Alerta"
+      descricao="Escolha como você quer ser notificado sobre novidades."
+    >
       <div className="space-y-4">
         <SwitchOpcao
           titulo="Nova comissão registrada"
@@ -1195,14 +1477,32 @@ function TabNotificacoes() {
         />
 
         <div className="pt-8 mt-4 border-t border-neutral-50">
-          <h4 className="text-xs font-black uppercase tracking-widest text-neutral-400 mb-6">Canais de Recebimento</h4>
-          <SwitchOpcao titulo="Notificação no App (Sino)" ativo={prefs.canal_app} onToggle={() => toggle("canal_app")} />
-          <SwitchOpcao titulo="E-mail Institucional" ativo={prefs.canal_email} onToggle={() => toggle("canal_email")} />
-          <SwitchOpcao titulo="WhatsApp (Alertas Críticos)" ativo={prefs.canal_whatsapp} onToggle={() => toggle("canal_whatsapp")} />
+          <h4 className="text-xs font-black uppercase tracking-widest text-neutral-400 mb-6">
+            Canais de Recebimento
+          </h4>
+          <SwitchOpcao
+            titulo="Notificação no App (Sino)"
+            ativo={prefs.canal_app}
+            onToggle={() => toggle("canal_app")}
+          />
+          <SwitchOpcao
+            titulo="E-mail Institucional"
+            ativo={prefs.canal_email}
+            onToggle={() => toggle("canal_email")}
+          />
+          <SwitchOpcao
+            titulo="WhatsApp (Alertas Críticos)"
+            ativo={prefs.canal_whatsapp}
+            onToggle={() => toggle("canal_whatsapp")}
+          />
         </div>
       </div>
       <div className="mt-10 flex justify-end">
-        <Button onClick={handleSalvar} disabled={salvando} className="bg-neutral-900 text-white hover:bg-neutral-800 px-8 h-12 rounded-xl font-bold">
+        <Button
+          onClick={handleSalvar}
+          disabled={salvando}
+          className="bg-neutral-900 text-white hover:bg-neutral-800 px-8 h-12 rounded-xl font-bold"
+        >
           {salvando ? "Salvando..." : "Salvar preferências"}
         </Button>
       </div>
@@ -1210,19 +1510,35 @@ function TabNotificacoes() {
   );
 }
 
-function SwitchOpcao({ titulo, descricao, ativo, onToggle }: { titulo: string; descricao?: string; ativo: boolean; onToggle: () => void }) {
+function SwitchOpcao({
+  titulo,
+  descricao,
+  ativo,
+  onToggle,
+}: {
+  titulo: string;
+  descricao?: string;
+  ativo: boolean;
+  onToggle: () => void;
+}) {
   return (
     <div className="flex items-center justify-between py-4 border-b border-neutral-50 last:border-b-0">
       <div>
         <p className="text-sm font-bold text-neutral-900 tracking-tight">{titulo}</p>
-        {descricao && <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest mt-1">{descricao}</p>}
+        {descricao && (
+          <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest mt-1">
+            {descricao}
+          </p>
+        )}
       </div>
       <button
         type="button"
         onClick={onToggle}
-        className={`w-12 h-6 rounded-full relative transition-all duration-300 ${ativo ? 'bg-yellow-400' : 'bg-neutral-200'}`}
+        className={`w-12 h-6 rounded-full relative transition-all duration-300 ${ativo ? "bg-yellow-400" : "bg-neutral-200"}`}
       >
-        <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-all duration-300 ${ativo ? 'left-7' : 'left-1'}`} />
+        <div
+          className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-all duration-300 ${ativo ? "left-7" : "left-1"}`}
+        />
       </button>
     </div>
   );
@@ -1256,9 +1572,21 @@ function TabComissoesNivel() {
     (async () => {
       try {
         const [niveisRes, apolicesRes, saldoRes] = await Promise.all([
-          supabase.from("niveis_perfil" as any).select("*").eq("tipo_perfil", usuario.role).eq("ativo", true).order("ordem", { ascending: true }),
-          supabase.from("apolices").select("id, status").eq(coluna as any, usuario.profileId),
-          supabase.from("saldos_comissao" as any).select("*").eq("profile_id", usuario.profileId).maybeSingle(),
+          supabase
+            .from("niveis_perfil" as any)
+            .select("*")
+            .eq("tipo_perfil", usuario.role)
+            .eq("ativo", true)
+            .order("ordem", { ascending: true }),
+          supabase
+            .from("apolices")
+            .select("id, status")
+            .eq(coluna as any, usuario.profileId),
+          supabase
+            .from("saldos_comissao" as any)
+            .select("*")
+            .eq("profile_id", usuario.profileId)
+            .maybeSingle(),
         ]);
         if (niveisRes.error) throw niveisRes.error;
         if (apolicesRes.error) throw apolicesRes.error;
@@ -1289,19 +1617,28 @@ function TabComissoesNivel() {
         if (ativo) setCarregando(false);
       }
     })();
-    return () => { ativo = false; };
+    return () => {
+      ativo = false;
+    };
   }, [usuario?.profileId, usuario?.role, coluna]);
 
-  const formatarBRL = (v: number) => (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const formatarBRL = (v: number) =>
+    (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
   if (loadingUser || carregando) {
-    return <div className="p-10 text-center"><Loader2 className="animate-spin mx-auto text-neutral-300" /></div>;
+    return (
+      <div className="p-10 text-center">
+        <Loader2 className="animate-spin mx-auto text-neutral-300" />
+      </div>
+    );
   }
 
   if (!coluna) {
     return (
       <CardSecao titulo="Plano e Nível" descricao="Regras de comissionamento por nível.">
-        <p className="text-sm text-neutral-500 font-medium">Este recurso é exclusivo para contas de corretor, imobiliária ou proprietário.</p>
+        <p className="text-sm text-neutral-500 font-medium">
+          Este recurso é exclusivo para contas de corretor, imobiliária ou proprietário.
+        </p>
       </CardSecao>
     );
   }
@@ -1326,24 +1663,36 @@ function TabComissoesNivel() {
               <Trophy size={40} strokeWidth={2.5} />
             </div>
             <div>
-              <p className="text-[10px] uppercase font-black tracking-[0.3em] text-yellow-400 mb-1">Seu Nível Atual</p>
-              <h2 className="text-4xl font-black text-white tracking-tighter uppercase">{nivelAtual?.nome_nivel || "—"}</h2>
+              <p className="text-[10px] uppercase font-black tracking-[0.3em] text-yellow-400 mb-1">
+                Seu Nível Atual
+              </p>
+              <h2 className="text-4xl font-black text-white tracking-tighter uppercase">
+                {nivelAtual?.nome_nivel || "—"}
+              </h2>
               <p className="text-sm text-neutral-400 font-bold mt-1">
-                {contratosAtivos} contrato{contratosAtivos === 1 ? "" : "s"} ativo{contratosAtivos === 1 ? "" : "s"} vinculado{contratosAtivos === 1 ? "" : "s"}
+                {contratosAtivos} contrato{contratosAtivos === 1 ? "" : "s"} ativo
+                {contratosAtivos === 1 ? "" : "s"} vinculado{contratosAtivos === 1 ? "" : "s"}
               </p>
             </div>
           </div>
           <div className="text-right">
-            <p className="text-[10px] uppercase font-black tracking-[0.3em] text-neutral-400 mb-1">Sua Comissão</p>
+            <p className="text-[10px] uppercase font-black tracking-[0.3em] text-neutral-400 mb-1">
+              Sua Comissão
+            </p>
             <p className="text-5xl font-black text-white tracking-tighter">
               {nivelAtual?.percentual_comissao != null ? `${nivelAtual.percentual_comissao}%` : "—"}
             </p>
-            <p className="text-xs text-yellow-400/80 font-bold uppercase tracking-widest mt-1">Sobre o aluguel</p>
+            <p className="text-xs text-yellow-400/80 font-bold uppercase tracking-widest mt-1">
+              Sobre o aluguel
+            </p>
           </div>
         </div>
 
         <div className="mt-10 pt-8 border-t border-white/10 flex items-center justify-between">
-          <Link to="/plano-carreira" className="text-xs font-bold text-neutral-400 hover:text-white flex items-center gap-2 transition-colors uppercase tracking-widest">
+          <Link
+            to="/plano-carreira"
+            className="text-xs font-bold text-neutral-400 hover:text-white flex items-center gap-2 transition-colors uppercase tracking-widest"
+          >
             Ver plano de carreira completo
             <ChevronRight size={14} />
           </Link>
@@ -1357,7 +1706,9 @@ function TabComissoesNivel() {
               </span>
             </div>
           ) : (
-            <span className="text-sm font-black text-yellow-400 uppercase tracking-widest">Nível máximo atingido</span>
+            <span className="text-sm font-black text-yellow-400 uppercase tracking-widest">
+              Nível máximo atingido
+            </span>
           )}
         </div>
       </div>
@@ -1365,20 +1716,35 @@ function TabComissoesNivel() {
       <CardSecao titulo="Resumo Financeiro" descricao="Sua saúde financeira na plataforma hoje.">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
           <div className="p-6 bg-neutral-50 rounded-2xl border border-neutral-100">
-            <p className="text-[10px] uppercase font-black tracking-widest text-neutral-400 mb-2">Disponível</p>
-            <p className="text-2xl font-black text-green-700">{formatarBRL(saldo.saldo_disponivel)}</p>
+            <p className="text-[10px] uppercase font-black tracking-widest text-neutral-400 mb-2">
+              Disponível
+            </p>
+            <p className="text-2xl font-black text-green-700">
+              {formatarBRL(saldo.saldo_disponivel)}
+            </p>
           </div>
           <div className="p-6 bg-neutral-50 rounded-2xl border border-neutral-100">
-            <p className="text-[10px] uppercase font-black tracking-widest text-neutral-400 mb-2">Pendente</p>
-            <p className="text-2xl font-black text-neutral-900">{formatarBRL(saldo.saldo_pendente)}</p>
+            <p className="text-[10px] uppercase font-black tracking-widest text-neutral-400 mb-2">
+              Pendente
+            </p>
+            <p className="text-2xl font-black text-neutral-900">
+              {formatarBRL(saldo.saldo_pendente)}
+            </p>
           </div>
           <div className="p-6 bg-neutral-50 rounded-2xl border border-neutral-100">
-            <p className="text-[10px] uppercase font-black tracking-widest text-neutral-400 mb-2">Total Sacado</p>
-            <p className="text-2xl font-black text-neutral-400">{formatarBRL(saldo.total_sacado)}</p>
+            <p className="text-[10px] uppercase font-black tracking-widest text-neutral-400 mb-2">
+              Total Sacado
+            </p>
+            <p className="text-2xl font-black text-neutral-400">
+              {formatarBRL(saldo.total_sacado)}
+            </p>
           </div>
         </div>
 
-        <Link to="/minhas-comissoes" className="mt-8 inline-flex items-center gap-3 text-sm font-black text-neutral-900 hover:text-yellow-600 transition-colors group">
+        <Link
+          to="/minhas-comissoes"
+          className="mt-8 inline-flex items-center gap-3 text-sm font-black text-neutral-900 hover:text-yellow-600 transition-colors group"
+        >
           Acessar histórico financeiro completo
           <ChevronRight size={16} className="transition-transform group-hover:translate-x-1" />
         </Link>

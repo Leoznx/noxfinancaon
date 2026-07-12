@@ -31,7 +31,7 @@ function CorretorPage() {
         subtitulo: 'Simule garantias, envie propostas, acompanhe contratos e receba comissões em uma plataforma feita para corretores.',
         imagem: 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?q=80&w=1400&auto=format&fit=crop',
         imagemAlt: 'Corretor atendendo cliente em escritório imobiliário',
-        personagemImagem: '/assets/nox-corretor-personagens.webp',
+        personagemImagem: '/assets/nox-corretor-personagens-chave-crop.png',
         personagemAlt: 'Personagens NOX Fiança, corretora e corretor, apresentando o app com casa e chaves',
         ctas: [
           { label: 'Criar conta de corretor', to: '/cadastro', search: { perfil: 'corretor' }, variant: 'primary' },

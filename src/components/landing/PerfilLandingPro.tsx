@@ -18,6 +18,8 @@ export type PerfilLandingProProps = {
     imagemAlt: string;
     ctas: Cta[];
     chips?: string[];
+    ocultarBadge?: boolean;
+    chipsCentralizados?: boolean;
     /** Ilustração de personagem (fundo branco/transparente) — substitui a foto em card à direita. */
     personagemImagem?: string;
     personagemAlt?: string;
@@ -85,36 +87,38 @@ export function PerfilLandingPro(props: PerfilLandingProProps) {
       <InstitutionalHeader />
       <main className="pt-20">
         {/* HERO */}
-        <section className="container mx-auto px-6 py-16 lg:py-24 max-w-7xl">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            <div className="order-2 lg:order-1 animate-in fade-in slide-in-from-left duration-700">
-              <div className="inline-flex items-center gap-2 bg-yellow-50 border border-yellow-200 rounded-full px-4 py-1.5 mb-8">
-                <BadgeIcon className="w-4 h-4 text-yellow-600" strokeWidth={2.5} />
-                <span className="text-xs font-black uppercase tracking-[0.15em] text-neutral-800">{badge.label}</span>
-              </div>
+        <section className="perfil-hero-section container mx-auto max-w-7xl px-6">
+          <div className="perfil-hero-grid grid gap-10 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] lg:items-center">
+            <div className="perfil-hero-copy order-1 animate-in fade-in slide-in-from-left duration-700">
+              {!hero.ocultarBadge && (
+                <div className="inline-flex items-center gap-2 bg-yellow-50 border border-yellow-200 rounded-full px-4 py-1.5 mb-8">
+                  <BadgeIcon className="w-4 h-4 text-yellow-600" strokeWidth={2.5} />
+                  <span className="text-xs font-black uppercase tracking-[0.15em] text-neutral-800">{badge.label}</span>
+                </div>
+              )}
               <h1 className="text-4xl lg:text-6xl font-black text-neutral-900 tracking-tighter leading-[1.05] mb-8">{hero.titulo}</h1>
               <p className="text-lg text-neutral-600 mb-10 leading-relaxed max-w-xl font-medium">{hero.subtitulo}</p>
               <div className="flex flex-col sm:flex-row gap-4">
                 {hero.ctas.map((c, i) => <CtaButton key={i} cta={c} />)}
               </div>
               {hero.chips && (
-                <div className="mt-10 flex flex-wrap gap-x-8 gap-y-3 text-sm text-neutral-500 font-medium">
+                <div className={`${hero.chipsCentralizados ? 'mt-5 justify-center text-center' : 'mt-10'} flex flex-wrap gap-x-8 gap-y-3 text-sm text-neutral-500 font-medium`}>
                   {hero.chips.map((c, i) => (
                     <span key={i} className="inline-flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-500" /> {c}</span>
                   ))}
                 </div>
               )}
             </div>
-            <div className="order-1 lg:order-2 relative animate-in fade-in slide-in-from-right duration-1000">
+            <div className="perfil-hero-visual relative order-2 min-w-0 animate-in fade-in slide-in-from-right duration-1000">
               {hero.personagemImagem ? (
-                <div className="flex w-full items-center justify-center overflow-visible lg:justify-end">
+                <div className="perfil-hero-personagem-frame">
                   <img
                     src={hero.personagemImagem}
                     alt={hero.personagemAlt ?? hero.imagemAlt}
                     loading="eager"
                     decoding="async"
                     fetchPriority="high"
-                    className="block h-auto w-full max-w-[420px] object-contain object-right sm:max-w-[520px] lg:max-w-[720px]"
+                    className="perfil-hero-personagem-img block"
                   />
                 </div>
               ) : (

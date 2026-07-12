@@ -35,8 +35,19 @@ export async function fetchDashboardStats(profileIds: string[] | null): Promise<
   try {
     let consultasQuery = supabase.from("consultas_credito").select("id, status, inquilino_id");
     if (profileIds) consultasQuery = consultasQuery.in("profile_id_solicitante", profileIds);
-    const { data: consultasData, error: consultasErr } = await consultasQuery;
+
+    let saldosQuery = supabase.from("saldos_comissao" as any).select("total_acumulado");
+    if (profileIds) saldosQuery = saldosQuery.in("profile_id", profileIds);
+
+    // consultas e saldos não dependem uma da outra — dispara as duas de uma vez
+    // em vez de esperar uma pra só depois começar a outra (era uma das 3 idas ao
+    // banco em sequência que deixavam o dashboard lento pra carregar os números).
+    const [{ data: consultasData, error: consultasErr }, { data: saldosData, error: saldosErr }] = await Promise.all([
+      consultasQuery,
+      saldosQuery,
+    ]);
     if (consultasErr) throw consultasErr;
+    if (saldosErr) throw saldosErr;
     const consultas = consultasData ?? [];
 
     const consultasPendentes = consultas.filter((c: any) => CONSULTA_STATUS_PENDENTE.includes(c.status)).length;
@@ -63,10 +74,6 @@ export async function fetchDashboardStats(profileIds: string[] | null): Promise<
       inquilinosGestao = inquilinosUnicos.size;
     }
 
-    let saldosQuery = supabase.from("saldos_comissao" as any).select("total_acumulado");
-    if (profileIds) saldosQuery = saldosQuery.in("profile_id", profileIds);
-    const { data: saldosData, error: saldosErr } = await saldosQuery;
-    if (saldosErr) throw saldosErr;
     const comissoesAcumuladas = (saldosData ?? []).reduce(
       (soma: number, s: any) => soma + (Number(s.total_acumulado) || 0),
       0,

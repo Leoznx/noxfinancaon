@@ -31,6 +31,10 @@ function ImobiliariaPage() {
         subtitulo: 'Controle corretores, consultas, contratos, faturas e garantias locatícias em um painel completo.',
         imagem: 'https://images.unsplash.com/photo-1497366216548-37526070297c?q=80&w=1400&auto=format&fit=crop',
         imagemAlt: 'Equipe de imobiliária trabalhando em escritório moderno',
+        personagemImagem: '/assets/nox-imobiliaria-personagens-crop.png',
+        personagemAlt: 'Personagens NOX Fianca apresentando painel para imobiliarias com predio e tablet',
+        ocultarBadge: true,
+        chipsCentralizados: true,
         ctas: [
           { label: 'Cadastrar imobiliária', to: '/cadastro', search: { perfil: 'imobiliaria' }, variant: 'primary' },
           { label: 'Entrar no painel', to: '/login', variant: 'secondary' },

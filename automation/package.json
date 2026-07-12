@@ -1,0 +1,22 @@
+{
+  "name": "nox-automacao-credpago",
+  "private": true,
+  "type": "module",
+  "description": "Worker de automação da CredPago da NOX Fiança — roda separado do frontend (Vercel), hospedado na VPS.",
+  "scripts": {
+    "start": "tsx credpagoWorker.ts",
+    "start:once": "tsx credpagoWorker.ts --once",
+    "export-session": "tsx exportSession.ts",
+    "install-browsers": "playwright install --with-deps chromium"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.106.1",
+    "dotenv": "^16.4.7",
+    "playwright": "^1.49.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.16.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.8.3"
+  }
+}

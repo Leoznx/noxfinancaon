@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Check, X, Shield, Zap, Scale, FileCheck, Headphones, CreditCard } from 'lucide-react';
+import { Check, X } from 'lucide-react';
 
 export const ComparativeSection = () => {
   const [activeTab, setActiveTab] = useState<'imobiliaria' | 'inquilino' | 'proprietario' | 'corretor'>('imobiliaria');
@@ -101,12 +101,12 @@ export const ComparativeSection = () => {
 
 export const BenefitsGrid = () => {
   const benefits = [
-    { icon: Shield, title: "Garantia contra inadimplência", desc: "Cobertura de até 40 vezes o valor do aluguel, com as melhores taxas do mercado nacional." },
-    { icon: Zap, title: "Aprovação em até 1 minuto", desc: "Análise de crédito automatizada com inteligência artificial e cruzamento de bases." },
-    { icon: Scale, title: "Suporte jurídico especializado", desc: "Parceria com escritórios de advocacia homologados para gestão completa de despejos." },
-    { icon: FileCheck, title: "Plataforma 100% digital", desc: "Asssignature eletrônica com validade jurídica e gestão automatizada de contratos." },
-    { icon: Headphones, title: "Atendimento dedicado", desc: "Equipe especializada de suporte a imobiliárias durante toda a jornada do contrato." },
-    { icon: CreditCard, title: "Pagamento flexível", desc: "Inquilino paga via PIX, boleto ou cartão em até 12 vezes, combinando opções." }
+    { imageIcon: "/assets/nox-icon-garantia-inadimplencia.png", title: "Garantia contra inadimplência", desc: "Cobertura de até 40 vezes o valor do aluguel, com as melhores taxas do mercado nacional." },
+    { imageIcon: "/assets/nox-icon-aprovacao-1-minuto.png", title: "Aprovação em até 1 minuto", desc: "Análise de crédito automatizada com inteligência artificial e cruzamento de bases." },
+    { imageIcon: "/assets/nox-icon-suporte-juridico.png", title: "Suporte jurídico especializado", desc: "Parceria com escritórios de advocacia homologados para gestão completa de despejos." },
+    { imageIcon: "/assets/nox-icon-plataforma-digital.png", title: "Plataforma 100% digital", desc: "Asssignature eletrônica com validade jurídica e gestão automatizada de contratos." },
+    { imageIcon: "/assets/nox-icon-atendimento-dedicado.png", title: "Atendimento dedicado", desc: "Equipe especializada de suporte a imobiliárias durante toda a jornada do contrato." },
+    { imageIcon: "/assets/nox-icon-pagamento-flexivel.png", title: "Pagamento flexível", desc: "Inquilino paga via PIX, boleto ou cartão em até 12 vezes, combinando opções." }
   ];
 
   return (
@@ -124,9 +124,20 @@ export const BenefitsGrid = () => {
               key={i}
               className="p-6 sm:p-8 rounded-xl bg-white border border-neutral-200 shadow-sm hover:shadow-md transition-shadow"
             >
-              <div className="w-14 h-14 rounded-xl bg-[#FACC15] flex items-center justify-center text-neutral-900 mb-6 p-3 hover:bg-[#EAB308] transition-colors">
-                <benefit.icon size={32} strokeWidth={2.75} color="#000000" />
-              </div>
+              {'imageIcon' in benefit ? (
+                <div className="mb-6 flex h-16 w-16 items-center justify-center">
+                  <img
+                    src={benefit.imageIcon}
+                    alt=""
+                    loading="lazy"
+                    className="h-16 w-16 object-contain drop-shadow-sm"
+                  />
+                </div>
+              ) : (
+                <div className="w-14 h-14 rounded-xl bg-[#FACC15] flex items-center justify-center text-neutral-900 mb-6 p-3 hover:bg-[#EAB308] transition-colors">
+                  <benefit.icon size={32} strokeWidth={2.75} color="#000000" />
+                </div>
+              )}
               <h3 className="text-lg sm:text-xl font-bold text-neutral-900 mb-3 sm:mb-4">{benefit.title}</h3>
               <p className="text-neutral-500 leading-relaxed text-sm">{benefit.desc}</p>
             </div>
