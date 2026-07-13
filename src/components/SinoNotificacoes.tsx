@@ -40,6 +40,8 @@ const ICONES_NOTIFICACAO: Record<string, LucideIcon> = {
   nivel_subiu: Trophy,
   contrato_aprovado: FileCheck,
   contrato_reprovado: FileX,
+  documento_aprovado: FileCheck,
+  documento_recusado: FileX,
   sistema: Megaphone,
   atualizacao: Sparkles,
 };

@@ -75,6 +75,7 @@ import { Route as ConfiguracoesNiveisComissaoRouteImport } from './routes/config
 import { Route as BlogSlugRouteImport } from './routes/blog.$slug'
 import { Route as AtivarFiancaTokenRouteImport } from './routes/ativar-fianca.$token'
 import { Route as ApolicesIdRouteImport } from './routes/apolices.$id'
+import { Route as AdminVerificacoesRouteImport } from './routes/admin.verificacoes'
 import { Route as AdminVagasRouteImport } from './routes/admin.vagas'
 import { Route as AdminUsuariosRouteImport } from './routes/admin.usuarios'
 import { Route as AdminSaquesRouteImport } from './routes/admin.saques'
@@ -446,6 +447,11 @@ const ApolicesIdRoute = ApolicesIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => ApolicesRoute,
 } as any).lazy(() => import('./routes/apolices.$id.lazy').then((d) => d.Route))
+const AdminVerificacoesRoute = AdminVerificacoesRouteImport.update({
+  id: '/admin/verificacoes',
+  path: '/admin/verificacoes',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminVagasRoute = AdminVagasRouteImport.update({
   id: '/admin/vagas',
   path: '/admin/vagas',
@@ -650,6 +656,7 @@ export interface FileRoutesByFullPath {
   '/admin/saques': typeof AdminSaquesRoute
   '/admin/usuarios': typeof AdminUsuariosRoute
   '/admin/vagas': typeof AdminVagasRoute
+  '/admin/verificacoes': typeof AdminVerificacoesRoute
   '/apolices/$id': typeof ApolicesIdRoute
   '/ativar-fianca/$token': typeof AtivarFiancaTokenRoute
   '/blog/$slug': typeof BlogSlugRoute
@@ -741,6 +748,7 @@ export interface FileRoutesByTo {
   '/admin/saques': typeof AdminSaquesRoute
   '/admin/usuarios': typeof AdminUsuariosRoute
   '/admin/vagas': typeof AdminVagasRoute
+  '/admin/verificacoes': typeof AdminVerificacoesRoute
   '/apolices/$id': typeof ApolicesIdRoute
   '/ativar-fianca/$token': typeof AtivarFiancaTokenRoute
   '/blog/$slug': typeof BlogSlugRoute
@@ -837,6 +845,7 @@ export interface FileRoutesById {
   '/admin/saques': typeof AdminSaquesRoute
   '/admin/usuarios': typeof AdminUsuariosRoute
   '/admin/vagas': typeof AdminVagasRoute
+  '/admin/verificacoes': typeof AdminVerificacoesRoute
   '/apolices/$id': typeof ApolicesIdRoute
   '/ativar-fianca/$token': typeof AtivarFiancaTokenRoute
   '/blog/$slug': typeof BlogSlugRoute
@@ -934,6 +943,7 @@ export interface FileRouteTypes {
     | '/admin/saques'
     | '/admin/usuarios'
     | '/admin/vagas'
+    | '/admin/verificacoes'
     | '/apolices/$id'
     | '/ativar-fianca/$token'
     | '/blog/$slug'
@@ -1025,6 +1035,7 @@ export interface FileRouteTypes {
     | '/admin/saques'
     | '/admin/usuarios'
     | '/admin/vagas'
+    | '/admin/verificacoes'
     | '/apolices/$id'
     | '/ativar-fianca/$token'
     | '/blog/$slug'
@@ -1120,6 +1131,7 @@ export interface FileRouteTypes {
     | '/admin/saques'
     | '/admin/usuarios'
     | '/admin/vagas'
+    | '/admin/verificacoes'
     | '/apolices/$id'
     | '/ativar-fianca/$token'
     | '/blog/$slug'
@@ -1216,6 +1228,7 @@ export interface RootRouteChildren {
   AdminSaquesRoute: typeof AdminSaquesRoute
   AdminUsuariosRoute: typeof AdminUsuariosRoute
   AdminVagasRoute: typeof AdminVagasRoute
+  AdminVerificacoesRoute: typeof AdminVerificacoesRoute
   AtivarFiancaTokenRoute: typeof AtivarFiancaTokenRoute
   BlogSlugRoute: typeof BlogSlugRoute
   FaturasInquilinosIdRoute: typeof FaturasInquilinosIdRoute
@@ -1696,6 +1709,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApolicesIdRouteImport
       parentRoute: typeof ApolicesRoute
     }
+    '/admin/verificacoes': {
+      id: '/admin/verificacoes'
+      path: '/admin/verificacoes'
+      fullPath: '/admin/verificacoes'
+      preLoaderRoute: typeof AdminVerificacoesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/vagas': {
       id: '/admin/vagas'
       path: '/admin/vagas'
@@ -2038,6 +2058,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminSaquesRoute: AdminSaquesRoute,
   AdminUsuariosRoute: AdminUsuariosRoute,
   AdminVagasRoute: AdminVagasRoute,
+  AdminVerificacoesRoute: AdminVerificacoesRoute,
   AtivarFiancaTokenRoute: AtivarFiancaTokenRoute,
   BlogSlugRoute: BlogSlugRoute,
   FaturasInquilinosIdRoute: FaturasInquilinosIdRoute,

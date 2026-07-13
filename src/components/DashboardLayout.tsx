@@ -37,6 +37,7 @@ import {
   X,
   Users2,
   Shuffle,
+  IdCard,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { SinoNotificacoes } from "./SinoNotificacoes";
@@ -83,6 +84,7 @@ const adminItems: MenuItem[] = [
     module: "dashboard_admin",
   },
   { icon: UserCheck, label: "Aprovações", href: "/admin/aprovacoes", module: "aprovacoes" },
+  { icon: IdCard, label: "Aprovações de Documentos", href: "/admin/verificacoes", module: "documentos" },
   { icon: Search, label: "Consultas", href: "/admin/consultas", module: "consultas" },
   { icon: FileText, label: "Contratos Ativos", href: "/admin/contratos", module: "contratos" },
   { icon: Users, label: "Usuários", href: "/admin/usuarios", module: "usuarios" },
