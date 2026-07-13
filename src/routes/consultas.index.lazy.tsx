@@ -305,16 +305,6 @@ function Consultas() {
                       </div>
                     </div>
                   </td>
-                  {user?.role === 'imobiliaria' && (
-                    <td className="px-6 py-6">
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full bg-neutral-100 flex items-center justify-center text-[10px] font-bold text-neutral-500">
-                          {c.solicitante?.nome?.charAt(0) || '?'}
-                        </div>
-                        <span className="text-xs font-bold text-neutral-700">{c.solicitante?.nome || '—'}</span>
-                      </div>
-                    </td>
-                  )}
                   <td className="px-6 py-6">
                     <div className="flex flex-col">
                       <div className="flex items-center gap-1.5 text-xs text-neutral-600 font-bold">
@@ -327,6 +317,16 @@ function Consultas() {
                       </div>
                     </div>
                   </td>
+                  {user?.role === 'imobiliaria' && (
+                    <td className="px-6 py-6">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full bg-neutral-100 flex items-center justify-center text-[10px] font-bold text-neutral-500">
+                          {c.solicitante?.nome?.charAt(0) || '?'}
+                        </div>
+                        <span className="text-xs font-bold text-neutral-700">{c.solicitante?.nome || '—'}</span>
+                      </div>
+                    </td>
+                  )}
                   <td className="px-6 py-6">
                     {/* Plano só aparece depois que o pagamento é confirmado — antes disso,
                         escolher um plano na tela de resultado não significa que foi comprado. */}
