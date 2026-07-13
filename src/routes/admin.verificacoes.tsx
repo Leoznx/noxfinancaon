@@ -47,6 +47,12 @@ const ROLE_LABEL: Record<string, string> = {
 
 const DOC_LABEL: Record<string, string> = { cnh: "CNH", rg: "Identidade / RG" };
 
+// O cadastro (auth-signup.functions.ts) grava verification_status "enviado"
+// direto no upload inicial; só quando a pessoa reenvia pela tela de
+// Configurações (VerificacaoDocumento.tsx) é que vira "em_analise". Os dois
+// significam a mesma coisa aqui: aguardando revisão do admin.
+const AGUARDANDO_REVISAO = ["enviado", "em_analise"];
+
 type SlotKey = "frente" | "verso" | "selfie";
 
 function VerificacoesDocumentoPage() {
@@ -104,7 +110,11 @@ function VerificacoesDocumentoPage() {
   const filtradas = useMemo(() => {
     const q = busca.trim().toLowerCase();
     return linhas.filter((v) => {
-      if (status !== "todas" && v.verification_status !== status) return false;
+      if (status === "em_analise") {
+        if (!AGUARDANDO_REVISAO.includes(v.verification_status)) return false;
+      } else if (status !== "todas" && v.verification_status !== status) {
+        return false;
+      }
       if (!q) return true;
       return (
         (v.perfil?.nome ?? "").toLowerCase().includes(q) ||
@@ -164,6 +174,24 @@ function VerificacoesDocumentoPage() {
         } as any)
         .eq("id", v.id);
       if (error) { toast.error("Erro ao aprovar: " + error.message); return; }
+
+      // Corretor/imobiliária/proprietário ficam com profiles.status =
+      // 'pendente_aprovacao' desde o cadastro (ver auth-signup.functions.ts) —
+      // sem isso, aprovar só o documento nunca libera a conta de verdade (ela
+      // continua barrada em telas que checam status === 'ativo', como
+      // "Vincular corretor"). Só mexe se ainda estiver pendente — não afeta
+      // inquilino, que já nasce 'ativo'.
+      await supabase
+        .from("profiles")
+        .update({
+          status: "ativo",
+          aprovado_em: new Date().toISOString(),
+          aprovado_por: adminId,
+          motivo_reprovacao: null,
+        } as any)
+        .eq("id", v.user_id)
+        .eq("status", "pendente_aprovacao");
+
       toast.success("Documento aprovado.");
       await notificarUsuario(v, {
         titulo: "Documento aprovado",
@@ -194,6 +222,18 @@ function VerificacoesDocumentoPage() {
         } as any)
         .eq("id", rejectingId);
       if (error) { toast.error("Erro ao reprovar: " + error.message); return; }
+
+      // Mantém profiles.status em 'pendente_aprovacao' (não vira 'ativo' nem
+      // um status novo) — a pessoa reenvia os arquivos na tela dela e volta
+      // pra fila de revisão normalmente. Só registra o motivo pra referência.
+      if (v) {
+        await supabase
+          .from("profiles")
+          .update({ motivo_reprovacao: motivo } as any)
+          .eq("id", v.user_id)
+          .eq("status", "pendente_aprovacao");
+      }
+
       toast.success("Documento recusado.");
       await notificarUsuario(v, {
         titulo: "Documento recusado",
@@ -235,7 +275,7 @@ function VerificacoesDocumentoPage() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="em_analise">Em análise</SelectItem>
+              <SelectItem value="em_analise">Aguardando revisão</SelectItem>
               <SelectItem value="aprovado">Aprovados</SelectItem>
               <SelectItem value="recusado">Recusados</SelectItem>
               <SelectItem value="pendente">Pendentes (não enviados)</SelectItem>
@@ -287,7 +327,7 @@ function VerificacoesDocumentoPage() {
                       <Button size="sm" variant="ghost" className="gap-1" onClick={() => abrirDetalhes(v)}>
                         <Eye size={14} /> Ver
                       </Button>
-                      {v.verification_status === "em_analise" && (
+                      {AGUARDANDO_REVISAO.includes(v.verification_status) && (
                         <>
                           <Button
                             size="sm"
