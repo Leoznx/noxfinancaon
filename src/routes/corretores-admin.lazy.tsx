@@ -45,6 +45,8 @@ function CorretoresAdmin() {
   const [imobiliariaId, setImobiliariaId] = useState<string | null>(null);
   const [toUnlink, setToUnlink] = useState<any | null>(null);
   const [detailOf, setDetailOf] = useState<any | null>(null);
+  const [detailApolices, setDetailApolices] = useState<any[]>([]);
+  const [loadingDetailApolices, setLoadingDetailApolices] = useState(false);
 
 
   const isImobiliaria = user?.role === "imobiliaria";
@@ -210,6 +212,46 @@ function CorretoresAdmin() {
     setToUnlink(null);
     await fetchLinkedCorretores(imobiliariaId);
   };
+
+  useEffect(() => {
+    if (!detailOf?.profile_id) {
+      setDetailApolices([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setLoadingDetailApolices(true);
+      // apolices não guarda o profile do corretor diretamente (coluna nunca
+      // preenchida) — o vínculo real é via consulta_id -> profile_id_solicitante.
+      const { data: consultasDoCorretor } = await supabase
+        .from("consultas_credito")
+        .select("id")
+        .eq("profile_id_solicitante", detailOf.profile_id);
+      const ids = (consultasDoCorretor || []).map((c: any) => c.id);
+      if (ids.length === 0) {
+        if (!cancelled) { setDetailApolices([]); setLoadingDetailApolices(false); }
+        return;
+      }
+      const { data, error } = await supabase
+        .from("apolices")
+        .select(`
+          id, numero, status, valor_premio,
+          consulta:consultas_credito(
+            inquilino:inquilinos(nome),
+            imovel:imoveis(endereco, cidade, estado)
+          )
+        `)
+        .in("consulta_id", ids)
+        .eq("status", "ativa")
+        .order("created_at", { ascending: false });
+      if (!cancelled) {
+        if (error) toast.error("Erro ao carregar contratos do corretor: " + error.message);
+        setDetailApolices(data || []);
+        setLoadingDetailApolices(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [detailOf]);
 
   return (
     <DashboardLayout>
@@ -499,6 +541,33 @@ function CorretoresAdmin() {
               <Row label="Vinculado em" value={new Date(detailOf.updated_at || detailOf.created_at).toLocaleDateString("pt-BR")} />
             </Card>
           )}
+
+          <div className="mt-5">
+            <h4 className="text-xs font-black uppercase tracking-widest text-neutral-400 mb-3">
+              Contratos ativos
+            </h4>
+            {loadingDetailApolices ? (
+              <p className="text-sm text-neutral-400 py-2">Carregando contratos...</p>
+            ) : detailApolices.length === 0 ? (
+              <p className="text-sm text-neutral-400 py-2">Nenhum contrato ativo para este corretor.</p>
+            ) : (
+              <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                {detailApolices.map((a) => (
+                  <div key={a.id} className="flex items-center justify-between gap-3 rounded-xl border border-neutral-200 bg-neutral-50 p-3">
+                    <div className="min-w-0">
+                      <p className="font-bold text-neutral-900 text-sm truncate">
+                        #{a.numero} · {a.consulta?.inquilino?.nome || "—"}
+                      </p>
+                      <p className="text-xs text-neutral-500 truncate">{a.consulta?.imovel?.endereco || ""}</p>
+                    </div>
+                    <span className="text-xs font-black text-neutral-900 shrink-0">
+                      {Number(a.valor_premio || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </DashboardLayout>

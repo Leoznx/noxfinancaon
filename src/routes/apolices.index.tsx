@@ -44,6 +44,53 @@ function ApolicesList() {
         const pid = profile?.id;
         const role = profile?.role || user.role;
 
+        // apolices.corretor_profile_id/imobiliaria_profile_id/proprietario_profile_id
+        // nunca são preenchidas pelo fluxo real de criação de apólice (ver
+        // src/lib/niveis-parceria.ts) — o vínculo de verdade é sempre
+        // apolices.consulta_id -> consultas_credito.profile_id_solicitante. Resolve
+        // os ids de consulta permitidos primeiro (mesmo padrão de
+        // consultas.index.lazy.tsx: para imobiliária, inclui a si mesma + os
+        // corretores vinculados) e só então filtra as apólices por consulta_id.
+        let consultaIdsPermitidos: string[] | null = null;
+
+        if (pid && role === "corretor") {
+          const { data: minhasConsultas } = await supabase
+            .from("consultas_credito")
+            .select("id")
+            .eq("profile_id_solicitante", pid);
+          consultaIdsPermitidos = (minhasConsultas || []).map((c: any) => c.id);
+        } else if (pid && role === "imobiliaria") {
+          const { data: imobData } = await supabase
+            .from("imobiliarias")
+            .select("id")
+            .eq("contato_email", user.email)
+            .maybeSingle();
+
+          let allowedProfileIds: string[] = [pid];
+          if (imobData?.id) {
+            const { data: corretoresData } = await supabase
+              .from("corretores")
+              .select("profile_id")
+              .eq("imobiliaria_id", imobData.id);
+            if (corretoresData) {
+              allowedProfileIds = [
+                ...allowedProfileIds,
+                ...corretoresData.map((c: any) => c.profile_id).filter(Boolean),
+              ];
+            }
+          }
+          const { data: consultasDaEquipe } = await supabase
+            .from("consultas_credito")
+            .select("id")
+            .in("profile_id_solicitante", allowedProfileIds);
+          consultaIdsPermitidos = (consultasDaEquipe || []).map((c: any) => c.id);
+        }
+
+        if (consultaIdsPermitidos && consultaIdsPermitidos.length === 0) {
+          if (!cancelled) setApolices([]);
+          return;
+        }
+
         let query = supabase
           .from("apolices")
           .select(`
@@ -51,17 +98,17 @@ function ApolicesList() {
             consulta:consultas_credito(
               inquilino:inquilinos(nome, cpf),
               imovel:imoveis(endereco, cidade, estado),
-              plano:planos(nome)
+              plano:planos(nome),
+              solicitante:profiles!profile_id_solicitante(nome)
             ),
-            imobiliaria:profiles!apolices_imobiliaria_profile_id_fkey(nome),
-            corretor:profiles!apolices_corretor_profile_id_fkey(nome)
+            imobiliaria:profiles!apolices_imobiliaria_profile_id_fkey(nome)
           `)
           .order("created_at", { ascending: false });
 
-        if (pid) {
-          if (role === "corretor") query = query.eq("corretor_profile_id", pid);
-          else if (role === "imobiliaria") query = query.eq("imobiliaria_profile_id", pid);
-          else if (role === "proprietario") query = query.eq("proprietario_profile_id", pid);
+        if (consultaIdsPermitidos) {
+          query = query.in("consulta_id", consultaIdsPermitidos);
+        } else if (pid && role === "proprietario") {
+          query = query.eq("proprietario_profile_id", pid);
         }
 
         const { data, error } = await query;
@@ -83,7 +130,8 @@ function ApolicesList() {
       !q ||
       a.numero?.toLowerCase().includes(q) ||
       a.consulta?.inquilino?.nome?.toLowerCase().includes(q) ||
-      a.imobiliaria?.nome?.toLowerCase().includes(q)
+      a.imobiliaria?.nome?.toLowerCase().includes(q) ||
+      a.consulta?.solicitante?.nome?.toLowerCase().includes(q)
     );
   });
 
@@ -129,7 +177,7 @@ function ApolicesList() {
               <tr>
                 <th className="px-6 py-5">Nº Apólice</th>
                 <th className="px-6 py-5">Inquilino</th>
-                <th className="px-6 py-5">Imobiliária</th>
+                <th className="px-6 py-5">{user?.role === "imobiliaria" ? "Corretor" : "Imobiliária"}</th>
                 <th className="px-6 py-5">Vigência</th>
                 <th className="px-6 py-5 text-right">Prêmio</th>
                 <th className="px-6 py-5 text-center">Status</th>
@@ -160,7 +208,9 @@ function ApolicesList() {
                     <p className="font-bold text-neutral-900 text-sm">{a.consulta?.inquilino?.nome || '—'}</p>
                     <p className="text-xs text-neutral-500">{a.consulta?.imovel?.endereco || ''}</p>
                   </td>
-                  <td className="px-6 py-5 text-sm text-neutral-600">{a.imobiliaria?.nome || 'Autônomo'}</td>
+                  <td className="px-6 py-5 text-sm text-neutral-600">
+                    {user?.role === "imobiliaria" ? (a.consulta?.solicitante?.nome || '—') : (a.imobiliaria?.nome || 'Autônomo')}
+                  </td>
                   <td className="px-6 py-5 text-sm text-neutral-600">
                     {formatDate(a.vigencia_inicio)} <span className="text-neutral-300">→</span> {formatDate(a.vigencia_fim)}
                   </td>
