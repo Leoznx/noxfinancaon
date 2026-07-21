@@ -53,7 +53,7 @@ function SimularResultado() {
       localStorage.removeItem('nox_simulacao_pendente');
       navigate({ to: '/simular' });
     }
-  }, []);
+  }, [navigate]);
 
   const handleSelecionarPlano = async (planoId: string, extras?: import("@/components/simulacao/SeletorPlanos").ExtrasSelecionados) => {
     if (!dados || !user?.email) return;

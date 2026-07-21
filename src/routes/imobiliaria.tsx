@@ -36,7 +36,7 @@ function ImobiliariaPage() {
         ocultarBadge: true,
         chipsCentralizados: true,
         ctas: [
-          { label: 'Cadastrar imobiliária', to: '/cadastro', search: { perfil: 'imobiliaria' }, variant: 'primary' },
+          { label: 'Cadastrar imobiliária', to: '/cadastro-imobiliaria', variant: 'primary' },
           { label: 'Entrar no painel', to: '/login', variant: 'secondary' },
         ],
         chips: ['Equipe centralizada', 'Faturamento organizado', 'Mais controle financeiro'],
@@ -98,7 +98,7 @@ function ImobiliariaPage() {
         titulo: 'Leve sua imobiliária para uma gestão digital de garantias',
         subtitulo: 'Cadastre sua imobiliária e centralize corretores, contratos e faturamento em um só painel.',
         ctas: [
-          { label: 'Cadastrar imobiliária', to: '/cadastro', search: { perfil: 'imobiliaria' }, variant: 'primary' },
+          { label: 'Cadastrar imobiliária', to: '/cadastro-imobiliaria', variant: 'primary' },
           { label: 'Entrar no painel', to: '/login', variant: 'secondary' },
         ],
       }}

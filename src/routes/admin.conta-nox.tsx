@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -90,7 +90,7 @@ function ContaNoxPage() {
     null,
   );
 
-  const carregar = async () => {
+  const carregar = useCallback(async () => {
     setLoading(true);
     try {
       const result = await listFn({ data: {} });
@@ -100,11 +100,11 @@ function ContaNoxPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [listFn]);
 
   useEffect(() => {
     carregar();
-  }, []);
+  }, [carregar]);
 
   const copiarLink = async (role: NoxInternalRole) => {
     try {

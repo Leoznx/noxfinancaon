@@ -11,7 +11,7 @@ const salvarConfigSchema = z.object({
 
 export const salvarConfiguracaoSeguro = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => salvarConfigSchema.parse(d))
+  .validator((d: unknown) => salvarConfigSchema.parse(d))
   .handler(async ({ data, context }) => {
     const { error } = await context.supabase
       .from("consultas_credito")
@@ -35,7 +35,7 @@ const salvarPagamentoSchema = z.object({
 
 export const salvarFormaPagamento = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => salvarPagamentoSchema.parse(d))
+  .validator((d: unknown) => salvarPagamentoSchema.parse(d))
   .handler(async ({ data, context }) => {
     if (!data.property_not_wood_confirmed) throw new Error("Confirme que o imóvel não é de madeira para continuar.");
     if (!data.terms_accepted) throw new Error("Aceite os Termos e Condições para continuar.");
@@ -67,7 +67,7 @@ const enviarPropostaSchema = z.object({ consultaId: z.string().uuid() });
 
 export const enviarProposta = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => enviarPropostaSchema.parse(d))
+  .validator((d: unknown) => enviarPropostaSchema.parse(d))
   .handler(async ({ data, context }) => {
     const now = new Date().toISOString();
     // Gera token único e validade de 30 dias
@@ -114,7 +114,7 @@ export const enviarProposta = createServerFn({ method: "POST" })
 
 export const listarHistoricoProposta = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => z.object({ consultaId: z.string().uuid() }).parse(d))
+  .validator((d: unknown) => z.object({ consultaId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { data: hist, error } = await context.supabase
       .from("proposta_historico")

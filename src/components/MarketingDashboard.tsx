@@ -106,7 +106,7 @@ export function MarketingDashboard() {
       clearInterval(interval);
       supabase.removeChannel(ch);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, []);
 
   const stats = useMemo(() => {

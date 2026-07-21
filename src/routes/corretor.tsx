@@ -34,7 +34,7 @@ function CorretorPage() {
         personagemImagem: '/assets/nox-corretor-personagens-chave-crop.png',
         personagemAlt: 'Personagens NOX Fiança, corretora e corretor, apresentando o app com casa e chaves',
         ctas: [
-          { label: 'Criar conta de corretor', to: '/cadastro', search: { perfil: 'corretor' }, variant: 'primary' },
+          { label: 'Criar conta de corretor', to: '/cadastro-corretor', variant: 'primary' },
           { label: 'Entrar no painel', to: '/login', variant: 'secondary' },
         ],
         chips: ['Aprovação rápida', 'Comissão por contrato', 'Plano de carreira'],
@@ -95,7 +95,7 @@ function CorretorPage() {
         titulo: 'Comece a vender garantia locatícia com a NOX',
         subtitulo: 'Crie sua conta de corretor e tenha aprovação rápida, comissões transparentes e plano de carreira.',
         ctas: [
-          { label: 'Criar conta de corretor', to: '/cadastro', search: { perfil: 'corretor' }, variant: 'primary' },
+          { label: 'Criar conta de corretor', to: '/cadastro-corretor', variant: 'primary' },
           { label: 'Entrar no painel', to: '/login', variant: 'secondary' },
         ],
       }}

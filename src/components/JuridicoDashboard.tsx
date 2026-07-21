@@ -77,7 +77,7 @@ export function JuridicoDashboard() {
       clearInterval(interval);
       supabase.removeChannel(channel);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, []);
 
   const stats = useMemo(() => {

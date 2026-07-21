@@ -304,7 +304,7 @@ export function SeletorPlanos({
       const totalAnual = mensal * 12;
       const aVista = totalAnual * 0.90;
       return { ...plano, mensal, totalAnual, aVista, baseCalculo };
-    }).filter((p): p is Plano & PlanoSelecionadoCalculo => p !== null);
+    }).filter((p): p is NonNullable<typeof p> => p !== null);
   }, [valores, todosPlanos, comissaoSelecionada]);
 
   const planoSelecionado = useMemo(

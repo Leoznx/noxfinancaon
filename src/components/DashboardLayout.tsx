@@ -278,7 +278,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const isImobiliaria = user?.role === "imobiliaria";
   const isProprietario = user?.role === "proprietario";
   const isInquilino = user?.role === "inquilino";
-  const isAnalista = user?.role === "analista" || user?.internalRole === "analista";
+  const isAnalista = user?.role === "analista";
 
   const temCardNivel = isCorretor || isImobiliaria || isProprietario;
   const [nivelInfo, setNivelInfo] = useState<NivelInfo | null | undefined>(
@@ -514,7 +514,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         <div className="p-4 sm:p-6 lg:p-10 flex-1 overflow-x-hidden">{children}</div>
 
         <footer className="p-6 sm:p-8 text-center text-xs text-neutral-400 border-t border-neutral-100 font-medium bg-white">
-          © 2025 NOX FIANÇA - Plataforma Institucional de Seguro Fiança Locatícia
+          © {new Date().getFullYear()} NOX FIANÇA - Plataforma Institucional de Seguro Fiança Locatícia
         </footer>
       </main>
     </div>

@@ -75,7 +75,7 @@ function mensagemSeguraParaErro(err: unknown): string {
 
 export const criarPagamentoCakto = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => criarPagamentoSchema.parse(d))
+  .validator((d: unknown) => criarPagamentoSchema.parse(d))
   .handler(async ({ data, context }) => {
     const docNumber = normalizeDocumento(data.customer.docNumber);
     const phone = formatarTelefoneCakto(data.customer.phone);

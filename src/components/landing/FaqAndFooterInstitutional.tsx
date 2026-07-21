@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Minus, Instagram, Linkedin, Youtube } from 'lucide-react';
+import { Plus, Minus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { LogoNox } from '../LogoNox';
 import { Link } from '@tanstack/react-router';
@@ -90,7 +90,6 @@ export const InstitutionalFooter = ({ hideCta = false }: { hideCta?: boolean } =
             <p className="text-neutral-400 text-sm leading-relaxed">
               A NOX é especialista em seguro fiança e soluções tecnológicas para o mercado imobiliário brasileiro, trazendo segurança e agilidade para inquilinos e proprietários.
             </p>
-            <p className="text-neutral-500 text-xs font-medium">CNPJ: 00.000.000/0001-00</p>
           </div>
           
           <div>
@@ -117,25 +116,18 @@ export const InstitutionalFooter = ({ hideCta = false }: { hideCta?: boolean } =
             <div>
               <h4 className="text-white font-bold text-sm mb-6 sm:mb-8 tracking-wider uppercase">Contato</h4>
               <ul className="space-y-4 text-neutral-400 text-sm font-medium">
-                <li>0800 000 0000</li>
                 <li className="break-all">contato@noxfianca.com.br</li>
                 <li className="pt-2 text-neutral-500 font-normal">Atendimento: seg a sex, 9h às 18h</li>
               </ul>
-            </div>
-            <div className="flex gap-5">
-              {[Instagram, Linkedin, Youtube].map((Icon, i) => (
-                <Icon key={i} size={20} strokeWidth={1.5} className="text-neutral-500 hover:text-white transition-colors cursor-pointer" />
-              ))}
             </div>
           </div>
         </div>
         
         <div className="pt-10 sm:pt-12 border-t border-neutral-800 flex flex-col md:flex-row justify-between items-center gap-6 sm:gap-8 text-center md:text-left">
-          <p className="text-xs text-neutral-500">© 2025 NOX FIANÇA. Todos os direitos reservados.</p>
+          <p className="text-xs text-neutral-500">© {new Date().getFullYear()} NOX FIANÇA. Todos os direitos reservados.</p>
           <div className="flex flex-wrap justify-center gap-6 sm:gap-8 text-xs text-neutral-500 font-bold uppercase tracking-widest">
-            <a href="#" className="hover:text-white transition-colors">Privacidade</a>
-            <a href="#" className="hover:text-white transition-colors">Termos</a>
-            <a href="#" className="hover:text-white transition-colors">Cookies</a>
+            <Link to="/privacidade" className="hover:text-white transition-colors">Privacidade</Link>
+            <Link to="/termos" className="hover:text-white transition-colors">Termos</Link>
           </div>
         </div>
       </div>

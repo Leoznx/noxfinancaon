@@ -42,6 +42,10 @@ import { Route as ConsultaRapidaRouteImport } from './routes/consulta-rapida'
 import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
 import { Route as CarteiraCobrancasRouteImport } from './routes/carteira-cobrancas'
 import { Route as CarreirasRouteImport } from './routes/carreiras'
+import { Route as CadastroProprietarioRouteImport } from './routes/cadastro-proprietario'
+import { Route as CadastroInquilinoRouteImport } from './routes/cadastro-inquilino'
+import { Route as CadastroImobiliariaRouteImport } from './routes/cadastro-imobiliaria'
+import { Route as CadastroCorretorRouteImport } from './routes/cadastro-corretor'
 import { Route as CadastroRouteImport } from './routes/cadastro'
 import { Route as ApolicesRouteImport } from './routes/apolices'
 import { Route as IndexRouteImport } from './routes/index'
@@ -271,6 +275,26 @@ const CarteiraCobrancasRoute = CarteiraCobrancasRouteImport.update({
 const CarreirasRoute = CarreirasRouteImport.update({
   id: '/carreiras',
   path: '/carreiras',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CadastroProprietarioRoute = CadastroProprietarioRouteImport.update({
+  id: '/cadastro-proprietario',
+  path: '/cadastro-proprietario',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CadastroInquilinoRoute = CadastroInquilinoRouteImport.update({
+  id: '/cadastro-inquilino',
+  path: '/cadastro-inquilino',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CadastroImobiliariaRoute = CadastroImobiliariaRouteImport.update({
+  id: '/cadastro-imobiliaria',
+  path: '/cadastro-imobiliaria',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CadastroCorretorRoute = CadastroCorretorRouteImport.update({
+  id: '/cadastro-corretor',
+  path: '/cadastro-corretor',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CadastroRoute = CadastroRouteImport.update({
@@ -601,6 +625,10 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/apolices': typeof ApolicesRouteWithChildren
   '/cadastro': typeof CadastroRoute
+  '/cadastro-corretor': typeof CadastroCorretorRoute
+  '/cadastro-imobiliaria': typeof CadastroImobiliariaRoute
+  '/cadastro-inquilino': typeof CadastroInquilinoRoute
+  '/cadastro-proprietario': typeof CadastroProprietarioRoute
   '/carreiras': typeof CarreirasRoute
   '/carteira-cobrancas': typeof CarteiraCobrancasRoute
   '/configuracoes': typeof ConfiguracoesRouteWithChildren
@@ -696,6 +724,10 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/cadastro': typeof CadastroRoute
+  '/cadastro-corretor': typeof CadastroCorretorRoute
+  '/cadastro-imobiliaria': typeof CadastroImobiliariaRoute
+  '/cadastro-inquilino': typeof CadastroInquilinoRoute
+  '/cadastro-proprietario': typeof CadastroProprietarioRoute
   '/carreiras': typeof CarreirasRoute
   '/carteira-cobrancas': typeof CarteiraCobrancasRoute
   '/configuracoes': typeof ConfiguracoesRouteWithChildren
@@ -790,6 +822,10 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/apolices': typeof ApolicesRouteWithChildren
   '/cadastro': typeof CadastroRoute
+  '/cadastro-corretor': typeof CadastroCorretorRoute
+  '/cadastro-imobiliaria': typeof CadastroImobiliariaRoute
+  '/cadastro-inquilino': typeof CadastroInquilinoRoute
+  '/cadastro-proprietario': typeof CadastroProprietarioRoute
   '/carreiras': typeof CarreirasRoute
   '/carteira-cobrancas': typeof CarteiraCobrancasRoute
   '/configuracoes': typeof ConfiguracoesRouteWithChildren
@@ -888,6 +924,10 @@ export interface FileRouteTypes {
     | '/'
     | '/apolices'
     | '/cadastro'
+    | '/cadastro-corretor'
+    | '/cadastro-imobiliaria'
+    | '/cadastro-inquilino'
+    | '/cadastro-proprietario'
     | '/carreiras'
     | '/carteira-cobrancas'
     | '/configuracoes'
@@ -983,6 +1023,10 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/cadastro'
+    | '/cadastro-corretor'
+    | '/cadastro-imobiliaria'
+    | '/cadastro-inquilino'
+    | '/cadastro-proprietario'
     | '/carreiras'
     | '/carteira-cobrancas'
     | '/configuracoes'
@@ -1076,6 +1120,10 @@ export interface FileRouteTypes {
     | '/'
     | '/apolices'
     | '/cadastro'
+    | '/cadastro-corretor'
+    | '/cadastro-imobiliaria'
+    | '/cadastro-inquilino'
+    | '/cadastro-proprietario'
     | '/carreiras'
     | '/carteira-cobrancas'
     | '/configuracoes'
@@ -1173,6 +1221,10 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApolicesRoute: typeof ApolicesRouteWithChildren
   CadastroRoute: typeof CadastroRoute
+  CadastroCorretorRoute: typeof CadastroCorretorRoute
+  CadastroImobiliariaRoute: typeof CadastroImobiliariaRoute
+  CadastroInquilinoRoute: typeof CadastroInquilinoRoute
+  CadastroProprietarioRoute: typeof CadastroProprietarioRoute
   CarreirasRoute: typeof CarreirasRoute
   CarteiraCobrancasRoute: typeof CarteiraCobrancasRoute
   ConfiguracoesRoute: typeof ConfiguracoesRouteWithChildren
@@ -1476,6 +1528,34 @@ declare module '@tanstack/react-router' {
       path: '/carreiras'
       fullPath: '/carreiras'
       preLoaderRoute: typeof CarreirasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cadastro-proprietario': {
+      id: '/cadastro-proprietario'
+      path: '/cadastro-proprietario'
+      fullPath: '/cadastro-proprietario'
+      preLoaderRoute: typeof CadastroProprietarioRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cadastro-inquilino': {
+      id: '/cadastro-inquilino'
+      path: '/cadastro-inquilino'
+      fullPath: '/cadastro-inquilino'
+      preLoaderRoute: typeof CadastroInquilinoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cadastro-imobiliaria': {
+      id: '/cadastro-imobiliaria'
+      path: '/cadastro-imobiliaria'
+      fullPath: '/cadastro-imobiliaria'
+      preLoaderRoute: typeof CadastroImobiliariaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cadastro-corretor': {
+      id: '/cadastro-corretor'
+      path: '/cadastro-corretor'
+      fullPath: '/cadastro-corretor'
+      preLoaderRoute: typeof CadastroCorretorRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/cadastro': {
@@ -2003,6 +2083,10 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApolicesRoute: ApolicesRouteWithChildren,
   CadastroRoute: CadastroRoute,
+  CadastroCorretorRoute: CadastroCorretorRoute,
+  CadastroImobiliariaRoute: CadastroImobiliariaRoute,
+  CadastroInquilinoRoute: CadastroInquilinoRoute,
+  CadastroProprietarioRoute: CadastroProprietarioRoute,
   CarreirasRoute: CarreirasRoute,
   CarteiraCobrancasRoute: CarteiraCobrancasRoute,
   ConfiguracoesRoute: ConfiguracoesRouteWithChildren,

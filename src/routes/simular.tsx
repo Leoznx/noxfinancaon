@@ -26,7 +26,7 @@ function SimularLayout() {
       </main>
 
       <footer className="py-8 text-center text-xs text-neutral-400">
-        © 2025 NOX FIANÇA - Todos os direitos reservados.
+        © {new Date().getFullYear()} NOX FIANÇA - Todos os direitos reservados.
       </footer>
     </div>
   );

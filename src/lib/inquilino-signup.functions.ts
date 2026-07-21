@@ -68,7 +68,7 @@ export async function linkTenantRecordsByCpf(
  */
 export const linkTenantByCpf = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => linkSchema.parse(data))
+  .validator((data: unknown) => linkSchema.parse(data))
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const cpfNorm = data.cpf.replace(/\D/g, "");
@@ -85,7 +85,7 @@ const checkSchema = z.object({
  * Público (sem auth) — usado antes do signup.
  */
 export const checkInquilinoExists = createServerFn({ method: "POST" })
-  .inputValidator((data: unknown) => checkSchema.parse(data))
+  .validator((data: unknown) => checkSchema.parse(data))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const emailLower = data.email.toLowerCase().trim();

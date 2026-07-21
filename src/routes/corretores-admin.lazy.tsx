@@ -1,7 +1,7 @@
 import { createLazyFileRoute } from "@tanstack/react-router";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -51,13 +51,28 @@ function CorretoresAdmin() {
 
   const isImobiliaria = user?.role === "imobiliaria";
 
-  useEffect(() => {
-    if (!user) return;
-    if (isImobiliaria) resolveImobiliariaId();
-    else fetchAllCorretores();
-  }, [user]);
+  const fetchLinkedCorretores = useCallback(async (imobId: string) => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("corretores")
+      .select("*, profiles:profile_id (nome, email, telefone, status)")
+      .eq("imobiliaria_id", imobId);
+    if (error) toast.error("Erro ao carregar corretores: " + error.message);
+    setCorretores(data || []);
+    setLoading(false);
+  }, []);
 
-  const resolveImobiliariaId = async () => {
+  const fetchAllCorretores = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("corretores")
+      .select("*, profiles:profile_id (nome, email, telefone, status)");
+    if (error) toast.error("Erro ao carregar corretores: " + error.message);
+    setCorretores(data || []);
+    setLoading(false);
+  }, []);
+
+  const resolveImobiliariaId = useCallback(async () => {
     setLoading(true);
     const userEmail = user?.email;
     if (!userEmail) {
@@ -75,28 +90,13 @@ function CorretoresAdmin() {
     } else {
       setLoading(false);
     }
-  };
+  }, [user?.email, fetchLinkedCorretores]);
 
-  const fetchLinkedCorretores = async (imobId: string) => {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from("corretores")
-      .select("*, profiles:profile_id (nome, email, telefone, status)")
-      .eq("imobiliaria_id", imobId);
-    if (error) toast.error("Erro ao carregar corretores: " + error.message);
-    setCorretores(data || []);
-    setLoading(false);
-  };
-
-  const fetchAllCorretores = async () => {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from("corretores")
-      .select("*, profiles:profile_id (nome, email, telefone, status)");
-    if (error) toast.error("Erro ao carregar corretores: " + error.message);
-    setCorretores(data || []);
-    setLoading(false);
-  };
+  useEffect(() => {
+    if (!user) return;
+    if (isImobiliaria) resolveImobiliariaId();
+    else fetchAllCorretores();
+  }, [user, isImobiliaria, resolveImobiliariaId, fetchAllCorretores]);
 
   const resetModal = () => {
     setSearchInput("");

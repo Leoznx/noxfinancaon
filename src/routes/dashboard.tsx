@@ -35,32 +35,6 @@ function Dashboard() {
   const isProprietario = user?.role === "proprietario";
   const isAdmin = (user?.role === "admin" || user?.role === "analista") && !isJuridico && !isFinanceiro && !isMarketing;
 
-  if (isJuridico) {
-    return (
-      <DashboardLayout>
-        <JuridicoDashboard />
-      </DashboardLayout>
-    );
-  }
-
-  if (isFinanceiro) {
-    return (
-      <DashboardLayout>
-        <FinanceiroDashboard />
-      </DashboardLayout>
-    );
-  }
-
-  if (isMarketing) {
-    return (
-      <DashboardLayout>
-        <MarketingDashboard />
-      </DashboardLayout>
-    );
-  }
-
-
-
   const [consultasRecentes, setConsultasRecentes] = useState<any[]>([]);
   const [loadingConsultas, setLoadingConsultas] = useState(true);
   const [nivelInfo, setNivelInfo] = useState<NivelInfo | null>(null);
@@ -74,7 +48,10 @@ function Dashboard() {
   // o roundtrip que existia aqui só pra buscar de novo o que já estava em mãos (era o
   // maior gargalo do "demora pra carregar" do dashboard).
   const carregarDados = useCallback(async () => {
-    if (!user?.id) { setLoadingConsultas(false); return; }
+    if (!user?.id || isJuridico || isFinanceiro || isMarketing) {
+      setLoadingConsultas(false);
+      return;
+    }
     try {
       if (isCorretor || isImobiliaria) {
         fetchNivelInfo(user.id, user.role).then(setNivelInfo).catch(() => setNivelInfo(null));
@@ -113,7 +90,17 @@ function Dashboard() {
     } finally {
       setLoadingConsultas(false);
     }
-  }, [user?.id, user?.email, user?.role, isAdmin, isImobiliaria, isCorretor]);
+  }, [
+    user?.id,
+    user?.email,
+    user?.role,
+    isAdmin,
+    isImobiliaria,
+    isCorretor,
+    isJuridico,
+    isFinanceiro,
+    isMarketing,
+  ]);
 
   useEffect(() => {
     carregarDados();
@@ -130,6 +117,30 @@ function Dashboard() {
       window.removeEventListener('focus', carregarDados);
     };
   }, [carregarDados]);
+
+  if (isJuridico) {
+    return (
+      <DashboardLayout>
+        <JuridicoDashboard />
+      </DashboardLayout>
+    );
+  }
+
+  if (isFinanceiro) {
+    return (
+      <DashboardLayout>
+        <FinanceiroDashboard />
+      </DashboardLayout>
+    );
+  }
+
+  if (isMarketing) {
+    return (
+      <DashboardLayout>
+        <MarketingDashboard />
+      </DashboardLayout>
+    );
+  }
 
   const nivelCardInfo = nivelInfo?.nivelAtual
     ? {

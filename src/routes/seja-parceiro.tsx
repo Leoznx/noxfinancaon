@@ -27,7 +27,9 @@ import {
 } from "lucide-react";
 
 export const Route = createFileRoute("/seja-parceiro")({
-  validateSearch: (s: Record<string, unknown>) => ({ ref: typeof s.ref === "string" ? s.ref.slice(0, 60) : "" }),
+  validateSearch: (s: Record<string, unknown>): { ref?: string } => ({
+    ref: typeof s.ref === "string" && s.ref ? s.ref.slice(0, 60) : undefined,
+  }),
 
   head: () => ({
     meta: [

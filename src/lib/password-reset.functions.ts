@@ -1,10 +1,20 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { sendPasswordResetEmail } from "@/lib/resend.service";
+import { buildAuthEmailCallbackUrl } from "@/lib/auth-email-links";
 
-function buildResetRedirectTo() {
-  const base = (process.env.APP_URL || "https://noxfianca.com").replace(/\/$/, "");
-  return `${base}/redefinir-senha`;
+function buildResetLink(properties: { hashed_token: string; verification_type: string }) {
+  const appUrl =
+    process.env.APP_URL ||
+    process.env.APP_BASE_URL ||
+    process.env.FRONTEND_URL ||
+    "https://noxfianca.com";
+  return buildAuthEmailCallbackUrl({
+    appUrl,
+    path: "/redefinir-senha",
+    tokenHash: properties.hashed_token,
+    type: properties.verification_type,
+  });
 }
 
 const requestSchema = z.object({
@@ -18,7 +28,7 @@ const requestSchema = z.object({
  * revela se o e-mail existe na base, evitando enumeração de contas.
  */
 export const requestPasswordReset = createServerFn({ method: "POST" })
-  .inputValidator((data: unknown) => requestSchema.parse(data))
+  .validator((data: unknown) => requestSchema.parse(data))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const emailLower = data.email.toLowerCase().trim();
@@ -34,9 +44,8 @@ export const requestPasswordReset = createServerFn({ method: "POST" })
       const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
         type: "recovery",
         email: emailLower,
-        options: { redirectTo: buildResetRedirectTo() },
       });
-      if (linkError || !linkData?.properties?.action_link) {
+      if (linkError || !linkData?.properties?.hashed_token) {
         console.error("[requestPasswordReset] falha ao gerar link de recuperação:", linkError);
         return { ok: true as const };
       }
@@ -44,7 +53,7 @@ export const requestPasswordReset = createServerFn({ method: "POST" })
       await sendPasswordResetEmail({
         email: emailLower,
         nome: (profile as any).nome || "cliente",
-        resetLink: linkData.properties.action_link,
+        resetLink: buildResetLink(linkData.properties),
       });
     } catch (e) {
       console.error("[requestPasswordReset] erro inesperado:", e);

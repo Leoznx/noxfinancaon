@@ -36,7 +36,7 @@ function InquilinoLanding() {
         personagemImagem: '/assets/nox-inquilino-personagens.png',
         personagemAlt: 'Personagens NOX Fianca apresentando o app do inquilino com faturas, casa e chaves',
         ctas: [
-          { label: 'Criar acesso de inquilino', to: '/cadastro', search: { perfil: 'inquilino' }, variant: 'primary' },
+          { label: 'Criar acesso de inquilino', to: '/cadastro-inquilino', variant: 'primary' },
           { label: 'Entrar no painel', to: '/login', variant: 'secondary' },
         ],
         chips: ['Acesso pelo CPF', 'Documentos online', 'Faturas e boletos'],
@@ -95,7 +95,7 @@ function InquilinoLanding() {
         titulo: 'Crie seu acesso e acompanhe tudo em um só lugar',
         subtitulo: 'Tenha visão completa de seguros ativos, documentos, faturas e boletos vinculados ao seu CPF.',
         ctas: [
-          { label: 'Criar acesso de inquilino', to: '/cadastro', search: { perfil: 'inquilino' }, variant: 'primary' },
+          { label: 'Criar acesso de inquilino', to: '/cadastro-inquilino', variant: 'primary' },
           { label: 'Entrar no painel', to: '/login', variant: 'secondary' },
         ],
       }}
