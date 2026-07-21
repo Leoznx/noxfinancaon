@@ -210,7 +210,7 @@ function RecuperarAcesso() {
       </Card>
 
       <p className="mt-10 text-[10px] text-neutral-400 font-medium uppercase tracking-[0.2em]">
-        © 2025 NOX FIANÇA - Todos os direitos reservados.
+        © {new Date().getFullYear()} NOX FIANÇA - Todos os direitos reservados.
       </p>
     </div>
   );

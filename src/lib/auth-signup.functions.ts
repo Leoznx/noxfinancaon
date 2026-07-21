@@ -3,10 +3,20 @@ import { z } from "zod";
 import { sendVerificationEmail } from "@/lib/resend.service";
 import { linkTenantRecordsByCpf } from "@/lib/inquilino-signup.functions";
 import { defaultAvatarForName } from "@/lib/gender-avatar";
+import { buildAuthEmailCallbackUrl } from "@/lib/auth-email-links";
 
-function buildRedirectTo() {
-  const base = (process.env.APP_URL || "https://noxfianca.com").replace(/\/$/, "");
-  return `${base}/email-verificado`;
+function buildVerificationLink(properties: { hashed_token: string; verification_type: string }) {
+  const appUrl =
+    process.env.APP_URL ||
+    process.env.APP_BASE_URL ||
+    process.env.FRONTEND_URL ||
+    "https://noxfianca.com";
+  return buildAuthEmailCallbackUrl({
+    appUrl,
+    path: "/email-verificado",
+    tokenHash: properties.hashed_token,
+    type: properties.verification_type,
+  });
 }
 
 async function emailAlreadyRegistered(supabaseAdmin: any, email: string) {
@@ -23,52 +33,25 @@ function isAlreadyRegisteredError(message: string | undefined) {
 }
 
 // ============================================================================
-// Documento de identidade (frente, verso e foto segurando o documento) —
-// enviado já no cadastro, gravado via supabaseAdmin (service role) porque
-// ainda não existe sessão (e-mail não confirmado). Mesma tabela/bucket que
-// VerificacaoDocumento usa em Configurações > Conta, então o usuário pode
-// revisar/reenviar depois por lá.
-const documentoSchema = z.object({
-  tipo: z.enum(["rg", "cnh"]),
-  frenteBase64: z.string().min(100),
-  versoBase64: z.string().min(100),
-  segurandoBase64: z.string().min(100),
-});
+// Lista pública controlada para o cadastro de corretores. A consulta usa o
+// servidor porque o visitante ainda não possui sessão e recebe somente os dois
+// campos necessários para escolher a empresa.
+export const listarImobiliariasCadastro = createServerFn({ method: "GET" }).handler(async () => {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data, error } = await supabaseAdmin
+    .from("imobiliarias")
+    .select("id, razao_social")
+    .order("razao_social", { ascending: true });
 
-async function uploadIdentityDocuments(
-  supabaseAdmin: any,
-  userId: string,
-  documento: z.infer<typeof documentoSchema>,
-) {
-  const slots: Array<["frente" | "verso" | "segurando", string]> = [
-    ["frente", documento.frenteBase64],
-    ["verso", documento.versoBase64],
-    ["segurando", documento.segurandoBase64],
-  ];
-  const paths: Record<string, string> = {};
-  for (const [slot, base64] of slots) {
-    const bytes = Buffer.from(base64, "base64");
-    const path = `${userId}/${slot}-${Date.now()}.jpg`;
-    const { error } = await supabaseAdmin.storage
-      .from("documentos-verificacao")
-      .upload(path, bytes, { contentType: "image/jpeg", upsert: true });
-    if (error) throw new Error(`Falha ao enviar ${slot}: ${error.message}`);
-    paths[slot] = path;
-  }
-  const { error: upsertError } = await supabaseAdmin.from("verificacoes_documento").upsert(
-    {
-      user_id: userId,
-      document_type: documento.tipo,
-      document_front_url: paths.frente,
-      document_back_url: paths.verso,
-      selfie_url: paths.segurando,
-      verification_status: "enviado",
-      submitted_at: new Date().toISOString(),
-    } as any,
-    { onConflict: "user_id" },
-  );
-  if (upsertError) throw new Error(upsertError.message);
-}
+  if (error) throw new Error("Não foi possível carregar as imobiliárias.");
+
+  return {
+    imobiliarias: (data ?? []).map((imobiliaria: { id: string; razao_social: string }) => ({
+      id: imobiliaria.id,
+      razaoSocial: imobiliaria.razao_social,
+    })),
+  };
+});
 
 // ============================================================================
 // Inquilino
@@ -80,11 +63,10 @@ const inquilinoSchema = z.object({
   email: z.string().email(),
   telefone: z.string().min(8),
   senha: z.string().min(8),
-  documento: documentoSchema,
 });
 
 export const signUpInquilino = createServerFn({ method: "POST" })
-  .inputValidator((data: unknown) => inquilinoSchema.parse(data))
+  .validator((data: unknown) => inquilinoSchema.parse(data))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const cpfNorm = data.cpf.replace(/\D/g, "");
@@ -108,14 +90,15 @@ export const signUpInquilino = createServerFn({ method: "POST" })
       password: data.senha,
       options: {
         data: { nome: data.nome, role: "inquilino", cpf: cpfNorm, telefone: data.telefone },
-        redirectTo: buildRedirectTo(),
       },
     });
 
     if (linkError || !linkData?.user) {
       return {
         ok: false as const,
-        error: isAlreadyRegisteredError(linkError?.message) ? ("ja_existe" as const) : ("erro" as const),
+        error: isAlreadyRegisteredError(linkError?.message)
+          ? ("ja_existe" as const)
+          : ("erro" as const),
       };
     }
 
@@ -123,7 +106,12 @@ export const signUpInquilino = createServerFn({ method: "POST" })
 
     await supabaseAdmin
       .from("profiles")
-      .update({ status: "ativo", nome: data.nome, telefone: data.telefone, role: "inquilino" } as any)
+      .update({
+        status: "ativo",
+        nome: data.nome,
+        telefone: data.telefone,
+        role: "inquilino",
+      } as any)
       .eq("id", userId);
 
     // Foto de perfil padrão (por gênero detectado no primeiro nome) — só se o
@@ -137,25 +125,24 @@ export const signUpInquilino = createServerFn({ method: "POST" })
 
     await supabaseAdmin
       .from("inquilinos")
-      .upsert({ profile_id: userId, nome: data.nome, cpf: cpfNorm, tipo: "PF" } as any, { onConflict: "cpf" });
+      .upsert({ profile_id: userId, nome: data.nome, cpf: cpfNorm, tipo: "PF" } as any, {
+        onConflict: "cpf",
+      });
 
     const { linkedConsultas } = await linkTenantRecordsByCpf(supabaseAdmin, userId, cpfNorm);
-
-    let documentUploadFailed = false;
-    try {
-      await uploadIdentityDocuments(supabaseAdmin, userId, data.documento);
-    } catch (e) {
-      console.error("[signUpInquilino] falha ao enviar documento de identidade:", e);
-      documentUploadFailed = true;
-    }
 
     const emailResult = await sendVerificationEmail({
       email: emailLower,
       nome: data.nome,
-      verificationLink: linkData.properties.action_link,
+      verificationLink: buildVerificationLink(linkData.properties),
     });
 
-    return { ok: true as const, userId, emailSent: emailResult.sent, linkedConsultas, documentUploadFailed };
+    return {
+      ok: true as const,
+      userId,
+      emailSent: emailResult.sent,
+      linkedConsultas,
+    };
   });
 
 // ============================================================================
@@ -185,17 +172,35 @@ const profissionalSchema = z.object({
   // Comuns a corretor/proprietário
   cidade: z.string().optional(),
   estado: z.string().optional(),
-  documento: documentoSchema,
+}).superRefine((data, ctx) => {
+  if (data.role === "corretor" && data.vinculadoImobiliaria && !data.imobiliariaId) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["imobiliariaId"],
+      message: "Selecione a imobiliária à qual o corretor está vinculado.",
+    });
+  }
 });
 
 export const signUpProfissional = createServerFn({ method: "POST" })
-  .inputValidator((data: unknown) => profissionalSchema.parse(data))
+  .validator((data: unknown) => profissionalSchema.parse(data))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const emailLower = data.email.toLowerCase().trim();
 
     if (await emailAlreadyRegistered(supabaseAdmin, emailLower)) {
       return { ok: false as const, error: "ja_existe" as const };
+    }
+
+    if (data.role === "corretor" && data.vinculadoImobiliaria) {
+      const { data: imobiliaria, error: imobiliariaError } = await supabaseAdmin
+        .from("imobiliarias")
+        .select("id")
+        .eq("id", data.imobiliariaId!)
+        .maybeSingle();
+      if (imobiliariaError || !imobiliaria) {
+        return { ok: false as const, error: "imobiliaria_nao_encontrada" as const };
+      }
     }
 
     const nomeExibicao = data.role === "imobiliaria" ? data.razaoSocial! : data.nome!;
@@ -206,14 +211,15 @@ export const signUpProfissional = createServerFn({ method: "POST" })
       password: data.senha,
       options: {
         data: { nome: nomeExibicao, role: data.role },
-        redirectTo: buildRedirectTo(),
       },
     });
 
     if (linkError || !linkData?.user) {
       return {
         ok: false as const,
-        error: isAlreadyRegisteredError(linkError?.message) ? ("ja_existe" as const) : ("erro" as const),
+        error: isAlreadyRegisteredError(linkError?.message)
+          ? ("ja_existe" as const)
+          : ("erro" as const),
       };
     }
 
@@ -255,7 +261,7 @@ export const signUpProfissional = createServerFn({ method: "POST" })
         cidade: data.cidade,
         estado: data.estado,
         vinculado_imobiliaria: data.vinculadoImobiliaria ?? false,
-        imobiliaria_id: data.imobiliariaId || null,
+        imobiliaria_id: data.vinculadoImobiliaria ? data.imobiliariaId : null,
       } as any);
     } else if (data.role === "proprietario") {
       await supabaseAdmin.from("proprietarios").insert({
@@ -267,21 +273,13 @@ export const signUpProfissional = createServerFn({ method: "POST" })
       } as any);
     }
 
-    let documentUploadFailed = false;
-    try {
-      await uploadIdentityDocuments(supabaseAdmin, userId, data.documento);
-    } catch (e) {
-      console.error("[signUpProfissional] falha ao enviar documento de identidade:", e);
-      documentUploadFailed = true;
-    }
-
     const emailResult = await sendVerificationEmail({
       email: emailLower,
       nome: nomeExibicao,
-      verificationLink: linkData.properties.action_link,
+      verificationLink: buildVerificationLink(linkData.properties),
     });
 
-    return { ok: true as const, userId, emailSent: emailResult.sent, documentUploadFailed };
+    return { ok: true as const, userId, emailSent: emailResult.sent };
   });
 
 // ============================================================================
@@ -301,7 +299,7 @@ const RESEND_MAX_PER_HOUR = 5;
  * trabalho de verificar/enviar acontece por trás, silenciosamente.
  */
 export const resendVerificationEmail = createServerFn({ method: "POST" })
-  .inputValidator((data: unknown) => resendSchema.parse(data))
+  .validator((data: unknown) => resendSchema.parse(data))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const emailLower = data.email.toLowerCase().trim();
@@ -335,14 +333,13 @@ export const resendVerificationEmail = createServerFn({ method: "POST" })
       const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
         type: "magiclink",
         email: emailLower,
-        options: { redirectTo: buildRedirectTo() },
       });
-      if (linkError || !linkData?.properties?.action_link) return { ok: true as const };
+      if (linkError || !linkData?.properties?.hashed_token) return { ok: true as const };
 
       await sendVerificationEmail({
         email: emailLower,
         nome: (profile as any).nome || "cliente",
-        verificationLink: linkData.properties.action_link,
+        verificationLink: buildVerificationLink(linkData.properties),
       });
 
       await supabaseAdmin.from("email_verification_sends").insert({ email: emailLower } as any);

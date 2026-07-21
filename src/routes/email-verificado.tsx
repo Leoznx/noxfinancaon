@@ -1,11 +1,10 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { CheckCircle2, XCircle, Settings } from "lucide-react";
+import { CheckCircle2, Settings, XCircle } from "lucide-react";
 import { LogoNox } from "@/components/LogoNox";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/components/AuthProvider";
-import { redirectPathForRole } from "@/lib/authRedirect";
 import { supabase } from "@/integrations/supabase/client";
+import { parseAuthEmailCallback, type AuthEmailCallbackType } from "@/lib/auth-email-links";
 
 export const Route = createFileRoute("/email-verificado")({
   component: EmailVerificadoPage,
@@ -13,25 +12,15 @@ export const Route = createFileRoute("/email-verificado")({
 
 type Estado = "verificando" | "verificado" | "invalido";
 
-/**
- * Mesma lógica de leitura de /redefinir-senha.tsx: o link de confirmação pode
- * chegar como PKCE (`?code=...`) ou fluxo implícito (`#access_token=...`,
- * processado automaticamente pelo client ao inicializar), e o GoTrue pode já
- * ter marcado o link como expirado/inválido antes de chegar aqui
- * (`?error=...&error_description=...`, em query OU hash).
- */
-function lerParametrosConfirmacao() {
-  const url = new URL(window.location.href);
-  const hashParams = new URLSearchParams(url.hash.startsWith("#") ? url.hash.slice(1) : url.hash);
-  const errorDescription =
-    url.searchParams.get("error_description") || hashParams.get("error_description");
-  const code = url.searchParams.get("code");
-  const temHashSession = !!hashParams.get("access_token");
-  return { errorDescription, code, temHashSession };
-}
+const CONFIRMATION_TYPES = new Set<AuthEmailCallbackType>([
+  "signup",
+  "invite",
+  "magiclink",
+  "email_change",
+  "email",
+]);
 
 function EmailVerificadoPage() {
-  const { user } = useAuth();
   const navigate = useNavigate();
   const [estado, setEstado] = useState<Estado>("verificando");
 
@@ -39,49 +28,50 @@ function EmailVerificadoPage() {
     let ativo = true;
 
     const validar = async () => {
-      const { errorDescription, code, temHashSession } = lerParametrosConfirmacao();
+      const callback = parseAuthEmailCallback(window.location.href);
+      let confirmou = false;
 
-      if (errorDescription) {
+      try {
+        if (callback.error || callback.errorDescription) return;
+
+        if (callback.tokenHash) {
+          if (!callback.type || !CONFIRMATION_TYPES.has(callback.type)) return;
+          const { data, error } = await supabase.auth.verifyOtp({
+            token_hash: callback.tokenHash,
+            type: callback.type,
+          });
+          confirmou = !error && Boolean(data.session);
+        } else if (callback.code) {
+          if (callback.type && !CONFIRMATION_TYPES.has(callback.type)) return;
+          const { data, error } = await supabase.auth.exchangeCodeForSession(callback.code);
+          confirmou = !error && Boolean(data.session);
+        } else if (callback.accessToken && callback.refreshToken) {
+          if (!callback.type || !CONFIRMATION_TYPES.has(callback.type)) return;
+          const { data, error } = await supabase.auth.setSession({
+            access_token: callback.accessToken,
+            refresh_token: callback.refreshToken,
+          });
+          confirmou = !error && Boolean(data.session);
+        }
+
+        if (confirmou) {
+          // A confirmação não deve pular as regras normais do login, como a
+          // aprovação documental. Encerra só a sessão temporária deste link.
+          await supabase.auth.signOut({ scope: "local" }).catch(() => {});
+        }
+      } catch (error) {
+        console.error("[email-verificado] falha ao confirmar o link", error);
+      } finally {
         window.history.replaceState({}, "", window.location.pathname);
-        if (ativo) setEstado("invalido");
-        return;
+        if (ativo) setEstado(confirmou ? "verificado" : "invalido");
       }
-
-      if (code) {
-        const { error } = await supabase.auth.exchangeCodeForSession(code);
-        window.history.replaceState({}, "", window.location.pathname);
-        if (!ativo) return;
-        setEstado(error ? "invalido" : "verificado");
-        return;
-      }
-
-      if (temHashSession) {
-        // Fluxo implícito: o client já processa o hash ao inicializar.
-        window.history.replaceState({}, "", window.location.pathname);
-        const { data } = await supabase.auth.getSession();
-        if (!ativo) return;
-        setEstado(data.session ? "verificado" : "invalido");
-        return;
-      }
-
-      // Sem nenhum parâmetro de confirmação: só é válido se já existir uma sessão
-      // ativa (ex.: usuário já verificado clicou no link de novo, ou voltou pra
-      // essa rota já logado) — nunca mostra "verificado" sem nenhuma evidência.
-      const { data } = await supabase.auth.getSession();
-      if (!ativo) return;
-      setEstado(data.session ? "verificado" : "invalido");
     };
 
-    validar();
+    void validar();
     return () => {
       ativo = false;
     };
   }, []);
-
-  const handleEntrar = () => {
-    const to = user ? redirectPathForRole(user.internalRole || user.role) : "/login";
-    navigate({ to: to as any });
-  };
 
   if (estado === "verificando") {
     return (
@@ -111,8 +101,8 @@ function EmailVerificadoPage() {
         <h1 className="text-2xl font-bold text-neutral-900 mb-4">Link inválido ou expirado</h1>
         <div className="max-w-md text-neutral-600 space-y-4 mb-10">
           <p>
-            Este link de confirmação não é mais válido. Solicite um novo cadastro ou entre em
-            contato caso já possua uma conta.
+            Este link de confirmação não é mais válido. Solicite um novo envio ou entre em contato
+            caso já possua uma conta.
           </p>
         </div>
         <Button
@@ -135,13 +125,16 @@ function EmailVerificadoPage() {
       </div>
       <h1 className="text-3xl font-bold text-neutral-900 mb-4">E-mail verificado com sucesso!</h1>
       <div className="max-w-md text-neutral-600 space-y-4 mb-10">
-        <p>Sua conta foi confirmada. Agora você já pode acessar a plataforma NOX Fiança.</p>
+        <p>
+          Seu e-mail foi confirmado. Agora entre normalmente; se o seu cadastro precisar de análise,
+          o acesso será liberado após a aprovação.
+        </p>
       </div>
       <Button
-        onClick={handleEntrar}
+        onClick={() => navigate({ to: "/login" })}
         className="bg-neutral-900 hover:bg-neutral-800 text-white px-8 py-2.5 rounded-lg font-bold text-sm h-auto"
       >
-        Entrar na plataforma
+        Ir para o login
       </Button>
     </div>
   );

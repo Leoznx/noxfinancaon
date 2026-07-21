@@ -11,7 +11,7 @@ const tokenCpfSchema = z.object({
  * Usa RPC SECURITY DEFINER (não vaza dados sem CPF correto).
  */
 export const validarTokenAtivacao = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => tokenCpfSchema.parse(d))
+  .validator((d: unknown) => tokenCpfSchema.parse(d))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: result, error } = await supabaseAdmin.rpc("validar_ativacao_token" as any, {
@@ -64,7 +64,7 @@ async function assertTokenMatch(token: string, consultaId: string) {
 
 /** Etapa 2 - biometria (placeholder): recebe base64 e marca como enviada. */
 export const enviarBiometria = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) =>
+  .validator((d: unknown) =>
     consultaIdToken.extend({ imageBase64: z.string().min(100) }).parse(d),
   )
   .handler(async ({ data }) => {
@@ -94,7 +94,7 @@ export const enviarBiometria = createServerFn({ method: "POST" })
 
 /** Etapa 3 - aceite do contrato. */
 export const aceitarContrato = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) =>
+  .validator((d: unknown) =>
     consultaIdToken
       .extend({
         userAgent: z.string().optional(),
@@ -121,7 +121,7 @@ export const aceitarContrato = createServerFn({ method: "POST" })
 
 /** Etapa 4 - confirma forma de pagamento. */
 export const confirmarPagamento = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) =>
+  .validator((d: unknown) =>
     consultaIdToken
       .extend({
         method: z.enum(["credit_card", "pix", "boleto"]),
@@ -150,7 +150,7 @@ export const confirmarPagamento = createServerFn({ method: "POST" })
 
 /** Etapa 5 - conclui ativação. */
 export const concluirAtivacao = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => consultaIdToken.parse(d))
+  .validator((d: unknown) => consultaIdToken.parse(d))
   .handler(async ({ data }) => {
     await assertTokenMatch(data.token, data.consultaId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");

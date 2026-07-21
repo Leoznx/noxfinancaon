@@ -247,8 +247,8 @@ export const InstitutionalHeader = () => {
 
         {/* Centro: Menu principal + abas de perfil (Desktop) */}
         <nav className="hidden lg:flex items-center gap-1">
-          <Link to="/#comparativo" className="px-3 py-1.5 text-base font-medium text-neutral-600 hover:text-neutral-900 transition-colors">Seguro Fiança</Link>
-          <Link to="/#planos" className="px-3 py-1.5 text-base font-medium text-neutral-600 hover:text-neutral-900 transition-colors">Planos</Link>
+          <Link to="/" hash="comparativo" className="px-3 py-1.5 text-base font-medium text-neutral-600 hover:text-neutral-900 transition-colors">Seguro Fiança</Link>
+          <Link to="/" hash="planos" className="px-3 py-1.5 text-base font-medium text-neutral-600 hover:text-neutral-900 transition-colors">Planos</Link>
           <Link to="/contato" className="px-3 py-1.5 text-base font-medium text-neutral-600 hover:text-neutral-900 transition-colors">Contato</Link>
 
           <span className="w-px h-5 bg-neutral-200 mx-3"></span>
@@ -281,8 +281,8 @@ export const InstitutionalHeader = () => {
           <div className="lg:hidden bg-white border-t border-neutral-100 max-h-[calc(100dvh-5rem)] overflow-y-auto overscroll-contain">
             <div className="container mx-auto px-6 py-6 space-y-6">
               <nav className="flex flex-col gap-4">
-                <Link to="/#comparativo" onClick={() => setIsMobileMenuOpen(false)} className="text-base font-medium text-neutral-600">Seguro Fiança</Link>
-                <Link to="/#planos" onClick={() => setIsMobileMenuOpen(false)} className="text-base font-medium text-neutral-600">Planos</Link>
+                <Link to="/" hash="comparativo" onClick={() => setIsMobileMenuOpen(false)} className="text-base font-medium text-neutral-600">Seguro Fiança</Link>
+                <Link to="/" hash="planos" onClick={() => setIsMobileMenuOpen(false)} className="text-base font-medium text-neutral-600">Planos</Link>
                 <Link to="/contato" onClick={() => setIsMobileMenuOpen(false)} className="text-base font-medium text-neutral-600">Contato</Link>
               </nav>
 

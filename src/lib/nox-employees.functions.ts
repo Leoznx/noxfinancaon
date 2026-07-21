@@ -4,10 +4,20 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { sendVerificationEmail } from "@/lib/resend.service";
 import { NOX_INTERNAL_ROLES } from "@/lib/nox-internal-accounts";
 import { defaultAvatarForName } from "@/lib/gender-avatar";
+import { buildAuthEmailCallbackUrl } from "@/lib/auth-email-links";
 
-function buildRedirectTo() {
-  const base = (process.env.APP_URL || "https://noxfianca.com").replace(/\/$/, "");
-  return `${base}/email-verificado`;
+function buildVerificationLink(properties: { hashed_token: string; verification_type: string }) {
+  const appUrl =
+    process.env.APP_URL ||
+    process.env.APP_BASE_URL ||
+    process.env.FRONTEND_URL ||
+    "https://noxfianca.com";
+  return buildAuthEmailCallbackUrl({
+    appUrl,
+    path: "/email-verificado",
+    tokenHash: properties.hashed_token,
+    type: properties.verification_type,
+  });
 }
 
 // Confere se quem chamou é um admin de verdade — nunca confia em roles/
@@ -48,7 +58,7 @@ const signUpSchema = z.object({
 });
 
 export const signUpNoxEmployee = createServerFn({ method: "POST" })
-  .inputValidator((data: unknown) => signUpSchema.parse(data))
+  .validator((data: unknown) => signUpSchema.parse(data))
   .handler(async ({ data }) => {
     // z.enum ja rejeita qualquer valor fora da lista fixa (incluindo "admin"/
     // "admin_master") antes de chegar aqui, mas o if abaixo fica como reforço
@@ -73,7 +83,6 @@ export const signUpNoxEmployee = createServerFn({ method: "POST" })
       password: data.senha,
       options: {
         data: { nome: data.nome, role: data.role },
-        redirectTo: buildRedirectTo(),
       },
     });
 
@@ -126,7 +135,7 @@ export const signUpNoxEmployee = createServerFn({ method: "POST" })
     const emailResult = await sendVerificationEmail({
       email: emailLower,
       nome: data.nome,
-      verificationLink: linkData.properties.action_link,
+      verificationLink: buildVerificationLink(linkData.properties),
     });
 
     return { ok: true as const, userId, emailSent: emailResult.sent };
@@ -138,7 +147,7 @@ export const signUpNoxEmployee = createServerFn({ method: "POST" })
 
 export const listNoxEmployees = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => z.object({}).optional().parse(data))
+  .validator((data: unknown) => z.object({}).optional().parse(data))
   .handler(async ({ context }) => {
     await assertIsAdmin(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -159,7 +168,11 @@ export const listNoxEmployees = createServerFn({ method: "POST" })
       const authUser = authById.get(r.auth_user_id);
       const emailConfirmed = !!authUser?.email_confirmed_at;
       const status: "ativo" | "bloqueado" | "aguardando_confirmacao" =
-        r.status === "bloqueado" ? "bloqueado" : !emailConfirmed ? "aguardando_confirmacao" : "ativo";
+        r.status === "bloqueado"
+          ? "bloqueado"
+          : !emailConfirmed
+            ? "aguardando_confirmacao"
+            : "ativo";
       return {
         id: r.id,
         authUserId: r.auth_user_id,
@@ -187,7 +200,7 @@ const updateStatusSchema = z.object({
 
 export const updateNoxEmployeeStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => updateStatusSchema.parse(data))
+  .validator((data: unknown) => updateStatusSchema.parse(data))
   .handler(async ({ data, context }) => {
     await assertIsAdmin(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -228,7 +241,7 @@ const updateRoleSchema = z.object({
 
 export const updateNoxEmployeeRole = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => updateRoleSchema.parse(data))
+  .validator((data: unknown) => updateRoleSchema.parse(data))
   .handler(async ({ data, context }) => {
     await assertIsAdmin(context.supabase, context.userId);
     if (!(NOX_INTERNAL_ROLES as readonly string[]).includes(data.role)) {

@@ -10,6 +10,7 @@ import {
 } from "@tanstack/react-router";
 import { AuthProvider } from "@/components/AuthProvider";
 import { Toaster } from "@/components/ui/sonner";
+import { hasAuthEmailCallback, parseAuthEmailCallback } from "@/lib/auth-email-links";
 
 import appCss from "../styles.css?url";
 
@@ -79,7 +80,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         name: "description",
         content:
-          "Aluguel sem fiador, sem caução e sem burocracia. A NOX é o seguro fiança digital com aprovação em 3 minutos. Camboriú, Balneário Camboriú e todo Santa Catarina.",
+          "Aluguel sem fiador, sem caução e sem burocracia. A NOX é o seguro fiança digital com aprovação em até 1 minuto. Camboriú, Balneário Camboriú e todo Santa Catarina.",
       },
       {
         name: "keywords",
@@ -95,10 +96,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         property: "og:description",
         content:
-          "Aluguel sem fiador, sem caução e sem burocracia. Aprovação em 3 minutos. 100% digital.",
+          "Aluguel sem fiador, sem caução e sem burocracia. Aprovação em até 1 minuto. 100% digital.",
       },
-      { property: "og:url", content: "https://noxfianca.com.br" },
-      { property: "og:image", content: "https://noxfianca.com.br/og-image.png" },
+      { property: "og:url", content: "https://noxfianca.com" },
+      { property: "og:image", content: "https://noxfianca.com/og-image.png" },
       { property: "og:image:width", content: "1200" },
       { property: "og:image:height", content: "630" },
       { property: "og:image:alt", content: "NOX Fiança — Aluguel sem fiador, sem caução." },
@@ -109,9 +110,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         name: "twitter:description",
         content:
-          "Aluguel sem fiador, sem caução e sem burocracia. Aprovação em 3 minutos. 100% digital.",
+          "Aluguel sem fiador, sem caução e sem burocracia. Aprovação em até 1 minuto. 100% digital.",
       },
-      { name: "twitter:image", content: "https://noxfianca.com.br/og-image.png" },
+      { name: "twitter:image", content: "https://noxfianca.com/og-image.png" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
@@ -123,7 +124,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "dns-prefetch", href: "https://images.unsplash.com" },
       {
         rel: "preconnect",
-        href: "https://rrhmkpccyigildmbelir.supabase.co",
+        href: "https://njheoytyidsghittjilr.supabase.co",
         crossOrigin: "anonymous",
       },
     ],
@@ -135,11 +136,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
           "@type": "Organization",
           name: "NOX Fiança",
           alternateName: "NOX",
-          url: "https://noxfianca.com.br",
-          logo: "https://noxfianca.com.br/favicon-512.png",
-          image: "https://noxfianca.com.br/og-image.png",
+          url: "https://noxfianca.com",
+          logo: "https://noxfianca.com/favicon-512.png",
+          image: "https://noxfianca.com/og-image.png",
           description:
-            "Seguro fiança digital com aprovação em 3 minutos. Aluguel sem fiador, sem caução, 100% online.",
+            "Seguro fiança digital com aprovação em até 1 minuto. Aluguel sem fiador, sem caução, 100% online.",
           address: {
             "@type": "PostalAddress",
             addressLocality: "Camboriú",
@@ -192,11 +193,12 @@ function RootComponent() {
   React.useEffect(() => {
     if (typeof window === "undefined") return;
     if (window.location.pathname !== "/") return;
-    const temErro =
-      /error=|error_description=/.test(window.location.hash) ||
-      /error=|error_description=/.test(window.location.search);
-    if (!temErro) return;
-    window.location.replace("/redefinir-senha" + window.location.search + window.location.hash);
+    const callback = parseAuthEmailCallback(window.location.href);
+    if (!hasAuthEmailCallback(callback)) return;
+
+    const destino =
+      callback.type === "recovery" || !callback.type ? "/redefinir-senha" : "/email-verificado";
+    window.location.replace(destino + window.location.search + window.location.hash);
   }, []);
 
   return (

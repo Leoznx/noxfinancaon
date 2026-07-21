@@ -16,7 +16,7 @@ const ensureTenantSchema = z.object({
  */
 export const ensureTenantUser = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => ensureTenantSchema.parse(data))
+  .validator((data: unknown) => ensureTenantSchema.parse(data))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 

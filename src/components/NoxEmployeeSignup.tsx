@@ -191,7 +191,7 @@ export function NoxEmployeeSignup({ role }: { role: NoxInternalRole }) {
       </main>
 
       <footer className="p-6 text-center text-xs text-neutral-400">
-        © 2025 NOX FIANÇA - Todos os direitos reservados.
+        © {new Date().getFullYear()} NOX FIANÇA - Todos os direitos reservados.
       </footer>
     </div>
   );

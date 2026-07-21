@@ -16,7 +16,15 @@ import { getRememberMe, setRememberMe } from "@/lib/authStorage";
 
 const loginSearchSchema = z.object({
   returnTo: z.string().optional(),
+  perfil: z.enum(["corretor", "imobiliaria", "proprietario", "inquilino"]).optional(),
 });
+
+const cadastroRouteByPerfil = {
+  corretor: "/cadastro-corretor",
+  imobiliaria: "/cadastro-imobiliaria",
+  proprietario: "/cadastro-proprietario",
+  inquilino: "/cadastro-inquilino",
+} as const;
 
 export const Route = createFileRoute("/login")({
   component: LoginComponent,
@@ -308,11 +316,8 @@ function LoginComponent() {
               <p className="text-sm text-neutral-500 font-medium">
                 Ainda não tem conta?{" "}
                 <Link
-                  to="/cadastro"
-                  search={{
-                    returnTo: returnTo || "/dashboard",
-                    perfil: searchParams.perfil,
-                  }}
+                  to={searchParams.perfil ? cadastroRouteByPerfil[searchParams.perfil] : "/cadastro"}
+                  search={returnTo && returnTo !== "/dashboard" ? { returnTo } : {}}
                   className="text-yellow-600 font-bold hover:underline"
                 >
                   Criar acesso
@@ -324,7 +329,7 @@ function LoginComponent() {
       </Card>
 
       <p className="mt-10 text-[10px] text-neutral-400 font-medium uppercase tracking-[0.2em]">
-        © 2025 NOX FIANÇA - Todos os direitos reservados.
+        © {new Date().getFullYear()} NOX FIANÇA - Todos os direitos reservados.
       </p>
     </div>
   );

@@ -34,7 +34,7 @@ function ProprietarioPage() {
         personagemImagem: '/assets/nox-proprietario-personagens-x.png',
         personagemAlt: 'Personagens NOX Fianca apresentando painel de pagamento para proprietarios com casa e mesa',
         ctas: [
-          { label: 'Criar conta de proprietário', to: '/cadastro', search: { perfil: 'proprietario' }, variant: 'primary' },
+          { label: 'Criar conta de proprietário', to: '/cadastro-proprietario', variant: 'primary' },
           { label: 'Entrar no painel', to: '/login', variant: 'secondary' },
         ],
         chips: ['Mais segurança', 'Documentos centralizados', 'Acompanhamento online'],
@@ -95,7 +95,7 @@ function ProprietarioPage() {
         titulo: 'Acompanhe seus contratos com mais segurança',
         subtitulo: 'Crie sua conta de proprietário e tenha visão completa dos seus imóveis, contratos e garantias.',
         ctas: [
-          { label: 'Criar conta de proprietário', to: '/cadastro', search: { perfil: 'proprietario' }, variant: 'primary' },
+          { label: 'Criar conta de proprietário', to: '/cadastro-proprietario', variant: 'primary' },
           { label: 'Entrar no painel', to: '/login', variant: 'secondary' },
         ],
       }}

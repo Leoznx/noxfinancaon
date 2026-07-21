@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -187,7 +187,7 @@ function TabMetas() {
   const [loading, setLoading] = useState(true);
   const [salvandoId, setSalvandoId] = useState<string | null>(null);
 
-  const carregar = async () => {
+  const carregar = useCallback(async () => {
     setLoading(true);
     try {
       const [{ data: vendedores }, { data: metas }, { data: performance }] = await Promise.all([
@@ -226,10 +226,10 @@ function TabMetas() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [month, year]);
   useEffect(() => {
     carregar();
-  }, [month, year]);
+  }, [carregar]);
 
   const salvar = async (sellerId: string, nome: string) => {
     const valor = Number(edits[sellerId]);
@@ -363,7 +363,7 @@ function TabAgenda() {
   const [notas, setNotas] = useState("");
   const [salvando, setSalvando] = useState(false);
 
-  const carregar = async () => {
+  const carregar = useCallback(async () => {
     setLoading(true);
     const [{ data: vs }, { data: rows }] = await Promise.all([
       supabase
@@ -387,10 +387,10 @@ function TabAgenda() {
     }
     setGrupos(Array.from(mapa.entries()).map(([id, groupRows]) => ({ id, rows: groupRows })));
     setLoading(false);
-  };
+  }, []);
   useEffect(() => {
     carregar();
-  }, []);
+  }, [carregar]);
 
   const criar = async () => {
     if (!titulo.trim()) {
@@ -622,7 +622,7 @@ function TabComissoes() {
   const [openNovo, setOpenNovo] = useState(false);
   const [editando, setEditando] = useState<any | null>(null);
 
-  const carregar = async () => {
+  const carregar = useCallback(async () => {
     setLoading(true);
     const [{ data: vs }, { data: rows }] = await Promise.all([
       supabase
@@ -641,10 +641,10 @@ function TabComissoes() {
     setVendedores((vs as any[]) ?? []);
     setLinhas((rows as any[]) ?? []);
     setLoading(false);
-  };
+  }, [month, year]);
   useEffect(() => {
     carregar();
-  }, [month, year]);
+  }, [carregar]);
 
   const salvar = async (form: any) => {
     if (!form.seller_id) {

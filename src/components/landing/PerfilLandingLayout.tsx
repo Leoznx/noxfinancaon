@@ -13,7 +13,7 @@ interface Beneficio {
 
 interface PerfilLandingLayoutProps {
   icone: any;
-  perfil: string;
+  perfil: 'corretor' | 'imobiliaria' | 'proprietario' | 'inquilino';
   labelPerfil: string;
   titulo: string;
   subtitulo: string;
@@ -25,6 +25,13 @@ interface PerfilLandingLayoutProps {
   };
   imagemUrl: string;
 }
+
+const cadastroRouteByPerfil = {
+  corretor: '/cadastro-corretor',
+  imobiliaria: '/cadastro-imobiliaria',
+  proprietario: '/cadastro-proprietario',
+  inquilino: '/cadastro-inquilino',
+} as const;
 
 export function PerfilLandingLayout({ 
   icone: Icone, 
@@ -70,8 +77,7 @@ export function PerfilLandingLayout({
                   <ArrowRight className="w-5 h-5" strokeWidth={2.5} />
                 </Link>
                 <Link 
-                  to="/cadastro"
-                  search={{ perfil }}
+                  to={cadastroRouteByPerfil[perfil]}
                   className="bg-yellow-400 hover:bg-yellow-500 text-neutral-900 px-8 py-4 rounded-xl font-bold inline-flex items-center justify-center gap-2 shadow-xl shadow-yellow-100 transition-all active:scale-95"
                 >
                   Criar conta grátis
@@ -155,8 +161,7 @@ export function PerfilLandingLayout({
                 <ArrowRight className="w-5 h-5" strokeWidth={3} />
               </Link>
               <Link 
-                to="/cadastro"
-                search={{ perfil }}
+                to={cadastroRouteByPerfil[perfil]}
                 className="border border-white/20 hover:bg-white/5 text-white px-10 py-4 rounded-xl font-black text-lg transition-all active:scale-95"
               >
                 Criar conta grátis

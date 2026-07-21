@@ -333,7 +333,7 @@ function TabPerfil() {
   async function handleUploadFoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
-    if (!file || !profile) return;
+    if (!file || !profile || !usuario) return;
     if (!["image/jpeg", "image/jpg", "image/png", "image/webp"].includes(file.type)) {
       toast.error("Formato inválido. Envie um JPG, PNG ou WEBP.");
       return;

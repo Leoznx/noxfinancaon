@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useAuth } from "@/components/AuthProvider";
@@ -65,7 +65,7 @@ function FaturasInquilino() {
   const [loading, setLoading] = useState(true);
   const [atualizandoId, setAtualizandoId] = useState<string | null>(null);
 
-  async function carregarFaturas() {
+  const carregarFaturas = useCallback(async () => {
     if (!user?.id) return;
     const { data } = await supabase
       .from("faturas_inquilino")
@@ -75,7 +75,7 @@ function FaturasInquilino() {
       .eq("tenant_user_id", user.id)
       .order("numero_parcela", { ascending: true });
     setFaturas(data ?? []);
-  }
+  }, [user?.id]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -104,7 +104,7 @@ function FaturasInquilino() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user?.id]);
+  }, [user?.id, carregarFaturas]);
 
   async function atualizarStatus(fatura: any) {
     const paymentId = fatura.asaas_payment?.asaas_payment_id;

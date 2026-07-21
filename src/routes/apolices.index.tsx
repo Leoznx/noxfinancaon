@@ -122,7 +122,7 @@ function ApolicesList() {
     }
     load();
     return () => { cancelled = true; };
-  }, [user?.email]);
+  }, [user?.email, user?.role]);
 
   const filtradas = apolices.filter((a) => {
     const q = busca.toLowerCase();

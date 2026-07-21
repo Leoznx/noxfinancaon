@@ -54,8 +54,8 @@ apontar para o seu próprio projeto Supabase:
 ### Build de produção
 
 ```bash
-npm run build    # gera .output/ (SSR, adaptador Cloudflare via Nitro/wrangler.jsonc)
-npx vite preview # testa o build localmente
+npm run build   # gera .vercel/output/ (SSR, preset Vercel via Nitro)
+npm run preview # testa o build Nitro/Vercel localmente
 ```
 
 ### Deploy (Vercel)

@@ -448,7 +448,7 @@ function FormDialog({ open, setOpen, leads, initial, defaultDate, onSubmit, chil
     } else if (open && defaultDate) {
       setForm((prev: any) => ({ ...prev, scheduled_at: horaPadrao(defaultDate) }));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [initial, open, defaultDate]);
 
   return (

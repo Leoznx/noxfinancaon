@@ -1,14 +1,14 @@
 import { createFileRoute, useNavigate, Link, useSearch } from "@tanstack/react-router";
 import { LogoNox } from "@/components/LogoNox";
 import { cn } from "@/lib/utils";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Building2, UserRound, ArrowLeft, ArrowRight, CheckCircle2, Search, Home, Info, FileText, Mail, IdCard, Camera } from "lucide-react";
+import { Building2, UserRound, ArrowLeft, ArrowRight, CheckCircle2, Home, Info, FileText, Mail } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -17,20 +17,40 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { checkInquilinoExists } from "@/lib/inquilino-signup.functions";
-import { signUpInquilino, signUpProfissional, resendVerificationEmail } from "@/lib/auth-signup.functions";
-import { compressImageToBase64 } from "@/lib/image-compress";
+import {
+  listarImobiliariasCadastro,
+  signUpInquilino,
+  signUpProfissional,
+  resendVerificationEmail,
+} from "@/lib/auth-signup.functions";
 
-const cadastroSearchSchema = z.z.object({
-  returnTo: z.z.string().optional(),
-  perfil: z.z.enum(['imobiliaria', 'corretor', 'proprietario', 'inquilino']).optional(),
-  ref: z.z.string().optional(),
+const cadastroSearchSchema = z.object({
+  returnTo: z.string().optional(),
+  perfil: z.enum(['imobiliaria', 'corretor', 'proprietario', 'inquilino']).optional(),
+  ref: z.string().optional(),
 });
 
 
 export const Route = createFileRoute("/cadastro")({
-  component: CadastroComponent,
+  component: () => <CadastroPage />,
   validateSearch: (search) => cadastroSearchSchema.parse(search),
 });
+
+export type CadastroPerfil = "imobiliaria" | "corretor" | "proprietario" | "inquilino";
+
+const CADASTRO_ROUTES: Record<CadastroPerfil, string> = {
+  imobiliaria: "/cadastro-imobiliaria",
+  corretor: "/cadastro-corretor",
+  proprietario: "/cadastro-proprietario",
+  inquilino: "/cadastro-inquilino",
+};
+
+const PERFIL_LABELS: Record<CadastroPerfil, string> = {
+  imobiliaria: "Imobiliária",
+  corretor: "Corretor",
+  proprietario: "Proprietário",
+  inquilino: "Inquilino",
+};
 
 const accountTypeSchema = z.object({
   type: z.enum(["imobiliaria", "corretor", "proprietario", "inquilino"], {
@@ -86,6 +106,9 @@ const corretorSchema = z.object({
 }).refine((data) => data.senha === data.confirmarSenha, {
   message: "As senhas não conferem",
   path: ["confirmarSenha"],
+}).refine((data) => data.vinculadoImobiliaria === "nao" || !!data.imobiliariaId, {
+  message: "Selecione a imobiliária à qual você está vinculado",
+  path: ["imobiliariaId"],
 });
 
 const proprietarioSchema = z.object({
@@ -105,33 +128,38 @@ const proprietarioSchema = z.object({
 
 const UFS = ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"];
 
-type DocumentoTipo = "rg" | "cnh";
-interface DocumentoState {
-  tipo: DocumentoTipo;
-  frente: File | null;
-  verso: File | null;
-  segurando: File | null;
-}
-const DOCUMENTO_INICIAL: DocumentoState = { tipo: "rg", frente: null, verso: null, segurando: null };
-
-function CadastroComponent() {
-  const [step, setStep] = useState(1);
-  const [accountType, setAccountType] = useState<"imobiliaria" | "corretor" | "proprietario" | "inquilino" | null>(null);
+export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil }) {
+  const search = useSearch({ strict: false }) as z.infer<typeof cadastroSearchSchema>;
+  const routedPerfil = perfilInicial ?? search.perfil;
+  const [step, setStep] = useState(routedPerfil ? 2 : 1);
+  const [accountType, setAccountType] = useState<CadastroPerfil | null>(routedPerfil ?? null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   // 'confirmacao': só falta confirmar o e-mail (inquilino, sem aprovação manual).
   // 'aprovacao': e-mail + aprovação da equipe (imobiliária/corretor/proprietário).
   const [successType, setSuccessType] = useState<"confirmacao" | "aprovacao" | null>(null);
   const [successEmail, setSuccessEmail] = useState("");
-  const [imobiliarias, setImobiliarias] = useState<any[]>([]);
-  const [documento, setDocumento] = useState<DocumentoState>(DOCUMENTO_INICIAL);
+  const [imobiliarias, setImobiliarias] = useState<Array<{ id: string; razaoSocial: string }>>([]);
+  const [imobiliariasLoading, setImobiliariasLoading] = useState(true);
   const navigate = useNavigate();
-  const search = useSearch({ from: '/cadastro' });
   const returnTo = search.returnTo || '/dashboard';
   const checkInquilinoFn = useServerFn(checkInquilinoExists);
   const signUpInquilinoFn = useServerFn(signUpInquilino);
   const signUpProfissionalFn = useServerFn(signUpProfissional);
+  const listarImobiliariasFn = useServerFn(listarImobiliariasCadastro);
   const resendFn = useServerFn(resendVerificationEmail);
   const [resendCooldown, setResendCooldown] = useState(0);
+
+  useEffect(() => {
+    if (search.returnTo !== "/dashboard") return;
+    navigate({
+      to: (perfilInicial ? CADASTRO_ROUTES[perfilInicial] : "/cadastro") as any,
+      search: {
+        ref: search.ref,
+        ...(!perfilInicial && search.perfil ? { perfil: search.perfil } : {}),
+      } as any,
+      replace: true,
+    });
+  }, [navigate, perfilInicial, search.perfil, search.ref, search.returnTo]);
 
   useEffect(() => {
     if (resendCooldown <= 0) return;
@@ -151,23 +179,31 @@ function CadastroComponent() {
   };
 
   useEffect(() => {
-    if (search.perfil) {
-      setAccountType(search.perfil);
+    if (routedPerfil) {
+      setAccountType(routedPerfil);
       setStep(2);
     }
-  }, [search.perfil]);
+  }, [routedPerfil]);
 
   useEffect(() => {
     const fetchImob = async () => {
-      const { data } = await supabase.from('imobiliarias').select('id, razao_social');
-      if (data) setImobiliarias(data);
+      try {
+        const result = await listarImobiliariasFn();
+        setImobiliarias(result.imobiliarias);
+      } catch {
+        setImobiliarias([]);
+      } finally {
+        setImobiliariasLoading(false);
+      }
     };
-    fetchImob();
-  }, []);
+    void fetchImob();
+  }, [listarImobiliariasFn]);
 
-  const handleTypeSelect = (type: "imobiliaria" | "corretor" | "proprietario" | "inquilino") => {
-    setAccountType(type);
-    setStep(2);
+  const handleTypeSelect = (type: CadastroPerfil) => {
+    navigate({
+      to: CADASTRO_ROUTES[type] as any,
+      search: { returnTo: search.returnTo, ref: search.ref } as any,
+    });
   };
 
   const formImobiliaria = useForm({
@@ -236,24 +272,8 @@ function CadastroComponent() {
   });
 
   const onSubmit = async (data: any) => {
-    if (!documento.frente || !documento.verso || !documento.segurando) {
-      toast.error("Envie a frente, o verso e uma foto segurando o documento para continuar.");
-      return;
-    }
     setIsSubmitting(true);
     try {
-      const [frenteImg, versoImg, segurandoImg] = await Promise.all([
-        compressImageToBase64(documento.frente),
-        compressImageToBase64(documento.verso),
-        compressImageToBase64(documento.segurando),
-      ]);
-      const documentoPayload = {
-        tipo: documento.tipo,
-        frenteBase64: frenteImg.base64,
-        versoBase64: versoImg.base64,
-        segurandoBase64: segurandoImg.base64,
-      };
-
       // === Fluxo do inquilino (separado, ativa direto + auto-link por CPF) ===
       if (accountType === 'inquilino') {
         const cpfNorm = (data.cpf as string).replace(/\D/g, "");
@@ -276,7 +296,6 @@ function CadastroComponent() {
             email: emailLower,
             telefone: data.telefone,
             senha: data.senha,
-            documento: documentoPayload,
           },
         });
         if (!result.ok) {
@@ -291,10 +310,6 @@ function CadastroComponent() {
         if (result.linkedConsultas > 0) {
           toast.success(`Vinculamos ${result.linkedConsultas} contrato(s) ao seu CPF.`);
         }
-        if (result.documentUploadFailed) {
-          toast.warning("Conta criada, mas não conseguimos enviar seus documentos agora. Envie depois em Configurações > Conta.");
-        }
-
         // A conta só fica utilizável depois de confirmar o e-mail (mailer_autoconfirm
         // está desligado no projeto) — navegar direto pra /inquilino/documentos aqui
         // só resultaria num redirect silencioso pro /login, já que ainda não há sessão
@@ -331,19 +346,21 @@ function CadastroComponent() {
           cpfCnpj: data.cpfCnpj,
           cidade: data.cidade,
           estado: data.estado,
-          documento: documentoPayload,
         },
       });
 
       if (!result.ok) {
-        toast.error(result.error === 'ja_existe' ? "Já existe uma conta com este e-mail." : "Erro ao criar usuário");
+        toast.error(
+          result.error === 'ja_existe'
+            ? "Já existe uma conta com este e-mail."
+            : result.error === 'imobiliaria_nao_encontrada'
+              ? "A imobiliária selecionada não está mais disponível. Atualize a página e escolha novamente."
+              : "Erro ao criar usuário",
+        );
         setIsSubmitting(false);
         return;
       }
       const userId = result.userId;
-      if (result.documentUploadFailed) {
-        toast.warning("Conta criada, mas não conseguimos enviar seus documentos agora. Envie depois em Configurações > Conta.");
-      }
 
       // Vínculo de indicação (?ref=CODIGO) — extra, não pode derrubar o cadastro (a
       // conta já foi criada com sucesso acima independente do que acontece aqui).
@@ -476,16 +493,16 @@ function CadastroComponent() {
 
       <main className="flex-1 flex items-center justify-center p-4">
         <div className="w-full max-w-5xl">
-          {search.perfil && (
+          {routedPerfil && (
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-6 text-sm text-neutral-700 flex items-start gap-2 max-w-xl mx-auto animate-in fade-in zoom-in duration-500">
               <Info className="w-4 h-4 text-yellow-700 flex-shrink-0 mt-0.5" strokeWidth={1.5} />
               <div>
                 <p className="font-black text-neutral-900 uppercase text-[10px] tracking-widest mb-0.5">Quase lá!</p>
-                <p className="text-xs font-medium">Você está criando sua conta de {search.perfil === 'imobiliaria' ? 'Imobiliária' : search.perfil === 'corretor' ? 'Corretor' : 'Proprietário'}.</p>
+                <p className="text-xs font-medium">Você está criando sua conta de {PERFIL_LABELS[routedPerfil]}.</p>
               </div>
             </div>
           )}
-          {returnTo === '/simular/resultado' && !search.perfil && (
+          {returnTo === '/simular/resultado' && !routedPerfil && (
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-6 text-sm text-neutral-700 flex items-start gap-2 max-w-xl mx-auto">
               <Info className="w-4 h-4 text-yellow-700 flex-shrink-0 mt-0.5" strokeWidth={1.5} />
               <div>
@@ -565,7 +582,12 @@ function CadastroComponent() {
             <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
               <div className="px-6 py-4 border-b border-neutral-200 flex items-center gap-3">
                 <button 
-                  onClick={() => setStep(1)}
+                  type="button"
+                  onClick={() => navigate({
+                    to: "/cadastro",
+                    search: { returnTo: search.returnTo, ref: search.ref },
+                  })}
+                  aria-label="Voltar para a seleção do tipo de conta"
                   className="text-neutral-500 hover:text-neutral-900 transition-colors"
                 >
                   <ArrowLeft size={20} strokeWidth={1.5} />
@@ -581,8 +603,6 @@ function CadastroComponent() {
                     form={formInquilino}
                     onSubmit={onSubmit}
                     isSubmitting={isSubmitting}
-                    documento={documento}
-                    setDocumento={setDocumento}
                   />
                 ) : (() => {
                   const activeForm = (accountType === 'imobiliaria' ? formImobiliaria : accountType === 'corretor' ? formCorretor : formProprietario) as any;
@@ -755,7 +775,12 @@ function CadastroComponent() {
                               <div className="space-y-1">
                                 <Label className="text-xs font-medium text-neutral-700">Vinculado a uma imobiliária?</Label>
                                 <Select 
-                                  onValueChange={(val: any) => formCorretor.setValue("vinculadoImobiliaria", val)}
+                                  onValueChange={(val: "sim" | "nao") => {
+                                    formCorretor.setValue("vinculadoImobiliaria", val, { shouldValidate: true });
+                                    if (val === "nao") {
+                                      formCorretor.setValue("imobiliariaId", "", { shouldValidate: true });
+                                    }
+                                  }}
                                   defaultValue="nao"
                                 >
                                   <SelectTrigger className="h-9">
@@ -771,16 +796,23 @@ function CadastroComponent() {
                               {formCorretor.watch("vinculadoImobiliaria") === "sim" && (
                                 <div className="space-y-1">
                                   <Label className="text-xs font-medium text-neutral-700">Selecione sua Imobiliária</Label>
-                                  <Select onValueChange={(val) => formCorretor.setValue("imobiliariaId", val)}>
+                                  <Select onValueChange={(val) => formCorretor.setValue("imobiliariaId", val, { shouldValidate: true })}>
                                     <SelectTrigger className="h-9">
                                       <SelectValue placeholder="Buscar imobiliária..." />
                                     </SelectTrigger>
                                     <SelectContent>
+                                      {imobiliariasLoading && (
+                                        <div className="px-2 py-3 text-xs text-neutral-500">Carregando imobiliárias...</div>
+                                      )}
+                                      {!imobiliariasLoading && imobiliarias.length === 0 && (
+                                        <div className="px-2 py-3 text-xs text-neutral-500">Nenhuma imobiliária cadastrada.</div>
+                                      )}
                                       {imobiliarias.map((imob) => (
-                                        <SelectItem key={imob.id} value={imob.id}>{imob.razao_social}</SelectItem>
+                                        <SelectItem key={imob.id} value={imob.id}>{imob.razaoSocial}</SelectItem>
                                       ))}
                                     </SelectContent>
                                   </Select>
+                                  {errors.imobiliariaId && <p className="text-[10px] text-red-500">{errors.imobiliariaId.message}</p>}
                                 </div>
                               )}
 
@@ -876,8 +908,6 @@ function CadastroComponent() {
                         </div>
                       </div>
 
-                      <DocumentoUploadSection documento={documento} onChange={setDocumento} />
-
                       {/* Fixed Footer within card */}
                       <div className="mt-8 pt-6 border-t border-neutral-200 flex flex-col sm:flex-row items-center justify-between gap-4">
                         <div className="flex items-start space-x-2">
@@ -913,7 +943,7 @@ function CadastroComponent() {
       </main>
 
       <footer className="p-6 text-center text-xs text-neutral-400">
-        © 2025 NOX FIANÇA - Todos os direitos reservados.
+        © {new Date().getFullYear()} NOX FIANÇA - Todos os direitos reservados.
       </footer>
     </div>
   );
@@ -923,14 +953,10 @@ function InquilinoForm({
   form,
   onSubmit,
   isSubmitting,
-  documento,
-  setDocumento,
 }: {
   form: any;
   onSubmit: (d: any) => void;
   isSubmitting: boolean;
-  documento: DocumentoState;
-  setDocumento: (next: DocumentoState) => void;
 }) {
   const errors = form.formState.errors;
   return (
@@ -987,8 +1013,6 @@ function InquilinoForm({
 
       <p className="text-[10px] text-neutral-500">Mínimo 8 caracteres, com pelo menos 1 letra e 1 número.</p>
 
-      <DocumentoUploadSection documento={documento} onChange={setDocumento} />
-
       <div className="flex items-start space-x-2 pt-2">
         <Checkbox
           id="termos-inq"
@@ -1010,143 +1034,6 @@ function InquilinoForm({
         <ArrowRight size={16} />
       </Button>
     </form>
-  );
-}
-
-function DocumentoUploadSection({
-  documento,
-  onChange,
-}: {
-  documento: DocumentoState;
-  onChange: (next: DocumentoState) => void;
-}) {
-  return (
-    <div className="pt-5 border-t border-neutral-200">
-      <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-500 mb-3">
-        Verificação de identidade
-      </h3>
-      <div className="flex gap-2 mb-4">
-        {(["rg", "cnh"] as const).map((tipo) => (
-          <button
-            type="button"
-            key={tipo}
-            onClick={() => onChange({ ...documento, tipo })}
-            className={cn(
-              "px-4 py-1.5 rounded-lg border text-xs font-bold uppercase tracking-wide transition-colors",
-              documento.tipo === tipo
-                ? "bg-neutral-900 text-white border-neutral-900"
-                : "border-neutral-200 text-neutral-600 hover:border-neutral-400",
-            )}
-          >
-            {tipo === "rg" ? "RG" : "CNH"}
-          </button>
-        ))}
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <DocumentoSlotInput
-          titulo="Frente do documento"
-          icon={IdCard}
-          capture="environment"
-          file={documento.frente}
-          onPick={(f) => onChange({ ...documento, frente: f })}
-        />
-        <DocumentoSlotInput
-          titulo="Verso do documento"
-          icon={IdCard}
-          capture="environment"
-          file={documento.verso}
-          onPick={(f) => onChange({ ...documento, verso: f })}
-        />
-        <DocumentoSlotInput
-          titulo="Segurando o documento"
-          icon={Camera}
-          capture="user"
-          file={documento.segurando}
-          onPick={(f) => onChange({ ...documento, segurando: f })}
-        />
-      </div>
-      <p className="text-[10px] text-neutral-500 mt-3">
-        Usado para validar sua identidade antes da liberação da conta. JPG, PNG ou WEBP, até 10MB por foto.
-      </p>
-    </div>
-  );
-}
-
-function DocumentoSlotInput({
-  titulo,
-  icon: Icon,
-  file,
-  onPick,
-  capture,
-}: {
-  titulo: string;
-  icon: any;
-  file: File | null;
-  onPick: (file: File) => void;
-  capture?: "user" | "environment";
-}) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!file) {
-      setPreviewUrl(null);
-      return;
-    }
-    const url = URL.createObjectURL(file);
-    setPreviewUrl(url);
-    return () => URL.revokeObjectURL(url);
-  }, [file]);
-
-  function handleSelect(f: File | undefined) {
-    if (!f) return;
-    if (!["image/jpeg", "image/jpg", "image/png", "image/webp"].includes(f.type)) {
-      toast.error("Formato inválido. Envie uma imagem em JPG, PNG ou WEBP.");
-      return;
-    }
-    if (f.size > 10 * 1024 * 1024) {
-      toast.error("Arquivo muito grande. Tamanho máximo: 10MB.");
-      return;
-    }
-    onPick(f);
-  }
-
-  return (
-    <div
-      className={cn(
-        "rounded-xl border-2 border-dashed p-3 flex flex-col items-center text-center",
-        file ? "border-emerald-300 bg-emerald-50/40" : "border-neutral-200 bg-neutral-50/50",
-      )}
-    >
-      <div className="w-full h-24 rounded-lg bg-white border border-neutral-200 overflow-hidden flex items-center justify-center mb-2">
-        {previewUrl ? (
-          <img src={previewUrl} alt={titulo} className="w-full h-full object-cover" />
-        ) : (
-          <Icon size={22} className="text-neutral-300" />
-        )}
-      </div>
-      <p className="text-[11px] font-bold text-neutral-800">{titulo}</p>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/jpeg,image/png,image/webp"
-        capture={capture}
-        className="hidden"
-        onChange={(e) => {
-          handleSelect(e.target.files?.[0]);
-          e.target.value = "";
-        }}
-      />
-      <Button
-        type="button"
-        size="sm"
-        variant={file ? "outline" : "default"}
-        onClick={() => inputRef.current?.click()}
-        className={cn("mt-2 h-8 text-[11px] w-full", !file && "bg-neutral-900 text-white hover:bg-neutral-800")}
-      >
-        {file ? "Trocar foto" : "Enviar foto"}
-      </Button>
-    </div>
   );
 }
 

@@ -44,7 +44,7 @@ function FaturamentoAdminPage() {
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState("");
   const [atualizandoId, setAtualizandoId] = useState<string | null>(null);
-  const now = new Date();
+  const now = useMemo(() => new Date(), []);
   // selectedYM: 'YYYY-MM' OR 'all'
   const [selectedYM, setSelectedYM] = useState<string>(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
   const [tab, setTab] = useState("receber");
@@ -89,22 +89,21 @@ function FaturamentoAdminPage() {
     const add = (yy: number, mm: number) => set.add(`${yy}-${String(mm + 1).padStart(2, "0")}`);
     add(y, m); add(y, m + 1 > 11 ? 0 : m + 1); add(y, m - 1 < 0 ? 11 : m - 1);
     return Array.from(set).sort((a, b) => b.localeCompare(a));
-  }, [enriched]);
+  }, [enriched, now]);
 
-  const inSelected = (p: any) => selectedYM === "all" || p._ym === selectedYM;
-
-  const filtrar = (lista: any[]) => {
+  const doMes = useMemo(() => {
     const q = busca.trim().toLowerCase();
-    if (!q) return lista;
-    return lista.filter(p =>
-      (p.consulta?.tenant_name ?? "").toLowerCase().includes(q) ||
-      (p.consulta?.tenant_document ?? "").toLowerCase().includes(q) ||
-      formatEndereco(p.consulta?.imovel).toLowerCase().includes(q) ||
-      p._status.includes(q)
-    );
-  };
-
-  const doMes = useMemo(() => filtrar(enriched.filter(inSelected)), [enriched, selectedYM, busca]);
+    return enriched.filter((p) => {
+      if (selectedYM !== "all" && p._ym !== selectedYM) return false;
+      if (!q) return true;
+      return (
+        (p.consulta?.tenant_name ?? "").toLowerCase().includes(q) ||
+        (p.consulta?.tenant_document ?? "").toLowerCase().includes(q) ||
+        formatEndereco(p.consulta?.imovel).toLowerCase().includes(q) ||
+        p._status.includes(q)
+      );
+    });
+  }, [enriched, selectedYM, busca]);
 
   const vencidas = doMes.filter(p => p._status === "vencido");
   const aReceber = doMes.filter(p => p._status === "a_vencer");

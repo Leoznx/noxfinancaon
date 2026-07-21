@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { 
   Bell, 
   Search, 
@@ -70,31 +70,36 @@ function NotificacoesPage() {
   const [filtro, setFiltro] = useState('todas'); // 'todas', 'nao_lidas'
   const [busca, setBusca] = useState('');
 
-  useEffect(() => {
-    carregarNotificacoes();
+  const carregarNotificacoes = useCallback(async () => {
+    if (!user) {
+      setCarregando(false);
+      return;
+    }
+    setCarregando(true);
+    try {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) return;
+
+      let query = supabase
+        .from('notificacoes')
+        .select('*')
+        .eq('user_id', authUser.id)
+        .order('created_at', { ascending: false });
+
+      if (filtro === 'nao_lidas') {
+        query = query.eq('lida', false);
+      }
+
+      const { data } = await query;
+      setNotificacoes(data || []);
+    } finally {
+      setCarregando(false);
+    }
   }, [filtro, user]);
 
-  async function carregarNotificacoes() {
-    if (!user) return;
-    setCarregando(true);
-    
-    const { data: { user: authUser } } = await supabase.auth.getUser();
-    if (!authUser) return;
-
-    let query = supabase
-      .from('notificacoes')
-      .select('*')
-      .eq('user_id', authUser.id)
-      .order('created_at', { ascending: false });
-
-    if (filtro === 'nao_lidas') {
-      query = query.eq('lida', false);
-    }
-
-    const { data } = await query;
-    setNotificacoes(data || []);
-    setCarregando(false);
-  }
+  useEffect(() => {
+    carregarNotificacoes();
+  }, [carregarNotificacoes]);
 
   async function marcarLida(id: string) {
     await supabase

@@ -140,7 +140,7 @@ export function VerificacaoDocumento({ usuario }: { usuario?: UsuarioDocumento }
       }
     })();
     return () => { ativo = false; };
-  }, [usuario?.userId, usuario?.profileId, usuario?.isRealSession]);
+  }, [usuario]);
 
   async function refreshSigned(v: Verificacao) {
     const paths: Array<[SlotKey, string | null]> = [
