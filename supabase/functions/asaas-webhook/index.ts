@@ -13,6 +13,7 @@ import {
   toMoney,
   wasNotificationSent,
 } from "../_shared/asaas.ts";
+import { dispatchD4SignContract } from "../_shared/d4sign.ts";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders(req) });
@@ -137,7 +138,8 @@ serve(async (req) => {
     .maybeSingle();
   if (faturaVinculada) {
     const updateFatura: Record<string, unknown> = { status: internalStatus };
-    if (internalStatus === "paid" && !faturaVinculada.pago_em) updateFatura.pago_em = receivedAt || new Date().toISOString();
+    if (internalStatus === "paid" && !faturaVinculada.pago_em)
+      updateFatura.pago_em = receivedAt || new Date().toISOString();
     const { error: updateFaturaError } = await supabase
       .from("faturas_inquilino")
       .update(updateFatura)
@@ -280,6 +282,25 @@ serve(async (req) => {
         }
       }
     }
+
+    // O contrato só é enviado depois de o Asaas confirmar o primeiro
+    // pagamento. A função compartilhada é idempotente: se o Asaas enviar
+    // PAYMENT_CONFIRMED e depois PAYMENT_RECEIVED, o mesmo documento não é
+    // criado duas vezes na D4Sign.
+    const isFirstPayment = !faturaVinculada || Number(faturaVinculada.numero_parcela) === 1;
+    if (isFirstPayment && (eventType === "PAYMENT_CONFIRMED" || eventType === "PAYMENT_RECEIVED")) {
+      const contractResult = await dispatchD4SignContract(supabase, localPayment.consultation_id);
+      if (!contractResult.ok) {
+        // O evento financeiro continua processado: o pagamento não pode ser
+        // refeito por uma indisponibilidade externa. A tentativa fica salva
+        // em contract_signatures e pode ser retomada com segurança.
+        console.error("[asaas-webhook] falha ao despachar contrato D4Sign", {
+          consultationId: localPayment.consultation_id,
+          signatureId: contractResult.signatureId || null,
+          error: contractResult.error || contractResult.status || "unknown",
+        });
+      }
+    }
   }
 
   await markEvent(supabase, eventId, "processed", null, {
@@ -335,7 +356,10 @@ async function handleConsolidatedBatchEvent(
     const bateValor = Math.abs(valorPago - Number(batch.total_value)) <= 0.02;
 
     if (!bateValor) {
-      await supabase.from("consolidated_invoice_batches").update({ status: "partial" }).eq("id", batch.id);
+      await supabase
+        .from("consolidated_invoice_batches")
+        .update({ status: "partial" })
+        .eq("id", batch.id);
       return;
     }
 
@@ -372,7 +396,10 @@ async function handleConsolidatedBatchEvent(
 
       const faturaAsaasPaymentRowId = item.fatura?.asaas_payment_id;
       if (!faturaAsaasPaymentRowId) {
-        await supabase.from("consolidated_invoice_items").update({ status: "paid_via_consolidated" }).eq("id", item.id);
+        await supabase
+          .from("consolidated_invoice_items")
+          .update({ status: "paid_via_consolidated" })
+          .eq("id", item.id);
         continue;
       }
 
@@ -383,44 +410,75 @@ async function handleConsolidatedBatchEvent(
         .maybeSingle();
       const individualAsaasChargeId = pagamentoIndividual?.asaas_payment_id;
 
-      if (!individualAsaasChargeId || pagamentoIndividual?.status === "paid" || pagamentoIndividual?.status === "cancelled") {
-        await supabase.from("consolidated_invoice_items").update({ status: "paid_via_consolidated" }).eq("id", item.id);
+      if (
+        !individualAsaasChargeId ||
+        pagamentoIndividual?.status === "paid" ||
+        pagamentoIndividual?.status === "cancelled"
+      ) {
+        await supabase
+          .from("consolidated_invoice_items")
+          .update({ status: "paid_via_consolidated" })
+          .eq("id", item.id);
         continue;
       }
 
       const resultado = await cancelAsaasPayment(individualAsaasChargeId);
       if (resultado.cancelled) {
-        await supabase.from("asaas_payments").update({ status: "cancelled" }).eq("id", faturaAsaasPaymentRowId);
-        await supabase.from("consolidated_invoice_items").update({ status: "paid_via_consolidated" }).eq("id", item.id);
+        await supabase
+          .from("asaas_payments")
+          .update({ status: "cancelled" })
+          .eq("id", faturaAsaasPaymentRowId);
+        await supabase
+          .from("consolidated_invoice_items")
+          .update({ status: "paid_via_consolidated" })
+          .eq("id", item.id);
       } else {
-        console.error("[asaas-webhook] nao foi possivel cancelar cobranca individual apos consolidado pago", {
-          batchId: batch.id,
-          itemId: item.id,
-          individualAsaasChargeId,
-        });
-        await supabase.from("consolidated_invoice_items").update({ status: "manual_review_required" }).eq("id", item.id);
+        console.error(
+          "[asaas-webhook] nao foi possivel cancelar cobranca individual apos consolidado pago",
+          {
+            batchId: batch.id,
+            itemId: item.id,
+            individualAsaasChargeId,
+          },
+        );
+        await supabase
+          .from("consolidated_invoice_items")
+          .update({ status: "manual_review_required" })
+          .eq("id", item.id);
       }
     }
     return;
   }
 
   if (eventType === "PAYMENT_OVERDUE") {
-    await supabase.from("consolidated_invoice_batches").update({ status: "active" }).eq("id", batch.id);
+    await supabase
+      .from("consolidated_invoice_batches")
+      .update({ status: "active" })
+      .eq("id", batch.id);
     return;
   }
   if (eventType === "PAYMENT_DELETED" || eventType === "PAYMENT_BANK_SLIP_CANCELLED") {
     // Lote cancelado/vencido sem pagamento - libera as faturas individuais
     // (remove o vinculo de consolidacao) pra poderem ser cobradas de novo ou
     // entrar em outro lote futuro.
-    await supabase.from("consolidated_invoice_batches").update({ status: "cancelled" }).eq("id", batch.id);
+    await supabase
+      .from("consolidated_invoice_batches")
+      .update({ status: "cancelled" })
+      .eq("id", batch.id);
     const { data: itens } = await supabase
       .from("consolidated_invoice_items")
       .select("id, fatura_id")
       .eq("batch_id", batch.id)
       .eq("status", "active");
     for (const item of itens ?? []) {
-      await supabase.from("faturas_inquilino").update({ consolidated_item_id: null }).eq("id", item.fatura_id);
-      await supabase.from("consolidated_invoice_items").update({ status: "cancelled_after_consolidation" }).eq("id", item.id);
+      await supabase
+        .from("faturas_inquilino")
+        .update({ consolidated_item_id: null })
+        .eq("id", item.fatura_id);
+      await supabase
+        .from("consolidated_invoice_items")
+        .update({ status: "cancelled_after_consolidation" })
+        .eq("id", item.id);
     }
     return;
   }

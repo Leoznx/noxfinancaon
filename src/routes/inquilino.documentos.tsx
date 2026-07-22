@@ -22,7 +22,7 @@ const TIPO_META: Record<string, { label: string; icon: any; tint: string }> = {
   garantia: { label: "Garantia", icon: FileBadge,      tint: "bg-amber-50 text-amber-700" },
 };
 
-const STORAGE_BUCKETS = ["approval-documents", "anexos", "documentos-proposta"];
+const STORAGE_BUCKETS = ["contratos-assinados", "approval-documents", "anexos", "documentos-proposta"];
 
 function DocumentosInquilino() {
   const { user } = useAuth();

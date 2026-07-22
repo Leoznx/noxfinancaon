@@ -48,6 +48,7 @@ import { Route as CadastroImobiliariaRouteImport } from './routes/cadastro-imobi
 import { Route as CadastroCorretorRouteImport } from './routes/cadastro-corretor'
 import { Route as CadastroRouteImport } from './routes/cadastro'
 import { Route as ApolicesRouteImport } from './routes/apolices'
+import { Route as AcessoInquilinoRouteImport } from './routes/acesso-inquilino'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as VendedorIndexRouteImport } from './routes/vendedor.index'
 import { Route as SimularIndexRouteImport } from './routes/simular.index'
@@ -71,6 +72,7 @@ import { Route as LoginMarketingnoxRouteImport } from './routes/login_.marketing
 import { Route as LoginJuridiconoxRouteImport } from './routes/login_.juridiconox'
 import { Route as LoginFinanceironoxRouteImport } from './routes/login_.financeironox'
 import { Route as InquilinoPerfilRouteImport } from './routes/inquilino.perfil'
+import { Route as InquilinoPainelRouteImport } from './routes/inquilino.painel'
 import { Route as InquilinoFaturasRouteImport } from './routes/inquilino.faturas'
 import { Route as InquilinoDocumentosRouteImport } from './routes/inquilino.documentos'
 import { Route as FaturasInquilinosIdRouteImport } from './routes/faturas-inquilinos.$id'
@@ -307,6 +309,11 @@ const ApolicesRoute = ApolicesRouteImport.update({
   path: '/apolices',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AcessoInquilinoRoute = AcessoInquilinoRouteImport.update({
+  id: '/acesso-inquilino',
+  path: '/acesso-inquilino',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -424,6 +431,11 @@ const LoginFinanceironoxRoute = LoginFinanceironoxRouteImport.update({
 const InquilinoPerfilRoute = InquilinoPerfilRouteImport.update({
   id: '/inquilino/perfil',
   path: '/inquilino/perfil',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InquilinoPainelRoute = InquilinoPainelRouteImport.update({
+  id: '/inquilino/painel',
+  path: '/inquilino/painel',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InquilinoFaturasRoute = InquilinoFaturasRouteImport.update({
@@ -623,6 +635,7 @@ const ConsultasIdDadosComplementaresRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/acesso-inquilino': typeof AcessoInquilinoRoute
   '/apolices': typeof ApolicesRouteWithChildren
   '/cadastro': typeof CadastroRoute
   '/cadastro-corretor': typeof CadastroCorretorRoute
@@ -693,6 +706,7 @@ export interface FileRoutesByFullPath {
   '/faturas-inquilinos/$id': typeof FaturasInquilinosIdRoute
   '/inquilino/documentos': typeof InquilinoDocumentosRoute
   '/inquilino/faturas': typeof InquilinoFaturasRoute
+  '/inquilino/painel': typeof InquilinoPainelRoute
   '/inquilino/perfil': typeof InquilinoPerfilRoute
   '/login/financeironox': typeof LoginFinanceironoxRoute
   '/login/juridiconox': typeof LoginJuridiconoxRoute
@@ -723,6 +737,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/acesso-inquilino': typeof AcessoInquilinoRoute
   '/cadastro': typeof CadastroRoute
   '/cadastro-corretor': typeof CadastroCorretorRoute
   '/cadastro-imobiliaria': typeof CadastroImobiliariaRoute
@@ -789,6 +804,7 @@ export interface FileRoutesByTo {
   '/faturas-inquilinos/$id': typeof FaturasInquilinosIdRoute
   '/inquilino/documentos': typeof InquilinoDocumentosRoute
   '/inquilino/faturas': typeof InquilinoFaturasRoute
+  '/inquilino/painel': typeof InquilinoPainelRoute
   '/inquilino/perfil': typeof InquilinoPerfilRoute
   '/login/financeironox': typeof LoginFinanceironoxRoute
   '/login/juridiconox': typeof LoginJuridiconoxRoute
@@ -820,6 +836,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/acesso-inquilino': typeof AcessoInquilinoRoute
   '/apolices': typeof ApolicesRouteWithChildren
   '/cadastro': typeof CadastroRoute
   '/cadastro-corretor': typeof CadastroCorretorRoute
@@ -890,6 +907,7 @@ export interface FileRoutesById {
   '/faturas-inquilinos/$id': typeof FaturasInquilinosIdRoute
   '/inquilino/documentos': typeof InquilinoDocumentosRoute
   '/inquilino/faturas': typeof InquilinoFaturasRoute
+  '/inquilino/painel': typeof InquilinoPainelRoute
   '/inquilino/perfil': typeof InquilinoPerfilRoute
   '/login_/financeironox': typeof LoginFinanceironoxRoute
   '/login_/juridiconox': typeof LoginJuridiconoxRoute
@@ -922,6 +940,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/acesso-inquilino'
     | '/apolices'
     | '/cadastro'
     | '/cadastro-corretor'
@@ -992,6 +1011,7 @@ export interface FileRouteTypes {
     | '/faturas-inquilinos/$id'
     | '/inquilino/documentos'
     | '/inquilino/faturas'
+    | '/inquilino/painel'
     | '/inquilino/perfil'
     | '/login/financeironox'
     | '/login/juridiconox'
@@ -1022,6 +1042,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/acesso-inquilino'
     | '/cadastro'
     | '/cadastro-corretor'
     | '/cadastro-imobiliaria'
@@ -1088,6 +1109,7 @@ export interface FileRouteTypes {
     | '/faturas-inquilinos/$id'
     | '/inquilino/documentos'
     | '/inquilino/faturas'
+    | '/inquilino/painel'
     | '/inquilino/perfil'
     | '/login/financeironox'
     | '/login/juridiconox'
@@ -1118,6 +1140,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/acesso-inquilino'
     | '/apolices'
     | '/cadastro'
     | '/cadastro-corretor'
@@ -1188,6 +1211,7 @@ export interface FileRouteTypes {
     | '/faturas-inquilinos/$id'
     | '/inquilino/documentos'
     | '/inquilino/faturas'
+    | '/inquilino/painel'
     | '/inquilino/perfil'
     | '/login_/financeironox'
     | '/login_/juridiconox'
@@ -1219,6 +1243,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AcessoInquilinoRoute: typeof AcessoInquilinoRoute
   ApolicesRoute: typeof ApolicesRouteWithChildren
   CadastroRoute: typeof CadastroRoute
   CadastroCorretorRoute: typeof CadastroCorretorRoute
@@ -1286,6 +1311,7 @@ export interface RootRouteChildren {
   FaturasInquilinosIdRoute: typeof FaturasInquilinosIdRoute
   InquilinoDocumentosRoute: typeof InquilinoDocumentosRoute
   InquilinoFaturasRoute: typeof InquilinoFaturasRoute
+  InquilinoPainelRoute: typeof InquilinoPainelRoute
   InquilinoPerfilRoute: typeof InquilinoPerfilRoute
   LoginFinanceironoxRoute: typeof LoginFinanceironoxRoute
   LoginJuridiconoxRoute: typeof LoginJuridiconoxRoute
@@ -1572,6 +1598,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApolicesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/acesso-inquilino': {
+      id: '/acesso-inquilino'
+      path: '/acesso-inquilino'
+      fullPath: '/acesso-inquilino'
+      preLoaderRoute: typeof AcessoInquilinoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -1731,6 +1764,13 @@ declare module '@tanstack/react-router' {
       path: '/inquilino/perfil'
       fullPath: '/inquilino/perfil'
       preLoaderRoute: typeof InquilinoPerfilRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/inquilino/painel': {
+      id: '/inquilino/painel'
+      path: '/inquilino/painel'
+      fullPath: '/inquilino/painel'
+      preLoaderRoute: typeof InquilinoPainelRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/inquilino/faturas': {
@@ -2081,6 +2121,7 @@ const VendedorRouteWithChildren = VendedorRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AcessoInquilinoRoute: AcessoInquilinoRoute,
   ApolicesRoute: ApolicesRouteWithChildren,
   CadastroRoute: CadastroRoute,
   CadastroCorretorRoute: CadastroCorretorRoute,
@@ -2148,6 +2189,7 @@ const rootRouteChildren: RootRouteChildren = {
   FaturasInquilinosIdRoute: FaturasInquilinosIdRoute,
   InquilinoDocumentosRoute: InquilinoDocumentosRoute,
   InquilinoFaturasRoute: InquilinoFaturasRoute,
+  InquilinoPainelRoute: InquilinoPainelRoute,
   InquilinoPerfilRoute: InquilinoPerfilRoute,
   LoginFinanceironoxRoute: LoginFinanceironoxRoute,
   LoginJuridiconoxRoute: LoginJuridiconoxRoute,

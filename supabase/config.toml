@@ -8,6 +8,15 @@ verify_jwt = true
 
 [functions.asaas-webhook]
 verify_jwt = false
+static_files = ["./functions/_shared/contract-templates/*.docx"]
+
+[functions.d4sign-create-contract]
+verify_jwt = true
+static_files = ["./functions/_shared/contract-templates/*.docx"]
+
+[functions.d4sign-webhook]
+verify_jwt = false
+static_files = ["./functions/_shared/contract-templates/*.docx"]
 
 [functions.asaas-create-customer]
 verify_jwt = true

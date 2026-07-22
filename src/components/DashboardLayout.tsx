@@ -158,6 +158,7 @@ const proprietarioItems = [
 ];
 
 const inquilinoItems = [
+  { icon: LayoutDashboard, label: "Meu Seguro", href: "/inquilino/painel" },
   { icon: FileText, label: "Documentos", href: "/inquilino/documentos" },
   { icon: Receipt, label: "Faturas", href: "/inquilino/faturas" },
   { icon: UserCircle, label: "Meu Perfil", href: "/configuracoes" },

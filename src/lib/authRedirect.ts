@@ -6,7 +6,7 @@
 export function redirectPathForRole(role: string | null | undefined): string {
   switch (role) {
     case "inquilino":
-      return "/inquilino/documentos";
+      return "/inquilino/painel";
     case "juridico":
       return "/admin/aprovacoes";
     case "financeiro":
