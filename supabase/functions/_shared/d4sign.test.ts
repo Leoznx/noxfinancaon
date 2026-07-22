@@ -1,0 +1,71 @@
+import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { strFromU8, unzipSync } from "https://esm.sh/fflate@0.8.2";
+import { buildContractDocx, type TemplateKey } from "./d4sign.ts";
+
+const consulta = {
+  id: "11111111-2222-3333-4444-555555555555",
+  tenant_name: "Maria da Silva",
+  tenant_document: "12345678901",
+  tenant_email: "maria@example.com",
+  tenant_telefone: "11999998888",
+  tenant_data_nascimento: "1990-05-17",
+  valor_premio_mensal: 480,
+  valor_anual: 5760,
+  imovel_subtipo: "Apartamento",
+  imovel_endereco: "Rua das Flores",
+  imovel_numero: "123",
+  imovel_complemento: "Apto 45",
+  imovel_bairro: "Centro",
+  imovel_cidade: "São Paulo",
+  imovel_estado: "SP",
+  imovel_cep: "01001000",
+  imoveis: {
+    valor_aluguel: 1500,
+    valor_condominio: 300,
+    valor_taxas: 100,
+  },
+  planos: {
+    nome: "NOX Smart",
+    cobertura_multiplicador: 30,
+  },
+  documentos: {
+    extras: {
+      external_painting_enabled: true,
+      external_painting_total: 72,
+      activation_fee_enabled: true,
+      activation_fee_amount: 200,
+    },
+  },
+  insurance_coverages: ["incendio"],
+  insurance_assistance: "assistencia_basica",
+  administrador: {
+    nome: "Imobiliária Central Ltda.",
+    documento: "12345678000199",
+    endereco: "Avenida Brasil, 500",
+    cidade: "São Paulo",
+    estado: "SP",
+    cep: "01310100",
+    telefone: "1133334444",
+    email: "contato@imobiliariacentral.com.br",
+  },
+};
+
+for (const template of ["fit", "fit_plus", "smart", "smart_plus", "up"] as TemplateKey[]) {
+  Deno.test(`personaliza o contrato ${template}`, async () => {
+    const built = await buildContractDocx(template, consulta, "NOX-TESTE-001");
+    const archive = unzipSync(built.bytes);
+    const documentXml = strFromU8(archive["word/document.xml"]);
+
+    assert(documentXml.includes("NOX-TESTE-001"));
+    assert(documentXml.includes("Maria da Silva"));
+    assert(documentXml.includes("123.456.789-01"));
+    assert(documentXml.includes("maria@example.com"));
+    assert(documentXml.includes("Rua das Flores, 123"));
+    assert(documentXml.includes("Imobiliária Central Ltda."));
+    assert(documentXml.includes("12.345.678/0001-99"));
+    assert(documentXml.includes("TAXA DE ADESÃO (SETUP) – R$ 200,00"));
+    assert(documentXml.includes("Pintura interna contratada: R$ 72,00"));
+    assert(documentXml.includes("R$ 57.000,00") || documentXml.includes("R$ 57.000,00"));
+    assertEquals(built.fileName.endsWith(".docx"), true);
+  });
+}

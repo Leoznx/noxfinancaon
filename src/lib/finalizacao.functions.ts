@@ -37,7 +37,8 @@ export const salvarFormaPagamento = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((d: unknown) => salvarPagamentoSchema.parse(d))
   .handler(async ({ data, context }) => {
-    if (!data.property_not_wood_confirmed) throw new Error("Confirme que o imóvel não é de madeira para continuar.");
+    if (!data.property_not_wood_confirmed)
+      throw new Error("Confirme que o imóvel não é de madeira para continuar.");
     if (!data.terms_accepted) throw new Error("Aceite os Termos e Condições para continuar.");
 
     const { error } = await context.supabase
@@ -70,34 +71,31 @@ export const enviarProposta = createServerFn({ method: "POST" })
   .validator((d: unknown) => enviarPropostaSchema.parse(d))
   .handler(async ({ data, context }) => {
     const now = new Date().toISOString();
-    // Gera token único e validade de 30 dias
-    const token =
-      (globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)) +
-      "-" +
-      Math.random().toString(36).slice(2) +
-      Date.now().toString(36);
-    const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
     const { error } = await context.supabase
       .from("consultas_credito")
       .update({
         status: "aguardando_ativacao",
-        substatus: "aguardando_assinatura",
+        substatus: "aguardando_pagamento",
         proposta_enviada_em: now,
-        link_ativacao_enviado_em: now,
-        activation_token: token,
-        activation_token_expires_at: expires,
-        activation_status: "pendente",
+        link_ativacao_enviado_em: null,
+        activation_token: null,
+        activation_token_expires_at: null,
+        activation_status: "aguardando_pagamento",
       } as any)
       .eq("id", data.consultaId);
     if (error) throw new Error(error.message);
 
     const eventos = [
-      { tipo: "proposta_enviada", desc: "Proposta enviada com sucesso." },
-      { tipo: "link_gerado", desc: `Link de ativação gerado: /ativar-fianca/${token}` },
-      { tipo: "link_email", desc: "Link de ativação enviado por e-mail ao inquilino." },
-      { tipo: "link_sms", desc: "Link de ativação enviado por SMS ao inquilino." },
-      { tipo: "aguardando_assinatura", desc: "Aguardando ativação do inquilino." },
+      { tipo: "proposta_registrada", desc: "Proposta registrada com sucesso." },
+      {
+        tipo: "aguardando_pagamento",
+        desc: "Aguardando a confirmação do primeiro pagamento pelo Asaas.",
+      },
+      {
+        tipo: "contrato_d4sign_pendente",
+        desc: "O contrato será enviado pela D4Sign após a confirmação do pagamento.",
+      },
     ];
     for (const e of eventos) {
       await context.supabase.from("proposta_historico").insert({
@@ -108,9 +106,8 @@ export const enviarProposta = createServerFn({ method: "POST" })
       } as any);
     }
 
-    return { ok: true, enviadoEm: now, activationToken: token, activationUrl: `/ativar-fianca/${token}` };
+    return { ok: true, enviadoEm: now };
   });
-
 
 export const listarHistoricoProposta = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])

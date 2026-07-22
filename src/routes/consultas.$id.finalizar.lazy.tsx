@@ -24,7 +24,10 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { ModalPagamentoAsaas } from "@/components/simulacao/ModalPagamentoAsaas";
-import { ModalCronogramaBoletos, type CronogramaResultado } from "@/components/simulacao/ModalCronogramaBoletos";
+import {
+  ModalCronogramaBoletos,
+  type CronogramaResultado,
+} from "@/components/simulacao/ModalCronogramaBoletos";
 import { toast } from "sonner";
 import type { NormalizedAsaasPayment } from "@/lib/asaas-payment";
 import {
@@ -263,7 +266,14 @@ function FinalizarPage() {
         if ((data as any).insurance_payment_method)
           setPagamento((data as any).insurance_payment_method);
         if ((data as any).terms_accepted) setAceiteTermos(true);
-        if ((data as any).substatus === "aguardando_assinatura") setEtapa("enviada");
+        if (
+          [
+            "aguardando_pagamento",
+            "aguardando_assinatura",
+            "aguardando_assinatura_d4sign",
+          ].includes((data as any).substatus)
+        )
+          setEtapa("enviada");
 
         setDocumentos(docsRes.data ?? []);
         if (histRes) setHistorico(histRes.historico);
@@ -373,6 +383,18 @@ function FinalizarPage() {
     }
   }
 
+  async function atualizarPropostaRegistrada(enviadoEm: string) {
+    const h = await fnHist({ data: { consultaId: id } });
+    setHistorico(h.historico);
+    setConsulta((c: any) => ({
+      ...c,
+      proposta_enviada_em: enviadoEm,
+      substatus: "aguardando_pagamento",
+      status: "aguardando_ativacao",
+    }));
+    setEtapa("enviada");
+  }
+
   async function handleEnviar(options: { silentSuccess?: boolean } = {}) {
     setEnviando(true);
     try {
@@ -398,16 +420,11 @@ function FinalizarPage() {
         },
       });
       const r = await fnEnviar({ data: { consultaId: id } });
-      const h = await fnHist({ data: { consultaId: id } });
-      setHistorico(h.historico);
-      setConsulta((c: any) => ({
-        ...c,
-        proposta_enviada_em: r.enviadoEm,
-        substatus: "aguardando_assinatura",
-        status: "aprovado",
-      }));
-      setEtapa("enviada");
-      if (!options.silentSuccess) toast.success("Proposta enviada com sucesso!");
+      await atualizarPropostaRegistrada(r.enviadoEm);
+      if (!options.silentSuccess)
+        toast.success(
+          "Proposta registrada. O contrato será enviado após a confirmação do pagamento.",
+        );
     } catch (e: any) {
       toast.error("Erro ao enviar: " + e.message);
     } finally {
@@ -821,7 +838,10 @@ function ResumoPropostaLoft(p: any) {
   const ehParceladoInquilino = consulta?.payment_type === "inquilino" && pagamento === "boleto";
   const cronogramaPreview = useMemo(() => {
     if (!ehParceladoInquilino) return [];
-    return generateInstallmentSchedulePreview({ firstDueDate: addBusinessDaysPreview(3), count: 12 });
+    return generateInstallmentSchedulePreview({
+      firstDueDate: addBusinessDaysPreview(3),
+      count: 12,
+    });
   }, [ehParceladoInquilino]);
 
   async function handlePagarComAsaas() {
@@ -868,14 +888,16 @@ function ResumoPropostaLoft(p: any) {
       });
 
       if (ehParceladoInquilino) {
-        const { data: planoData, error: planoError } = await supabase.functions.invoke<CronogramaResultado>(
-          "asaas-create-installment-plan",
-          { body: { proposalId: id } },
-        );
+        const registro = await fnEnviar({ data: { consultaId: id } });
+        const { data: planoData, error: planoError } =
+          await supabase.functions.invoke<CronogramaResultado>("asaas-create-installment-plan", {
+            body: { proposalId: id },
+          });
         if (planoError) throw new Error(planoError.message);
         if ((planoData as any)?.error) throw new Error((planoData as any).error);
-        if (!planoData?.installments?.length) throw new Error("O Asaas nao retornou o cronograma de boletos.");
-        await onEnviar({ silentSuccess: true });
+        if (!planoData?.installments?.length)
+          throw new Error("O Asaas nao retornou o cronograma de boletos.");
+        await atualizarPropostaRegistrada(registro.enviadoEm);
         setCronogramaResultado(planoData);
         setModalCronogramaAberto(true);
         toast.success(`${planoData.installmentTotal} boletos gerados com sucesso.`);
@@ -934,6 +956,7 @@ function ResumoPropostaLoft(p: any) {
         };
       }
 
+      const registro = await fnEnviar({ data: { consultaId: id } });
       const { data, error } = await supabase.functions.invoke<NormalizedAsaasPayment>(
         "asaas-create-payment",
         {
@@ -946,11 +969,10 @@ function ResumoPropostaLoft(p: any) {
       if ((data as any)?.error) throw new Error((data as any).error);
       if (!data?.success) throw new Error("O Asaas nao retornou os dados do pagamento.");
 
-      await onEnviar({ silentSuccess: true });
-
+      await atualizarPropostaRegistrada(registro.enviadoEm);
       setPagamentoAsaasResultado(data);
       setModalAsaasAberto(true);
-      toast.success("Pagamento criado. Aguarde a confirmacao do Asaas.");
+      toast.success("Pagamento criado. O contrato será enviado pela D4Sign após a confirmação.");
     } catch (e: any) {
       console.error("Erro ao criar pagamento Asaas:", e);
       toast.error(e?.message || "Não foi possível gerar o pagamento agora. Tente novamente.");
@@ -2335,16 +2357,15 @@ function EtapaEnviada(p: any) {
           <CheckCircle2 size={32} className="text-neutral-900" />
         </div>
         <h2 className="text-2xl sm:text-3xl font-black">
-          Proposta enviada e aguardando ativação do inquilino
+          Pagamento criado e aguardando confirmação
         </h2>
         <p className="text-sm text-neutral-300 mt-3 max-w-xl mx-auto">
-          A ativação do contrato de locação com garantia da NOX Fiança será concluída após a
-          assinatura do contrato de seguro pelo inquilino.
+          Assim que o pagamento for confirmado, a D4Sign enviará o contrato do plano escolhido por
+          e-mail e SMS para o inquilino assinar.
         </p>
         <p className="text-xs text-neutral-400 mt-3">
-          Enviamos o link de ativação para o e-mail e também por SMS para a pessoa inquilina, para
-          que ela possa revisar, assinar o contrato de seguro e seguir com a forma de pagamento
-          escolhida.
+          Depois da assinatura, o seguro será ativado automaticamente e o inquilino receberá por
+          e-mail e WhatsApp o acesso ao painel com contrato, documentos e faturas.
         </p>
       </div>
 
@@ -2354,7 +2375,7 @@ function EtapaEnviada(p: any) {
           <Linha label="Inquilino" value={inquilino?.nome ?? consulta?.tenant_name} />
           <Linha label="Plano" value={plano?.nome} />
           <Linha label="Pagamento" value={pagLabel} />
-          <Linha label="Status" value="Proposta enviada" />
+          <Linha label="Status" value="Aguardando confirmação do pagamento" />
           <Linha
             label="Enviada em"
             value={
@@ -2368,27 +2389,28 @@ function EtapaEnviada(p: any) {
         <Card icon={<Sparkles size={14} />} title="Próximos passos">
           <ol className="space-y-2 text-xs text-neutral-700">
             <li className="flex gap-2">
-              <span className="font-black text-yellow-700">1.</span> A proposta foi gerada com
+              <span className="font-black text-yellow-700">1.</span> O pagamento foi criado com
               sucesso
             </li>
             <li className="flex gap-2">
-              <span className="font-black text-yellow-700">2.</span> O inquilino receberá o link de
-              ativação
+              <span className="font-black text-yellow-700">2.</span> Após a confirmação, a D4Sign
+              enviará o contrato
             </li>
             <li className="flex gap-2">
-              <Mail size={14} className="text-yellow-700 shrink-0 mt-0.5" /> Link enviado por e-mail
+              <Mail size={14} className="text-yellow-700 shrink-0 mt-0.5" /> Assinatura enviada por
+              e-mail
             </li>
             <li className="flex gap-2">
-              <MessageSquare size={14} className="text-yellow-700 shrink-0 mt-0.5" /> Link enviado
-              por SMS
+              <MessageSquare size={14} className="text-yellow-700 shrink-0 mt-0.5" /> Código de
+              autenticação enviado por SMS
             </li>
             <li className="flex gap-2">
-              <span className="font-black text-yellow-700">3.</span> O inquilino acessa o link e
-              assina o contrato
+              <span className="font-black text-yellow-700">3.</span> O inquilino assina o contrato
+              na D4Sign
             </li>
             <li className="flex gap-2">
-              <span className="font-black text-yellow-700">4.</span> Após assinatura, o status é
-              atualizado no painel
+              <span className="font-black text-yellow-700">4.</span> O seguro é ativado e o painel é
+              liberado
             </li>
           </ol>
         </Card>
