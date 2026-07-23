@@ -5,10 +5,11 @@ import { Button } from '@/components/ui/button';
 
 export const PlansSection = () => {
   const plans = [
-    { name: "NOX Essencial", coverage: "25x", exit: "3x", benefits: ['Análise em 1 minuto', 'Contratação Digital', 'Suporte Jurídico', 'Assistência 24h ao imóvel'] },
-    { name: "NOX Plus", coverage: "30x", exit: "3x", featured: true, benefits: ['Análise em 1 minuto', 'Contratação Digital', 'Suporte Jurídico', 'Assistência 24h ao imóvel'] },
-    { name: "NOX Premium", coverage: "35x", exit: "5x", benefits: ['Análise em 1 minuto', 'Contratação Digital', 'Suporte Jurídico', 'Assistência 24h ao imóvel', 'Cobertura de IPTU e Condomínio'] },
-    { name: "NOX Top", coverage: "40x", exit: "5x", benefits: ['Análise em 1 minuto', 'Contratação Digital', 'Suporte Jurídico', 'Assistência 24h ao imóvel', 'Cobertura de IPTU e Condomínio', 'Gerente de relacionamento dedicado'] },
+    { name: "NOX FIT", coverage: "30x", rate: "10%" },
+    { name: "NOX FIT +", coverage: "35x", rate: "11,5%", coversExpenses: true },
+    { name: "NOX SMART", coverage: "30x", rate: "12%", badge: "MAIS APROVAÇÕES", featured: true },
+    { name: "NOX SMART +", coverage: "35x", rate: "13,5%", coversExpenses: true, badge: "COBRE TAXAS" },
+    { name: "NOX UP", coverage: "40x", rate: "16%", coversExpenses: true, badge: "MAIOR COBERTURA" },
   ];
 
   return (
@@ -24,13 +25,13 @@ export const PlansSection = () => {
           Planos transparentes que atendem locações residenciais e comerciais, para pessoas físicas e jurídicas.
         </p>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 text-left max-w-7xl mx-auto">
-          {plans.map((plan, i) => (
+        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-6 text-left max-w-7xl mx-auto">
+          {plans.map((plan) => (
             <div
-              key={i}
+              key={plan.name}
               className={`p-4 sm:p-6 lg:p-8 rounded-xl bg-white border ${plan.featured ? 'border-neutral-900 shadow-xl lg:scale-[1.02] lg:z-10' : 'border-neutral-200 shadow-sm'} flex flex-col relative`}
             >
-              {plan.featured && <span className="absolute -top-3 left-1/2 -translate-x-1/2 px-2 sm:px-3 py-1 bg-[#FFD60A] text-neutral-900 text-[9px] sm:text-[10px] font-bold rounded-full whitespace-nowrap">RECOMENDADO</span>}
+              {plan.badge && <span className="absolute -top-3 left-1/2 -translate-x-1/2 px-2 sm:px-3 py-1 bg-[#FFD60A] text-neutral-900 text-[8px] sm:text-[9px] font-bold rounded-full whitespace-nowrap">{plan.badge}</span>}
               <div className="mb-4 sm:mb-6">
                 <h3 className="text-base sm:text-xl font-bold text-neutral-900">{plan.name}</h3>
               </div>
@@ -44,11 +45,14 @@ export const PlansSection = () => {
                 </div>
                 <div className="h-px bg-neutral-100"></div>
                 <div>
-                  <p className="text-sm sm:text-lg font-bold text-neutral-900">Custo de saída: {plan.exit}</p>
+                  <p className="text-sm sm:text-lg font-bold text-neutral-900">Taxa de {plan.rate}</p>
                 </div>
                 <div className="h-px bg-neutral-100"></div>
                 <div className="space-y-2 sm:space-y-3">
-                  {plan.benefits.map(item => (
+                  {[
+                    '10% de desconto no pagamento à vista',
+                    ...(plan.coversExpenses ? ['Cobre taxas e condomínio'] : []),
+                  ].map(item => (
                     <div key={item} className="flex items-start gap-2 sm:gap-3 text-xs sm:text-sm text-neutral-600 font-medium">
                       <Check size={14} className="text-[#FFD60A] shrink-0 mt-0.5 sm:w-4 sm:h-4" strokeWidth={2.5} />
                       <span className="leading-snug">{item}</span>
