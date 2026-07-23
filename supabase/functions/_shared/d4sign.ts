@@ -1062,40 +1062,123 @@ async function sendActiveEmail(params: {
   return { sent: true };
 }
 
+export function buildInsuranceActiveWhatsAppPayload(params: {
+  to: string;
+  name: string;
+  planName: string;
+  dashboardUrl: string;
+  templateName?: string;
+  languageCode?: string;
+}) {
+  const phone = normalizePhone(params.to);
+  if (!phone) throw new Error("invalid_phone");
+
+  let tokenHash = "";
+  try {
+    tokenHash = new URL(params.dashboardUrl).searchParams.get("token_hash") ||
+      "";
+  } catch {
+    throw new Error("invalid_dashboard_url");
+  }
+  if (!tokenHash) throw new Error("missing_dashboard_token");
+
+  return {
+    messaging_product: "whatsapp",
+    recipient_type: "individual",
+    to: phone.replace(/^\+/, ""),
+    type: "template",
+    template: {
+      name: params.templateName || "nox_seguro_ativo",
+      language: {
+        code: params.languageCode || "pt_BR",
+      },
+      components: [
+        {
+          type: "body",
+          parameters: [
+            { type: "text", text: params.name },
+            { type: "text", text: params.planName },
+          ],
+        },
+        {
+          type: "button",
+          sub_type: "url",
+          index: "0",
+          parameters: [{ type: "text", text: tokenHash }],
+        },
+      ],
+    },
+  } as const;
+}
+
 async function sendActiveWhatsapp(params: {
   to: string;
   name: string;
   planName: string;
   dashboardUrl: string;
 }) {
-  const apiKey = Deno.env.get("WHATSAPP_API_KEY")?.trim();
-  const providerUrl = Deno.env.get("WHATSAPP_PROVIDER_URL")?.trim();
-  if (!apiKey || !providerUrl) return { sent: false, reason: "not_configured" };
-  const phone = normalizePhone(params.to);
-  if (!phone) return { sent: false, reason: "invalid_phone" };
-  const message =
-    `Parabéns, ${params.name}! Seu seguro ${params.planName} está ativo. Acesse o painel para ver contrato, documentos e faturas: ${params.dashboardUrl}`;
-  const response = await fetch(providerUrl, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      to: phone,
-      message,
-      button: { label: "Acessar meu painel", url: params.dashboardUrl },
-      buttons: [{
-        type: "url",
-        text: "Acessar meu painel",
-        url: params.dashboardUrl,
-      }],
-    }),
-  });
-  if (!response.ok) {
-    return { sent: false, reason: `provider_${response.status}` };
+  const accessToken = Deno.env.get("WHATSAPP_ACCESS_TOKEN")?.trim();
+  const phoneNumberId = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID")?.trim();
+  if (!accessToken || !phoneNumberId) {
+    return { sent: false, reason: "not_configured" };
   }
-  return { sent: true };
+
+  let payload;
+  try {
+    payload = buildInsuranceActiveWhatsAppPayload({
+      ...params,
+      templateName:
+        Deno.env.get("WHATSAPP_INSURANCE_ACTIVE_TEMPLATE")?.trim() ||
+        "nox_seguro_ativo",
+      languageCode: Deno.env.get("WHATSAPP_TEMPLATE_LANGUAGE")?.trim() ||
+        "pt_BR",
+    });
+  } catch (error) {
+    return {
+      sent: false,
+      reason: error instanceof Error ? error.message : "invalid_payload",
+    };
+  }
+
+  const graphVersion = Deno.env.get("WHATSAPP_GRAPH_API_VERSION")?.trim() ||
+    "v25.0";
+  if (!/^v\d+\.\d+$/.test(graphVersion)) {
+    return { sent: false, reason: "invalid_graph_api_version" };
+  }
+  const response = await fetch(
+    `https://graph.facebook.com/${graphVersion}/${
+      encodeURIComponent(phoneNumberId)
+    }/messages`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    },
+  );
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    const errorCode = String(body?.error?.code || "unknown").replace(
+      /[^a-zA-Z0-9_-]/g,
+      "",
+    );
+    console.error("[d4sign] falha ao enviar WhatsApp pela Meta", {
+      status: response.status,
+      errorCode,
+    });
+    return {
+      sent: false,
+      reason: `meta_${response.status}_${errorCode}`.slice(0, 120),
+    };
+  }
+  const body = await response.json().catch(() => ({}));
+  const providerMessageId = body?.messages?.[0]?.id;
+  if (!providerMessageId) {
+    return { sent: false, reason: "meta_missing_message_id" };
+  }
+  return { sent: true, providerMessageId: String(providerMessageId) };
 }
 
 async function notifyInsuranceActive(
