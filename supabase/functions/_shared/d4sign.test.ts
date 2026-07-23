@@ -1,6 +1,16 @@
-import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import {
+  assert,
+  assertEquals,
+  assertThrows,
+} from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { strFromU8, unzipSync } from "https://esm.sh/fflate@0.8.2";
-import { buildContractDocx, type TemplateKey } from "./d4sign.ts";
+import {
+  buildContractDocx,
+  buildD4SignSendPayload,
+  buildD4SignSigner,
+  resolveContractTemplate,
+  type TemplateKey,
+} from "./d4sign.ts";
 
 const consulta = {
   id: "11111111-2222-3333-4444-555555555555",
@@ -50,7 +60,15 @@ const consulta = {
   },
 };
 
-for (const template of ["fit", "fit_plus", "smart", "smart_plus", "up"] as TemplateKey[]) {
+for (
+  const template of [
+    "fit",
+    "fit_plus",
+    "smart",
+    "smart_plus",
+    "up",
+  ] as TemplateKey[]
+) {
   Deno.test(`personaliza o contrato ${template}`, async () => {
     const built = await buildContractDocx(template, consulta, "NOX-TESTE-001");
     const archive = unzipSync(built.bytes);
@@ -65,7 +83,57 @@ for (const template of ["fit", "fit_plus", "smart", "smart_plus", "up"] as Templ
     assert(documentXml.includes("12.345.678/0001-99"));
     assert(documentXml.includes("TAXA DE ADESÃO (SETUP) – R$ 200,00"));
     assert(documentXml.includes("Pintura interna contratada: R$ 72,00"));
-    assert(documentXml.includes("R$ 57.000,00") || documentXml.includes("R$ 57.000,00"));
+    assert(
+      documentXml.includes("R$ 57.000,00") ||
+        documentXml.includes("R$ 57.000,00"),
+    );
     assertEquals(built.fileName.endsWith(".docx"), true);
   });
 }
+
+const planMappings = [
+  ["NOX Fit", "fit", "nox-fit.docx"],
+  ["NOX Fit+", "fit_plus", "nox-fit-plus.docx"],
+  ["NOX Smart", "smart", "nox-smart.docx"],
+  ["NOX Smart+", "smart_plus", "nox-smart-plus.docx"],
+  ["NOX Up", "up", "nox-up.docx"],
+] as const;
+
+for (const [planName, templateKey, fileName] of planMappings) {
+  Deno.test(`${planName} seleciona exclusivamente ${fileName}`, () => {
+    assertEquals(resolveContractTemplate(planName), { templateKey, fileName });
+  });
+}
+
+Deno.test("usa exatamente o e-mail e o telefone do inquilino na D4Sign", () => {
+  const signer = buildD4SignSigner({
+    ...consulta,
+    tenant_email: "  Inquilino@Example.com ",
+    tenant_telefone: "(11) 99999-8888",
+  });
+  assertEquals(signer.email, "inquilino@example.com");
+  assertEquals(signer.embed_methodauth, "sms");
+  assertEquals(signer.embed_smsnumber, "+5511999998888");
+  assertEquals(signer.skipemail, "0");
+
+  const sendPayload = buildD4SignSendPayload(
+    consulta,
+    "NOX Up",
+    "token-de-teste",
+  );
+  assertEquals(sendPayload.skip_email, "0");
+  assert(sendPayload.message.includes("NOX Up"));
+});
+
+Deno.test("bloqueia envio com e-mail ou telefone inválido", () => {
+  assertThrows(() =>
+    buildD4SignSigner({ ...consulta, tenant_email: "email-invalido" })
+  );
+  assertThrows(() =>
+    buildD4SignSigner({ ...consulta, tenant_telefone: "12345" })
+  );
+});
+
+Deno.test("não aceita nome de plano desconhecido", () => {
+  assertThrows(() => resolveContractTemplate("NOX Super"));
+});

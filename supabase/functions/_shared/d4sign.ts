@@ -1,5 +1,13 @@
-import { decodeBase64, encodeBase64 } from "https://deno.land/std@0.224.0/encoding/base64.ts";
-import { strFromU8, strToU8, unzipSync, zipSync } from "https://esm.sh/fflate@0.8.2";
+import {
+  decodeBase64,
+  encodeBase64,
+} from "https://deno.land/std@0.224.0/encoding/base64.ts";
+import {
+  strFromU8,
+  strToU8,
+  unzipSync,
+  zipSync,
+} from "https://esm.sh/fflate@0.8.2";
 
 const D4SIGN_API_DEFAULT = "https://secure.d4sign.com.br/api/v1";
 const SIGNED_CONTRACTS_BUCKET = "contratos-assinados";
@@ -28,24 +36,85 @@ function env(name: string) {
   return value;
 }
 
-function normalizePlanKey(name: unknown): TemplateKey {
+export function normalizePlanKey(name: unknown): TemplateKey {
   const normalized = String(name || "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/\s+/g, "");
-  if (normalized.includes("smart+") || normalized.includes("smartplus")) return "smart_plus";
-  if (normalized.includes("fit+") || normalized.includes("fitplus")) return "fit_plus";
-  if (normalized.includes("smart")) return "smart";
-  if (normalized.includes("fit")) return "fit";
-  if (normalized.includes("up")) return "up";
+  const aliases: Record<string, TemplateKey> = {
+    fit: "fit",
+    noxfit: "fit",
+    "fit+": "fit_plus",
+    fitplus: "fit_plus",
+    "noxfit+": "fit_plus",
+    noxfitplus: "fit_plus",
+    smart: "smart",
+    noxsmart: "smart",
+    "smart+": "smart_plus",
+    smartplus: "smart_plus",
+    "noxsmart+": "smart_plus",
+    noxsmartplus: "smart_plus",
+    up: "up",
+    noxup: "up",
+  };
+  if (aliases[normalized]) return aliases[normalized];
   throw new Error(`unsupported_plan:${String(name || "unknown")}`);
 }
 
-function normalizePhone(value: unknown) {
+export function normalizePhone(value: unknown) {
   const digits = String(value || "").replace(/\D/g, "");
   if (!digits) return "";
-  return digits.startsWith("55") ? `+${digits}` : `+55${digits}`;
+  const nationalNumber = digits.startsWith("55") ? digits.slice(2) : digits;
+  if (![10, 11].includes(nationalNumber.length)) return "";
+  return `+55${nationalNumber}`;
+}
+
+export function resolveContractTemplate(planName: unknown) {
+  const templateKey = normalizePlanKey(planName);
+  return { templateKey, fileName: TEMPLATE_BY_PLAN[templateKey] };
+}
+
+export function buildD4SignSigner(consulta: any) {
+  const email = String(consulta?.tenant_email || "")
+    .trim()
+    .toLowerCase();
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new Error("missing_or_invalid_tenant_email");
+  }
+  const phone = normalizePhone(
+    consulta?.tenant_telefone || consulta?.inquilinos?.telefone,
+  );
+  if (!phone) throw new Error("missing_or_invalid_tenant_phone");
+
+  return {
+    email,
+    act: "1",
+    foreign: "0",
+    certificadoicpbr: "0",
+    assinatura_presencial: "0",
+    docauth: "0",
+    docauthandselfie: "0",
+    embed_methodauth: "sms",
+    embed_smsnumber: phone,
+    skipemail: "0",
+    upload_allow: "0",
+  } as const;
+}
+
+export function buildD4SignSendPayload(
+  consulta: any,
+  planName: unknown,
+  token: string,
+) {
+  return {
+    message: `Olá, ${
+      consulta?.tenant_name || consulta?.inquilinos?.nome || "cliente"
+    }. Assine seu contrato ${String(planName || "NOX")} da NOX Fiança.`,
+    skip_email: "0",
+    workflow: "0",
+    tokenAPI: token,
+  } as const;
 }
 
 function normalizeDocument(value: unknown) {
@@ -58,7 +127,10 @@ function formatCpfCnpj(value: unknown) {
     return digits.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
   }
   if (digits.length === 14) {
-    return digits.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
+    return digits.replace(
+      /(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/,
+      "$1.$2.$3/$4-$5",
+    );
   }
   return digits;
 }
@@ -118,23 +190,33 @@ function replaceParagraphText(paragraphXml: string, nextText: string) {
 
 function paragraphText(paragraphXml: string) {
   const chunks: string[] = [];
-  paragraphXml.replace(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g, (_match, text) => {
-    chunks.push(decodeXml(text));
-    return _match;
-  });
+  paragraphXml.replace(
+    /<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g,
+    (_match, text) => {
+      chunks.push(decodeXml(text));
+      return _match;
+    },
+  );
   return chunks.join("").trim();
 }
 
 function calculatePackageValue(consulta: any) {
   const imovel = consulta?.imoveis || {};
   return (
-    Number(imovel.valor_aluguel ?? consulta?.valor_aluguel ?? consulta?.rent_value ?? 0) +
+    Number(
+      imovel.valor_aluguel ?? consulta?.valor_aluguel ?? consulta?.rent_value ??
+        0,
+    ) +
     Number(imovel.valor_condominio ?? consulta?.valor_condominio ?? 0) +
     Number(imovel.valor_taxas ?? consulta?.valor_taxas ?? 0)
   );
 }
 
-function personalizeDocumentXml(xml: string, consulta: any, contractNumber: string) {
+function personalizeDocumentXml(
+  xml: string,
+  consulta: any,
+  contractNumber: string,
+) {
   const inquilino = consulta?.inquilinos || {};
   const imovel = consulta?.imoveis || {};
   const plan = consulta?.planos || {};
@@ -142,7 +224,8 @@ function personalizeDocumentXml(xml: string, consulta: any, contractNumber: stri
   const extras = consulta?.documentos?.extras || {};
   const administrador = consulta?.administrador || {};
   const tenantName = consulta?.tenant_name || inquilino.nome || "";
-  const tenantDocument = consulta?.tenant_document || inquilino.cpf || inquilino.cnpj || "";
+  const tenantDocument = consulta?.tenant_document || inquilino.cpf ||
+    inquilino.cnpj || "";
   const tenantPhone = consulta?.tenant_telefone || inquilino.telefone || "";
   const packageValue = calculatePackageValue(consulta);
   const multiplier = Number(
@@ -156,18 +239,27 @@ function personalizeDocumentXml(xml: string, consulta: any, contractNumber: stri
     consulta?.activation_fee_enabled ?? extras?.activation_fee_enabled,
   );
   const activationValue = activationEnabled
-    ? Number(consulta?.activation_fee_amount ?? extras?.activation_fee_amount ?? 0)
+    ? Number(
+      consulta?.activation_fee_amount ?? extras?.activation_fee_amount ?? 0,
+    )
     : 0;
   const paintingEnabled = Boolean(
     consulta?.external_painting_enabled ?? extras?.external_painting_enabled,
   );
   const paintingValue = paintingEnabled
-    ? Number(consulta?.external_painting_total ?? extras?.external_painting_total ?? 0)
+    ? Number(
+      consulta?.external_painting_total ?? extras?.external_painting_total ?? 0,
+    )
     : 0;
   const observations = [
-    paintingEnabled ? `Pintura interna contratada: ${formatCurrency(paintingValue)}` : null,
-    activationEnabled ? `Taxa de adesão: ${formatCurrency(activationValue)}` : null,
-    Array.isArray(consulta?.insurance_coverages) && consulta.insurance_coverages.length
+    paintingEnabled
+      ? `Pintura interna contratada: ${formatCurrency(paintingValue)}`
+      : null,
+    activationEnabled
+      ? `Taxa de adesão: ${formatCurrency(activationValue)}`
+      : null,
+    Array.isArray(consulta?.insurance_coverages) &&
+      consulta.insurance_coverages.length
       ? `Coberturas adicionais: ${consulta.insurance_coverages.join(", ")}`
       : null,
     consulta?.insurance_assistance
@@ -187,56 +279,93 @@ function personalizeDocumentXml(xml: string, consulta: any, contractNumber: stri
     if (!current) return paragraph;
     let next: string | null = null;
 
-    if (current === "QUADRO RESUMO – CONTRATO Nº") next = `${current} ${contractNumber}`;
-    else if (current === "NOME COMPLETO:") next = `${current} ${tenantName}`;
-    else if (current === "INSCRITO NO CPF:")
+    if (current === "QUADRO RESUMO – CONTRATO Nº") {
+      next = `${current} ${contractNumber}`;
+    } else if (current === "NOME COMPLETO:") next = `${current} ${tenantName}`;
+    else if (current === "INSCRITO NO CPF:") {
       next = `INSCRITO NO CPF/CNPJ: ${formatCpfCnpj(tenantDocument)}`;
-    else if (current === "DATA NASCIMENTO:")
-      next = `${current} ${formatDate(consulta?.tenant_data_nascimento || inquilino.data_nascimento)}`;
-    else if (current === "TELEFONE:") {
+    } else if (current === "DATA NASCIMENTO:") {
+      next = `${current} ${
+        formatDate(
+          consulta?.tenant_data_nascimento || inquilino.data_nascimento,
+        )
+      }`;
+    } else if (current === "TELEFONE:") {
       const occurrence = count("telefone");
       if (occurrence === 1) next = `${current} ${tenantPhone}`;
-      else if (occurrence === 2 && administrador.telefone)
+      else if (occurrence === 2 && administrador.telefone) {
         next = `${current} ${administrador.telefone}`;
+      }
     } else if (current === "EMAIL:") {
       const occurrence = count("email");
       if (occurrence === 1) next = `${current} ${consulta?.tenant_email || ""}`;
-      else if (occurrence === 2 && administrador.email) next = `${current} ${administrador.email}`;
-    } else if (current.startsWith("NOME/RAZÃO SOCIAL:") && administrador.nome)
+      else if (occurrence === 2 && administrador.email) {
+        next = `${current} ${administrador.email}`;
+      }
+    } else if (current.startsWith("NOME/RAZÃO SOCIAL:") && administrador.nome) {
       next = `NOME/RAZÃO SOCIAL: ${administrador.nome}`;
-    else if (current.startsWith("INSCRITO NO CNPJ/MF OU CPF:") && administrador.documento)
-      next = `INSCRITO NO CNPJ/MF OU CPF: ${formatCpfCnpj(administrador.documento)}`;
-    else if (current.startsWith("COM ENDEREÇO NA:") && administrador.endereco)
+    } else if (
+      current.startsWith("INSCRITO NO CNPJ/MF OU CPF:") &&
+      administrador.documento
+    ) {
+      next = `INSCRITO NO CNPJ/MF OU CPF: ${
+        formatCpfCnpj(administrador.documento)
+      }`;
+    } else if (
+      current.startsWith("COM ENDEREÇO NA:") && administrador.endereco
+    ) {
       next = `COM ENDEREÇO NA: ${administrador.endereco}`;
-    else if (current === "TIPO IMÓVEL:")
-      next = `${current} ${consulta?.imovel_subtipo || imovel.tipo || consulta?.tipo_imovel || ""}`;
-    else if (current.startsWith("ENDEREÇO:"))
-      next = `ENDEREÇO: ${consulta?.imovel_endereco || imovel.endereco || ""}, ${consulta?.imovel_numero || imovel.numero || "S/N"}`;
-    else if (current === "COMPLEMENTO:") {
+    } else if (current === "TIPO IMÓVEL:") {
+      next = `${current} ${
+        consulta?.imovel_subtipo || imovel.tipo || consulta?.tipo_imovel || ""
+      }`;
+    } else if (current.startsWith("ENDEREÇO:")) {
+      next = `ENDEREÇO: ${
+        consulta?.imovel_endereco || imovel.endereco || ""
+      }, ${consulta?.imovel_numero || imovel.numero || "S/N"}`;
+    } else if (current === "COMPLEMENTO:") {
       const occurrence = count("complemento");
-      if (occurrence === 1 && administrador.complemento)
+      if (occurrence === 1 && administrador.complemento) {
         next = `${current} ${administrador.complemento}`;
-      else if (occurrence === 2)
-        next = `${current} ${consulta?.imovel_complemento || imovel.complemento || ""}`;
+      } else if (occurrence === 2) {
+        next = `${current} ${
+          consulta?.imovel_complemento || imovel.complemento || ""
+        }`;
+      }
     } else if (current.startsWith("BAIRRO:")) {
       const occurrence = count("bairro");
-      if (occurrence === 1 && administrador.bairro) next = `BAIRRO: ${administrador.bairro}`;
-      else if (occurrence === 2) next = `BAIRRO: ${consulta?.imovel_bairro || imovel.bairro || ""}`;
+      if (occurrence === 1 && administrador.bairro) {
+        next = `BAIRRO: ${administrador.bairro}`;
+      } else if (occurrence === 2) {
+        next = `BAIRRO: ${consulta?.imovel_bairro || imovel.bairro || ""}`;
+      }
     } else if (current.startsWith("CIDADE:")) {
       const occurrence = count("cidade");
-      if (occurrence === 1 && administrador.cidade) next = `CIDADE: ${administrador.cidade}`;
-      else if (occurrence === 2) next = `CIDADE: ${consulta?.imovel_cidade || imovel.cidade || ""}`;
+      if (occurrence === 1 && administrador.cidade) {
+        next = `CIDADE: ${administrador.cidade}`;
+      } else if (occurrence === 2) {
+        next = `CIDADE: ${consulta?.imovel_cidade || imovel.cidade || ""}`;
+      }
     } else if (current.startsWith("UF:")) {
       const occurrence = count("uf");
-      if (occurrence === 1 && administrador.estado) next = `UF: ${administrador.estado}`;
-      else if (occurrence === 2) next = `UF: ${consulta?.imovel_estado || imovel.estado || ""}`;
+      if (occurrence === 1 && administrador.estado) {
+        next = `UF: ${administrador.estado}`;
+      } else if (occurrence === 2) {
+        next = `UF: ${consulta?.imovel_estado || imovel.estado || ""}`;
+      }
     } else if (current.startsWith("CEP:")) {
       const occurrence = count("cep");
-      if (occurrence === 1 && administrador.cep) next = `CEP: ${administrador.cep}`;
-      else if (occurrence === 2) next = `CEP: ${consulta?.imovel_cep || imovel.cep || ""}`;
+      if (occurrence === 1 && administrador.cep) {
+        next = `CEP: ${administrador.cep}`;
+      } else if (occurrence === 2) {
+        next = `CEP: ${consulta?.imovel_cep || imovel.cep || ""}`;
+      }
     } else if (current.startsWith("VALOR TOTAL CONTRATADO – R$")) {
       next = current.replace(/R\$\s*X+/i, formatCurrency(coverageValue));
-    } else if (current.startsWith("LOCAÇÃO – R$") || current.startsWith("PACOTE LOCATÍCIO – R$")) {
+    } else if (
+      current.startsWith("LOCAÇÃO – R$") ||
+      current.startsWith("PACOTE LOCATÍCIO – R$")
+    ) {
       next = current.replace(/R\$\s*X+/i, formatCurrency(packageValue));
     } else if (current.startsWith("VALOR DA TAXA – R$")) {
       next = current.replace(/R\$\s*X+/i, formatCurrency(annualValue));
@@ -245,10 +374,20 @@ function personalizeDocumentXml(xml: string, consulta: any, contractNumber: stri
         ? `TAXA DE ADESÃO (SETUP) – ${formatCurrency(activationValue)}.`
         : "TAXA DE ADESÃO (SETUP) – NÃO CONTRATADA.";
     } else if (current.startsWith("OBSERVAÇÕES –")) {
-      next = `OBSERVAÇÕES – ${observations.length ? observations.join("; ") : "Sem serviços extras."}`;
+      next = `OBSERVAÇÕES – ${
+        observations.length ? observations.join("; ") : "Sem serviços extras."
+      }`;
     } else if (current.startsWith("CONTRATO ATIVADO PELA NOX FIANÇA LTDA EM")) {
       const now = new Date();
-      next = `CONTRATO EMITIDO PELA NOX FIANÇA LTDA EM ${now.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })} ÀS ${now.toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" })} (HORÁRIO DE BRASÍLIA).`;
+      next = `CONTRATO EMITIDO PELA NOX FIANÇA LTDA EM ${
+        now.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })
+      } ÀS ${
+        now.toLocaleTimeString("pt-BR", {
+          timeZone: "America/Sao_Paulo",
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      } (HORÁRIO DE BRASÍLIA).`;
     }
 
     return next === null ? paragraph : replaceParagraphText(paragraph, next);
@@ -261,7 +400,10 @@ export async function buildContractDocx(
   contractNumber: string,
 ) {
   const fileName = TEMPLATE_BY_PLAN[templateKey];
-  const templateUrl = new URL(`./contract-templates/${fileName}`, import.meta.url);
+  const templateUrl = new URL(
+    `./contract-templates/${fileName}`,
+    import.meta.url,
+  );
   const original = await Deno.readFile(templateUrl);
   const archive = unzipSync(original);
   const documentXml = archive["word/document.xml"];
@@ -273,7 +415,8 @@ export async function buildContractDocx(
 }
 
 function d4SignUrl(path: string) {
-  const base = (Deno.env.get("D4SIGN_API_BASE_URL") || D4SIGN_API_DEFAULT).replace(/\/$/, "");
+  const base = (Deno.env.get("D4SIGN_API_BASE_URL") || D4SIGN_API_DEFAULT)
+    .replace(/\/$/, "");
   const url = new URL(`${base}${path.startsWith("/") ? path : `/${path}`}`);
   url.searchParams.set("tokenAPI", env("D4SIGN_TOKEN_API"));
   url.searchParams.set("cryptKey", env("D4SIGN_CRYPT_KEY"));
@@ -294,21 +437,26 @@ async function d4SignRequest(path: string, init: RequestInit) {
   }
   if (!response.ok) {
     const message = body?.message || body?.error || `HTTP ${response.status}`;
-    throw new Error(`d4sign_api_error:${response.status}:${String(message).slice(0, 300)}`);
+    throw new Error(
+      `d4sign_api_error:${response.status}:${String(message).slice(0, 300)}`,
+    );
   }
   return body;
 }
 
 function buildWebhookUrl() {
   const explicit = Deno.env.get("D4SIGN_WEBHOOK_URL")?.trim();
-  const base = explicit || `${env("SUPABASE_URL").replace(/\/$/, "")}/functions/v1/d4sign-webhook`;
+  const base = explicit ||
+    `${env("SUPABASE_URL").replace(/\/$/, "")}/functions/v1/d4sign-webhook`;
   const url = new URL(base);
   url.searchParams.set("secret", env("D4SIGN_WEBHOOK_SECRET"));
   return url.toString();
 }
 
 function contractNumber(consultationId: string) {
-  return `NOX-${new Date().getUTCFullYear()}-${consultationId.replace(/-/g, "").slice(0, 10).toUpperCase()}`;
+  return `NOX-${new Date().getUTCFullYear()}-${
+    consultationId.replace(/-/g, "").slice(0, 10).toUpperCase()
+  }`;
 }
 
 async function ensureTenantAccount(supabase: any, consulta: any) {
@@ -347,14 +495,18 @@ async function ensureTenantAccount(supabase: any, consulta: any) {
       password: randomPassword,
       email_confirm: true,
       user_metadata: {
-        nome: consulta?.tenant_name || consulta?.inquilinos?.nome || "Inquilino",
-        cpf: normalizeDocument(consulta?.tenant_document || consulta?.inquilinos?.cpf),
+        nome: consulta?.tenant_name || consulta?.inquilinos?.nome ||
+          "Inquilino",
+        cpf: normalizeDocument(
+          consulta?.tenant_document || consulta?.inquilinos?.cpf,
+        ),
         telefone: consulta?.tenant_telefone || null,
         role: "inquilino",
       },
     });
-    if (error || !created?.user)
+    if (error || !created?.user) {
       throw new Error(`tenant_account_error:${error?.message || "unknown"}`);
+    }
     tenantUserId = created.user.id;
   }
 
@@ -412,7 +564,11 @@ async function getConsultation(supabase: any, consultationId: string) {
     .select("*, inquilinos(*), imoveis(*), planos(*)")
     .eq("id", consultationId)
     .single();
-  if (error || !data) throw new Error(`consultation_not_found:${error?.message || consultationId}`);
+  if (error || !data) {
+    throw new Error(
+      `consultation_not_found:${error?.message || consultationId}`,
+    );
+  }
 
   let administrador: any = null;
   const imobiliariaId = data?.imoveis?.imobiliaria_id || null;
@@ -440,7 +596,9 @@ async function getConsultation(supabase: any, consultationId: string) {
       administrador = administratorFromAgency(imobiliaria);
     }
     if (!administrador && corretor) {
-      const profile = Array.isArray(corretor.profiles) ? corretor.profiles[0] : corretor.profiles;
+      const profile = Array.isArray(corretor.profiles)
+        ? corretor.profiles[0]
+        : corretor.profiles;
       administrador = {
         nome: profile?.nome,
         documento: corretor.cpf || profile?.cpf || profile?.cnpj,
@@ -466,11 +624,11 @@ async function getConsultation(supabase: any, consultationId: string) {
     }
     administrador ||= profile
       ? {
-          nome: profile.nome,
-          documento: profile.cpf || profile.cnpj,
-          telefone: profile.telefone,
-          email: profile.email,
-        }
+        nome: profile.nome,
+        documento: profile.cpf || profile.cnpj,
+        telefone: profile.telefone,
+        email: profile.email,
+      }
       : null;
   }
 
@@ -478,7 +636,9 @@ async function getConsultation(supabase: any, consultationId: string) {
 }
 
 function isPaidStatus(status: unknown) {
-  return ["confirmed", "paid", "received", "aprovado"].includes(String(status || "").toLowerCase());
+  return ["confirmed", "paid", "received", "aprovado"].includes(
+    String(status || "").toLowerCase(),
+  );
 }
 
 async function createSignatureRow(
@@ -497,7 +657,8 @@ async function createSignatureRow(
   const payload = {
     consultation_id: consulta.id,
     tenant_user_id: tenantUserId,
-    plan_name: consulta?.planos?.nome || consulta?.documentos?.plano_calculado?.nome || templateKey,
+    plan_name: consulta?.planos?.nome ||
+      consulta?.documentos?.plano_calculado?.nome || templateKey,
     template_file: TEMPLATE_BY_PLAN[templateKey],
     status: "processing",
     send_attempts: 0,
@@ -514,8 +675,11 @@ async function createSignatureRow(
     .select("*")
     .eq("consultation_id", consulta.id)
     .single();
-  if (racedError || !raced)
-    throw new Error(`signature_row_error:${error?.message || racedError?.message}`);
+  if (racedError || !raced) {
+    throw new Error(
+      `signature_row_error:${error?.message || racedError?.message}`,
+    );
+  }
   return raced;
 }
 
@@ -527,13 +691,23 @@ export async function dispatchD4SignContract(
   try {
     const consulta = await getConsultation(supabase, consultationId);
     if (!isPaidStatus(consulta.payment_status)) {
-      return { ok: false, status: "waiting_payment", error: "payment_not_confirmed" };
+      return {
+        ok: false,
+        status: "waiting_payment",
+        error: "payment_not_confirmed",
+      };
     }
 
-    const planName = consulta?.planos?.nome || consulta?.documentos?.plano_calculado?.nome;
-    const templateKey = normalizePlanKey(planName);
+    const planName = consulta?.planos?.nome ||
+      consulta?.documentos?.plano_calculado?.nome;
+    const { templateKey } = resolveContractTemplate(planName);
     const tenantUserId = await ensureTenantAccount(supabase, consulta);
-    signature = await createSignatureRow(supabase, consulta, templateKey, tenantUserId);
+    signature = await createSignatureRow(
+      supabase,
+      consulta,
+      templateKey,
+      tenantUserId,
+    );
 
     if (["awaiting_signature", "signed", "active"].includes(signature.status)) {
       return {
@@ -556,22 +730,26 @@ export async function dispatchD4SignContract(
 
     const token = env("D4SIGN_TOKEN_API");
     env("D4SIGN_CRYPT_KEY");
-    const safeUuid =
-      Deno.env.get("D4SIGN_SAFE_UUID")?.trim() || "9fbb5127-b896-4310-bdca-3933841dfd3a";
+    const safeUuid = Deno.env.get("D4SIGN_SAFE_UUID")?.trim() ||
+      "9fbb5127-b896-4310-bdca-3933841dfd3a";
     const number = contractNumber(consultationId);
     let documentUuid = signature.d4sign_document_uuid as string | null;
 
     if (!documentUuid) {
       const built = await buildContractDocx(templateKey, consulta, number);
-      const uploaded = await d4SignRequest(`/documents/${safeUuid}/uploadbinary`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          base64_binary_file: encodeBase64(built.bytes),
-          mime_type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-          name: `${number} - ${String(planName || "Contrato NOX")}.docx`,
-        }),
-      });
+      const uploaded = await d4SignRequest(
+        `/documents/${safeUuid}/uploadbinary`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            base64_binary_file: encodeBase64(built.bytes),
+            mime_type:
+              "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            name: `${number} - ${String(planName || "Contrato NOX")}.docx`,
+          }),
+        },
+      );
       documentUuid = uploaded?.uuid;
       if (!documentUuid) throw new Error("d4sign_upload_missing_uuid");
       await supabase
@@ -586,41 +764,34 @@ export async function dispatchD4SignContract(
       body: JSON.stringify({ url: buildWebhookUrl() }),
     });
 
-    const phone = normalizePhone(consulta?.tenant_telefone || consulta?.inquilinos?.telefone);
-    if (!phone) throw new Error("missing_tenant_phone");
+    const signerPayload = buildD4SignSigner(consulta);
     let signerKey = signature.d4sign_signer_key as string | null;
     if (!signerKey) {
       let signerResult: any = null;
       let lastSignerError: unknown = null;
       for (let attempt = 0; attempt < 3; attempt += 1) {
         try {
-          signerResult = await d4SignRequest(`/documents/${documentUuid}/createlist`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              signers: [
-                {
-                  email: String(consulta.tenant_email).trim().toLowerCase(),
-                  act: "1",
-                  foreign: "0",
-                  certificadoicpbr: "0",
-                  assinatura_presencial: "0",
-                  docauth: "0",
-                  docauthandselfie: "0",
-                  embed_methodauth: "sms",
-                  embed_smsnumber: phone,
-                  skipemail: "0",
-                  upload_allow: "0",
-                },
-              ],
-            }),
-          });
+          signerResult = await d4SignRequest(
+            `/documents/${documentUuid}/createlist`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                signers: [
+                  signerPayload,
+                ],
+              }),
+            },
+          );
           lastSignerError = null;
           break;
         } catch (error) {
           lastSignerError = error;
-          if (attempt < 2)
-            await new Promise((resolve) => setTimeout(resolve, (attempt + 1) * 1200));
+          if (attempt < 2) {
+            await new Promise((resolve) =>
+              setTimeout(resolve, (attempt + 1) * 1200)
+            );
+          }
         }
       }
       if (lastSignerError) throw lastSignerError;
@@ -641,18 +812,19 @@ export async function dispatchD4SignContract(
         await d4SignRequest(`/documents/${documentUuid}/sendtosigner`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            message: `Olá, ${consulta?.tenant_name || consulta?.inquilinos?.nome || "cliente"}. Assine seu contrato ${planName} da NOX Fiança.`,
-            skip_email: "0",
-            workflow: "0",
-            tokenAPI: token,
-          }),
+          body: JSON.stringify(
+            buildD4SignSendPayload(consulta, planName, token),
+          ),
         });
         lastSendError = null;
         break;
       } catch (error) {
         lastSendError = error;
-        if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, (attempt + 1) * 1200));
+        if (attempt < 2) {
+          await new Promise((resolve) =>
+            setTimeout(resolve, (attempt + 1) * 1200)
+          );
+        }
       }
     }
     if (lastSendError) throw lastSendError;
@@ -680,7 +852,8 @@ export async function dispatchD4SignContract(
     await supabase.from("proposta_historico").insert({
       consulta_id: consultationId,
       tipo_evento: "contrato_d4sign_enviado",
-      descricao: `Contrato ${planName} enviado pela D4Sign por e-mail e SMS ao inquilino.`,
+      descricao:
+        `Contrato ${planName} enviado pela D4Sign por e-mail e SMS ao inquilino.`,
     });
 
     return {
@@ -706,7 +879,12 @@ export async function dispatchD4SignContract(
       signatureId: signature?.id || null,
       message,
     });
-    return { ok: false, signatureId: signature?.id, status: "error", error: message };
+    return {
+      ok: false,
+      signatureId: signature?.id,
+      status: "error",
+      error: message,
+    };
   }
 }
 
@@ -720,11 +898,17 @@ async function downloadSignedPdf(documentUuid: string) {
   const response = await fetch(result.url);
   if (!response.ok) throw new Error(`d4sign_download_error:${response.status}`);
   const bytes = new Uint8Array(await response.arrayBuffer());
-  if (bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46) {
+  if (
+    bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 &&
+    bytes[3] === 0x46
+  ) {
     return { bytes, name: result.name || "contrato-assinado.pdf" };
   }
   const text = new TextDecoder().decode(bytes).trim();
-  return { bytes: decodeBase64(text), name: result.name || "contrato-assinado.pdf" };
+  return {
+    bytes: decodeBase64(text),
+    name: result.name || "contrato-assinado.pdf",
+  };
 }
 
 async function createOrGetPolicy(supabase: any, consulta: any) {
@@ -735,7 +919,10 @@ async function createOrGetPolicy(supabase: any, consulta: any) {
     .limit(1);
   if (existing?.[0]) {
     if (existing[0].status !== "ativa") {
-      await supabase.from("apolices").update({ status: "ativa" }).eq("id", existing[0].id);
+      await supabase.from("apolices").update({ status: "ativa" }).eq(
+        "id",
+        existing[0].id,
+      );
     }
     return { ...existing[0], status: "ativa" };
   }
@@ -750,23 +937,39 @@ async function createOrGetPolicy(supabase: any, consulta: any) {
       consulta_id: consulta.id,
       numero: contractNumber(consulta.id),
       status: "ativa",
-      valor_premio: Number(consulta.valor_anual || Number(consulta.valor_premio_mensal || 0) * 12),
+      valor_premio: Number(
+        consulta.valor_anual || Number(consulta.valor_premio_mensal || 0) * 12,
+      ),
       vigencia_inicio: starts.toISOString().slice(0, 10),
       vigencia_fim: ends.toISOString().slice(0, 10),
-      corretor_profile_id: role === "corretor" ? consulta.profile_id_solicitante : null,
-      imobiliaria_profile_id: role === "imobiliaria" ? consulta.profile_id_solicitante : null,
-      proprietario_profile_id: role === "proprietario" ? consulta.profile_id_solicitante : null,
+      corretor_profile_id: role === "corretor"
+        ? consulta.profile_id_solicitante
+        : null,
+      imobiliaria_profile_id: role === "imobiliaria"
+        ? consulta.profile_id_solicitante
+        : null,
+      proprietario_profile_id: role === "proprietario"
+        ? consulta.profile_id_solicitante
+        : null,
     })
     .select("*")
     .single();
-  if (error || !data) throw new Error(`policy_create_error:${error?.message || "unknown"}`);
+  if (error || !data) {
+    throw new Error(`policy_create_error:${error?.message || "unknown"}`);
+  }
   return data;
 }
 
 async function tenantAccessLink(supabase: any, email: string) {
-  const frontend = (Deno.env.get("FRONTEND_URL") || "https://noxfianca.com").replace(/\/$/, "");
-  const fallback = `${frontend}/login?returnTo=${encodeURIComponent("/inquilino/painel")}`;
-  const { data, error } = await supabase.auth.admin.generateLink({ type: "magiclink", email });
+  const frontend = (Deno.env.get("FRONTEND_URL") || "https://noxfianca.com")
+    .replace(/\/$/, "");
+  const fallback = `${frontend}/login?returnTo=${
+    encodeURIComponent("/inquilino/painel")
+  }`;
+  const { data, error } = await supabase.auth.admin.generateLink({
+    type: "magiclink",
+    email,
+  });
   const tokenHash = data?.properties?.hashed_token;
   if (error || !tokenHash) return fallback;
   const url = new URL(`${frontend}/acesso-inquilino`);
@@ -775,7 +978,11 @@ async function tenantAccessLink(supabase: any, email: string) {
   return url.toString();
 }
 
-async function notificationWasSent(supabase: any, signatureId: string, channel: string) {
+async function notificationWasSent(
+  supabase: any,
+  signatureId: string,
+  channel: string,
+) {
   const { data } = await supabase
     .from("contract_notification_deliveries")
     .select("id")
@@ -808,8 +1015,8 @@ async function logNotification(
       status: result.sent
         ? "sent"
         : result.reason === "not_configured"
-          ? "not_configured"
-          : "failed",
+        ? "not_configured"
+        : "failed",
       attempts: Number(previous?.attempts || 0) + 1,
       last_error: result.sent ? null : result.reason || "provider_error",
       sent_at: result.sent ? new Date().toISOString() : null,
@@ -826,10 +1033,14 @@ async function sendActiveEmail(params: {
 }) {
   const apiKey = Deno.env.get("RESEND_API_KEY")?.trim();
   if (!apiKey) return { sent: false, reason: "not_configured" };
-  const from = Deno.env.get("RESEND_FROM_EMAIL") || "NOX FIANÇA <financeiro@noxfianca.com.br>";
+  const from = Deno.env.get("RESEND_FROM_EMAIL") ||
+    "NOX FIANÇA <financeiro@noxfianca.com.br>";
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify({
       from,
       to: [params.to],
@@ -845,7 +1056,9 @@ async function sendActiveEmail(params: {
       `,
     }),
   });
-  if (!response.ok) return { sent: false, reason: `provider_${response.status}` };
+  if (!response.ok) {
+    return { sent: false, reason: `provider_${response.status}` };
+  }
   return { sent: true };
 }
 
@@ -860,18 +1073,28 @@ async function sendActiveWhatsapp(params: {
   if (!apiKey || !providerUrl) return { sent: false, reason: "not_configured" };
   const phone = normalizePhone(params.to);
   if (!phone) return { sent: false, reason: "invalid_phone" };
-  const message = `Parabéns, ${params.name}! Seu seguro ${params.planName} está ativo. Acesse o painel para ver contrato, documentos e faturas: ${params.dashboardUrl}`;
+  const message =
+    `Parabéns, ${params.name}! Seu seguro ${params.planName} está ativo. Acesse o painel para ver contrato, documentos e faturas: ${params.dashboardUrl}`;
   const response = await fetch(providerUrl, {
     method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify({
       to: phone,
       message,
       button: { label: "Acessar meu painel", url: params.dashboardUrl },
-      buttons: [{ type: "url", text: "Acessar meu painel", url: params.dashboardUrl }],
+      buttons: [{
+        type: "url",
+        text: "Acessar meu painel",
+        url: params.dashboardUrl,
+      }],
     }),
   });
-  if (!response.ok) return { sent: false, reason: `provider_${response.status}` };
+  if (!response.ok) {
+    return { sent: false, reason: `provider_${response.status}` };
+  }
   return { sent: true };
 }
 
@@ -885,7 +1108,9 @@ async function notifyInsuranceActive(
     .trim()
     .toLowerCase();
   const name = consulta.tenant_name || consulta?.inquilinos?.nome || "cliente";
-  let dashboardUrl = `${(Deno.env.get("FRONTEND_URL") || "https://noxfianca.com").replace(/\/$/, "")}/login`;
+  let dashboardUrl = `${
+    (Deno.env.get("FRONTEND_URL") || "https://noxfianca.com").replace(/\/$/, "")
+  }/login`;
 
   if (!(await notificationWasSent(supabase, signature.id, "email"))) {
     const emailDashboardUrl = await tenantAccessLink(supabase, email);
@@ -920,7 +1145,8 @@ async function notifyInsuranceActive(
     await supabase.from("notificacoes").insert({
       user_id: tenantUserId,
       titulo: "Parabéns, seu seguro está ativo!",
-      mensagem: `O contrato ${signature.plan_name} foi assinado. Documentos e faturas já estão no seu painel.`,
+      mensagem:
+        `O contrato ${signature.plan_name} foi assinado. Documentos e faturas já estão no seu painel.`,
       tipo: "seguro_ativo",
       cor_destaque: "emerald",
       icone: "shield-check",
@@ -935,21 +1161,40 @@ async function notifyInsuranceActive(
 export async function finalizeD4SignContract(supabase: any, signature: any) {
   if (signature.status === "active") {
     const consulta = await getConsultation(supabase, signature.consultation_id);
-    const tenantUserId =
-      signature.tenant_user_id || (await ensureTenantAccount(supabase, consulta));
-    const dashboardUrl = await notifyInsuranceActive(supabase, signature, consulta, tenantUserId);
-    return { ok: true, alreadyActive: true, policyId: signature.policy_id, dashboardUrl };
+    const tenantUserId = signature.tenant_user_id ||
+      (await ensureTenantAccount(supabase, consulta));
+    const dashboardUrl = await notifyInsuranceActive(
+      supabase,
+      signature,
+      consulta,
+      tenantUserId,
+    );
+    return {
+      ok: true,
+      alreadyActive: true,
+      policyId: signature.policy_id,
+      dashboardUrl,
+    };
   }
-  if (!signature.d4sign_document_uuid) throw new Error("missing_d4sign_document_uuid");
+  if (!signature.d4sign_document_uuid) {
+    throw new Error("missing_d4sign_document_uuid");
+  }
 
   const consulta = await getConsultation(supabase, signature.consultation_id);
-  const tenantUserId = signature.tenant_user_id || (await ensureTenantAccount(supabase, consulta));
+  const tenantUserId = signature.tenant_user_id ||
+    (await ensureTenantAccount(supabase, consulta));
   const downloaded = await downloadSignedPdf(signature.d4sign_document_uuid);
-  const path = `${tenantUserId}/${consulta.id}/${signature.d4sign_document_uuid}.pdf`;
+  const path =
+    `${tenantUserId}/${consulta.id}/${signature.d4sign_document_uuid}.pdf`;
   const { error: uploadError } = await supabase.storage
     .from(SIGNED_CONTRACTS_BUCKET)
-    .upload(path, downloaded.bytes, { contentType: "application/pdf", upsert: true });
-  if (uploadError) throw new Error(`signed_contract_upload_error:${uploadError.message}`);
+    .upload(path, downloaded.bytes, {
+      contentType: "application/pdf",
+      upsert: true,
+    });
+  if (uploadError) {
+    throw new Error(`signed_contract_upload_error:${uploadError.message}`);
+  }
 
   const policy = await createOrGetPolicy(supabase, consulta);
   const documentPayload = {
@@ -957,7 +1202,8 @@ export async function finalizeD4SignContract(supabase: any, signature: any) {
     apolice_id: policy.id,
     tenant_user_id: tenantUserId,
     contract_signature_id: signature.id,
-    file_name: downloaded.name || `Contrato ${signature.plan_name} assinado.pdf`,
+    file_name: downloaded.name ||
+      `Contrato ${signature.plan_name} assinado.pdf`,
     file_url: path,
     file_type: "application/pdf",
     document_type: "contrato",
@@ -969,9 +1215,14 @@ export async function finalizeD4SignContract(supabase: any, signature: any) {
     .eq("contract_signature_id", signature.id)
     .maybeSingle();
   if (existingDoc?.id) {
-    await supabase.from("documentos_proposta").update(documentPayload).eq("id", existingDoc.id);
+    await supabase.from("documentos_proposta").update(documentPayload).eq(
+      "id",
+      existingDoc.id,
+    );
   } else {
-    const { error } = await supabase.from("documentos_proposta").insert(documentPayload);
+    const { error } = await supabase.from("documentos_proposta").insert(
+      documentPayload,
+    );
     if (error) throw new Error(`signed_contract_record_error:${error.message}`);
   }
 
@@ -1006,10 +1257,16 @@ export async function finalizeD4SignContract(supabase: any, signature: any) {
   await supabase.from("proposta_historico").insert({
     consulta_id: consulta.id,
     tipo_evento: "contrato_d4sign_assinado",
-    descricao: `Contrato ${signature.plan_name} assinado na D4Sign e seguro ativado.`,
+    descricao:
+      `Contrato ${signature.plan_name} assinado na D4Sign e seguro ativado.`,
   });
 
-  const dashboardUrl = await notifyInsuranceActive(supabase, signature, consulta, tenantUserId);
+  const dashboardUrl = await notifyInsuranceActive(
+    supabase,
+    signature,
+    consulta,
+    tenantUserId,
+  );
 
   return { ok: true, policyId: policy.id, dashboardUrl };
 }
