@@ -4,7 +4,10 @@ import { CheckCircle2, LoaderCircle, XCircle } from "lucide-react";
 import { LogoNox } from "@/components/LogoNox";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { parseAuthEmailCallback } from "@/lib/auth-email-links";
+import {
+  parseAuthEmailCallback,
+  resolveTenantAccessReturnTo,
+} from "@/lib/auth-email-links";
 
 export const Route = createFileRoute("/acesso-inquilino")({
   component: AcessoInquilinoPage,
@@ -20,6 +23,9 @@ function AcessoInquilinoPage() {
 
     async function entrar() {
       const callback = parseAuthEmailCallback(window.location.href);
+      const returnTo = resolveTenantAccessReturnTo(
+        new URL(window.location.href).searchParams.get("returnTo"),
+      );
       try {
         if (callback.error || callback.errorDescription) throw new Error("link_invalido");
 
@@ -44,7 +50,7 @@ function AcessoInquilinoPage() {
         if (!confirmou) throw new Error("link_invalido");
         window.history.replaceState({}, "", window.location.pathname);
         if (ativo) setEstado("sucesso");
-        window.setTimeout(() => window.location.replace("/inquilino/painel"), 700);
+        window.setTimeout(() => window.location.replace(returnTo), 700);
       } catch (error) {
         console.error("[acesso-inquilino] falha ao validar acesso", error);
         window.history.replaceState({}, "", window.location.pathname);

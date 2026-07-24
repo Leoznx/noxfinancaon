@@ -78,3 +78,9 @@ export function hasAuthEmailCallback(callback: AuthEmailCallback): boolean {
     callback.errorDescription,
   );
 }
+
+export function resolveTenantAccessReturnTo(value: string | null): string {
+  return value === "/inquilino/documentos"
+    ? value
+    : "/inquilino/painel";
+}

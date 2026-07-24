@@ -983,11 +983,18 @@ async function createOrGetPolicy(supabase: any, consulta: any) {
   return data;
 }
 
-async function tenantAccessLink(supabase: any, email: string) {
+async function tenantAccessLink(
+  supabase: any,
+  email: string,
+  returnTo = "/inquilino/painel",
+) {
+  const safeReturnTo = returnTo === "/inquilino/documentos"
+    ? returnTo
+    : "/inquilino/painel";
   const frontend = (Deno.env.get("FRONTEND_URL") || "https://noxfianca.com")
     .replace(/\/$/, "");
   const fallback = `${frontend}/login?returnTo=${
-    encodeURIComponent("/inquilino/painel")
+    encodeURIComponent(safeReturnTo)
   }`;
   const { data, error } = await supabase.auth.admin.generateLink({
     type: "magiclink",
@@ -998,6 +1005,7 @@ async function tenantAccessLink(supabase: any, email: string) {
   const url = new URL(`${frontend}/acesso-inquilino`);
   url.searchParams.set("token_hash", tokenHash);
   url.searchParams.set("type", "magiclink");
+  url.searchParams.set("returnTo", safeReturnTo);
   return url.toString();
 }
 
@@ -1070,10 +1078,10 @@ async function sendActiveEmail(params: {
       subject: "Parabéns, seu seguro está ativo — NOX Fiança",
       html: `
         <div style="font-family:Arial,sans-serif;color:#171717;line-height:1.6;max-width:620px;margin:auto">
-          <h1 style="font-size:26px">Parabéns, ${params.name}! Seu seguro está ativo.</h1>
-          <p>O contrato <strong>${params.planName}</strong> foi assinado e sua garantia NOX Fiança já está ativa.</p>
-          <p>No seu painel você encontra o contrato assinado, os documentos e todas as faturas geradas.</p>
-          <p style="margin:28px 0"><a href="${params.dashboardUrl}" style="display:inline-block;background:#ffd21c;color:#171717;text-decoration:none;font-weight:700;padding:14px 22px;border-radius:10px">Acessar meu painel</a></p>
+          <h1 style="font-size:26px">Parabéns, seu contrato está ativo! 🌙</h1>
+          <p>Para visualizar seus documentos, acesse o site da <strong>NOX FIANÇA</strong>.</p>
+          <p>Caso ainda não tenha acesso, crie sua conta com suas informações no site da <strong>NOX FIANÇA</strong> para visualizar seus documentos.</p>
+          <p style="margin:28px 0"><a href="${params.dashboardUrl}" style="display:inline-block;background:#ffd21c;color:#171717;text-decoration:none;font-weight:700;padding:14px 22px;border-radius:10px">Ver Documentos</a></p>
           <p>Equipe NOX Fiança</p>
         </div>
       `,
@@ -1105,20 +1113,27 @@ export function buildInsuranceActiveZApiPayload(params: {
   if (dashboardUrl.protocol !== "https:") {
     throw new Error("invalid_dashboard_protocol");
   }
+  if (
+    dashboardUrl.pathname !== "/acesso-inquilino" ||
+    dashboardUrl.searchParams.get("returnTo") !== "/inquilino/documentos"
+  ) {
+    throw new Error("invalid_documents_destination");
+  }
 
   return {
     phone: phone.replace(/^\+/, ""),
-    title: "Seguro ativo",
+    title: "Contrato ativo 🌙",
     message:
-      `Parabéns, ${params.name}! Seu seguro ${params.planName} está ativo.\n\n` +
-      "O contrato foi assinado e seus documentos e faturas já estão " +
-      "disponíveis no painel da NOX Fiança.",
+      "Parabéns, seu contrato está ativo! 🌙\n\n" +
+      "• Para visualizar seus documentos, acesse o site da *NOX FIANÇA*.\n" +
+      "• Caso ainda não tenha acesso, crie sua conta com suas informações " +
+      "no site da *NOX FIANÇA* para visualizar seus documentos.",
     footer: "NOX Fiança",
     buttonActions: [
       {
-        id: "acessar-painel",
+        id: "ver-documentos",
         type: "URL",
-        label: "Acessar meu painel",
+        label: "Ver Documentos",
         url: dashboardUrl.toString(),
       },
     ],
@@ -1207,29 +1222,40 @@ async function notifyInsuranceActive(
   let dashboardUrl = `${
     (Deno.env.get("FRONTEND_URL") || "https://noxfianca.com").replace(/\/$/, "")
   }/login`;
+  const emailWasSent = await notificationWasSent(
+    supabase,
+    signature.id,
+    "email",
+  );
+  const whatsappWasSent = await notificationWasSent(
+    supabase,
+    signature.id,
+    "whatsapp",
+  );
+  const documentsAccessUrl = !emailWasSent || !whatsappWasSent
+    ? await tenantAccessLink(supabase, email, "/inquilino/documentos")
+    : dashboardUrl;
 
-  if (!(await notificationWasSent(supabase, signature.id, "email"))) {
-    const emailDashboardUrl = await tenantAccessLink(supabase, email);
-    dashboardUrl = emailDashboardUrl;
+  if (!emailWasSent) {
+    dashboardUrl = documentsAccessUrl;
     const result = await sendActiveEmail({
       to: email,
       name,
       planName: signature.plan_name,
-      dashboardUrl: emailDashboardUrl,
+      dashboardUrl: documentsAccessUrl,
     }).catch((error) => ({
       sent: false,
       reason: error instanceof Error ? error.message : "provider_error",
     }));
     await logNotification(supabase, signature.id, "email", result);
   }
-  if (!(await notificationWasSent(supabase, signature.id, "whatsapp"))) {
-    const whatsappDashboardUrl = await tenantAccessLink(supabase, email);
-    dashboardUrl = whatsappDashboardUrl;
+  if (!whatsappWasSent) {
+    dashboardUrl = documentsAccessUrl;
     const result = await sendActiveWhatsapp({
       to: consulta.tenant_telefone || "",
       name,
       planName: signature.plan_name,
-      dashboardUrl: whatsappDashboardUrl,
+      dashboardUrl: documentsAccessUrl,
     }).catch((error) => ({
       sent: false,
       reason: error instanceof Error ? error.message : "provider_error",
@@ -1242,11 +1268,11 @@ async function notifyInsuranceActive(
       user_id: tenantUserId,
       titulo: "Parabéns, seu seguro está ativo!",
       mensagem:
-        `O contrato ${signature.plan_name} foi assinado. Documentos e faturas já estão no seu painel.`,
+        `O contrato ${signature.plan_name} foi assinado. Seus documentos já estão disponíveis.`,
       tipo: "seguro_ativo",
       cor_destaque: "emerald",
       icone: "shield-check",
-      link: "/inquilino/painel",
+      link: "/inquilino/documentos",
     });
     await logNotification(supabase, signature.id, "push", { sent: true });
   }

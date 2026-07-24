@@ -5,6 +5,7 @@ import {
   hasAuthEmailCallback,
   normalizeAuthEmailCallbackType,
   parseAuthEmailCallback,
+  resolveTenantAccessReturnTo,
 } from "../src/lib/auth-email-links";
 
 test("monta o link de confirmação direto para a aplicação", () => {
@@ -60,4 +61,16 @@ test("normaliza os dois tipos internos de troca de e-mail", () => {
   assert.equal(normalizeAuthEmailCallbackType("email_change_current"), "email_change");
   assert.equal(normalizeAuthEmailCallbackType("email_change_new"), "email_change");
   assert.equal(normalizeAuthEmailCallbackType("desconhecido"), null);
+});
+
+test("aceita somente a tela de documentos no acesso mágico do inquilino", () => {
+  assert.equal(
+    resolveTenantAccessReturnTo("/inquilino/documentos"),
+    "/inquilino/documentos",
+  );
+  assert.equal(
+    resolveTenantAccessReturnTo("https://site-malicioso.example"),
+    "/inquilino/painel",
+  );
+  assert.equal(resolveTenantAccessReturnTo(null), "/inquilino/painel");
 });

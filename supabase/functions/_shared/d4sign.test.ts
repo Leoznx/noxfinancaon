@@ -179,21 +179,22 @@ Deno.test("monta mensagem da Z-API com botão para ativação do seguro", () => 
     name: "Maria da Silva",
     planName: "NOX Up",
     dashboardUrl:
-      "https://noxfianca.com/acesso-inquilino?type=magiclink&token_hash=hash-seguro-ativo",
+      "https://noxfianca.com/acesso-inquilino?type=magiclink&token_hash=hash-seguro-ativo&returnTo=%2Finquilino%2Fdocumentos",
   });
 
   assertEquals(payload.phone, "5511999998888");
-  assertEquals(payload.title, "Seguro ativo");
-  assert(payload.message.includes("Maria da Silva"));
-  assert(payload.message.includes("NOX Up"));
+  assertEquals(payload.title, "Contrato ativo 🌙");
+  assert(payload.message.includes("Parabéns, seu contrato está ativo! 🌙"));
+  assert(payload.message.includes("*NOX FIANÇA*"));
+  assert(payload.message.includes("crie sua conta"));
   assertEquals(payload.footer, "NOX Fiança");
   assertEquals(payload.buttonActions, [
     {
-      id: "acessar-painel",
+      id: "ver-documentos",
       type: "URL",
-      label: "Acessar meu painel",
+      label: "Ver Documentos",
       url:
-        "https://noxfianca.com/acesso-inquilino?type=magiclink&token_hash=hash-seguro-ativo",
+        "https://noxfianca.com/acesso-inquilino?type=magiclink&token_hash=hash-seguro-ativo&returnTo=%2Finquilino%2Fdocumentos",
     },
   ]);
 });
@@ -205,7 +206,7 @@ Deno.test("bloqueia WhatsApp sem destinatário ou acesso individual", () => {
       name: "Maria",
       planName: "NOX Fit",
       dashboardUrl:
-        "https://noxfianca.com/acesso-inquilino?type=magiclink&token_hash=abc",
+        "https://noxfianca.com/acesso-inquilino?type=magiclink&token_hash=abc&returnTo=%2Finquilino%2Fdocumentos",
     })
   );
   assertThrows(() =>
@@ -222,7 +223,16 @@ Deno.test("bloqueia WhatsApp sem destinatário ou acesso individual", () => {
       name: "Maria",
       planName: "NOX Fit",
       dashboardUrl:
-        "http://noxfianca.com/acesso-inquilino?type=magiclink&token_hash=abc",
+        "http://noxfianca.com/acesso-inquilino?type=magiclink&token_hash=abc&returnTo=%2Finquilino%2Fdocumentos",
+    })
+  );
+  assertThrows(() =>
+    buildInsuranceActiveZApiPayload({
+      to: "(11) 99999-8888",
+      name: "Maria",
+      planName: "NOX Fit",
+      dashboardUrl:
+        "https://noxfianca.com/acesso-inquilino?type=magiclink&token_hash=abc&returnTo=%2Finquilino%2Fpainel",
     })
   );
 });
