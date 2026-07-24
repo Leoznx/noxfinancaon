@@ -84,3 +84,13 @@ export function resolveTenantAccessReturnTo(value: string | null): string {
     ? value
     : "/inquilino/painel";
 }
+
+export function resolveTenantAccessDestination(
+  returnTo: string | null,
+  setupRequired: boolean,
+): string {
+  const safeReturnTo = resolveTenantAccessReturnTo(returnTo);
+  return setupRequired
+    ? `/completar-acesso-inquilino?returnTo=${encodeURIComponent(safeReturnTo)}`
+    : safeReturnTo;
+}

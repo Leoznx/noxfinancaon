@@ -5,6 +5,7 @@ import {
   hasAuthEmailCallback,
   normalizeAuthEmailCallbackType,
   parseAuthEmailCallback,
+  resolveTenantAccessDestination,
   resolveTenantAccessReturnTo,
 } from "../src/lib/auth-email-links";
 
@@ -73,4 +74,15 @@ test("aceita somente a tela de documentos no acesso mágico do inquilino", () =>
     "/inquilino/painel",
   );
   assert.equal(resolveTenantAccessReturnTo(null), "/inquilino/painel");
+});
+
+test("novo inquilino define a senha antes de abrir os documentos", () => {
+  assert.equal(
+    resolveTenantAccessDestination("/inquilino/documentos", true),
+    "/completar-acesso-inquilino?returnTo=%2Finquilino%2Fdocumentos",
+  );
+  assert.equal(
+    resolveTenantAccessDestination("/inquilino/documentos", false),
+    "/inquilino/documentos",
+  );
 });

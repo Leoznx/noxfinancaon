@@ -536,6 +536,7 @@ async function ensureTenantAccount(supabase: any, consulta: any) {
         ),
         telefone: consulta?.tenant_telefone || null,
         role: "inquilino",
+        tenant_access_setup_required: true,
       },
     });
     if (error || !created?.user) {

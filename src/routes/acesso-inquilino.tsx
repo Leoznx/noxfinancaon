@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import {
   parseAuthEmailCallback,
+  resolveTenantAccessDestination,
   resolveTenantAccessReturnTo,
 } from "@/lib/auth-email-links";
 
@@ -30,27 +31,38 @@ function AcessoInquilinoPage() {
         if (callback.error || callback.errorDescription) throw new Error("link_invalido");
 
         let confirmou = false;
+        let precisaCriarAcesso = false;
         if (callback.tokenHash && callback.type === "magiclink") {
           const { data, error } = await supabase.auth.verifyOtp({
             token_hash: callback.tokenHash,
             type: "magiclink",
           });
           confirmou = !error && Boolean(data.session);
+          precisaCriarAcesso =
+            data.user?.user_metadata?.tenant_access_setup_required === true;
         } else if (callback.code) {
           const { data, error } = await supabase.auth.exchangeCodeForSession(callback.code);
           confirmou = !error && Boolean(data.session);
+          precisaCriarAcesso =
+            data.user?.user_metadata?.tenant_access_setup_required === true;
         } else if (callback.accessToken && callback.refreshToken) {
           const { data, error } = await supabase.auth.setSession({
             access_token: callback.accessToken,
             refresh_token: callback.refreshToken,
           });
           confirmou = !error && Boolean(data.session);
+          precisaCriarAcesso =
+            data.user?.user_metadata?.tenant_access_setup_required === true;
         }
 
         if (!confirmou) throw new Error("link_invalido");
         window.history.replaceState({}, "", window.location.pathname);
         if (ativo) setEstado("sucesso");
-        window.setTimeout(() => window.location.replace(returnTo), 700);
+        const destino = resolveTenantAccessDestination(
+          returnTo,
+          precisaCriarAcesso,
+        );
+        window.setTimeout(() => window.location.replace(destino), 700);
       } catch (error) {
         console.error("[acesso-inquilino] falha ao validar acesso", error);
         window.history.replaceState({}, "", window.location.pathname);
