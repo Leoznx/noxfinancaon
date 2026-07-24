@@ -1,14 +1,36 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  AlertTriangle,
+  Building2,
+  CalendarClock,
+  Copy,
+  CreditCard,
+  FileText,
+  Landmark,
+  QrCode,
+  Receipt,
+  RefreshCw,
+  Wallet,
+} from "lucide-react";
+import { toast } from "sonner";
+
+import { useAuth } from "@/components/AuthProvider";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { useAuth } from "@/components/AuthProvider";
-import { supabase } from "@/integrations/supabase/client";
-import { Receipt, Info, AlertTriangle, Copy, FileText, Wallet, CalendarClock, RefreshCw } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { toast } from "sonner";
-import { MESES_PT, isPagamentoConcluido, statusPagamentoLabel } from "@/lib/asaas-payment";
+import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
+import { isPagamentoConcluido, MESES_PT, statusPagamentoLabel } from "@/lib/asaas-payment";
+import {
+  AGENCY_BILLING_MESSAGE,
+  mergeTenantBillingItems,
+  tenantBillingMethodLabel,
+  type TenantBillingConsultation,
+  type TenantBillingItem,
+  type TenantInvoiceSource,
+  type TenantPaymentSource,
+} from "@/lib/tenant-billing";
 
 export const Route = createFileRoute("/inquilino/faturas")({
   component: () => (
@@ -18,11 +40,7 @@ export const Route = createFileRoute("/inquilino/faturas")({
   ),
 });
 
-const brl = (n: number) => `R$ ${Number(n || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
-
-// "Em aberto" so soma o que ainda pode virar cobranca ativa (agendada,
-// aguardando pagamento ou vencida) - nunca cancelada/estornada/chargeback.
-const STATUS_ABERTO = ["pending", "overdue"];
+const STATUS_ABERTO = ["pending", "overdue", "risk_analysis", "approved"];
 
 const STATUS_CLASS: Record<string, string> = {
   paid: "bg-emerald-100 text-emerald-700 border-emerald-200",
@@ -37,314 +55,481 @@ const STATUS_CLASS: Record<string, string> = {
   refused: "bg-red-100 text-red-700 border-red-200",
 };
 
-// A mensalidade "pending" mais proxima (ou ja vencida) mostra "Aguardando
-// pagamento"; as demais pending futuras da mesma parcela mostram "Agendada" -
-// e so um rotulo de exibicao (nao existe status "scheduled" no Asaas nem no
-// banco, a coluna real continua "pending" o tempo todo).
-function statusInfo(f: any, ehProximaAcionavel: boolean) {
-  if (f.status === "pending" && !ehProximaAcionavel) {
-    return { label: "Agendada", cls: "bg-slate-100 text-slate-600 border-slate-200" };
+type BillingContract = TenantBillingConsultation & {
+  items: TenantBillingItem[];
+};
+
+const brl = (value: number) =>
+  `R$ ${Number(value || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
+
+function statusInfo(item: TenantBillingItem, actionableId?: string) {
+  if (item.status === "pending" && item.id !== actionableId) {
+    return {
+      label: "Agendada",
+      cls: "bg-slate-100 text-slate-600 border-slate-200",
+    };
   }
   return {
-    label: statusPagamentoLabel(f.status),
-    cls: STATUS_CLASS[f.status] || "bg-amber-100 text-amber-700 border-amber-200",
+    label: statusPagamentoLabel(item.status),
+    cls: STATUS_CLASS[item.status] || "bg-amber-100 text-amber-700 border-amber-200",
   };
 }
 
-type Contrato = {
-  consultaId: string;
-  endereco: string;
-  planoNome: string;
-  viaImobiliaria: boolean;
-  parcelas: any[];
-};
-
 function FaturasInquilino() {
   const { user } = useAuth();
-  const [faturas, setFaturas] = useState<any[]>([]);
+  const [consultations, setConsultations] = useState<TenantBillingConsultation[]>([]);
+  const [items, setItems] = useState<TenantBillingItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [atualizandoId, setAtualizandoId] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [refreshingId, setRefreshingId] = useState<string | null>(null);
 
-  const carregarFaturas = useCallback(async () => {
+  const loadBilling = useCallback(async () => {
     if (!user?.id) return;
-    const { data } = await supabase
-      .from("faturas_inquilino")
-      .select(
-        `*, consulta:consultas_credito(id, payment_type, imovel:imoveis(endereco, cidade, estado), plano:planos(nome)), asaas_payment:asaas_payments(asaas_payment_id)`,
-      )
-      .eq("tenant_user_id", user.id)
-      .order("numero_parcela", { ascending: true });
-    setFaturas(data ?? []);
-  }, [user?.id]);
+    setErrorMessage(null);
+
+    try {
+      const consultationSelect =
+        "id, payment_type, insurance_payment_method, imovel:imoveis(endereco, cidade, estado), plano:planos(nome)";
+      const [byUser, byEmail] = await Promise.all([
+        supabase
+          .from("consultas_credito")
+          .select(consultationSelect)
+          .eq("tenant_user_id", user.id),
+        user.email
+          ? supabase
+              .from("consultas_credito")
+              .select(consultationSelect)
+              .ilike("tenant_email", user.email)
+          : Promise.resolve({ data: [], error: null }),
+      ]);
+      if (byUser.error) throw byUser.error;
+      if (byEmail.error) throw byEmail.error;
+
+      const uniqueConsultations = Array.from(
+        new Map(
+          [...(byUser.data ?? []), ...(byEmail.data ?? [])].map((item: any) => [
+            item.id,
+            item,
+          ]),
+        ).values(),
+      ) as TenantBillingConsultation[];
+      setConsultations(uniqueConsultations);
+
+      const consultationIds = uniqueConsultations.map((item) => item.id);
+      if (!consultationIds.length) {
+        setItems([]);
+        return;
+      }
+
+      const [invoiceResult, paymentResult] = await Promise.all([
+        supabase
+          .from("faturas_inquilino")
+          .select(
+            "id, consulta_id, asaas_payment_id, numero_parcela, installment_total, vencimento, valor, status, pago_em, boleto_url, linha_digitavel",
+          )
+          .in("consulta_id", consultationIds),
+        (supabase as any)
+          .from("asaas_payments")
+          .select(
+            "id, consultation_id, asaas_payment_id, payment_method, status, value, due_date, confirmed_at, received_at, pix_qr_code, pix_copy_paste, pix_expires_at, boleto_url, boleto_barcode, external_reference",
+          )
+          .in("consultation_id", consultationIds),
+      ]);
+      if (invoiceResult.error) throw invoiceResult.error;
+      if (paymentResult.error) throw paymentResult.error;
+
+      setItems(
+        mergeTenantBillingItems(
+          uniqueConsultations,
+          (invoiceResult.data ?? []) as unknown as TenantInvoiceSource[],
+          (paymentResult.data ?? []) as unknown as TenantPaymentSource[],
+        ),
+      );
+    } catch (error) {
+      setConsultations([]);
+      setItems([]);
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível carregar suas faturas agora.",
+      );
+    }
+  }, [user?.email, user?.id]);
 
   useEffect(() => {
     if (!user?.id) return;
-    (async () => {
-      try {
-        await carregarFaturas();
-      } finally {
-        setLoading(false);
-      }
-    })();
-    // Assim que o webhook do Asaas confirmar/receber um pagamento, o UPDATE
-    // em faturas_inquilino chega aqui via Realtime e a tela atualiza sozinha
-    // (sem precisar recarregar a pagina) - mesmo padrao ja usado no sino de
-    // notificacoes (SinoNotificacoes.tsx).
+    setLoading(true);
+    loadBilling().finally(() => setLoading(false));
+
     const channel = supabase
-      .channel(`faturas-inquilino-realtime-${user.id}`)
+      .channel(`tenant-billing-${user.id}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "faturas_inquilino", filter: `tenant_user_id=eq.${user.id}` },
-        () => {
-          carregarFaturas();
+        {
+          event: "*",
+          schema: "public",
+          table: "faturas_inquilino",
+          filter: `tenant_user_id=eq.${user.id}`,
         },
+        loadBilling,
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "asaas_payments",
+          filter: `tenant_user_id=eq.${user.id}`,
+        },
+        loadBilling,
       )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user?.id, carregarFaturas]);
+  }, [loadBilling, user?.id]);
 
-  async function atualizarStatus(fatura: any) {
-    const paymentId = fatura.asaas_payment?.asaas_payment_id;
-    if (!paymentId) return;
-    setAtualizandoId(fatura.id);
+  const contracts = useMemo<BillingContract[]>(
+    () =>
+      consultations.map((consultation) => ({
+        ...consultation,
+        items: items.filter((item) => item.consultationId === consultation.id),
+      })),
+    [consultations, items],
+  );
+
+  const tenantItems = useMemo(
+    () => items.filter((item) => contracts.some(
+      (contract) =>
+        contract.id === item.consultationId && contract.payment_type !== "imobiliaria",
+    )),
+    [contracts, items],
+  );
+
+  const actionableByContract = useMemo(() => {
+    const result = new Map<string, string>();
+    for (const contract of contracts) {
+      const actionable = contract.items
+        .filter((item) => STATUS_ABERTO.includes(item.status))
+        .sort(
+          (a, b) =>
+            new Date(a.dueDate || "9999-12-31").getTime() -
+            new Date(b.dueDate || "9999-12-31").getTime(),
+        )[0];
+      if (actionable) result.set(contract.id, actionable.id);
+    }
+    return result;
+  }, [contracts]);
+
+  const summary = useMemo(() => {
+    const open = tenantItems.filter((item) => STATUS_ABERTO.includes(item.status));
+    return {
+      paid: tenantItems
+        .filter((item) => isPagamentoConcluido(item.status))
+        .reduce((sum, item) => sum + item.amount, 0),
+      open: open.reduce((sum, item) => sum + item.amount, 0),
+      overdue: tenantItems.filter((item) => item.status === "overdue"),
+      next: [...open].sort(
+        (a, b) =>
+          new Date(a.dueDate || "9999-12-31").getTime() -
+          new Date(b.dueDate || "9999-12-31").getTime(),
+      )[0],
+    };
+  }, [tenantItems]);
+
+  async function copyValue(value: string, successMessage: string) {
     try {
-      const { data, error } = await supabase.functions.invoke("asaas-get-payment", {
-        body: { paymentId },
-      });
-      if (error) throw new Error(error.message);
-      if ((data as any)?.error) throw new Error((data as any).error);
-      await carregarFaturas();
-      toast.success("Status atualizado.");
-    } catch (e: any) {
-      toast.error(e?.message || "Não foi possível consultar o pagamento agora.");
-    } finally {
-      setAtualizandoId(null);
+      await navigator.clipboard.writeText(value);
+      toast.success(successMessage);
+    } catch {
+      toast.error("Não foi possível copiar. Tente novamente.");
     }
   }
 
-  const contratos = useMemo<Contrato[]>(() => {
-    const grupos = new Map<string, Contrato>();
-    for (const f of faturas) {
-      const consultaId = f.consulta_id;
-      if (!grupos.has(consultaId)) {
-        const imovel = f.consulta?.imovel;
-        grupos.set(consultaId, {
-          consultaId,
-          endereco: imovel ? `${imovel.endereco}, ${imovel.cidade}/${imovel.estado}` : "Imóvel",
-          planoNome: f.consulta?.plano?.nome ?? "",
-          viaImobiliaria: f.consulta?.payment_type === "imobiliaria",
-          parcelas: [],
-        });
-      }
-      grupos.get(consultaId)!.parcelas.push(f);
+  async function refreshStatus(item: TenantBillingItem) {
+    if (!item.providerPaymentId) return;
+    setRefreshingId(item.id);
+    try {
+      const { data, error } = await supabase.functions.invoke("asaas-get-payment", {
+        body: { paymentId: item.providerPaymentId },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      await loadBilling();
+      toast.success("Status atualizado.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível consultar o pagamento agora.",
+      );
+    } finally {
+      setRefreshingId(null);
     }
-    return Array.from(grupos.values());
-  }, [faturas]);
-
-  // Dentro de cada contrato, so a parcela "pending" com vencimento mais
-  // proximo (ou ja vencida) e a que realmente precisa de acao agora - as
-  // demais pending futuras aparecem como "Agendada".
-  const proximaAcionavelPorContrato = useMemo(() => {
-    const mapa = new Map<string, string>();
-    for (const contrato of contratos) {
-      const acionaveis = contrato.parcelas
-        .filter((f) => STATUS_ABERTO.includes(f.status))
-        .sort((a, b) => new Date(a.vencimento).getTime() - new Date(b.vencimento).getTime());
-      if (acionaveis[0]) mapa.set(contrato.consultaId, acionaveis[0].id);
-    }
-    return mapa;
-  }, [contratos]);
-
-  const resumo = useMemo(() => {
-    const abertas = faturas.filter((f) => STATUS_ABERTO.includes(f.status));
-    const pago = faturas.filter((f) => isPagamentoConcluido(f.status)).reduce((s, f) => s + Number(f.valor || 0), 0);
-    const aberto = abertas.reduce((s, f) => s + Number(f.valor || 0), 0);
-    const vencidas = faturas.filter((f) => f.status === "overdue");
-    const prox = [...abertas].sort((a, b) => new Date(a.vencimento).getTime() - new Date(b.vencimento).getTime())[0];
-    return { pago, aberto, prox, vencidas };
-  }, [faturas]);
-
-  function copiar(linha: string) {
-    navigator.clipboard.writeText(linha);
-    toast.success("Linha digitável copiada");
   }
 
   return (
     <DashboardLayout>
-      <div className="max-w-6xl mx-auto space-y-6">
+      <div className="mx-auto max-w-6xl space-y-6">
         <div>
-          <h1 className="text-3xl font-black tracking-tight text-neutral-900">Minhas Faturas</h1>
-          <p className="text-sm text-neutral-500 mt-1">Acompanhe suas 12 mensalidades, vencimentos e pagamentos.</p>
-        </div>
-
-        {resumo.vencidas.length > 0 && (
-          <div className="bg-red-50 border border-red-200 rounded-2xl p-5 flex items-start gap-4">
-            <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center shrink-0">
-              <AlertTriangle className="text-red-600" size={20} />
-            </div>
-            <div className="flex-1">
-              <p className="font-black text-red-700 text-sm">
-                Atenção: existe{resumo.vencidas.length > 1 ? "m" : ""} {resumo.vencidas.length} mensalidade
-                {resumo.vencidas.length > 1 ? "s" : ""} vencida{resumo.vencidas.length > 1 ? "s" : ""}.
-              </p>
-              <p className="text-xs text-red-600/80 mt-0.5">Regularize o pagamento para manter sua fiança ativa.</p>
-            </div>
-            {resumo.vencidas[0]?.boleto_url && (
-              <a href={resumo.vencidas[0].boleto_url} target="_blank" rel="noreferrer">
-                <Button size="sm" className="bg-red-600 hover:bg-red-700 text-white">Ver parcela vencida</Button>
-              </a>
-            )}
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <ResumoCard
-            icon={CalendarClock}
-            label="Próximo vencimento"
-            value={resumo.prox ? new Date(resumo.prox.vencimento).toLocaleDateString("pt-BR") : "—"}
-            tint="bg-white border border-neutral-200 text-neutral-900"
-          />
-          <ResumoCard
-            icon={Wallet}
-            label="Em aberto"
-            value={brl(resumo.aberto)}
-            tint="bg-white border border-neutral-200 text-neutral-900"
-          />
-          <ResumoCard
-            icon={Receipt}
-            label="Já pago"
-            value={brl(resumo.pago)}
-            tint="bg-white border border-neutral-200 text-neutral-900"
-          />
+          <h1 className="text-3xl font-black tracking-tight text-neutral-900">
+            Minhas Faturas
+          </h1>
+          <p className="mt-1 text-sm text-neutral-500">
+            Acompanhe cobranças, vencimentos e pagamentos do seu contrato.
+          </p>
         </div>
 
         {loading ? (
           <p className="text-sm text-neutral-400">Carregando...</p>
-        ) : !contratos.length ? (
-          <div className="bg-white border border-neutral-200 rounded-2xl p-10 text-center">
-            <Receipt size={32} className="mx-auto text-neutral-300 mb-3" />
-            <p className="text-sm text-neutral-500">Nenhuma fatura disponível ainda.</p>
+        ) : errorMessage ? (
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-8 text-center">
+            <p className="text-sm text-red-700">{errorMessage}</p>
+            <Button className="mt-4" variant="outline" onClick={loadBilling}>
+              Tentar novamente
+            </Button>
           </div>
+        ) : !contracts.length ? (
+          <EmptyBilling />
         ) : (
-          contratos.map((contrato) => (
-            <div key={contrato.consultaId} className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-black text-neutral-900">{contrato.endereco}</p>
-                  {contrato.planoNome && <p className="text-xs text-neutral-500">{contrato.planoNome}</p>}
-                </div>
-              </div>
+          <>
+            {tenantItems.length > 0 && (
+              <>
+                {summary.overdue.length > 0 && (
+                  <div className="flex items-start gap-4 rounded-2xl border border-red-200 bg-red-50 p-5">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-500/10">
+                      <AlertTriangle className="text-red-600" size={20} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-black text-red-700">
+                        Existem {summary.overdue.length} mensalidade
+                        {summary.overdue.length > 1 ? "s" : ""} vencida
+                        {summary.overdue.length > 1 ? "s" : ""}.
+                      </p>
+                      <p className="mt-0.5 text-xs text-red-600/80">
+                        Regularize o pagamento para manter sua fiança ativa.
+                      </p>
+                    </div>
+                  </div>
+                )}
 
-              {contrato.viaImobiliaria && (
-                <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 flex gap-3">
-                  <Info className="text-yellow-700 shrink-0 mt-0.5" size={18} />
-                  <p className="text-sm text-neutral-700">
-                    Este contrato possui cobrança centralizada pela imobiliária.
-                  </p>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  <SummaryCard
+                    icon={CalendarClock}
+                    label="Próximo vencimento"
+                    value={
+                      summary.next?.dueDate
+                        ? new Date(`${summary.next.dueDate}T00:00:00`).toLocaleDateString(
+                            "pt-BR",
+                          )
+                        : "—"
+                    }
+                  />
+                  <SummaryCard icon={Wallet} label="Em aberto" value={brl(summary.open)} />
+                  <SummaryCard icon={Receipt} label="Já pago" value={brl(summary.paid)} />
                 </div>
-              )}
+              </>
+            )}
 
-              <div className="bg-white border border-neutral-200 rounded-2xl overflow-hidden shadow-sm">
-                <table className="w-full text-sm">
-                  <thead className="bg-neutral-50 text-[10px] uppercase tracking-widest text-neutral-500">
-                    <tr>
-                      <th className="text-left px-6 py-4">Mensalidade</th>
-                      <th className="text-left px-6 py-4">Vencimento</th>
-                      <th className="text-left px-6 py-4">Valor</th>
-                      <th className="text-left px-6 py-4">Status</th>
-                      <th className="text-left px-6 py-4">Pagamento</th>
-                      <th className="text-right px-6 py-4">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {contrato.parcelas.map((f) => {
-                      const ehProximaAcionavel = proximaAcionavelPorContrato.get(contrato.consultaId) === f.id;
-                      const s = statusInfo(f, ehProximaAcionavel);
-                      const pago = isPagamentoConcluido(f.status);
-                      const [ano, mes] = String(f.vencimento).split("-").map(Number);
-                      return (
-                        <tr key={f.id} className="hover:bg-neutral-50/60">
-                          <td className="px-6 py-4 font-bold">
-                            Mês {f.numero_parcela} de {f.installment_total}
-                            <span className="block text-xs font-normal text-neutral-500">
-                              {MESES_PT[mes - 1]} de {ano}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-neutral-700">
-                            {new Date(f.vencimento).toLocaleDateString("pt-BR")}
-                          </td>
-                          <td className="px-6 py-4 font-black text-neutral-900">{brl(f.valor)}</td>
-                          <td className="px-6 py-4"><Badge className={`${s.cls} border`}>{s.label}</Badge></td>
-                          <td className="px-6 py-4 text-neutral-600">
-                            {f.pago_em ? new Date(f.pago_em).toLocaleDateString("pt-BR") : "—"}
-                          </td>
-                          <td className="px-6 py-4 text-right space-x-1 whitespace-nowrap">
-                            {pago ? (
-                              f.boleto_url && (
-                                <a href={f.boleto_url} target="_blank" rel="noreferrer">
-                                  <Button size="sm" variant="outline">
-                                    <FileText size={14} className="mr-1" /> Ver pagamento
-                                  </Button>
-                                </a>
-                              )
-                            ) : (
-                              <>
-                                {f.boleto_url && (
-                                  <a href={f.boleto_url} target="_blank" rel="noreferrer">
-                                    <Button size="sm" className="bg-neutral-900 hover:bg-neutral-800 text-white">
-                                      Ver boleto
-                                    </Button>
-                                  </a>
-                                )}
-                                {f.linha_digitavel && (
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => copiar(f.linha_digitavel)}
-                                    title="Copiar linha digitável"
-                                  >
-                                    <Copy size={14} />
-                                  </Button>
-                                )}
-                                {f.asaas_payment?.asaas_payment_id && (
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => atualizarStatus(f)}
-                                    disabled={atualizandoId === f.id}
-                                    title="Atualizar status"
-                                  >
-                                    <RefreshCw size={14} className={atualizandoId === f.id ? "animate-spin" : ""} />
-                                  </Button>
-                                )}
-                              </>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          ))
+            {contracts.map((contract) => (
+              <ContractBilling
+                key={contract.id}
+                contract={contract}
+                actionableId={actionableByContract.get(contract.id)}
+                refreshingId={refreshingId}
+                onCopy={copyValue}
+                onRefresh={refreshStatus}
+              />
+            ))}
+          </>
         )}
       </div>
     </DashboardLayout>
   );
 }
 
-function ResumoCard({ icon: Icon, label, value, tint }: { icon: any; label: string; value: string; tint: string }) {
+function ContractBilling({
+  contract,
+  actionableId,
+  refreshingId,
+  onCopy,
+  onRefresh,
+}: {
+  contract: BillingContract;
+  actionableId?: string;
+  refreshingId: string | null;
+  onCopy: (value: string, message: string) => Promise<void>;
+  onRefresh: (item: TenantBillingItem) => Promise<void>;
+}) {
+  const address = contract.imovel
+    ? [contract.imovel.endereco, contract.imovel.cidade, contract.imovel.estado]
+        .filter(Boolean)
+        .join(", ")
+    : "Contrato de locação";
+
+  if (contract.payment_type === "imobiliaria") {
+    return (
+      <section className="rounded-2xl border border-yellow-200 bg-yellow-50 px-6 py-12 text-center">
+        <Building2 className="mx-auto mb-4 text-yellow-700" size={34} />
+        <p className="mx-auto max-w-xl text-base font-semibold leading-relaxed text-neutral-800">
+          {AGENCY_BILLING_MESSAGE}
+        </p>
+      </section>
+    );
+  }
+
   return (
-    <div className={`rounded-2xl p-4 ${tint}`}>
-      <div className="flex items-center gap-2 mb-2 opacity-80">
+    <section className="space-y-3">
+      <div>
+        <p className="text-sm font-black text-neutral-900">{address}</p>
+        {contract.plano?.nome && (
+          <p className="text-xs text-neutral-500">{contract.plano.nome}</p>
+        )}
+      </div>
+
+      {!contract.items.length ? (
+        <div className="rounded-2xl border border-neutral-200 bg-white p-8 text-center">
+          <Receipt className="mx-auto mb-3 text-neutral-300" size={28} />
+          <p className="text-sm text-neutral-500">
+            Nenhuma cobrança foi gerada para este contrato ainda.
+          </p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-2xl border border-neutral-200 bg-white shadow-sm">
+          <table className="w-full min-w-[860px] text-sm">
+            <thead className="bg-neutral-50 text-[10px] uppercase tracking-widest text-neutral-500">
+              <tr>
+                <th className="px-6 py-4 text-left">Mensalidade</th>
+                <th className="px-6 py-4 text-left">Vencimento</th>
+                <th className="px-6 py-4 text-left">Valor</th>
+                <th className="px-6 py-4 text-left">Forma</th>
+                <th className="px-6 py-4 text-left">Status</th>
+                <th className="px-6 py-4 text-right">Ações</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {contract.items.map((item) => {
+                const status = statusInfo(item, actionableId);
+                const [year, month] = String(item.dueDate || "").split("-").map(Number);
+                return (
+                  <tr key={item.id} className="hover:bg-neutral-50/60">
+                    <td className="px-6 py-4 font-bold">
+                      Mês {item.installmentNumber}
+                      {item.installmentTotal > 1 ? ` de ${item.installmentTotal}` : ""}
+                      {month && year ? (
+                        <span className="block text-xs font-normal text-neutral-500">
+                          {MESES_PT[month - 1]} de {year}
+                        </span>
+                      ) : null}
+                    </td>
+                    <td className="px-6 py-4 text-neutral-700">
+                      {item.dueDate
+                        ? new Date(`${item.dueDate}T00:00:00`).toLocaleDateString("pt-BR")
+                        : "—"}
+                    </td>
+                    <td className="px-6 py-4 font-black text-neutral-900">
+                      {brl(item.amount)}
+                    </td>
+                    <td className="px-6 py-4">
+                      <PaymentMethod method={item.method} />
+                    </td>
+                    <td className="px-6 py-4">
+                      <Badge className={`${status.cls} border`}>{status.label}</Badge>
+                      {item.paidAt && (
+                        <span className="mt-1 block text-[10px] text-neutral-500">
+                          Pago em {new Date(item.paidAt).toLocaleDateString("pt-BR")}
+                        </span>
+                      )}
+                    </td>
+                    <td className="space-x-1 whitespace-nowrap px-6 py-4 text-right">
+                      {item.method === "boleto" && item.boletoUrl && (
+                        <a href={item.boletoUrl} target="_blank" rel="noreferrer">
+                          <Button size="sm" variant="outline">
+                            <FileText className="mr-1" size={14} /> Ver boleto
+                          </Button>
+                        </a>
+                      )}
+                      {item.method === "boleto" && item.boletoBarcode && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => onCopy(item.boletoBarcode!, "Linha digitável copiada.")}
+                          title="Copiar linha digitável"
+                        >
+                          <Copy size={14} />
+                        </Button>
+                      )}
+                      {item.method === "pix" && item.pixCopyPaste && (
+                        <Button
+                          size="sm"
+                          className="bg-neutral-900 text-white hover:bg-neutral-800"
+                          onClick={() => onCopy(item.pixCopyPaste!, "Código Pix copiado.")}
+                        >
+                          <QrCode className="mr-1" size={14} /> Copiar Pix
+                        </Button>
+                      )}
+                      {item.providerPaymentId && !isPagamentoConcluido(item.status) && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => onRefresh(item)}
+                          disabled={refreshingId === item.id}
+                          title="Atualizar status"
+                        >
+                          <RefreshCw
+                            size={14}
+                            className={refreshingId === item.id ? "animate-spin" : ""}
+                          />
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function PaymentMethod({ method }: { method: TenantBillingItem["method"] }) {
+  const Icon = method === "pix" ? QrCode : method === "credit_card" ? CreditCard : Landmark;
+  return (
+    <span className="inline-flex items-center gap-1.5 font-semibold text-neutral-700">
+      <Icon size={14} />
+      {tenantBillingMethodLabel(method)}
+    </span>
+  );
+}
+
+function SummaryCard({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: typeof Receipt;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-neutral-200 bg-white p-4 text-neutral-900">
+      <div className="mb-2 flex items-center gap-2 opacity-80">
         <Icon size={14} />
         <span className="text-[10px] font-bold uppercase tracking-widest">{label}</span>
       </div>
       <p className="text-xl font-black tracking-tight">{value}</p>
+    </div>
+  );
+}
+
+function EmptyBilling() {
+  return (
+    <div className="rounded-2xl border border-neutral-200 bg-white p-10 text-center">
+      <Receipt className="mx-auto mb-3 text-neutral-300" size={32} />
+      <p className="text-sm text-neutral-500">Nenhuma fatura disponível ainda.</p>
     </div>
   );
 }
