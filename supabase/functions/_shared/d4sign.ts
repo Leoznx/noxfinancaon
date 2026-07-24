@@ -8,6 +8,7 @@ import {
   unzipSync,
   zipSync,
 } from "https://esm.sh/fflate@0.8.2";
+import { escapeEmailHtml, renderNoxEmail } from "./email-branding.ts";
 
 const D4SIGN_API_DEFAULT = "https://secure.d4sign.com.br/api/v1";
 const SIGNED_CONTRACTS_BUCKET = "contratos-assinados";
@@ -1200,18 +1201,18 @@ async function sendActiveEmail(params: {
       from,
       to: [params.to],
       subject: "Parabéns, seu seguro está ativo — NOX Fiança",
-      html: `
-        <div style="font-family:Arial,sans-serif;color:#171717;line-height:1.6;max-width:620px;margin:auto">
+      html: renderNoxEmail(
+        `
           <h1 style="font-size:26px">🎉 Parabéns,seu contrato está ativo! 🌙</h1>
           <ul style="padding-left:22px">
             <li style="margin-bottom:14px">para visualizar seus documentos acesso o site da <strong>NOX FIANÇA</strong></li>
             <li>caso nao tenha crie um acesso com suas informações no site da <strong>NOX FIANÇA</strong> para visualizar seus documentos</li>
           </ul>
-          <p style="margin:28px 0 12px"><a href="${params.dashboardUrl}" style="display:inline-block;background:#ffd21c;color:#171717;text-decoration:none;font-weight:700;padding:14px 22px;border-radius:10px">Ver Documentos (Site)</a></p>
-          <p style="margin:0 0 28px"><a href="${appDocumentsUrl}" style="display:inline-block;background:#171717;color:#ffffff;text-decoration:none;font-weight:700;padding:14px 22px;border-radius:10px">Ver Documentos (Aplicativo)</a></p>
-          <p>Equipe NOX Fiança</p>
-        </div>
-      `,
+          <p style="margin:28px 0 12px"><a href="${escapeEmailHtml(params.dashboardUrl)}" style="display:inline-block;background:#ffd21c;color:#171717;text-decoration:none;font-weight:700;padding:14px 22px;border-radius:10px">Ver Documentos (Site)</a></p>
+          <p style="margin:0"><a href="${escapeEmailHtml(appDocumentsUrl)}" style="display:inline-block;background:#171717;color:#ffffff;text-decoration:none;font-weight:700;padding:14px 22px;border-radius:10px">Ver Documentos (Aplicativo)</a></p>
+        `,
+        "Parabéns, seu contrato da NOX Fiança está ativo.",
+      ),
     }),
   });
   if (!response.ok) {

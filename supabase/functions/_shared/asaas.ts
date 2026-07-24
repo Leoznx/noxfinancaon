@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
+import { renderNoxEmail } from "./email-branding.ts";
 
 export type PaymentMethod = "pix" | "boleto" | "credit_card";
 export type FireMode = "avista" | "embutido";
@@ -369,7 +370,7 @@ export async function sendPaymentEmail(params: {
   const assunto =
     params.tipo === "criado" ? "Pagamento gerado — NOX Fiança" : "Pagamento confirmado — NOX Fiança";
 
-  const corpo =
+  const conteudo =
     params.tipo === "criado"
       ? `
         <p>Olá, ${params.nome}.</p>
@@ -402,7 +403,17 @@ export async function sendPaymentEmail(params: {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from, to: [params.to], subject: assunto, html: corpo }),
+      body: JSON.stringify({
+        from,
+        to: [params.to],
+        subject: assunto,
+        html: renderNoxEmail(
+          conteudo,
+          params.tipo === "criado"
+            ? "Seu pagamento da NOX Fiança foi gerado."
+            : "Seu pagamento da NOX Fiança foi confirmado.",
+        ),
+      }),
     });
     if (!res.ok) {
       const text = await res.text();
@@ -589,7 +600,7 @@ export async function sendInstallmentScheduleEmail(params: {
         `<li>Mês ${p.installmentNumber} — ${MESES_PT[p.referenceMonth - 1]} de ${p.referenceYear} — Vencimento ${formatDateBr(p.dueDate)} — ${formatBRL(p.value)}</li>`,
     )
     .join("");
-  const corpo = `
+  const conteudo = `
     <p>Olá, ${params.nome}.</p>
     <p>Os ${params.installments.length} boletos mensais referentes ao seu contrato da NOX Fiança foram gerados.</p>
     <p>
@@ -609,7 +620,10 @@ export async function sendInstallmentScheduleEmail(params: {
         from,
         to: [params.to],
         subject: `Seus ${params.installments.length} boletos foram gerados — NOX Fiança`,
-        html: corpo,
+        html: renderNoxEmail(
+          conteudo,
+          `Seus ${params.installments.length} boletos da NOX Fiança foram gerados.`,
+        ),
       }),
     });
     if (!res.ok) {
