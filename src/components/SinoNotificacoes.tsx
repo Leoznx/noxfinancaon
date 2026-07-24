@@ -17,6 +17,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./AuthProvider";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
+import { routeForNotification } from "@/lib/notification-routing";
 
 type Notificacao = {
   id: string;
@@ -42,16 +43,25 @@ const ICONES_NOTIFICACAO: Record<string, LucideIcon> = {
   contrato_reprovado: FileX,
   documento_aprovado: FileCheck,
   documento_recusado: FileX,
+  seguro_ativo: FileCheck,
+  pagamento: CheckCircle,
   sistema: Megaphone,
   atualizacao: Sparkles,
 };
 
 const CORES_NOTIFICACAO: Record<string, { fundo: string; icone: string }> = {
   verde: { fundo: "bg-green-100", icone: "text-green-700" },
+  green: { fundo: "bg-green-100", icone: "text-green-700" },
+  emerald: { fundo: "bg-emerald-100", icone: "text-emerald-700" },
   amarelo: { fundo: "bg-yellow-100", icone: "text-yellow-700" },
+  yellow: { fundo: "bg-yellow-100", icone: "text-yellow-700" },
   azul: { fundo: "bg-blue-100", icone: "text-blue-700" },
+  blue: { fundo: "bg-blue-100", icone: "text-blue-700" },
   vermelho: { fundo: "bg-red-100", icone: "text-red-700" },
+  red: { fundo: "bg-red-100", icone: "text-red-700" },
   cinza: { fundo: "bg-neutral-100", icone: "text-neutral-700" },
+  gray: { fundo: "bg-neutral-100", icone: "text-neutral-700" },
+  grey: { fundo: "bg-neutral-100", icone: "text-neutral-700" },
 };
 
 export function SinoNotificacoes() {
@@ -218,7 +228,9 @@ export function SinoNotificacoes() {
               ) : (
                 <div className="divide-y divide-neutral-50">
                   {notificacoes.map((notif) => {
-                    const cor = CORES_NOTIFICACAO[notif.cor_destaque || "cinza"];
+                    const cor =
+                      CORES_NOTIFICACAO[notif.cor_destaque || "cinza"] ??
+                      CORES_NOTIFICACAO.cinza;
                     const Icone = ICONES_NOTIFICACAO[notif.tipo] || Bell;
 
                     return (
@@ -226,7 +238,8 @@ export function SinoNotificacoes() {
                         key={notif.id}
                         onClick={() => {
                           if (!notif.lida) marcarUmaComoLida(notif.id);
-                          if (notif.link) navigate({ to: notif.link as never });
+                          const destination = routeForNotification(notif.link);
+                          if (destination) navigate({ to: destination as never });
                           setAberto(false);
                         }}
                         className={`w-full text-left px-5 py-4 hover:bg-neutral-50 transition-colors flex gap-4 ${

@@ -1581,7 +1581,7 @@ async function notifyInsuranceActive(
       mensagem:
         `O contrato ${signature.plan_name} foi assinado. Seus documentos já estão disponíveis.`,
       tipo: "seguro_ativo",
-      cor_destaque: "emerald",
+      cor_destaque: "verde",
       icone: "shield-check",
       link: "/inquilino/documentos",
     });

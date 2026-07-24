@@ -70,7 +70,7 @@ function AprovacoesPage() {
       mensagem: opts.mensagem,
       tipo: opts.tipo,
       cor_destaque: opts.cor,
-      link: `/consultas/${consulta.id}/status`,
+      link: `/consultas/${consulta.id}/resultado`,
     } as any);
     if (error) console.error("[admin.aprovacoes] falha ao notificar solicitante:", error);
   };

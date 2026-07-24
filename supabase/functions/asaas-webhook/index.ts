@@ -188,7 +188,7 @@ serve(async (req) => {
         titulo: "Pagamento confirmado",
         mensagem: "O pagamento da proposta foi identificado com sucesso.",
         tipo: "pagamento",
-        cor_destaque: "emerald",
+        cor_destaque: "verde",
         icone: "check-circle",
         link: `/consultas/${localPayment.consultation_id}/finalizar`,
       });

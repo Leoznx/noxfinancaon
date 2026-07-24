@@ -27,6 +27,7 @@ import { ptBR } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { routeForNotification } from "@/lib/notification-routing";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -50,16 +51,25 @@ const ICONES_NOTIFICACAO: Record<string, any> = {
   nivel_subiu: Trophy,
   contrato_aprovado: FileCheck,
   contrato_reprovado: FileX,
+  seguro_ativo: FileCheck,
+  pagamento: CheckCircle,
   sistema: Megaphone,
   atualizacao: Sparkles,
 };
 
 const CORES_NOTIFICACAO: Record<string, { fundo: string; icone: string; badge: string }> = {
   verde: { fundo: 'bg-green-100', icone: 'text-green-700', badge: 'bg-green-100 text-green-700' },
+  green: { fundo: 'bg-green-100', icone: 'text-green-700', badge: 'bg-green-100 text-green-700' },
+  emerald: { fundo: 'bg-emerald-100', icone: 'text-emerald-700', badge: 'bg-emerald-100 text-emerald-700' },
   amarelo: { fundo: 'bg-yellow-100', icone: 'text-yellow-700', badge: 'bg-yellow-100 text-yellow-700' },
+  yellow: { fundo: 'bg-yellow-100', icone: 'text-yellow-700', badge: 'bg-yellow-100 text-yellow-700' },
   azul: { fundo: 'bg-blue-100', icone: 'text-blue-700', badge: 'bg-blue-100 text-blue-700' },
+  blue: { fundo: 'bg-blue-100', icone: 'text-blue-700', badge: 'bg-blue-100 text-blue-700' },
   vermelho: { fundo: 'bg-red-100', icone: 'text-red-700', badge: 'bg-red-100 text-red-700' },
+  red: { fundo: 'bg-red-100', icone: 'text-red-700', badge: 'bg-red-100 text-red-700' },
   cinza: { fundo: 'bg-neutral-100', icone: 'text-neutral-700', badge: 'bg-neutral-100 text-neutral-700' },
+  gray: { fundo: 'bg-neutral-100', icone: 'text-neutral-700', badge: 'bg-neutral-100 text-neutral-700' },
+  grey: { fundo: 'bg-neutral-100', icone: 'text-neutral-700', badge: 'bg-neutral-100 text-neutral-700' },
 };
 
 function NotificacoesPage() {
@@ -178,7 +188,9 @@ function NotificacoesPage() {
           ) : (
             <div className="grid gap-3">
               {notificacoesFiltradas.map((notif) => {
-                const cor = CORES_NOTIFICACAO[notif.cor_destaque || 'cinza'];
+                const cor =
+                  CORES_NOTIFICACAO[notif.cor_destaque || 'cinza'] ??
+                  CORES_NOTIFICACAO.cinza;
                 const Icone = ICONES_NOTIFICACAO[notif.tipo] || Bell;
                 
                 return (
@@ -248,7 +260,8 @@ function NotificacoesPage() {
                             className="text-xs font-black text-neutral-900 hover:bg-neutral-50 h-9 px-4 rounded-xl gap-2 group/btn"
                             onClick={() => {
                               if (!notif.lida) marcarLida(notif.id);
-                              navigate({ to: notif.link as any });
+                              const destination = routeForNotification(notif.link);
+                              if (destination) navigate({ to: destination as any });
                             }}
                           >
                             Acessar detalhes
