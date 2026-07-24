@@ -18,6 +18,9 @@ static_files = ["./functions/_shared/contract-templates/*.docx"]
 verify_jwt = false
 static_files = ["./functions/_shared/contract-templates/*.docx"]
 
+[functions.zapi-webhook]
+verify_jwt = false
+
 [functions.asaas-create-customer]
 verify_jwt = true
 

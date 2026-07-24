@@ -1029,7 +1029,11 @@ async function logNotification(
   supabase: any,
   signatureId: string,
   channel: "email" | "whatsapp" | "push",
-  result: { sent: boolean; reason?: string },
+  result: {
+    sent: boolean;
+    reason?: string;
+    providerMessageId?: string;
+  },
 ) {
   const { data: previous } = await supabase
     .from("contract_notification_deliveries")
@@ -1054,6 +1058,21 @@ async function logNotification(
     },
     { onConflict: "contract_signature_id,channel,notification_type" },
   );
+  if (channel === "whatsapp" && result.sent && result.providerMessageId) {
+    await supabase.from("contract_signature_events").upsert(
+      {
+        contract_signature_id: signatureId,
+        event_key: `zapi:sent:${result.providerMessageId}`,
+        event_type: "zapi_message_sent",
+        message: "Mensagem de ativação aceita pela Z-API.",
+        payload: {
+          provider_message_id: result.providerMessageId,
+          channel: "whatsapp",
+        },
+      },
+      { onConflict: "event_key", ignoreDuplicates: true },
+    );
+  }
 }
 
 async function sendActiveEmail(params: {
