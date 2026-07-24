@@ -12,8 +12,9 @@ import {
   fillCep,
   fillValores,
   submitSimulation,
-  isLoginPage,
   isCaptchaPresent,
+  loginWithCredentials,
+  detectAuthenticationState,
 } from "./credpagoSelectors";
 import { parseResultado } from "./credpagoParser";
 import type { ConsultaCreditoRow } from "./types";
@@ -40,13 +41,34 @@ function mensagemSeguraParaErro(erroTecnico: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Login manual compartilhado entre consultas concorrentes.
+// Login compartilhado entre consultas concorrentes.
 // Várias abas podem detectar "não logado" ao mesmo tempo (ex.: perfil novo +
 // 3 consultas simultâneas) — todas compartilham cookies do mesmo contexto, então
-// só uma pergunta de login deve aparecer no terminal; as demais abas só esperam
-// essa mesma promise e depois recarregam para herdar a sessão recém-autenticada.
+// só uma renovação deve acontecer; as demais abas esperam a mesma promise e
+// recarregam para herdar a sessão recém-autenticada.
 // ---------------------------------------------------------------------------
 let loginEmAndamento: Promise<void> | null = null;
+
+class CredPagoAuthenticationError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "CredPagoAuthenticationError";
+  }
+}
+
+type AuthRuntimeStatus = "checking" | "ok" | "required" | "unavailable";
+
+const runtimeState: {
+  auth: AuthRuntimeStatus;
+  lastAuthCheckAt: string | null;
+  lastAuthSuccessAt: string | null;
+} = {
+  auth: "checking",
+  lastAuthCheckAt: null,
+  lastAuthSuccessAt: null,
+};
+
+let proximaValidacaoAuthEm = 0;
 
 async function solicitarLoginManual(): Promise<void> {
   log("Tela de login detectada na CredPago.");
@@ -56,19 +78,53 @@ async function solicitarLoginManual(): Promise<void> {
   rl.close();
 }
 
-async function ensureLoggedIn(cid: string, page: Page): Promise<void> {
-  if (!(await isLoginPage(page))) return;
-
-  if (env.headless) {
-    throw new Error(
-      "Login necessário, mas o worker está em modo headless. Rode uma vez com HEADLESS=false para logar manualmente.",
-    );
+async function ensureLoggedIn(
+  cid: string,
+  page: Page,
+  persistirSessao: () => Promise<void>,
+): Promise<void> {
+  const initialState = await detectAuthenticationState(page);
+  if (initialState === "authenticated") return;
+  if (initialState === "unknown") {
+    throw new Error("O portal da CredPago não informou o estado da autenticação.");
   }
 
   if (!loginEmAndamento) {
-    loginEmAndamento = solicitarLoginManual().finally(() => {
-      loginEmAndamento = null;
-    });
+    loginEmAndamento = (async () => {
+      if (env.credpagoLogin && env.credpagoPassword) {
+        log("Sessão expirada — renovando automaticamente pelo Login Loft.");
+        await loginWithCredentials(
+          page,
+          env.credpagoLogin,
+          env.credpagoPassword,
+          env.authLoginTimeoutMs,
+        );
+        await persistirSessao();
+        log("Login Loft renovado e sessão persistida.");
+        return;
+      }
+
+      if (env.headless) {
+        throw new CredPagoAuthenticationError(
+          "Sessão expirada e credenciais de renovação não configuradas na VPS.",
+        );
+      }
+
+      await solicitarLoginManual();
+      await persistirSessao();
+    })()
+      .catch((error) => {
+        if (error instanceof CredPagoAuthenticationError) throw error;
+        throw new CredPagoAuthenticationError(
+          error instanceof Error
+            ? `Não foi possível renovar o Login Loft: ${error.message}`
+            : "Não foi possível renovar o Login Loft.",
+          { cause: error },
+        );
+      })
+      .finally(() => {
+        loginEmAndamento = null;
+      });
   } else {
     log(`[${cid}] Login já solicitado por outra consulta — aguardando confirmação...`);
   }
@@ -79,8 +135,10 @@ async function ensureLoggedIn(cid: string, page: Page): Promise<void> {
   // agora autenticada no contexto compartilhado (cookies são por contexto, não por aba).
   await page.goto(env.credpagoUrl, { waitUntil: "domcontentloaded" }).catch(() => {});
 
-  if (await isLoginPage(page)) {
-    throw new Error("Login não confirmado — a página ainda parece ser a tela de login.");
+  if ((await detectAuthenticationState(page)) !== "authenticated") {
+    throw new CredPagoAuthenticationError(
+      "Login não confirmado — a página ainda parece ser a tela de login.",
+    );
   }
 }
 
@@ -192,6 +250,73 @@ async function marcarErro(id: string, erroTecnico: string): Promise<void> {
   });
 }
 
+/**
+ * Falha de autenticação não é falha de crédito. Preserva a consulta na fila para
+ * retomá-la automaticamente depois que a sessão for recuperada, em vez de mostrar
+ * erro ao corretor no site ou no aplicativo.
+ */
+async function recolocarNaFilaAguardandoAutenticacao(id: string): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from("consultas_credito")
+    .update({
+      status: "pendente",
+      resultado: null,
+      mensagem: null,
+      error_message: null,
+      automation_started_at: null,
+      automation_finished_at: null,
+      automation_step: "aguardando_autenticacao",
+    })
+    .eq("id", id)
+    .eq("status", "processando");
+  if (error) throw error;
+}
+
+async function validarAutenticacao(
+  context: BrowserContext,
+  persistirSessao: () => Promise<void>,
+): Promise<boolean> {
+  const agora = Date.now();
+  if (agora < proximaValidacaoAuthEm) return runtimeState.auth === "ok";
+
+  const statusAnterior = runtimeState.auth;
+  runtimeState.auth = "checking";
+  runtimeState.lastAuthCheckAt = new Date().toISOString();
+
+  const page = await context.newPage();
+  try {
+    await page.goto(env.credpagoUrl, { waitUntil: "domcontentloaded" });
+    await ensureLoggedIn("auth", page, persistirSessao);
+
+    if ((await detectAuthenticationState(page)) !== "authenticated") {
+      throw new CredPagoAuthenticationError("A sessão ainda redireciona para o Login Loft.");
+    }
+
+    runtimeState.auth = "ok";
+    runtimeState.lastAuthSuccessAt = new Date().toISOString();
+    proximaValidacaoAuthEm = Date.now() + env.authCheckIntervalMs;
+    if (statusAnterior !== "ok") {
+      log("Autenticação da CredPago validada — fila liberada.");
+    }
+    return true;
+  } catch (error) {
+    const isAuthError = error instanceof CredPagoAuthenticationError;
+    runtimeState.auth = isAuthError ? "required" : "unavailable";
+    proximaValidacaoAuthEm = Date.now() + env.authRetryIntervalMs;
+    if (statusAnterior !== runtimeState.auth) {
+      logErro(
+        isAuthError
+          ? "Fila pausada: a autenticação da CredPago precisa ser recuperada"
+          : "Fila pausada: não foi possível validar o portal da CredPago",
+        error,
+      );
+    }
+    return false;
+  } finally {
+    await page.close().catch(() => {});
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Processamento de uma consulta — sempre com sua PRÓPRIA aba, nunca compartilhada
 // com outra consulta em andamento. `estado.finalizado` evita que um resultado
@@ -206,6 +331,7 @@ async function processarConsulta(
   context: BrowserContext,
   consulta: ConsultaCreditoRow,
   estado: EstadoConsulta,
+  persistirSessao: () => Promise<void>,
 ): Promise<void> {
   const cid = consulta.id.slice(0, 8);
   const doc = consulta.documento_masked || maskDocumento(consulta.documento);
@@ -225,7 +351,10 @@ async function processarConsulta(
       await page.reload({ waitUntil: "domcontentloaded" }).catch(() => {});
     }
 
-    await ensureLoggedIn(cid, page);
+    await ensureLoggedIn(cid, page, persistirSessao);
+    runtimeState.auth = "ok";
+    runtimeState.lastAuthSuccessAt = new Date().toISOString();
+    proximaValidacaoAuthEm = Date.now() + env.authCheckIntervalMs;
 
     // O login costuma redirecionar para o dashboard em vez de voltar à página de origem —
     // garante que esta aba termine na tela de simulação antes de preencher os dados.
@@ -289,9 +418,22 @@ async function processarConsulta(
       return;
     }
     estado.finalizado = true;
-    await marcarErro(consulta.id, erroTecnico).catch((e) =>
-      logErro(`[${cid}] Falha ao gravar erro no Supabase`, e),
-    );
+    if (err instanceof CredPagoAuthenticationError) {
+      runtimeState.auth = "required";
+      runtimeState.lastAuthCheckAt = new Date().toISOString();
+      proximaValidacaoAuthEm = Date.now() + env.authRetryIntervalMs;
+      await recolocarNaFilaAguardandoAutenticacao(consulta.id)
+        .then(() =>
+          log(
+            `[${cid}] Consulta preservada na fila enquanto a autenticação é recuperada.`,
+          ),
+        )
+        .catch((e) => logErro(`[${cid}] Falha ao devolver consulta para a fila`, e));
+    } else {
+      await marcarErro(consulta.id, erroTecnico).catch((e) =>
+        logErro(`[${cid}] Falha ao gravar erro no Supabase`, e),
+      );
+    }
   } finally {
     await page.close().catch(() => {});
     log(`[${cid}] Aba fechada`);
@@ -302,6 +444,7 @@ async function processarConsulta(
 async function processarConsultaComTimeout(
   context: BrowserContext,
   consulta: ConsultaCreditoRow,
+  persistirSessao: () => Promise<void>,
 ): Promise<void> {
   const cid = consulta.id.slice(0, 8);
   const estado: EstadoConsulta = { finalizado: false };
@@ -320,7 +463,9 @@ async function processarConsultaComTimeout(
     }, env.consultaTimeoutMs);
   });
 
-  const trabalho = processarConsulta(context, consulta, estado).finally(() => clearTimeout(timer));
+  const trabalho = processarConsulta(context, consulta, estado, persistirSessao).finally(() =>
+    clearTimeout(timer),
+  );
 
   await Promise.race([trabalho, timeoutPromise]);
   // Se o timeout venceu a corrida, ainda deixamos o trabalho de fundo terminar sozinho
@@ -399,14 +544,30 @@ function iniciarServidorHealth(): http.Server {
   const server = http.createServer((req, res) => {
     if (req.method === "GET" && req.url === "/health") {
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ status: "ok" }));
+      res.end(
+        JSON.stringify({
+          status: "ok",
+          ready: runtimeState.auth === "ok",
+          auth: runtimeState.auth,
+          lastAuthCheckAt: runtimeState.lastAuthCheckAt,
+          lastAuthSuccessAt: runtimeState.lastAuthSuccessAt,
+        }),
+      );
+      return;
+    }
+    if (req.method === "GET" && req.url === "/ready") {
+      const ready = runtimeState.auth === "ok";
+      res.writeHead(ready ? 200 : 503, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ status: ready ? "ready" : "not_ready", auth: runtimeState.auth }));
       return;
     }
     res.writeHead(404, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ status: "not_found" }));
   });
   server.listen(env.healthPort, "0.0.0.0", () => {
-    log(`Servidor de health check ouvindo em 0.0.0.0:${env.healthPort}/health`);
+    log(
+      `Servidor de health check ouvindo em 0.0.0.0:${env.healthPort}/health (prontidão em /ready)`,
+    );
   });
   return server;
 }
@@ -418,6 +579,11 @@ async function loop(once: boolean): Promise<void> {
   log(`Worker CredPago iniciado. Origem da sessão: ${origemSessao}`);
   log(
     `Limite de consultas simultâneas: ${env.maxConcurrentConsultas} | timeout por consulta: ${env.consultaTimeoutMs}ms`,
+  );
+  log(
+    `Autenticação preventiva a cada ${env.authCheckIntervalMs}ms | renovação automática: ${
+      env.credpagoLogin ? "configurada" : "não configurada"
+    }`,
   );
   const { context, browser, persistirSessao } = await abrirContexto();
   log(`Chrome iniciado em modo ${env.headless ? "headless (invisível)" : "visível"}`);
@@ -463,6 +629,16 @@ async function loop(once: boolean): Promise<void> {
     for (;;) {
       if (desligando) break;
 
+      const autenticacaoPronta = await validarAutenticacao(context, persistirSessao);
+      if (!autenticacaoPronta) {
+        if (once) {
+          log("Autenticação indisponível — nenhuma consulta foi retirada da fila.");
+          break;
+        }
+        await new Promise((r) => setTimeout(r, env.pollIntervalMs));
+        continue;
+      }
+
       const vagas = env.maxConcurrentConsultas - emAndamento.size;
       if (vagas > 0) {
         const pendentes = await fetchConsultasPendentes(vagas);
@@ -472,7 +648,7 @@ async function loop(once: boolean): Promise<void> {
           const reservou = await marcarProcessando(consulta.id);
           if (!reservou) continue; // outra execução pegou essa consulta primeiro
 
-          const tarefa = processarConsultaComTimeout(context, consulta)
+          const tarefa = processarConsultaComTimeout(context, consulta, persistirSessao)
             .catch((e) => logErro(`Falha não tratada na consulta ${consulta.id}`, e))
             .finally(() => emAndamento.delete(consulta.id));
           emAndamento.set(consulta.id, tarefa);

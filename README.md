@@ -72,18 +72,17 @@ Workers/Pages (ex.: publicação direta pelo próprio Lovable) — a Vercel igno
 ### Rodar a automação em uma VPS separada
 
 O worker de automação (`automation/`) é um processo Node **separado** do frontend — não faz
-parte do build/deploy da app principal, porque abre um Chrome real via Playwright (precisa de
-um SO com interface gráfica disponível ao menos na primeira vez, para o login manual). Para
-rodar em uma VPS:
+parte do build/deploy da app principal, porque abre um Chrome real via Playwright. Para rodar
+em uma VPS:
 
 1. Suba só a pasta do projeto (ou `git clone`) na VPS, com Node 18+ instalado.
 2. `npm install && npx playwright install chromium --with-deps` (`--with-deps` instala as
    bibliotecas de sistema que o Chromium precisa em Linux).
 3. Crie `automation/.env` (veja [Configurar `.env`](#configurar-env) na seção da automação).
-4. Na **primeira** execução, rode com `HEADLESS=false` e um servidor gráfico/VNC disponível
-   (ou localmente, copiando depois a pasta `automation/chrome-profile-credpago/` já logada
-   para a VPS) — o login na CredPago é sempre manual.
-5. Depois de logado, ative `HEADLESS=true` e rode `npm run automation:credpago` sob um
+4. Configure as credenciais somente no `.env` privado da VPS e use
+   `npm run automation:login` para gerar a sessão portátil. Se houver verificação, forneça
+   apenas o código temporário pelo arquivo privado indicado em `CREDPAGO_OTP_FILE`.
+5. Depois de autenticado, mantenha `HEADLESS=true` e rode `npm run automation:credpago` sob um
    supervisor de processo (`pm2`, `systemd`, etc.) para manter o worker no ar.
 
 ## Automação de simulação de crédito (CredPago)
@@ -202,9 +201,16 @@ Preencha:
 | `CREDPAGO_PROFILE_DIR` | Pasta do perfil do Chrome (padrão: `./automation/chrome-profile-credpago`) |
 | `AUTOMATION_POLL_INTERVAL_MS` | Intervalo de verificação de novas consultas (padrão: `5000`) |
 | `CREDPAGO_URL` | `https://credpago.com/imobiliaria/proposta` |
+| `CREDPAGO_LOGIN` | E-mail ou telefone da conta da imobiliária no Login Loft (somente na VPS) |
+| `CREDPAGO_PASSWORD` | Senha da mesma conta (somente na VPS; nunca commitar) |
+| `CREDPAGO_OTP_FILE` | Arquivo privado usado para entregar o código de seis dígitos ao login isolado |
+| `AUTH_OTP_TIMEOUT_MS` | Tempo máximo que o login isolado aguarda o código (exemplo: `900000`) |
+| `AUTH_CHECK_INTERVAL_MS` | Intervalo da verificação que mantém a sessão ativa (padrão: `240000`) |
+| `AUTH_RETRY_INTERVAL_MS` | Intervalo de nova tentativa quando a autenticação estiver indisponível (padrão: `60000`) |
+| `AUTH_LOGIN_TIMEOUT_MS` | Tempo máximo para o Login Loft confirmar a sessão (padrão: `45000`) |
 | `MAX_CONCURRENT_CONSULTAS` | Quantas consultas rodam em paralelo, cada uma em sua aba (padrão: `3`) |
 | `CONSULTA_TIMEOUT_MS` | Tempo máximo por consulta antes de marcar erro (padrão: `90000`) |
-| `HEADLESS` | `true` para rodar sem janela visível (requer sessão já logada) — padrão `false` |
+| `HEADLESS` | `true` para rodar sem janela visível; a VPS usa a sessão portátil — padrão `false` |
 
 > Nota: o `.env.example` sugerido para este tipo de automação às vezes cita
 > `CHROME_USER_DATA_DIR`/`CHROME_PROFILE_DIRECTORY` (nomenclatura de Selenium/Chrome puro).
@@ -237,19 +243,22 @@ npm run automation:once         # processa uma única consulta pendente e encerr
 
 ### Primeiro login na CredPago
 
-Na primeira execução (perfil vazio), o worker abre o Chrome, navega até a CredPago e detecta
-a tela de login. No terminal aparece:
+Na VPS, configure `CREDPAGO_LOGIN`, `CREDPAGO_PASSWORD`,
+`CREDPAGO_STORAGE_STATE_PATH` e `CREDPAGO_OTP_FILE` somente no `.env` privado do servidor.
+Pare o worker principal e inicie o login isolado:
 
+```bash
+npm run automation:login
 ```
-Faça login manualmente na CredPago. Depois pressione Enter para continuar.
-```
 
-Faça o login **manualmente** na janela do Chrome que abriu e, só depois, volte ao terminal e
-pressione Enter. A sessão fica salva em `automation/chrome-profile-credpago/` — nas próximas
-execuções o login não será pedido novamente (a menos que a sessão expire).
+O utilitário envia as credenciais sem registrá-las nos logs. Se a Loft pedir verificação, ele
+imprime `OTP_REQUIRED` e aguarda um código de seis dígitos no arquivo configurado por
+`CREDPAGO_OTP_FILE`. Quando a autenticação termina, ele imprime `AUTH_SUCCESS` e grava a sessão
+portátil em `CREDPAGO_STORAGE_STATE_PATH`. Depois disso, reinicie o worker principal.
 
-Se a CredPago exibir um captcha, o worker não tenta resolvê-lo: ele marca a consulta como
-`erro` com uma mensagem explicando o motivo, para você resolver manualmente e reenviar.
+O worker valida a sessão antes de retirar consultas da fila. Se a sessão expirar ou a Loft
+exigir nova verificação, a fila fica pausada em `aguardando_autenticacao`; a consulta não é
+marcada como erro e volta a ser processada quando a sessão for restabelecida.
 
 ### Testar com dados fictícios
 

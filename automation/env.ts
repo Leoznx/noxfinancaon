@@ -20,6 +20,14 @@ function required(name: string): string {
   return value;
 }
 
+const credpagoLogin = process.env.CREDPAGO_LOGIN?.trim() || "";
+const credpagoPassword = process.env.CREDPAGO_PASSWORD || "";
+if (Boolean(credpagoLogin) !== Boolean(credpagoPassword)) {
+  throw new Error(
+    "CREDPAGO_LOGIN e CREDPAGO_PASSWORD precisam ser configuradas juntas em automation/.env.",
+  );
+}
+
 export const env = {
   supabaseUrl: required("SUPABASE_URL"),
   supabaseServiceRoleKey: required("SUPABASE_SERVICE_ROLE_KEY"),
@@ -40,6 +48,15 @@ export const env = {
   healthPort: Number(process.env.HEALTH_PORT) || 3000,
   pollIntervalMs: Number(process.env.AUTOMATION_POLL_INTERVAL_MS) || 5000,
   credpagoUrl: process.env.CREDPAGO_URL || "https://credpago.com/imobiliaria/proposta",
+  /** Credenciais exclusivas do servidor para renovar automaticamente a sessão do Login Loft. */
+  credpagoLogin,
+  credpagoPassword,
+  /** Mantém a sessão aquecida e detecta expiração antes de retirar uma consulta da fila. */
+  authCheckIntervalMs: Number(process.env.AUTH_CHECK_INTERVAL_MS) || 4 * 60 * 1000,
+  /** Intervalo entre tentativas de recuperar uma autenticação indisponível. */
+  authRetryIntervalMs: Number(process.env.AUTH_RETRY_INTERVAL_MS) || 60 * 1000,
+  /** Teto para o redirecionamento e confirmação do Login Loft. */
+  authLoginTimeoutMs: Number(process.env.AUTH_LOGIN_TIMEOUT_MS) || 45 * 1000,
   keepBrowserOpen: process.env.AUTOMATION_KEEP_BROWSER_OPEN === "true",
   /** Quantas consultas podem rodar em paralelo, cada uma na sua própria aba do mesmo perfil/contexto. */
   maxConcurrentConsultas: Math.max(1, Number(process.env.MAX_CONCURRENT_CONSULTAS) || 3),
