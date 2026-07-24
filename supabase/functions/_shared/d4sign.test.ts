@@ -208,6 +208,31 @@ Deno.test("monta mensagem da Z-API com botões para site e aplicativo", () => {
   ]);
 });
 
+Deno.test("conta existente recebe links diretos para documentos", () => {
+  const payload = buildInsuranceActiveZApiPayload({
+    to: "(11) 99999-8888",
+    name: "Maria da Silva",
+    planName: "NOX Up",
+    dashboardUrl: "https://noxfianca.com/inquilino/documentos",
+  });
+
+  assertEquals(payload.buttonActions, [
+    {
+      id: "ver-documentos-site",
+      type: "URL",
+      label: "Ver Documentos (Site)",
+      url: "https://noxfianca.com/inquilino/documentos",
+    },
+    {
+      id: "ver-documentos-aplicativo",
+      type: "URL",
+      label: "Ver Documentos (Aplicativo)",
+      url:
+        "https://noxfianca.com/abrir-app/documentos?returnTo=%2Finquilino%2Fdocumentos",
+    },
+  ]);
+});
+
 Deno.test("bloqueia WhatsApp sem destinatário ou acesso individual", () => {
   assertThrows(() =>
     buildInsuranceActiveZApiPayload({

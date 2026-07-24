@@ -20,22 +20,31 @@ function AbrirDocumentosNoAplicativoPage() {
   const search = Route.useSearch();
   const [tentativaConcluida, setTentativaConcluida] = useState(false);
   const links = useMemo(() => {
-    if (!search.token_hash || search.type !== "magiclink") return null;
+    const firstAccess = Boolean(search.token_hash && search.type === "magiclink");
+    if (!firstAccess && (search.token_hash || search.type)) return null;
 
-    const app = new URL("noxfianca://acesso-inquilino");
-    app.searchParams.set("token_hash", search.token_hash);
-    app.searchParams.set("type", "magiclink");
-    app.searchParams.set("returnTo", "/inquilino/documentos");
+    const app = new URL(
+      firstAccess ? "noxfianca://acesso-inquilino" : "noxfianca://inquilino/documentos",
+    );
+    if (firstAccess && search.token_hash) {
+      app.searchParams.set("token_hash", search.token_hash);
+      app.searchParams.set("type", "magiclink");
+      app.searchParams.set("returnTo", "/inquilino/documentos");
+    }
 
-    const siteParams = new URLSearchParams({
-      token_hash: search.token_hash,
-      type: "magiclink",
-      returnTo: "/inquilino/documentos",
-    });
+    let site = "/inquilino/documentos";
+    if (firstAccess && search.token_hash) {
+      const siteParams = new URLSearchParams({
+        token_hash: search.token_hash,
+        type: "magiclink",
+        returnTo: "/inquilino/documentos",
+      });
+      site = `/acesso-inquilino?${siteParams.toString()}`;
+    }
 
     return {
       app: app.toString(),
-      site: `/acesso-inquilino?${siteParams.toString()}`,
+      site,
     };
   }, [search.token_hash, search.type]);
 

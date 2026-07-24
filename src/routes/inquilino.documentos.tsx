@@ -4,7 +4,15 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useAuth } from "@/components/AuthProvider";
 import { supabase } from "@/integrations/supabase/client";
-import { FileText, Download, Eye, ShieldCheck, ClipboardCheck, FileSignature, FileBadge } from "lucide-react";
+import {
+  FileText,
+  Download,
+  Eye,
+  ShieldCheck,
+  ClipboardCheck,
+  FileSignature,
+  FileBadge,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/inquilino/documentos")({
@@ -18,11 +26,16 @@ export const Route = createFileRoute("/inquilino/documentos")({
 const TIPO_META: Record<string, { label: string; icon: any; tint: string }> = {
   contrato: { label: "Contrato", icon: FileSignature, tint: "bg-blue-50 text-blue-700" },
   vistoria: { label: "Vistoria", icon: ClipboardCheck, tint: "bg-purple-50 text-purple-700" },
-  apolice:  { label: "Apólice",  icon: ShieldCheck,    tint: "bg-emerald-50 text-emerald-700" },
-  garantia: { label: "Garantia", icon: FileBadge,      tint: "bg-amber-50 text-amber-700" },
+  apolice: { label: "Apólice", icon: ShieldCheck, tint: "bg-emerald-50 text-emerald-700" },
+  garantia: { label: "Garantia", icon: FileBadge, tint: "bg-amber-50 text-amber-700" },
 };
 
-const STORAGE_BUCKETS = ["contratos-assinados", "approval-documents", "anexos", "documentos-proposta"];
+const STORAGE_BUCKETS = [
+  "contratos-assinados",
+  "approval-documents",
+  "anexos",
+  "documentos-proposta",
+];
 
 function DocumentosInquilino() {
   const { user } = useAuth();
@@ -33,21 +46,42 @@ function DocumentosInquilino() {
   useEffect(() => {
     (async () => {
       try {
-        const { data: consultas } = await supabase
-          .from("consultas_credito")
-          .select("id")
-          .eq("tenant_email", user?.email ?? "");
-        const ids = (consultas ?? []).map((c: any) => c.id);
-        if (!ids.length) { setDocs([]); return; }
+        const [{ data: consultasPorUsuario }, { data: consultasPorEmail }] = await Promise.all([
+          supabase
+            .from("consultas_credito")
+            .select("id")
+            .eq("tenant_user_id", user?.id ?? ""),
+          supabase
+            .from("consultas_credito")
+            .select("id")
+            .eq("tenant_email", user?.email ?? ""),
+        ]);
+        const ids = Array.from(
+          new Set(
+            [...(consultasPorUsuario ?? []), ...(consultasPorEmail ?? [])].map(
+              (consulta: any) => consulta.id,
+            ),
+          ),
+        );
+        if (!ids.length) {
+          setDocs([]);
+          return;
+        }
         const [{ data: documentos }, { data: apo }] = await Promise.all([
-          supabase.from("documentos_proposta").select("*").in("consulta_id", ids).order("created_at", { ascending: true }),
+          supabase
+            .from("documentos_proposta")
+            .select("*")
+            .in("consulta_id", ids)
+            .order("created_at", { ascending: true }),
           supabase.from("apolices").select("numero").in("consulta_id", ids).limit(1).maybeSingle(),
         ]);
         setDocs(documentos ?? []);
         setContrato((apo as any)?.numero ?? null);
-      } finally { setLoading(false); }
+      } finally {
+        setLoading(false);
+      }
     })();
-  }, [user?.email]);
+  }, [user?.email, user?.id]);
 
   function bucketCandidates(bucketHint?: string | null) {
     const hint = bucketHint && STORAGE_BUCKETS.includes(bucketHint) ? bucketHint : null;
@@ -87,7 +121,9 @@ function DocumentosInquilino() {
       <div className="max-w-5xl mx-auto space-y-6">
         <div>
           <h1 className="text-3xl font-black tracking-tight text-neutral-900">Meus Documentos</h1>
-          <p className="text-sm text-neutral-500 mt-1">Documentos vinculados ao seu contrato{contrato ? ` · ${contrato}` : ""}.</p>
+          <p className="text-sm text-neutral-500 mt-1">
+            Documentos vinculados ao seu contrato{contrato ? ` · ${contrato}` : ""}.
+          </p>
         </div>
 
         {loading ? (
@@ -100,12 +136,21 @@ function DocumentosInquilino() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {docs.map((d) => {
-              const meta = TIPO_META[d.document_type] ?? { label: d.document_type ?? "Documento", icon: FileText, tint: "bg-neutral-100 text-neutral-700" };
+              const meta = TIPO_META[d.document_type] ?? {
+                label: d.document_type ?? "Documento",
+                icon: FileText,
+                tint: "bg-neutral-100 text-neutral-700",
+              };
               const Icon = meta.icon;
               return (
-                <div key={d.id} className="bg-white border border-neutral-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+                <div
+                  key={d.id}
+                  className="bg-white border border-neutral-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow"
+                >
                   <div className="flex items-start gap-3">
-                    <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${meta.tint}`}>
+                    <div
+                      className={`w-11 h-11 rounded-xl flex items-center justify-center ${meta.tint}`}
+                    >
                       <Icon size={20} />
                     </div>
                     <div className="flex-1 min-w-0">
@@ -127,7 +172,11 @@ function DocumentosInquilino() {
                     <Button size="sm" variant="outline" className="flex-1" onClick={() => abrir(d)}>
                       <Eye size={14} className="mr-1.5" /> Visualizar
                     </Button>
-                    <Button size="sm" className="flex-1 bg-neutral-900 hover:bg-neutral-800 text-white" onClick={() => baixar(d)}>
+                    <Button
+                      size="sm"
+                      className="flex-1 bg-neutral-900 hover:bg-neutral-800 text-white"
+                      onClick={() => baixar(d)}
+                    >
                       <Download size={14} className="mr-1.5" /> Baixar
                     </Button>
                   </div>

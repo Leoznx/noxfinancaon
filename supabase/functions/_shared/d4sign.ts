@@ -499,24 +499,48 @@ async function ensureTenantAccount(supabase: any, consulta: any) {
     .toLowerCase();
   if (!email) throw new Error("missing_tenant_email");
   let tenantUserId = consulta?.tenant_user_id || null;
+  let existingProfile: any = null;
 
   if (!tenantUserId) {
     const { data: profiles } = await supabase
       .from("profiles")
-      .select("id, role")
+      .select("id, role, status, email, nome, telefone")
       .ilike("email", email)
       .limit(1);
-    const existingProfile = profiles?.[0] || null;
+    existingProfile = profiles?.[0] || null;
     if (existingProfile && existingProfile.role !== "inquilino") {
       throw new Error("tenant_email_already_used_by_other_role");
     }
     tenantUserId = existingProfile?.id || null;
+
+    const tenantPhone = normalizePhone(
+      consulta?.tenant_telefone || consulta?.inquilinos?.telefone,
+    );
+    if (!tenantUserId && tenantPhone) {
+      const pageSize = 500;
+      for (let from = 0; !tenantUserId; from += pageSize) {
+        const { data: phoneProfiles, error: phoneError } = await supabase
+          .from("profiles")
+          .select("id, role, status, email, nome, telefone")
+          .eq("role", "inquilino")
+          .or("status.eq.ativo,status.is.null")
+          .not("telefone", "is", null)
+          .range(from, from + pageSize - 1);
+        if (phoneError) break;
+        existingProfile = (phoneProfiles || []).find(
+          (profile: any) => normalizePhone(profile.telefone) === tenantPhone,
+        ) || null;
+        tenantUserId = existingProfile?.id || null;
+        if ((phoneProfiles || []).length < pageSize) break;
+      }
+    }
   } else {
     const { data: tenantProfile } = await supabase
       .from("profiles")
-      .select("role")
+      .select("id, role, status, email, nome, telefone")
       .eq("id", tenantUserId)
       .maybeSingle();
+    existingProfile = tenantProfile || null;
     if (tenantProfile?.role && tenantProfile.role !== "inquilino") {
       throw new Error("tenant_account_has_other_role");
     }
@@ -548,9 +572,10 @@ async function ensureTenantAccount(supabase: any, consulta: any) {
   await supabase.from("profiles").upsert(
     {
       id: tenantUserId,
-      email,
-      nome: consulta?.tenant_name || consulta?.inquilinos?.nome || "Inquilino",
-      telefone: consulta?.tenant_telefone || null,
+      email: existingProfile?.email || email,
+      nome: existingProfile?.nome || consulta?.tenant_name ||
+        consulta?.inquilinos?.nome || "Inquilino",
+      telefone: existingProfile?.telefone || consulta?.tenant_telefone || null,
       role: "inquilino",
       status: "ativo",
     },
@@ -987,6 +1012,7 @@ async function createOrGetPolicy(supabase: any, consulta: any) {
 async function tenantAccessLink(
   supabase: any,
   email: string,
+  tenantUserId: string,
   returnTo = "/inquilino/painel",
 ) {
   const safeReturnTo = returnTo === "/inquilino/documentos"
@@ -997,9 +1023,20 @@ async function tenantAccessLink(
   const fallback = `${frontend}/login?returnTo=${
     encodeURIComponent(safeReturnTo)
   }`;
+  const { data: tenantAuth } = await supabase.auth.admin.getUserById(
+    tenantUserId,
+  );
+  const setupRequired =
+    tenantAuth?.user?.user_metadata?.tenant_access_setup_required === true;
+  if (!setupRequired) {
+    return `${frontend}${safeReturnTo}`;
+  }
+  const accessEmail = String(tenantAuth?.user?.email || email)
+    .trim()
+    .toLowerCase();
   const { data, error } = await supabase.auth.admin.generateLink({
     type: "magiclink",
-    email,
+    email: accessEmail,
   });
   const tokenHash = data?.properties?.hashed_token;
   if (error || !tokenHash) return fallback;
@@ -1118,11 +1155,11 @@ async function sendActiveEmail(params: {
 function buildAppDocumentsBridgeUrl(dashboardUrlValue: string) {
   const dashboardUrl = new URL(dashboardUrlValue);
   const appDocumentsUrl = new URL("/abrir-app/documentos", dashboardUrl.origin);
-  appDocumentsUrl.searchParams.set(
-    "token_hash",
-    dashboardUrl.searchParams.get("token_hash") || "",
-  );
-  appDocumentsUrl.searchParams.set("type", "magiclink");
+  const tokenHash = dashboardUrl.searchParams.get("token_hash");
+  if (tokenHash) {
+    appDocumentsUrl.searchParams.set("token_hash", tokenHash);
+    appDocumentsUrl.searchParams.set("type", "magiclink");
+  }
   appDocumentsUrl.searchParams.set("returnTo", "/inquilino/documentos");
   return appDocumentsUrl.toString();
 }
@@ -1142,16 +1179,17 @@ export function buildInsuranceActiveZApiPayload(params: {
   } catch {
     throw new Error("invalid_dashboard_url");
   }
-  const tokenHash = dashboardUrl.searchParams.get("token_hash") || "";
-  if (!tokenHash) throw new Error("missing_dashboard_token");
   if (dashboardUrl.protocol !== "https:") {
     throw new Error("invalid_dashboard_protocol");
   }
-  if (
-    dashboardUrl.pathname !== "/acesso-inquilino" ||
-    dashboardUrl.searchParams.get("type") !== "magiclink" ||
-    dashboardUrl.searchParams.get("returnTo") !== "/inquilino/documentos"
-  ) {
+  const isFirstAccess =
+    dashboardUrl.pathname === "/acesso-inquilino" &&
+    !!dashboardUrl.searchParams.get("token_hash") &&
+    dashboardUrl.searchParams.get("type") === "magiclink" &&
+    dashboardUrl.searchParams.get("returnTo") === "/inquilino/documentos";
+  const isExistingAccount =
+    dashboardUrl.pathname === "/inquilino/documentos";
+  if (!isFirstAccess && !isExistingAccount) {
     throw new Error("invalid_documents_destination");
   }
 
@@ -1271,7 +1309,12 @@ async function notifyInsuranceActive(
     "whatsapp",
   );
   const documentsAccessUrl = !emailWasSent || !whatsappWasSent
-    ? await tenantAccessLink(supabase, email, "/inquilino/documentos")
+    ? await tenantAccessLink(
+      supabase,
+      email,
+      tenantUserId,
+      "/inquilino/documentos",
+    )
     : dashboardUrl;
 
   if (!emailWasSent) {
