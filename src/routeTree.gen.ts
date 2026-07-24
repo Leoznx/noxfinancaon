@@ -105,6 +105,7 @@ import { Route as AdminColaboradoresRouteImport } from './routes/admin.colaborad
 import { Route as AdminAprovacoesRouteImport } from './routes/admin.aprovacoes'
 import { Route as AdminAfiliadosRouteImport } from './routes/admin.afiliados'
 import { Route as AdminAdicionarUsuariosRouteImport } from './routes/admin.adicionar-usuarios'
+import { Route as AbrirAppDocumentosRouteImport } from './routes/abrir-app.documentos'
 import { Route as ConsultasIdStatusRouteImport } from './routes/consultas.$id.status'
 import { Route as ConsultasIdResultadoRouteImport } from './routes/consultas.$id.resultado'
 import { Route as ConsultasIdFinalizarRouteImport } from './routes/consultas.$id.finalizar'
@@ -607,6 +608,11 @@ const AdminAdicionarUsuariosRoute = AdminAdicionarUsuariosRouteImport.update({
   path: '/admin/adicionar-usuarios',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AbrirAppDocumentosRoute = AbrirAppDocumentosRouteImport.update({
+  id: '/abrir-app/documentos',
+  path: '/abrir-app/documentos',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ConsultasIdStatusRoute = ConsultasIdStatusRouteImport.update({
   id: '/$id/status',
   path: '/$id/status',
@@ -683,6 +689,7 @@ export interface FileRoutesByFullPath {
   '/termos': typeof TermosRoute
   '/trabalhe-conosco': typeof TrabalheConoscoRoute
   '/vendedor': typeof VendedorRouteWithChildren
+  '/abrir-app/documentos': typeof AbrirAppDocumentosRoute
   '/admin/adicionar-usuarios': typeof AdminAdicionarUsuariosRoute
   '/admin/afiliados': typeof AdminAfiliadosRoute
   '/admin/aprovacoes': typeof AdminAprovacoesRoute
@@ -782,6 +789,7 @@ export interface FileRoutesByTo {
   '/suporte': typeof SuporteRoute
   '/termos': typeof TermosRoute
   '/trabalhe-conosco': typeof TrabalheConoscoRoute
+  '/abrir-app/documentos': typeof AbrirAppDocumentosRoute
   '/admin/adicionar-usuarios': typeof AdminAdicionarUsuariosRoute
   '/admin/afiliados': typeof AdminAfiliadosRoute
   '/admin/aprovacoes': typeof AdminAprovacoesRoute
@@ -886,6 +894,7 @@ export interface FileRoutesById {
   '/termos': typeof TermosRoute
   '/trabalhe-conosco': typeof TrabalheConoscoRoute
   '/vendedor': typeof VendedorRouteWithChildren
+  '/abrir-app/documentos': typeof AbrirAppDocumentosRoute
   '/admin/adicionar-usuarios': typeof AdminAdicionarUsuariosRoute
   '/admin/afiliados': typeof AdminAfiliadosRoute
   '/admin/aprovacoes': typeof AdminAprovacoesRoute
@@ -991,6 +1000,7 @@ export interface FileRouteTypes {
     | '/termos'
     | '/trabalhe-conosco'
     | '/vendedor'
+    | '/abrir-app/documentos'
     | '/admin/adicionar-usuarios'
     | '/admin/afiliados'
     | '/admin/aprovacoes'
@@ -1090,6 +1100,7 @@ export interface FileRouteTypes {
     | '/suporte'
     | '/termos'
     | '/trabalhe-conosco'
+    | '/abrir-app/documentos'
     | '/admin/adicionar-usuarios'
     | '/admin/afiliados'
     | '/admin/aprovacoes'
@@ -1193,6 +1204,7 @@ export interface FileRouteTypes {
     | '/termos'
     | '/trabalhe-conosco'
     | '/vendedor'
+    | '/abrir-app/documentos'
     | '/admin/adicionar-usuarios'
     | '/admin/afiliados'
     | '/admin/aprovacoes'
@@ -1297,6 +1309,7 @@ export interface RootRouteChildren {
   TermosRoute: typeof TermosRoute
   TrabalheConoscoRoute: typeof TrabalheConoscoRoute
   VendedorRoute: typeof VendedorRouteWithChildren
+  AbrirAppDocumentosRoute: typeof AbrirAppDocumentosRoute
   AdminAdicionarUsuariosRoute: typeof AdminAdicionarUsuariosRoute
   AdminAfiliadosRoute: typeof AdminAfiliadosRoute
   AdminAprovacoesRoute: typeof AdminAprovacoesRoute
@@ -2011,6 +2024,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAdicionarUsuariosRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/abrir-app/documentos': {
+      id: '/abrir-app/documentos'
+      path: '/abrir-app/documentos'
+      fullPath: '/abrir-app/documentos'
+      preLoaderRoute: typeof AbrirAppDocumentosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/consultas/$id/status': {
       id: '/consultas/$id/status'
       path: '/$id/status'
@@ -2183,6 +2203,7 @@ const rootRouteChildren: RootRouteChildren = {
   TermosRoute: TermosRoute,
   TrabalheConoscoRoute: TrabalheConoscoRoute,
   VendedorRoute: VendedorRouteWithChildren,
+  AbrirAppDocumentosRoute: AbrirAppDocumentosRoute,
   AdminAdicionarUsuariosRoute: AdminAdicionarUsuariosRoute,
   AdminAfiliadosRoute: AdminAfiliadosRoute,
   AdminAprovacoesRoute: AdminAprovacoesRoute,

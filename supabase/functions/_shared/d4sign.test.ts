@@ -173,7 +173,7 @@ Deno.test("não aceita nome de plano desconhecido", () => {
   assertThrows(() => resolveContractTemplate("NOX Super"));
 });
 
-Deno.test("monta mensagem da Z-API com botão para ativação do seguro", () => {
+Deno.test("monta mensagem da Z-API com botões para site e aplicativo", () => {
   const payload = buildInsuranceActiveZApiPayload({
     to: "(11) 99999-8888",
     name: "Maria da Silva",
@@ -183,18 +183,27 @@ Deno.test("monta mensagem da Z-API com botão para ativação do seguro", () => 
   });
 
   assertEquals(payload.phone, "5511999998888");
-  assertEquals(payload.title, "Contrato ativo 🌙");
-  assert(payload.message.includes("Parabéns, seu contrato está ativo! 🌙"));
-  assert(payload.message.includes("*NOX FIANÇA*"));
-  assert(payload.message.includes("crie sua conta"));
-  assertEquals(payload.footer, "NOX Fiança");
+  assertEquals(
+    payload.message,
+    "🎉 Parabéns,seu contrato está ativo!  🌙\n\n" +
+      "- para visualizar seus documentos acesso o site da *NOX FIANÇA*\n\n" +
+      "- caso nao tenha crie um acesso com suas informações no site da " +
+      "*NOX FIANÇA* para visualizar seus documentos",
+  );
   assertEquals(payload.buttonActions, [
     {
-      id: "ver-documentos",
+      id: "ver-documentos-site",
       type: "URL",
-      label: "Ver Documentos",
+      label: "Ver Documentos (Site)",
       url:
         "https://noxfianca.com/acesso-inquilino?type=magiclink&token_hash=hash-seguro-ativo&returnTo=%2Finquilino%2Fdocumentos",
+    },
+    {
+      id: "ver-documentos-aplicativo",
+      type: "URL",
+      label: "Ver Documentos (Aplicativo)",
+      url:
+        "https://noxfianca.com/abrir-app/documentos?token_hash=hash-seguro-ativo&type=magiclink&returnTo=%2Finquilino%2Fdocumentos",
     },
   ]);
 });

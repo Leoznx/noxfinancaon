@@ -1086,6 +1086,7 @@ async function sendActiveEmail(params: {
   if (!apiKey) return { sent: false, reason: "not_configured" };
   const from = Deno.env.get("RESEND_FROM_EMAIL") ||
     "NOX FIANÇA <financeiro@noxfianca.com.br>";
+  const appDocumentsUrl = buildAppDocumentsBridgeUrl(params.dashboardUrl);
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -1098,10 +1099,11 @@ async function sendActiveEmail(params: {
       subject: "Parabéns, seu seguro está ativo — NOX Fiança",
       html: `
         <div style="font-family:Arial,sans-serif;color:#171717;line-height:1.6;max-width:620px;margin:auto">
-          <h1 style="font-size:26px">Parabéns, seu contrato está ativo! 🌙</h1>
-          <p>Para visualizar seus documentos, acesse o site da <strong>NOX FIANÇA</strong>.</p>
-          <p>Caso ainda não tenha acesso, crie sua conta com suas informações no site da <strong>NOX FIANÇA</strong> para visualizar seus documentos.</p>
-          <p style="margin:28px 0"><a href="${params.dashboardUrl}" style="display:inline-block;background:#ffd21c;color:#171717;text-decoration:none;font-weight:700;padding:14px 22px;border-radius:10px">Ver Documentos</a></p>
+          <h1 style="font-size:26px">🎉 Parabéns,seu contrato está ativo! 🌙</h1>
+          <p>– para visualizar seus documentos acesso o site da <strong>NOX FIANÇA</strong></p>
+          <p>– caso nao tenha crie um acesso com suas informações no site da <strong>NOX FIANÇA</strong> para visualizar seus documentos</p>
+          <p style="margin:28px 0 12px"><a href="${params.dashboardUrl}" style="display:inline-block;background:#ffd21c;color:#171717;text-decoration:none;font-weight:700;padding:14px 22px;border-radius:10px">Ver Documentos (Site)</a></p>
+          <p style="margin:0 0 28px"><a href="${appDocumentsUrl}" style="display:inline-block;background:#171717;color:#ffffff;text-decoration:none;font-weight:700;padding:14px 22px;border-radius:10px">Ver Documentos (Aplicativo)</a></p>
           <p>Equipe NOX Fiança</p>
         </div>
       `,
@@ -1111,6 +1113,18 @@ async function sendActiveEmail(params: {
     return { sent: false, reason: `provider_${response.status}` };
   }
   return { sent: true };
+}
+
+function buildAppDocumentsBridgeUrl(dashboardUrlValue: string) {
+  const dashboardUrl = new URL(dashboardUrlValue);
+  const appDocumentsUrl = new URL("/abrir-app/documentos", dashboardUrl.origin);
+  appDocumentsUrl.searchParams.set(
+    "token_hash",
+    dashboardUrl.searchParams.get("token_hash") || "",
+  );
+  appDocumentsUrl.searchParams.set("type", "magiclink");
+  appDocumentsUrl.searchParams.set("returnTo", "/inquilino/documentos");
+  return appDocumentsUrl.toString();
 }
 
 export function buildInsuranceActiveZApiPayload(params: {
@@ -1135,6 +1149,7 @@ export function buildInsuranceActiveZApiPayload(params: {
   }
   if (
     dashboardUrl.pathname !== "/acesso-inquilino" ||
+    dashboardUrl.searchParams.get("type") !== "magiclink" ||
     dashboardUrl.searchParams.get("returnTo") !== "/inquilino/documentos"
   ) {
     throw new Error("invalid_documents_destination");
@@ -1142,19 +1157,22 @@ export function buildInsuranceActiveZApiPayload(params: {
 
   return {
     phone: phone.replace(/^\+/, ""),
-    title: "Contrato ativo 🌙",
-    message:
-      "Parabéns, seu contrato está ativo! 🌙\n\n" +
-      "• Para visualizar seus documentos, acesse o site da *NOX FIANÇA*.\n" +
-      "• Caso ainda não tenha acesso, crie sua conta com suas informações " +
-      "no site da *NOX FIANÇA* para visualizar seus documentos.",
-    footer: "NOX Fiança",
+    message: "🎉 Parabéns,seu contrato está ativo!  🌙\n\n" +
+      "- para visualizar seus documentos acesso o site da *NOX FIANÇA*\n\n" +
+      "- caso nao tenha crie um acesso com suas informações no site da " +
+      "*NOX FIANÇA* para visualizar seus documentos",
     buttonActions: [
       {
-        id: "ver-documentos",
+        id: "ver-documentos-site",
         type: "URL",
-        label: "Ver Documentos",
+        label: "Ver Documentos (Site)",
         url: dashboardUrl.toString(),
+      },
+      {
+        id: "ver-documentos-aplicativo",
+        type: "URL",
+        label: "Ver Documentos (Aplicativo)",
+        url: buildAppDocumentsBridgeUrl(dashboardUrl.toString()),
       },
     ],
   } as const;
