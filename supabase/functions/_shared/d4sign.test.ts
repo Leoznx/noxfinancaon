@@ -8,7 +8,7 @@ import {
   buildContractDocx,
   buildD4SignSendPayload,
   buildD4SignSigner,
-  buildInsuranceActiveWhatsAppPayload,
+  buildInsuranceActiveZApiPayload,
   resolveContractTemplate,
   type TemplateKey,
 } from "./d4sign.ts";
@@ -139,8 +139,8 @@ Deno.test("não aceita nome de plano desconhecido", () => {
   assertThrows(() => resolveContractTemplate("NOX Super"));
 });
 
-Deno.test("monta template oficial da Meta para ativação do seguro", () => {
-  const payload = buildInsuranceActiveWhatsAppPayload({
+Deno.test("monta mensagem da Z-API com botão para ativação do seguro", () => {
+  const payload = buildInsuranceActiveZApiPayload({
     to: "(11) 99999-8888",
     name: "Maria da Silva",
     planName: "NOX Up",
@@ -148,23 +148,25 @@ Deno.test("monta template oficial da Meta para ativação do seguro", () => {
       "https://noxfianca.com/acesso-inquilino?type=magiclink&token_hash=hash-seguro-ativo",
   });
 
-  assertEquals(payload.messaging_product, "whatsapp");
-  assertEquals(payload.to, "5511999998888");
-  assertEquals(payload.type, "template");
-  assertEquals(payload.template.name, "nox_seguro_ativo");
-  assertEquals(payload.template.language.code, "pt_BR");
-  assertEquals(payload.template.components[0].parameters, [
-    { type: "text", text: "Maria da Silva" },
-    { type: "text", text: "NOX Up" },
-  ]);
-  assertEquals(payload.template.components[1].parameters, [
-    { type: "text", text: "hash-seguro-ativo" },
+  assertEquals(payload.phone, "5511999998888");
+  assertEquals(payload.title, "Seguro ativo");
+  assert(payload.message.includes("Maria da Silva"));
+  assert(payload.message.includes("NOX Up"));
+  assertEquals(payload.footer, "NOX Fiança");
+  assertEquals(payload.buttonActions, [
+    {
+      id: "acessar-painel",
+      type: "URL",
+      label: "Acessar meu painel",
+      url:
+        "https://noxfianca.com/acesso-inquilino?type=magiclink&token_hash=hash-seguro-ativo",
+    },
   ]);
 });
 
 Deno.test("bloqueia WhatsApp sem destinatário ou acesso individual", () => {
   assertThrows(() =>
-    buildInsuranceActiveWhatsAppPayload({
+    buildInsuranceActiveZApiPayload({
       to: "12345",
       name: "Maria",
       planName: "NOX Fit",
@@ -173,11 +175,20 @@ Deno.test("bloqueia WhatsApp sem destinatário ou acesso individual", () => {
     })
   );
   assertThrows(() =>
-    buildInsuranceActiveWhatsAppPayload({
+    buildInsuranceActiveZApiPayload({
       to: "(11) 99999-8888",
       name: "Maria",
       planName: "NOX Fit",
       dashboardUrl: "https://noxfianca.com/login",
+    })
+  );
+  assertThrows(() =>
+    buildInsuranceActiveZApiPayload({
+      to: "(11) 99999-8888",
+      name: "Maria",
+      planName: "NOX Fit",
+      dashboardUrl:
+        "http://noxfianca.com/acesso-inquilino?type=magiclink&token_hash=abc",
     })
   );
 });

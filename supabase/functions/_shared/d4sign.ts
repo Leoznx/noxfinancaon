@@ -1062,52 +1062,43 @@ async function sendActiveEmail(params: {
   return { sent: true };
 }
 
-export function buildInsuranceActiveWhatsAppPayload(params: {
+export function buildInsuranceActiveZApiPayload(params: {
   to: string;
   name: string;
   planName: string;
   dashboardUrl: string;
-  templateName?: string;
-  languageCode?: string;
 }) {
   const phone = normalizePhone(params.to);
   if (!phone) throw new Error("invalid_phone");
 
-  let tokenHash = "";
+  let dashboardUrl: URL;
   try {
-    tokenHash = new URL(params.dashboardUrl).searchParams.get("token_hash") ||
-      "";
+    dashboardUrl = new URL(params.dashboardUrl);
   } catch {
     throw new Error("invalid_dashboard_url");
   }
+  const tokenHash = dashboardUrl.searchParams.get("token_hash") || "";
   if (!tokenHash) throw new Error("missing_dashboard_token");
+  if (dashboardUrl.protocol !== "https:") {
+    throw new Error("invalid_dashboard_protocol");
+  }
 
   return {
-    messaging_product: "whatsapp",
-    recipient_type: "individual",
-    to: phone.replace(/^\+/, ""),
-    type: "template",
-    template: {
-      name: params.templateName || "nox_seguro_ativo",
-      language: {
-        code: params.languageCode || "pt_BR",
+    phone: phone.replace(/^\+/, ""),
+    title: "Seguro ativo",
+    message:
+      `Parabéns, ${params.name}! Seu seguro ${params.planName} está ativo.\n\n` +
+      "O contrato foi assinado e seus documentos e faturas já estão " +
+      "disponíveis no painel da NOX Fiança.",
+    footer: "NOX Fiança",
+    buttonActions: [
+      {
+        id: "acessar-painel",
+        type: "URL",
+        label: "Acessar meu painel",
+        url: dashboardUrl.toString(),
       },
-      components: [
-        {
-          type: "body",
-          parameters: [
-            { type: "text", text: params.name },
-            { type: "text", text: params.planName },
-          ],
-        },
-        {
-          type: "button",
-          sub_type: "url",
-          index: "0",
-          parameters: [{ type: "text", text: tokenHash }],
-        },
-      ],
-    },
+    ],
   } as const;
 }
 
@@ -1117,22 +1108,22 @@ async function sendActiveWhatsapp(params: {
   planName: string;
   dashboardUrl: string;
 }) {
-  const accessToken = Deno.env.get("WHATSAPP_ACCESS_TOKEN")?.trim();
-  const phoneNumberId = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID")?.trim();
-  if (!accessToken || !phoneNumberId) {
+  const instanceId = Deno.env.get("ZAPI_INSTANCE_ID")?.trim();
+  const instanceToken = Deno.env.get("ZAPI_INSTANCE_TOKEN")?.trim();
+  const clientToken = Deno.env.get("ZAPI_CLIENT_TOKEN")?.trim();
+  if (!instanceId || !instanceToken) {
     return { sent: false, reason: "not_configured" };
+  }
+  if (
+    !/^[a-zA-Z0-9_-]+$/.test(instanceId) ||
+    !/^[a-zA-Z0-9_-]+$/.test(instanceToken)
+  ) {
+    return { sent: false, reason: "invalid_zapi_credentials" };
   }
 
   let payload;
   try {
-    payload = buildInsuranceActiveWhatsAppPayload({
-      ...params,
-      templateName:
-        Deno.env.get("WHATSAPP_INSURANCE_ACTIVE_TEMPLATE")?.trim() ||
-        "nox_seguro_ativo",
-      languageCode: Deno.env.get("WHATSAPP_TEMPLATE_LANGUAGE")?.trim() ||
-        "pt_BR",
-    });
+    payload = buildInsuranceActiveZApiPayload(params);
   } catch (error) {
     return {
       sent: false,
@@ -1140,43 +1131,42 @@ async function sendActiveWhatsapp(params: {
     };
   }
 
-  const graphVersion = Deno.env.get("WHATSAPP_GRAPH_API_VERSION")?.trim() ||
-    "v25.0";
-  if (!/^v\d+\.\d+$/.test(graphVersion)) {
-    return { sent: false, reason: "invalid_graph_api_version" };
-  }
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (clientToken) headers["Client-Token"] = clientToken;
+
   const response = await fetch(
-    `https://graph.facebook.com/${graphVersion}/${
-      encodeURIComponent(phoneNumberId)
-    }/messages`,
+    `https://api.z-api.io/instances/${
+      encodeURIComponent(instanceId)
+    }/token/${encodeURIComponent(instanceToken)}/send-button-actions`,
     {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
+      headers,
       body: JSON.stringify(payload),
     },
   );
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
-    const errorCode = String(body?.error?.code || "unknown").replace(
+    const errorCode = String(
+      body?.error || body?.message || body?.code || "unknown",
+    ).replace(
       /[^a-zA-Z0-9_-]/g,
       "",
-    );
-    console.error("[d4sign] falha ao enviar WhatsApp pela Meta", {
+    ).slice(0, 60);
+    console.error("[d4sign] falha ao enviar WhatsApp pela Z-API", {
       status: response.status,
       errorCode,
     });
     return {
       sent: false,
-      reason: `meta_${response.status}_${errorCode}`.slice(0, 120),
+      reason: `zapi_${response.status}_${errorCode}`.slice(0, 120),
     };
   }
   const body = await response.json().catch(() => ({}));
-  const providerMessageId = body?.messages?.[0]?.id;
+  const providerMessageId = body?.messageId || body?.zaapId || body?.id;
   if (!providerMessageId) {
-    return { sent: false, reason: "meta_missing_message_id" };
+    return { sent: false, reason: "zapi_missing_message_id" };
   }
   return { sent: true, providerMessageId: String(providerMessageId) };
 }
