@@ -117,6 +117,39 @@ export function buildD4SignSendPayload(
   } as const;
 }
 
+export function extractD4SignSignerKey(
+  response: any,
+  signerEmail: string,
+) {
+  const signers: any[] = [];
+  const visited = new Set<unknown>();
+  const collect = (value: any, depth: number) => {
+    if (
+      depth > 6 ||
+      !value ||
+      typeof value !== "object" ||
+      visited.has(value) ||
+      signers.length >= 100
+    ) {
+      return;
+    }
+    visited.add(value);
+    if (value.key_signer || value.keySigner) signers.push(value);
+    if (Array.isArray(value)) {
+      value.forEach((item) => collect(item, depth + 1));
+      return;
+    }
+    Object.values(value).forEach((item) => collect(item, depth + 1));
+  };
+  collect(response, 0);
+  const normalizedEmail = signerEmail.trim().toLowerCase();
+  const signer =
+    signers.find((candidate: any) =>
+      String(candidate?.email || "").trim().toLowerCase() === normalizedEmail
+    ) || (signers.length === 1 ? signers[0] : null);
+  return signer?.key_signer || signer?.keySigner || null;
+}
+
 function normalizeDocument(value: unknown) {
   return String(value || "").replace(/\D/g, "");
 }
@@ -767,11 +800,16 @@ export async function dispatchD4SignContract(
     const signerPayload = buildD4SignSigner(consulta);
     let signerKey = signature.d4sign_signer_key as string | null;
     if (!signerKey) {
-      let signerResult: any = null;
+      const listed = await d4SignRequest(`/documents/${documentUuid}/list`, {
+        method: "GET",
+      });
+      signerKey = extractD4SignSignerKey(listed, signerPayload.email);
+    }
+    if (!signerKey) {
       let lastSignerError: unknown = null;
       for (let attempt = 0; attempt < 3; attempt += 1) {
         try {
-          signerResult = await d4SignRequest(
+          await d4SignRequest(
             `/documents/${documentUuid}/createlist`,
             {
               method: "POST",
@@ -783,22 +821,26 @@ export async function dispatchD4SignContract(
               }),
             },
           );
-          lastSignerError = null;
-          break;
+          const listed = await d4SignRequest(
+            `/documents/${documentUuid}/list`,
+            { method: "GET" },
+          );
+          signerKey = extractD4SignSignerKey(listed, signerPayload.email);
+          if (signerKey) {
+            lastSignerError = null;
+            break;
+          }
+          lastSignerError = new Error("d4sign_signer_missing_key");
         } catch (error) {
           lastSignerError = error;
-          if (attempt < 2) {
-            await new Promise((resolve) =>
-              setTimeout(resolve, (attempt + 1) * 1200)
-            );
-          }
+        }
+        if (attempt < 2) {
+          await new Promise((resolve) =>
+            setTimeout(resolve, (attempt + 1) * 1200)
+          );
         }
       }
       if (lastSignerError) throw lastSignerError;
-      const signer = Array.isArray(signerResult)
-        ? signerResult[0]
-        : signerResult?.signers?.[0] || signerResult;
-      signerKey = signer?.key_signer || signer?.keySigner || null;
       if (!signerKey) throw new Error("d4sign_signer_missing_key");
       await supabase
         .from("contract_signatures")
@@ -1137,9 +1179,9 @@ async function sendActiveWhatsapp(params: {
   if (clientToken) headers["Client-Token"] = clientToken;
 
   const response = await fetch(
-    `https://api.z-api.io/instances/${
-      encodeURIComponent(instanceId)
-    }/token/${encodeURIComponent(instanceToken)}/send-button-actions`,
+    `https://api.z-api.io/instances/${encodeURIComponent(instanceId)}/token/${
+      encodeURIComponent(instanceToken)
+    }/send-button-actions`,
     {
       method: "POST",
       headers,

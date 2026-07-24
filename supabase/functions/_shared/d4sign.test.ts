@@ -9,6 +9,7 @@ import {
   buildD4SignSendPayload,
   buildD4SignSigner,
   buildInsuranceActiveZApiPayload,
+  extractD4SignSignerKey,
   resolveContractTemplate,
   type TemplateKey,
 } from "./d4sign.ts";
@@ -124,6 +125,38 @@ Deno.test("usa exatamente o e-mail e o telefone do inquilino na D4Sign", () => {
   );
   assertEquals(sendPayload.skip_email, "0");
   assert(sendPayload.message.includes("NOX Up"));
+});
+
+Deno.test("extrai a chave do signatário retornada pelo endpoint list da D4Sign", () => {
+  assertEquals(
+    extractD4SignSignerKey(
+      {
+        uuidDoc: "documento-teste",
+        list: {
+          key_signer: "NwYj=",
+          email: "leoleosilva04@gmail.com",
+        },
+      },
+      "LEOLEOSILVA04@GMAIL.COM",
+    ),
+    "NwYj=",
+  );
+  assertEquals(
+    extractD4SignSignerKey(
+      {
+        data: [{
+          document: {
+            list: [
+              { key_signer: "outro", email: "outro@example.com" },
+              { key_signer: "correto", email: "leoleosilva04@gmail.com" },
+            ],
+          },
+        }],
+      },
+      "leoleosilva04@gmail.com",
+    ),
+    "correto",
+  );
 });
 
 Deno.test("bloqueia envio com e-mail ou telefone inválido", () => {
