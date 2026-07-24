@@ -9,6 +9,7 @@ import {
   buildD4SignSendPayload,
   buildD4SignSigner,
   buildInsuranceActiveZApiPayload,
+  buildSignatureInviteZApiPayload,
   extractD4SignSignerKey,
   resolveContractTemplate,
   type TemplateKey,
@@ -116,7 +117,7 @@ Deno.test("usa exatamente o e-mail e o telefone do inquilino na D4Sign", () => {
   assertEquals(signer.email, "inquilino@example.com");
   assertEquals(signer.embed_methodauth, "sms");
   assertEquals(signer.embed_smsnumber, "+5511999998888");
-  assertEquals(signer.whatsapp_number, "+5511999998888");
+  assertEquals("whatsapp_number" in signer, false);
   assertEquals(signer.skipemail, "0");
 
   const sendPayload = buildD4SignSendPayload(
@@ -126,6 +127,37 @@ Deno.test("usa exatamente o e-mail e o telefone do inquilino na D4Sign", () => {
   );
   assertEquals(sendPayload.skip_email, "0");
   assert(sendPayload.message.includes("NOX Up"));
+});
+
+Deno.test("mantém o e-mail na D4Sign e envia o mesmo contrato pelo WhatsApp", () => {
+  const payload = buildSignatureInviteZApiPayload({
+    to: "(11) 99999-8888",
+    name: "Maria da Silva",
+    planName: "NOX Up",
+    signatureUrl: "https://secure.d4sign.com.br/w/i/documento/assinatura/123",
+  });
+
+  assertEquals(payload, {
+    phone: "5511999998888",
+    message:
+      "Olá, Maria da Silva. Seu contrato NOX Up da NOX Fiança está pronto para assinatura.",
+    buttonActions: [
+      {
+        id: "assinar-contrato-d4sign",
+        type: "URL",
+        label: "Assinar contrato",
+        url: "https://secure.d4sign.com.br/w/i/documento/assinatura/123",
+      },
+    ],
+  });
+  assertThrows(() =>
+    buildSignatureInviteZApiPayload({
+      to: "(11) 99999-8888",
+      name: "Maria",
+      planName: "NOX Up",
+      signatureUrl: "https://example.com/contrato",
+    })
+  );
 });
 
 Deno.test("extrai a chave do signatário retornada pelo endpoint list da D4Sign", () => {

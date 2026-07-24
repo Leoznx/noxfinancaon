@@ -97,7 +97,6 @@ export function buildD4SignSigner(consulta: any) {
     docauthandselfie: "0",
     embed_methodauth: "sms",
     embed_smsnumber: phone,
-    whatsapp_number: phone,
     skipemail: "0",
     upload_allow: "0",
   } as const;
@@ -478,6 +477,46 @@ async function d4SignRequest(path: string, init: RequestInit) {
   return body;
 }
 
+function decodeD4SignSignerId(signerKey: string) {
+  let decoded = "";
+  try {
+    decoded = new TextDecoder().decode(decodeBase64(signerKey)).trim();
+  } catch {
+    throw new Error("invalid_d4sign_signer_key");
+  }
+  if (!/^\d+$/.test(decoded)) {
+    throw new Error("invalid_d4sign_signer_id");
+  }
+  return decoded;
+}
+
+async function getD4SignSignatureLink(
+  documentUuid: string,
+  signerKey: string,
+) {
+  const signerId = decodeD4SignSignerId(signerKey);
+  const result = await d4SignRequest(
+    `/documents/${encodeURIComponent(documentUuid)}/signaturelink/${
+      encodeURIComponent(signerId)
+    }`,
+    { method: "GET" },
+  );
+  const link = String(result?.link || "").trim();
+  let parsed: URL;
+  try {
+    parsed = new URL(link);
+  } catch {
+    throw new Error("d4sign_signature_link_missing");
+  }
+  if (
+    parsed.protocol !== "https:" ||
+    !/(^|\.)d4sign\.com\.br$/i.test(parsed.hostname)
+  ) {
+    throw new Error("d4sign_signature_link_invalid");
+  }
+  return parsed.toString();
+}
+
 function buildWebhookUrl() {
   const explicit = Deno.env.get("D4SIGN_WEBHOOK_URL")?.trim();
   const base = explicit ||
@@ -770,6 +809,9 @@ export async function dispatchD4SignContract(
     );
 
     if (["awaiting_signature", "signed", "active"].includes(signature.status)) {
+      if (signature.status === "awaiting_signature") {
+        await ensureSignatureInviteWhatsapp(supabase, signature, consulta);
+      }
       return {
         ok: true,
         signatureId: signature.id,
@@ -902,8 +944,25 @@ export async function dispatchD4SignContract(
       consulta_id: consultationId,
       tipo_evento: "contrato_d4sign_enviado",
       descricao:
-        `Contrato ${planName} enviado pela D4Sign por e-mail e SMS ao inquilino.`,
+        `Contrato ${planName} enviado por e-mail e WhatsApp ao inquilino.`,
     });
+    await logNotification(
+      supabase,
+      signature.id,
+      "email",
+      { sent: true },
+      "signature_invite",
+    );
+    await ensureSignatureInviteWhatsapp(
+      supabase,
+      {
+        ...signature,
+        d4sign_document_uuid: documentUuid,
+        d4sign_signer_key: signerKey,
+        plan_name: planName,
+      },
+      consulta,
+    );
 
     return {
       ok: true,
@@ -1051,13 +1110,14 @@ async function notificationWasSent(
   supabase: any,
   signatureId: string,
   channel: string,
+  notificationType = "insurance_active",
 ) {
   const { data } = await supabase
     .from("contract_notification_deliveries")
     .select("id")
     .eq("contract_signature_id", signatureId)
     .eq("channel", channel)
-    .eq("notification_type", "insurance_active")
+    .eq("notification_type", notificationType)
     .eq("status", "sent")
     .maybeSingle();
   return !!data;
@@ -1072,19 +1132,20 @@ async function logNotification(
     reason?: string;
     providerMessageId?: string;
   },
+  notificationType = "insurance_active",
 ) {
   const { data: previous } = await supabase
     .from("contract_notification_deliveries")
     .select("attempts")
     .eq("contract_signature_id", signatureId)
     .eq("channel", channel)
-    .eq("notification_type", "insurance_active")
+    .eq("notification_type", notificationType)
     .maybeSingle();
   await supabase.from("contract_notification_deliveries").upsert(
     {
       contract_signature_id: signatureId,
       channel,
-      notification_type: "insurance_active",
+      notification_type: notificationType,
       status: result.sent
         ? "sent"
         : result.reason === "not_configured"
@@ -1100,12 +1161,17 @@ async function logNotification(
     await supabase.from("contract_signature_events").upsert(
       {
         contract_signature_id: signatureId,
-        event_key: `zapi:sent:${result.providerMessageId}`,
-        event_type: "zapi_message_sent",
-        message: "Mensagem de ativação aceita pela Z-API.",
+        event_key: `zapi:${notificationType}:sent:${result.providerMessageId}`,
+        event_type: notificationType === "signature_invite"
+          ? "zapi_signature_invite_sent"
+          : "zapi_message_sent",
+        message: notificationType === "signature_invite"
+          ? "Convite para assinatura aceito pela Z-API."
+          : "Mensagem de ativação aceita pela Z-API.",
         payload: {
           provider_message_id: result.providerMessageId,
           channel: "whatsapp",
+          notification_type: notificationType,
         },
       },
       { onConflict: "event_key", ignoreDuplicates: true },
@@ -1164,6 +1230,43 @@ function buildAppDocumentsBridgeUrl(dashboardUrlValue: string) {
   return appDocumentsUrl.toString();
 }
 
+export function buildSignatureInviteZApiPayload(params: {
+  to: string;
+  name: string;
+  planName: string;
+  signatureUrl: string;
+}) {
+  const phone = normalizePhone(params.to);
+  if (!phone) throw new Error("invalid_phone");
+
+  let signatureUrl: URL;
+  try {
+    signatureUrl = new URL(params.signatureUrl);
+  } catch {
+    throw new Error("invalid_signature_url");
+  }
+  if (
+    signatureUrl.protocol !== "https:" ||
+    !/(^|\.)d4sign\.com\.br$/i.test(signatureUrl.hostname)
+  ) {
+    throw new Error("invalid_signature_destination");
+  }
+
+  return {
+    phone: phone.replace(/^\+/, ""),
+    message:
+      `Olá, ${params.name}. Seu contrato ${params.planName} da NOX Fiança está pronto para assinatura.`,
+    buttonActions: [
+      {
+        id: "assinar-contrato-d4sign",
+        type: "URL",
+        label: "Assinar contrato",
+        url: signatureUrl.toString(),
+      },
+    ],
+  } as const;
+}
+
 export function buildInsuranceActiveZApiPayload(params: {
   to: string;
   name: string;
@@ -1214,6 +1317,66 @@ export function buildInsuranceActiveZApiPayload(params: {
       },
     ],
   } as const;
+}
+
+async function sendSignatureInviteWhatsapp(params: {
+  to: string;
+  name: string;
+  planName: string;
+  signatureUrl: string;
+}) {
+  const instanceId = Deno.env.get("ZAPI_INSTANCE_ID")?.trim();
+  const instanceToken = Deno.env.get("ZAPI_INSTANCE_TOKEN")?.trim();
+  const clientToken = Deno.env.get("ZAPI_CLIENT_TOKEN")?.trim();
+  if (!instanceId || !instanceToken) {
+    return { sent: false, reason: "not_configured" };
+  }
+  if (
+    !/^[a-zA-Z0-9_-]+$/.test(instanceId) ||
+    !/^[a-zA-Z0-9_-]+$/.test(instanceToken)
+  ) {
+    return { sent: false, reason: "invalid_zapi_credentials" };
+  }
+
+  let payload;
+  try {
+    payload = buildSignatureInviteZApiPayload(params);
+  } catch (error) {
+    return {
+      sent: false,
+      reason: error instanceof Error ? error.message : "invalid_payload",
+    };
+  }
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (clientToken) headers["Client-Token"] = clientToken;
+  const response = await fetch(
+    `https://api.z-api.io/instances/${encodeURIComponent(instanceId)}/token/${
+      encodeURIComponent(instanceToken)
+    }/send-button-actions`,
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+    },
+  );
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    const errorCode = String(
+      body?.error || body?.message || body?.code || "unknown",
+    ).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 60);
+    return {
+      sent: false,
+      reason: `zapi_${response.status}_${errorCode}`.slice(0, 120),
+    };
+  }
+  const body = await response.json().catch(() => ({}));
+  const providerMessageId = body?.messageId || body?.zaapId || body?.id;
+  if (!providerMessageId) {
+    return { sent: false, reason: "zapi_missing_message_id" };
+  }
+  return { sent: true, providerMessageId: String(providerMessageId) };
 }
 
 async function sendActiveWhatsapp(params: {
@@ -1283,6 +1446,68 @@ async function sendActiveWhatsapp(params: {
     return { sent: false, reason: "zapi_missing_message_id" };
   }
   return { sent: true, providerMessageId: String(providerMessageId) };
+}
+
+async function ensureSignatureInviteWhatsapp(
+  supabase: any,
+  signature: any,
+  consulta: any,
+) {
+  if (
+    await notificationWasSent(
+      supabase,
+      signature.id,
+      "whatsapp",
+      "signature_invite",
+    )
+  ) {
+    return;
+  }
+  const phone = consulta.tenant_telefone || consulta?.inquilinos?.telefone ||
+    "";
+  const name = consulta.tenant_name || consulta?.inquilinos?.nome || "cliente";
+  let result: {
+    sent: boolean;
+    reason?: string;
+    providerMessageId?: string;
+  };
+  try {
+    if (!signature.d4sign_document_uuid || !signature.d4sign_signer_key) {
+      throw new Error("d4sign_signature_link_not_ready");
+    }
+    let signatureUrl = "";
+    for (let attempt = 0; attempt < 3 && !signatureUrl; attempt += 1) {
+      if (attempt > 0) {
+        await new Promise((resolve) => setTimeout(resolve, attempt * 1200));
+      }
+      try {
+        signatureUrl = await getD4SignSignatureLink(
+          signature.d4sign_document_uuid,
+          signature.d4sign_signer_key,
+        );
+      } catch (error) {
+        if (attempt === 2) throw error;
+      }
+    }
+    result = await sendSignatureInviteWhatsapp({
+      to: phone,
+      name,
+      planName: signature.plan_name,
+      signatureUrl,
+    });
+  } catch (error) {
+    result = {
+      sent: false,
+      reason: error instanceof Error ? error.message : "provider_error",
+    };
+  }
+  await logNotification(
+    supabase,
+    signature.id,
+    "whatsapp",
+    result,
+    "signature_invite",
+  );
 }
 
 async function notifyInsuranceActive(
