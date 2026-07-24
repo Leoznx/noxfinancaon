@@ -97,6 +97,7 @@ export function buildD4SignSigner(consulta: any) {
     docauthandselfie: "0",
     embed_methodauth: "sms",
     embed_smsnumber: phone,
+    whatsapp_number: phone,
     skipemail: "0",
     upload_allow: "0",
   } as const;
@@ -806,41 +807,34 @@ export async function dispatchD4SignContract(
       signerKey = extractD4SignSignerKey(listed, signerPayload.email);
     }
     if (!signerKey) {
-      let lastSignerError: unknown = null;
-      for (let attempt = 0; attempt < 3; attempt += 1) {
+      await d4SignRequest(
+        `/documents/${documentUuid}/createlist`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            signers: [
+              signerPayload,
+            ],
+          }),
+        },
+      );
+      for (let attempt = 0; attempt < 3 && !signerKey; attempt += 1) {
+        if (attempt > 0) {
+          await new Promise((resolve) => setTimeout(resolve, attempt * 1200));
+        }
         try {
-          await d4SignRequest(
-            `/documents/${documentUuid}/createlist`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                signers: [
-                  signerPayload,
-                ],
-              }),
-            },
-          );
           const listed = await d4SignRequest(
             `/documents/${documentUuid}/list`,
             { method: "GET" },
           );
           signerKey = extractD4SignSignerKey(listed, signerPayload.email);
-          if (signerKey) {
-            lastSignerError = null;
-            break;
-          }
-          lastSignerError = new Error("d4sign_signer_missing_key");
-        } catch (error) {
-          lastSignerError = error;
-        }
-        if (attempt < 2) {
-          await new Promise((resolve) =>
-            setTimeout(resolve, (attempt + 1) * 1200)
-          );
+        } catch {
+          // A criação do signatário não é repetida: a D4Sign pode efetivar a
+          // inclusão antes de devolver um erro transitório e uma nova chamada
+          // criaria notificações duplicadas. Apenas a leitura é repetida.
         }
       }
-      if (lastSignerError) throw lastSignerError;
       if (!signerKey) throw new Error("d4sign_signer_missing_key");
       await supabase
         .from("contract_signatures")
@@ -848,28 +842,15 @@ export async function dispatchD4SignContract(
         .eq("id", signature.id);
     }
 
-    let lastSendError: unknown = null;
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      try {
-        await d4SignRequest(`/documents/${documentUuid}/sendtosigner`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(
-            buildD4SignSendPayload(consulta, planName, token),
-          ),
-        });
-        lastSendError = null;
-        break;
-      } catch (error) {
-        lastSendError = error;
-        if (attempt < 2) {
-          await new Promise((resolve) =>
-            setTimeout(resolve, (attempt + 1) * 1200)
-          );
-        }
-      }
-    }
-    if (lastSendError) throw lastSendError;
+    // sendtosigner dispara notificações externas e não é seguro repetir
+    // automaticamente: um timeout depois do envio causaria e-mails duplicados.
+    await d4SignRequest(`/documents/${documentUuid}/sendtosigner`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(
+        buildD4SignSendPayload(consulta, planName, token),
+      ),
+    });
 
     const now = new Date().toISOString();
     await supabase

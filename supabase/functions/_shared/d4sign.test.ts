@@ -116,6 +116,7 @@ Deno.test("usa exatamente o e-mail e o telefone do inquilino na D4Sign", () => {
   assertEquals(signer.email, "inquilino@example.com");
   assertEquals(signer.embed_methodauth, "sms");
   assertEquals(signer.embed_smsnumber, "+5511999998888");
+  assertEquals(signer.whatsapp_number, "+5511999998888");
   assertEquals(signer.skipemail, "0");
 
   const sendPayload = buildD4SignSendPayload(
