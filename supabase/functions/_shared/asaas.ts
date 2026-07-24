@@ -361,7 +361,7 @@ export async function sendPaymentEmail(params: {
     return { sent: false, reason: !apiKey ? "not_configured" : "missing_recipient" };
   }
 
-  const from = Deno.env.get("RESEND_FROM_EMAIL") || "NOX FIANÇA <financeiro@noxfianca.com.br>";
+  const from = Deno.env.get("RESEND_FROM_EMAIL") || "NOX FIANÇA <financeiro@noxfianca.com>";
   const valorFmt = params.valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
   const metodoLabel =
     params.metodo === "pix" ? "Pix" : params.metodo === "boleto" ? "Boleto" : "Cartão de crédito";
@@ -580,7 +580,7 @@ export async function sendInstallmentScheduleEmail(params: {
     });
     return { sent: false, reason: !apiKey ? "not_configured" : "missing_recipient" };
   }
-  const from = Deno.env.get("RESEND_FROM_EMAIL") || "NOX FIANÇA <financeiro@noxfianca.com.br>";
+  const from = Deno.env.get("RESEND_FROM_EMAIL") || "NOX FIANÇA <financeiro@noxfianca.com>";
   const primeira = params.installments[0];
   const ultima = params.installments[params.installments.length - 1];
   const linhas = params.installments

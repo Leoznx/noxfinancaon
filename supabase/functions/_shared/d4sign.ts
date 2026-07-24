@@ -1188,7 +1188,7 @@ async function sendActiveEmail(params: {
   const apiKey = Deno.env.get("RESEND_API_KEY")?.trim();
   if (!apiKey) return { sent: false, reason: "not_configured" };
   const from = Deno.env.get("RESEND_FROM_EMAIL") ||
-    "NOX FIANÇA <financeiro@noxfianca.com.br>";
+    "NOX FIANÇA <financeiro@noxfianca.com>";
   const appDocumentsUrl = buildAppDocumentsBridgeUrl(params.dashboardUrl);
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -1203,8 +1203,10 @@ async function sendActiveEmail(params: {
       html: `
         <div style="font-family:Arial,sans-serif;color:#171717;line-height:1.6;max-width:620px;margin:auto">
           <h1 style="font-size:26px">🎉 Parabéns,seu contrato está ativo! 🌙</h1>
-          <p>– para visualizar seus documentos acesso o site da <strong>NOX FIANÇA</strong></p>
-          <p>– caso nao tenha crie um acesso com suas informações no site da <strong>NOX FIANÇA</strong> para visualizar seus documentos</p>
+          <ul style="padding-left:22px">
+            <li style="margin-bottom:14px">para visualizar seus documentos acesso o site da <strong>NOX FIANÇA</strong></li>
+            <li>caso nao tenha crie um acesso com suas informações no site da <strong>NOX FIANÇA</strong> para visualizar seus documentos</li>
+          </ul>
           <p style="margin:28px 0 12px"><a href="${params.dashboardUrl}" style="display:inline-block;background:#ffd21c;color:#171717;text-decoration:none;font-weight:700;padding:14px 22px;border-radius:10px">Ver Documentos (Site)</a></p>
           <p style="margin:0 0 28px"><a href="${appDocumentsUrl}" style="display:inline-block;background:#171717;color:#ffffff;text-decoration:none;font-weight:700;padding:14px 22px;border-radius:10px">Ver Documentos (Aplicativo)</a></p>
           <p>Equipe NOX Fiança</p>
@@ -1254,8 +1256,10 @@ export function buildSignatureInviteZApiPayload(params: {
 
   return {
     phone: phone.replace(/^\+/, ""),
-    message:
-      `Olá, ${params.name}. Seu contrato ${params.planName} da NOX Fiança está pronto para assinatura.`,
+    message: `Olá, *${params.name}*! 👋\n\n` +
+      `• Seu contrato *${params.planName}*, da *NOX Fiança*, já está pronto para assinatura. 📝\n\n` +
+      "• Clique no botão *Assinar contrato*, confira todas as informações e finalize a assinatura. ✅\n\n" +
+      "*NOX Fiança — segurança e praticidade para o seu aluguel.* 🌙",
     buttonActions: [
       {
         id: "assinar-contrato-d4sign",
@@ -1299,8 +1303,8 @@ export function buildInsuranceActiveZApiPayload(params: {
   return {
     phone: phone.replace(/^\+/, ""),
     message: "🎉 Parabéns,seu contrato está ativo!  🌙\n\n" +
-      "- para visualizar seus documentos acesso o site da *NOX FIANÇA*\n\n" +
-      "- caso nao tenha crie um acesso com suas informações no site da " +
+      "• para visualizar seus documentos acesso o site da *NOX FIANÇA*\n\n" +
+      "• caso nao tenha crie um acesso com suas informações no site da " +
       "*NOX FIANÇA* para visualizar seus documentos",
     buttonActions: [
       {

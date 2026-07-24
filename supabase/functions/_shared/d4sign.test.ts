@@ -139,8 +139,10 @@ Deno.test("mantém o e-mail na D4Sign e envia o mesmo contrato pelo WhatsApp", (
 
   assertEquals(payload, {
     phone: "5511999998888",
-    message:
-      "Olá, Maria da Silva. Seu contrato NOX Up da NOX Fiança está pronto para assinatura.",
+    message: "Olá, *Maria da Silva*! 👋\n\n" +
+      "• Seu contrato *NOX Up*, da *NOX Fiança*, já está pronto para assinatura. 📝\n\n" +
+      "• Clique no botão *Assinar contrato*, confira todas as informações e finalize a assinatura. ✅\n\n" +
+      "*NOX Fiança — segurança e praticidade para o seu aluguel.* 🌙",
     buttonActions: [
       {
         id: "assinar-contrato-d4sign",
@@ -218,8 +220,8 @@ Deno.test("monta mensagem da Z-API com botões para site e aplicativo", () => {
   assertEquals(
     payload.message,
     "🎉 Parabéns,seu contrato está ativo!  🌙\n\n" +
-      "- para visualizar seus documentos acesso o site da *NOX FIANÇA*\n\n" +
-      "- caso nao tenha crie um acesso com suas informações no site da " +
+      "• para visualizar seus documentos acesso o site da *NOX FIANÇA*\n\n" +
+      "• caso nao tenha crie um acesso com suas informações no site da " +
       "*NOX FIANÇA* para visualizar seus documentos",
   );
   assertEquals(payload.buttonActions, [
