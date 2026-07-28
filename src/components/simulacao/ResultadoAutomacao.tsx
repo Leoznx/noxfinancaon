@@ -45,7 +45,7 @@ const STATUS_UI: Record<
     Icon: XCircle,
   },
   em_analise: {
-    label: "Em análise",
+    label: "Em anÃ¡lise",
     className: "bg-yellow-50 border-yellow-200 text-yellow-800",
     iconClassName: "text-yellow-600",
     Icon: Clock,
@@ -59,7 +59,7 @@ const STATUS_UI: Record<
 };
 
 function formatarMoeda(v: number | null): string {
-  if (v === null || v === undefined) return "—";
+  if (v === null || v === undefined) return "â€”";
   return Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
@@ -68,9 +68,9 @@ interface ResultadoAutomacaoProps {
   onTentarNovamente?: () => void;
   onSelecionarPlano?: (planoId: string, extras?: ExtrasSelecionados, planoCalculado?: PlanoSelecionadoCalculo) => void;
   isSubmittingPlano?: boolean;
-  /** Permite editar aluguel/condomínio/taxas antes de escolher o plano (opcional — só passe se a consulta tiver um imóvel vinculado que possa ser atualizado). */
+  /** Permite editar aluguel/condomÃ­nio/taxas antes de escolher o plano (opcional â€” sÃ³ passe se a consulta tiver um imÃ³vel vinculado que possa ser atualizado). */
   onAtualizarValores?: (valores: { aluguel: number; condominio: number; taxas: number }) => Promise<void> | void;
-  /** Retoma um plano já escolhido anteriormente (ex.: corretor volta em "Detalhes" depois de já ter selecionado um plano). */
+  /** Retoma um plano jÃ¡ escolhido anteriormente (ex.: corretor volta em "Detalhes" depois de jÃ¡ ter selecionado um plano). */
   planoIdInicial?: string | null;
   extrasIniciais?: Partial<ExtrasSelecionados> | null;
 }
@@ -85,20 +85,20 @@ export function ResultadoAutomacao({
   extrasIniciais,
 }: ResultadoAutomacaoProps) {
   const navigate = useNavigate();
-  // `resultado` guarda o veredito da consulta de crédito de forma permanente — a
-  // automação só grava aprovado/recusado/em_analise/erro ali e nunca mais mexe depois.
-  // Já `consulta.status` é o ponteiro de etapa da proposta inteira (pendente_documentacao,
-  // aguardando_ativacao, ativado, etc.) e avança conforme o corretor progride a proposta.
+  // `resultado` guarda o veredito da consulta de crÃ©dito de forma permanente â€” a
+  // automaÃ§Ã£o sÃ³ grava aprovado/recusado/em_analise/erro ali e nunca mais mexe depois.
+  // JÃ¡ `consulta.status` Ã© o ponteiro de etapa da proposta inteira (pendente_documentacao,
+  // aguardando_ativacao, ativado, etc.) e avanÃ§a conforme o corretor progride a proposta.
   // Preferir `resultado` aqui evita que essa tela fique presa em "Consultando..." para
-  // sempre assim que a proposta avança para as próximas etapas.
+  // sempre assim que a proposta avanÃ§a para as prÃ³ximas etapas.
   const statusBruto = String(consulta.status ?? "").toLowerCase();
   const resultadoConhecido = STATUS_FINAIS.includes(String(consulta.resultado ?? "").toLowerCase() as StatusConsulta);
-  // A automação em si só tem dois estados "ainda rodando": pendente (na fila) e
+  // A automaÃ§Ã£o em si sÃ³ tem dois estados "ainda rodando": pendente (na fila) e
   // processando (worker aberto). Qualquer outro `status` (pendente_documentacao,
-  // aguardando_ativacao, ativado...) significa que a proposta já avançou bem além da
-  // análise de crédito — nunca deve mostrar "Consultando..." nesse caso, mesmo que
+  // aguardando_ativacao, ativado...) significa que a proposta jÃ¡ avanÃ§ou bem alÃ©m da
+  // anÃ¡lise de crÃ©dito â€” nunca deve mostrar "Consultando..." nesse caso, mesmo que
   // `resultado` tenha ficado null por ser um registro antigo/manual que nunca passou
-  // pela automação de verdade (confirmado com um caso real: status=aguardando_ativacao,
+  // pela automaÃ§Ã£o de verdade (confirmado com um caso real: status=aguardando_ativacao,
   // resultado=null, ficava preso em "Consultando..." para sempre).
   const aindaNaAnaliseDeCredito = statusBruto === "" || statusBruto === "pendente" || statusBruto === "processando";
   const status = (resultadoConhecido
@@ -113,9 +113,9 @@ export function ResultadoAutomacao({
   const isDocumentacaoPendente = statusNormalizado.includes("pendente_documentacao");
   const isEmAnalise =
     statusNormalizado.includes("em_analise") ||
-    statusNormalizado.includes("em análise") ||
+    statusNormalizado.includes("em anÃ¡lise") ||
     statusNormalizado.includes("em analise") ||
-    statusNormalizado.includes("análise") ||
+    statusNormalizado.includes("anÃ¡lise") ||
     statusNormalizado.includes("analise") ||
     (statusNormalizado === "pendente" && !!consulta.automation_finished_at);
 
@@ -141,7 +141,7 @@ export function ResultadoAutomacao({
                     Aprovado
                   </h1>
                   <p className="text-green-700 text-sm sm:text-base leading-tight">
-                    {consulta.mensagem || "Crédito aprovado."}
+                    {consulta.mensagem || "CrÃ©dito aprovado."}
                   </p>
                 </div>
               </div>
@@ -172,7 +172,7 @@ export function ResultadoAutomacao({
             <div className="flex flex-1 items-end justify-center sm:justify-end overflow-hidden order-first sm:order-last sm:pr-6">
               <img
                 src="/assets/nox-aprovado-personagens.webp"
-                alt="Personagens comemorando aprovação da simulação"
+                alt="Personagens comemorando aprovaÃ§Ã£o da simulaÃ§Ã£o"
                 className="block h-[285px] sm:h-[335px] w-auto self-end object-contain object-bottom translate-y-[22px] pointer-events-none select-none"
               />
             </div>
@@ -227,7 +227,7 @@ export function ResultadoAutomacao({
                     Recusado
                   </h1>
                   <p className="text-red-700 text-sm sm:text-base leading-tight">
-                    {consulta.mensagem || "Crédito recusado."}
+                    {consulta.mensagem || "CrÃ©dito recusado."}
                   </p>
                 </div>
               </div>
@@ -258,7 +258,7 @@ export function ResultadoAutomacao({
             <div className="flex flex-1 items-end justify-center sm:justify-end overflow-hidden order-first sm:order-last sm:pr-6">
               <img
                 src="/assets/nox-recusado-personagens.webp"
-                alt="Personagens tristes com simulação recusada"
+                alt="Personagens tristes com simulaÃ§Ã£o recusada"
                 className="block h-[275px] sm:h-[325px] w-auto self-end object-contain object-bottom translate-y-[18px] pointer-events-none select-none"
               />
             </div>
@@ -273,7 +273,7 @@ export function ResultadoAutomacao({
             <div>
               <h3 className="text-lg font-bold text-red-900">Tente novamente com outro CPF</h3>
               <p className="mt-1 text-sm leading-relaxed text-red-800">
-                Você pode revisar os dados informados ou tentar uma nova simulação com outro CPF.
+                VocÃª pode revisar os dados informados ou tentar uma nova simulaÃ§Ã£o com outro CPF.
               </p>
             </div>
           </div>
@@ -313,10 +313,10 @@ export function ResultadoAutomacao({
                     </div>
                     <div>
                       <h1 className="text-2xl sm:text-3xl font-bold text-amber-900 leading-tight tracking-tight">
-                        Em Análise
+                        Em AnÃ¡lise
                       </h1>
                       <p className="text-amber-800 text-sm sm:text-base leading-tight">
-                        Sua simulação está em análise.
+                        Sua simulaÃ§Ã£o estÃ¡ em anÃ¡lise.
                       </p>
                     </div>
                   </div>
@@ -346,8 +346,8 @@ export function ResultadoAutomacao({
 
                 <div className="flex flex-1 items-end justify-center sm:justify-end overflow-hidden order-first sm:order-last sm:pr-6">
                   <img
-                    src="/assets/nox-em-analise-personagens-novo.png"
-                    alt="Personagens analisando a simulação"
+                    src="/assets/nox-em-analise-personagens-novo.webp"
+                    alt="Personagens analisando a simulaÃ§Ã£o"
                     className="block h-[280px] w-auto max-w-full self-end object-contain object-bottom translate-y-[18px] pointer-events-none select-none sm:h-[335px]"
                   />
                 </div>
@@ -372,7 +372,7 @@ export function ResultadoAutomacao({
           />
           <h1 className="text-3xl font-bold text-neutral-900 tracking-tight">Consultando...</h1>
           <p className="text-neutral-600 max-w-lg">
-            A simulação ainda está em andamento. Esta página atualiza automaticamente quando o
+            A simulaÃ§Ã£o ainda estÃ¡ em andamento. Esta pÃ¡gina atualiza automaticamente quando o
             resultado chegar.
           </p>
         </div>
@@ -418,7 +418,7 @@ export function ResultadoAutomacao({
               <div className="flex justify-between gap-4">
                 <dt className="text-neutral-500">Tipo</dt>
                 <dd className="font-semibold text-neutral-900">
-                  {consulta.tipo_pessoa === "PJ" ? "Pessoa Jurídica" : "Pessoa Física"}
+                  {consulta.tipo_pessoa === "PJ" ? "Pessoa JurÃ­dica" : "Pessoa FÃ­sica"}
                 </dd>
               </div>
               {isNomeValido(consulta.tenant_name) && (
@@ -430,7 +430,7 @@ export function ResultadoAutomacao({
               <div className="flex justify-between gap-4">
                 <dt className="text-neutral-500">{consulta.tipo_pessoa === "PJ" ? "CNPJ" : "CPF"}</dt>
                 <dd className="font-semibold text-neutral-900">
-                  {consulta.documento ? formatDocumento(consulta.documento) : consulta.documento_masked || "—"}
+                  {consulta.documento ? formatDocumento(consulta.documento) : consulta.documento_masked || "â€”"}
                 </dd>
               </div>
             </dl>
@@ -441,16 +441,16 @@ export function ResultadoAutomacao({
           <CardContent className="p-6">
             <h2 className="text-xs font-bold text-neutral-500 uppercase tracking-widest mb-4 flex items-center gap-2">
               <MapPin className="w-4 h-4 text-yellow-600" />
-              Imóvel
+              ImÃ³vel
             </h2>
             <dl className="space-y-2 text-sm">
               <div className="flex justify-between gap-4">
                 <dt className="text-neutral-500">Tipo</dt>
-                <dd className="font-semibold text-neutral-900">{consulta.tipo_imovel || "—"}</dd>
+                <dd className="font-semibold text-neutral-900">{consulta.tipo_imovel || "â€”"}</dd>
               </div>
               <div className="flex justify-between gap-4">
                 <dt className="text-neutral-500">CEP</dt>
-                <dd className="font-semibold text-neutral-900">{consulta.cep || "—"}</dd>
+                <dd className="font-semibold text-neutral-900">{consulta.cep || "â€”"}</dd>
               </div>
             </dl>
           </CardContent>
@@ -466,7 +466,7 @@ export function ResultadoAutomacao({
               <p className="text-lg font-bold text-neutral-900">{formatarMoeda(consulta.valor_aluguel)}</p>
             </div>
             <div>
-              <p className="text-xs text-neutral-500 uppercase font-bold tracking-wider mb-1">Condomínio</p>
+              <p className="text-xs text-neutral-500 uppercase font-bold tracking-wider mb-1">CondomÃ­nio</p>
               <p className="text-lg font-bold text-neutral-900">{formatarMoeda(consulta.valor_condominio)}</p>
             </div>
             <div>
@@ -479,7 +479,7 @@ export function ResultadoAutomacao({
 
       <div className="text-xs text-neutral-400 text-center">
         Consulta criada em {new Date(consulta.created_at).toLocaleString("pt-BR")}
-        {consulta.origem ? ` · origem: ${consulta.origem}` : ""}
+        {consulta.origem ? ` Â· origem: ${consulta.origem}` : ""}
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3">
@@ -501,7 +501,7 @@ export function ResultadoAutomacao({
   );
 }
 
-const ESTADOS_CIVIS = ["Solteiro(a)", "Casado(a)", "Divorciado(a)", "Viúvo(a)", "União Estável"];
+const ESTADOS_CIVIS = ["Solteiro(a)", "Casado(a)", "Divorciado(a)", "ViÃºvo(a)", "UniÃ£o EstÃ¡vel"];
 const ACCEPTED_UPLOAD_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
 const MAX_UPLOAD_SIZE = 10 * 1024 * 1024;
 const APPROVAL_BUCKET = "approval-documents";
@@ -592,7 +592,7 @@ function FormularioAnaliseComplementar({ consulta }: { consulta: ConsultaCredito
 
     if (uploadError) {
       console.error("Erro detalhado no upload:", uploadError);
-      throw new Error(`Não foi possível enviar ${file.name}: ${uploadError.message}`);
+      throw new Error(`NÃ£o foi possÃ­vel enviar ${file.name}: ${uploadError.message}`);
     }
 
     const { error: insertError } = await supabase.from("documentos_proposta").insert({
@@ -610,7 +610,7 @@ function FormularioAnaliseComplementar({ consulta }: { consulta: ConsultaCredito
 
   async function handleEnviar() {
     if (!formValido) {
-      toast.error("Preencha todos os campos obrigatórios antes de enviar.");
+      toast.error("Preencha todos os campos obrigatÃ³rios antes de enviar.");
       return;
     }
 
@@ -618,7 +618,7 @@ function FormularioAnaliseComplementar({ consulta }: { consulta: ConsultaCredito
     try {
       const { data: userData } = await supabase.auth.getUser();
       const uploaderId = userData.user?.id;
-      if (!uploaderId) throw new Error("Usuário não autenticado");
+      if (!uploaderId) throw new Error("UsuÃ¡rio nÃ£o autenticado");
 
       const uploaded: Record<string, { path: string; bucket: string } | null> = {};
       if (cnhFile) uploaded.cnh = await uploadDocumento(cnhFile, "cnh_analise", uploaderId);
@@ -676,9 +676,9 @@ function FormularioAnaliseComplementar({ consulta }: { consulta: ConsultaCredito
         .eq("consulta_id", consulta.id)
         .in("document_type", ["cnh_analise", "comprovante_renda_analise"]);
       setExistingDocs(docs ?? []);
-      toast.success("Documentação enviada para aprovação.");
+      toast.success("DocumentaÃ§Ã£o enviada para aprovaÃ§Ã£o.");
     } catch (error: any) {
-      toast.error("Erro ao enviar para aprovação: " + (error?.message || "desconhecido"));
+      toast.error("Erro ao enviar para aprovaÃ§Ã£o: " + (error?.message || "desconhecido"));
     } finally {
       setSaving(false);
     }
@@ -698,7 +698,7 @@ function FormularioAnaliseComplementar({ consulta }: { consulta: ConsultaCredito
               Obrigado por compartilhar os dados.
             </h2>
             <p className="mt-3 text-base leading-relaxed text-neutral-700">
-              Retornaremos em até 2 horas de análise dentro do horário comercial.
+              Retornaremos em atÃ© 2 horas de anÃ¡lise dentro do horÃ¡rio comercial.
             </p>
             <p className="mt-2 text-sm leading-relaxed text-neutral-600">
               Fique de olho no seu e-mail ou acompanhe o andamento aqui no painel em Minhas Consultas.
@@ -715,7 +715,7 @@ function FormularioAnaliseComplementar({ consulta }: { consulta: ConsultaCredito
           <div className="flex items-end justify-center sm:justify-end overflow-hidden px-6 sm:pr-8">
             <img
               src="/assets/nox-obrigado-analise.webp"
-              alt="Dados enviados para análise"
+              alt="Dados enviados para anÃ¡lise"
               className="block h-[300px] sm:h-[380px] w-auto object-contain object-bottom translate-y-[24px] sm:translate-y-[32px] pointer-events-none select-none"
             />
           </div>
@@ -731,13 +731,13 @@ function FormularioAnaliseComplementar({ consulta }: { consulta: ConsultaCredito
           <FileText className="h-5 w-5" strokeWidth={2.4} />
         </div>
         <div>
-          <h2 className="text-xl font-bold text-neutral-950">Formulário complementar</h2>
+          <h2 className="text-xl font-bold text-neutral-950">FormulÃ¡rio complementar</h2>
           <p className="mt-1 max-w-3xl text-sm leading-relaxed text-neutral-600">
-            Sua simulação ficou em análise. Para continuar com a avaliação, envie os documentos e dados abaixo para análise do Jurídico/Administrativo.
+            Sua simulaÃ§Ã£o ficou em anÃ¡lise. Para continuar com a avaliaÃ§Ã£o, envie os documentos e dados abaixo para anÃ¡lise do JurÃ­dico/Administrativo.
           </p>
           {submittedAt && (
             <p className="mt-2 text-xs font-bold uppercase tracking-wider text-emerald-700">
-              Documentação enviada em {new Date(submittedAt).toLocaleString("pt-BR")}
+              DocumentaÃ§Ã£o enviada em {new Date(submittedAt).toLocaleString("pt-BR")}
             </p>
           )}
         </div>
@@ -799,7 +799,7 @@ function FormularioAnaliseComplementar({ consulta }: { consulta: ConsultaCredito
         onClick={handleEnviar}
         className="mt-6 h-16 w-full rounded-2xl bg-yellow-400 px-8 text-lg font-bold text-neutral-950 shadow-sm transition hover:bg-yellow-500 disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {saving ? "Enviando..." : "Enviar para Aprovação"}
+        {saving ? "Enviando..." : "Enviar para AprovaÃ§Ã£o"}
       </Button>
     </div>
   );
@@ -831,7 +831,7 @@ function UploadField({
           onChange={(event) => onChange(event.target.files?.[0])}
         />
       </label>
-      <p className="mt-1 text-xs text-neutral-400">PDF, JPG, PNG ou WEBP até 10MB.</p>
+      <p className="mt-1 text-xs text-neutral-400">PDF, JPG, PNG ou WEBP atÃ© 10MB.</p>
     </div>
   );
 }

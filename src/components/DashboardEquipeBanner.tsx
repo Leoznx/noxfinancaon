@@ -1,9 +1,9 @@
-// Peça de arte pronta: não recriar isso em CSS.
+// PeÃ§a de arte pronta: nÃ£o recriar isso em CSS.
 export function DashboardEquipeBanner() {
   return (
     <img
-      src="/dashboard/banner-equipe.png"
-      alt="Quanto mais contratos, mais comissão"
+      src="/dashboard/banner-equipe.webp"
+      alt="Quanto mais contratos, mais comissÃ£o"
       className="block w-full rounded-2xl object-contain"
     />
   );

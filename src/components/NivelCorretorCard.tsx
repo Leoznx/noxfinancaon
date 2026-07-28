@@ -11,10 +11,10 @@ interface NivelInfo {
 }
 
 const ICONE_NIVEL: Record<string, string> = {
-  BRONZE: "/assets/nox-icon-fidelidade-bronze.png",
-  PRATA: "/assets/nox-icon-fidelidade-prata.png",
-  OURO: "/assets/nox-icon-fidelidade-ouro.png",
-  DIAMANTE: "/assets/nox-icon-fidelidade-diamante.png",
+  BRONZE: "/assets/nox-icon-fidelidade-bronze.webp",
+  PRATA: "/assets/nox-icon-fidelidade-prata.webp",
+  OURO: "/assets/nox-icon-fidelidade-ouro.webp",
+  DIAMANTE: "/assets/nox-icon-fidelidade-diamante.webp",
 };
 
 export function NivelCorretorCard({ info }: { info: NivelInfo }) {
@@ -42,7 +42,7 @@ export function NivelCorretorCard({ info }: { info: NivelInfo }) {
             </div>
             <div className="flex items-center gap-3">
               <div className={`px-3 py-1 rounded-full text-[9px] font-black tracking-widest flex items-center gap-2 ${isOuro ? 'bg-white text-neutral-900' : 'bg-neutral-900 text-white'}`}>
-                {info.percentual}% COMISSÃO
+                {info.percentual}% COMISSÃƒO
               </div>
               <p className={`text-[11px] font-bold ${isOuro ? 'text-neutral-400' : 'text-neutral-500'}`}>
                 <span className={isOuro ? 'text-white' : 'text-neutral-900'}>{info.contratos} contratos ativos</span> vinculados
