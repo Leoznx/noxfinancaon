@@ -34,11 +34,15 @@ function AprovacoesPage() {
 
   const load = async () => {
     setLoading(true);
+    // Toda consulta que caiu em análise após a simulação entra aqui, mesmo sem o
+    // formulário complementar — o jurídico decide todas. "pendente" continua
+    // restrito a quem já enviou a documentação, senão a fila da automação
+    // (status pendente sem substatus) apareceria como pendência do jurídico.
     const { data, error } = await supabase
       .from("consultas_credito")
       .select("id, profile_id_solicitante, tenant_name, tenant_document, tenant_email, tenant_telefone, property_address, rent_value, role_solicitante, created_at, status, substatus, documentos, dados_complementares_em, plano:planos(nome), solicitante:profiles!consultas_credito_profile_id_solicitante_fkey(nome, email)")
       .in("status", ["pendente", "em_analise"])
-      .eq("substatus", "documentacao_complementar_enviada")
+      .or("status.eq.em_analise,substatus.eq.documentacao_complementar_enviada")
       .order("created_at", { ascending: false });
     if (error) toast.error("Erro ao carregar pendências");
     else setLinhas(data ?? []);
@@ -154,7 +158,7 @@ function AprovacoesPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Aprovações</h1>
           <p className="text-neutral-500 mt-2">
-            Consultas em análise que já tiveram o formulário complementar enviado pelo solicitante.
+            Todas as consultas que ficaram em análise após a simulação de crédito. O jurídico decide cada uma: aprovar ou recusar.
           </p>
         </div>
 
@@ -173,6 +177,7 @@ function AprovacoesPage() {
                 <TableHead>Aluguel</TableHead>
                 <TableHead>Plano</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Docs complementares</TableHead>
                 <TableHead>Solicitante</TableHead>
                 <TableHead>Data</TableHead>
                 <TableHead className="text-right pr-6">Ações</TableHead>
@@ -180,9 +185,9 @@ function AprovacoesPage() {
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={9} className="text-center py-16 text-neutral-400">Carregando...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={10} className="text-center py-16 text-neutral-400">Carregando...</TableCell></TableRow>
               ) : !filtradas.length ? (
-                <TableRow><TableCell colSpan={9} className="text-center py-16 text-neutral-500">Nenhuma consulta pendente.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={10} className="text-center py-16 text-neutral-500">Nenhuma consulta pendente.</TableCell></TableRow>
               ) : filtradas.map((c) => (
                 <TableRow key={c.id} className="hover:bg-neutral-50/50">
                   <TableCell className="px-6 font-semibold">{c.tenant_name ?? "—"}</TableCell>
@@ -193,6 +198,11 @@ function AprovacoesPage() {
                   <TableCell>
                     <Badge variant="outline" className={c.status === "em_analise" ? "bg-yellow-50 text-yellow-800 border-yellow-200" : "bg-amber-50 text-amber-700 border-amber-200"}>
                       {c.status === "em_analise" ? "Em análise" : "Pendente"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className={c.substatus === "documentacao_complementar_enviada" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-neutral-50 text-neutral-500 border-neutral-200"}>
+                      {c.substatus === "documentacao_complementar_enviada" ? "Enviados" : "Aguardando"}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-xs">
@@ -216,7 +226,7 @@ function AprovacoesPage() {
         <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle>Detalhes da aprovação</DialogTitle>
-            <DialogDescription>Dados complementares enviados para análise manual.</DialogDescription>
+            <DialogDescription>Dados da consulta e documentação complementar (quando enviada).</DialogDescription>
           </DialogHeader>
 
           {detalhe && (
@@ -225,6 +235,7 @@ function AprovacoesPage() {
                 <Info label="Cliente" value={detalhe.tenant_name ?? "—"} />
                 <Info label="CPF/CNPJ" value={detalhe.tenant_document ?? "—"} />
                 <Info label="Status" value={detalhe.status === "em_analise" ? "Em análise" : "Pendente"} />
+                <Info label="Docs complementares" value={detalhe.substatus === "documentacao_complementar_enviada" ? "Enviados" : "Aguardando envio"} />
                 <Info label="Data" value={detalhe.created_at ? new Date(detalhe.created_at).toLocaleString("pt-BR") : "—"} />
                 <Info label="E-mail enviado" value={detalhe.tenant_email || detalheMeta.email || "—"} />
                 <Info label="Telefone enviado" value={detalhe.tenant_telefone || detalheMeta.telefone || "—"} />
