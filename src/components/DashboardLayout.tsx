@@ -190,6 +190,11 @@ const vendedorItems = [
 // Cargos internos gateados por role_permissions (ver DashboardLayout abaixo) -
 // "Meu Perfil" é sempre adicionado à parte (sem module), continua sempre visível.
 const CARGO_GATEADO_MENU_ITEM = { icon: User, label: "Meu Perfil", href: "/configuracoes" };
+const JURIDICO_DASHBOARD_ITEM = {
+  icon: LayoutDashboard,
+  label: "Dashboard",
+  href: "/dashboard",
+};
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
@@ -354,8 +359,12 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     ];
   } else if (cargoInterno) {
     menuItems = [
+      ...(cargoInterno === "juridico" ? [JURIDICO_DASHBOARD_ITEM] : []),
       ...ADMIN_CATALOG.filter(
-        (item) => podeVerModulo(permissoesCargo, item.module) && item.module !== undefined,
+        (item) =>
+          podeVerModulo(permissoesCargo, item.module) &&
+          item.module !== undefined &&
+          (cargoInterno !== "juridico" || item.module !== "dashboard_admin"),
       ),
       CARGO_GATEADO_MENU_ITEM,
     ];
