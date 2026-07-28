@@ -9,6 +9,7 @@ import type { Page, Locator } from "playwright";
 // primeiro botão da tela ("Pessoa Física"), mesmo com a sessão/login corretos.
 const FIND_TIMEOUT_MS = 8000;
 const FIND_POLL_MS = 200;
+const LOGIN_LOFT_URL_PATTERN = /(?:^https?:\/\/sso\.loft\.com\.br\/|\/realms\/loft\/)/i;
 
 /**
  * Tenta localizar um campo por várias estratégias, na ordem: label, placeholder,
@@ -192,7 +193,21 @@ export async function submitSimulation(page: Page): Promise<void> {
 }
 
 export async function isLoginPage(page: Page): Promise<boolean> {
-  if (/login|signin|entrar/i.test(page.url())) return true;
+  if (LOGIN_LOFT_URL_PATTERN.test(page.url()) || /login|signin|entrar/i.test(page.url())) {
+    return true;
+  }
+
+  const loginLoftButton = page.getByRole("button", { name: /login\s+loft/i });
+  if (
+    (await loginLoftButton.count().catch(() => 0)) > 0 &&
+    (await loginLoftButton
+      .first()
+      .isVisible()
+      .catch(() => false))
+  ) {
+    return true;
+  }
+
   const senhaField = page.getByLabel(/senha|password/i);
   return (
     (await senhaField.count().catch(() => 0)) > 0 &&
@@ -201,6 +216,155 @@ export async function isLoginPage(page: Page): Promise<boolean> {
       .isVisible()
       .catch(() => false))
   );
+}
+
+async function waitUntil(
+  page: Page,
+  predicate: () => Promise<boolean>,
+  timeoutMs: number,
+): Promise<boolean> {
+  const inicio = Date.now();
+  do {
+    if (await predicate().catch(() => false)) return true;
+    await page.waitForTimeout(FIND_POLL_MS);
+  } while (Date.now() - inicio < timeoutMs);
+  return false;
+}
+
+async function isAuthenticatedCredPagoPage(page: Page): Promise<boolean> {
+  let hostname = "";
+  try {
+    hostname = new URL(page.url()).hostname;
+  } catch {
+    return false;
+  }
+  if (hostname !== "credpago.com" && !hostname.endsWith(".credpago.com")) return false;
+
+  const loginLoftButton = page.getByRole("button", { name: /login\s+loft/i });
+  if (
+    (await loginLoftButton.count().catch(() => 0)) > 0 &&
+    (await loginLoftButton
+      .first()
+      .isVisible()
+      .catch(() => false))
+  ) {
+    return false;
+  }
+
+  const senhaField = page.getByLabel(/senha|password/i);
+  if (
+    (await senhaField.count().catch(() => 0)) > 0 &&
+    (await senhaField
+      .first()
+      .isVisible()
+      .catch(() => false))
+  ) {
+    return false;
+  }
+
+  const bodyText = await page
+    .locator("body")
+    .innerText()
+    .catch(() => "");
+  return bodyText.trim().length > 0;
+}
+
+export async function detectAuthenticationState(
+  page: Page,
+  timeoutMs = FIND_TIMEOUT_MS,
+): Promise<"authenticated" | "login" | "unknown"> {
+  const inicio = Date.now();
+  do {
+    if (await isLoginPage(page)) return "login";
+    if (await isAuthenticatedCredPagoPage(page)) return "authenticated";
+    await page.waitForTimeout(FIND_POLL_MS);
+  } while (Date.now() - inicio < timeoutMs);
+  return "unknown";
+}
+
+/**
+ * Refaz o login legítimo da conta da imobiliária quando a sessão da VPS expira.
+ * As credenciais vêm exclusivamente de variáveis secretas do servidor; nunca são
+ * gravadas no storageState, nos logs ou no repositório.
+ */
+export async function loginWithCredentials(
+  page: Page,
+  login: string,
+  password: string,
+  timeoutMs: number,
+): Promise<void> {
+  const initialState = await detectAuthenticationState(page, timeoutMs);
+  if (initialState === "authenticated") return;
+  if (initialState === "unknown") {
+    throw new Error("A CredPago não informou se a sessão está autenticada.");
+  }
+
+  // A página pública da CredPago agora é uma porta de entrada para o SSO da Loft.
+  const loginLoftButton = page.getByRole("button", { name: /login\s+loft/i });
+  if (
+    (await loginLoftButton.count().catch(() => 0)) > 0 &&
+    (await loginLoftButton
+      .first()
+      .isVisible()
+      .catch(() => false))
+  ) {
+    await loginLoftButton.first().click();
+  }
+
+  const formularioDisponivel = await waitUntil(
+    page,
+    async () => {
+      const loginField = page.getByLabel(/e-?mail ou telefone|e-?mail|telefone/i);
+      const senhaField = page.getByLabel(/senha|password/i);
+      const loginFormReady =
+        (await loginField.count().catch(() => 0)) > 0 &&
+        (await senhaField.count().catch(() => 0)) > 0;
+      return loginFormReady || (await isAuthenticatedCredPagoPage(page));
+    },
+    timeoutMs,
+  );
+
+  if (!formularioDisponivel) {
+    throw new Error("O formulário do Login Loft não ficou disponível dentro do tempo esperado.");
+  }
+  if (await isAuthenticatedCredPagoPage(page)) return;
+
+  const loginField = await locateField(page, {
+    label: /e-?mail ou telefone|e-?mail|telefone/i,
+    placeholder: /e-?mail ou telefone|e-?mail|telefone/i,
+    role: { name: /e-?mail ou telefone|e-?mail|telefone/i },
+  });
+  const senhaField = await locateField(page, {
+    label: /senha|password/i,
+    placeholder: /\*{4,}|senha|password/i,
+    role: { name: /senha|password/i },
+  });
+
+  await loginField.fill(login);
+  await senhaField.fill(password);
+
+  const entrarButton = page.getByRole("button", { name: /^entrar$/i });
+  if ((await entrarButton.count().catch(() => 0)) === 0) {
+    throw new Error("O botão Entrar do Login Loft não foi encontrado.");
+  }
+  await entrarButton.first().click({ timeout: timeoutMs });
+
+  const autenticou = await waitUntil(
+    page,
+    async () => isAuthenticatedCredPagoPage(page),
+    timeoutMs,
+  );
+  if (!autenticou) {
+    const texto = await page
+      .locator("body")
+      .innerText()
+      .then((value) => value.replace(/\s+/g, " ").trim().slice(0, 500))
+      .catch(() => "");
+    const motivo = /captcha|recaptcha|verifica/i.test(texto)
+      ? "A Loft solicitou uma verificação de segurança durante o login."
+      : "O Login Loft não confirmou as credenciais dentro do tempo esperado.";
+    throw new Error(motivo);
+  }
 }
 
 export async function isCaptchaPresent(page: Page): Promise<boolean> {

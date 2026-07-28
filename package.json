@@ -14,8 +14,10 @@
     "automation:once": "tsx automation/credpagoWorker.ts --once",
     "automation:install-browsers": "playwright install chromium",
     "automation:export-session": "tsx automation/exportSession.ts",
+    "automation:login": "node automation/interactiveLogin.mjs",
     "test:withdrawals": "tsx --test tests/withdrawal-pix.test.ts",
-    "test:auth-links": "tsx --test tests/auth-email-links.test.ts"
+    "test:auth-links": "tsx --test tests/auth-email-links.test.ts",
+    "test:automation-auth": "tsx --test tests/credpago-auth.test.ts"
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.25.5",
