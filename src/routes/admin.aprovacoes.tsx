@@ -29,7 +29,8 @@ function AprovacoesPage() {
   const [linhas, setLinhas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState("");
-  const [filtroDocs, setFiltroDocs] = useState<FiltroDocs>("todos");
+  // Abre em "Docs enviados": é o que o jurídico consegue decidir de imediato.
+  const [filtroDocs, setFiltroDocs] = useState<FiltroDocs>("enviados");
   const [adminId, setAdminId] = useState<string | null>(null);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [motivo, setMotivo] = useState("");
