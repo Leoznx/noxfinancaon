@@ -21,10 +21,15 @@ export const Route = createFileRoute("/admin/aprovacoes")({
   ),
 });
 
+type FiltroDocs = "todos" | "enviados" | "aguardando";
+
+const docsEnviados = (c: any) => c.substatus === "documentacao_complementar_enviada";
+
 function AprovacoesPage() {
   const [linhas, setLinhas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState("");
+  const [filtroDocs, setFiltroDocs] = useState<FiltroDocs>("todos");
   const [adminId, setAdminId] = useState<string | null>(null);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [motivo, setMotivo] = useState("");
@@ -56,13 +61,22 @@ function AprovacoesPage() {
 
   const filtradas = useMemo(() => {
     const q = busca.trim().toLowerCase();
-    if (!q) return linhas;
-    return linhas.filter((c) =>
-      (c.tenant_name ?? "").toLowerCase().includes(q) ||
-      (c.tenant_document ?? "").toLowerCase().includes(q) ||
-      (c.solicitante?.nome ?? "").toLowerCase().includes(q)
-    );
-  }, [linhas, busca]);
+    return linhas.filter((c) => {
+      if (filtroDocs === "enviados" && !docsEnviados(c)) return false;
+      if (filtroDocs === "aguardando" && docsEnviados(c)) return false;
+      if (!q) return true;
+      return (
+        (c.tenant_name ?? "").toLowerCase().includes(q) ||
+        (c.tenant_document ?? "").toLowerCase().includes(q) ||
+        (c.solicitante?.nome ?? "").toLowerCase().includes(q)
+      );
+    });
+  }, [linhas, busca, filtroDocs]);
+
+  const totais = useMemo(() => {
+    const enviados = linhas.filter(docsEnviados).length;
+    return { todos: linhas.length, enviados, aguardando: linhas.length - enviados };
+  }, [linhas]);
 
   // Avisa o corretor/imobiliária/proprietário que pediu a consulta — o sino já
   // escuta INSERT em notificacoes via Realtime (ver SinoNotificacoes.tsx).
@@ -162,9 +176,31 @@ function AprovacoesPage() {
           </p>
         </div>
 
-        <div className="relative max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={18} />
-          <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar por inquilino, CPF ou solicitante..." className="pl-10 h-11" />
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="relative w-full max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={18} />
+            <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar por inquilino, CPF ou solicitante..." className="pl-10 h-11" />
+          </div>
+
+          <div className="flex w-fit rounded-xl border border-neutral-200 bg-white p-1 shadow-sm">
+            {([
+              { key: "todos", label: "Todos", total: totais.todos },
+              { key: "enviados", label: "Docs enviados", total: totais.enviados },
+              { key: "aguardando", label: "Aguardando docs", total: totais.aguardando },
+            ] as { key: FiltroDocs; label: string; total: number }[]).map((op) => (
+              <button
+                key={op.key}
+                onClick={() => setFiltroDocs(op.key)}
+                className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                  filtroDocs === op.key
+                    ? "bg-yellow-400 text-neutral-950"
+                    : "text-neutral-500 hover:text-neutral-900"
+                }`}
+              >
+                {op.label} ({op.total})
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden shadow-sm">
@@ -187,7 +223,9 @@ function AprovacoesPage() {
               {loading ? (
                 <TableRow><TableCell colSpan={10} className="text-center py-16 text-neutral-400">Carregando...</TableCell></TableRow>
               ) : !filtradas.length ? (
-                <TableRow><TableCell colSpan={10} className="text-center py-16 text-neutral-500">Nenhuma consulta pendente.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={10} className="text-center py-16 text-neutral-500">
+                  {filtroDocs === "enviados" ? "Nenhuma consulta com documentos enviados." : filtroDocs === "aguardando" ? "Nenhuma consulta aguardando documentos." : "Nenhuma consulta pendente."}
+                </TableCell></TableRow>
               ) : filtradas.map((c) => (
                 <TableRow key={c.id} className="hover:bg-neutral-50/50">
                   <TableCell className="px-6 font-semibold">{c.tenant_name ?? "—"}</TableCell>
