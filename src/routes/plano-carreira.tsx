@@ -16,7 +16,7 @@ export const Route = createFileRoute("/plano-carreira")({
   ),
 });
 
-// ConfiguraÃ§Ã£o estÃ¡tica dos nÃ­veis por perfil
+// Configuração estática dos níveis por perfil
 const NIVEIS_UNIFICADOS = [
   { nome: 'BRONZE',   min: 0,   max: 10,   percentual: 1.0, bonusRenovacao: 0 },
   { nome: 'PRATA',    min: 11,  max: 20,   percentual: 1.5, bonusRenovacao: 0 },
@@ -75,45 +75,45 @@ const IMAGENS_CARD_NIVEL = {
 const textosPorPerfil = {
   corretor: {
     titulo: 'Plano de Carreira',
-    subtitulo: 'Sua jornada na NOX FIANÃ‡A. Quanto mais contratos ativos, maior sua comissÃ£o.',
+    subtitulo: 'Sua jornada na NOX FIANÇA. Quanto mais contratos ativos, maior sua comissão.',
     unidadeContagem: 'contratos ativos',
-    comoFunciona: 'Seu nÃ­vel Ã© recalculado diariamente com base nos seus contratos ATIVOS vinculados ao seu CRECI. Mantenha sua carteira saudÃ¡vel para conservar ou subir de nÃ­vel.',
+    comoFunciona: 'Seu nível é recalculado diariamente com base nos seus contratos ATIVOS vinculados ao seu CRECI. Mantenha sua carteira saudável para conservar ou subir de nível.',
     metricaPrincipal: '% sobre o aluguel',
   },
   imobiliaria: {
     titulo: 'Plano de Parceria',
-    subtitulo: 'Sua imobiliÃ¡ria ganha mais quanto maior for o volume de contratos sob gestÃ£o.',
-    unidadeContagem: 'contratos ativos sob gestÃ£o',
-    comoFunciona: 'O nÃ­vel da imobiliÃ¡ria Ã© recalculado diariamente com base em todos os contratos ativos administrados pela sua equipe. Conforme a operaÃ§Ã£o cresce, a comissÃ£o aumenta automaticamente.',
+    subtitulo: 'Sua imobiliária ganha mais quanto maior for o volume de contratos sob gestão.',
+    unidadeContagem: 'contratos ativos sob gestão',
+    comoFunciona: 'O nível da imobiliária é recalculado diariamente com base em todos os contratos ativos administrados pela sua equipe. Conforme a operação cresce, a comissão aumenta automaticamente.',
     metricaPrincipal: '% sobre o aluguel',
   },
   proprietario: {
     titulo: 'Plano de Fidelidade',
-    subtitulo: 'Quanto mais imÃ³veis seus na plataforma, mais bÃ´nus e cashback vocÃª recebe.',
-    unidadeContagem: 'imÃ³veis cadastrados',
-    comoFunciona: 'Seu nÃ­vel Ã© definido pelo nÃºmero de imÃ³veis ativos cadastrados no seu nome. A cada nova locaÃ§Ã£o garantida, vocÃª ganha cashback proporcional e um bÃ´nus fixo na renovaÃ§Ã£o anual.',
-    metricaPrincipal: 'cashback + bÃ´nus',
+    subtitulo: 'Quanto mais imóveis seus na plataforma, mais bônus e cashback você recebe.',
+    unidadeContagem: 'imóveis cadastrados',
+    comoFunciona: 'Seu nível é definido pelo número de imóveis ativos cadastrados no seu nome. A cada nova locação garantida, você ganha cashback proporcional e um bônus fixo na renovação anual.',
+    metricaPrincipal: 'cashback + bônus',
   },
 };
 
 const beneficiosPorPerfilENivel = {
   corretor: {
-    BRONZE:   ['ComissÃ£o sobre cada contrato', 'Painel de carteira'],
-    PRATA:    ['ComissÃ£o sobre cada contrato', 'Painel de carteira', 'Suporte prioritÃ¡rio WhatsApp', 'Selo Prata no perfil'],
-    OURO:     ['ComissÃ£o sobre cada contrato', 'Painel de carteira', 'Suporte prioritÃ¡rio WhatsApp', 'Selo Ouro no perfil', 'Materiais de marketing exclusivos'],
-    DIAMANTE: ['ComissÃ£o sobre cada contrato', 'Painel de carteira', 'Suporte VIP 24h', 'Selo Diamante', 'Materiais exclusivos', 'Eventos NOX', 'BÃ´nus anual de performance'],
+    BRONZE:   ['Comissão sobre cada contrato', 'Painel de carteira'],
+    PRATA:    ['Comissão sobre cada contrato', 'Painel de carteira', 'Suporte prioritário WhatsApp', 'Selo Prata no perfil'],
+    OURO:     ['Comissão sobre cada contrato', 'Painel de carteira', 'Suporte prioritário WhatsApp', 'Selo Ouro no perfil', 'Materiais de marketing exclusivos'],
+    DIAMANTE: ['Comissão sobre cada contrato', 'Painel de carteira', 'Suporte VIP 24h', 'Selo Diamante', 'Materiais exclusivos', 'Eventos NOX', 'Bônus anual de performance'],
   },
   imobiliaria: {
-    BRONZE:   ['ComissÃ£o sobre cada contrato', 'Dashboard de equipe'],
-    PRATA:    ['ComissÃ£o sobre cada contrato', 'Dashboard de equipe', 'Selo Parceira Prata', 'Suporte dedicado'],
-    OURO:     ['ComissÃ£o sobre cada contrato', 'Dashboard de equipe', 'Selo Parceira Ouro', 'Suporte dedicado', 'Co-branding em materiais'],
-    DIAMANTE: ['ComissÃ£o sobre cada contrato', 'Dashboard de equipe', 'Selo Diamante', 'Gerente de conta exclusivo', 'Co-branding', 'Eventos exclusivos NOX', 'Programa de incentivos anual'],
+    BRONZE:   ['Comissão sobre cada contrato', 'Dashboard de equipe'],
+    PRATA:    ['Comissão sobre cada contrato', 'Dashboard de equipe', 'Selo Parceira Prata', 'Suporte dedicado'],
+    OURO:     ['Comissão sobre cada contrato', 'Dashboard de equipe', 'Selo Parceira Ouro', 'Suporte dedicado', 'Co-branding em materiais'],
+    DIAMANTE: ['Comissão sobre cada contrato', 'Dashboard de equipe', 'Selo Diamante', 'Gerente de conta exclusivo', 'Co-branding', 'Eventos exclusivos NOX', 'Programa de incentivos anual'],
   },
   proprietario: {
-    BRONZE:   ['Cashback por contrato fechado', 'Painel de imÃ³veis'],
-    PRATA:    ['Cashback aumentado', 'BÃ´nus de R$ 80 por renovaÃ§Ã£o', 'Painel completo', 'Suporte preferencial'],
-    OURO:     ['Cashback de 2% sobre prÃªmio', 'BÃ´nus de R$ 150 por renovaÃ§Ã£o', 'Suporte VIP', 'Vistoria gratuita anual'],
-    DIAMANTE: ['Cashback de 3% sobre prÃªmio', 'BÃ´nus de R$ 250 por renovaÃ§Ã£o', 'Concierge dedicado', 'Vistoria semestral gratuita', 'Acesso a investimentos imobiliÃ¡rios NOX'],
+    BRONZE:   ['Cashback por contrato fechado', 'Painel de imóveis'],
+    PRATA:    ['Cashback aumentado', 'Bônus de R$ 80 por renovação', 'Painel completo', 'Suporte preferencial'],
+    OURO:     ['Cashback de 2% sobre prêmio', 'Bônus de R$ 150 por renovação', 'Suporte VIP', 'Vistoria gratuita anual'],
+    DIAMANTE: ['Cashback de 3% sobre prêmio', 'Bônus de R$ 250 por renovação', 'Concierge dedicado', 'Vistoria semestral gratuita', 'Acesso a investimentos imobiliários NOX'],
   },
 };
 
@@ -151,7 +151,7 @@ function CardProgresso({ nivelAtual, proximoNivel, contratosAtivos, faltam, tipo
               <IconePorNivel nivel={proximoNivel.nome} size={imagemProximoNivel ? 56 : 24} />
             </div>
             <div>
-              <p className="text-[9px] uppercase tracking-widest text-neutral-500 font-black mb-1">PrÃ³ximo NÃ­vel</p>
+              <p className="text-[9px] uppercase tracking-widest text-neutral-500 font-black mb-1">Próximo Nível</p>
               <div className="flex items-center gap-2">
                 <span className="text-xl font-bold">{proximoNivel.nome}</span>
                 <Badge className="bg-yellow-400 text-neutral-900 font-bold">+{proximoNivel.percentual}%</Badge>
@@ -175,7 +175,7 @@ function CardProgresso({ nivelAtual, proximoNivel, contratosAtivos, faltam, tipo
           {proximoNivel ? (
             <span className="text-yellow-400">Faltam {faltam} contratos para {proximoNivel.nome}</span>
           ) : (
-            <span className="text-yellow-400">ParabÃ©ns! VocÃª alcanÃ§ou o nÃ­vel mÃ¡ximo.</span>
+            <span className="text-yellow-400">Parabéns! Você alcançou o nível máximo.</span>
           )}
         </div>
       </div>
@@ -216,7 +216,7 @@ function CardNivel({ nivel, atual, tipoPerfil }: { nivel: any; atual: boolean; t
     }`}>
       {atual && (
         <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-neutral-900 text-yellow-400 text-[9px] font-black uppercase tracking-[0.2em] px-4 py-1.5 rounded-full shadow-xl whitespace-nowrap">
-          VocÃª estÃ¡ aqui
+          Você está aqui
         </div>
       )}
 
@@ -244,7 +244,7 @@ function CardNivel({ nivel, atual, tipoPerfil }: { nivel: any; atual: boolean; t
 
       <div className="bg-white/50 backdrop-blur-sm rounded-xl p-3 mb-5 border border-white/50 text-center">
         <p className="text-[9px] uppercase tracking-widest text-neutral-500 font-black mb-1">
-          {tipoPerfil === 'proprietario' ? 'Cashback + BÃ´nus' : 'ComissÃ£o'}
+          {tipoPerfil === 'proprietario' ? 'Cashback + Bônus' : 'Comissão'}
         </p>
         <p className={`text-2xl font-black ${config.percentual}`}>
           {tipoPerfil === 'proprietario' ? (nivel.bonusRenovacao ? `R$ ${nivel.bonusRenovacao}` : `${nivel.percentual}%`) : `${nivel.percentual}%`}
@@ -274,7 +274,7 @@ function BannerComoSubir({ tipoPerfil }: { tipoPerfil: string }) {
         </div>
         <div className="space-y-1">
           <p className="text-lg font-black text-white">
-            Como funciona a evoluÃ§Ã£o
+            Como funciona a evolução
           </p>
           <p className="text-sm text-neutral-400 leading-relaxed max-w-2xl">
             {textos.comoFunciona}

@@ -113,16 +113,16 @@ export const CareerProgramSection = () => {
             PARA CORRETORES
           </span>
           <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-neutral-900 mb-6 sm:mb-8 leading-tight tracking-tight">
-            Programa Carreira NOX: quanto mais vocÃª produz, mais vocÃª ganha.
+            Programa Carreira NOX: quanto mais você produz, mais você ganha.
           </h2>
           <p className="text-base sm:text-lg lg:text-xl text-neutral-600 mb-8 sm:mb-10 leading-relaxed">
-            Corretores parceiros da NOX FIANÃ‡A evoluem em uma trilha de carreira com comissÃµes progressivas. A cada nova faixa de contratos ativos, sua remuneraÃ§Ã£o sobe automaticamente. Sem metas trimestrais, sem letras miÃºdas, sem reset. Reconhecimento contÃ­nuo pela sua produÃ§Ã£o.
+            Corretores parceiros da NOX FIANÇA evoluem em uma trilha de carreira com comissões progressivas. A cada nova faixa de contratos ativos, sua remuneração sobe automaticamente. Sem metas trimestrais, sem letras miúdas, sem reset. Reconhecimento contínuo pela sua produção.
           </p>
           
           <div className="space-y-5 sm:space-y-6 mb-10 sm:mb-12">
             {[
-              'ComissÃ£o recalculada automaticamente ao subir de nÃ­vel',
-              'HistÃ³rico de comissÃµes preservado em cada faixa',
+              'Comissão recalculada automaticamente ao subir de nível',
+              'Histórico de comissões preservado em cada faixa',
               'Acompanhamento em tempo real no painel do corretor'
             ].map(item => (
               <div key={item} className="flex items-start gap-4 text-neutral-800 font-medium text-sm sm:text-base">

@@ -6,27 +6,27 @@ export const ComparativeSection = () => {
   
   const content = {
     imobiliaria: {
-      sem: ['Papelada e processos manuais', 'Alto risco de inadimplÃªncia', 'Custos jurÃ­dicos elevados'],
-      com: ['AnÃ¡lise em atÃ© 1 minuto', 'Aluguel garantido todo mÃªs', 'Suporte jurÃ­dico especializado']
+      sem: ['Papelada e processos manuais', 'Alto risco de inadimplência', 'Custos jurídicos elevados'],
+      com: ['Análise em até 1 minuto', 'Aluguel garantido todo mês', 'Suporte jurídico especializado']
     },
     inquilino: {
-      sem: ['Necessidade de fiador ou cauÃ§Ã£o', 'AprovaÃ§Ã£o demorada e burocrÃ¡tica', 'Idas ao cartÃ³rio para assinaturas'],
-      com: ['Zero fiador, zero cauÃ§Ã£o', 'AprovaÃ§Ã£o 100% digital', 'ContrataÃ§Ã£o via assinatura eletrÃ´nica']
+      sem: ['Necessidade de fiador ou caução', 'Aprovação demorada e burocrática', 'Idas ao cartório para assinaturas'],
+      com: ['Zero fiador, zero caução', 'Aprovação 100% digital', 'Contratação via assinatura eletrônica']
     },
     proprietario: {
       sem: ['Risco direto de falta de pagamento', 'Processos de despejo complexos', 'Incerteza no fluxo de caixa'],
-      com: ['Aluguel garantido mesmo em atraso', 'Assessoria completa em sinistros', 'AnÃ¡lise de crÃ©dito rigorosa']
+      com: ['Aluguel garantido mesmo em atraso', 'Assessoria completa em sinistros', 'Análise de crédito rigorosa']
     },
     corretor: {
-      sem: ['NegÃ³cios travados em busca de fiador', 'ComissÃ£o atrasada quando inquilino some', 'Cliente perdido por anÃ¡lise demorada'],
-      com: ['Mais contratos fechados, comissÃ£o garantida', 'AprovaÃ§Ã£o na hora, sem perder cliente quente', 'Material de venda e treinamento gratuitos']
+      sem: ['Negócios travados em busca de fiador', 'Comissão atrasada quando inquilino some', 'Cliente perdido por análise demorada'],
+      com: ['Mais contratos fechados, comissão garantida', 'Aprovação na hora, sem perder cliente quente', 'Material de venda e treinamento gratuitos']
     }
   };
 
   const tabLabels = {
-    imobiliaria: 'ImobiliÃ¡ria',
+    imobiliaria: 'Imobiliária',
     inquilino: 'Inquilino',
-    proprietario: 'ProprietÃ¡rio',
+    proprietario: 'Proprietário',
     corretor: 'Corretor',
   } as const;
 
@@ -37,7 +37,7 @@ export const ComparativeSection = () => {
           COMPARATIVO
         </span>
         <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-neutral-900 mb-10 sm:mb-12 tracking-tight">
-          A diferenÃ§a entre operar com e sem a NOX FIANÃ‡A.
+          A diferença entre operar com e sem a NOX FIANÇA.
         </h2>
 
         <div className="flex justify-center mb-12 sm:mb-16">
@@ -63,7 +63,7 @@ export const ComparativeSection = () => {
           >
             <h3 className="text-lg sm:text-xl font-bold text-neutral-400 mb-6 sm:mb-8 flex items-center gap-3">
               <X size={24} strokeWidth={2} />
-              Sem NOX FIANÃ‡A
+              Sem NOX FIANÇA
             </h3>
             <ul className="space-y-5 sm:space-y-6">
               {content[activeTab].sem.map((item, i) => (
@@ -82,7 +82,7 @@ export const ComparativeSection = () => {
             <div className="absolute top-0 left-0 w-full h-1 bg-[#FACC15]"></div>
             <h3 className="text-lg sm:text-xl font-bold text-neutral-900 mb-6 sm:mb-8 flex items-center gap-3">
               <Check size={24} className="text-[#FACC15]" strokeWidth={2.5} />
-              Com NOX FIANÃ‡A
+              Com NOX FIANÇA
             </h3>
             <ul className="space-y-5 sm:space-y-6">
               {content[activeTab].com.map((item, i) => (
@@ -101,22 +101,22 @@ export const ComparativeSection = () => {
 
 export const BenefitsGrid = () => {
   const benefits = [
-    { imageIcon: "/assets/nox-icon-garantia-inadimplencia.webp", title: "Garantia contra inadimplÃªncia", desc: "Cobertura de atÃ© 40 vezes o valor do aluguel, com as melhores taxas do mercado nacional." },
-    { imageIcon: "/assets/nox-icon-aprovacao-1-minuto.webp", title: "AprovaÃ§Ã£o em atÃ© 1 minuto", desc: "AnÃ¡lise de crÃ©dito automatizada com inteligÃªncia artificial e cruzamento de bases." },
-    { imageIcon: "/assets/nox-icon-suporte-juridico.webp", title: "Suporte jurÃ­dico especializado", desc: "Parceria com escritÃ³rios de advocacia homologados para gestÃ£o completa de despejos." },
-    { imageIcon: "/assets/nox-icon-plataforma-digital.webp", title: "Plataforma 100% digital", desc: "Assinatura eletrÃ´nica com validade jurÃ­dica e gestÃ£o automatizada de contratos." },
-    { imageIcon: "/assets/nox-icon-atendimento-dedicado.webp", title: "Atendimento dedicado", desc: "Equipe especializada de suporte a imobiliÃ¡rias durante toda a jornada do contrato." },
-    { imageIcon: "/assets/nox-icon-pagamento-flexivel.webp", title: "Pagamento flexÃ­vel", desc: "Inquilino paga via PIX, boleto ou cartÃ£o em atÃ© 12 vezes, combinando opÃ§Ãµes." }
+    { imageIcon: "/assets/nox-icon-garantia-inadimplencia.webp", title: "Garantia contra inadimplência", desc: "Cobertura de até 40 vezes o valor do aluguel, com as melhores taxas do mercado nacional." },
+    { imageIcon: "/assets/nox-icon-aprovacao-1-minuto.webp", title: "Aprovação em até 1 minuto", desc: "Análise de crédito automatizada com inteligência artificial e cruzamento de bases." },
+    { imageIcon: "/assets/nox-icon-suporte-juridico.webp", title: "Suporte jurídico especializado", desc: "Parceria com escritórios de advocacia homologados para gestão completa de despejos." },
+    { imageIcon: "/assets/nox-icon-plataforma-digital.webp", title: "Plataforma 100% digital", desc: "Assinatura eletrônica com validade jurídica e gestão automatizada de contratos." },
+    { imageIcon: "/assets/nox-icon-atendimento-dedicado.webp", title: "Atendimento dedicado", desc: "Equipe especializada de suporte a imobiliárias durante toda a jornada do contrato." },
+    { imageIcon: "/assets/nox-icon-pagamento-flexivel.webp", title: "Pagamento flexível", desc: "Inquilino paga via PIX, boleto ou cartão em até 12 vezes, combinando opções." }
   ];
 
   return (
     <section className="py-16 sm:py-24 px-4 sm:px-6 bg-white">
       <div className="container mx-auto max-w-7xl text-center">
         <span className="inline-block px-3 py-1 bg-neutral-100 text-neutral-700 text-xs font-bold tracking-widest rounded-full mb-6">
-          BENEFÃCIOS
+          BENEFÍCIOS
         </span>
         <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-neutral-900 mb-12 sm:mb-16 tracking-tight">
-          Tudo o que sua operaÃ§Ã£o precisa em um Ãºnico lugar.
+          Tudo o que sua operação precisa em um único lugar.
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 text-left">
           {benefits.map((benefit, i) => (

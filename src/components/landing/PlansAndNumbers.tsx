@@ -7,7 +7,7 @@ export const PlansSection = () => {
   const plans = [
     { name: "NOX FIT", coverage: "30x", rate: "10%" },
     { name: "NOX FIT +", coverage: "35x", rate: "11,5%", coversExpenses: true },
-    { name: "NOX SMART", coverage: "30x", rate: "12%", badge: "MAIS APROVAÃ‡Ã•ES", featured: true },
+    { name: "NOX SMART", coverage: "30x", rate: "12%", badge: "MAIS APROVAÇÕES", featured: true },
     { name: "NOX SMART +", coverage: "35x", rate: "13,5%", coversExpenses: true, badge: "COBRE TAXAS" },
     { name: "NOX UP", coverage: "40x", rate: "16%", coversExpenses: true, badge: "MAIOR COBERTURA" },
   ];
@@ -19,10 +19,10 @@ export const PlansSection = () => {
           PLANOS E COBERTURAS
         </span>
         <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-neutral-900 mb-4 sm:mb-6 tracking-tight">
-          Planos NOX FIANÃ‡A com as melhores taxas do mercado
+          Planos NOX FIANÇA com as melhores taxas do mercado
         </h2>
         <p className="text-neutral-500 mb-12 sm:mb-16 font-medium max-w-2xl mx-auto text-sm sm:text-base">
-          Planos transparentes que atendem locaÃ§Ãµes residenciais e comerciais, para pessoas fÃ­sicas e jurÃ­dicas.
+          Planos transparentes que atendem locações residenciais e comerciais, para pessoas físicas e jurídicas.
         </p>
 
         <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-6 text-left max-w-7xl mx-auto">
@@ -50,8 +50,8 @@ export const PlansSection = () => {
                 <div className="h-px bg-neutral-100"></div>
                 <div className="space-y-2 sm:space-y-3">
                   {[
-                    '10% de desconto no pagamento Ã  vista',
-                    ...(plan.coversExpenses ? ['Cobre taxas e condomÃ­nio'] : []),
+                    '10% de desconto no pagamento à vista',
+                    ...(plan.coversExpenses ? ['Cobre taxas e condomínio'] : []),
                   ].map(item => (
                     <div key={item} className="flex items-start gap-2 sm:gap-3 text-xs sm:text-sm text-neutral-600 font-medium">
                       <Check size={14} className="text-[#FFD60A] shrink-0 mt-0.5 sm:w-4 sm:h-4" strokeWidth={2.5} />
@@ -106,15 +106,15 @@ export const InstitutionalNumbers = () => (
         <span className="inline-block px-3 py-1 bg-neutral-100 text-neutral-700 text-sm font-bold uppercase tracking-wider rounded-full mb-6">
           RESULTADOS
         </span>
-        <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-neutral-900 tracking-tight mb-4">A NOX FIANÃ‡A em nÃºmeros.</h2>
-        <p className="text-neutral-600 font-medium text-sm sm:text-base">Resultados que comprovam a confianÃ§a do mercado.</p>
+        <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-neutral-900 tracking-tight mb-4">A NOX FIANÇA em números.</h2>
+        <p className="text-neutral-600 font-medium text-sm sm:text-base">Resultados que comprovam a confiança do mercado.</p>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 items-stretch">
-        <StatCard imageIcon="/assets/nox-icon-contratos-gestao.webp" title="Contratos" value="20 mil+" label="Contratos Sob GestÃ£o No Brasil" />
-        <StatCard imageIcon="/assets/nox-icon-cidades-atendidas.webp" title="Cidades" value="500+" label="Cidades Atendidas Em TerritÃ³rio Nacional" />
-        <StatCard imageIcon="/assets/nox-icon-imobiliarias-parceiras.webp" title="ImobiliÃ¡rias" value="800+" label="ImobiliÃ¡rias Parceiras" />
-        <StatCard imageIcon="/assets/nox-icon-tempo-aprovacao.webp" title="AprovaÃ§Ã£o" value="1 minuto" label="Tempo MÃ©dio De AprovaÃ§Ã£o De CrÃ©dito" />
+        <StatCard imageIcon="/assets/nox-icon-contratos-gestao.webp" title="Contratos" value="20 mil+" label="Contratos Sob Gestão No Brasil" />
+        <StatCard imageIcon="/assets/nox-icon-cidades-atendidas.webp" title="Cidades" value="500+" label="Cidades Atendidas Em Território Nacional" />
+        <StatCard imageIcon="/assets/nox-icon-imobiliarias-parceiras.webp" title="Imobiliárias" value="800+" label="Imobiliárias Parceiras" />
+        <StatCard imageIcon="/assets/nox-icon-tempo-aprovacao.webp" title="Aprovação" value="1 minuto" label="Tempo Médio De Aprovação De Crédito" />
       </div>
     </div>
   </section>
