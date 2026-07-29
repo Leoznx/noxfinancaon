@@ -31,10 +31,15 @@ function NovaConsulta() {
   const [erroAutomacao, setErroAutomacao] = useState<string | null>(null);
   const [progresso, setProgresso] = useState(5);
   const stopWatchRef = useRef<(() => void) | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const pararEscuta = () => {
     stopWatchRef.current?.();
     stopWatchRef.current = null;
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
   };
 
   useEffect(() => pararEscuta, []);
@@ -57,6 +62,18 @@ function NovaConsulta() {
       setConsultaId(null);
       navigate({ to: "/consultas/$id/status", params: { id } });
     });
+
+    // Rede de segurança: se por algum motivo o worker não responder (ex.: automação
+    // temporariamente fora do ar), não deixamos o modal "Consultando crédito" girar
+    // pra sempre. Depois de um tempo bem maior que o processamento normal (~10s) e que
+    // o timeout do worker (90s), mostramos uma mensagem clara com opção de reenviar —
+    // reaproveitando a mesma UI de erro (a consulta continua salva e pode ser reenviada).
+    timeoutRef.current = setTimeout(() => {
+      setErroAutomacao(
+        "A consulta está demorando mais que o normal. Pode ser uma instabilidade momentânea — tente reenviar em instantes.",
+      );
+      pararEscuta();
+    }, 150000);
   };
 
   const handleSimular = async (dados: DadosSimulacao) => {
