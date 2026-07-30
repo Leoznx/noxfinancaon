@@ -14,14 +14,26 @@ interface UpsertParams {
  * Retorna o id da consulta.
  */
 export async function upsertConsultaCredito({ dados, userEmail, userRole }: UpsertParams): Promise<string> {
-  // 1. Profile do usuário logado
+  // 1. Profile do usuário logado — busca pelo id da sessão real (auth.uid()), não pelo
+  // e-mail: a policy de INSERT exige profile_id_solicitante = auth.uid(), e o e-mail
+  // vindo do estado em cache do AuthProvider pode divergir da sessão ativa (ex.: sessão
+  // trocada/expirada em outra aba), o que fazia o profile não ser encontrado, gravar
+  // profile_id_solicitante = null e violar a RLS de consultas_credito.
+  const {
+    data: { user: authUser },
+  } = await supabase.auth.getUser();
+
+  if (!authUser) {
+    throw new Error("Sessão expirada. Faça login novamente para simular o crédito.");
+  }
+
   const { data: profile } = await supabase
     .from("profiles")
     .select("id, role")
-    .eq("email", userEmail)
+    .eq("id", authUser.id)
     .maybeSingle();
 
-  const profileId = profile?.id || null;
+  const profileId = authUser.id;
   const role = profile?.role || userRole || null;
 
   // 2. Normalizar dados do inquilino
