@@ -418,7 +418,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           </button>
         </div>
 
-        <nav className="flex-1 overflow-y-auto no-scrollbar p-4 py-6 space-y-1.5">
+        <nav className="flex-1 overflow-y-auto sidebar-scrollbar p-4 py-6 space-y-1.5">
           {menuItems.map((item) => {
             const isActive = location.pathname === item.href;
             const isHighlight = item.highlight;
@@ -443,19 +443,19 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
         <div className="p-6 border-t border-white/10 space-y-4">
           {temCardNivel && (
-            <div className="px-4 py-4 rounded-xl bg-neutral-900 border border-white/10 mb-2 space-y-2.5">
-              <div className="flex items-center gap-2">
-                <Crown size={14} className="text-yellow-400" strokeWidth={2} />
-                <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">
+            <div className="px-3.5 py-3 rounded-xl bg-neutral-900 border border-white/10 mb-2 space-y-2">
+              <div className="flex items-center gap-1.5">
+                <Crown size={12} className="text-yellow-400" strokeWidth={2} />
+                <p className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest">
                   Nível Atual
                 </p>
               </div>
-              <p className="text-lg font-black text-yellow-400 uppercase tracking-tight leading-none">
+              <p className="text-base font-black text-yellow-400 uppercase tracking-tight leading-none">
                 {nivelInfo?.nivelAtual?.nome_nivel || "-"}
               </p>
               {nivelInfo?.nivelAtual && (
                 <>
-                  <p className="text-[10px] text-neutral-500 font-medium">
+                  <p className="text-[9px] text-neutral-500 font-medium">
                     {nivelInfo.nivelAtual.percentual_comissao}% de comissão por contrato
                   </p>
                   <div className="h-1 bg-white/10 rounded-full overflow-hidden">
