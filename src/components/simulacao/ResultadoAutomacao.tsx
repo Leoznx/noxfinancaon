@@ -745,7 +745,7 @@ function FormularioAnaliseComplementar({ consulta }: { consulta: ConsultaCredito
 
       <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <UploadField
-          label="CNH"
+          label="DOCUMENTO COM FOTO"
           file={cnhFile}
           existingFileName={existingDocs.find((doc) => doc.document_type === "cnh_analise")?.file_name}
           onChange={(file) => pickFile(file, setCnhFile)}
