@@ -4,6 +4,7 @@ import { sendVerificationEmail } from "@/lib/resend.service";
 import { linkTenantRecordsByCpf } from "@/lib/inquilino-signup.functions";
 import { defaultAvatarForName } from "@/lib/gender-avatar";
 import { buildAuthEmailCallbackUrl } from "@/lib/auth-email-links";
+import { checkEmailRegistration } from "@/lib/email-registration-status";
 
 function buildVerificationLink(properties: { hashed_token: string; verification_type: string }) {
   const appUrl =
@@ -17,15 +18,6 @@ function buildVerificationLink(properties: { hashed_token: string; verification_
     tokenHash: properties.hashed_token,
     type: properties.verification_type,
   });
-}
-
-async function emailAlreadyRegistered(supabaseAdmin: any, email: string) {
-  const { data } = await supabaseAdmin
-    .from("profiles")
-    .select("id")
-    .ilike("email", email)
-    .maybeSingle();
-  return !!data;
 }
 
 function isAlreadyRegisteredError(message: string | undefined) {
@@ -72,8 +64,12 @@ export const signUpInquilino = createServerFn({ method: "POST" })
     const cpfNorm = data.cpf.replace(/\D/g, "");
     const emailLower = data.email.toLowerCase().trim();
 
-    if (await emailAlreadyRegistered(supabaseAdmin, emailLower)) {
+    const registration = await checkEmailRegistration(supabaseAdmin, emailLower);
+    if (registration.status === "confirmado") {
       return { ok: false as const, error: "ja_existe" as const };
+    }
+    if (registration.status === "pendente") {
+      return { ok: false as const, error: "ja_existe_pendente" as const };
     }
     const { data: byCpf } = await supabaseAdmin
       .from("inquilinos")
@@ -188,8 +184,12 @@ export const signUpProfissional = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const emailLower = data.email.toLowerCase().trim();
 
-    if (await emailAlreadyRegistered(supabaseAdmin, emailLower)) {
+    const registration = await checkEmailRegistration(supabaseAdmin, emailLower);
+    if (registration.status === "confirmado") {
       return { ok: false as const, error: "ja_existe" as const };
+    }
+    if (registration.status === "pendente") {
+      return { ok: false as const, error: "ja_existe_pendente" as const };
     }
 
     if (data.role === "corretor" && data.vinculadoImobiliaria) {
@@ -305,15 +305,8 @@ export const resendVerificationEmail = createServerFn({ method: "POST" })
     const emailLower = data.email.toLowerCase().trim();
 
     try {
-      const { data: profile } = await supabaseAdmin
-        .from("profiles")
-        .select("id, nome")
-        .ilike("email", emailLower)
-        .maybeSingle();
-      if (!profile) return { ok: true as const };
-
-      const { data: authUser } = await supabaseAdmin.auth.admin.getUserById((profile as any).id);
-      if (!authUser?.user || authUser.user.email_confirmed_at) return { ok: true as const };
+      const registration = await checkEmailRegistration(supabaseAdmin, emailLower);
+      if (registration.status !== "pendente") return { ok: true as const };
 
       const now = Date.now();
       const { data: recentSends } = await supabaseAdmin
@@ -338,7 +331,7 @@ export const resendVerificationEmail = createServerFn({ method: "POST" })
 
       await sendVerificationEmail({
         email: emailLower,
-        nome: (profile as any).nome || "cliente",
+        nome: registration.nome || "cliente",
         verificationLink: buildVerificationLink(linkData.properties),
       });
 

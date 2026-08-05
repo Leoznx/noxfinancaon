@@ -1,5 +1,16 @@
 project_id = "njheoytyidsghittjilr"
 
+# O link de confirmação de e-mail (enviado no cadastro, e reenviado por
+# resendVerificationEmail) deve continuar clicável por até 5 dias — pedido de
+# produto, já que o padrão do Supabase (24h) expirava antes de muita gente
+# confirmar. otp_expiry é a única configuração de expiração de link de e-mail
+# do GoTrue: vale igualmente para o magic link de reenvio (type: "magiclink")
+# e para o link de recuperação de senha (type: "recovery"), não dá pra ter um
+# prazo diferente por tipo aqui. Ainda assim é o comportamento desejado: o
+# link de redefinição de senha também passa a valer por até 5 dias.
+[auth.email]
+otp_expiry = 432000
+
 [functions.cakto-webhook]
 verify_jwt = false
 

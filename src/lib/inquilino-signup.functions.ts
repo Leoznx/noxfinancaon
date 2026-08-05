@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
+import { checkEmailRegistration } from "@/lib/email-registration-status";
 
 const linkSchema = z.object({
   cpf: z.string().min(11).max(20),
@@ -91,14 +92,11 @@ export const checkInquilinoExists = createServerFn({ method: "POST" })
     const emailLower = data.email.toLowerCase().trim();
     const cpfNorm = data.cpf.replace(/\D/g, "");
 
-    // Profile por email
-    const { data: byEmail } = await supabaseAdmin
-      .from("profiles")
-      .select("id, role")
-      .ilike("email", emailLower)
-      .maybeSingle();
-
-    if (byEmail) return { exists: true, reason: "email" as const };
+    // Profile por email — "email_pendente" (cadastro anterior nunca
+    // confirmado) reenvia o link de ativação em vez de barrar o cadastro.
+    const registration = await checkEmailRegistration(supabaseAdmin, emailLower);
+    if (registration.status === "confirmado") return { exists: true, reason: "email" as const };
+    if (registration.status === "pendente") return { exists: true, reason: "email_pendente" as const };
 
     // Inquilino por cpf que já tenha profile_id
     const { data: byCpf } = await supabaseAdmin
