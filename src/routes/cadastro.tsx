@@ -136,7 +136,8 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
   const [isSubmitting, setIsSubmitting] = useState(false);
   // 'confirmacao': só falta confirmar o e-mail (inquilino, sem aprovação manual).
   // 'aprovacao': e-mail + aprovação da equipe (imobiliária/corretor/proprietário).
-  const [successType, setSuccessType] = useState<"confirmacao" | "aprovacao" | null>(null);
+  // 'pendente': já existia um cadastro não confirmado com esse e-mail — reenviamos o link.
+  const [successType, setSuccessType] = useState<"confirmacao" | "aprovacao" | "pendente" | null>(null);
   const [successEmail, setSuccessEmail] = useState("");
   const [imobiliarias, setImobiliarias] = useState<Array<{ id: string; razaoSocial: string }>>([]);
   const [imobiliariasLoading, setImobiliariasLoading] = useState(true);
@@ -176,6 +177,17 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
     } catch {
       toast.error("Não foi possível reenviar agora. Tente novamente em instantes.");
     }
+  };
+
+  // E-mail já tinha um cadastro iniciado, mas nunca confirmado (a pessoa perdeu o
+  // link antigo, ele expirou, etc.) — em vez de travar em "conta já existe", reenvia
+  // a confirmação para esse cadastro pendente e mostra a mesma tela de "aguardando
+  // e-mail", já com o cooldown de reenvio ativo.
+  const handlePendingSignup = async (email: string) => {
+    setResendCooldown(60);
+    setSuccessEmail(email);
+    setSuccessType("pendente");
+    await resendFn({ data: { email } }).catch(() => {});
   };
 
   useEffect(() => {
@@ -281,6 +293,11 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
 
         const exists = await checkInquilinoFn({ data: { email: emailLower, cpf: cpfNorm } });
         if (exists.exists) {
+          if (exists.reason === 'email_pendente') {
+            await handlePendingSignup(emailLower);
+            setIsSubmitting(false);
+            return;
+          }
           toast.error("Já existe uma conta vinculada a este CPF ou e-mail. Faça login para acessar seus documentos e faturas.");
           setIsSubmitting(false);
           return;
@@ -299,6 +316,11 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
           },
         });
         if (!result.ok) {
+          if (result.error === 'ja_existe_pendente') {
+            await handlePendingSignup(emailLower);
+            setIsSubmitting(false);
+            return;
+          }
           toast.error(
             result.error === 'ja_existe'
               ? "Já existe uma conta vinculada a este CPF ou e-mail. Faça login para acessar seus documentos e faturas."
@@ -350,6 +372,11 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
       });
 
       if (!result.ok) {
+        if (result.error === 'ja_existe_pendente') {
+          await handlePendingSignup(emailLower);
+          setIsSubmitting(false);
+          return;
+        }
         toast.error(
           result.error === 'ja_existe'
             ? "Já existe uma conta com este e-mail."
@@ -466,6 +493,33 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
             aviso em até 24 horas úteis confirmando a liberação do seu acesso.
           </p>
           <p className="text-sm italic">Enquanto isso, fique à vontade para conhecer nossos planos e materiais para imobiliárias.</p>
+        </div>
+        <div className="flex flex-col sm:flex-row items-center gap-3">
+          <Button variant="outline" onClick={() => navigate({ to: "/" })}>
+            Voltar para a Home
+          </Button>
+          <Button variant="ghost" onClick={handleResend} disabled={resendCooldown > 0}>
+            {resendCooldown > 0 ? `Reenviar e-mail (${resendCooldown}s)` : "Reenviar e-mail"}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (successType === 'pendente') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-neutral-50 p-6 text-center">
+        <div className="w-20 h-20 bg-yellow-100 rounded-full flex items-center justify-center mb-8 text-yellow-600">
+          <Mail size={44} />
+        </div>
+        <h1 className="text-3xl font-bold text-neutral-900 mb-4">Você já tem um cadastro pendente</h1>
+        <div className="max-w-md text-neutral-600 space-y-4 mb-10">
+          <p>
+            Encontramos um cadastro em andamento para <strong className="text-neutral-900">{successEmail}</strong>{" "}
+            que ainda não teve o e-mail confirmado. Acabamos de reenviar o link de ativação — clique nele para
+            ativar sua conta.
+          </p>
+          <p className="text-sm italic">Não recebeu? Confira a caixa de spam ou peça um novo reenvio abaixo.</p>
         </div>
         <div className="flex flex-col sm:flex-row items-center gap-3">
           <Button variant="outline" onClick={() => navigate({ to: "/" })}>
