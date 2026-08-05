@@ -13,6 +13,9 @@ import { z } from "zod";
 import { redirectPathForRole } from "@/lib/authRedirect";
 import { setCachedHeaderProfile } from "@/lib/profile-cache";
 import { getRememberMe, setRememberMe } from "@/lib/authStorage";
+import { useServerFn } from "@tanstack/react-start";
+import { resendVerificationEmail } from "@/lib/auth-signup.functions";
+import { isEmailNotConfirmedError } from "@/lib/auth-errors";
 
 const loginSearchSchema = z.object({
   returnTo: z.string().optional(),
@@ -40,6 +43,7 @@ function LoginComponent() {
   const [lembrar, setLembrar] = useState(true);
   const navigate = useNavigate();
   const { login } = useAuth();
+  const resendVerificationFn = useServerFn(resendVerificationEmail);
   const searchParams = useSearch({ from: "/login" });
   const returnTo = searchParams.returnTo;
   const vindoDaSimulacao = returnTo?.includes("resultado");
@@ -169,7 +173,22 @@ function LoginComponent() {
 
       await handleLoginSuccess(authData.user, profileData);
     } catch (error: any) {
-      toast.error(error.message || "Erro ao realizar login");
+      if (isEmailNotConfirmedError(error)) {
+        try {
+          await resendVerificationFn({ data: { email: email.trim().toLowerCase() } });
+          toast.success(
+            "Seu e-mail ainda não foi confirmado. Reenviamos um novo link de verificação. Confira sua caixa de entrada e o spam.",
+            { duration: 8000 },
+          );
+        } catch {
+          toast.info(
+            "Seu e-mail ainda não foi confirmado. Não foi possível reenviar o link agora; tente novamente em alguns instantes.",
+            { duration: 8000 },
+          );
+        }
+      } else {
+        toast.error(error.message || "Erro ao realizar login");
+      }
     } finally {
       setIsLoading(false);
     }

@@ -1,5 +1,27 @@
 project_id = "njheoytyidsghittjilr"
 
+[storage.vector]
+enabled = false
+
+[auth]
+site_url = "https://noxfianca.com"
+additional_redirect_urls = [
+  "https://noxfianca.com/email-verificado",
+  "https://noxfianca.com/redefinir-senha",
+  "noxfianca://**",
+]
+
+[auth.email]
+# Links de confirmação e demais tokens de e-mail do Supabase expiram em 5 dias.
+enable_confirmations = true
+max_frequency = "1m"
+otp_length = 8
+otp_expiry = 432000
+
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
+
 [functions.cakto-webhook]
 verify_jwt = false
 
@@ -19,6 +41,9 @@ verify_jwt = false
 static_files = ["./functions/_shared/contract-templates/*.docx"]
 
 [functions.zapi-webhook]
+verify_jwt = false
+
+[functions.account-access]
 verify_jwt = false
 
 [functions.asaas-create-customer]

@@ -28,6 +28,7 @@ export async function sendVerificationEmail({
         <h1 style="font-size:24px;line-height:1.25;margin:0 0 18px">Confirme seu e-mail</h1>
         <p>Olá, ${escapeEmailHtml(nome || "cliente")}.</p>
         <p>Confirme seu e-mail para concluir a criação do seu acesso à NOX Fiança.</p>
+        <p style="font-size:13px;color:#666666">Este link de verificação é válido por 5 dias.</p>
         <p style="margin:26px 0">
           <a href="${escapeEmailHtml(verificationLink)}" style="display:inline-block;background:#ffd60a;color:#171717;text-decoration:none;font-weight:700;padding:14px 22px;border-radius:10px">Verificar meu e-mail</a>
         </p>
