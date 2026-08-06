@@ -41,13 +41,21 @@ export interface ConsultaCredito {
 }
 
 /** Etapas que o worker local grava em `automation_step` enquanto processa a consulta. */
-export type AutomationStep = "abrindo" | "preenchendo" | "enviando" | "aguardando_resultado";
+export type AutomationStep =
+  | "abrindo"
+  | "preenchendo"
+  | "enviando"
+  | "aguardando_resultado"
+  | "aguardando_autenticacao"
+  | "recuperada_automaticamente";
 
 const PROGRESSO_POR_ETAPA: Record<AutomationStep, number> = {
   abrindo: 15,
   preenchendo: 40,
   enviando: 65,
   aguardando_resultado: 85,
+  aguardando_autenticacao: 5,
+  recuperada_automaticamente: 5,
 };
 
 /**
@@ -157,20 +165,39 @@ export async function criarConsultaParaAutomacao({
   return consultaId;
 }
 
-export async function getConsultaCredito(id: string): Promise<ConsultaCredito | null> {
-  const { data, error } = await supabase
+export async function getConsultaCredito(
+  id: string,
+  signal?: AbortSignal,
+): Promise<ConsultaCredito | null> {
+  const ownController = signal ? null : new AbortController();
+  const effectiveSignal = signal ?? ownController!.signal;
+  const timeout = ownController ? setTimeout(() => ownController.abort(), 12_000) : null;
+  const query = supabase
     .from("consultas_credito")
     .select(
       "id, created_at, updated_at, tipo_pessoa, documento, documento_masked, tenant_name, tipo_imovel, cep, valor_aluguel, valor_condominio, valor_taxas, status, resultado, mensagem, origem, automation_started_at, automation_finished_at, automation_step, error_message, raw_response, substatus",
     )
-    .eq("id", id)
-    .maybeSingle();
-  if (error) throw error;
-  return (data as unknown as ConsultaCredito) ?? null;
+    .eq("id", id);
+  try {
+    const { data, error } = await query.abortSignal(effectiveSignal).maybeSingle();
+    if (error) throw error;
+    return (data as unknown as ConsultaCredito) ?? null;
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
 }
 
 /** Recoloca uma consulta com erro de volta na fila do worker. */
 export async function reenviarConsulta(id: string): Promise<void> {
+  const atual = await getConsultaCredito(id);
+  if (!atual) throw new Error("Consulta não encontrada ou sem permissão de acesso.");
+  // Um aviso local de demora não significa que o worker parou. Não altere uma
+  // linha ainda pendente/processando: isso evita claims duplicados e dois envios.
+  if (atual.status === "pendente" || atual.status === "processando") return;
+  if (atual.status !== "erro") {
+    throw new Error("Esta consulta já foi concluída e não precisa ser reenviada.");
+  }
+
   const { error } = await supabase
     .from("consultas_credito")
     .update({
@@ -182,8 +209,15 @@ export async function reenviarConsulta(id: string): Promise<void> {
       automation_finished_at: null,
       automation_step: null,
     } as any)
-    .eq("id", id);
+    .eq("id", id)
+    .eq("status", "erro");
   if (error) throw error;
+}
+
+interface WatchConsultaCreditoOptions {
+  pollIntervalMs?: number;
+  requestTimeoutMs?: number;
+  onError?: (error: Error) => void;
 }
 
 /**
@@ -194,13 +228,46 @@ export async function reenviarConsulta(id: string): Promise<void> {
 export function watchConsultaCredito(
   id: string,
   onChange: (consulta: ConsultaCredito) => void,
-  pollIntervalMs = 4000,
+  options: WatchConsultaCreditoOptions = {},
 ): () => void {
   let stopped = false;
   let channel: RealtimeChannel | null = null;
+  let fetchInFlight = false;
+  let consecutiveErrors = 0;
+  let errorReported = false;
+  let activeController: AbortController | null = null;
+  const pollIntervalMs = options.pollIntervalMs ?? 4000;
+  const requestTimeoutMs = options.requestTimeoutMs ?? 12_000;
 
   const emit = (c: ConsultaCredito | null) => {
     if (!stopped && c) onChange(c);
+  };
+
+  const fetchAndEmit = async () => {
+    if (stopped || fetchInFlight) return;
+    fetchInFlight = true;
+    activeController = new AbortController();
+    const timer = setTimeout(() => activeController?.abort(), requestTimeoutMs);
+    try {
+      const consulta = await getConsultaCredito(id, activeController.signal);
+      if (!consulta) throw new Error("A consulta não foi encontrada ou não está mais acessível.");
+      consecutiveErrors = 0;
+      errorReported = false;
+      emit(consulta);
+    } catch (error) {
+      if (stopped) return;
+      consecutiveErrors += 1;
+      if (consecutiveErrors >= 3 && !errorReported) {
+        errorReported = true;
+        options.onError?.(
+          error instanceof Error ? error : new Error("Não foi possível acompanhar a consulta."),
+        );
+      }
+    } finally {
+      clearTimeout(timer);
+      activeController = null;
+      fetchInFlight = false;
+    }
   };
 
   channel = supabase
@@ -208,24 +275,19 @@ export function watchConsultaCredito(
     .on(
       "postgres_changes",
       { event: "UPDATE", schema: "public", table: "consultas_credito", filter: `id=eq.${id}` },
-      (payload) => emit(payload.new as unknown as ConsultaCredito),
+      () => void fetchAndEmit(),
     )
     .subscribe();
 
-  const timer = setInterval(async () => {
-    try {
-      emit(await getConsultaCredito(id));
-    } catch {
-      // polling silencioso — próximo tick tenta de novo
-    }
-  }, pollIntervalMs);
+  const timer = setInterval(() => void fetchAndEmit(), pollIntervalMs);
 
   // Estado inicial imediato (evita esperar o primeiro tick).
-  getConsultaCredito(id).then(emit).catch(() => {});
+  void fetchAndEmit();
 
   return () => {
     stopped = true;
     clearInterval(timer);
+    activeController?.abort();
     if (channel) supabase.removeChannel(channel);
   };
 }

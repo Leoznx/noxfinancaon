@@ -30,6 +30,7 @@ function NovaConsulta() {
   const [consultaId, setConsultaId] = useState<string | null>(null);
   const [erroAutomacao, setErroAutomacao] = useState<string | null>(null);
   const [progresso, setProgresso] = useState(5);
+  const [etapaAutomacao, setEtapaAutomacao] = useState<string | null>(null);
   const stopWatchRef = useRef<(() => void) | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -46,22 +47,34 @@ function NovaConsulta() {
 
   const escutarConsulta = (id: string) => {
     pararEscuta();
-    stopWatchRef.current = watchConsultaCredito(id, (consulta) => {
-      const status = consulta.status as StatusConsulta;
-      setProgresso(progressoConsulta(consulta.status, consulta.automation_step));
-      if (!STATUS_FINAIS.includes(status)) return;
-      if (status === "erro") {
-        setErroAutomacao(
-          consulta.error_message || consulta.mensagem || "Não foi possível concluir a consulta no momento.",
-        );
+    stopWatchRef.current = watchConsultaCredito(
+      id,
+      (consulta) => {
+        const status = consulta.status as StatusConsulta;
+        setEtapaAutomacao(consulta.automation_step);
+        setProgresso(progressoConsulta(consulta.status, consulta.automation_step));
+        if (!STATUS_FINAIS.includes(status)) return;
+        if (status === "erro") {
+          setErroAutomacao(
+            consulta.error_message || consulta.mensagem || "Não foi possível concluir a consulta no momento.",
+          );
+          pararEscuta();
+          return;
+        }
+        // aprovado | recusado | em_analise → tela de status da automação
         pararEscuta();
-        return;
-      }
-      // aprovado | recusado | em_analise → tela de status da automação
-      pararEscuta();
-      setConsultaId(null);
-      navigate({ to: "/consultas/$id/status", params: { id } });
-    });
+        setConsultaId(null);
+        navigate({ to: "/consultas/$id/status", params: { id } });
+      },
+      {
+        onError: () => {
+          setErroAutomacao(
+            "A conexão para acompanhar a consulta ficou indisponível. Verifique sua internet e tente continuar.",
+          );
+          pararEscuta();
+        },
+      },
+    );
 
     // Rede de segurança: se por algum motivo o worker não responder (ex.: automação
     // temporariamente fora do ar), não deixamos o modal "Consultando crédito" girar
@@ -84,6 +97,7 @@ function NovaConsulta() {
     setIsSubmitting(true);
     setErroAutomacao(null);
     setProgresso(5);
+    setEtapaAutomacao(null);
     try {
       const id = await criarConsultaParaAutomacao({
         dados,
@@ -105,6 +119,7 @@ function NovaConsulta() {
       await reenviarConsulta(consultaId);
       setErroAutomacao(null);
       setProgresso(5);
+      setEtapaAutomacao(null);
       escutarConsulta(consultaId);
     } catch (e: any) {
       toast.error("Erro ao reenviar consulta: " + (e?.message || "desconhecido"));
@@ -115,6 +130,7 @@ function NovaConsulta() {
     pararEscuta();
     setConsultaId(null);
     setErroAutomacao(null);
+    setEtapaAutomacao(null);
   };
 
   const modalAberto = consultaId !== null;
@@ -135,6 +151,7 @@ function NovaConsulta() {
         open={modalAberto}
         erro={erroAutomacao}
         progresso={progresso}
+        etapa={etapaAutomacao}
         onTentarNovamente={handleTentarNovamente}
         onFechar={handleFecharModal}
       />

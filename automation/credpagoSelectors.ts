@@ -10,6 +10,12 @@ import type { Page, Locator } from "playwright";
 const FIND_TIMEOUT_MS = 8000;
 const FIND_POLL_MS = 200;
 const LOGIN_LOFT_URL_PATTERN = /(?:^https?:\/\/sso\.loft\.com\.br\/|\/realms\/loft\/)/i;
+const AUTHENTICATED_CREDPAGO_URL_PATTERN =
+  /\/imobiliaria\/(?:cr\/|dashboard(?:\/|$)|home(?:\/|$)|index(?:\.php)?(?:\/|$))/i;
+
+function tempoRestante(deadline: number): number {
+  return Math.max(1, deadline - Date.now());
+}
 
 /**
  * Tenta localizar um campo por várias estratégias, na ordem: label, placeholder,
@@ -262,11 +268,41 @@ async function isAuthenticatedCredPagoPage(page: Page): Promise<boolean> {
     return false;
   }
 
-  const bodyText = await page
+  // Nunca trate "qualquer texto" em credpago.com como sessão autenticada. A página
+  // pública de entrada também tem texto e, durante a hidratação, o botão Login Loft
+  // pode levar alguns instantes para aparecer. Esse falso positivo deixava o worker
+  // anunciando login renovado e voltando imediatamente para a tela de login.
+  if (AUTHENTICATED_CREDPAGO_URL_PATTERN.test(page.url())) return true;
+
+  const simulationMarkers = [
+    page.getByRole("button", { name: /simular\s+cr[ée]dito/i }),
+    page.getByText(/pessoa\s+f[íi]sica/i, { exact: false }),
+    page.getByLabel(/cpf|cnpj/i),
+  ];
+  return anyVisible(simulationMarkers);
+}
+
+async function authenticationChallenge(page: Page): Promise<string | null> {
+  const texto = await page
     .locator("body")
     .innerText()
+    .then((value) => value.replace(/\s+/g, " ").trim().slice(0, 1200))
     .catch(() => "");
-  return bodyText.trim().length > 0;
+
+  if (/captcha|recaptcha/i.test(texto)) {
+    return "A Loft solicitou uma verificação de segurança durante o login.";
+  }
+  if (
+    /insira\s+o\s+c[oó]digo|c[oó]digo\s+(?:de\s+)?verifica[cç][aã]o|c[oó]digo\s+enviado|autentica[cç][aã]o\s+em\s+duas\s+etapas/i.test(
+      texto,
+    )
+  ) {
+    return "A Loft solicitou um código de verificação para renovar a sessão.";
+  }
+  if (/credenciais?\s+inv[aá]lid|senha\s+incorret|usu[aá]rio\s+n[aã]o\s+encontrado/i.test(texto)) {
+    return "O Login Loft recusou as credenciais configuradas.";
+  }
+  return null;
 }
 
 export async function detectAuthenticationState(
@@ -376,23 +412,35 @@ export async function loginWithCredentials(
   password: string,
   timeoutMs: number,
 ): Promise<void> {
-  const MAX_TENTATIVAS = 3;
+  const MAX_TENTATIVAS = 2;
+  const deadline = Date.now() + timeoutMs;
   let ultimoErro: unknown;
   for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
+    const tentativasRestantes = MAX_TENTATIVAS - tentativa + 1;
+    const restante = tempoRestante(deadline);
+    if (restante <= 1) break;
+
     try {
-      await tentarLoginLoft(page, login, password, timeoutMs);
+      // O prazo é total para toda a renovação, não é multiplicado por cada seletor
+      // nem por cada tentativa. Assim uma mudança no SSO nunca congela a fila.
+      const prazoDaTentativa = Math.max(1, Math.floor(restante / tentativasRestantes));
+      await tentarLoginLoft(page, login, password, prazoDaTentativa);
       return;
     } catch (erro) {
       ultimoErro = erro;
-      if (tentativa < MAX_TENTATIVAS) {
-        await page.reload({ waitUntil: "domcontentloaded" }).catch(() => {});
+      if (tentativa < MAX_TENTATIVAS && tempoRestante(deadline) > FIND_POLL_MS) {
+        await page
+          .reload({ waitUntil: "domcontentloaded", timeout: tempoRestante(deadline) })
+          .catch(() => {});
         await page.waitForTimeout(FIND_POLL_MS);
       }
     }
   }
-  throw ultimoErro instanceof Error
-    ? ultimoErro
-    : new Error("Não foi possível concluir o Login Loft.");
+
+  if (Date.now() >= deadline) {
+    throw new Error(`Tempo limite total de ${Math.round(timeoutMs / 1000)}s excedido no Login Loft.`);
+  }
+  throw ultimoErro instanceof Error ? ultimoErro : new Error("Não foi possível concluir o Login Loft.");
 }
 
 async function tentarLoginLoft(
@@ -401,7 +449,11 @@ async function tentarLoginLoft(
   password: string,
   timeoutMs: number,
 ): Promise<void> {
-  const initialState = await detectAuthenticationState(page, timeoutMs);
+  const deadline = Date.now() + timeoutMs;
+  const initialState = await detectAuthenticationState(
+    page,
+    Math.min(FIND_TIMEOUT_MS, tempoRestante(deadline)),
+  );
   if (initialState === "authenticated") return;
   if (initialState === "unknown") {
     throw new Error("A CredPago não informou se a sessão está autenticada.");
@@ -426,7 +478,7 @@ async function tentarLoginLoft(
       const senhaPresente = await anyVisible(passwordCandidates(page));
       return (idPresente && senhaPresente) || (await isAuthenticatedCredPagoPage(page));
     },
-    timeoutMs,
+    tempoRestante(deadline),
   );
 
   if (!formularioDisponivel) {
@@ -437,13 +489,13 @@ async function tentarLoginLoft(
   const loginField = await firstVisibleLocator(
     page,
     loginIdentifierCandidates(page),
-    timeoutMs,
+    tempoRestante(deadline),
     "Campo de e-mail/telefone do Login Loft",
   );
   const senhaField = await firstVisibleLocator(
     page,
     passwordCandidates(page),
-    timeoutMs,
+    tempoRestante(deadline),
     "Campo de senha do Login Loft",
   );
 
@@ -458,23 +510,20 @@ async function tentarLoginLoft(
   if ((await submitButton.count().catch(() => 0)) === 0) {
     throw new Error("O botão Entrar do Login Loft não foi encontrado.");
   }
-  await submitButton.click({ timeout: timeoutMs });
+  await submitButton.click({ timeout: tempoRestante(deadline) });
 
-  const autenticou = await waitUntil(
+  let desafio: string | null = null;
+  const concluiu = await waitUntil(
     page,
-    async () => isAuthenticatedCredPagoPage(page),
-    timeoutMs,
+    async () => {
+      desafio = await authenticationChallenge(page);
+      return Boolean(desafio) || (await isAuthenticatedCredPagoPage(page));
+    },
+    tempoRestante(deadline),
   );
-  if (!autenticou) {
-    const texto = await page
-      .locator("body")
-      .innerText()
-      .then((value) => value.replace(/\s+/g, " ").trim().slice(0, 500))
-      .catch(() => "");
-    const motivo = /captcha|recaptcha|verifica/i.test(texto)
-      ? "A Loft solicitou uma verificação de segurança durante o login."
-      : "O Login Loft não confirmou as credenciais dentro do tempo esperado.";
-    throw new Error(motivo);
+  if (desafio) throw new Error(desafio);
+  if (!concluiu || !(await isAuthenticatedCredPagoPage(page))) {
+    throw new Error("O Login Loft não confirmou as credenciais dentro do tempo esperado.");
   }
 }
 

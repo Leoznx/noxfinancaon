@@ -20,6 +20,16 @@ function required(name: string): string {
   return value;
 }
 
+function positiveNumber(name: string, fallback: number, minimum = 1): number {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < minimum) {
+    throw new Error(`${name} precisa ser um número maior ou igual a ${minimum}.`);
+  }
+  return value;
+}
+
 const credpagoLogin = process.env.CREDPAGO_LOGIN?.trim() || "";
 const credpagoPassword = process.env.CREDPAGO_PASSWORD || "";
 if (Boolean(credpagoLogin) !== Boolean(credpagoPassword)) {
@@ -31,6 +41,8 @@ if (Boolean(credpagoLogin) !== Boolean(credpagoPassword)) {
 export const env = {
   supabaseUrl: required("SUPABASE_URL"),
   supabaseServiceRoleKey: required("SUPABASE_SERVICE_ROLE_KEY"),
+  /** Evita que uma conexão degradada com a fila congele o loop do worker. */
+  supabaseRequestTimeoutMs: positiveNumber("SUPABASE_REQUEST_TIMEOUT_MS", 15_000, 3_000),
   profileDir:
     process.env.CREDPAGO_PROFILE_DIR || path.resolve(__dirname, "chrome-profile-credpago"),
   /**
@@ -45,23 +57,37 @@ export const env = {
    */
   storageStatePath: process.env.CREDPAGO_STORAGE_STATE_PATH || "",
   /** Porta do servidor HTTP só com /health — não expõe nenhuma rota de negócio. */
-  healthPort: Number(process.env.HEALTH_PORT) || 3000,
-  pollIntervalMs: Number(process.env.AUTOMATION_POLL_INTERVAL_MS) || 5000,
+  healthPort: positiveNumber("HEALTH_PORT", 3000),
+  pollIntervalMs: positiveNumber("AUTOMATION_POLL_INTERVAL_MS", 5000, 500),
   credpagoUrl: process.env.CREDPAGO_URL || "https://credpago.com/imobiliaria/proposta",
   /** Credenciais exclusivas do servidor para renovar automaticamente a sessão do Login Loft. */
   credpagoLogin,
   credpagoPassword,
   /** Mantém a sessão aquecida e detecta expiração antes de retirar uma consulta da fila. */
-  authCheckIntervalMs: Number(process.env.AUTH_CHECK_INTERVAL_MS) || 4 * 60 * 1000,
+  authCheckIntervalMs: positiveNumber("AUTH_CHECK_INTERVAL_MS", 4 * 60 * 1000, 10_000),
   /** Intervalo entre tentativas de recuperar uma autenticação indisponível. */
-  authRetryIntervalMs: Number(process.env.AUTH_RETRY_INTERVAL_MS) || 60 * 1000,
-  /** Teto para o redirecionamento e confirmação do Login Loft. */
-  authLoginTimeoutMs: Number(process.env.AUTH_LOGIN_TIMEOUT_MS) || 45 * 1000,
+  authRetryIntervalMs: positiveNumber("AUTH_RETRY_INTERVAL_MS", 30 * 1000, 5_000),
+  /** Teto TOTAL para todas as tentativas de redirecionamento e Login Loft. */
+  authLoginTimeoutMs: positiveNumber("AUTH_LOGIN_TIMEOUT_MS", 75 * 1000, 10_000),
+  /** Watchdog externo ao fluxo de login: fecha a aba mesmo se o Playwright/SSO não responder. */
+  authValidationTimeoutMs: positiveNumber("AUTH_VALIDATION_TIMEOUT_MS", 90 * 1000, 15_000),
+  /** Reinicia contexto+navegador depois de falhas seguidas, sem derrubar o processo. */
+  authFailuresBeforeBrowserRestart: positiveNumber(
+    "AUTH_FAILURES_BEFORE_BROWSER_RESTART",
+    2,
+  ),
   keepBrowserOpen: process.env.AUTOMATION_KEEP_BROWSER_OPEN === "true",
   /** Quantas consultas podem rodar em paralelo, cada uma na sua própria aba do mesmo perfil/contexto. */
-  maxConcurrentConsultas: Math.max(1, Number(process.env.MAX_CONCURRENT_CONSULTAS) || 3),
+  maxConcurrentConsultas: positiveNumber("MAX_CONCURRENT_CONSULTAS", 3),
   /** Tempo máximo (ms) para uma consulta individual antes de ser marcada como erro. */
-  consultaTimeoutMs: Number(process.env.CONSULTA_TIMEOUT_MS) || 90000,
+  consultaTimeoutMs: positiveNumber("CONSULTA_TIMEOUT_MS", 90_000, 10_000),
+  /** Recupera leases "processando" deixados por queda/reinício do worker. */
+  staleConsultaMs: positiveNumber("STALE_CONSULTA_MS", 3 * 60 * 1000, 60_000),
+  staleRecoveryIntervalMs: positiveNumber(
+    "STALE_RECOVERY_INTERVAL_MS",
+    60 * 1000,
+    10_000,
+  ),
   /**
    * Chrome invisível. Login manual exige uma janela visível — se HEADLESS=true e a sessão
    * expirar, o worker falha com uma mensagem clara em vez de travar esperando um Enter que

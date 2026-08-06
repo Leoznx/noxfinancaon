@@ -11,6 +11,7 @@ interface ModalConsultandoProps {
   onFechar?: () => void;
   /** Progresso real (0-100) vindo do worker via Realtime — ver progressoConsulta() em consultasCredito.ts. */
   progresso?: number;
+  etapa?: string | null;
 }
 
 // As imagens de resultado (ResultadoAutomacao) só entram na tela quando o worker termina
@@ -27,7 +28,17 @@ const IMAGENS_RESULTADO = [
  * Não fecha com clique fora nem com ESC — o fluxo termina por Realtime/polling
  * (redirecionamento) ou pelo estado de erro.
  */
-export function ModalConsultando({ open, erro, onTentarNovamente, onFechar, progresso = 5 }: ModalConsultandoProps) {
+function etapaLabel(etapa?: string | null): string {
+  if (etapa === "preenchendo") return "Preenchendo os dados da consulta";
+  if (etapa === "enviando") return "Enviando a simulação";
+  if (etapa === "aguardando_resultado") return "Aguardando o resultado";
+  if (etapa === "abrindo") return "Abrindo a consulta";
+  if (etapa === "aguardando_autenticacao") return "Restabelecendo conexão segura";
+  if (etapa === "recuperada_automaticamente") return "Consulta recuperada e reenfileirada";
+  return "Consulta adicionada à fila";
+}
+
+export function ModalConsultando({ open, erro, onTentarNovamente, onFechar, progresso = 5, etapa }: ModalConsultandoProps) {
   useEffect(() => {
     if (!open) return;
     IMAGENS_RESULTADO.forEach((src) => {
@@ -56,7 +67,7 @@ export function ModalConsultando({ open, erro, onTentarNovamente, onFechar, prog
               Consultando crédito
             </DialogTitle>
             <DialogDescription className="text-base text-neutral-600 leading-relaxed">
-              Estamos consultando a simulação aguarde...
+              {etapaLabel(etapa)}. Aguarde um instante.
             </DialogDescription>
             <div className="w-full h-1.5 rounded-full bg-neutral-100 overflow-hidden">
               <div

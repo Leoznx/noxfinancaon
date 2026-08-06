@@ -62,13 +62,22 @@ const runtimeState: {
   auth: AuthRuntimeStatus;
   lastAuthCheckAt: string | null;
   lastAuthSuccessAt: string | null;
+  authCheckStartedAt: string | null;
+  lastLoopAt: string | null;
+  consecutiveAuthFailures: number;
+  browserRestarts: number;
 } = {
   auth: "checking",
   lastAuthCheckAt: null,
   lastAuthSuccessAt: null,
+  authCheckStartedAt: null,
+  lastLoopAt: null,
+  consecutiveAuthFailures: 0,
+  browserRestarts: 0,
 };
 
 let proximaValidacaoAuthEm = 0;
+let ultimaRecuperacaoConsultasEm = 0;
 
 async function solicitarLoginManual(): Promise<void> {
   log("Tela de login detectada na CredPago.");
@@ -272,6 +281,39 @@ async function recolocarNaFilaAguardandoAutenticacao(id: string): Promise<void> 
   if (error) throw error;
 }
 
+/**
+ * Se o processo/container cair depois do claim, a linha ficava eternamente em
+ * "processando" e nenhum worker voltava a enxergá-la. Este lease temporal devolve
+ * somente consultas antigas à fila; consultas ativas ficam protegidas pelo corte.
+ */
+async function recuperarConsultasTravadas(): Promise<void> {
+  const agora = Date.now();
+  if (agora - ultimaRecuperacaoConsultasEm < env.staleRecoveryIntervalMs) return;
+  ultimaRecuperacaoConsultasEm = agora;
+
+  const cutoff = new Date(agora - env.staleConsultaMs).toISOString();
+  const { data, error } = await supabaseAdmin
+    .from("consultas_credito")
+    .update({
+      status: "pendente",
+      resultado: null,
+      mensagem: null,
+      error_message: null,
+      automation_started_at: null,
+      automation_finished_at: null,
+      automation_step: "recuperada_automaticamente",
+    })
+    .eq("status", "processando")
+    .eq("origem", "nox_financa")
+    .lt("automation_started_at", cutoff)
+    .select("id");
+
+  if (error) throw error;
+  if (data?.length) {
+    log(`${data.length} consulta(s) interrompida(s) recuperada(s) automaticamente para a fila.`);
+  }
+}
+
 async function validarAutenticacao(
   context: BrowserContext,
   persistirSessao: () => Promise<void>,
@@ -282,18 +324,39 @@ async function validarAutenticacao(
   const statusAnterior = runtimeState.auth;
   runtimeState.auth = "checking";
   runtimeState.lastAuthCheckAt = new Date().toISOString();
+  runtimeState.authCheckStartedAt = runtimeState.lastAuthCheckAt;
 
   const page = await context.newPage();
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    await page.goto(env.credpagoUrl, { waitUntil: "domcontentloaded" });
-    await ensureLoggedIn("auth", page, persistirSessao);
+    const validacao = (async () => {
+      await page.goto(env.credpagoUrl, {
+        waitUntil: "domcontentloaded",
+        timeout: Math.min(30_000, env.authValidationTimeoutMs),
+      });
+      await ensureLoggedIn("auth", page, persistirSessao);
 
-    if ((await detectAuthenticationState(page)) !== "authenticated") {
-      throw new CredPagoAuthenticationError("A sessão ainda redireciona para o Login Loft.");
-    }
+      if ((await detectAuthenticationState(page)) !== "authenticated") {
+        throw new CredPagoAuthenticationError("A sessão ainda redireciona para o Login Loft.");
+      }
+    })();
+
+    const watchdog = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        void page.close().catch(() => {});
+        reject(
+          new Error(
+            `A validação da autenticação excedeu ${Math.round(env.authValidationTimeoutMs / 1000)}s e foi abortada.`,
+          ),
+        );
+      }, env.authValidationTimeoutMs);
+    });
+
+    await Promise.race([validacao, watchdog]);
 
     runtimeState.auth = "ok";
     runtimeState.lastAuthSuccessAt = new Date().toISOString();
+    runtimeState.consecutiveAuthFailures = 0;
     proximaValidacaoAuthEm = Date.now() + env.authCheckIntervalMs;
     if (statusAnterior !== "ok") {
       log("Autenticação da CredPago validada — fila liberada.");
@@ -302,6 +365,7 @@ async function validarAutenticacao(
   } catch (error) {
     const isAuthError = error instanceof CredPagoAuthenticationError;
     runtimeState.auth = isAuthError ? "required" : "unavailable";
+    runtimeState.consecutiveAuthFailures += 1;
     proximaValidacaoAuthEm = Date.now() + env.authRetryIntervalMs;
     if (statusAnterior !== runtimeState.auth) {
       logErro(
@@ -313,6 +377,8 @@ async function validarAutenticacao(
     }
     return false;
   } finally {
+    if (timer) clearTimeout(timer);
+    runtimeState.authCheckStartedAt = null;
     await page.close().catch(() => {});
   }
 }
@@ -325,6 +391,7 @@ async function validarAutenticacao(
 
 interface EstadoConsulta {
   finalizado: boolean;
+  page: Page | null;
 }
 
 async function processarConsulta(
@@ -338,6 +405,7 @@ async function processarConsulta(
   log(`[${cid}] Consulta recebida (documento ${doc})`);
 
   const page = await context.newPage();
+  estado.page = page;
   try {
     log(`[${cid}] Abrindo CredPago`);
     const sessaoPodeEstarFria = Date.now() - ultimaAtividadeEm > SESSAO_OCIOSA_MS;
@@ -436,6 +504,7 @@ async function processarConsulta(
     }
   } finally {
     await page.close().catch(() => {});
+    estado.page = null;
     log(`[${cid}] Aba fechada`);
   }
 }
@@ -447,14 +516,19 @@ async function processarConsultaComTimeout(
   persistirSessao: () => Promise<void>,
 ): Promise<void> {
   const cid = consulta.id.slice(0, 8);
-  const estado: EstadoConsulta = { finalizado: false };
+  const estado: EstadoConsulta = { finalizado: false, page: null };
 
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let timeoutAtingido = false;
   const timeoutPromise = new Promise<void>((resolve) => {
     timer = setTimeout(async () => {
       if (estado.finalizado) return;
+      timeoutAtingido = true;
       estado.finalizado = true;
       logErro(`[${cid}] Tempo limite de ${env.consultaTimeoutMs}ms excedido`);
+      // Interrompe de verdade a aba desta consulta. Antes, o trabalho continuava em
+      // segundo plano e um retry podia enviar a mesma simulação duas vezes.
+      await estado.page?.close().catch(() => {});
       await marcarErro(
         consulta.id,
         `Tempo limite de ${Math.round(env.consultaTimeoutMs / 1000)}s excedido ao consultar.`,
@@ -468,10 +542,14 @@ async function processarConsultaComTimeout(
   );
 
   await Promise.race([trabalho, timeoutPromise]);
-  // Se o timeout venceu a corrida, ainda deixamos o trabalho de fundo terminar sozinho
-  // (ele vai fechar a própria aba no finally) — só evitamos que uma rejeição não tratada
-  // derrube o processo do worker.
-  trabalho.catch(() => {});
+  if (timeoutAtingido) {
+    // Fechar a aba faz as operações Playwright pendentes rejeitarem rapidamente. O
+    // teto abaixo evita reter para sempre uma vaga por uma dependência externa ruim.
+    await Promise.race([
+      trabalho,
+      new Promise<void>((resolve) => setTimeout(resolve, 5_000)),
+    ]).catch(() => {});
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -536,6 +614,12 @@ async function abrirContexto(): Promise<ContextoAberto> {
   }
 }
 
+async function fecharContexto(contextoAberto: ContextoAberto): Promise<void> {
+  await contextoAberto.persistirSessao();
+  await contextoAberto.context.close().catch(() => {});
+  if (contextoAberto.browser) await contextoAberto.browser.close().catch(() => {});
+}
+
 /**
  * Servidor HTTP mínimo só para health check (ex.: Docker healthcheck, monitoramento
  * externo). Não expõe nenhuma rota de negócio, secret ou detalhe interno.
@@ -543,14 +627,27 @@ async function abrirContexto(): Promise<ContextoAberto> {
 function iniciarServidorHealth(): http.Server {
   const server = http.createServer((req, res) => {
     if (req.method === "GET" && req.url === "/health") {
-      res.writeHead(200, { "Content-Type": "application/json" });
+      const agora = Date.now();
+      const authCheckAgeMs = runtimeState.authCheckStartedAt
+        ? agora - Date.parse(runtimeState.authCheckStartedAt)
+        : 0;
+      const loopAgeMs = runtimeState.lastLoopAt ? agora - Date.parse(runtimeState.lastLoopAt) : 0;
+      const authTravada = authCheckAgeMs > env.authValidationTimeoutMs + 15_000;
+      const loopTravado =
+        loopAgeMs > Math.max(env.authValidationTimeoutMs + 30_000, env.pollIntervalMs * 12);
+      const healthy = !authTravada && !loopTravado;
+
+      res.writeHead(healthy ? 200 : 503, { "Content-Type": "application/json" });
       res.end(
         JSON.stringify({
-          status: "ok",
+          status: healthy ? "ok" : "stalled",
           ready: runtimeState.auth === "ok",
           auth: runtimeState.auth,
           lastAuthCheckAt: runtimeState.lastAuthCheckAt,
           lastAuthSuccessAt: runtimeState.lastAuthSuccessAt,
+          lastLoopAt: runtimeState.lastLoopAt,
+          consecutiveAuthFailures: runtimeState.consecutiveAuthFailures,
+          browserRestarts: runtimeState.browserRestarts,
         }),
       );
       return;
@@ -585,7 +682,7 @@ async function loop(once: boolean): Promise<void> {
       env.credpagoLogin ? "configurada" : "não configurada"
     }`,
   );
-  const { context, browser, persistirSessao } = await abrirContexto();
+  let contextoAberto = await abrirContexto();
   log(`Chrome iniciado em modo ${env.headless ? "headless (invisível)" : "visível"}`);
 
   const healthServer = once ? null : iniciarServidorHealth();
@@ -596,9 +693,7 @@ async function loop(once: boolean): Promise<void> {
   const finalizarWorker = async () => {
     if (healthServer) await new Promise((resolve) => healthServer.close(resolve));
     if (!env.keepBrowserOpen) {
-      await persistirSessao();
-      await context.close().catch(() => {});
-      if (browser) await browser.close().catch(() => {});
+      await fecharContexto(contextoAberto);
     } else {
       log("AUTOMATION_KEEP_BROWSER_OPEN=true — Chrome permanece aberto.");
     }
@@ -622,19 +717,44 @@ async function loop(once: boolean): Promise<void> {
   // depender só da sessão exportada no dia da migração (que eventualmente expira).
   const persistTimer =
     !once && env.storageStatePath
-      ? setInterval(() => void persistirSessao(), 15 * 60 * 1000)
+      ? setInterval(() => void contextoAberto.persistirSessao(), 15 * 60 * 1000)
       : null;
 
   try {
     for (;;) {
       if (desligando) break;
+      runtimeState.lastLoopAt = new Date().toISOString();
 
-      const autenticacaoPronta = await validarAutenticacao(context, persistirSessao);
+      await recuperarConsultasTravadas().catch((error) =>
+        logErro("Falha ao recuperar consultas interrompidas", error),
+      );
+
+      const autenticacaoPronta = await validarAutenticacao(
+        contextoAberto.context,
+        contextoAberto.persistirSessao,
+      );
       if (!autenticacaoPronta) {
         if (once) {
           log("Autenticação indisponível — nenhuma consulta foi retirada da fila.");
           break;
         }
+
+        if (
+          emAndamento.size === 0 &&
+          runtimeState.consecutiveAuthFailures >= env.authFailuresBeforeBrowserRestart
+        ) {
+          log(
+            `Reiniciando navegador após ${runtimeState.consecutiveAuthFailures} falha(s) consecutiva(s) de autenticação.`,
+          );
+          await fecharContexto(contextoAberto);
+          loginEmAndamento = null;
+          contextoAberto = await abrirContexto();
+          runtimeState.browserRestarts += 1;
+          runtimeState.consecutiveAuthFailures = 0;
+          runtimeState.auth = "checking";
+          proximaValidacaoAuthEm = 0;
+        }
+
         await new Promise((r) => setTimeout(r, env.pollIntervalMs));
         continue;
       }
@@ -648,7 +768,12 @@ async function loop(once: boolean): Promise<void> {
           const reservou = await marcarProcessando(consulta.id);
           if (!reservou) continue; // outra execução pegou essa consulta primeiro
 
-          const tarefa = processarConsultaComTimeout(context, consulta, persistirSessao)
+          const contextoDaConsulta = contextoAberto;
+          const tarefa = processarConsultaComTimeout(
+            contextoDaConsulta.context,
+            consulta,
+            contextoDaConsulta.persistirSessao,
+          )
             .catch((e) => logErro(`Falha não tratada na consulta ${consulta.id}`, e))
             .finally(() => emAndamento.delete(consulta.id));
           emAndamento.set(consulta.id, tarefa);

@@ -326,6 +326,27 @@ Isso aplica (idempotentemente):
   `status` para aceitar `processando`, `recusado`, `em_analise` e `erro` (os valores legados
   continuam válidos).
 
+### Operação contínua em produção
+
+O frontend da Vercel não executa o Playwright. Em produção, o worker roda continuamente na
+VPS pelo `automation/docker-compose.yml`, com `restart: unless-stopped`, uma aba isolada por
+consulta e `MAX_CONCURRENT_CONSULTAS` vagas simultâneas.
+
+As proteções contra fila travada são complementares:
+
+- cada acesso ao Supabase, validação de login e consulta possui prazo máximo;
+- a autenticação só é aceita quando há uma rota interna ou o formulário real de simulação;
+- após falhas consecutivas, contexto e navegador são recriados sem reiniciar a VPS;
+- uma aba que excede o timeout é fechada antes de liberar a vaga, impedindo envio duplicado;
+- linhas antigas em `processando` voltam automaticamente à fila após queda/reinício;
+- `/health` mede se o loop está vivo e retorna erro se ele congelar; `/ready` informa se a
+  sessão do parceiro está pronta para consumir a fila;
+- site e aplicativo usam Realtime com polling não sobreposto, cancelamento e timeout local.
+
+O endpoint público de monitoramento é `https://automacao.noxfianca.com/health`; prontidão é
+exposta em `https://automacao.noxfianca.com/ready`. Nunca exponha credenciais, cookies ou a
+service role nesses endpoints.
+
 ## Scripts disponíveis
 
 | Script | Descrição |
@@ -335,3 +356,4 @@ Isso aplica (idempotentemente):
 | `npm run automation:credpago` | Inicia o worker local em loop contínuo |
 | `npm run automation:once` | Processa as consultas pendentes disponíveis (até `MAX_CONCURRENT_CONSULTAS`) e encerra |
 | `npm run automation:install-browsers` | Baixa o Chromium do Playwright |
+| `npm run test:automation` | Testa detecção de login/sessão sem acessar dados reais de clientes |
