@@ -347,6 +347,12 @@ O endpoint público de monitoramento é `https://automacao.noxfianca.com/health`
 exposta em `https://automacao.noxfianca.com/ready`. Nunca exponha credenciais, cookies ou a
 service role nesses endpoints.
 
+Se o Login Loft exigir reCAPTCHA/OTP, a recuperação precisa de uma pessoa autorizada — o worker
+não tenta contornar a verificação. Rode `npm run automation:interactive-login` em um computador
+com interface gráfica, conclua o desafio na janela aberta e transfira o arquivo de sessão gerado
+para a VPS pelo canal SSH já configurado. O processo volta a ser totalmente automático depois
+que a sessão válida é carregada.
+
 ## Scripts disponíveis
 
 | Script | Descrição |
@@ -356,4 +362,5 @@ service role nesses endpoints.
 | `npm run automation:credpago` | Inicia o worker local em loop contínuo |
 | `npm run automation:once` | Processa as consultas pendentes disponíveis (até `MAX_CONCURRENT_CONSULTAS`) e encerra |
 | `npm run automation:install-browsers` | Baixa o Chromium do Playwright |
+| `npm run automation:interactive-login` | Renova a sessão com janela visível quando houver CAPTCHA/OTP |
 | `npm run test:automation` | Testa detecção de login/sessão sem acessar dados reais de clientes |

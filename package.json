@@ -14,6 +14,7 @@
     "automation:once": "tsx automation/credpagoWorker.ts --once",
     "automation:install-browsers": "playwright install chromium",
     "automation:export-session": "tsx automation/exportSession.ts",
+    "automation:interactive-login": "node automation/interactiveLogin.mjs",
     "test:automation": "tsx --test automation/*.test.ts",
     "test:withdrawals": "tsx --test tests/withdrawal-pix.test.ts",
     "test:auth-links": "tsx --test tests/auth-email-links.test.ts"
