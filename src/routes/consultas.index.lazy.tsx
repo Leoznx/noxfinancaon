@@ -114,6 +114,7 @@ function Consultas() {
   // Consultas" sempre mostre o resultado real da análise, mesmo depois de a proposta
   // avançar para as próximas etapas.
   const getStatusConsulta = (c: any) => {
+    if (c.status === 'em_analise' && c.substatus === 'falta_documentos') return 'falta_documentos';
     const resultadosFinais = ['aprovado', 'recusado', 'reprovado', 'em_analise'];
     const status = resultadosFinais.includes(c.resultado) ? c.resultado : c.status;
 
@@ -138,6 +139,7 @@ function Consultas() {
       erro: 'Erro',
       processando: 'Consultando...',
       pendente: 'Pendente',
+      falta_documentos: 'Falta de documentos',
     };
     return labels[status] ?? status;
   };
@@ -151,6 +153,8 @@ function Consultas() {
         return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 font-bold px-3">Recusado</Badge>;
       case 'em_analise':
         return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 font-bold px-3">Em análise</Badge>;
+      case 'falta_documentos':
+        return <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 font-bold px-3">Falta de documentos</Badge>;
       case 'erro':
         return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 font-bold px-3">Erro</Badge>;
       case 'processando':

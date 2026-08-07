@@ -10,6 +10,7 @@ import { toast } from "sonner";
 interface Consulta {
   id: string;
   status: string;
+  substatus: string | null;
   created_at: string;
   tenant_name: string | null;
   tenant_document: string | null;
@@ -18,10 +19,12 @@ interface Consulta {
 }
 
 const DEMO: Consulta[] = [
-  { id: "demo-1", status: "pendente", created_at: new Date(Date.now() - 1000 * 60 * 60 * 26).toISOString(), tenant_name: "João da Silva Teste", tenant_document: "123.456.789-01", property_address: "Rua das Flores, 100 — São Paulo/SP", role_solicitante: "corretor" },
-  { id: "demo-2", status: "pendente", created_at: new Date(Date.now() - 1000 * 60 * 60 * 8).toISOString(), tenant_name: "Maria Oliveira Teste", tenant_document: "987.654.321-00", property_address: "Av. Paulista, 2000 — São Paulo/SP", role_solicitante: "imobiliaria" },
-  { id: "demo-3", status: "pendente", created_at: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(), tenant_name: "Carlos Mendes Teste", tenant_document: "456.789.123-00", property_address: "Rua Augusta, 555 — São Paulo/SP", role_solicitante: "proprietario" },
+  { id: "demo-1", status: "pendente", substatus: null, created_at: new Date(Date.now() - 1000 * 60 * 60 * 26).toISOString(), tenant_name: "João da Silva Teste", tenant_document: "123.456.789-01", property_address: "Rua das Flores, 100 — São Paulo/SP", role_solicitante: "corretor" },
+  { id: "demo-2", status: "pendente", substatus: null, created_at: new Date(Date.now() - 1000 * 60 * 60 * 8).toISOString(), tenant_name: "Maria Oliveira Teste", tenant_document: "987.654.321-00", property_address: "Av. Paulista, 2000 — São Paulo/SP", role_solicitante: "imobiliaria" },
+  { id: "demo-3", status: "pendente", substatus: null, created_at: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(), tenant_name: "Carlos Mendes Teste", tenant_document: "456.789.123-00", property_address: "Rua Augusta, 555 — São Paulo/SP", role_solicitante: "proprietario" },
 ];
+
+const suspensaPorFaltaDeDocumentos = (consulta: Consulta) => consulta.substatus === "falta_documentos";
 
 const isToday = (iso: string) => {
   const d = new Date(iso);
@@ -46,7 +49,7 @@ export function JuridicoDashboard() {
   const load = async () => {
     const { data, error } = await supabase
       .from("consultas_credito")
-      .select("id, status, created_at, tenant_name, tenant_document, property_address, role_solicitante")
+      .select("id, status, substatus, created_at, tenant_name, tenant_document, property_address, role_solicitante")
       .order("created_at", { ascending: false })
       .limit(200);
 
@@ -83,16 +86,17 @@ export function JuridicoDashboard() {
   const stats = useMemo(() => {
     const novasHoje = consultas.filter((c) => isToday(c.created_at)).length;
     const pendentes = consultas.filter((c) => c.status === "pendente");
-    const emAnalise = consultas.filter((c) => c.status === "em_analise").length;
+    const emAnalise = consultas.filter((c) => c.status === "em_analise" && !suspensaPorFaltaDeDocumentos(c)).length;
     const aprovadasHoje = consultas.filter((c) => c.status === "aprovado" && isToday(c.created_at)).length;
     const reprovadasHoje = consultas.filter((c) => c.status === "reprovado" && isToday(c.created_at)).length;
-    const docsPendentes = consultas.filter((c) => c.status === "documentos_pendentes" || c.status === "ajuste_solicitado").length;
+    const docsPendentes = consultas.filter((c) => suspensaPorFaltaDeDocumentos(c) || c.status === "documentos_pendentes" || c.status === "ajuste_solicitado").length;
     return { novasHoje, pendentes: pendentes.length, emAnalise, aprovadasHoje, reprovadasHoje, docsPendentes };
   }, [consultas]);
 
   const prioridades = useMemo(() =>
     consultas
       .filter((c) => c.status === "pendente" || c.status === "em_analise" || c.status === "documentos_pendentes")
+      .filter((c) => !suspensaPorFaltaDeDocumentos(c))
       .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
       .slice(0, 10),
     [consultas]

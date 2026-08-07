@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,9 @@ export const Route = createFileRoute("/admin/aprovacoes")({
 type FiltroDocs = "todos" | "enviados" | "aguardando";
 
 const docsEnviados = (c: any) => c.substatus === "documentacao_complementar_enviada";
+const suspensaPorFaltaDeDocumentos = (c: any) => c.substatus === "falta_documentos";
+const estaNaFilaManual = (c: any) =>
+  docsEnviados(c) || (c.status === "em_analise" && !suspensaPorFaltaDeDocumentos(c));
 
 function AprovacoesPage() {
   const [linhas, setLinhas] = useState<any[]>([]);
@@ -38,7 +41,7 @@ function AprovacoesPage() {
   const [docsDetalhe, setDocsDetalhe] = useState<any[]>([]);
   const [loadingDetalhe, setLoadingDetalhe] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     // Toda consulta que caiu em análise após a simulação entra aqui, mesmo sem o
     // formulário complementar — o jurídico decide todas. "pendente" continua
@@ -46,19 +49,29 @@ function AprovacoesPage() {
     // (status pendente sem substatus) apareceria como pendência do jurídico.
     const { data, error } = await supabase
       .from("consultas_credito")
-      .select("id, profile_id_solicitante, tenant_name, tenant_document, tenant_email, tenant_telefone, property_address, rent_value, role_solicitante, created_at, status, substatus, documentos, dados_complementares_em, plano:planos(nome), solicitante:profiles!consultas_credito_profile_id_solicitante_fkey(nome, email)")
+      .select("id, profile_id_solicitante, tenant_name, tenant_document, tenant_email, tenant_telefone, property_address, rent_value, role_solicitante, created_at, status, substatus, documentos, dados_complementares_em, documentos_prazo_limite_em, plano:planos(nome), solicitante:profiles!consultas_credito_profile_id_solicitante_fkey(nome, email)")
       .in("status", ["pendente", "em_analise"])
-      .or("status.eq.em_analise,substatus.eq.documentacao_complementar_enviada")
       .order("created_at", { ascending: false });
     if (error) toast.error("Erro ao carregar pendências");
-    else setLinhas(data ?? []);
+    else setLinhas((data ?? []).filter(estaNaFilaManual));
     setLoading(false);
-  };
+  }, []);
 
   useEffect(() => {
-    load();
+    void load();
     supabase.auth.getUser().then(({ data }) => setAdminId(data.user?.id ?? null));
-  }, []);
+
+    const channel = supabase
+      .channel("aprovacoes-prazo-documentos")
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "consultas_credito" }, () => void load())
+      .subscribe();
+    const interval = window.setInterval(() => void load(), 60_000);
+
+    return () => {
+      window.clearInterval(interval);
+      void supabase.removeChannel(channel);
+    };
+  }, [load]);
 
   const filtradas = useMemo(() => {
     const q = busca.trim().toLowerCase();
@@ -173,7 +186,7 @@ function AprovacoesPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Aprovações</h1>
           <p className="text-neutral-500 mt-2">
-            Todas as consultas que ficaram em análise após a simulação de crédito. O jurídico decide cada uma: aprovar ou recusar.
+            Consultas em análise ficam disponíveis por até 5 horas no expediente. Sem documentos, são pausadas e retornam assim que o solicitante concluir o envio.
           </p>
         </div>
 
@@ -275,6 +288,7 @@ function AprovacoesPage() {
                 <Info label="CPF/CNPJ" value={detalhe.tenant_document ?? "—"} />
                 <Info label="Status" value={detalhe.status === "em_analise" ? "Em análise" : "Pendente"} />
                 <Info label="Docs complementares" value={detalhe.substatus === "documentacao_complementar_enviada" ? "Enviados" : "Aguardando envio"} />
+                <Info label="Prazo dos documentos" value={detalhe.documentos_prazo_limite_em ? new Date(detalhe.documentos_prazo_limite_em).toLocaleString("pt-BR") : "—"} />
                 <Info label="Data" value={detalhe.created_at ? new Date(detalhe.created_at).toLocaleString("pt-BR") : "—"} />
                 <Info label="E-mail enviado" value={detalhe.tenant_email || detalheMeta.email || "—"} />
                 <Info label="Telefone enviado" value={detalhe.tenant_telefone || detalheMeta.telefone || "—"} />

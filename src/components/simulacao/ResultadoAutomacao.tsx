@@ -293,6 +293,8 @@ export function ResultadoAutomacao({
 
   if (isEmAnalise) {
     const jaEnviadoParaAprovacao = consulta.substatus === "documentacao_complementar_enviada";
+    const faltaDocumentos = consulta.substatus === "falta_documentos";
+    const AnaliseIcon = faltaDocumentos ? AlertTriangle : Clock;
     return (
       <div className="space-y-6">
         {!jaEnviadoParaAprovacao && (
@@ -309,14 +311,16 @@ export function ResultadoAutomacao({
                 <div className="flex flex-col justify-center px-6 py-4 sm:px-7 sm:py-5 sm:max-w-[46%] text-center sm:text-left items-center sm:items-start">
                   <div className="flex items-center gap-3">
                     <div className="grid h-11 w-11 place-items-center rounded-full bg-amber-500 text-white shadow-lg shadow-amber-200 ring-4 ring-amber-100 shrink-0">
-                      <Clock className="h-6 w-6" strokeWidth={3} />
+                      <AnaliseIcon className="h-6 w-6" strokeWidth={3} />
                     </div>
                     <div>
                       <h1 className="text-2xl sm:text-3xl font-bold text-amber-900 leading-tight tracking-tight">
-                        Em Análise
+                        {faltaDocumentos ? "Falta de documentos" : "Em Análise"}
                       </h1>
                       <p className="text-amber-800 text-sm sm:text-base leading-tight">
-                        Sua simulação está em análise.
+                        {faltaDocumentos
+                          ? "O prazo terminou sem o envio da documentação."
+                          : "Sua simulação está em análise."}
                       </p>
                     </div>
                   </div>
@@ -354,6 +358,15 @@ export function ResultadoAutomacao({
               </div>
             </div>
           </>
+        )}
+
+        {faltaDocumentos && !jaEnviadoParaAprovacao && (
+          <div className="rounded-2xl border border-orange-300 bg-orange-50 px-5 py-4 text-orange-900">
+            <p className="font-bold">A aprovação manual está pausada.</p>
+            <p className="mt-1 text-sm leading-relaxed">
+              Envie os documentos e complete os dados abaixo. Assim que o envio for concluído, a consulta volta automaticamente para a fila do Administrativo/Jurídico.
+            </p>
+          </div>
         )}
 
         <FormularioAnaliseComplementar consulta={consulta} />
@@ -735,6 +748,11 @@ function FormularioAnaliseComplementar({ consulta }: { consulta: ConsultaCredito
           <p className="mt-1 max-w-3xl text-sm leading-relaxed text-neutral-600">
             Sua simulação ficou em análise. Para continuar com a avaliação, envie os documentos e dados abaixo para análise do Jurídico/Administrativo.
           </p>
+          {consulta.substatus !== "falta_documentos" && consulta.documentos_prazo_limite_em && (
+            <p className="mt-2 text-xs font-bold uppercase tracking-wider text-amber-700">
+              Envie até {new Date(consulta.documentos_prazo_limite_em).toLocaleString("pt-BR")} para manter a aprovação manual ativa.
+            </p>
+          )}
           {submittedAt && (
             <p className="mt-2 text-xs font-bold uppercase tracking-wider text-emerald-700">
               Documentação enviada em {new Date(submittedAt).toLocaleString("pt-BR")}

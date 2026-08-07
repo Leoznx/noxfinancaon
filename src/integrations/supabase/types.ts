@@ -599,6 +599,9 @@ export type Database = {
           corretor_id: string | null
           created_at: string
           dados_complementares_em: string | null
+          documentos_faltantes_em: string | null
+          documentos_prazo_iniciado_em: string | null
+          documentos_prazo_limite_em: string | null
           documento: string | null
           documento_masked: string | null
           documentos: Json | null
@@ -690,6 +693,9 @@ export type Database = {
           corretor_id?: string | null
           created_at?: string
           dados_complementares_em?: string | null
+          documentos_faltantes_em?: string | null
+          documentos_prazo_iniciado_em?: string | null
+          documentos_prazo_limite_em?: string | null
           documento?: string | null
           documento_masked?: string | null
           documentos?: Json | null
@@ -781,6 +787,9 @@ export type Database = {
           corretor_id?: string | null
           created_at?: string
           dados_complementares_em?: string | null
+          documentos_faltantes_em?: string | null
+          documentos_prazo_iniciado_em?: string | null
+          documentos_prazo_limite_em?: string | null
           documento?: string | null
           documento_masked?: string | null
           documentos?: Json | null
