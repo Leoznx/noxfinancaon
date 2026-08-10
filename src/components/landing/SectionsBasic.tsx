@@ -50,17 +50,17 @@ export const InstitutionalHero = () => (
         </div>
       </div>
 
-      <div className="flex w-full items-center justify-center lg:justify-end">
-        <div className="flex aspect-[4/3] w-full max-w-[840px] items-center justify-center">
+      <div className="flex w-full items-center justify-center lg:justify-start">
+        <div className="flex aspect-[3/2] w-full shrink-0 items-center justify-end lg:w-[calc(100%_+_3rem)] xl:w-[calc(100%_+_4rem)] 2xl:w-[calc(100%_+_max(0px,50vw_-_768px)_+_5rem)]">
           <img
             src="/assets/nox-home-hero-banner.png"
             alt="Casa moderna com aprovação digital em até 1 minuto, mais de 15 mil imóveis protegidos e avaliação cinco estrelas"
-            width={1448}
-            height={1086}
+            width={1536}
+            height={1024}
             loading="eager"
             decoding="async"
             fetchPriority="high"
-            className="h-full w-full object-contain"
+            className="h-full w-full object-contain object-right"
           />
         </div>
       </div>
