@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router';
 import { Check } from 'lucide-react';
 
+import noxHomeHeroBanner from '@/assets/nox-home-hero-banner.png';
 import { Button } from '@/components/ui/button';
 
 export const InstitutionalHero = () => (
@@ -53,7 +54,7 @@ export const InstitutionalHero = () => (
       <div className="flex w-full items-center justify-center lg:justify-start">
         <div className="flex aspect-[3/2] w-full shrink-0 items-center justify-end lg:w-[calc(100%_+_3rem)] xl:w-[calc(100%_+_4rem)] 2xl:w-[calc(100%_+_max(0px,50vw_-_768px)_+_5rem)]">
           <img
-            src="/assets/nox-home-hero-banner.png"
+            src={noxHomeHeroBanner}
             alt="Casa moderna com aprovação digital em até 1 minuto, mais de 15 mil imóveis protegidos e avaliação cinco estrelas"
             width={1536}
             height={1024}
