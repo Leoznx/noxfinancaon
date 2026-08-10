@@ -25,7 +25,7 @@ function PerfilTab({ to, label }: { to: string; label: string }) {
   return (
     <Link
       to={to}
-      className="flex h-7 items-center px-2.5 text-[13px] font-semibold whitespace-nowrap text-neutral-700 transition-colors hover:text-neutral-950 2xl:px-3 2xl:text-sm"
+      className="flex h-8 items-center whitespace-nowrap px-2.5 text-[15px] font-semibold text-neutral-700 transition-colors hover:text-neutral-950 2xl:px-3 2xl:text-base"
     >
       {label}
     </Link>

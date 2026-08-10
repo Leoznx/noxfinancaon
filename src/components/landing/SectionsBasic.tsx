@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 
 export const InstitutionalHero = () => (
   <section className="w-full overflow-hidden bg-white pt-28 sm:pt-32 lg:pt-[126px]">
-    <div className="mx-auto grid w-full max-w-[1536px] items-center gap-12 px-5 pb-16 sm:px-8 sm:pb-20 lg:min-h-[600px] lg:grid-cols-[minmax(0,0.49fr)_minmax(0,0.51fr)] lg:gap-8 lg:px-12 lg:pb-16 xl:gap-12 xl:px-16 2xl:px-20">
+    <div className="mx-auto grid w-full max-w-[1536px] items-center gap-12 px-5 pb-16 sm:px-8 sm:pb-20 lg:min-h-[600px] lg:grid-cols-[minmax(0,0.49fr)_minmax(0,0.51fr)] lg:gap-8 lg:px-12 lg:pb-16 xl:grid-cols-[minmax(0,0.46fr)_minmax(0,0.54fr)] xl:gap-12 xl:px-16 2xl:px-20">
       <div className="max-w-[600px] lg:py-10 xl:max-w-[620px]">
         <span className="mb-6 inline-block rounded-full bg-neutral-100 px-3 py-1 text-sm font-bold tracking-wider text-neutral-700">
           SEGURO FIANÇA LOCATÍCIA
@@ -50,8 +50,8 @@ export const InstitutionalHero = () => (
         </div>
       </div>
 
-      <div className="flex w-full items-center justify-center lg:justify-start">
-        <div className="flex aspect-[4/3] w-full max-w-[780px] items-center justify-center">
+      <div className="flex w-full items-center justify-center lg:justify-end">
+        <div className="flex aspect-[4/3] w-full max-w-[840px] items-center justify-center">
           <img
             src="/assets/nox-home-hero-banner.png"
             alt="Casa moderna com aprovação digital em até 1 minuto, mais de 15 mil imóveis protegidos e avaliação cinco estrelas"
@@ -60,7 +60,7 @@ export const InstitutionalHero = () => (
             loading="eager"
             decoding="async"
             fetchPriority="high"
-            className="h-auto w-full object-contain"
+            className="h-full w-full object-contain"
           />
         </div>
       </div>
