@@ -5,6 +5,7 @@ import { ComparativeSection } from "@/components/landing/ComparativeAndBenefits"
 import { InstitutionalNumbers } from "@/components/landing/PlansAndNumbers";
 import { CareerProgramSection } from "@/components/landing/CareerProgramSection";
 import { InstitutionalFaq, InstitutionalFooter } from "@/components/landing/FaqAndFooterInstitutional";
+import { HomeSectionDivider } from "@/components/landing/HomeSectionDivider";
 import { ArrowUp } from "lucide-react";
 import { useState, useEffect } from "react";
 
@@ -50,10 +51,15 @@ function Index() {
       
       <main>
         <InstitutionalHero />
+        <HomeSectionDivider />
         <SolutionPresentation />
+        <HomeSectionDivider />
         <CareerProgramSection />
+        <HomeSectionDivider />
         <ComparativeSection />
+        <HomeSectionDivider />
         <InstitutionalNumbers />
+        <HomeSectionDivider />
         <InstitutionalFaq />
       </main>
 
