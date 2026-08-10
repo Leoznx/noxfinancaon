@@ -42,7 +42,7 @@ export function NivelCorretorCard({ info }: { info: NivelInfo }) {
             </div>
             <div className="flex items-center gap-3">
               <div className={`px-3 py-1 rounded-full text-[9px] font-black tracking-widest flex items-center gap-2 ${isOuro ? 'bg-white text-neutral-900' : 'bg-neutral-900 text-white'}`}>
-                {info.percentual}% COMISSÃƒO
+                {info.percentual}% COMISSÃO
               </div>
               <p className={`text-[11px] font-bold ${isOuro ? 'text-neutral-400' : 'text-neutral-500'}`}>
                 <span className={isOuro ? 'text-white' : 'text-neutral-900'}>{info.contratos} contratos ativos</span> vinculados

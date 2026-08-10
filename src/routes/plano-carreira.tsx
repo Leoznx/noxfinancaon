@@ -121,7 +121,7 @@ function BadgeNivelAtual({ nivel, contratos }: { nivel: string; contratos: numbe
   return (
     <div className="flex items-center gap-2 bg-neutral-100 px-3 py-1.5 rounded-full border border-neutral-200 shadow-sm">
       <div className={`w-2 h-2 rounded-full ${nivel === 'BRONZE' ? 'bg-amber-400' : nivel === 'PRATA' ? 'bg-slate-400' : nivel === 'OURO' ? 'bg-yellow-400' : 'bg-cyan-400'} animate-pulse`} />
-      <span className="text-xs font-bold text-neutral-700">{nivel} â€¢ {contratos} contratos</span>
+      <span className="text-xs font-bold text-neutral-700">{nivel} • {contratos} contratos</span>
     </div>
   );
 }

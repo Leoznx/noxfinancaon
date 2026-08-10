@@ -59,7 +59,7 @@ const STATUS_UI: Record<
 };
 
 function formatarMoeda(v: number | null): string {
-  if (v === null || v === undefined) return "â€”";
+  if (v === null || v === undefined) return "—";
   return Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
@@ -68,7 +68,7 @@ interface ResultadoAutomacaoProps {
   onTentarNovamente?: () => void;
   onSelecionarPlano?: (planoId: string, extras?: ExtrasSelecionados, planoCalculado?: PlanoSelecionadoCalculo) => void;
   isSubmittingPlano?: boolean;
-  /** Permite editar aluguel/condomínio/taxas antes de escolher o plano (opcional â€” só passe se a consulta tiver um imóvel vinculado que possa ser atualizado). */
+  /** Permite editar aluguel/condomínio/taxas antes de escolher o plano (opcional — só passe se a consulta tiver um imóvel vinculado que possa ser atualizado). */
   onAtualizarValores?: (valores: { aluguel: number; condominio: number; taxas: number }) => Promise<void> | void;
   /** Retoma um plano já escolhido anteriormente (ex.: corretor volta em "Detalhes" depois de já ter selecionado um plano). */
   planoIdInicial?: string | null;
@@ -85,7 +85,7 @@ export function ResultadoAutomacao({
   extrasIniciais,
 }: ResultadoAutomacaoProps) {
   const navigate = useNavigate();
-  // `resultado` guarda o veredito da consulta de crédito de forma permanente â€” a
+  // `resultado` guarda o veredito da consulta de crédito de forma permanente — a
   // automação só grava aprovado/recusado/em_analise/erro ali e nunca mais mexe depois.
   // Já `consulta.status` é o ponteiro de etapa da proposta inteira (pendente_documentacao,
   // aguardando_ativacao, ativado, etc.) e avança conforme o corretor progride a proposta.
@@ -96,7 +96,7 @@ export function ResultadoAutomacao({
   // A automação em si só tem dois estados "ainda rodando": pendente (na fila) e
   // processando (worker aberto). Qualquer outro `status` (pendente_documentacao,
   // aguardando_ativacao, ativado...) significa que a proposta já avançou bem além da
-  // análise de crédito â€” nunca deve mostrar "Consultando..." nesse caso, mesmo que
+  // análise de crédito — nunca deve mostrar "Consultando..." nesse caso, mesmo que
   // `resultado` tenha ficado null por ser um registro antigo/manual que nunca passou
   // pela automação de verdade (confirmado com um caso real: status=aguardando_ativacao,
   // resultado=null, ficava preso em "Consultando..." para sempre).
@@ -443,7 +443,7 @@ export function ResultadoAutomacao({
               <div className="flex justify-between gap-4">
                 <dt className="text-neutral-500">{consulta.tipo_pessoa === "PJ" ? "CNPJ" : "CPF"}</dt>
                 <dd className="font-semibold text-neutral-900">
-                  {consulta.documento ? formatDocumento(consulta.documento) : consulta.documento_masked || "â€”"}
+                  {consulta.documento ? formatDocumento(consulta.documento) : consulta.documento_masked || "—"}
                 </dd>
               </div>
             </dl>
@@ -459,11 +459,11 @@ export function ResultadoAutomacao({
             <dl className="space-y-2 text-sm">
               <div className="flex justify-between gap-4">
                 <dt className="text-neutral-500">Tipo</dt>
-                <dd className="font-semibold text-neutral-900">{consulta.tipo_imovel || "â€”"}</dd>
+                <dd className="font-semibold text-neutral-900">{consulta.tipo_imovel || "—"}</dd>
               </div>
               <div className="flex justify-between gap-4">
                 <dt className="text-neutral-500">CEP</dt>
-                <dd className="font-semibold text-neutral-900">{consulta.cep || "â€”"}</dd>
+                <dd className="font-semibold text-neutral-900">{consulta.cep || "—"}</dd>
               </div>
             </dl>
           </CardContent>
@@ -492,7 +492,7 @@ export function ResultadoAutomacao({
 
       <div className="text-xs text-neutral-400 text-center">
         Consulta criada em {new Date(consulta.created_at).toLocaleString("pt-BR")}
-        {consulta.origem ? ` Â· origem: ${consulta.origem}` : ""}
+        {consulta.origem ? ` · origem: ${consulta.origem}` : ""}
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3">

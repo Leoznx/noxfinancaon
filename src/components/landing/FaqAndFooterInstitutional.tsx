@@ -1,5 +1,14 @@
 import React, { useState } from 'react';
-import { Plus, Minus } from 'lucide-react';
+import {
+  Clock3,
+  Facebook,
+  Globe2,
+  Instagram,
+  Mail,
+  Minus,
+  Plus,
+  Youtube,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { LogoNox } from '../LogoNox';
 import { Link } from '@tanstack/react-router';
@@ -81,54 +90,109 @@ export const InstitutionalFooter = ({ hideCta = false }: { hideCta?: boolean } =
         </section>
       )}
 
-    <footer className="bg-neutral-900 text-white pt-16 sm:pt-24 pb-10 sm:pb-12 px-4 sm:px-6">
+    <footer className="border-t border-yellow-400/70 bg-[#0b0b0b] px-4 pb-7 pt-12 text-white sm:px-6 sm:pb-8 sm:pt-14">
       <div className="container mx-auto max-w-7xl">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-10 sm:gap-12 mb-16 sm:mb-20">
-          <div className="space-y-6 sm:col-span-2 md:col-span-1">
+        <div className="grid grid-cols-1 gap-10 pb-10 sm:grid-cols-2 sm:gap-x-12 sm:gap-y-12 lg:grid-cols-[1.35fr_0.85fr_0.95fr_1.2fr_0.8fr] lg:gap-10">
+          <div className="space-y-5">
             <LogoNox variant="escuro" size="md" />
-            <p className="text-neutral-400 text-xs font-bold uppercase tracking-[0.2em]">"A proteção que nunca dorme."</p>
-            <p className="text-neutral-400 text-sm leading-relaxed">
-              A NOX é especialista em seguro fiança e soluções tecnológicas para o mercado imobiliário brasileiro, trazendo segurança e agilidade para inquilinos e proprietários.
+            <p className="max-w-xs text-sm leading-6 text-neutral-400">
+              A NOX Fiança simplifica a garantia locatícia com tecnologia, segurança e atendimento para inquilinos, proprietários, corretores e imobiliárias.
             </p>
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              {[
+                { label: 'Instagram da NOX Fiança', href: 'https://www.instagram.com/noxfianca/', icon: Instagram },
+                { label: 'Facebook da NOX Fiança', href: 'https://www.facebook.com/noxfianca/', icon: Facebook },
+                { label: 'YouTube da NOX Fiança', href: 'https://www.youtube.com/@noxfianca', icon: Youtube },
+              ].map(({ label, href, icon: Icon }) => (
+                <a
+                  key={label}
+                  href={href}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label={label}
+                  className="grid h-10 w-10 place-items-center rounded-lg border border-neutral-800 text-neutral-400 transition-colors hover:border-yellow-400 hover:text-yellow-400"
+                >
+                  <Icon size={17} strokeWidth={1.8} />
+                </a>
+              ))}
+              <span className="mx-1 h-6 w-px bg-neutral-800" aria-hidden="true" />
+              <span
+                className="grid h-10 min-w-14 place-items-center rounded-lg border border-neutral-800 px-3 text-xl"
+                aria-label="Brasil"
+                title="Brasil"
+              >
+                <svg viewBox="0 0 28 20" className="h-5 w-7 rounded-[2px]" role="img" aria-label="Bandeira do Brasil">
+                  <rect width="28" height="20" fill="#009B3A" />
+                  <path d="M14 2.8 25 10 14 17.2 3 10Z" fill="#FFDF00" />
+                  <circle cx="14" cy="10" r="4.25" fill="#002776" />
+                  <path d="M10.3 9.3c2.9-.8 5.4-.3 7.6 1.1" fill="none" stroke="#FFFFFF" strokeWidth=".65" />
+                </svg>
+              </span>
+            </div>
           </div>
-          
+
           <div>
-            <h4 className="text-white font-bold text-sm mb-6 sm:mb-8 tracking-wider uppercase">Soluções</h4>
-            <ul className="space-y-4 text-neutral-400 text-sm font-medium">
-              <Link to="/corretor" className="hover:text-white transition-colors cursor-pointer block">Seguro Fiança Pessoa Física</Link>
-              <Link to="/imobiliaria" className="hover:text-white transition-colors cursor-pointer block">Seguro Fiança Pessoa Jurídica</Link>
-              <Link to="/imobiliaria" className="hover:text-white transition-colors cursor-pointer block">Para Imobiliárias</Link>
-              <Link to="/corretor" className="hover:text-white transition-colors cursor-pointer block">Para Corretores</Link>
-            </ul>
-          </div>
-          
-          <div>
-            <h4 className="text-white font-bold text-sm mb-6 sm:mb-8 tracking-wider uppercase">Empresa</h4>
-            <ul className="space-y-4 text-neutral-400 text-sm font-medium">
-              <li><Link to="/sobre" className="hover:text-white transition-colors cursor-pointer block">Sobre a NOX</Link></li>
-              <li><Link to="/trabalhe-conosco" className="hover:text-white transition-colors cursor-pointer block">Trabalhe conosco</Link></li>
-              <li><Link to="/blog" className="hover:text-white transition-colors cursor-pointer block">Blog</Link></li>
-              <li><Link to="/seja-parceiro" className="hover:text-white transition-colors cursor-pointer block">Seja parceiro</Link></li>
+            <h4 className="mb-5 text-sm font-bold uppercase tracking-[0.14em] text-yellow-400">Links rápidos</h4>
+            <ul className="space-y-3.5 text-sm font-medium text-neutral-400">
+              <li><Link to="/" className="transition-colors hover:text-white">Início</Link></li>
+              <li><Link to="/sobre" className="transition-colors hover:text-white">Sobre a NOX</Link></li>
+              <li><Link to="/trabalhe-conosco" className="transition-colors hover:text-white">Trabalhe conosco</Link></li>
+              <li><Link to="/blog" className="transition-colors hover:text-white">Blog</Link></li>
             </ul>
           </div>
 
-          <div className="space-y-8">
-            <div>
-              <h4 className="text-white font-bold text-sm mb-6 sm:mb-8 tracking-wider uppercase">Contato</h4>
-              <ul className="space-y-4 text-neutral-400 text-sm font-medium">
-                <li className="break-all">contato@noxfianca.com.br</li>
-                <li className="pt-2 text-neutral-500 font-normal">Atendimento: seg a sex, 9h às 18h</li>
-              </ul>
+          <div>
+            <h4 className="mb-5 text-sm font-bold uppercase tracking-[0.14em] text-yellow-400">Serviços</h4>
+            <ul className="space-y-3.5 text-sm font-medium text-neutral-400">
+              <li><Link to="/inquilino" className="transition-colors hover:text-white">Pessoa física</Link></li>
+              <li><Link to="/imobiliaria" className="transition-colors hover:text-white">Pessoa jurídica</Link></li>
+              <li><Link to="/imobiliaria" className="transition-colors hover:text-white">Para imobiliárias</Link></li>
+              <li><Link to="/corretor" className="transition-colors hover:text-white">Para corretores</Link></li>
+            </ul>
+          </div>
+
+          <div>
+            <h4 className="mb-5 text-sm font-bold uppercase tracking-[0.14em] text-yellow-400">Contato</h4>
+            <ul className="space-y-4 text-sm text-neutral-400">
+              <li className="flex items-start gap-3">
+                <Mail className="mt-0.5 shrink-0 text-yellow-400" size={17} strokeWidth={1.8} />
+                <a href="mailto:contato@noxfianca.com.br" className="break-all transition-colors hover:text-white">contato@noxfianca.com.br</a>
+              </li>
+              <li className="flex items-start gap-3">
+                <Clock3 className="mt-0.5 shrink-0 text-yellow-400" size={17} strokeWidth={1.8} />
+                <span>Seg a sex, das 9h às 18h</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <Globe2 className="mt-0.5 shrink-0 text-yellow-400" size={17} strokeWidth={1.8} />
+                <span>Atendimento em todo o Brasil</span>
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <h4 className="mb-3 text-sm font-bold uppercase tracking-[0.14em] text-yellow-400">Nosso app</h4>
+            <div className="relative h-[92px] w-[136px] overflow-hidden" aria-label="Disponível na App Store e no Google Play">
+              <img
+                src="/assets/app-store-google-play.png"
+                alt="Baixe na App Store ou no Google Play"
+                className="absolute -left-[46px] -top-[19px] h-auto w-[228px] max-w-none"
+                loading="lazy"
+              />
             </div>
+            <Link
+              to="/aplicativo"
+              className="mt-3 inline-flex min-h-10 items-center justify-center rounded-lg border border-yellow-400/70 px-4 text-sm font-bold text-yellow-400 transition-colors hover:bg-yellow-400 hover:text-neutral-950"
+            >
+              Saiba mais
+            </Link>
           </div>
         </div>
-        
-        <div className="pt-10 sm:pt-12 border-t border-neutral-800 flex flex-col md:flex-row justify-between items-center gap-6 sm:gap-8 text-center md:text-left">
-          <p className="text-xs text-neutral-500">© {new Date().getFullYear()} NOX FIANÇA. Todos os direitos reservados.</p>
-          <div className="flex flex-wrap justify-center gap-6 sm:gap-8 text-xs text-neutral-500 font-bold uppercase tracking-widest">
-            <Link to="/privacidade" className="hover:text-white transition-colors">Privacidade</Link>
-            <Link to="/termos" className="hover:text-white transition-colors">Termos</Link>
-          </div>
+
+        <div className="border-t border-neutral-800 pt-6 text-center text-xs text-neutral-500">
+          <p className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
+            <span>© 2026 NOX Fiança. Todos os direitos reservados.</span>
+            <span className="whitespace-nowrap"><span className="mr-2 text-neutral-700">|</span><strong className="text-yellow-400">GRUPO NOX</strong></span>
+          </p>
         </div>
       </div>
     </footer>

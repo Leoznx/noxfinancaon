@@ -49,6 +49,7 @@ import { Route as CadastroImobiliariaRouteImport } from './routes/cadastro-imobi
 import { Route as CadastroCorretorRouteImport } from './routes/cadastro-corretor'
 import { Route as CadastroRouteImport } from './routes/cadastro'
 import { Route as ApolicesRouteImport } from './routes/apolices'
+import { Route as AplicativoRouteImport } from './routes/aplicativo'
 import { Route as AcessoInquilinoRouteImport } from './routes/acesso-inquilino'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as VendedorIndexRouteImport } from './routes/vendedor.index'
@@ -315,6 +316,11 @@ const CadastroRoute = CadastroRouteImport.update({
 const ApolicesRoute = ApolicesRouteImport.update({
   id: '/apolices',
   path: '/apolices',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AplicativoRoute = AplicativoRouteImport.update({
+  id: '/aplicativo',
+  path: '/aplicativo',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AcessoInquilinoRoute = AcessoInquilinoRouteImport.update({
@@ -649,6 +655,7 @@ const ConsultasIdDadosComplementaresRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/acesso-inquilino': typeof AcessoInquilinoRoute
+  '/aplicativo': typeof AplicativoRoute
   '/apolices': typeof ApolicesRouteWithChildren
   '/cadastro': typeof CadastroRoute
   '/cadastro-corretor': typeof CadastroCorretorRoute
@@ -753,6 +760,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/acesso-inquilino': typeof AcessoInquilinoRoute
+  '/aplicativo': typeof AplicativoRoute
   '/cadastro': typeof CadastroRoute
   '/cadastro-corretor': typeof CadastroCorretorRoute
   '/cadastro-imobiliaria': typeof CadastroImobiliariaRoute
@@ -854,6 +862,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/acesso-inquilino': typeof AcessoInquilinoRoute
+  '/aplicativo': typeof AplicativoRoute
   '/apolices': typeof ApolicesRouteWithChildren
   '/cadastro': typeof CadastroRoute
   '/cadastro-corretor': typeof CadastroCorretorRoute
@@ -960,6 +969,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/acesso-inquilino'
+    | '/aplicativo'
     | '/apolices'
     | '/cadastro'
     | '/cadastro-corretor'
@@ -1064,6 +1074,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/acesso-inquilino'
+    | '/aplicativo'
     | '/cadastro'
     | '/cadastro-corretor'
     | '/cadastro-imobiliaria'
@@ -1164,6 +1175,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/acesso-inquilino'
+    | '/aplicativo'
     | '/apolices'
     | '/cadastro'
     | '/cadastro-corretor'
@@ -1269,6 +1281,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AcessoInquilinoRoute: typeof AcessoInquilinoRoute
+  AplicativoRoute: typeof AplicativoRoute
   ApolicesRoute: typeof ApolicesRouteWithChildren
   CadastroRoute: typeof CadastroRoute
   CadastroCorretorRoute: typeof CadastroCorretorRoute
@@ -1630,6 +1643,13 @@ declare module '@tanstack/react-router' {
       path: '/apolices'
       fullPath: '/apolices'
       preLoaderRoute: typeof ApolicesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/aplicativo': {
+      id: '/aplicativo'
+      path: '/aplicativo'
+      fullPath: '/aplicativo'
+      preLoaderRoute: typeof AplicativoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/acesso-inquilino': {
@@ -2163,6 +2183,7 @@ const VendedorRouteWithChildren = VendedorRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AcessoInquilinoRoute: AcessoInquilinoRoute,
+  AplicativoRoute: AplicativoRoute,
   ApolicesRoute: ApolicesRouteWithChildren,
   CadastroRoute: CadastroRoute,
   CadastroCorretorRoute: CadastroCorretorRoute,
