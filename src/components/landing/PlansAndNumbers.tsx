@@ -5,11 +5,40 @@ import { Button } from '@/components/ui/button';
 
 export const PlansSection = () => {
   const plans = [
-    { name: "NOX FIT", coverage: "30x", rate: "10%" },
-    { name: "NOX FIT +", coverage: "35x", rate: "11,5%", coversExpenses: true },
-    { name: "NOX SMART", coverage: "30x", rate: "12%", badge: "MAIS APROVAÇÕES", featured: true },
-    { name: "NOX SMART +", coverage: "35x", rate: "13,5%", coversExpenses: true, badge: "COBRE TAXAS" },
-    { name: "NOX UP", coverage: "40x", rate: "16%", coversExpenses: true, badge: "MAIOR COBERTURA" },
+    {
+      name: "NOX SMART",
+      coverage: "30x",
+      badge: "MAIS APROVAÇÕES",
+      featured: true,
+      benefits: [
+        'Maior índice de aprovações',
+        'Análise de crédito em até 1 minuto',
+        'Contratação 100% digital',
+        'Sem fiador ou caução',
+      ],
+    },
+    {
+      name: "NOX SMART +",
+      coverage: "35x",
+      badge: "COBRE TAXAS",
+      benefits: [
+        'Cobre taxas e condomínio',
+        'Cobertura ampliada para encargos',
+        'Atendimento prioritário',
+        'Assinatura eletrônica com validade jurídica',
+      ],
+    },
+    {
+      name: "NOX UP",
+      coverage: "40x",
+      badge: "MAIOR COBERTURA",
+      benefits: [
+        'Maior cobertura da NOX',
+        'Suporte jurídico especializado',
+        'Gestão completa de sinistros',
+        'Atendimento dedicado à imobiliária',
+      ],
+    },
   ];
 
   return (
@@ -25,7 +54,7 @@ export const PlansSection = () => {
           Planos transparentes que atendem locações residenciais e comerciais, para pessoas físicas e jurídicas.
         </p>
 
-        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-6 text-left max-w-7xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left max-w-5xl mx-auto">
           {plans.map((plan) => (
             <div
               key={plan.name}
@@ -44,15 +73,8 @@ export const PlansSection = () => {
                   <p className="text-[9px] sm:text-[10px] text-neutral-400 font-bold uppercase mt-1 sm:mt-2 tracking-widest">Cobertura Principal</p>
                 </div>
                 <div className="h-px bg-neutral-100"></div>
-                <div>
-                  <p className="text-sm sm:text-lg font-bold text-neutral-900">Taxa de {plan.rate}</p>
-                </div>
-                <div className="h-px bg-neutral-100"></div>
                 <div className="space-y-2 sm:space-y-3">
-                  {[
-                    '10% de desconto no pagamento à vista',
-                    ...(plan.coversExpenses ? ['Cobre taxas e condomínio'] : []),
-                  ].map(item => (
+                  {plan.benefits.map(item => (
                     <div key={item} className="flex items-start gap-2 sm:gap-3 text-xs sm:text-sm text-neutral-600 font-medium">
                       <Check size={14} className="text-[#FFD60A] shrink-0 mt-0.5 sm:w-4 sm:h-4" strokeWidth={2.5} />
                       <span className="leading-snug">{item}</span>
