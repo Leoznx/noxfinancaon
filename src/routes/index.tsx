@@ -1,11 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { InstitutionalHeader } from "@/components/landing/InstitutionalHeader";
-import { InstitutionalHero, SocialProofLogos, SolutionPresentation } from "@/components/landing/SectionsBasic";
-import { ComparativeSection, BenefitsGrid } from "@/components/landing/ComparativeAndBenefits";
-import { PlansSection, InstitutionalNumbers } from "@/components/landing/PlansAndNumbers";
+import { InstitutionalHero, SolutionPresentation } from "@/components/landing/SectionsBasic";
+import { InstitutionalNumbers } from "@/components/landing/PlansAndNumbers";
 import { CareerProgramSection } from "@/components/landing/CareerProgramSection";
-import { RegistrationForm, InstitutionalTestimonials } from "@/components/landing/RegistrationAndTestimonials";
-import { InstitutionalFaq, InstitutionalFooter } from "@/components/landing/FaqAndFooterInstitutional";
+import { InstitutionalFooter } from "@/components/landing/FaqAndFooterInstitutional";
 import { ArrowUp } from "lucide-react";
 import { useState, useEffect } from "react";
 
@@ -51,16 +49,9 @@ function Index() {
       
       <main>
         <InstitutionalHero />
-        <SocialProofLogos />
         <SolutionPresentation />
-        <ComparativeSection />
-        <BenefitsGrid />
-        <PlansSection />
         <CareerProgramSection />
         <InstitutionalNumbers />
-        <RegistrationForm />
-        <InstitutionalTestimonials />
-        <InstitutionalFaq />
       </main>
 
       <InstitutionalFooter />

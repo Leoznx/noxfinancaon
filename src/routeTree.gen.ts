@@ -17,11 +17,13 @@ import { Route as SobreRouteImport } from './routes/sobre'
 import { Route as SinistrosRouteImport } from './routes/sinistros'
 import { Route as SimularRouteImport } from './routes/simular'
 import { Route as SejaParceiroRouteImport } from './routes/seja-parceiro'
+import { Route as SeguroFiancaRouteImport } from './routes/seguro-fianca'
 import { Route as RelatoriosRouteImport } from './routes/relatorios'
 import { Route as RedefinirSenhaRouteImport } from './routes/redefinir-senha'
 import { Route as RecuperarAcessoRouteImport } from './routes/recuperar-acesso'
 import { Route as ProprietarioRouteImport } from './routes/proprietario'
 import { Route as PrivacidadeRouteImport } from './routes/privacidade'
+import { Route as PlanosRouteImport } from './routes/planos'
 import { Route as PlanoCarreiraRouteImport } from './routes/plano-carreira'
 import { Route as MinhasComissoesRouteImport } from './routes/minhas-comissoes'
 import { Route as LoginRouteImport } from './routes/login'
@@ -153,6 +155,11 @@ const SejaParceiroRoute = SejaParceiroRouteImport.update({
   path: '/seja-parceiro',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SeguroFiancaRoute = SeguroFiancaRouteImport.update({
+  id: '/seguro-fianca',
+  path: '/seguro-fianca',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RelatoriosRoute = RelatoriosRouteImport.update({
   id: '/relatorios',
   path: '/relatorios',
@@ -176,6 +183,11 @@ const ProprietarioRoute = ProprietarioRouteImport.update({
 const PrivacidadeRoute = PrivacidadeRouteImport.update({
   id: '/privacidade',
   path: '/privacidade',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlanosRoute = PlanosRouteImport.update({
+  id: '/planos',
+  path: '/planos',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PlanoCarreiraRoute = PlanoCarreiraRouteImport.update({
@@ -683,11 +695,13 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/minhas-comissoes': typeof MinhasComissoesRoute
   '/plano-carreira': typeof PlanoCarreiraRoute
+  '/planos': typeof PlanosRoute
   '/privacidade': typeof PrivacidadeRoute
   '/proprietario': typeof ProprietarioRoute
   '/recuperar-acesso': typeof RecuperarAcessoRoute
   '/redefinir-senha': typeof RedefinirSenhaRoute
   '/relatorios': typeof RelatoriosRoute
+  '/seguro-fianca': typeof SeguroFiancaRoute
   '/seja-parceiro': typeof SejaParceiroRoute
   '/simular': typeof SimularRouteWithChildren
   '/sinistros': typeof SinistrosRoute
@@ -786,11 +800,13 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/minhas-comissoes': typeof MinhasComissoesRoute
   '/plano-carreira': typeof PlanoCarreiraRoute
+  '/planos': typeof PlanosRoute
   '/privacidade': typeof PrivacidadeRoute
   '/proprietario': typeof ProprietarioRoute
   '/recuperar-acesso': typeof RecuperarAcessoRoute
   '/redefinir-senha': typeof RedefinirSenhaRoute
   '/relatorios': typeof RelatoriosRoute
+  '/seguro-fianca': typeof SeguroFiancaRoute
   '/seja-parceiro': typeof SejaParceiroRoute
   '/sinistros': typeof SinistrosRoute
   '/sobre': typeof SobreRoute
@@ -890,11 +906,13 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/minhas-comissoes': typeof MinhasComissoesRoute
   '/plano-carreira': typeof PlanoCarreiraRoute
+  '/planos': typeof PlanosRoute
   '/privacidade': typeof PrivacidadeRoute
   '/proprietario': typeof ProprietarioRoute
   '/recuperar-acesso': typeof RecuperarAcessoRoute
   '/redefinir-senha': typeof RedefinirSenhaRoute
   '/relatorios': typeof RelatoriosRoute
+  '/seguro-fianca': typeof SeguroFiancaRoute
   '/seja-parceiro': typeof SejaParceiroRoute
   '/simular': typeof SimularRouteWithChildren
   '/sinistros': typeof SinistrosRoute
@@ -997,11 +1015,13 @@ export interface FileRouteTypes {
     | '/login'
     | '/minhas-comissoes'
     | '/plano-carreira'
+    | '/planos'
     | '/privacidade'
     | '/proprietario'
     | '/recuperar-acesso'
     | '/redefinir-senha'
     | '/relatorios'
+    | '/seguro-fianca'
     | '/seja-parceiro'
     | '/simular'
     | '/sinistros'
@@ -1100,11 +1120,13 @@ export interface FileRouteTypes {
     | '/login'
     | '/minhas-comissoes'
     | '/plano-carreira'
+    | '/planos'
     | '/privacidade'
     | '/proprietario'
     | '/recuperar-acesso'
     | '/redefinir-senha'
     | '/relatorios'
+    | '/seguro-fianca'
     | '/seja-parceiro'
     | '/sinistros'
     | '/sobre'
@@ -1203,11 +1225,13 @@ export interface FileRouteTypes {
     | '/login'
     | '/minhas-comissoes'
     | '/plano-carreira'
+    | '/planos'
     | '/privacidade'
     | '/proprietario'
     | '/recuperar-acesso'
     | '/redefinir-senha'
     | '/relatorios'
+    | '/seguro-fianca'
     | '/seja-parceiro'
     | '/simular'
     | '/sinistros'
@@ -1309,11 +1333,13 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   MinhasComissoesRoute: typeof MinhasComissoesRoute
   PlanoCarreiraRoute: typeof PlanoCarreiraRoute
+  PlanosRoute: typeof PlanosRoute
   PrivacidadeRoute: typeof PrivacidadeRoute
   ProprietarioRoute: typeof ProprietarioRoute
   RecuperarAcessoRoute: typeof RecuperarAcessoRoute
   RedefinirSenhaRoute: typeof RedefinirSenhaRoute
   RelatoriosRoute: typeof RelatoriosRoute
+  SeguroFiancaRoute: typeof SeguroFiancaRoute
   SejaParceiroRoute: typeof SejaParceiroRoute
   SimularRoute: typeof SimularRouteWithChildren
   SinistrosRoute: typeof SinistrosRoute
@@ -1421,6 +1447,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SejaParceiroRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/seguro-fianca': {
+      id: '/seguro-fianca'
+      path: '/seguro-fianca'
+      fullPath: '/seguro-fianca'
+      preLoaderRoute: typeof SeguroFiancaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/relatorios': {
       id: '/relatorios'
       path: '/relatorios'
@@ -1454,6 +1487,13 @@ declare module '@tanstack/react-router' {
       path: '/privacidade'
       fullPath: '/privacidade'
       preLoaderRoute: typeof PrivacidadeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/planos': {
+      id: '/planos'
+      path: '/planos'
+      fullPath: '/planos'
+      preLoaderRoute: typeof PlanosRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/plano-carreira': {
@@ -2211,11 +2251,13 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   MinhasComissoesRoute: MinhasComissoesRoute,
   PlanoCarreiraRoute: PlanoCarreiraRoute,
+  PlanosRoute: PlanosRoute,
   PrivacidadeRoute: PrivacidadeRoute,
   ProprietarioRoute: ProprietarioRoute,
   RecuperarAcessoRoute: RecuperarAcessoRoute,
   RedefinirSenhaRoute: RedefinirSenhaRoute,
   RelatoriosRoute: RelatoriosRoute,
+  SeguroFiancaRoute: SeguroFiancaRoute,
   SejaParceiroRoute: SejaParceiroRoute,
   SimularRoute: SimularRouteWithChildren,
   SinistrosRoute: SinistrosRoute,

@@ -144,8 +144,8 @@ export const InstitutionalFooter = ({ hideCta = false }: { hideCta?: boolean } =
           <div>
             <h4 className="mb-5 text-sm font-bold uppercase tracking-[0.14em] text-yellow-400">Serviços</h4>
             <ul className="space-y-3.5 text-sm font-medium text-neutral-400">
-              <li><Link to="/inquilino" className="transition-colors hover:text-white">Pessoa física</Link></li>
-              <li><Link to="/imobiliaria" className="transition-colors hover:text-white">Pessoa jurídica</Link></li>
+              <li><Link to="/seguro-fianca" className="transition-colors hover:text-white">Seguro Fiança</Link></li>
+              <li><Link to="/planos" className="transition-colors hover:text-white">Planos e coberturas</Link></li>
               <li><Link to="/imobiliaria" className="transition-colors hover:text-white">Para imobiliárias</Link></li>
               <li><Link to="/corretor" className="transition-colors hover:text-white">Para corretores</Link></li>
             </ul>
