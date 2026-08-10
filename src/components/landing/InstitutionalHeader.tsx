@@ -25,7 +25,7 @@ function PerfilTab({ to, label }: { to: string; label: string }) {
   return (
     <Link
       to={to}
-      className="flex items-center px-4 py-1.5 text-base font-medium text-neutral-600 hover:text-neutral-900 transition-colors"
+      className="flex h-7 items-center px-2.5 text-[13px] font-semibold whitespace-nowrap text-neutral-700 transition-colors hover:text-neutral-950 2xl:px-3 2xl:text-sm"
     >
       {label}
     </Link>
@@ -119,10 +119,10 @@ function HeaderUserMenu({ align }: { align: 'desktop' | 'mobile' }) {
       return (
         <>
           <Link to="/login">
-            <Button variant="ghost" className="text-neutral-700 font-medium text-base">Entrar</Button>
+            <Button variant="ghost" className="h-11 rounded-xl px-3 text-sm font-semibold text-neutral-700">Entrar</Button>
           </Link>
           <Link to="/simular">
-            <Button className="bg-neutral-900 text-white hover:bg-neutral-800 px-5 py-2 rounded-lg font-bold text-base shadow-xl shadow-neutral-100 transition-all active:scale-95">
+            <Button className="h-11 rounded-[14px] bg-neutral-950 px-4 text-sm font-bold text-white shadow-none transition-colors hover:bg-neutral-800">
               Solicitar Análise
             </Button>
           </Link>
@@ -190,13 +190,13 @@ function HeaderUserMenu({ align }: { align: 'desktop' | 'mobile' }) {
   return (
     <>
       <Link to={dashboardTo as any}>
-        <Button className="bg-neutral-900 text-white hover:bg-neutral-800 px-5 py-2 rounded-lg font-bold text-base shadow-xl shadow-neutral-100 transition-all active:scale-95 gap-2">
+        <Button className="h-11 gap-2 rounded-[14px] bg-neutral-950 px-5 text-sm font-bold text-white shadow-none transition-colors hover:bg-neutral-800">
           <LayoutDashboard className="w-4 h-4" /> Dashboard
         </Button>
       </Link>
       <DropdownMenu>
         <DropdownMenuTrigger className="outline-none rounded-full ring-offset-2 focus-visible:ring-2 focus-visible:ring-yellow-400">
-          <Avatar className="w-10 h-10 border border-neutral-200 hover:border-yellow-400 transition-colors">
+          <Avatar className="h-11 w-11 border border-neutral-200 transition-colors hover:border-yellow-400">
             <AvatarImage src={profile?.avatar_url ?? undefined} alt={profile?.nome ?? user.email} />
             <AvatarFallback className="bg-yellow-400 text-neutral-900 font-bold">{inicial}</AvatarFallback>
           </Avatar>
@@ -238,38 +238,35 @@ export const InstitutionalHeader = () => {
   }, [isMobileMenuOpen]);
 
   return (
-    <header className="fixed top-0 w-full z-50 bg-white/90 backdrop-blur-md border-b border-neutral-100">
-      <div className="container mx-auto px-6 h-20 flex items-center justify-between max-w-7xl">
+    <header className="fixed inset-x-0 top-0 z-50 px-3 pt-3 sm:px-5 sm:pt-4">
+      <div className="mx-auto flex h-[72px] w-full max-w-[1500px] items-center justify-between gap-4 rounded-[20px] border border-black/[0.06] bg-white px-4 shadow-[0_8px_30px_rgba(0,0,0,0.04)] sm:h-20 sm:px-6 xl:gap-5 xl:px-7">
         {/* Esquerda: Logo */}
         <Link to="/" className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity shrink-0">
           <LogoNox variant="claro" size="md" />
         </Link>
 
         {/* Centro: Menu principal + abas de perfil (Desktop) */}
-        <nav className="hidden lg:flex items-center gap-1">
-          <Link to="/seguro-fianca" className="px-3 py-1.5 text-base font-medium text-neutral-600 hover:text-neutral-900 transition-colors">Seguro Fiança</Link>
-          <Link to="/planos" className="px-3 py-1.5 text-base font-medium text-neutral-600 hover:text-neutral-900 transition-colors">Planos</Link>
-          <Link to="/contato" className="px-3 py-1.5 text-base font-medium text-neutral-600 hover:text-neutral-900 transition-colors">Contato</Link>
-
-          <span className="w-px h-5 bg-neutral-200 mx-3"></span>
-
-          <div className="flex items-center divide-x divide-neutral-200/80">
-            <PerfilTab to="/corretor" label="Corretor" />
-            <PerfilTab to="/imobiliaria" label="Imobiliária" />
-            <PerfilTab to="/proprietario" label="Proprietário" />
-            <PerfilTab to="/inquilino" label="Inquilino" />
-          </div>
+        <nav className="hidden min-w-0 flex-1 items-center justify-center divide-x divide-neutral-200/80 xl:flex">
+          <PerfilTab to="/seguro-fianca" label="Seguro Fiança" />
+          <PerfilTab to="/planos" label="Planos" />
+          <PerfilTab to="/contato" label="Contato" />
+          <PerfilTab to="/corretor" label="Corretor" />
+          <PerfilTab to="/imobiliaria" label="Imobiliária" />
+          <PerfilTab to="/proprietario" label="Proprietário" />
+          <PerfilTab to="/inquilino" label="Inquilino" />
         </nav>
 
         {/* Direita: Botões (Desktop) */}
-        <div className="hidden lg:flex items-center gap-4">
-          <span className="w-px h-5 bg-neutral-200"></span>
+        <div className="hidden shrink-0 items-center gap-3 border-l border-neutral-200/80 pl-4 xl:flex 2xl:gap-4 2xl:pl-5">
           <HeaderUserMenu align="desktop" />
         </div>
 
         {/* Menu Mobile Button */}
         <button
-          className="lg:hidden p-2 text-neutral-600 hover:text-neutral-900"
+          type="button"
+          aria-label={isMobileMenuOpen ? 'Fechar menu' : 'Abrir menu'}
+          aria-expanded={isMobileMenuOpen}
+          className="rounded-xl border border-neutral-200 p-2.5 text-neutral-700 transition-colors hover:bg-neutral-50 hover:text-neutral-950 xl:hidden"
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
         >
           {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
@@ -278,8 +275,8 @@ export const InstitutionalHeader = () => {
 
       {/* Mobile Menu Drawer */}
       {isMobileMenuOpen && (
-          <div className="lg:hidden bg-white border-t border-neutral-100 max-h-[calc(100dvh-5rem)] overflow-y-auto overscroll-contain">
-            <div className="container mx-auto px-6 py-6 space-y-6">
+          <div className="mx-auto mt-2 max-h-[calc(100dvh-6.75rem)] w-full max-w-[1500px] overflow-y-auto overscroll-contain rounded-[20px] border border-black/[0.06] bg-white shadow-[0_12px_32px_rgba(0,0,0,0.06)] xl:hidden">
+            <div className="space-y-6 px-6 py-6">
               <nav className="flex flex-col gap-4">
                 <Link to="/seguro-fianca" onClick={() => setIsMobileMenuOpen(false)} className="text-base font-medium text-neutral-600">Seguro Fiança</Link>
                 <Link to="/planos" onClick={() => setIsMobileMenuOpen(false)} className="text-base font-medium text-neutral-600">Planos</Link>
