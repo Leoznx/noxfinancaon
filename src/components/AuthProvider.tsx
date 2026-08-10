@@ -99,7 +99,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (e) {
       console.warn("[Auth] failed to parse saved user", e);
     }
-    setIsLoading(false);
+    // O usuario salvo e apenas cache visual. As rotas protegidas continuam
+    // bloqueadas ate a sessao real do Supabase ser confirmada abaixo.
   }, []);
 
   // Reconcilia com a sessão REAL do Supabase (além do "nox_user" no localStorage acima).
@@ -114,15 +115,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { supabase } = await import("@/integrations/supabase/client");
 
       const syncFromSession = async (userId: string, email: string, authUser?: any, isFreshSignIn?: boolean) => {
-        if (isLoggingOutRef.current) return;
+        if (isLoggingOutRef.current) return false;
         const syncVersion = authVersionRef.current;
         try {
-          const { data: profile } = await supabase
+          const { data: profile, error: profileError } = await supabase
             .from("profiles")
             .select("role,nome,avatar_url")
             .eq("id", userId)
             .maybeSingle();
-          if (!active || isLoggingOutRef.current || syncVersion !== authVersionRef.current) return;
+          if (profileError) throw profileError;
+          if (!active || isLoggingOutRef.current || syncVersion !== authVersionRef.current) return false;
           const role = (profile as any)?.role as Role | undefined;
           if (!role) return; // profile ainda não existe (ex.: trigger em voo) — não força estado incompleto
           setCachedHeaderProfile({
@@ -147,17 +149,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               )
               .catch((e) => console.warn("[Auth] finalizar cadastro inquilino falhou", e));
           }
+          return true;
         } catch (e) {
           console.warn("[Auth] syncFromSession failed", e);
+          return false;
         }
       };
 
       const {
         data: { session },
       } = await supabase.auth.getSession();
-      if (active && !isLoggingOutRef.current && session?.user?.email) {
-        await syncFromSession(session.user.id, session.user.email);
+      if (!active) return;
+
+      if (!isLoggingOutRef.current && session?.user?.email) {
+        const synced = await syncFromSession(session.user.id, session.user.email, session.user);
+        if (!active || isLoggingOutRef.current) return;
+        if (!synced) {
+          await supabase.auth.signOut({ scope: "local" });
+          setUser(null);
+          clearStoredAuth();
+        }
+      } else if (!isLoggingOutRef.current) {
+        authVersionRef.current += 1;
+        setUser(null);
+        clearStoredAuth();
       }
+
+      if (active) setIsLoading(false);
 
       const {
         data: { subscription },
@@ -166,6 +184,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           authVersionRef.current += 1;
           setUser(null);
           clearStoredAuth();
+          setIsLoading(false);
         } else if (!isLoggingOutRef.current && event === "SIGNED_IN" && newSession?.user?.email) {
           syncFromSession(newSession.user.id, newSession.user.email, newSession.user, true);
         }

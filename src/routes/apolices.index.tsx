@@ -107,8 +107,6 @@ function ApolicesList() {
 
         if (consultaIdsPermitidos) {
           query = query.in("consulta_id", consultaIdsPermitidos);
-        } else if (pid && role === "proprietario") {
-          query = query.eq("proprietario_profile_id", pid);
         }
 
         const { data, error } = await query;

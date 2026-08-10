@@ -72,10 +72,11 @@ function FaturasInquilinosLista() {
       const ids = (aps || []).map((a: any) => a.id);
       const parcelasByAp: Record<string, any[]> = {};
       if (ids.length) {
-        const { data: ms } = await supabase
+        const { data: ms, error: mensalidadesError } = await supabase
           .from("mensalidades")
           .select("apolice_id, valor, data_vencimento, status")
           .in("apolice_id", ids);
+        if (mensalidadesError) throw mensalidadesError;
         for (const m of ms || []) {
           (parcelasByAp[m.apolice_id] ||= []).push(m);
         }
