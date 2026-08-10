@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 
-import { BenefitsGrid, ComparativeSection } from '@/components/landing/ComparativeAndBenefits';
-import { InstitutionalFaq, InstitutionalFooter } from '@/components/landing/FaqAndFooterInstitutional';
+import { BenefitsGrid } from '@/components/landing/ComparativeAndBenefits';
+import { InstitutionalFooter } from '@/components/landing/FaqAndFooterInstitutional';
 import { InstitutionalHeader } from '@/components/landing/InstitutionalHeader';
 import {
   InsuranceFinalCta,
@@ -37,8 +37,6 @@ function SeguroFiancaPage() {
         <InsuranceJourney />
         <InsuranceForEveryone />
         <BenefitsGrid />
-        <ComparativeSection />
-        <InstitutionalFaq />
         <InsuranceFinalCta />
       </main>
       <InstitutionalFooter hideCta />

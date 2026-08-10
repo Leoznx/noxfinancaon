@@ -1,9 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { InstitutionalHeader } from "@/components/landing/InstitutionalHeader";
 import { InstitutionalHero, SolutionPresentation } from "@/components/landing/SectionsBasic";
+import { ComparativeSection } from "@/components/landing/ComparativeAndBenefits";
 import { InstitutionalNumbers } from "@/components/landing/PlansAndNumbers";
 import { CareerProgramSection } from "@/components/landing/CareerProgramSection";
-import { InstitutionalFooter } from "@/components/landing/FaqAndFooterInstitutional";
+import { InstitutionalFaq, InstitutionalFooter } from "@/components/landing/FaqAndFooterInstitutional";
 import { ArrowUp } from "lucide-react";
 import { useState, useEffect } from "react";
 
@@ -51,10 +52,12 @@ function Index() {
         <InstitutionalHero />
         <SolutionPresentation />
         <CareerProgramSection />
+        <ComparativeSection />
         <InstitutionalNumbers />
+        <InstitutionalFaq />
       </main>
 
-      <InstitutionalFooter />
+      <InstitutionalFooter hideCta />
 
 
       {/* Scroll to Top */}
