@@ -226,6 +226,16 @@ function FinanceiroAdminPage() {
         { event: "*", schema: "public", table: "comissoes" },
         () => void loadData(filters, true),
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "asaas_payments" },
+        () => void loadData(filters, true),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "consolidated_invoice_batches" },
+        () => void loadData(filters, true),
+      )
       .subscribe();
     return () => {
       void supabase.removeChannel(channel);

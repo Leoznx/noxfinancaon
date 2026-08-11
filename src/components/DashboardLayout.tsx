@@ -152,6 +152,7 @@ const proprietarioItems = [
   { icon: DollarSign, label: "Plano de Comissão", href: "/minhas-comissoes" },
   { icon: FileText, label: "Contratos Ativos", href: "/apolices" },
   { icon: Receipt, label: "Faturas Inquilinos", href: "/faturas-inquilinos" },
+  { icon: Wallet, label: "Carteira de Cobranças", href: "/carteira-cobrancas" },
   { icon: AlertCircle, label: "Abrir Sinistro", href: "/sinistros" },
 
   { icon: User, label: "Meu Perfil", href: "/configuracoes" },

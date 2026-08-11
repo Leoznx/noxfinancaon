@@ -41,6 +41,7 @@ const STATUS_EXCLUIDOS_DOS_TOTAIS = ["cancelled", "refunded", "partially_refunde
 
 function FaturamentoAdminPage() {
   const [parcelas, setParcelas] = useState<any[]>([]);
+  const [lotes, setLotes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState("");
   const [atualizandoId, setAtualizandoId] = useState<string | null>(null);
@@ -51,25 +52,75 @@ function FaturamentoAdminPage() {
 
   const carregar = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from("faturas_inquilino")
-      .select(
-        `id, valor, vencimento, pago_em, status, numero_parcela, installment_total, boleto_url, linha_digitavel, payment_responsible,
+    const [{ data, error }, { data: batchData, error: batchError }] = await Promise.all([
+      supabase.from("faturas_inquilino").select(
+        `id, valor, vencimento, pago_em, status, numero_parcela, installment_total, boleto_url, linha_digitavel, payment_responsible, consolidated_item_id,
          asaas_payment:asaas_payments(asaas_payment_id),
          consulta:consultas_credito(id, tenant_name, tenant_document, imovel:imoveis(endereco, cidade, estado))`,
-      )
-      .order("vencimento", { ascending: false })
-      .limit(5000);
-    if (error) toast.error("Erro ao carregar faturas");
-    else setParcelas(data ?? []);
+      ).order("vencimento", { ascending: false }).limit(5000),
+      (supabase as any).from("consolidated_invoice_batches").select("id, total_value, received_value, due_date, paid_at, status, invoice_count, bank_slip_url, identification_field, asaas_payment_id, reference_month, reference_year"),
+    ]);
+    if (error || batchError) toast.error("Erro ao carregar faturas");
+    else {
+      setParcelas(data ?? []);
+      setLotes(batchData ?? []);
+    }
     setLoading(false);
   };
 
   useEffect(() => {
     carregar();
+    const channel = supabase
+      .channel("admin-faturamento-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "faturas_inquilino" }, carregar)
+      .on("postgres_changes", { event: "*", schema: "public", table: "asaas_payments" }, carregar)
+      .on("postgres_changes", { event: "*", schema: "public", table: "consolidated_invoice_batches" }, carregar)
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
   }, []);
 
-  const enriched = useMemo(() => parcelas.map(p => {
+  const linhasFinanceiras = useMemo(() => [
+    ...parcelas.filter((p) => !p.consolidated_item_id),
+    ...lotes.flatMap((batch) => {
+      const base = {
+        vencimento: batch.due_date,
+        numero_parcela: 1,
+        installment_total: 1,
+        boleto_url: batch.bank_slip_url,
+        linha_digitavel: batch.identification_field,
+        payment_responsible: "agency",
+        asaas_payment: { asaas_payment_id: batch.asaas_payment_id },
+        consulta: { tenant_name: `Lote consolidado (${batch.invoice_count} contratos)`, tenant_document: "", imovel: null },
+      };
+      if (batch.status !== "partial") {
+        return [{
+          ...base,
+          id: `batch:${batch.id}`,
+          valor: batch.total_value,
+          pago_em: batch.paid_at,
+          status: batch.status === "active" ? "pending" : batch.status,
+        }];
+      }
+      return [
+        {
+          ...base,
+          id: `batch:${batch.id}:remaining`,
+          valor: Math.max(Number(batch.total_value || 0) - Number(batch.received_value || 0), 0),
+          pago_em: null,
+          status: "pending",
+        },
+        {
+          ...base,
+          id: `batch:${batch.id}:received`,
+          valor: Number(batch.received_value || 0),
+          pago_em: batch.paid_at,
+          status: "paid_via_consolidated",
+        },
+      ];
+    }),
+  ], [lotes, parcelas]);
+
+  const enriched = useMemo(() => linhasFinanceiras.map(p => {
     const status: "pago" | "vencido" | "a_vencer" | "outro" = isPagamentoConcluido(p.status)
       ? "pago"
       : p.status === "overdue"
@@ -78,7 +129,7 @@ function FaturamentoAdminPage() {
           ? "a_vencer"
           : "outro";
     return { ...p, _status: status, _ym: ymKey(p.vencimento) };
-  }), [parcelas]);
+  }), [linhasFinanceiras]);
 
   // Meses disponíveis ordenados desc
   const mesesDisponiveis = useMemo(() => {

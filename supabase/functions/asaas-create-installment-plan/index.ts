@@ -22,6 +22,7 @@ import {
   wasNotificationSent,
 } from "../_shared/asaas.ts";
 import { ensureAsaasCustomer } from "../_shared/asaas-customer.ts";
+import { asaasLateFeePayload, nextMonthlyDueDate } from "../_shared/billing-automation.ts";
 
 const INSTALLMENT_COUNT = 12;
 
@@ -111,7 +112,10 @@ serve(async (req) => {
       return jsonResponse(req, buildResponse([...jaCriadas.values()], recipient));
     }
 
-    const primeiroVencimento = jaCriadas.size > 0 ? null : addBusinessDays(3);
+    // A ativacao continua sendo uma cobranca separada; as mensalidades
+    // recorrentes novas passam a vencer sempre no dia 10, iniciando no mes
+    // seguinte. Planos antigos preservam o cronograma ja contratado.
+    const primeiroVencimento = jaCriadas.size > 0 ? null : nextMonthlyDueDate(new Date(), 1);
     const schedule = generateInstallmentSchedule({
       firstDueDate: primeiroVencimento || (existentes?.[0]?.vencimento ?? addBusinessDays(3)),
       count: INSTALLMENT_COUNT,
@@ -137,6 +141,7 @@ serve(async (req) => {
             dueDate: item.dueDate,
             description,
             externalReference,
+            ...asaasLateFeePayload(),
           }),
         });
       } catch (error) {

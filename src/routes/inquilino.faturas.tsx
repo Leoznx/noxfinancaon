@@ -22,6 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { isPagamentoConcluido, MESES_PT, statusPagamentoLabel } from "@/lib/asaas-payment";
+import { reissuePayment } from "@/lib/automated-billing";
 import {
   AGENCY_BILLING_MESSAGE,
   mergeTenantBillingItems,
@@ -82,6 +83,7 @@ function FaturasInquilino() {
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [refreshingId, setRefreshingId] = useState<string | null>(null);
+  const [reissuingId, setReissuingId] = useState<string | null>(null);
 
   const loadBilling = useCallback(async () => {
     if (!user?.id) return;
@@ -269,6 +271,29 @@ function FaturasInquilino() {
     }
   }
 
+  async function reissue(item: TenantBillingItem, method: "boleto" | "pix") {
+    if (!item.invoiceId) {
+      toast.error("Esta cobrança avulsa não possui uma mensalidade atualizável.");
+      return;
+    }
+    setReissuingId(`${item.id}:${method}`);
+    try {
+      const payment = await reissuePayment({ invoiceId: item.invoiceId, method });
+      await loadBilling();
+      if (method === "boleto" && payment.boleto?.pdfUrl) {
+        window.open(payment.boleto.pdfUrl, "_blank", "noopener,noreferrer");
+      }
+      if (method === "pix" && payment.pix?.copyPaste) {
+        await copyValue(payment.pix.copyPaste, "Pix atualizado copiado.");
+      }
+      toast.success(method === "boleto" ? "Boleto atualizado gerado." : "Pix atualizado gerado.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível atualizar a cobrança.");
+    } finally {
+      setReissuingId(null);
+    }
+  }
+
   return (
     <DashboardLayout>
       <div className="mx-auto max-w-6xl space-y-6">
@@ -338,8 +363,10 @@ function FaturasInquilino() {
                 contract={contract}
                 actionableId={actionableByContract.get(contract.id)}
                 refreshingId={refreshingId}
+                reissuingId={reissuingId}
                 onCopy={copyValue}
                 onRefresh={refreshStatus}
+                onReissue={reissue}
               />
             ))}
           </>
@@ -353,14 +380,18 @@ function ContractBilling({
   contract,
   actionableId,
   refreshingId,
+  reissuingId,
   onCopy,
   onRefresh,
+  onReissue,
 }: {
   contract: BillingContract;
   actionableId?: string;
   refreshingId: string | null;
+  reissuingId: string | null;
   onCopy: (value: string, message: string) => Promise<void>;
   onRefresh: (item: TenantBillingItem) => Promise<void>;
+  onReissue: (item: TenantBillingItem, method: "boleto" | "pix") => Promise<void>;
 }) {
   const address = contract.imovel
     ? [contract.imovel.endereco, contract.imovel.cidade, contract.imovel.estado]
@@ -468,6 +499,26 @@ function ContractBilling({
                         >
                           <QrCode className="mr-1" size={14} /> Copiar Pix
                         </Button>
+                      )}
+                      {item.invoiceId && item.providerPaymentId && !isPagamentoConcluido(item.status) && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => onReissue(item, "boleto")}
+                            disabled={reissuingId === `${item.id}:boleto`}
+                          >
+                            <FileText className="mr-1" size={14} /> Boleto atualizado
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => onReissue(item, "pix")}
+                            disabled={reissuingId === `${item.id}:pix`}
+                          >
+                            <QrCode className="mr-1" size={14} /> Gerar Pix
+                          </Button>
+                        </>
                       )}
                       {item.providerPaymentId && !isPagamentoConcluido(item.status) && (
                         <Button

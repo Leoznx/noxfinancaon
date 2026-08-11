@@ -1,190 +1,355 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import {
   AsaasApiError,
-  addBusinessDays,
   asaasFetch,
+  cancelAsaasPayment,
   corsHeaders,
   jsonResponse,
-  mapAsaasStatus,
   normalizeDocumento,
   normalizePhone,
   requireUser,
-  sanitizeAsaasResponse,
+  supabaseAdmin,
   toMoney,
 } from "../_shared/asaas.ts";
+import {
+  asaasLateFeePayload,
+  monthlyDueDate,
+  saoPauloClock,
+} from "../_shared/billing-automation.ts";
 
 type Body = {
   invoiceIds?: string[];
   referenceMonth?: number;
   referenceYear?: number;
+  agencyUserId?: string;
 };
 
+const OPEN_STATUSES = [
+  "pending",
+  "overdue",
+  "risk_analysis",
+  "approved",
+  "created",
+  "waiting_payment",
+];
+
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders(req) });
-  if (req.method !== "POST")
-    return jsonResponse(req, { ok: false, error: "Metodo nao permitido." }, 405);
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders(req) });
+  }
+  if (req.method !== "POST") {
+    return jsonResponse(
+      req,
+      { ok: false, error: "Método não permitido." },
+      405,
+    );
+  }
 
   try {
-    const { supabase, user } = await requireUser(req);
-    const body = (await req.json()) as Body;
-    const invoiceIds = Array.isArray(body.invoiceIds) ? body.invoiceIds.filter(Boolean) : [];
-    if (!invoiceIds.length)
-      return jsonResponse(req, { ok: false, error: "Selecione ao menos uma fatura para consolidar." }, 400);
-
-    const now = new Date();
-    const referenceMonth = body.referenceMonth || now.getMonth() + 1;
-    const referenceYear = body.referenceYear || now.getFullYear();
-
-    // Fonte de verdade e o backend: revalida cada fatura, nunca confia
-    // cegamente na lista vinda do frontend alem de usa-la como candidata.
-    // "Minha carteira" = faturas cujo destinatario (recipient_user_id) sou eu
-    // mesmo (o profile autenticado) - mesmo nivel de escopo ja usado hoje em
-    // apolices.index.tsx (match direto por profile_id, sem fan-out de
-    // imobiliaria->corretores vinculados).
-    const { data: candidatas, error: candidatasError } = await supabase
-      .from("faturas_inquilino")
-      .select("*")
-      .in("id", invoiceIds)
-      .eq("recipient_user_id", user.id)
-      .eq("payment_responsible", "agency")
-      .is("consolidated_item_id", null)
-      .not("status", "in", "(paid,cancelled,refunded,partially_refunded)");
-    if (candidatasError) throw candidatasError;
-
-    const elegiveis = (candidatas ?? []).filter((f: any) => {
-      const [ano, mes] = String(f.vencimento).split("-").map(Number);
-      return mes === referenceMonth && ano === referenceYear;
-    });
-
-    if (!elegiveis.length)
-      return jsonResponse(
-        req,
-        { ok: false, error: "Nenhuma fatura elegivel encontrada (verifique mes, responsavel e se ja nao esta consolidada)." },
-        400,
-      );
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("nome, email, telefone, cnpj, role")
-      .eq("id", user.id)
-      .maybeSingle();
-    if (!profile?.email || !profile?.telefone) {
-      return jsonResponse(
-        req,
-        { ok: false, error: "Complete e-mail e telefone do seu cadastro antes de gerar o boleto consolidado." },
-        400,
-      );
+    const body = (await req.json().catch(() => ({}))) as Body;
+    const cronSecret = Deno.env.get("CRON_NOTIFICATIONS_SECRET") || "";
+    const internal = !!cronSecret &&
+      req.headers.get("x-cron-secret") === cronSecret;
+    let actorId: string | null = null;
+    let agencyUserId = body.agencyUserId || null;
+    if (!internal) {
+      const { user } = await requireUser(req);
+      actorId = user.id;
+      agencyUserId = user.id;
+    }
+    if (!agencyUserId) {
+      return jsonResponse(req, {
+        ok: false,
+        error: "Responsável não informado.",
+      }, 400);
     }
 
-    const totalValue = toMoney(elegiveis.reduce((sum: number, f: any) => sum + Number(f.valor || 0), 0));
-    const dueDate = addBusinessDays(3);
-    const cpfCnpj = normalizeDocumento(profile.cnpj) || normalizeDocumento(user.email);
+    const admin = supabaseAdmin();
+    const clock = saoPauloClock();
+    const [currentYear, currentMonth] = clock.date.split("-").map(Number);
+    const referenceMonth = body.referenceMonth || currentMonth;
+    const referenceYear = body.referenceYear || currentYear;
+    if (
+      referenceMonth < 1 || referenceMonth > 12 || referenceYear < 2020 ||
+      referenceYear > 2200
+    ) {
+      return jsonResponse(req, {
+        ok: false,
+        error: "Mês de referência inválido.",
+      }, 400);
+    }
 
-    // Cliente Asaas em nome da imobiliaria/corretor (dados do profile
-    // autenticado, nunca do payload do frontend) - reutiliza se ja existir
-    // pelo documento cadastrado, pra evitar cliente duplicado.
-    let customerId: string | null = null;
-    if (profile.cnpj) {
-      const found = await asaasFetch(`/customers?cpfCnpj=${encodeURIComponent(normalizeDocumento(profile.cnpj))}`);
-      customerId = Array.isArray(found?.data) && found.data.length ? found.data[0].id : null;
+    let candidateQuery = admin
+      .from("faturas_inquilino")
+      .select(
+        "id, consulta_id, tenant_user_id, asaas_payment_id, valor, vencimento, status, consolidated_item_id",
+      )
+      .eq("recipient_user_id", agencyUserId)
+      .eq("payment_responsible", "agency")
+      .in("status", OPEN_STATUSES);
+    const invoiceIds = Array.isArray(body.invoiceIds)
+      ? [...new Set(body.invoiceIds.filter(Boolean))]
+      : [];
+    if (invoiceIds.length) candidateQuery = candidateQuery.in("id", invoiceIds);
+    const { data: candidates, error: candidateError } = await candidateQuery;
+    if (candidateError) throw candidateError;
+
+    const eligible = (candidates ?? []).filter((invoice: any) => {
+      const [year, month] = String(invoice.vencimento).split("-").map(Number);
+      return year === referenceYear && month === referenceMonth;
+    });
+
+    const { data: existingBatch } = await admin
+      .from("consolidated_invoice_batches")
+      .select("*")
+      .eq("agency_user_id", agencyUserId)
+      .eq("reference_month", referenceMonth)
+      .eq("reference_year", referenceYear)
+      .in("status", ["active", "partial"])
+      .maybeSingle();
+
+    if (!eligible.length) {
+      if (
+        existingBatch?.asaas_payment_id && existingBatch.status === "active"
+      ) {
+        await cancelAsaasPayment(existingBatch.asaas_payment_id);
+        await releaseBatch(admin, existingBatch.id);
+      }
+      return jsonResponse(req, {
+        ok: false,
+        error: "Nenhuma fatura elegível para este mês.",
+      }, 400);
+    }
+    if (existingBatch?.status === "partial") {
+      return jsonResponse(req, {
+        ok: false,
+        error: "O lote possui pagamento parcial e requer revisão financeira.",
+      }, 409);
+    }
+
+    const { data: profile } = await admin
+      .from("profiles")
+      .select("id, nome, email, telefone, cnpj, role")
+      .eq("id", agencyUserId)
+      .maybeSingle();
+    if (!profile?.email || !profile?.telefone) {
+      return jsonResponse(req, {
+        ok: false,
+        error:
+          "Complete e-mail e telefone do responsável antes de gerar a cobrança.",
+      }, 400);
+    }
+    const cpfCnpj = await resolveProfileDocument(admin, profile);
+    if (!cpfCnpj) {
+      return jsonResponse(req, {
+        ok: false,
+        error:
+          "Cadastre o CPF ou CNPJ do responsável antes de gerar a cobrança.",
+      }, 400);
+    }
+
+    const totalValue = toMoney(
+      eligible.reduce(
+        (sum: number, invoice: any) => sum + Number(invoice.valor || 0),
+        0,
+      ),
+    );
+    const dueDate = monthlyDueDate(referenceYear, referenceMonth);
+    let customerId = existingBatch?.asaas_customer_id || null;
+    if (!customerId) {
+      const found = await asaasFetch(
+        `/customers?cpfCnpj=${encodeURIComponent(cpfCnpj)}`,
+      );
+      customerId = Array.isArray(found?.data) && found.data.length
+        ? found.data[0].id
+        : null;
     }
     if (!customerId) {
       const created = await asaasFetch("/customers", {
         method: "POST",
         body: JSON.stringify({
           name: profile.nome,
-          cpfCnpj: cpfCnpj || undefined,
+          cpfCnpj,
           email: profile.email,
           mobilePhone: normalizePhone(profile.telefone),
           phone: normalizePhone(profile.telefone),
         }),
       });
-      customerId = created?.id;
+      customerId = created?.id || null;
     }
-    if (!customerId) throw new Error("Nao foi possivel criar/localizar o cliente Asaas da imobiliaria.");
+    if (!customerId) throw new Error("asaas_customer_missing");
 
-    const externalReference = `nox:lote:${user.id}:${referenceMonth}:${referenceYear}:${Math.round(totalValue * 100)}`;
+    const externalReference = existingBatch?.external_reference ||
+      `nox:lote:${agencyUserId}:${referenceYear}:${
+        String(referenceMonth).padStart(2, "0")
+      }`;
+    const paymentPayload = {
+      customer: customerId,
+      billingType: "BOLETO",
+      value: totalValue,
+      dueDate,
+      description: `NOX Fiança — cobrança mensal consolidada ${
+        String(referenceMonth).padStart(2, "0")
+      }/${referenceYear} (${eligible.length} contratos)`,
+      externalReference,
+      ...asaasLateFeePayload(),
+    };
 
     let raw: any;
     try {
-      raw = await asaasFetch("/payments", {
-        method: "POST",
-        body: JSON.stringify({
-          customer: customerId,
-          billingType: "BOLETO",
-          value: totalValue,
-          dueDate,
-          description: `NOX Fiança — Boleto consolidado ${String(referenceMonth).padStart(2, "0")}/${referenceYear} (${elegiveis.length} faturas)`,
-          externalReference,
-        }),
-      });
+      raw = existingBatch?.asaas_payment_id
+        ? await asaasFetch(`/payments/${existingBatch.asaas_payment_id}`, {
+          method: "PUT",
+          body: JSON.stringify(paymentPayload),
+        })
+        : await asaasFetch("/payments", {
+          method: "POST",
+          body: JSON.stringify(paymentPayload),
+        });
     } catch (error) {
-      console.error("[asaas-create-consolidated-invoice] falha ao criar cobranca", {
-        agencyUserId: user.id,
+      console.error("[asaas-create-consolidated-invoice] provider_error", {
         status: error instanceof AsaasApiError ? error.status : "unknown",
       });
-      return jsonResponse(req, { ok: false, error: "Nao foi possivel gerar o boleto consolidado agora." }, 502);
+      return jsonResponse(req, {
+        ok: false,
+        error: "Não foi possível gerar a cobrança consolidada agora.",
+      }, 502);
     }
 
-    const sanitized = sanitizeAsaasResponse(raw);
-    const internalStatus = mapAsaasStatus(raw?.status);
+    let batch = existingBatch;
+    if (batch) {
+      const { data, error } = await admin
+        .from("consolidated_invoice_batches")
+        .update({
+          total_value: totalValue,
+          due_date: dueDate,
+          invoice_count: eligible.length,
+          billing_method: "boleto",
+          asaas_customer_id: customerId,
+          asaas_payment_id: raw?.id || batch.asaas_payment_id,
+          invoice_url: raw?.invoiceUrl || null,
+          bank_slip_url: raw?.bankSlipUrl || raw?.invoiceUrl || null,
+          identification_field: raw?.identificationField || raw?.nossoNumero ||
+            null,
+          last_synced_at: new Date().toISOString(),
+        })
+        .eq("id", batch.id)
+        .select()
+        .maybeSingle();
+      if (error) throw error;
+      batch = data;
+    } else {
+      const { data, error } = await admin
+        .from("consolidated_invoice_batches")
+        .insert({
+          agency_user_id: agencyUserId,
+          created_by: actorId,
+          reference_month: referenceMonth,
+          reference_year: referenceYear,
+          total_value: totalValue,
+          due_date: dueDate,
+          status: "active",
+          invoice_count: eligible.length,
+          billing_method: "boleto",
+          asaas_customer_id: customerId,
+          asaas_payment_id: raw?.id || null,
+          external_reference: externalReference,
+          invoice_url: raw?.invoiceUrl || null,
+          bank_slip_url: raw?.bankSlipUrl || raw?.invoiceUrl || null,
+          identification_field: raw?.identificationField || raw?.nossoNumero ||
+            null,
+          last_synced_at: new Date().toISOString(),
+        })
+        .select()
+        .maybeSingle();
+      if (error) throw error;
+      batch = data;
+    }
 
-    const { data: batch, error: batchError } = await supabase
-      .from("consolidated_invoice_batches")
-      .insert({
-        agency_user_id: user.id,
-        created_by: user.id,
-        reference_month: referenceMonth,
-        reference_year: referenceYear,
-        total_value: totalValue,
-        due_date: dueDate,
-        status: "active",
-        asaas_customer_id: customerId,
-        asaas_payment_id: raw?.id || null,
-        external_reference: externalReference,
-        invoice_url: raw?.invoiceUrl || null,
-        bank_slip_url: raw?.bankSlipUrl || null,
-        identification_field: raw?.identificationField || raw?.nossoNumero || null,
-      })
-      .select()
-      .maybeSingle();
-    if (batchError) throw batchError;
-
-    // Trava transacional contra dupla consolidacao: o indice unico parcial
-    // (fatura_id) WHERE status='active' garante no banco que uma fatura
-    // nunca entre em dois lotes ativos ao mesmo tempo, mesmo em corrida.
-    const itemRows = elegiveis.map((f: any) => ({
-      batch_id: batch.id,
-      fatura_id: f.id,
-      tenant_user_id: f.tenant_user_id,
-      consulta_id: f.consulta_id,
-      original_value: f.valor,
-      status: "active",
-    }));
-    const { data: itensCriados, error: itemsError } = await supabase
+    const { data: currentItems } = await admin
       .from("consolidated_invoice_items")
-      .insert(itemRows)
-      .select("id, fatura_id");
-    if (itemsError) {
-      // O indice unico parcial (fatura_id) WHERE status='active' rejeita a
-      // insercao se alguma dessas faturas ja entrou em outro lote ativo
-      // entre a checagem acima e aqui (corrida). A cobranca no Asaas ja foi
-      // criada nesse ponto - marca o lote como cancelado pra nao ficar
-      // "active" orfao sem itens (nao tenta cancelar no Asaas aqui pra nao
-      // mascarar o erro original; fica sinalizado pra revisao manual).
-      console.error("[asaas-create-consolidated-invoice] falha ao gravar itens do lote (possivel corrida)", {
-        batchId: batch.id,
-        error: itemsError.message,
-      });
-      await supabase.from("consolidated_invoice_batches").update({ status: "cancelled" }).eq("id", batch.id);
-      throw itemsError;
+      .select("id, fatura_id, status")
+      .eq("batch_id", batch.id)
+      .eq("status", "active");
+    const eligibleIds = new Set(eligible.map((invoice: any) => invoice.id));
+    const itemByInvoice = new Map(
+      (currentItems ?? []).map((item: any) => [item.fatura_id, item]),
+    );
+
+    for (const item of currentItems ?? []) {
+      if (eligibleIds.has(item.fatura_id)) continue;
+      await admin.from("faturas_inquilino").update({
+        consolidated_item_id: null,
+      }).eq("id", item.fatura_id);
+      await admin
+        .from("consolidated_invoice_items")
+        .update({
+          status: "cancelled_after_consolidation",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", item.id);
     }
 
-    for (const item of itensCriados ?? []) {
-      await supabase
+    for (const invoice of eligible) {
+      let item = itemByInvoice.get(invoice.id);
+      if (!item) {
+        const { data, error } = await admin
+          .from("consolidated_invoice_items")
+          .insert({
+            batch_id: batch.id,
+            fatura_id: invoice.id,
+            tenant_user_id: invoice.tenant_user_id,
+            consulta_id: invoice.consulta_id,
+            original_value: invoice.valor,
+            status: "active",
+          })
+          .select("id, fatura_id")
+          .maybeSingle();
+        if (error) throw error;
+        item = data;
+      }
+      await admin
         .from("faturas_inquilino")
-        .update({ consolidated_item_id: item.id })
-        .eq("id", item.fatura_id);
+        .update({
+          consolidated_item_id: item.id,
+          boleto_url: null,
+          linha_digitavel: null,
+        })
+        .eq("id", invoice.id);
+    }
+
+    // Uma cobrança individual aberta nunca pode coexistir com o lote. Se o
+    // cancelamento de qualquer item falhar, o lote novo é cancelado e os
+    // vínculos são liberados para evitar cobrança duplicada.
+    for (const invoice of eligible) {
+      if (!invoice.asaas_payment_id) continue;
+      const { data: payment } = await admin
+        .from("asaas_payments")
+        .select("id, asaas_payment_id, status")
+        .eq("id", invoice.asaas_payment_id)
+        .maybeSingle();
+      if (
+        !payment?.asaas_payment_id ||
+        !OPEN_STATUSES.includes(String(payment.status))
+      ) continue;
+      const cancelled = await cancelAsaasPayment(payment.asaas_payment_id);
+      if (!cancelled.cancelled) {
+        await cancelAsaasPayment(batch.asaas_payment_id);
+        await releaseBatch(admin, batch.id);
+        return jsonResponse(
+          req,
+          {
+            ok: false,
+            error:
+              "A consolidação foi interrompida para evitar uma cobrança duplicada.",
+          },
+          502,
+        );
+      }
+      await admin.from("asaas_payments").update({ status: "cancelled" }).eq(
+        "id",
+        payment.id,
+      );
     }
 
     return jsonResponse(req, {
@@ -192,16 +357,78 @@ serve(async (req) => {
       batchId: batch.id,
       totalValue,
       dueDate,
-      invoiceCount: elegiveis.length,
-      status: internalStatus,
+      invoiceCount: eligible.length,
+      status: batch.status,
       invoiceUrl: raw?.invoiceUrl || null,
-      bankSlipUrl: raw?.bankSlipUrl || null,
+      bankSlipUrl: raw?.bankSlipUrl || raw?.invoiceUrl || null,
       identificationField: raw?.identificationField || raw?.nossoNumero || null,
     });
   } catch (error) {
-    console.error("[asaas-create-consolidated-invoice] erro", {
+    console.error("[asaas-create-consolidated-invoice] unexpected_error", {
       message: error instanceof Error ? error.message : String(error),
     });
-    return jsonResponse(req, { ok: false, error: "Nao foi possivel gerar o boleto consolidado agora." }, 500);
+    return jsonResponse(req, {
+      ok: false,
+      error: "Não foi possível sincronizar a cobrança consolidada.",
+    }, 500);
   }
 });
+
+async function resolveProfileDocument(admin: any, profile: any) {
+  if (normalizeDocumento(profile.cnpj)) return normalizeDocumento(profile.cnpj);
+  const role = String(profile.role || "");
+  if (role === "corretor") {
+    const { data } = await admin.from("corretores").select("cpf").eq(
+      "profile_id",
+      profile.id,
+    ).maybeSingle();
+    return normalizeDocumento(data?.cpf);
+  }
+  if (role === "proprietario") {
+    const { data } = await admin.from("proprietarios").select("cpf_cnpj").eq(
+      "profile_id",
+      profile.id,
+    ).maybeSingle();
+    return normalizeDocumento(data?.cpf_cnpj);
+  }
+  if (role === "inquilino") {
+    const { data } = await admin.from("inquilinos").select("cpf, cnpj").eq(
+      "profile_id",
+      profile.id,
+    ).maybeSingle();
+    return normalizeDocumento(data?.cpf || data?.cnpj);
+  }
+  return "";
+}
+
+async function releaseBatch(admin: any, batchId: string) {
+  const { data: items } = await admin
+    .from("consolidated_invoice_items")
+    .select("id, fatura_id")
+    .eq("batch_id", batchId)
+    .eq("status", "active");
+  for (const item of items ?? []) {
+    await admin.from("faturas_inquilino").update({ consolidated_item_id: null })
+      .eq("id", item.fatura_id);
+    await admin
+      .from("consolidated_invoice_items")
+      .update({
+        status: "cancelled_after_consolidation",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", item.id);
+  }
+  await admin
+    .from("consolidated_invoice_batches")
+    .update({
+      status: "cancelled",
+      invoice_url: null,
+      bank_slip_url: null,
+      identification_field: null,
+      pix_qr_code: null,
+      pix_copy_paste: null,
+      pix_expires_at: null,
+      last_synced_at: new Date().toISOString(),
+    })
+    .eq("id", batchId);
+}

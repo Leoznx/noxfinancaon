@@ -222,6 +222,16 @@ export function FinanceiroDashboard() {
         { event: "*", schema: "public", table: "withdrawal_requests" },
         () => void load(),
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "asaas_payments" },
+        () => void load(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "consolidated_invoice_batches" },
+        () => void load(),
+      )
       .subscribe();
 
     return () => {

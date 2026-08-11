@@ -62,7 +62,13 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.asaas-create-consolidated-invoice]
-verify_jwt = true
+verify_jwt = false
+
+[functions.asaas-reissue-payment]
+verify_jwt = false
+
+[functions.billing-automation-provider-test]
+verify_jwt = false
 
 [functions.process-scheduled-invoice-notifications]
 verify_jwt = false

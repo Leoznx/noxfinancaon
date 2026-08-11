@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 import { renderNoxEmail } from "./email-branding.ts";
+import { sendZApiText } from "./zapi.ts";
 
 export type PaymentMethod = "pix" | "boleto" | "credit_card";
 export type FireMode = "avista" | "embutido";
@@ -429,6 +430,54 @@ export async function sendPaymentEmail(params: {
   }
 }
 
+export async function sendCollectionEmail(params: {
+  to: string;
+  name: string;
+  subject: string;
+  message: string;
+  paymentUrl?: string | null;
+}) {
+  const apiKey = Deno.env.get("RESEND_API_KEY");
+  if (!apiKey || !params.to) {
+    return { sent: false, reason: !apiKey ? "not_configured" : "missing_recipient" };
+  }
+  const from = Deno.env.get("RESEND_FROM_EMAIL") || "NOX FIANÇA <financeiro@noxfianca.com>";
+  const paragraphs = params.message
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => `<p>${escapeEmailHtml(line)}</p>`)
+    .join("");
+  const action = params.paymentUrl
+    ? `<p><a href="${escapeEmailHtml(params.paymentUrl)}">Acessar cobrança atualizada</a></p>`
+    : `<p>Acesse sua conta NOX Fiança para gerar o boleto atualizado ou o Pix.</p>`;
+  try {
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from,
+        to: [params.to],
+        subject: params.subject,
+        html: renderNoxEmail(`${paragraphs}${action}`, params.subject),
+      }),
+    });
+    if (!response.ok) return { sent: false, reason: `provider_http_${response.status}` };
+    const data = await response.json();
+    return { sent: true, providerMessageId: data?.id ? String(data.id) : undefined };
+  } catch {
+    return { sent: false, reason: "provider_unavailable" };
+  }
+}
+
+function escapeEmailHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
 // Nenhum provedor de SMS esta integrado neste projeto ainda. Esta funcao
 // existe pra ja deixar o ponto de chamada pronto (create-payment/webhook) -
 // quando SMS_API_KEY/SMS_PROVIDER_URL forem configurados no ambiente das
@@ -651,41 +700,14 @@ export async function sendInstallmentScheduleSms(params: {
   });
 }
 
-// Nenhum provedor de WhatsApp esta integrado neste projeto ainda. Mesmo
-// padrao do SMS: nunca simula envio nem marca como enviado - so registra que
-// falta credencial ate WHATSAPP_API_KEY/WHATSAPP_PROVIDER_URL existirem.
+// Integracao financeira oficial com a instancia Z-API. As credenciais sao
+// lidas exclusivamente das secrets das Edge Functions e nunca do cliente.
 export async function sendPaymentWhatsapp(params: { to: string; mensagem: string }) {
-  const apiKey = Deno.env.get("WHATSAPP_API_KEY");
-  const providerUrl = Deno.env.get("WHATSAPP_PROVIDER_URL");
-  const digits = String(params.to || "").replace(/\D/g, "");
-  const normalizedPhone = digits ? (digits.startsWith("55") ? `+${digits}` : `+55${digits}`) : "";
-
-  if (!apiKey || !providerUrl) {
-    console.error("[asaas] WhatsApp nao enviado: provedor nao configurado (WHATSAPP_API_KEY/WHATSAPP_PROVIDER_URL ausentes)");
-    return { sent: false, reason: "not_configured" };
+  const result = await sendZApiText({ to: params.to, message: params.mensagem });
+  if (!result.sent) {
+    console.error("[asaas] WhatsApp financeiro nao enviado", { reason: result.reason });
   }
-  if (!normalizedPhone || digits.length < 10) {
-    console.error("[asaas] WhatsApp nao enviado: telefone ausente ou invalido");
-    return { sent: false, reason: "invalid_phone" };
-  }
-
-  try {
-    const res = await fetch(providerUrl, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ to: normalizedPhone, message: params.mensagem }),
-    });
-    if (!res.ok) {
-      console.error("[asaas] falha ao enviar WhatsApp", { status: res.status });
-      return { sent: false, reason: "provider_error" };
-    }
-    return { sent: true };
-  } catch (error) {
-    console.error("[asaas] erro ao enviar WhatsApp", {
-      message: error instanceof Error ? error.message : String(error),
-    });
-    return { sent: false, reason: "exception" };
-  }
+  return result;
 }
 
 // Idempotencia de notificacoes financeiras - evita reenviar e-mail/SMS/
@@ -715,7 +737,7 @@ export async function logFinancialNotification(
     recipientId?: string | null;
     channel: "email" | "sms" | "whatsapp";
     notificationType: string;
-    result: { sent: boolean; reason?: string };
+    result: { sent: boolean; reason?: string; providerMessageId?: string };
   },
 ) {
   let existingQuery = supabase
@@ -740,6 +762,7 @@ export async function logFinancialNotification(
       status,
       attempts: (existing?.attempts || 0) + 1,
       last_error: params.result.sent ? null : params.result.reason || null,
+      provider_message_id: params.result.providerMessageId || null,
       sent_at: params.result.sent ? new Date().toISOString() : null,
     },
     { onConflict: params.invoiceId ? "invoice_id,channel,notification_type" : "batch_id,channel,notification_type" },

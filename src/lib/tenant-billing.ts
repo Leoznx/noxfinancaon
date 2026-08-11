@@ -49,6 +49,7 @@ export type TenantPaymentSource = {
 
 export type TenantBillingItem = {
   id: string;
+  invoiceId: string | null;
   consultationId: string;
   localPaymentId: string | null;
   providerPaymentId: string | null;
@@ -112,6 +113,7 @@ export function mergeTenantBillingItems(
 
     merged.push({
       id: `invoice:${invoice.id}`,
+      invoiceId: invoice.id,
       consultationId,
       localPaymentId: payment?.id || invoice.asaas_payment_id || null,
       providerPaymentId: payment?.asaas_payment_id || null,
@@ -140,6 +142,7 @@ export function mergeTenantBillingItems(
     const installment = installmentFromReference(payment.external_reference);
     merged.push({
       id: `payment:${payment.id}`,
+      invoiceId: null,
       consultationId,
       localPaymentId: payment.id,
       providerPaymentId: payment.asaas_payment_id,

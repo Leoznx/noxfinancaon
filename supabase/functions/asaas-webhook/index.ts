@@ -9,6 +9,7 @@ import {
   sanitizeAsaasResponse,
   sendPaymentEmail,
   sendPaymentSms,
+  sendPaymentWhatsapp,
   supabaseAdmin,
   toMoney,
   wasNotificationSent,
@@ -281,6 +282,36 @@ serve(async (req) => {
           });
         }
       }
+      const whatsappDispatchEnabled = await isBillingWhatsappDispatchEnabled(supabase);
+      const jaNotificouWhatsapp = faturaVinculada
+        ? await wasNotificationSent(supabase, {
+            invoiceId: faturaVinculada.id,
+            channel: "whatsapp",
+            notificationType: "payment_confirmed",
+          })
+        : false;
+      if (whatsappDispatchEnabled && localPayment.recipient_phone && !jaNotificouWhatsapp) {
+        const valorFmt = Number(localPayment.value || 0).toLocaleString("pt-BR", {
+          style: "currency",
+          currency: "BRL",
+        });
+        const resultadoWhatsapp = await sendPaymentWhatsapp({
+          to: localPayment.recipient_phone,
+          mensagem: contratoRef
+            ? `Olá, ${localPayment.recipient_name || "cliente"}. O pagamento da ${contratoRef} foi confirmado. Valor recebido: ${valorFmt}. A baixa já está disponível na sua conta NOX Fiança.`
+            : `Olá, ${localPayment.recipient_name || "cliente"}. Seu pagamento de ${valorFmt} foi confirmado com sucesso pela NOX Fiança.`,
+        });
+        if (faturaVinculada) {
+          await logFinancialNotification(supabase, {
+            invoiceId: faturaVinculada.id,
+            recipientType: localPayment.recipient_type === "user" ? "user" : "tenant",
+            recipientId: localPayment.recipient_tenant_id || localPayment.recipient_user_id,
+            channel: "whatsapp",
+            notificationType: "payment_confirmed",
+            result: resultadoWhatsapp,
+          });
+        }
+      }
     }
 
     // O contrato só é enviado depois de o Asaas confirmar o primeiro
@@ -358,15 +389,80 @@ async function handleConsolidatedBatchEvent(
     if (!bateValor) {
       await supabase
         .from("consolidated_invoice_batches")
-        .update({ status: "partial" })
+        .update({
+          status: "partial",
+          received_value: valorPago,
+          paid_at: new Date().toISOString(),
+        })
         .eq("id", batch.id);
       return;
     }
 
     await supabase
       .from("consolidated_invoice_batches")
-      .update({ status: "paid", paid_at: new Date().toISOString() })
+      .update({
+        status: "paid",
+        received_value: Number(batch.total_value),
+        paid_at: new Date().toISOString(),
+      })
       .eq("id", batch.id);
+
+    const { data: batchRecipient } = await supabase
+      .from("profiles")
+      .select("nome, email, telefone")
+      .eq("id", batch.agency_user_id)
+      .maybeSingle();
+    if (batchRecipient?.email) {
+      const alreadySent = await wasNotificationSent(supabase, {
+        batchId: batch.id,
+        channel: "email",
+        notificationType: "payment_confirmed",
+      });
+      if (!alreadySent) {
+        const result = await sendPaymentEmail({
+          to: batchRecipient.email,
+          nome: batchRecipient.nome || "cliente",
+          tipo: "confirmado",
+          valor: Number(batch.total_value || 0),
+          metodo: batch.billing_method || "boleto",
+          vencimento: batch.due_date,
+          contratoRef: `cobrança consolidada ${String(batch.reference_month).padStart(2, "0")}/${batch.reference_year}`,
+        });
+        await logFinancialNotification(supabase, {
+          batchId: batch.id,
+          recipientType: "user",
+          recipientId: batch.agency_user_id,
+          channel: "email",
+          notificationType: "payment_confirmed",
+          result,
+        });
+      }
+    }
+    if (batchRecipient?.telefone && await isBillingWhatsappDispatchEnabled(supabase)) {
+      const alreadySent = await wasNotificationSent(supabase, {
+        batchId: batch.id,
+        channel: "whatsapp",
+        notificationType: "payment_confirmed",
+      });
+      if (!alreadySent) {
+        const amount = Number(batch.total_value || 0).toLocaleString("pt-BR", {
+          style: "currency",
+          currency: "BRL",
+        });
+        const result = await sendPaymentWhatsapp({
+          to: batchRecipient.telefone,
+          mensagem: `Olá, ${batchRecipient.nome || "cliente"}. O pagamento da cobrança consolidada de ${amount} foi confirmado. Todas as mensalidades incluídas no lote já receberam baixa automática na NOX Fiança.`,
+        });
+        await logFinancialNotification(supabase, {
+          batchId: batch.id,
+          recipientType: "user",
+          recipientId: batch.agency_user_id,
+          channel: "whatsapp",
+          notificationType: "payment_confirmed",
+          result,
+        });
+      }
+    }
 
     const { data: itens } = await supabase
       .from("consolidated_invoice_items")
@@ -463,7 +559,15 @@ async function handleConsolidatedBatchEvent(
     // entrar em outro lote futuro.
     await supabase
       .from("consolidated_invoice_batches")
-      .update({ status: "cancelled" })
+      .update({
+        status: "cancelled",
+        invoice_url: null,
+        bank_slip_url: null,
+        identification_field: null,
+        pix_qr_code: null,
+        pix_copy_paste: null,
+        pix_expires_at: null,
+      })
       .eq("id", batch.id);
     const { data: itens } = await supabase
       .from("consolidated_invoice_items")
@@ -488,4 +592,13 @@ async function handleConsolidatedBatchEvent(
     eventType,
     internalStatus,
   });
+}
+
+async function isBillingWhatsappDispatchEnabled(supabase: any) {
+  const { data } = await supabase
+    .from("billing_automation_settings")
+    .select("enabled, dispatch_enabled")
+    .eq("id", true)
+    .maybeSingle();
+  return data?.enabled !== false && data?.dispatch_enabled === true;
 }

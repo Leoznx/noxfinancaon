@@ -13,6 +13,7 @@ import {
   FileText,
   Loader2,
   RefreshCw,
+  QrCode,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -33,10 +34,15 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { MESES_PT, isPagamentoConcluido, statusPagamentoLabel } from "@/lib/asaas-payment";
+import {
+  fetchOwnConsolidatedBatches,
+  reissuePayment,
+  type ConsolidatedBillingBatch,
+} from "@/lib/automated-billing";
 
 export const Route = createFileRoute("/carteira-cobrancas")({
   component: () => (
-    <ProtectedRoute roles={["corretor", "imobiliaria"]}>
+    <ProtectedRoute roles={["corretor", "imobiliaria", "proprietario"]}>
       <CarteiraCobrancas />
     </ProtectedRoute>
   ),
@@ -70,6 +76,7 @@ type Contrato = {
 function CarteiraCobrancas() {
   const { user } = useAuth();
   const [faturas, setFaturas] = useState<any[]>([]);
+  const [batches, setBatches] = useState<ConsolidatedBillingBatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState("");
   const [statusFiltro, setStatusFiltro] = useState("todos");
@@ -81,21 +88,23 @@ function CarteiraCobrancas() {
   const [confirmandoAberto, setConfirmandoAberto] = useState(false);
   const [gerando, setGerando] = useState(false);
   const [atualizandoId, setAtualizandoId] = useState<string | null>(null);
+  const [reissuingBatch, setReissuingBatch] = useState<string | null>(null);
 
   async function carregar() {
     setLoading(true);
     try {
-      const { data } = await supabase
-        .from("faturas_inquilino")
-        .select(
+      const [{ data }, batchRows] = await Promise.all([
+        supabase.from("faturas_inquilino").select(
           `*, consulta:consultas_credito(
             id, tenant_name,
             inquilino:inquilinos(nome, cpf, cnpj, razao_social),
             imovel:imoveis(endereco, cidade, estado)
           ), asaas_payment:asaas_payments(asaas_payment_id)`,
-        )
-        .order("numero_parcela", { ascending: true });
+        ).order("numero_parcela", { ascending: true }),
+        fetchOwnConsolidatedBatches(),
+      ]);
       setFaturas(data ?? []);
+      setBatches(batchRows);
     } finally {
       setLoading(false);
     }
@@ -119,6 +128,11 @@ function CarteiraCobrancas() {
         () => {
           carregar();
         },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "consolidated_invoice_batches", filter: `agency_user_id=eq.${user.id}` },
+        () => carregar(),
       )
       .subscribe();
 
@@ -168,17 +182,29 @@ function CarteiraCobrancas() {
   }, [faturas]);
 
   const resumoCarteira = useMemo(() => {
-    const abertas = faturas.filter((f) => f.status === "pending" || f.status === "overdue");
-    const pagas = faturas.filter((f) => isPagamentoConcluido(f.status));
-    const vencidas = faturas.filter((f) => f.status === "overdue");
+    const abertas = faturas.filter(
+      (f) => (f.status === "pending" || f.status === "overdue") && !f.consolidated_item_id,
+    );
+    const pagas = faturas.filter((f) => isPagamentoConcluido(f.status) && !f.consolidated_item_id);
+    const vencidas = faturas.filter((f) => f.status === "overdue" && !f.consolidated_item_id);
+    const lotesAbertos = batches.filter((batch) => batch.status === "active" || batch.status === "partial");
+    const lotesPagos = batches.filter((batch) => batch.status === "paid");
+    const valorParcialRecebido = batches
+      .filter((batch) => batch.status === "partial")
+      .reduce((sum, batch) => sum + Number(batch.received_value || 0), 0);
     return {
-      qtdAberto: abertas.length,
-      qtdPago: pagas.length,
-      valorAberto: abertas.reduce((s, f) => s + Number(f.valor || 0), 0),
-      valorPago: pagas.reduce((s, f) => s + Number(f.valor || 0), 0),
+      qtdAberto: abertas.length + lotesAbertos.length,
+      qtdPago: pagas.length + lotesPagos.length,
+      valorAberto: abertas.reduce((s, f) => s + Number(f.valor || 0), 0) + lotesAbertos.reduce((s, b) => s + Math.max(Number(b.total_value || 0) - Number(b.received_value || 0), 0), 0),
+      valorPago: pagas.reduce((s, f) => s + Number(f.valor || 0), 0) + lotesPagos.reduce((s, b) => s + Number(b.total_value || 0), 0) + valorParcialRecebido,
       qtdVencidas: vencidas.length,
     };
-  }, [faturas]);
+  }, [batches, faturas]);
+
+  const batchesPeriodo = useMemo(
+    () => batches.filter((batch) => batch.reference_month === mes && batch.reference_year === ano),
+    [ano, batches, mes],
+  );
 
   const contratosFiltrados = useMemo(() => {
     const termo = busca.trim().toLowerCase();
@@ -254,6 +280,27 @@ function CarteiraCobrancas() {
     }
   }
 
+  async function gerarSegundaViaLote(batch: ConsolidatedBillingBatch, method: "boleto" | "pix") {
+    setReissuingBatch(`${batch.id}:${method}`);
+    try {
+      const payment = await reissuePayment({ batchId: batch.id, method });
+      await carregar();
+      if (method === "boleto" && payment.boleto?.pdfUrl) {
+        window.open(payment.boleto.pdfUrl, "_blank", "noopener,noreferrer");
+      }
+      if (method === "pix" && payment.pix?.copyPaste) {
+        await navigator.clipboard.writeText(payment.pix.copyPaste);
+        toast.success("Pix atualizado copiado.");
+      } else {
+        toast.success("Cobrança atualizada.");
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível atualizar a cobrança.");
+    } finally {
+      setReissuingBatch(null);
+    }
+  }
+
   return (
     <DashboardLayout>
       <div className="max-w-6xl mx-auto space-y-6">
@@ -263,6 +310,38 @@ function CarteiraCobrancas() {
             Acompanhe as mensalidades da sua carteira de inquilinos e gere um boleto consolidado do mês.
           </p>
         </div>
+
+        {batchesPeriodo.map((batch) => {
+          const open = batch.status === "active";
+          return (
+            <section key={batch.id} className="rounded-2xl border border-yellow-300 bg-gradient-to-r from-yellow-50 to-white p-5 shadow-sm">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center">
+                <div className="flex-1">
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-yellow-700">Cobrança consolidada mensal</p>
+                  <h2 className="mt-1 text-xl font-black text-neutral-900">{brl(batch.total_value)}</h2>
+                  <p className="mt-1 text-sm text-neutral-600">
+                    {batch.invoice_count} contrato(s) · vencimento {new Date(`${batch.due_date}T00:00:00`).toLocaleDateString("pt-BR")} · {statusPagamentoLabel(batch.status)}
+                  </p>
+                </div>
+                {open && (
+                  <div className="flex flex-wrap gap-2">
+                    {(batch.bank_slip_url || batch.invoice_url) && (
+                      <a href={batch.bank_slip_url || batch.invoice_url || "#"} target="_blank" rel="noreferrer">
+                        <Button variant="outline"><FileText className="mr-2" size={15} />Ver boleto</Button>
+                      </a>
+                    )}
+                    <Button variant="outline" onClick={() => gerarSegundaViaLote(batch, "boleto")} disabled={reissuingBatch === `${batch.id}:boleto`}>
+                      <RefreshCw className="mr-2" size={15} />Boleto atualizado
+                    </Button>
+                    <Button className="bg-neutral-900 text-white hover:bg-neutral-800" onClick={() => gerarSegundaViaLote(batch, "pix")} disabled={reissuingBatch === `${batch.id}:pix`}>
+                      <QrCode className="mr-2" size={15} />Gerar Pix
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </section>
+          );
+        })}
 
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <div className="rounded-2xl border border-neutral-200 bg-white p-4">
@@ -473,7 +552,7 @@ function CarteiraCobrancas() {
           <DialogTitle>Confirmar boleto consolidado</DialogTitle>
           <DialogDescription>
             {selecionadas.size} fatura(s) de {MESES_PT[mes - 1]}/{ano} serão reunidas em um único boleto.
-            As cobranças individuais correspondentes serão canceladas automaticamente assim que este boleto for pago.
+            As cobranças individuais correspondentes serão canceladas imediatamente para impedir pagamento duplicado.
           </DialogDescription>
           <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-sm">
             <p className="flex justify-between"><span>Total do boleto</span><span className="font-black">{brl(totalSelecionado)}</span></p>
