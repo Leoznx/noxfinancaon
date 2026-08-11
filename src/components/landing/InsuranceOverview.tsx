@@ -13,6 +13,7 @@ import {
   UserRound,
 } from 'lucide-react';
 
+import noxInsuranceHero from '@/assets/nox-insurance-hero.png';
 import { Button } from '@/components/ui/button';
 
 const journey = [
@@ -68,17 +69,7 @@ const audiences = [
 export function InsuranceHero() {
   return (
     <section className="relative overflow-hidden border-b border-neutral-100 bg-white">
-      <div className="absolute inset-0 hidden lg:block">
-        <img
-          src="/assets/seguro-fianca-entrega-chaves.webp"
-          alt="Inquilinos recebendo as chaves de um novo imóvel"
-          className="h-full w-full object-cover object-center"
-          fetchPriority="high"
-        />
-        <div className="absolute inset-0 bg-[linear-gradient(90deg,#fff_0%,#fff_37%,rgba(255,255,255,.96)_47%,rgba(255,255,255,.45)_61%,rgba(255,255,255,0)_73%)]" />
-      </div>
-
-      <div className="relative mx-auto grid min-h-[640px] max-w-7xl items-center px-5 pb-14 pt-14 sm:px-8 lg:px-6">
+      <div className="relative mx-auto grid min-h-[640px] max-w-[1536px] items-center gap-10 px-5 py-14 sm:px-8 lg:grid-cols-[minmax(0,0.46fr)_minmax(0,0.54fr)] lg:gap-8 lg:px-12 xl:gap-12 xl:px-16">
         <div className="max-w-[600px]">
           <span className="mb-6 inline-flex rounded-full bg-neutral-100 px-3 py-1 text-xs font-bold tracking-[0.16em] text-neutral-700">
             SEGURO FIANÇA LOCATÍCIA
@@ -112,11 +103,18 @@ export function InsuranceHero() {
             ))}
           </div>
 
-          <div className="mt-10 overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-100 lg:hidden">
+        </div>
+
+        <div className="flex w-full items-center justify-center lg:justify-end">
+          <div className="aspect-[3/2] w-full max-w-[820px]">
             <img
-              src="/assets/seguro-fianca-entrega-chaves.webp"
-              alt="Inquilinos recebendo as chaves de um novo imóvel"
-              className="aspect-[4/3] w-full object-cover object-right"
+              src={noxInsuranceHero}
+              alt="Celular com garantia locatícia digital, contrato online, chaves e proteção para o aluguel"
+              width={1536}
+              height={1024}
+              fetchPriority="high"
+              decoding="async"
+              className="h-full w-full object-contain object-center"
             />
           </div>
         </div>

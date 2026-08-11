@@ -1,10 +1,11 @@
 import { Link, createFileRoute } from '@tanstack/react-router';
-import { ArrowRight, Check, CircleDollarSign, Layers3, ShieldCheck } from 'lucide-react';
+import { ArrowRight, CircleDollarSign, Layers3, ShieldCheck } from 'lucide-react';
 
 import { InstitutionalFooter } from '@/components/landing/FaqAndFooterInstitutional';
 import { InstitutionalHeader } from '@/components/landing/InstitutionalHeader';
 import { PlansSection } from '@/components/landing/PlansAndNumbers';
 import { Button } from '@/components/ui/button';
+import noxPlansHero from '@/assets/nox-plans-hero.png';
 
 export const Route = createFileRoute('/planos')({
   head: () => ({
@@ -49,7 +50,7 @@ function PlanosPage() {
       <main className="pt-20">
         <section className="relative overflow-hidden border-b border-neutral-100 bg-white px-4 py-16 sm:px-6 sm:py-24">
           <div className="pointer-events-none absolute -right-24 -top-32 h-96 w-96 rounded-full bg-yellow-200/40 blur-3xl" />
-          <div className="relative mx-auto grid max-w-7xl items-end gap-10 lg:grid-cols-[1.2fr_.8fr]">
+          <div className="relative mx-auto grid max-w-7xl items-center gap-10 lg:grid-cols-[1.08fr_.92fr] lg:gap-12">
             <div>
               <span className="mb-6 inline-flex rounded-full bg-neutral-100 px-3 py-1 text-xs font-bold tracking-[0.16em] text-neutral-700">
                 PLANOS NOX FIANÇA
@@ -61,15 +62,18 @@ function PlanosPage() {
                 Três opções objetivas para imóveis residenciais ou comerciais, com diferentes limites de cobertura e serviços de apoio.
               </p>
             </div>
-            <div className="rounded-2xl bg-neutral-950 p-6 text-white shadow-xl sm:p-8">
-              <p className="text-sm font-bold uppercase tracking-[0.14em] text-[#FFD60A]">Antes de contratar</p>
-              <ul className="mt-5 space-y-4">
-                {['Compare o limite de cobertura', 'Confira os encargos incluídos', 'Escolha conforme o perfil da locação'].map((item) => (
-                  <li key={item} className="flex items-start gap-3 text-sm font-semibold leading-relaxed text-neutral-200">
-                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-[#FFD60A]" strokeWidth={3} /> {item}
-                  </li>
-                ))}
-              </ul>
+            <div className="flex w-full items-center justify-center lg:justify-end">
+              <div className="aspect-[3/2] w-full max-w-[620px]">
+                <img
+                  src={noxPlansHero}
+                  alt="Comparativo visual dos planos NOX Smart, NOX Smart+ e NOX Up"
+                  width={1536}
+                  height={1024}
+                  fetchPriority="high"
+                  decoding="async"
+                  className="h-full w-full object-contain object-center"
+                />
+              </div>
             </div>
           </div>
         </section>

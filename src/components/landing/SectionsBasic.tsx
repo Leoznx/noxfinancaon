@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router';
 import { Check } from 'lucide-react';
 
+import noxAboutHome from '@/assets/nox-about-home.png';
 import noxHomeHeroBanner from '@/assets/nox-home-hero-banner.png';
 import { Button } from '@/components/ui/button';
 
@@ -72,15 +73,15 @@ export const InstitutionalHero = () => (
 export const SolutionPresentation = () => (
   <section className="bg-white px-4 py-16 sm:px-6 sm:py-24">
     <div className="container mx-auto grid max-w-7xl items-center gap-10 lg:grid-cols-2 lg:gap-16">
-      <div className="overflow-hidden rounded-2xl border border-neutral-100 shadow-sm">
+      <div className="aspect-[3/2] overflow-hidden rounded-2xl border border-neutral-100 shadow-sm lg:-translate-x-4">
         <img
-          src="https://images.unsplash.com/photo-1556911220-e15b29be8c8f?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80"
-          alt="Pessoa em sua casa"
+          src={noxAboutHome}
+          alt="Casa moderna com destaques sobre análise instantânea, processo digital, agilidade e segurança"
           loading="lazy"
           decoding="async"
-          width={1000}
-          height={500}
-          className="h-64 w-full object-cover sm:h-96 lg:h-[500px]"
+          width={1536}
+          height={1024}
+          className="h-full w-full object-cover"
         />
       </div>
       <div>
