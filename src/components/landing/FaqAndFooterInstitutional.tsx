@@ -171,11 +171,11 @@ export const InstitutionalFooter = ({ hideCta = false }: { hideCta?: boolean } =
 
           <div>
             <h4 className="mb-3 text-sm font-bold uppercase tracking-[0.14em] text-yellow-400">Nosso app</h4>
-            <div className="relative h-[92px] w-[136px] overflow-hidden" aria-label="Disponível na App Store e no Google Play">
+            <div className="relative h-[76px] w-[112px] overflow-hidden" aria-label="Disponível na App Store e no Google Play">
               <img
                 src="/assets/app-store-google-play.png"
                 alt="Baixe na App Store ou no Google Play"
-                className="absolute -left-[46px] -top-[19px] h-auto w-[228px] max-w-none"
+                className="absolute -left-[38px] -top-[16px] h-auto w-[188px] max-w-none"
                 loading="lazy"
               />
             </div>
