@@ -9,7 +9,9 @@ import {
 } from 'lucide-react';
 
 import { InstitutionalFooter } from '@/components/landing/FaqAndFooterInstitutional';
+import { HomeSectionDivider } from '@/components/landing/HomeSectionDivider';
 import { InstitutionalHeader } from '@/components/landing/InstitutionalHeader';
+import { LogoNox } from '@/components/LogoNox';
 
 export const Route = createFileRoute('/aplicativo')({
   head: () => ({
@@ -55,7 +57,7 @@ function AplicativoPage() {
       <InstitutionalHeader />
 
       <main className="pt-20">
-        <section className="border-b border-neutral-200 bg-white px-4 pt-6 sm:px-6 sm:pt-8 lg:pt-10" aria-label="Nosso aplicativo">
+        <section className="bg-white px-4 pt-6 sm:px-6 sm:pt-8 lg:pt-10" aria-label="Nosso aplicativo">
           <img
             src="/assets/nox-aplicativo-banner.png"
             alt="Aplicativo NOX Finança para aluguel sem fiador, sem caução e com aprovação em até um minuto"
@@ -65,6 +67,8 @@ function AplicativoPage() {
             fetchPriority="high"
           />
         </section>
+
+        <HomeSectionDivider />
 
         <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-24">
           <div className="mx-auto max-w-2xl text-center">
@@ -85,18 +89,24 @@ function AplicativoPage() {
           </div>
         </section>
 
-        <section className="overflow-hidden border-y border-neutral-200 bg-neutral-50">
+        <HomeSectionDivider />
+
+        <section className="overflow-hidden bg-neutral-50">
           <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 py-16 sm:px-6 lg:grid-cols-2 lg:py-20">
             <div className="min-w-0">
-              <div className="grid h-12 w-12 place-items-center rounded-2xl bg-yellow-400 text-neutral-950">
-                <ShieldCheck size={25} />
+              <div className="flex items-center gap-4 sm:gap-5" aria-label="Segurança NOX Fiança">
+                <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-yellow-400 text-neutral-950 shadow-[0_8px_24px_rgba(250,204,21,0.20)]">
+                  <ShieldCheck size={28} />
+                </div>
+                <span aria-hidden="true" className="text-2xl font-light text-neutral-400">×</span>
+                <LogoNox variant="claro" size="md" />
               </div>
-              <h2 className="mt-5 text-3xl font-black tracking-tight text-neutral-950">Segurança para acessar de onde estiver</h2>
-              <p className="mt-4 max-w-xl leading-7 text-neutral-600">
+              <h2 className="mt-7 text-4xl font-black tracking-tight text-neutral-950 sm:text-5xl sm:leading-[1.08]">Segurança para acessar de onde estiver</h2>
+              <p className="mt-5 max-w-xl text-lg leading-8 text-neutral-600">
                 Cada usuário visualiza apenas as informações do seu perfil. A autenticação e os dados são protegidos pela mesma infraestrutura usada no portal NOX.
               </p>
-              <div className="mt-6 flex items-center gap-3 text-sm font-bold text-neutral-800">
-                <LockKeyhole size={18} className="text-yellow-600" /> Acesso individual e dados protegidos
+              <div className="mt-7 flex items-center gap-3 text-base font-bold text-neutral-800">
+                <LockKeyhole size={20} className="shrink-0 text-yellow-600" /> Acesso individual e dados protegidos
               </div>
             </div>
             <img
