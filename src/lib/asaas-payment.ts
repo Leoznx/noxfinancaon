@@ -27,6 +27,36 @@ export type NormalizedAsaasPayment = {
   } | null;
 };
 
+type EdgeFunctionErrorPayload = {
+  error?: unknown;
+  message?: unknown;
+};
+
+/**
+ * Extrai a mensagem enviada pela Edge Function. O cliente do Supabase usa uma
+ * mensagem generica para respostas HTTP 4xx/5xx, mas preserva o Response real
+ * em `context`; sem esta leitura o usuario nao descobre o que precisa corrigir.
+ */
+export async function getEdgeFunctionErrorMessage(
+  error: unknown,
+  fallback: string,
+): Promise<string> {
+  const context = (error as { context?: unknown } | null)?.context;
+
+  if (context instanceof Response) {
+    try {
+      const payload = (await context.clone().json()) as EdgeFunctionErrorPayload;
+      const detail = payload.error ?? payload.message;
+      if (typeof detail === "string" && detail.trim()) return detail.trim();
+    } catch {
+      // A resposta pode nao ser JSON; nesse caso usamos a mensagem original.
+    }
+  }
+
+  if (error instanceof Error && error.message.trim()) return error.message.trim();
+  return fallback;
+}
+
 export function statusPagamentoLabel(status?: string | null) {
   const labels: Record<string, string> = {
     pending: "Aguardando pagamento",
@@ -57,8 +87,18 @@ export function isPagamentoConcluido(status?: string | null) {
 }
 
 export const MESES_PT = [
-  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+  "Janeiro",
+  "Fevereiro",
+  "Março",
+  "Abril",
+  "Maio",
+  "Junho",
+  "Julho",
+  "Agosto",
+  "Setembro",
+  "Outubro",
+  "Novembro",
+  "Dezembro",
 ];
 
 export type ParcelaPreview = {

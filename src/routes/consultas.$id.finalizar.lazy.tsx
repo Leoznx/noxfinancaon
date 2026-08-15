@@ -35,6 +35,7 @@ import {
   addBusinessDaysPreview,
   formatDateBr,
   generateInstallmentSchedulePreview,
+  getEdgeFunctionErrorMessage,
 } from "@/lib/asaas-payment";
 import {
   CheckCircle2,
@@ -80,6 +81,18 @@ export const Route = createLazyFileRoute("/consultas/$id/finalizar")({
 
 type EtapaKey = "resumo" | "pagamento" | "revisao" | "enviada";
 type IncendioPagamento = "a_vista" | "parcelado";
+type CartaoForm = {
+  holderName: string;
+  number: string;
+  expiryMonth: string;
+  expiryYear: string;
+  ccv: string;
+  holderDocument: string;
+  holderPhone: string;
+  holderEmail: string;
+  holderPostalCode: string;
+  holderAddressNumber: string;
+};
 
 const ETAPAS: { key: EtapaKey; label: string }[] = [
   { key: "resumo", label: "Resumo da proposta" },
@@ -150,7 +163,7 @@ const PAGAMENTOS = [
     id: "credit_card" as const,
     label: "Cartão de crédito",
     icon: CreditCard,
-    desc: "Pagamento em até 12x no cartão de crédito.",
+    desc: "Cobrança no cartão com confirmação pelo Asaas.",
   },
   {
     id: "pix" as const,
@@ -183,6 +196,50 @@ const ASSISTENCIA_VALORES: Record<string, number> = {
   complete: 24.9,
   complete_pet: 34.9,
 };
+
+function passaLuhn(numero: string) {
+  let soma = 0;
+  let dobrar = false;
+  for (let index = numero.length - 1; index >= 0; index -= 1) {
+    let digito = Number(numero[index]);
+    if (dobrar) {
+      digito *= 2;
+      if (digito > 9) digito -= 9;
+    }
+    soma += digito;
+    dobrar = !dobrar;
+  }
+  return soma > 0 && soma % 10 === 0;
+}
+
+function validarCartaoPagamento(cartao: CartaoForm): string | null {
+  if (!cartao.holderName || !cartao.number || !cartao.ccv)
+    return "Preencha nome, numero e codigo de seguranca do cartao.";
+  if (cartao.number.length < 13 || cartao.number.length > 19 || !passaLuhn(cartao.number))
+    return "Informe um numero de cartao valido.";
+
+  const mes = Number(cartao.expiryMonth);
+  const ano = Number(cartao.expiryYear);
+  const hoje = new Date();
+  if (
+    cartao.expiryYear.length !== 4 ||
+    mes < 1 ||
+    mes > 12 ||
+    ano < hoje.getFullYear() ||
+    (ano === hoje.getFullYear() && mes < hoje.getMonth() + 1)
+  )
+    return "Informe uma validade futura no formato MM/AAAA.";
+  if (!/^\d{3,4}$/.test(cartao.ccv)) return "Informe um CVV com 3 ou 4 digitos.";
+  if (![11, 14].includes(cartao.holderDocument.length))
+    return "Informe um CPF ou CNPJ valido para o titular do cartao.";
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cartao.holderEmail))
+    return "Informe um e-mail valido para o titular do cartao.";
+  if (![10, 11].includes(cartao.holderPhone.length))
+    return "Informe um telefone brasileiro valido para o titular.";
+  if (cartao.holderPostalCode.length !== 8) return "Informe um CEP valido para o titular.";
+  if (!cartao.holderAddressNumber) return "Informe o numero do endereco do titular do cartao.";
+  return null;
+}
 
 function fmt(n: number) {
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -384,8 +441,6 @@ function FinalizarPage() {
   }
 
   async function atualizarPropostaRegistrada(enviadoEm: string) {
-    const h = await fnHist({ data: { consultaId: id } });
-    setHistorico(h.historico);
     setConsulta((c: any) => ({
       ...c,
       proposta_enviada_em: enviadoEm,
@@ -393,6 +448,15 @@ function FinalizarPage() {
       status: "aguardando_ativacao",
     }));
     setEtapa("enviada");
+
+    try {
+      const h = await fnHist({ data: { consultaId: id } });
+      setHistorico(h.historico);
+    } catch (error) {
+      // O pagamento ja foi criado e a proposta registrada. Uma falha ao
+      // recarregar apenas o historico nao pode transformar o sucesso em erro.
+      console.error("Erro ao atualizar historico da proposta:", error);
+    }
   }
 
   async function handleEnviar(options: { silentSuccess?: boolean } = {}) {
@@ -499,6 +563,8 @@ function FinalizarPage() {
         onEnviar={handleEnviar}
         fnSalvarConfig={fnSalvarConfig}
         fnSalvarPagamento={fnSalvarPagamento}
+        fnEnviar={fnEnviar}
+        onPropostaRegistrada={atualizarPropostaRegistrada}
       />
 
       <Dialog open={termosOpen} onOpenChange={setTermosOpen}>
@@ -763,6 +829,8 @@ function ResumoPropostaLoft(p: any) {
     onEnviar,
     fnSalvarConfig,
     fnSalvarPagamento,
+    fnEnviar,
+    onPropostaRegistrada,
   } = p;
   const dataNascimento = consulta?.tenant_data_nascimento
     ? new Date(`${consulta.tenant_data_nascimento}T00:00:00`).toLocaleDateString("pt-BR")
@@ -812,7 +880,7 @@ function ResumoPropostaLoft(p: any) {
   // Integracao Asaas: cobra o valor exibido como "Valor cobrado agora" no resumo.
   // Incêndio embutido cobra a mensalidade total; incêndio à vista soma o anual no primeiro pagamento.
   const [pagando, setPagando] = useState(false);
-  const emptyCardForm = {
+  const emptyCardForm: CartaoForm = {
     holderName: "",
     number: "",
     expiryMonth: "",
@@ -848,6 +916,8 @@ function ResumoPropostaLoft(p: any) {
     if (pagandoRef.current) return;
 
     if (!pagamento) return toast.error("Selecione uma forma de pagamento.");
+    if (!aceiteTermos)
+      return toast.error("Aceite os Termos e Condições para seguir para o pagamento.");
     if (valorCobradoAgora <= 0)
       return toast.error("Não foi possível calcular o valor do pagamento.");
 
@@ -883,21 +953,28 @@ function ResumoPropostaLoft(p: any) {
           insurance_payment_method: pagamento as any,
           insurance_payment_method_label: `${formaPagamentoLabel} - ${incendioPagamentoLabel}`,
           property_not_wood_confirmed: true,
-          terms_accepted: true,
+          terms_accepted: aceiteTermos,
         },
       });
 
       if (ehParceladoInquilino) {
-        const registro = await fnEnviar({ data: { consultaId: id } });
         const { data: planoData, error: planoError } =
           await supabase.functions.invoke<CronogramaResultado>("asaas-create-installment-plan", {
             body: { proposalId: id },
           });
-        if (planoError) throw new Error(planoError.message);
+        if (planoError) {
+          throw new Error(
+            await getEdgeFunctionErrorMessage(
+              planoError,
+              "Nao foi possivel gerar os boletos agora. Tente novamente.",
+            ),
+          );
+        }
         if ((planoData as any)?.error) throw new Error((planoData as any).error);
         if (!planoData?.installments?.length)
           throw new Error("O Asaas nao retornou o cronograma de boletos.");
-        await atualizarPropostaRegistrada(registro.enviadoEm);
+        const registro = await fnEnviar({ data: { consultaId: id } });
+        await onPropostaRegistrada(registro.enviadoEm);
         setCronogramaResultado(planoData);
         setModalCronogramaAberto(true);
         toast.success(`${planoData.installmentTotal} boletos gerados com sucesso.`);
@@ -912,51 +989,50 @@ function ResumoPropostaLoft(p: any) {
       };
 
       if (pagamento === "credit_card") {
-        const holderDocument = cartao.holderDocument || documento;
-        const holderPhone = cartao.holderPhone || telefone;
-        const holderEmail = cartao.holderEmail || email;
-        const holderPostalCode =
-          cartao.holderPostalCode || consulta?.imovel_cep || imovel?.cep || "";
-        const holderAddressNumber =
-          cartao.holderAddressNumber || consulta?.imovel_numero || imovel?.numero || "";
-        if (
-          !cartao.holderName ||
-          !cartao.number ||
-          !cartao.expiryMonth ||
-          !cartao.expiryYear ||
-          !cartao.ccv
-        ) {
-          toast.error("Preencha todos os dados do cartao.");
-          return;
-        }
-        if (
-          !holderDocument ||
-          !holderPhone ||
-          !holderEmail ||
-          !holderPostalCode ||
-          !holderAddressNumber
-        ) {
-          toast.error("Complete CPF/CNPJ, telefone, e-mail, CEP e numero do titular do cartao.");
+        const cartaoNormalizado: CartaoForm = {
+          holderName: cartao.holderName.trim(),
+          number: cartao.number.replace(/\D/g, ""),
+          expiryMonth: cartao.expiryMonth.replace(/\D/g, ""),
+          expiryYear: cartao.expiryYear.replace(/\D/g, ""),
+          ccv: cartao.ccv.replace(/\D/g, ""),
+          holderDocument: (cartao.holderDocument || documento).replace(/\D/g, ""),
+          holderPhone: (cartao.holderPhone || telefone).replace(/\D/g, ""),
+          holderEmail: (cartao.holderEmail || email).trim().toLowerCase(),
+          holderPostalCode: (
+            cartao.holderPostalCode ||
+            consulta?.imovel_cep ||
+            imovel?.cep ||
+            ""
+          ).replace(/\D/g, ""),
+          holderAddressNumber: (
+            cartao.holderAddressNumber ||
+            consulta?.imovel_numero ||
+            imovel?.numero ||
+            ""
+          ).trim(),
+        };
+        const erroCartao = validarCartaoPagamento(cartaoNormalizado);
+        if (erroCartao) {
+          toast.error(erroCartao);
           return;
         }
         body.creditCard = {
-          holderName: cartao.holderName,
-          number: cartao.number,
-          expiryMonth: cartao.expiryMonth,
-          expiryYear: cartao.expiryYear,
-          ccv: cartao.ccv,
+          holderName: cartaoNormalizado.holderName,
+          number: cartaoNormalizado.number,
+          expiryMonth: cartaoNormalizado.expiryMonth,
+          expiryYear: cartaoNormalizado.expiryYear,
+          ccv: cartaoNormalizado.ccv,
         };
         body.creditCardHolderInfo = {
-          name: cartao.holderName,
-          email: holderEmail,
-          cpfCnpj: holderDocument,
-          postalCode: holderPostalCode,
-          addressNumber: holderAddressNumber,
-          phone: holderPhone,
+          name: cartaoNormalizado.holderName,
+          email: cartaoNormalizado.holderEmail,
+          cpfCnpj: cartaoNormalizado.holderDocument,
+          postalCode: cartaoNormalizado.holderPostalCode,
+          addressNumber: cartaoNormalizado.holderAddressNumber,
+          phone: cartaoNormalizado.holderPhone,
         };
       }
 
-      const registro = await fnEnviar({ data: { consultaId: id } });
       const { data, error } = await supabase.functions.invoke<NormalizedAsaasPayment>(
         "asaas-create-payment",
         {
@@ -965,11 +1041,19 @@ function ResumoPropostaLoft(p: any) {
       );
       setCartao(emptyCardForm);
 
-      if (error) throw new Error(error.message);
+      if (error) {
+        throw new Error(
+          await getEdgeFunctionErrorMessage(
+            error,
+            "Nao foi possivel gerar o pagamento agora. Tente novamente.",
+          ),
+        );
+      }
       if ((data as any)?.error) throw new Error((data as any).error);
       if (!data?.success) throw new Error("O Asaas nao retornou os dados do pagamento.");
 
-      await atualizarPropostaRegistrada(registro.enviadoEm);
+      const registro = await fnEnviar({ data: { consultaId: id } });
+      await onPropostaRegistrada(registro.enviadoEm);
       setPagamentoAsaasResultado(data);
       setModalAsaasAberto(true);
       toast.success("Pagamento criado. O contrato será enviado pela D4Sign após a confirmação.");
@@ -1294,7 +1378,12 @@ function ResumoPropostaLoft(p: any) {
                       />
                       <Input
                         value={cartao.number}
-                        onChange={(e) => setCartao((prev) => ({ ...prev, number: e.target.value }))}
+                        onChange={(e) =>
+                          setCartao((prev) => ({
+                            ...prev,
+                            number: e.target.value.replace(/\D/g, "").slice(0, 19),
+                          }))
+                        }
                         placeholder="Numero do cartao"
                         inputMode="numeric"
                         autoComplete="cc-number"
@@ -1338,7 +1427,10 @@ function ResumoPropostaLoft(p: any) {
                       <Input
                         value={cartao.holderDocument}
                         onChange={(e) =>
-                          setCartao((prev) => ({ ...prev, holderDocument: e.target.value }))
+                          setCartao((prev) => ({
+                            ...prev,
+                            holderDocument: e.target.value.replace(/\D/g, "").slice(0, 14),
+                          }))
                         }
                         placeholder="CPF/CNPJ do titular"
                         inputMode="numeric"
@@ -1346,7 +1438,10 @@ function ResumoPropostaLoft(p: any) {
                       <Input
                         value={cartao.holderPhone}
                         onChange={(e) =>
-                          setCartao((prev) => ({ ...prev, holderPhone: e.target.value }))
+                          setCartao((prev) => ({
+                            ...prev,
+                            holderPhone: e.target.value.replace(/\D/g, "").slice(0, 11),
+                          }))
                         }
                         placeholder="Telefone do titular"
                         inputMode="tel"
@@ -1362,7 +1457,10 @@ function ResumoPropostaLoft(p: any) {
                       <Input
                         value={cartao.holderPostalCode}
                         onChange={(e) =>
-                          setCartao((prev) => ({ ...prev, holderPostalCode: e.target.value }))
+                          setCartao((prev) => ({
+                            ...prev,
+                            holderPostalCode: e.target.value.replace(/\D/g, "").slice(0, 8),
+                          }))
                         }
                         placeholder="CEP do titular"
                         inputMode="numeric"

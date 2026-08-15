@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
-    "build": "vite build",
+    "build": "npm run typecheck && vite build",
     "build:dev": "vite build --mode development",
     "preview": "nitro preview --prebuilt",
     "lint": "eslint .",
@@ -18,7 +18,9 @@
     "test:automation": "tsx --test automation/*.test.ts",
     "test:withdrawals": "tsx --test tests/withdrawal-pix.test.ts",
     "test:auth-links": "tsx --test tests/auth-email-links.test.ts",
-    "test:billing": "tsx --test tests/billing-automation.test.ts"
+    "test:billing": "tsx --test tests/billing-automation.test.ts",
+    "test:payments": "tsx --test tests/asaas-payment.test.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.25.5",
