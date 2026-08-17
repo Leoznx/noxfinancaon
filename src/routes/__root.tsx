@@ -5,6 +5,7 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useRouterState,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
@@ -13,6 +14,35 @@ import { Toaster } from "@/components/ui/sonner";
 import { hasAuthEmailCallback, parseAuthEmailCallback } from "@/lib/auth-email-links";
 
 import appCss from "../styles.css?url";
+
+const GOOGLE_ADS_TAG_ID = "AW-18391707457";
+
+declare global {
+  interface Window {
+    gtag?: (...args: unknown[]) => void;
+  }
+}
+
+function GoogleAdsPageViewTracker() {
+  const locationHref = useRouterState({ select: (state) => state.location.href });
+  const isInitialPageView = React.useRef(true);
+
+  React.useEffect(() => {
+    // The config command in the global tag records the initial page load.
+    if (isInitialPageView.current) {
+      isInitialPageView.current = false;
+      return;
+    }
+
+    window.gtag?.("event", "page_view", {
+      page_location: window.location.href,
+      page_title: document.title,
+      send_to: GOOGLE_ADS_TAG_ID,
+    });
+  }, [locationHref]);
+
+  return null;
+}
 
 function NotFoundComponent() {
   return (
@@ -130,6 +160,18 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     ],
     scripts: [
       {
+        async: true,
+        src: `https://www.googletagmanager.com/gtag/js?id=${GOOGLE_ADS_TAG_ID}`,
+      },
+      {
+        children: `
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', '${GOOGLE_ADS_TAG_ID}');
+        `,
+      },
+      {
         type: "application/ld+json",
         children: JSON.stringify({
           "@context": "https://schema.org",
@@ -204,6 +246,7 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
+        <GoogleAdsPageViewTracker />
         <Outlet />
         <Toaster richColors position="top-right" />
       </AuthProvider>
