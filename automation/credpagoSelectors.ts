@@ -12,6 +12,10 @@ const FIND_POLL_MS = 200;
 const LOGIN_LOFT_URL_PATTERN = /(?:^https?:\/\/sso\.loft\.com\.br\/|\/realms\/loft\/)/i;
 const AUTHENTICATED_CREDPAGO_URL_PATTERN =
   /\/imobiliaria\/(?:cr\/|dashboard(?:\/|$)|home(?:\/|$)|index(?:\.php)?(?:\/|$))/i;
+// A tela de simulação já morou em credpago.com e hoje mora em app.loft.com.br
+// (ver CREDPAGO_URL em env.ts) — aceita os dois hostnames pra não depender de
+// nenhum redirecionamento entre eles continuar existindo no futuro.
+const AUTHENTICATED_HOSTNAMES = ["credpago.com", "app.loft.com.br"];
 
 function tempoRestante(deadline: number): number {
   return Math.max(1, deadline - Date.now());
@@ -244,7 +248,9 @@ async function isAuthenticatedCredPagoPage(page: Page): Promise<boolean> {
   } catch {
     return false;
   }
-  if (hostname !== "credpago.com" && !hostname.endsWith(".credpago.com")) return false;
+  if (!AUTHENTICATED_HOSTNAMES.some((h) => hostname === h || hostname.endsWith(`.${h}`))) {
+    return false;
+  }
 
   const loginLoftButton = page.getByRole("button", { name: /login\s+loft/i });
   if (
@@ -268,9 +274,9 @@ async function isAuthenticatedCredPagoPage(page: Page): Promise<boolean> {
     return false;
   }
 
-  // Nunca trate "qualquer texto" em credpago.com como sessão autenticada. A página
-  // pública de entrada também tem texto e, durante a hidratação, o botão Login Loft
-  // pode levar alguns instantes para aparecer. Esse falso positivo deixava o worker
+  // Nunca trate "qualquer texto" num dos AUTHENTICATED_HOSTNAMES como sessão autenticada.
+  // A página pública de entrada também tem texto e, durante a hidratação, o botão Login
+  // Loft pode levar alguns instantes para aparecer. Esse falso positivo deixava o worker
   // anunciando login renovado e voltando imediatamente para a tela de login.
   if (AUTHENTICATED_CREDPAGO_URL_PATTERN.test(page.url())) return true;
 

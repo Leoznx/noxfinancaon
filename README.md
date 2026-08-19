@@ -89,7 +89,7 @@ rodar em uma VPS:
 ## Automação de simulação de crédito (CredPago)
 
 A tela **Nova Consulta** (`/consultas/nova`) permite ao corretor simular crédito no site da
-CredPago (`https://credpago.com/imobiliaria/proposta`) sem sair do NOX FINANÇA. O fluxo é:
+CredPago (`https://app.loft.com.br/fianca-aluguel/imobiliaria/proposta`) sem sair do NOX FINANÇA. O fluxo é:
 
 1. Corretor preenche os dados do inquilino/imóvel e clica em **Simular crédito**.
 2. O frontend cria um registro em `public.consultas_credito` com `status = "pendente"` e
@@ -114,7 +114,7 @@ mesmo contexto — nunca reaproveita a aba de outra consulta, nunca lança um se
 Chrome apontando pro mesmo perfil. Isso permite processar várias consultas em paralelo sem
 misturar dados nem arriscar corromper o perfil.
 
-- **Fila com limite de concorrência** (`MAX_CONCURRENT_CONSULTAS`, padrão `3`): se chegarem
+- **Fila com limite de concorrência** (`MAX_CONCURRENT_CONSULTAS`, padrão `10`): se chegarem
   mais consultas do que o limite, as excedentes esperam e começam automaticamente assim que uma
   aba libera.
 - **Isolamento por consulta**: cada consulta tem sua própria aba, seus próprios dados (vindos
@@ -201,8 +201,8 @@ Preencha:
 | `SUPABASE_SERVICE_ROLE_KEY` | Painel Supabase → Project Settings → API → `service_role` (secreta!) |
 | `CREDPAGO_PROFILE_DIR` | Pasta do perfil do Chrome (padrão: `./automation/chrome-profile-credpago`) |
 | `AUTOMATION_POLL_INTERVAL_MS` | Intervalo de verificação de novas consultas (padrão: `5000`) |
-| `CREDPAGO_URL` | `https://credpago.com/imobiliaria/proposta` |
-| `MAX_CONCURRENT_CONSULTAS` | Quantas consultas rodam em paralelo, cada uma em sua aba (padrão: `3`) |
+| `CREDPAGO_URL` | `https://app.loft.com.br/fianca-aluguel/imobiliaria/proposta` |
+| `MAX_CONCURRENT_CONSULTAS` | Quantas consultas rodam em paralelo, cada uma em sua aba (padrão: `10`) |
 | `CONSULTA_TIMEOUT_MS` | Tempo máximo por consulta antes de marcar erro (padrão: `90000`) |
 | `HEADLESS` | `true` para rodar sem janela visível (requer sessão já logada) — padrão `false` |
 

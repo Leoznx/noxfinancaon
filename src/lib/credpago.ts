@@ -7,7 +7,7 @@ import type {
   SimulateCredPagoResponse,
 } from "@/types/credpago";
 
-const DEFAULT_PORTAL_URL = "https://credpago.com/imobiliaria";
+const DEFAULT_PORTAL_URL = "https://app.loft.com.br/fianca-aluguel/imobiliaria";
 
 /** URL do portal de imobiliárias da CredPago, para abrir em nova aba no fluxo manual assistido. */
 export function getCredPagoPortalUrl(): string {

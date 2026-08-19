@@ -57,3 +57,43 @@ test("reconhece a rota interna autenticada após o SSO", async () => {
   assert.equal(await detectAuthenticationState(page, 300), "authenticated");
   await page.close();
 });
+
+// A tela de simulação migrou de credpago.com para app.loft.com.br (ver CREDPAGO_URL em
+// env.ts) — os quatro testes acima continuam cobrindo o hostname antigo (aceito por
+// compatibilidade); estes repetem os mesmos casos no hostname novo, que é o real hoje.
+
+test("não confunde a página pública hidratando com uma sessão autenticada (app.loft.com.br)", async () => {
+  const page = await pageWithHtml(
+    "https://app.loft.com.br/fianca-aluguel/imobiliaria/proposta",
+    "<main><h1>Bem-vindo</h1><p>Acesse sua conta para continuar.</p></main>",
+  );
+  assert.equal(await detectAuthenticationState(page, 300), "unknown");
+  await page.close();
+});
+
+test("reconhece explicitamente a tela de Login Loft (app.loft.com.br)", async () => {
+  const page = await pageWithHtml(
+    "https://app.loft.com.br/fianca-aluguel/imobiliaria/proposta",
+    '<main><button type="button">Login Loft</button></main>',
+  );
+  assert.equal(await detectAuthenticationState(page, 300), "login");
+  await page.close();
+});
+
+test("reconhece o formulário de simulação como sessão autenticada (app.loft.com.br)", async () => {
+  const page = await pageWithHtml(
+    "https://app.loft.com.br/fianca-aluguel/imobiliaria/proposta",
+    '<main><button>Pessoa Física</button><label>CPF<input /></label><button>Simular Crédito</button></main>',
+  );
+  assert.equal(await detectAuthenticationState(page, 300), "authenticated");
+  await page.close();
+});
+
+test("reconhece a rota interna autenticada após o SSO (app.loft.com.br)", async () => {
+  const page = await pageWithHtml(
+    "https://app.loft.com.br/fianca-aluguel/imobiliaria/cr/index.php",
+    "<main><h1>Painel da imobiliária</h1></main>",
+  );
+  assert.equal(await detectAuthenticationState(page, 300), "authenticated");
+  await page.close();
+});
