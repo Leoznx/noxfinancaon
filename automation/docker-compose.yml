@@ -22,13 +22,21 @@ services:
     # https://automacao.noxfianca.com, via proxy reverso.
     ports:
       - "127.0.0.1:3000:3000"
-    shm_size: "1gb" # Chromium precisa de /dev/shm maior que o padrão de 64MB do Docker.
+    shm_size: "2gb" # Chromium precisa de /dev/shm maior que o padrão de 64MB do Docker;
+                     # dobrado junto com o limite de memória abaixo (mais abas = mais /dev/shm).
     deploy:
       resources:
         limits:
-          memory: 2g
+          # 2g era dimensionado para MAX_CONCURRENT_CONSULTAS=3. Com o padrão subindo pra
+          # 10 (env.ts), até 10 abas do Chromium rodam ao mesmo tempo no mesmo container —
+          # 2g arrisca o container ser morto por falta de memória (OOM) bem no pico de uso.
+          # 4g é uma estimativa conservadora (não testada em produção): confirme que a VPS
+          # tem RAM sobrando pra isso (o ideal é uns 5-6g livres, sobrando margem pro
+          # Nginx/SO) antes de subir — se a VPS for menor, ajuste este valor E/OU
+          # MAX_CONCURRENT_CONSULTAS no automation/.env pra um número que caiba.
+          memory: 4g
         reservations:
-          memory: 512m
+          memory: 1g
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
