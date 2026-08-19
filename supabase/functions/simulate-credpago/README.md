@@ -40,12 +40,12 @@ a última):
 | `SUPABASE_URL` | sim (automática) | Já injetada pelo runtime da Supabase. |
 | `SUPABASE_ANON_KEY` | sim (automática) | Já injetada pelo runtime da Supabase. |
 | `SUPABASE_SERVICE_ROLE_KEY` | sim (automática) | Já injetada pelo runtime da Supabase. |
-| `CREDPAGO_PORTAL_URL` | não | URL do portal de imobiliárias da CredPago aberto no passo 1. Default: `https://credpago.com/imobiliaria`. Só precisa configurar se a URL for outra. |
+| `CREDPAGO_PORTAL_URL` | não | URL do portal de imobiliárias da CredPago aberto no passo 1. Default: `https://app.loft.com.br/fianca-aluguel/imobiliaria`. Só precisa configurar se a URL for outra. |
 
 Para configurar (opcional):
 
 ```bash
-supabase secrets set CREDPAGO_PORTAL_URL="https://credpago.com/imobiliaria"
+supabase secrets set CREDPAGO_PORTAL_URL="https://app.loft.com.br/fianca-aluguel/imobiliaria"
 ```
 
 No frontend, o mesmo link pode ser sobrescrito com `VITE_CREDPAGO_PORTAL_URL` no `.env`

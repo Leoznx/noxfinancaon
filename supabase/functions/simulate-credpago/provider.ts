@@ -73,7 +73,8 @@ export interface ICreditoProvider {
   registrarResultado(respostaColada: unknown): Promise<ResultadoSimulacaoCredito>;
 }
 
-const PORTAL_URL = Deno.env.get("CREDPAGO_PORTAL_URL") ?? "https://credpago.com/imobiliaria";
+const PORTAL_URL =
+  Deno.env.get("CREDPAGO_PORTAL_URL") ?? "https://app.loft.com.br/fianca-aluguel/imobiliaria";
 
 function normalizarStatus(statusCredPago: string | undefined): ResultadoSimulacaoCredito["status"] {
   const s = (statusCredPago || "").trim().toLowerCase();

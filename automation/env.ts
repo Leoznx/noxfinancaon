@@ -59,7 +59,8 @@ export const env = {
   /** Porta do servidor HTTP só com /health — não expõe nenhuma rota de negócio. */
   healthPort: positiveNumber("HEALTH_PORT", 3000),
   pollIntervalMs: positiveNumber("AUTOMATION_POLL_INTERVAL_MS", 5000, 500),
-  credpagoUrl: process.env.CREDPAGO_URL || "https://credpago.com/imobiliaria/proposta",
+  credpagoUrl:
+    process.env.CREDPAGO_URL || "https://app.loft.com.br/fianca-aluguel/imobiliaria/proposta",
   /** Credenciais exclusivas do servidor para renovar automaticamente a sessão do Login Loft. */
   credpagoLogin,
   credpagoPassword,
@@ -77,8 +78,14 @@ export const env = {
     2,
   ),
   keepBrowserOpen: process.env.AUTOMATION_KEEP_BROWSER_OPEN === "true",
-  /** Quantas consultas podem rodar em paralelo, cada uma na sua própria aba do mesmo perfil/contexto. */
-  maxConcurrentConsultas: positiveNumber("MAX_CONCURRENT_CONSULTAS", 3),
+  /**
+   * Quantas consultas podem rodar em paralelo, cada uma na sua própria aba do mesmo
+   * perfil/contexto. Padrão 10 — dá pra 10 corretores simularem ao mesmo tempo sem fila.
+   * Suba com cautela: cada aba é uma sessão real batendo no site da Loft com o mesmo login;
+   * um valor muito alto pode esbarrar em limites do próprio site ou nos recursos da máquina
+   * que roda o worker antes de qualquer coisa no código.
+   */
+  maxConcurrentConsultas: positiveNumber("MAX_CONCURRENT_CONSULTAS", 10),
   /** Tempo máximo (ms) para uma consulta individual antes de ser marcada como erro. */
   consultaTimeoutMs: positiveNumber("CONSULTA_TIMEOUT_MS", 90_000, 10_000),
   /** Recupera leases "processando" deixados por queda/reinício do worker. */
