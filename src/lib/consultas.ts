@@ -92,8 +92,26 @@ export async function upsertConsultaCredito({ dados, userEmail, userRole }: Upse
         .insert(inqPayload)
         .select("id")
         .single();
-      if (inqErr) throw inqErr;
-      inquilinoId = inqNova.id;
+      if (inqErr) {
+        // 23505 = unique_violation: outra simulação concorrente pro MESMO CPF/CNPJ
+        // (dois corretores atendendo o mesmo inquilino, duplo clique, nova aba) inseriu
+        // entre o SELECT acima e este INSERT. Com muita gente simulando ao mesmo tempo
+        // isso deixou de ser raro — em vez de propagar o erro pro corretor, busca de
+        // novo e reaproveita a linha que a outra requisição acabou de gravar.
+        if (inqErr.code === "23505") {
+          const { data: inqRetry, error: retryErr } = await supabase
+            .from("inquilinos")
+            .select("id")
+            .eq("cpf", tenantDocument)
+            .single();
+          if (retryErr || !inqRetry) throw retryErr || inqErr;
+          inquilinoId = inqRetry.id;
+        } else {
+          throw inqErr;
+        }
+      } else {
+        inquilinoId = inqNova.id;
+      }
     }
   } else {
     await supabase.from("inquilinos").update({ nome: tenantNameSafe } as any).eq("id", inquilinoId);
@@ -146,6 +164,28 @@ export async function upsertConsultaCredito({ dados, userEmail, userRole }: Upse
     .insert(consultaPayload)
     .select("id")
     .single();
-  if (novaErr) throw novaErr;
+  if (novaErr) {
+    // 23505 = unique_violation em uniq_consulta_user_document (profile_id_solicitante +
+    // tenant_document): outra requisição do MESMO usuário (duplo clique, nova aba, retry
+    // de rede sob alta concorrência) criou a consulta pro mesmo documento entre o SELECT
+    // do passo 3 e este INSERT. Busca de novo e atualiza a linha existente em vez de
+    // falhar a simulação.
+    if (novaErr.code === "23505") {
+      const { data: consultaRetry, error: retryErr } = await supabase
+        .from("consultas_credito")
+        .select("id")
+        .eq("profile_id_solicitante", profileId)
+        .eq("tenant_document", tenantDocument)
+        .single();
+      if (retryErr || !consultaRetry) throw retryErr || novaErr;
+      const { error: updateErr } = await supabase
+        .from("consultas_credito")
+        .update(consultaPayload)
+        .eq("id", consultaRetry.id);
+      if (updateErr) throw updateErr;
+      return consultaRetry.id;
+    }
+    throw novaErr;
+  }
   return nova.id;
 }
