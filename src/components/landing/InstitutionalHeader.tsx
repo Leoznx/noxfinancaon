@@ -121,7 +121,7 @@ function HeaderUserMenu({ align }: { align: 'desktop' | 'mobile' }) {
           <Link to="/login">
             <Button variant="ghost" className="h-11 rounded-xl px-3 text-sm font-semibold text-neutral-700">Entrar</Button>
           </Link>
-          <Link to="/simular">
+          <Link to="/consultas/nova">
             <Button className="h-11 rounded-[14px] bg-neutral-950 px-4 text-sm font-bold text-white shadow-none transition-colors hover:bg-neutral-800">
               Solicitar Análise
             </Button>
@@ -134,7 +134,7 @@ function HeaderUserMenu({ align }: { align: 'desktop' | 'mobile' }) {
         <Link to="/login">
           <Button variant="outline" className="w-full h-12 font-bold text-neutral-900 border-neutral-200">Entrar</Button>
         </Link>
-        <Link to="/simular">
+        <Link to="/consultas/nova">
           <Button className="w-full h-12 bg-neutral-900 text-white font-bold">Solicitar Análise</Button>
         </Link>
       </>

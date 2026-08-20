@@ -110,7 +110,7 @@ function PlanosPage() {
                 Comece pela análise da locação. A proposta apresenta a opção aplicável antes da contratação.
               </p>
               <div className="mt-7 flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
-                <Link to="/simular" className="w-full sm:w-auto">
+                <Link to="/consultas/nova" className="w-full sm:w-auto">
                   <Button className="h-12 w-full rounded-lg bg-neutral-950 px-7 font-bold text-white hover:bg-neutral-800 sm:w-auto">
                     Solicitar análise <ArrowRight className="ml-2 h-4 w-4" />
                   </Button>

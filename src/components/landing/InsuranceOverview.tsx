@@ -82,7 +82,7 @@ export function InsuranceHero() {
           </p>
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <Link to="/simular" className="w-full sm:w-auto">
+            <Link to="/consultas/nova" className="w-full sm:w-auto">
               <Button className="h-12 w-full rounded-lg bg-neutral-950 px-7 font-bold text-white hover:bg-neutral-800 sm:w-auto">
                 Solicitar análise
               </Button>
@@ -217,7 +217,7 @@ export function InsuranceFinalCta() {
           Faça sua solicitação ou compare os planos antes de decidir. A contratação começa online e a equipe NOX acompanha você quando precisar.
         </p>
         <div className="mt-8 flex w-full flex-col justify-center gap-3 sm:w-auto sm:flex-row">
-          <Link to="/simular" className="w-full sm:w-auto">
+          <Link to="/consultas/nova" className="w-full sm:w-auto">
             <Button className="h-12 w-full rounded-lg bg-[#FFD60A] px-7 font-bold text-neutral-950 hover:bg-yellow-300 sm:w-auto">
               Solicitar análise <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
