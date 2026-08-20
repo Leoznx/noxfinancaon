@@ -215,26 +215,26 @@ function Consultas() {
 
   return (
     <DashboardLayout>
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
-        <div>
+      <div className="mb-6 flex flex-col justify-between gap-4 sm:mb-8 md:flex-row md:items-center lg:mb-10">
+        <div className="min-w-0">
           <h1 className="text-3xl font-bold text-neutral-900 tracking-tight">Consultas de Crédito</h1>
-          <p className="text-neutral-500 mt-2 font-medium">Acompanhe todas as simulações e análises em tempo real.</p>
+          <p className="mt-2 max-w-2xl text-sm font-medium leading-relaxed text-neutral-500 sm:text-base">Acompanhe todas as simulações e análises em tempo real.</p>
         </div>
       </div>
 
 
-      <div className="flex flex-col md:flex-row gap-4 mb-8">
-        <div className="relative flex-1">
+      <div className="mb-6 flex min-w-0 flex-col gap-3 sm:mb-8 md:flex-row md:gap-4">
+        <div className="relative min-w-0 flex-1">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400" size={18} />
           <Input 
             placeholder="Buscar por nome, CPF/CNPJ, endereço, status ou plano..."
-            className="pl-12 h-14 bg-white border-neutral-200 rounded-xl shadow-sm focus:ring-yellow-400"
+            className="h-12 min-w-0 rounded-xl border-neutral-200 bg-white pl-11 pr-3 shadow-sm focus:ring-yellow-400 sm:h-14 sm:pl-12"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
           />
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="h-14 w-full justify-center rounded-xl border-neutral-200 bg-white px-4 text-xs font-normal text-neutral-700 shadow-sm hover:bg-neutral-50 md:w-44 [&>svg]:hidden">
+          <SelectTrigger className="h-12 w-full justify-center rounded-xl border-neutral-200 bg-white px-4 text-xs font-normal text-neutral-700 shadow-sm hover:bg-neutral-50 sm:h-14 md:w-44 [&>svg]:hidden">
             <div className="flex items-center justify-center gap-2">
               <Filter size={15} strokeWidth={1.8} className="text-neutral-500 shrink-0" />
               <span className="tracking-wide">FILTRAR</span>
@@ -250,7 +250,111 @@ function Consultas() {
         </Select>
       </div>
 
-      <Card className="border-neutral-200 shadow-sm overflow-hidden bg-white">
+      <div className="space-y-3 md:hidden">
+        {loading ? (
+          <Card className="flex min-h-48 flex-col items-center justify-center gap-3 border-neutral-200 bg-white p-6 shadow-sm">
+            <div className="size-8 animate-spin rounded-full border-4 border-neutral-200 border-t-yellow-400" />
+            <p className="text-xs font-bold uppercase tracking-widest text-neutral-500">
+              Carregando consultas...
+            </p>
+          </Card>
+        ) : filteredConsultas.length === 0 ? (
+          <Card className="flex min-h-48 flex-col items-center justify-center gap-3 border-neutral-200 bg-white p-6 text-center shadow-sm">
+            <div className="flex size-14 items-center justify-center rounded-full bg-neutral-50 text-neutral-300">
+              <FileText size={28} />
+            </div>
+            <div>
+              <p className="font-bold text-neutral-900">Nenhuma consulta encontrada</p>
+              <p className="mt-1 text-sm leading-relaxed text-neutral-500">
+                Use “Nova Consulta” no menu para iniciar uma simulação.
+              </p>
+            </div>
+          </Card>
+        ) : (
+          filteredConsultas.map((c) => {
+            const nome = getNome(c);
+            const doc = getDoc(c);
+            const endereco = formatarEnderecoConsulta(c);
+            const aluguel = getAluguel(c);
+            const dataAtualizacao = new Date(c.updated_at || c.created_at);
+
+            return (
+              <Link
+                key={c.id}
+                to={`/consultas/${c.id}/resultado` as any}
+                className="group block rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-yellow-400 focus-visible:ring-offset-2"
+              >
+                <Card className="overflow-hidden border-neutral-200 bg-white shadow-sm transition-colors group-active:bg-neutral-50">
+                  <div className="space-y-4 p-4">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-yellow-400 text-sm font-black text-neutral-900">
+                        {nome.substring(0, 1).toUpperCase()}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="break-words text-base font-black leading-tight text-neutral-900">
+                          {nome}
+                        </p>
+                        <p className="mt-1 text-xs font-medium text-neutral-500">
+                          {doc === '—' ? doc : formatDocumento(doc)}
+                        </p>
+                      </div>
+                      <div className="shrink-0">{getStatusBadge(c)}</div>
+                    </div>
+
+                    <div className="space-y-2 rounded-xl bg-neutral-50 p-3">
+                      <div className="flex min-w-0 items-start gap-2 text-sm text-neutral-700">
+                        <MapPin size={16} className="mt-0.5 shrink-0 text-neutral-400" />
+                        <span className="min-w-0 break-words font-semibold leading-relaxed">
+                          {endereco}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm font-black text-neutral-900">
+                        <DollarSign size={16} className="shrink-0 text-green-600" />
+                        {aluguel.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      </div>
+                    </div>
+
+                    <dl className="grid grid-cols-2 gap-3 text-xs">
+                      <div className="min-w-0">
+                        <dt className="font-bold uppercase tracking-wider text-neutral-400">Plano</dt>
+                        <dd className="mt-1 break-words font-bold text-neutral-700">
+                          {c.payment_status === 'aprovado' ? c.planos?.nome || 'N/D' : 'Nenhum'}
+                        </dd>
+                      </div>
+                      <div className="min-w-0 text-right">
+                        <dt className="font-bold uppercase tracking-wider text-neutral-400">Atualização</dt>
+                        <dd className="mt-1 font-bold text-neutral-700">
+                          {dataAtualizacao.toLocaleDateString('pt-BR')} às{' '}
+                          {dataAtualizacao.toLocaleTimeString('pt-BR', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </dd>
+                      </div>
+                      {user?.role === 'imobiliaria' && (
+                        <div className="col-span-2 min-w-0 border-t border-neutral-200 pt-3">
+                          <dt className="font-bold uppercase tracking-wider text-neutral-400">
+                            Corretor responsável
+                          </dt>
+                          <dd className="mt-1 break-words font-bold text-neutral-700">
+                            {c.solicitante?.nome || 'Não informado'}
+                          </dd>
+                        </div>
+                      )}
+                    </dl>
+                  </div>
+                  <div className="flex min-h-12 items-center justify-between border-t border-neutral-100 px-4 text-xs font-black uppercase tracking-wide text-neutral-700">
+                    Ver detalhes
+                    <ChevronRight size={17} className="text-neutral-400" />
+                  </div>
+                </Card>
+              </Link>
+            );
+          })
+        )}
+      </div>
+
+      <Card className="hidden border-neutral-200 shadow-sm overflow-hidden bg-white md:block">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>

@@ -64,11 +64,20 @@
 }
 
 @layer base {
+  html {
+    min-width: 320px;
+    overflow-x: clip;
+    text-size-adjust: 100%;
+  }
+
   * {
     border-color: var(--color-border);
   }
 
   body {
+    min-width: 320px;
+    min-height: 100dvh;
+    overflow-x: clip;
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
@@ -79,6 +88,24 @@
 
   h1, h2, h3, h4, h5, h6 {
     letter-spacing: -0.03em;
+    text-wrap: balance;
+  }
+
+  img,
+  video,
+  canvas {
+    max-width: 100%;
+    height: auto;
+  }
+
+  button,
+  a,
+  input,
+  select,
+  textarea,
+  [role="button"],
+  [role="tab"] {
+    touch-action: manipulation;
   }
 }
 
@@ -124,6 +151,84 @@
 }
 
 @layer components {
+  .dashboard-content {
+    container-type: inline-size;
+    overflow-wrap: anywhere;
+  }
+
+  .dashboard-content > * {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .dashboard-content :where(.overflow-x-auto, .overflow-auto, .responsive-table) {
+    max-width: 100%;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: #d4d4d4 transparent;
+  }
+
+  .dashboard-content
+    :where(.overflow-x-auto, .overflow-auto, .responsive-table)::-webkit-scrollbar {
+    height: 7px;
+  }
+
+  .dashboard-content
+    :where(.overflow-x-auto, .overflow-auto, .responsive-table)::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    background: #d4d4d4;
+  }
+
+  .dashboard-content :where([role="tablist"]) {
+    max-width: 100%;
+  }
+
+  .dashboard-content :where(p, span, dd, dt, td, th) {
+    min-width: 0;
+  }
+
+  @media (max-width: 639px) {
+    .dashboard-content h1 {
+      font-size: clamp(1.65rem, 8vw, 2rem) !important;
+      line-height: 1.12 !important;
+    }
+
+    .dashboard-content h2 {
+      line-height: 1.2;
+    }
+
+    .dashboard-content :where(section, [class*="rounded-2xl"], [class*="rounded-3xl"]) {
+      scroll-margin-top: 5rem;
+    }
+
+    .dashboard-content :where(th, td) {
+      padding: 0.8rem 0.9rem !important;
+    }
+
+    .dashboard-content :where([role="dialog"]) {
+      max-width: calc(100vw - 1.5rem);
+    }
+
+    .dashboard-content :where(button, [role="button"]) {
+      max-width: 100%;
+      min-height: 2.75rem;
+      height: auto;
+      white-space: normal;
+    }
+
+    .dashboard-content [role="combobox"] {
+      width: 100% !important;
+      max-width: 100%;
+    }
+  }
+
+  @media (max-width: 420px) {
+    .dashboard-content :where(.grid.grid-cols-2, .grid.grid-cols-3, .grid.grid-cols-4) {
+      grid-template-columns: minmax(0, 1fr) !important;
+    }
+  }
+
   .perfil-hero-section {
     display: flex;
     align-items: center;

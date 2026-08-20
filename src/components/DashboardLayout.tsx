@@ -389,7 +389,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <div className="min-h-screen bg-neutral-50 flex">
+    <div className="min-h-dvh bg-neutral-50 flex overflow-x-clip">
       {/* Overlay mobile */}
       {mobileOpen && (
         <div
@@ -485,8 +485,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 lg:ml-64 min-h-screen flex flex-col w-full min-w-0">
-        <header className="h-16 border-b border-neutral-200 flex items-center justify-between gap-3 px-4 sm:px-6 lg:px-10 bg-white/80 backdrop-blur-md sticky top-0 z-40">
+      <main className="flex-1 lg:ml-64 min-h-dvh flex flex-col w-full min-w-0">
+        <header className="min-h-16 border-b border-neutral-200 flex items-center justify-between gap-3 px-3 py-2 sm:px-6 lg:px-10 bg-white/90 backdrop-blur-md sticky top-0 z-40">
           <div className="flex items-center gap-3 min-w-0">
             <button
               className="lg:hidden p-2 -ml-2 text-neutral-700 hover:text-neutral-900 shrink-0"
@@ -524,7 +524,12 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <div className="p-4 sm:p-6 lg:p-10 flex-1 overflow-x-hidden">{children}</div>
+        <div
+          data-dashboard-content
+          className="dashboard-content mx-auto flex w-full max-w-[1600px] min-w-0 flex-1 flex-col px-3 py-4 sm:p-6 lg:p-8 xl:p-10"
+        >
+          {children}
+        </div>
 
         <footer className="p-6 sm:p-8 text-center text-xs text-neutral-400 border-t border-neutral-100 font-medium bg-white">
           © {new Date().getFullYear()} NOX FIANÇA - Plataforma Institucional de Seguro Fiança Locatícia

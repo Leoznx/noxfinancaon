@@ -364,8 +364,8 @@ function CarteiraCobrancas() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative flex-1 min-w-[220px]">
+        <div className="grid grid-cols-1 items-center gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(260px,1fr)_180px_150px_110px]">
+          <div className="relative min-w-0">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
             <Input
               value={busca}
@@ -375,7 +375,7 @@ function CarteiraCobrancas() {
             />
           </div>
           <Select value={statusFiltro} onValueChange={setStatusFiltro}>
-            <SelectTrigger className="w-[180px]"><SelectValue placeholder="Status" /></SelectTrigger>
+            <SelectTrigger className="w-full"><SelectValue placeholder="Status" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="todos">Todos os status</SelectItem>
               <SelectItem value="pending">Aguardando pagamento</SelectItem>
@@ -386,7 +386,7 @@ function CarteiraCobrancas() {
             </SelectContent>
           </Select>
           <Select value={String(mes)} onValueChange={(v) => setMes(Number(v))}>
-            <SelectTrigger className="w-[150px]"><SelectValue placeholder="Mês" /></SelectTrigger>
+            <SelectTrigger className="w-full"><SelectValue placeholder="Mês" /></SelectTrigger>
             <SelectContent>
               {MESES_PT.map((nome, i) => (
                 <SelectItem key={i + 1} value={String(i + 1)}>{nome}</SelectItem>
@@ -394,7 +394,7 @@ function CarteiraCobrancas() {
             </SelectContent>
           </Select>
           <Select value={String(ano)} onValueChange={(v) => setAno(Number(v))}>
-            <SelectTrigger className="w-[110px]"><SelectValue placeholder="Ano" /></SelectTrigger>
+            <SelectTrigger className="w-full"><SelectValue placeholder="Ano" /></SelectTrigger>
             <SelectContent>
               {[now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1].map((a) => (
                 <SelectItem key={a} value={String(a)}>{a}</SelectItem>
@@ -448,20 +448,21 @@ function CarteiraCobrancas() {
                   }
                   className="w-full flex items-center justify-between gap-3 p-4 text-left hover:bg-neutral-50"
                 >
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <p className="text-sm font-black text-neutral-900">{contrato.tenantNome}</p>
                     <p className="text-xs text-neutral-500">
                       {contrato.tenantDocumento} · {contrato.endereco}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2 text-neutral-500">
+                  <div className="flex shrink-0 items-center gap-2 text-neutral-500">
                     <span className="text-xs">{contrato.parcelas.length} parcela(s)</span>
                     {aberto ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                   </div>
                 </button>
 
                 {aberto && (
-                  <table className="w-full text-sm border-t border-neutral-100">
+                  <div className="overflow-x-auto overscroll-x-contain">
+                  <table className="w-full min-w-[760px] text-sm border-t border-neutral-100">
                     <thead className="bg-neutral-50 text-[10px] uppercase tracking-widest text-neutral-500">
                       <tr>
                         <th className="text-left px-4 py-3 w-8"></th>
@@ -540,6 +541,7 @@ function CarteiraCobrancas() {
                       })}
                     </tbody>
                   </table>
+                  </div>
                 )}
               </div>
             );
