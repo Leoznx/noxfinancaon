@@ -83,6 +83,17 @@ function Consultas() {
           }
         }
         query = query.in('profile_id_solicitante', allowedProfileIds);
+      } else if (role === 'inquilino') {
+        // Consulta do inquilino é tanto a que ele mesmo pediu (Contratar Seguro) quanto
+        // aquela em que ele é o inquilino analisado — o corretor/imobiliária consultou o
+        // CPF dele e a proposta é dele. A RLS de consultas_credito já libera esses três
+        // caminhos (solicitante, tenant_user_id e tenant_email) pro próprio inquilino.
+        const condicoes = [
+          meuProfile?.id ? `profile_id_solicitante.eq.${meuProfile.id}` : null,
+          user?.id ? `tenant_user_id.eq.${user.id}` : null,
+          user?.email ? `tenant_email.eq."${user.email}"` : null,
+        ].filter(Boolean) as string[];
+        query = query.or(condicoes.join(','));
       } else if (meuProfile) {
         query = query.or(`profile_id_solicitante.eq.${meuProfile.id},and(profile_id_solicitante.is.null,role_solicitante.eq.${role})`);
       } else {
@@ -98,7 +109,7 @@ function Consultas() {
     } finally {
       setLoading(false);
     }
-  }, [user?.email, user?.role]);
+  }, [user?.email, user?.id, user?.role]);
 
   useEffect(() => {
     fetchConsultas();

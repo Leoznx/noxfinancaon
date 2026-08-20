@@ -294,3 +294,57 @@ export function watchConsultaCredito(
     if (channel) supabase.removeChannel(channel);
   };
 }
+
+/** Status normalizado de uma consulta, do jeito que o painel mostra pro usuário. */
+export type StatusExibicaoConsulta =
+  | "aprovado"
+  | "recusado"
+  | "em_analise"
+  | "falta_documentos"
+  | "erro"
+  | "processando"
+  | "pendente";
+
+/**
+ * `resultado` guarda o veredito da análise de crédito de forma permanente (a automação
+ * grava aprovado/recusado/em_analise/erro ali e nunca mais mexe). Já `status` é o ponteiro
+ * de etapa da proposta inteira (pendente, processando, pendente_documentacao,
+ * aguardando_ativacao, ativo...) e avança conforme o corretor toca a proposta. Preferir
+ * `resultado` faz o painel mostrar sempre o resultado real da análise, mesmo depois de a
+ * proposta seguir para as próximas etapas. Mesma regra usada em "Minhas Consultas".
+ */
+export function resolverStatusConsulta(consulta: {
+  status?: string | null;
+  resultado?: string | null;
+  substatus?: string | null;
+}): StatusExibicaoConsulta {
+  if (consulta.status === "em_analise" && consulta.substatus === "falta_documentos")
+    return "falta_documentos";
+
+  const resultadosFinais = ["aprovado", "recusado", "reprovado", "em_analise"];
+  const status = resultadosFinais.includes(consulta.resultado ?? "")
+    ? consulta.resultado
+    : consulta.status;
+
+  if (status === "aprovado") return "aprovado";
+  if (status === "recusado" || status === "reprovado") return "recusado";
+  if (status === "em_analise") return "em_analise";
+  if (status === "erro") return "erro";
+  if (status === "processando") return "processando";
+  if (status === "pendente" || !status) return "pendente";
+  // Qualquer outro status (pendente_documentacao, aguardando_ativacao, ativo...) só foi
+  // alcançado porque a consulta passou pela análise com aprovação — nunca deve cair em
+  // "Pendente" por falta do campo `resultado` (dados legados que avançaram a proposta
+  // sem nunca ter passado pela automação de verdade).
+  return "aprovado";
+}
+
+export const LABEL_STATUS_CONSULTA: Record<StatusExibicaoConsulta, string> = {
+  aprovado: "Aprovado",
+  recusado: "Recusado",
+  em_analise: "Em análise",
+  falta_documentos: "Falta de documentos",
+  erro: "Erro",
+  processando: "Consultando...",
+  pendente: "Pendente",
+};
