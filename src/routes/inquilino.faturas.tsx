@@ -427,7 +427,121 @@ function ContractBilling({
           </p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-neutral-200 bg-white shadow-sm">
+        <>
+          {/* Mobile/tablet estreito (< md): cards empilhados, sem tabela pra arrastar. */}
+          <div className="md:hidden divide-y divide-neutral-100 rounded-2xl border border-neutral-200 bg-white shadow-sm">
+            {contract.items.map((item) => {
+              const status = statusInfo(item, actionableId);
+              const [year, month] = String(item.dueDate || "").split("-").map(Number);
+              return (
+                <div key={item.id} className="p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-bold text-neutral-900">
+                        Mês {item.installmentNumber}
+                        {item.installmentTotal > 1 ? ` de ${item.installmentTotal}` : ""}
+                      </p>
+                      {month && year ? (
+                        <p className="text-xs text-neutral-500">
+                          {MESES_PT[month - 1]} de {year}
+                        </p>
+                      ) : null}
+                    </div>
+                    <Badge className={`${status.cls} border shrink-0`}>{status.label}</Badge>
+                  </div>
+
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-neutral-600">
+                      Vence{" "}
+                      {item.dueDate
+                        ? new Date(`${item.dueDate}T00:00:00`).toLocaleDateString("pt-BR")
+                        : "—"}
+                    </span>
+                    <span className="font-black text-neutral-900">{brl(item.amount)}</span>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <PaymentMethod method={item.method} />
+                    {item.paidAt && (
+                      <span className="text-[10px] text-neutral-500">
+                        Pago em {new Date(item.paidAt).toLocaleDateString("pt-BR")}
+                      </span>
+                    )}
+                  </div>
+
+                  {(item.method === "boleto" || item.method === "pix" ||
+                    (item.providerPaymentId && !isPagamentoConcluido(item.status))) && (
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {item.method === "boleto" && item.boletoUrl && (
+                        <a href={item.boletoUrl} target="_blank" rel="noreferrer">
+                          <Button size="sm" variant="outline">
+                            <FileText className="mr-1" size={14} /> Ver boleto
+                          </Button>
+                        </a>
+                      )}
+                      {item.method === "boleto" && item.boletoBarcode && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => onCopy(item.boletoBarcode!, "Linha digitável copiada.")}
+                          title="Copiar linha digitável"
+                        >
+                          <Copy size={14} className="mr-1" /> Copiar linha
+                        </Button>
+                      )}
+                      {item.method === "pix" && item.pixCopyPaste && (
+                        <Button
+                          size="sm"
+                          className="bg-neutral-900 text-white hover:bg-neutral-800"
+                          onClick={() => onCopy(item.pixCopyPaste!, "Código Pix copiado.")}
+                        >
+                          <QrCode className="mr-1" size={14} /> Copiar Pix
+                        </Button>
+                      )}
+                      {item.invoiceId && item.providerPaymentId && !isPagamentoConcluido(item.status) && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => onReissue(item, "boleto")}
+                            disabled={reissuingId === `${item.id}:boleto`}
+                          >
+                            <FileText className="mr-1" size={14} /> Boleto atualizado
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => onReissue(item, "pix")}
+                            disabled={reissuingId === `${item.id}:pix`}
+                          >
+                            <QrCode className="mr-1" size={14} /> Gerar Pix
+                          </Button>
+                        </>
+                      )}
+                      {item.providerPaymentId && !isPagamentoConcluido(item.status) && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => onRefresh(item)}
+                          disabled={refreshingId === item.id}
+                          title="Atualizar status"
+                        >
+                          <RefreshCw
+                            size={14}
+                            className={`mr-1 ${refreshingId === item.id ? "animate-spin" : ""}`}
+                          />
+                          Atualizar
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Tablet/desktop (md:+): tabela completa. */}
+          <div className="hidden md:block overflow-x-auto rounded-2xl border border-neutral-200 bg-white shadow-sm">
           <table className="w-full min-w-[860px] text-sm">
             <thead className="bg-neutral-50 text-[10px] uppercase tracking-widest text-neutral-500">
               <tr>
@@ -540,7 +654,8 @@ function ContractBilling({
               })}
             </tbody>
           </table>
-        </div>
+          </div>
+        </>
       )}
     </section>
   );

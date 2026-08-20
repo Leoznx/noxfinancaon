@@ -107,7 +107,51 @@ function Comissoes() {
             ) : !erro && rows.length === 0 ? (
               <Estado titulo="Nenhuma comissão registrada" descricao="Comissões aparecem após contrato vinculado e primeira parcela conforme o fluxo financeiro." />
             ) : !erro && (
-              <div className="overflow-x-auto">
+              <>
+                {/* Mobile/tablet estreito (< md): cards empilhados, sem tabela pra arrastar. */}
+                <div className="md:hidden divide-y divide-neutral-100">
+                  {rows.map((row) => (
+                    <div key={row.id} className="py-4 first:pt-0 last:pb-0">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-bold text-neutral-900">
+                            {String(row.month).padStart(2, "0")}/{row.year}
+                          </p>
+                          <p className="text-xs text-neutral-500">
+                            Apólice {row.apolices?.numero ?? row.apolice_id ?? row.contract_id ?? "-"}
+                          </p>
+                        </div>
+                        <Badge variant="outline" className="shrink-0">
+                          {STATUS_LABEL[row.status] ?? row.status}
+                        </Badge>
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                        <div>
+                          <p className="text-neutral-400 uppercase text-[10px] font-bold tracking-wide">Comissão</p>
+                          <p className="font-semibold text-neutral-900">{formatMoney(row.commission_amount)}</p>
+                        </div>
+                        <div>
+                          <p className="text-neutral-400 uppercase text-[10px] font-bold tracking-wide">Bônus</p>
+                          <p className="font-semibold text-neutral-900">{formatMoney(row.bonus_amount)}</p>
+                        </div>
+                        <div>
+                          <p className="text-neutral-400 uppercase text-[10px] font-bold tracking-wide">Retido</p>
+                          <p className="font-semibold text-neutral-900">{formatMoney(row.reserve_amount)}</p>
+                        </div>
+                        <div>
+                          <p className="text-neutral-400 uppercase text-[10px] font-bold tracking-wide">Liberado</p>
+                          <p className="font-semibold text-neutral-900">{formatMoney(row.released_amount)}</p>
+                        </div>
+                      </div>
+                      <p className="mt-2 text-[10px] text-neutral-400">
+                        Liberação: {formatDateTime(row.released_at || row.reserve_release_at) || "-"}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Tablet/desktop (md:+): tabela completa. */}
+                <div className="hidden md:block overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -136,7 +180,8 @@ function Comissoes() {
                     ))}
                   </TableBody>
                 </Table>
-              </div>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>
