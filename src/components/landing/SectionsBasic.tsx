@@ -52,7 +52,7 @@ export const InstitutionalHero = () => (
         </div>
       </div>
 
-      <div className="flex w-full items-center justify-center lg:justify-start">
+      <div className="hidden w-full items-center justify-center sm:flex lg:justify-start">
         <div className="flex aspect-[3/2] w-full shrink-0 items-center justify-end lg:w-[calc(100%_+_3rem)] xl:w-[calc(100%_+_4rem)] 2xl:w-[calc(100%_+_max(0px,50vw_-_768px)_+_5rem)]">
           <img
             src={noxHomeHeroBanner}
