@@ -218,6 +218,53 @@ function AprovacoesPage() {
         </div>
 
         <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden shadow-sm">
+          {/* Mobile/tablet estreito (< md): cards empilhados, sem tabela pra arrastar. */}
+          <div className="md:hidden divide-y divide-neutral-100">
+            {loading ? (
+              <p className="text-center py-16 text-neutral-400">Carregando...</p>
+            ) : !filtradas.length ? (
+              <p className="text-center py-16 text-neutral-500">
+                {filtroDocs === "enviados" ? "Nenhuma consulta com documentos enviados." : filtroDocs === "aguardando" ? "Nenhuma consulta aguardando documentos." : "Nenhuma consulta pendente."}
+              </p>
+            ) : (
+              filtradas.map((c) => (
+                <div key={c.id} className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-semibold truncate">{c.tenant_name ?? "—"}</p>
+                      <p className="text-xs text-neutral-500">{c.tenant_document ?? "—"}</p>
+                    </div>
+                    <span className="shrink-0 text-sm font-semibold">
+                      {c.rent_value ? `R$ ${Number(c.rent_value).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "—"}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-neutral-500 truncate">{c.property_address ?? "—"}</p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <Badge variant="outline" className={c.status === "em_analise" ? "bg-yellow-50 text-yellow-800 border-yellow-200" : "bg-amber-50 text-amber-700 border-amber-200"}>
+                      {c.status === "em_analise" ? "Em análise" : "Pendente"}
+                    </Badge>
+                    <Badge variant="outline" className={c.substatus === "documentacao_complementar_enviada" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-neutral-50 text-neutral-500 border-neutral-200"}>
+                      {c.substatus === "documentacao_complementar_enviada" ? "Docs enviados" : "Aguardando docs"}
+                    </Badge>
+                    <span className="text-xs text-neutral-400">{c.plano?.nome ?? "—"}</span>
+                  </div>
+                  <div className="mt-2 text-xs text-neutral-500">
+                    <span className="font-semibold text-neutral-700">{c.solicitante?.nome ?? "—"}</span>{" "}
+                    <span className="uppercase">({c.role_solicitante})</span> ·{" "}
+                    {new Date(c.created_at).toLocaleDateString("pt-BR")}
+                  </div>
+                  <div className="mt-3 flex items-center gap-1 border-t border-neutral-100 pt-3">
+                    <Button size="sm" variant="ghost" className="gap-1" onClick={() => abrirDetalhes(c)}><Eye size={14} /></Button>
+                    <Button size="sm" variant="ghost" className="gap-1 text-emerald-700" onClick={() => aprovar(c.id)}><CheckCircle2 size={14} /></Button>
+                    <Button size="sm" variant="ghost" className="gap-1 text-red-700" onClick={() => { setRejectingId(c.id); setMotivo(""); }}><XCircle size={14} /></Button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Tablet/desktop (md:+): tabela completa. */}
+          <div className="hidden md:block overflow-x-auto">
           <Table>
             <TableHeader className="bg-neutral-50">
               <TableRow>
@@ -271,6 +318,7 @@ function AprovacoesPage() {
               ))}
             </TableBody>
           </Table>
+          </div>
         </div>
       </div>
 

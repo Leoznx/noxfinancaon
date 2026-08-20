@@ -450,7 +450,38 @@ function DistribuicaoLeadsAdmin() {
               Atualizar
             </Button>
           </div>
-          <div className="overflow-x-auto">
+          {/* Mobile/tablet estreito (< md): cards empilhados, sem tabela pra arrastar. */}
+          <div className="md:hidden divide-y divide-neutral-100">
+            {fila.length === 0 ? (
+              <p className="py-10 text-center text-neutral-400">
+                {carregando ? "Carregando fila..." : "Nenhum vendedor ativo na fila."}
+              </p>
+            ) : (
+              fila.map((item) => (
+                <div key={item.id} className="flex items-center justify-between gap-3 p-4">
+                  <div className="min-w-0">
+                    <p className="font-bold text-neutral-950 truncate">{item.vendedor?.full_name ?? "—"}</p>
+                    <p className="text-xs text-neutral-500">
+                      {item.total_leads_recebidos} recebido(s) · {formatDateTime(item.ultimo_recebimento) || "nunca recebeu"}
+                    </p>
+                  </div>
+                  <Badge
+                    variant="outline"
+                    className={
+                      item.ativo
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-700 shrink-0"
+                        : "border-neutral-200 bg-neutral-50 text-neutral-500 shrink-0"
+                    }
+                  >
+                    {item.ativo ? "Ativo" : "Inativo"}
+                  </Badge>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Tablet/desktop (md:+): tabela completa. */}
+          <div className="hidden md:block overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -500,7 +531,35 @@ function DistribuicaoLeadsAdmin() {
             <h2 className="font-black text-neutral-950">Distribuídos recentemente</h2>
             <p className="text-sm text-neutral-500">Últimos 20 leads e pra quem foram.</p>
           </div>
-          <div className="overflow-x-auto">
+          {/* Mobile/tablet estreito (< md): cards empilhados, sem tabela pra arrastar. */}
+          <div className="md:hidden divide-y divide-neutral-100">
+            {recentes.length === 0 ? (
+              <p className="py-10 text-center text-neutral-400">
+                {carregando ? "Carregando..." : "Nenhum lead distribuído ainda."}
+              </p>
+            ) : (
+              recentes.map((lead) => (
+                <div key={lead.id} className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-bold text-neutral-950 truncate">{lead.full_name}</p>
+                      <p className="text-xs text-neutral-600 truncate">{lead.phone || lead.email || "—"}</p>
+                    </div>
+                    <Badge className={`${leadStatusClass(lead.status)} shrink-0`}>
+                      {leadStatusLabel(lead.status)}
+                    </Badge>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between text-xs text-neutral-500">
+                    <span>{lead.vendedor?.full_name ?? "—"}</span>
+                    <span>{formatDateTime(lead.distributed_at)}</span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Tablet/desktop (md:+): tabela completa. */}
+          <div className="hidden md:block overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>

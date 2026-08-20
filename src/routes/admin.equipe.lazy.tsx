@@ -213,51 +213,89 @@ function EquipePage() {
             </div>
 
             <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden shadow-sm">
-              <Table>
-                <TableHeader className="bg-neutral-50">
-                  <TableRow>
-                    <TableHead className="px-6">Usuário</TableHead>
-                    <TableHead>Cargo</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Desde</TableHead>
-                    <TableHead className="pr-6 text-right">Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loadingUsers ? (
-                    <TableRow><TableCell colSpan={5} className="text-center py-16 text-neutral-400">Carregando equipe...</TableCell></TableRow>
-                  ) : filteredUsers.length === 0 ? (
-                    <TableRow><TableCell colSpan={5} className="text-center py-16 text-neutral-500">Nenhum colaborador encontrado.</TableCell></TableRow>
-                  ) : filteredUsers.map(u => (
-                    <TableRow key={u.id} className="hover:bg-neutral-50/50">
-                      <TableCell className="px-6">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-full bg-neutral-100 border border-neutral-200 flex items-center justify-center font-bold text-xs uppercase">
-                            {(u.nome ?? u.email ?? "?").substring(0, 2)}
-                          </div>
-                          <div>
-                            <p className="font-bold text-neutral-900 leading-tight">{u.nome ?? "—"}</p>
-                            <p className="text-xs text-neutral-400">{u.email}</p>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Shield size={14} className="text-neutral-400" />
-                          <span className="text-xs font-bold uppercase tracking-wider">{u.role}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell><StatusBadge status={u.status} /></TableCell>
-                      <TableCell className="text-xs text-neutral-400">{new Date(u.created_at).toLocaleDateString("pt-BR")}</TableCell>
-                      <TableCell className="pr-6 text-right space-x-1">
-                        {u.status === "ativo" && <Button size="sm" variant="ghost" onClick={() => alterarStatus(u.id, "bloqueado")}>Bloquear</Button>}
-                        {u.status === "bloqueado" && <Button size="sm" variant="ghost" onClick={() => alterarStatus(u.id, "ativo")}>Reativar</Button>}
-                        {u.status === "aguardando_aceite" && <Button size="sm" variant="ghost">Reenviar convite</Button>}
-                      </TableCell>
+              {/* Mobile/tablet estreito: cards empilhados, sem tabela pra arrastar. */}
+              <div className="md:hidden divide-y divide-neutral-100">
+                {loadingUsers ? (
+                  <p className="text-center py-16 text-neutral-400">Carregando equipe...</p>
+                ) : filteredUsers.length === 0 ? (
+                  <p className="text-center py-16 text-neutral-500">Nenhum colaborador encontrado.</p>
+                ) : filteredUsers.map(u => (
+                  <div key={u.id} className="p-4 space-y-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-neutral-100 border border-neutral-200 flex items-center justify-center font-bold text-xs uppercase shrink-0">
+                        {(u.nome ?? u.email ?? "?").substring(0, 2)}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-bold text-neutral-900 leading-tight truncate">{u.nome ?? "—"}</p>
+                        <p className="text-xs text-neutral-400 truncate">{u.email}</p>
+                      </div>
+                      <StatusBadge status={u.status} />
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2">
+                        <Shield size={14} className="text-neutral-400" />
+                        <span className="font-bold uppercase tracking-wider">{u.role}</span>
+                      </div>
+                      <span className="text-neutral-400">{new Date(u.created_at).toLocaleDateString("pt-BR")}</span>
+                    </div>
+                    {(u.status === "ativo" || u.status === "bloqueado" || u.status === "aguardando_aceite") && (
+                      <div className="flex gap-2 pt-1">
+                        {u.status === "ativo" && <Button size="sm" variant="outline" className="flex-1" onClick={() => alterarStatus(u.id, "bloqueado")}>Bloquear</Button>}
+                        {u.status === "bloqueado" && <Button size="sm" variant="outline" className="flex-1" onClick={() => alterarStatus(u.id, "ativo")}>Reativar</Button>}
+                        {u.status === "aguardando_aceite" && <Button size="sm" variant="outline" className="flex-1">Reenviar convite</Button>}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {/* Tablet/desktop: tabela completa. */}
+              <div className="hidden md:block overflow-x-auto">
+                <Table>
+                  <TableHeader className="bg-neutral-50">
+                    <TableRow>
+                      <TableHead className="px-6">Usuário</TableHead>
+                      <TableHead>Cargo</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Desde</TableHead>
+                      <TableHead className="pr-6 text-right">Ações</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {loadingUsers ? (
+                      <TableRow><TableCell colSpan={5} className="text-center py-16 text-neutral-400">Carregando equipe...</TableCell></TableRow>
+                    ) : filteredUsers.length === 0 ? (
+                      <TableRow><TableCell colSpan={5} className="text-center py-16 text-neutral-500">Nenhum colaborador encontrado.</TableCell></TableRow>
+                    ) : filteredUsers.map(u => (
+                      <TableRow key={u.id} className="hover:bg-neutral-50/50">
+                        <TableCell className="px-6">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-full bg-neutral-100 border border-neutral-200 flex items-center justify-center font-bold text-xs uppercase">
+                              {(u.nome ?? u.email ?? "?").substring(0, 2)}
+                            </div>
+                            <div>
+                              <p className="font-bold text-neutral-900 leading-tight">{u.nome ?? "—"}</p>
+                              <p className="text-xs text-neutral-400">{u.email}</p>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Shield size={14} className="text-neutral-400" />
+                            <span className="text-xs font-bold uppercase tracking-wider">{u.role}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell><StatusBadge status={u.status} /></TableCell>
+                        <TableCell className="text-xs text-neutral-400">{new Date(u.created_at).toLocaleDateString("pt-BR")}</TableCell>
+                        <TableCell className="pr-6 text-right space-x-1">
+                          {u.status === "ativo" && <Button size="sm" variant="ghost" onClick={() => alterarStatus(u.id, "bloqueado")}>Bloquear</Button>}
+                          {u.status === "bloqueado" && <Button size="sm" variant="ghost" onClick={() => alterarStatus(u.id, "ativo")}>Reativar</Button>}
+                          {u.status === "aguardando_aceite" && <Button size="sm" variant="ghost">Reenviar convite</Button>}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           </TabsContent>
 
@@ -321,28 +359,46 @@ function EquipePage() {
           {/* HISTÓRICO */}
           <TabsContent value="historico" className="mt-6">
             <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden shadow-sm">
-              <Table>
-                <TableHeader className="bg-neutral-50">
-                  <TableRow>
-                    <TableHead className="px-6">Ação</TableHead>
-                    <TableHead>Alvo</TableHead>
-                    <TableHead>Detalhes</TableHead>
-                    <TableHead className="pr-6">Data</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {logs.length === 0 ? (
-                    <TableRow><TableCell colSpan={4} className="text-center py-12 text-neutral-400">Nenhuma alteração registrada ainda.</TableCell></TableRow>
-                  ) : logs.map(l => (
-                    <TableRow key={l.id}>
-                      <TableCell className="px-6 font-semibold text-sm">{l.action}</TableCell>
-                      <TableCell className="text-xs font-mono">{l.target_id ?? "—"}</TableCell>
-                      <TableCell className="text-xs text-neutral-500 max-w-md truncate">{JSON.stringify(l.details ?? {})}</TableCell>
-                      <TableCell className="pr-6 text-xs text-neutral-500">{new Date(l.created_at).toLocaleString("pt-BR")}</TableCell>
+              {/* Mobile/tablet estreito: cards empilhados, sem tabela pra arrastar. */}
+              <div className="md:hidden divide-y divide-neutral-100">
+                {logs.length === 0 ? (
+                  <p className="text-center py-12 text-neutral-400">Nenhuma alteração registrada ainda.</p>
+                ) : logs.map(l => (
+                  <div key={l.id} className="p-4 space-y-1">
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="font-semibold text-sm">{l.action}</span>
+                      <span className="text-xs text-neutral-500 shrink-0">{new Date(l.created_at).toLocaleString("pt-BR")}</span>
+                    </div>
+                    <p className="text-xs font-mono text-neutral-500">{l.target_id ?? "—"}</p>
+                    <p className="text-xs text-neutral-500 break-words">{JSON.stringify(l.details ?? {})}</p>
+                  </div>
+                ))}
+              </div>
+              {/* Tablet/desktop: tabela completa. */}
+              <div className="hidden md:block overflow-x-auto">
+                <Table>
+                  <TableHeader className="bg-neutral-50">
+                    <TableRow>
+                      <TableHead className="px-6">Ação</TableHead>
+                      <TableHead>Alvo</TableHead>
+                      <TableHead>Detalhes</TableHead>
+                      <TableHead className="pr-6">Data</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {logs.length === 0 ? (
+                      <TableRow><TableCell colSpan={4} className="text-center py-12 text-neutral-400">Nenhuma alteração registrada ainda.</TableCell></TableRow>
+                    ) : logs.map(l => (
+                      <TableRow key={l.id}>
+                        <TableCell className="px-6 font-semibold text-sm">{l.action}</TableCell>
+                        <TableCell className="text-xs font-mono">{l.target_id ?? "—"}</TableCell>
+                        <TableCell className="text-xs text-neutral-500 max-w-md truncate">{JSON.stringify(l.details ?? {})}</TableCell>
+                        <TableCell className="pr-6 text-xs text-neutral-500">{new Date(l.created_at).toLocaleString("pt-BR")}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           </TabsContent>
         </Tabs>

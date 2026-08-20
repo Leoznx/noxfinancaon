@@ -720,6 +720,37 @@ function TabComissoes() {
           </div>
         </CardHeader>
         <CardContent>
+          {/* Mobile/tablet estreito (< md): cards empilhados, sem tabela pra arrastar. */}
+          <div className="md:hidden divide-y divide-neutral-100">
+            {loading ? (
+              <p className="py-6 text-center text-sm">Carregando…</p>
+            ) : linhas.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                Nenhuma comissão lançada neste mês.
+              </p>
+            ) : (
+              linhas.map((l) => (
+                <div key={l.id} className="py-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="font-medium">{l.internal_users?.full_name ?? "—"}</p>
+                    <Badge variant="outline" className="shrink-0">
+                      {STATUS_COMISSAO.find((s) => s.v === l.status)?.l ?? l.status}
+                    </Badge>
+                  </div>
+                  <div className="mt-1.5 text-xs text-neutral-500">
+                    Comissão {formatMoney(l.commission_amount)} · Bônus {formatMoney(l.bonus_amount)} · Reserva{" "}
+                    {formatMoney(l.reserve_amount)} · Liberado {formatMoney(l.released_amount)}
+                  </div>
+                  <Button size="sm" variant="outline" className="mt-2" onClick={() => setEditando(l)}>
+                    Editar
+                  </Button>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Tablet/desktop (md:+): tabela completa. */}
+          <div className="hidden md:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -770,6 +801,7 @@ function TabComissoes() {
               )}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
 

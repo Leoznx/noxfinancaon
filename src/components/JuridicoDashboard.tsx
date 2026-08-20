@@ -197,49 +197,90 @@ export function JuridicoDashboard() {
           <h2 className="text-lg font-bold text-neutral-900">Prioridades de análise</h2>
           <p className="text-xs text-neutral-500 mt-1">Ordenadas pelas mais antigas primeiro.</p>
         </div>
-        <Table>
-          <TableHeader className="bg-neutral-50">
-            <TableRow>
-              <TableHead className="px-6">Inquilino</TableHead>
-              <TableHead>CPF</TableHead>
-              <TableHead>Origem</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Aguardando</TableHead>
-              <TableHead className="text-right pr-6">Ações</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              <TableRow><TableCell colSpan={6} className="text-center py-12 text-neutral-400">Carregando...</TableCell></TableRow>
-            ) : !prioridades.length ? (
-              <TableRow><TableCell colSpan={6} className="text-center py-12 text-neutral-500">Nenhuma prioridade no momento.</TableCell></TableRow>
-            ) : prioridades.map((c) => {
-              const horas = (Date.now() - new Date(c.created_at).getTime()) / (1000 * 60 * 60);
-              const urgente = horas > 24;
-              return (
-                <TableRow key={c.id} className={urgente ? "bg-red-50/40" : ""}>
-                  <TableCell className="px-6 font-semibold">{c.tenant_name ?? "—"}</TableCell>
-                  <TableCell className="text-xs text-neutral-500">{c.tenant_document ?? "—"}</TableCell>
-                  <TableCell className="text-xs uppercase text-neutral-500">{c.role_solicitante ?? "—"}</TableCell>
-                  <TableCell><StatusBadge status={c.status} /></TableCell>
-                  <TableCell className={`text-xs font-semibold ${urgente ? "text-red-700" : "text-neutral-600"}`}>{tempoAguardando(c.created_at)}</TableCell>
-                  <TableCell className="text-right pr-6 space-x-1">
-                    {!c.id.startsWith("demo-") ? (
-                      <Link to="/consultas/$id/resultado" params={{ id: c.id }}>
-                        <Button size="sm" variant="ghost"><Eye size={14} /></Button>
-                      </Link>
-                    ) : (
-                      <Button size="sm" variant="ghost" disabled><Eye size={14} /></Button>
-                    )}
-                    <Button size="sm" variant="ghost" className="text-emerald-700" onClick={() => aprovar(c.id)}><CheckCircle2 size={14} /></Button>
-                    <Button size="sm" variant="ghost" className="text-red-700" onClick={() => reprovar(c.id)}><XCircle size={14} /></Button>
-                    <Button size="sm" variant="ghost" className="text-orange-700" onClick={() => solicitarAjuste(c.id)}><FileWarning size={14} /></Button>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
+        {/* Mobile/tablet estreito: cards empilhados, sem tabela pra arrastar. */}
+        <div className="md:hidden divide-y divide-neutral-100">
+          {loading ? (
+            <p className="text-center py-12 text-neutral-400">Carregando...</p>
+          ) : !prioridades.length ? (
+            <p className="text-center py-12 text-neutral-500">Nenhuma prioridade no momento.</p>
+          ) : prioridades.map((c) => {
+            const horas = (Date.now() - new Date(c.created_at).getTime()) / (1000 * 60 * 60);
+            const urgente = horas > 24;
+            return (
+              <div key={c.id} className={`p-4 space-y-2 ${urgente ? "bg-red-50/40" : ""}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-semibold truncate">{c.tenant_name ?? "—"}</p>
+                    <p className="text-xs text-neutral-500">{c.tenant_document ?? "—"}</p>
+                  </div>
+                  <StatusBadge status={c.status} />
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="uppercase text-neutral-500">{c.role_solicitante ?? "—"}</span>
+                  <span className={`font-semibold ${urgente ? "text-red-700" : "text-neutral-600"}`}>Aguardando {tempoAguardando(c.created_at)}</span>
+                </div>
+                <div className="flex items-center gap-1 pt-1">
+                  {!c.id.startsWith("demo-") ? (
+                    <Link to="/consultas/$id/resultado" params={{ id: c.id }} className="flex-1">
+                      <Button size="sm" variant="outline" className="w-full"><Eye size={14} /></Button>
+                    </Link>
+                  ) : (
+                    <Button size="sm" variant="outline" className="flex-1" disabled><Eye size={14} /></Button>
+                  )}
+                  <Button size="sm" variant="outline" className="flex-1 text-emerald-700" onClick={() => aprovar(c.id)}><CheckCircle2 size={14} /></Button>
+                  <Button size="sm" variant="outline" className="flex-1 text-red-700" onClick={() => reprovar(c.id)}><XCircle size={14} /></Button>
+                  <Button size="sm" variant="outline" className="flex-1 text-orange-700" onClick={() => solicitarAjuste(c.id)}><FileWarning size={14} /></Button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {/* Tablet/desktop: tabela completa. */}
+        <div className="hidden md:block overflow-x-auto">
+          <Table>
+            <TableHeader className="bg-neutral-50">
+              <TableRow>
+                <TableHead className="px-6">Inquilino</TableHead>
+                <TableHead>CPF</TableHead>
+                <TableHead>Origem</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Aguardando</TableHead>
+                <TableHead className="text-right pr-6">Ações</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableRow><TableCell colSpan={6} className="text-center py-12 text-neutral-400">Carregando...</TableCell></TableRow>
+              ) : !prioridades.length ? (
+                <TableRow><TableCell colSpan={6} className="text-center py-12 text-neutral-500">Nenhuma prioridade no momento.</TableCell></TableRow>
+              ) : prioridades.map((c) => {
+                const horas = (Date.now() - new Date(c.created_at).getTime()) / (1000 * 60 * 60);
+                const urgente = horas > 24;
+                return (
+                  <TableRow key={c.id} className={urgente ? "bg-red-50/40" : ""}>
+                    <TableCell className="px-6 font-semibold">{c.tenant_name ?? "—"}</TableCell>
+                    <TableCell className="text-xs text-neutral-500">{c.tenant_document ?? "—"}</TableCell>
+                    <TableCell className="text-xs uppercase text-neutral-500">{c.role_solicitante ?? "—"}</TableCell>
+                    <TableCell><StatusBadge status={c.status} /></TableCell>
+                    <TableCell className={`text-xs font-semibold ${urgente ? "text-red-700" : "text-neutral-600"}`}>{tempoAguardando(c.created_at)}</TableCell>
+                    <TableCell className="text-right pr-6 space-x-1">
+                      {!c.id.startsWith("demo-") ? (
+                        <Link to="/consultas/$id/resultado" params={{ id: c.id }}>
+                          <Button size="sm" variant="ghost"><Eye size={14} /></Button>
+                        </Link>
+                      ) : (
+                        <Button size="sm" variant="ghost" disabled><Eye size={14} /></Button>
+                      )}
+                      <Button size="sm" variant="ghost" className="text-emerald-700" onClick={() => aprovar(c.id)}><CheckCircle2 size={14} /></Button>
+                      <Button size="sm" variant="ghost" className="text-red-700" onClick={() => reprovar(c.id)}><XCircle size={14} /></Button>
+                      <Button size="sm" variant="ghost" className="text-orange-700" onClick={() => solicitarAjuste(c.id)}><FileWarning size={14} /></Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
       </section>
     </div>
   );

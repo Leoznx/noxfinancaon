@@ -461,19 +461,9 @@ function CarteiraCobrancas() {
                 </button>
 
                 {aberto && (
-                  <table className="w-full text-sm border-t border-neutral-100">
-                    <thead className="bg-neutral-50 text-[10px] uppercase tracking-widest text-neutral-500">
-                      <tr>
-                        <th className="text-left px-4 py-3 w-8"></th>
-                        <th className="text-left px-4 py-3">Mensalidade</th>
-                        <th className="text-left px-4 py-3">Vencimento</th>
-                        <th className="text-left px-4 py-3">Valor</th>
-                        <th className="text-left px-4 py-3">Responsável</th>
-                        <th className="text-left px-4 py-3">Status</th>
-                        <th className="text-right px-4 py-3">Ações</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y">
+                  <>
+                    {/* Mobile/tablet estreito: cards empilhados, sem tabela pra arrastar. */}
+                    <div className="md:hidden divide-y divide-neutral-100 border-t border-neutral-100">
                       {contrato.parcelas.map((f) => {
                         const s = statusInfo(f.status);
                         const [fAno, fMes] = String(f.vencimento).split("-").map(Number);
@@ -485,61 +475,149 @@ function CarteiraCobrancas() {
                           fMes === mes &&
                           fAno === ano;
                         return (
-                          <tr key={f.id} className="hover:bg-neutral-50/60">
-                            <td className="px-4 py-3">
-                              {elegivel && (
-                                <input
-                                  type="checkbox"
-                                  checked={selecionadas.has(f.id)}
-                                  onChange={() => alternarSelecao(f.id)}
-                                />
-                              )}
-                            </td>
-                            <td className="px-4 py-3 font-bold">
-                              Mês {f.numero_parcela} de {f.installment_total}
-                              <span className="block text-xs font-normal text-neutral-500">
-                                {MESES_PT[fMes - 1]} de {fAno}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-neutral-700">{new Date(f.vencimento).toLocaleDateString("pt-BR")}</td>
-                            <td className="px-4 py-3 font-black text-neutral-900">{brl(f.valor)}</td>
-                            <td className="px-4 py-3 text-neutral-600">
+                          <div key={f.id} className="p-4 space-y-2">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex items-start gap-2 min-w-0">
+                                {elegivel && (
+                                  <input
+                                    type="checkbox"
+                                    checked={selecionadas.has(f.id)}
+                                    onChange={() => alternarSelecao(f.id)}
+                                    className="mt-1 shrink-0"
+                                  />
+                                )}
+                                <div className="min-w-0">
+                                  <p className="font-bold text-sm">Mês {f.numero_parcela} de {f.installment_total}</p>
+                                  <p className="text-xs text-neutral-500">{MESES_PT[fMes - 1]} de {fAno}</p>
+                                </div>
+                              </div>
+                              <div className="text-right shrink-0">
+                                <Badge className={`${s.cls} border`}>{s.label}</Badge>
+                                {f.consolidated_item_id && (
+                                  <span className="block text-[10px] text-neutral-400 mt-0.5">Em lote consolidado</span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between text-xs text-neutral-600">
+                              <span>Vence {new Date(f.vencimento).toLocaleDateString("pt-BR")}</span>
+                              <span className="font-black text-neutral-900">{brl(f.valor)}</span>
+                            </div>
+                            <p className="text-xs text-neutral-500">
                               {f.payment_responsible === "agency" ? "Imobiliária" : "Inquilino"}
-                            </td>
-                            <td className="px-4 py-3">
-                              <Badge className={`${s.cls} border`}>{s.label}</Badge>
-                              {f.consolidated_item_id && (
-                                <span className="block text-[10px] text-neutral-400 mt-0.5">Em lote consolidado</span>
-                              )}
-                            </td>
-                            <td className="px-4 py-3 text-right space-x-1 whitespace-nowrap">
-                              {f.boleto_url && (
-                                <a href={f.boleto_url} target="_blank" rel="noreferrer">
-                                  <Button size="sm" variant="outline"><FileText size={14} /></Button>
-                                </a>
-                              )}
-                              {f.linha_digitavel && (
-                                <Button size="sm" variant="ghost" onClick={() => copiar(f.linha_digitavel)}>
-                                  <Copy size={14} />
-                                </Button>
-                              )}
-                              {f.asaas_payment?.asaas_payment_id && (
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => atualizarStatus(f)}
-                                  disabled={atualizandoId === f.id}
-                                  title="Atualizar status"
-                                >
-                                  <RefreshCw size={14} className={atualizandoId === f.id ? "animate-spin" : ""} />
-                                </Button>
-                              )}
-                            </td>
-                          </tr>
+                            </p>
+                            {(f.boleto_url || f.linha_digitavel || f.asaas_payment?.asaas_payment_id) && (
+                              <div className="flex items-center gap-2 pt-1">
+                                {f.boleto_url && (
+                                  <a href={f.boleto_url} target="_blank" rel="noreferrer" className="flex-1">
+                                    <Button size="sm" variant="outline" className="w-full"><FileText size={14} /></Button>
+                                  </a>
+                                )}
+                                {f.linha_digitavel && (
+                                  <Button size="sm" variant="outline" className="flex-1" onClick={() => copiar(f.linha_digitavel)}>
+                                    <Copy size={14} />
+                                  </Button>
+                                )}
+                                {f.asaas_payment?.asaas_payment_id && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="flex-1"
+                                    onClick={() => atualizarStatus(f)}
+                                    disabled={atualizandoId === f.id}
+                                    title="Atualizar status"
+                                  >
+                                    <RefreshCw size={14} className={atualizandoId === f.id ? "animate-spin" : ""} />
+                                  </Button>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         );
                       })}
-                    </tbody>
-                  </table>
+                    </div>
+                    {/* Tablet/desktop: tabela completa. */}
+                    <div className="hidden md:block overflow-x-auto">
+                      <table className="w-full text-sm border-t border-neutral-100">
+                        <thead className="bg-neutral-50 text-[10px] uppercase tracking-widest text-neutral-500">
+                          <tr>
+                            <th className="text-left px-4 py-3 w-8"></th>
+                            <th className="text-left px-4 py-3">Mensalidade</th>
+                            <th className="text-left px-4 py-3">Vencimento</th>
+                            <th className="text-left px-4 py-3">Valor</th>
+                            <th className="text-left px-4 py-3">Responsável</th>
+                            <th className="text-left px-4 py-3">Status</th>
+                            <th className="text-right px-4 py-3">Ações</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y">
+                          {contrato.parcelas.map((f) => {
+                            const s = statusInfo(f.status);
+                            const [fAno, fMes] = String(f.vencimento).split("-").map(Number);
+                            const elegivel =
+                              f.payment_responsible === "agency" &&
+                              f.recipient_user_id === user?.id &&
+                              !f.consolidated_item_id &&
+                              STATUS_ABERTO.includes(f.status) &&
+                              fMes === mes &&
+                              fAno === ano;
+                            return (
+                              <tr key={f.id} className="hover:bg-neutral-50/60">
+                                <td className="px-4 py-3">
+                                  {elegivel && (
+                                    <input
+                                      type="checkbox"
+                                      checked={selecionadas.has(f.id)}
+                                      onChange={() => alternarSelecao(f.id)}
+                                    />
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 font-bold">
+                                  Mês {f.numero_parcela} de {f.installment_total}
+                                  <span className="block text-xs font-normal text-neutral-500">
+                                    {MESES_PT[fMes - 1]} de {fAno}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3 text-neutral-700">{new Date(f.vencimento).toLocaleDateString("pt-BR")}</td>
+                                <td className="px-4 py-3 font-black text-neutral-900">{brl(f.valor)}</td>
+                                <td className="px-4 py-3 text-neutral-600">
+                                  {f.payment_responsible === "agency" ? "Imobiliária" : "Inquilino"}
+                                </td>
+                                <td className="px-4 py-3">
+                                  <Badge className={`${s.cls} border`}>{s.label}</Badge>
+                                  {f.consolidated_item_id && (
+                                    <span className="block text-[10px] text-neutral-400 mt-0.5">Em lote consolidado</span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 text-right space-x-1 whitespace-nowrap">
+                                  {f.boleto_url && (
+                                    <a href={f.boleto_url} target="_blank" rel="noreferrer">
+                                      <Button size="sm" variant="outline"><FileText size={14} /></Button>
+                                    </a>
+                                  )}
+                                  {f.linha_digitavel && (
+                                    <Button size="sm" variant="ghost" onClick={() => copiar(f.linha_digitavel)}>
+                                      <Copy size={14} />
+                                    </Button>
+                                  )}
+                                  {f.asaas_payment?.asaas_payment_id && (
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => atualizarStatus(f)}
+                                      disabled={atualizandoId === f.id}
+                                      title="Atualizar status"
+                                    >
+                                      <RefreshCw size={14} className={atualizandoId === f.id ? "animate-spin" : ""} />
+                                    </Button>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
                 )}
               </div>
             );

@@ -291,6 +291,40 @@ function FaturamentoAdminPage() {
         <div className="space-y-4">
           <h3 className="text-lg font-bold">Outros meses</h3>
           <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden shadow-sm">
+            {/* Mobile/tablet estreito (< md): cards empilhados, sem tabela pra arrastar. */}
+            <div className="md:hidden divide-y divide-neutral-100">
+              {resumoMeses.length === 0 ? (
+                <p className="text-center py-12 text-neutral-400">Sem outros meses para exibir.</p>
+              ) : (
+                resumoMeses.map((r) => {
+                  const [y, m] = r.ym.split("-").map(Number);
+                  return (
+                    <div key={r.ym} className="p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="font-semibold">{mesLabel(y, m - 1)}</p>
+                        <span className="font-semibold">{brl(r.total)}</span>
+                      </div>
+                      <div className="mt-1.5 flex flex-wrap gap-x-3 text-xs">
+                        <span className="text-red-700">Vencidos {brl(r.venc)}</span>
+                        <span className="text-amber-700">A receber {brl(r.rec)}</span>
+                        <span className="text-emerald-700">Pagos {brl(r.pago)}</span>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="mt-2"
+                        onClick={() => { setSelectedYM(r.ym); setTab("receber"); }}
+                      >
+                        Ver mês
+                      </Button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Tablet/desktop (md:+): tabela completa. */}
+            <div className="hidden md:block overflow-x-auto">
             <Table>
               <TableHeader className="bg-neutral-50">
                 <TableRow>
@@ -322,6 +356,7 @@ function FaturamentoAdminPage() {
                 })}
               </TableBody>
             </Table>
+            </div>
           </div>
         </div>
       </div>
@@ -366,6 +401,71 @@ function TabelaFaturas({
 }) {
   return (
     <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden shadow-sm">
+      {/* Mobile/tablet estreito (< md): cards empilhados, sem tabela pra arrastar. */}
+      <div className="md:hidden divide-y divide-neutral-100">
+        {loading ? (
+          <p className="text-center py-16 text-neutral-400">Carregando...</p>
+        ) : !parcelas.length ? (
+          <p className="text-center py-16 text-neutral-500">Nenhuma parcela no período.</p>
+        ) : (
+          parcelas.map((p) => {
+            const resp = p.payment_responsible;
+            const respLabel = resp === "agency" ? "Imobiliária" : resp === "tenant" ? "Inquilino" : "—";
+            const respCls = resp === "agency"
+              ? "bg-blue-50 text-blue-700 border-blue-200"
+              : resp === "tenant"
+                ? "bg-purple-50 text-purple-700 border-purple-200"
+                : "bg-neutral-50 text-neutral-500 border-neutral-200";
+            const imovel = p.consulta?.imovel;
+            return (
+              <div key={p.id} className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-semibold truncate">{p.consulta?.tenant_name ?? "—"}</p>
+                    <p className="text-xs text-neutral-500">{p.consulta?.tenant_document ?? ""}</p>
+                  </div>
+                  <span className="shrink-0 font-semibold">{brl(p.valor)}</span>
+                </div>
+                <p className="mt-1 text-xs text-neutral-500 truncate">{formatEndereco(imovel)}</p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <span className="text-xs text-neutral-600">
+                    {p.numero_parcela ? `Parcela ${p.numero_parcela}/${p.installment_total}` : "—"} ·{" "}
+                    {new Date(p.vencimento).toLocaleDateString("pt-BR")}
+                  </span>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <Badge className={respCls}>{respLabel}</Badge>
+                  <StatusFat status={p.status} />
+                </div>
+                <div className="mt-3 flex items-center gap-1 border-t border-neutral-100 pt-3">
+                  {p.boleto_url && (
+                    <a href={p.boleto_url} target="_blank" rel="noreferrer">
+                      <Button size="sm" variant="ghost"><FileText size={14} /></Button>
+                    </a>
+                  )}
+                  {p.linha_digitavel && (
+                    <Button size="sm" variant="ghost" onClick={() => onCopiar(p.linha_digitavel)}><Copy size={14} /></Button>
+                  )}
+                  {p.asaas_payment?.asaas_payment_id && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={atualizandoId === p.id}
+                      onClick={() => onAtualizar(p)}
+                      title="Atualizar status"
+                    >
+                      <RefreshCw size={14} className={atualizandoId === p.id ? "animate-spin" : ""} />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* Tablet/desktop (md:+): tabela completa. */}
+      <div className="hidden md:block overflow-x-auto">
       <Table>
         <TableHeader className="bg-neutral-50">
           <TableRow>
@@ -431,6 +531,7 @@ function TabelaFaturas({
           })}
         </TableBody>
       </Table>
+      </div>
     </div>
   );
 }

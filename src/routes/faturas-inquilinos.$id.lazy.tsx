@@ -201,7 +201,102 @@ function FaturasInquilinoDetalhe() {
 
         {/* Tabela de parcelas */}
         <Card className="border-neutral-200 shadow-sm overflow-hidden bg-white">
-          <div className="overflow-x-auto">
+          {/* Mobile/tablet estreito (< md): cards empilhados, sem tabela pra arrastar. */}
+          <div className="md:hidden divide-y divide-neutral-100">
+            {enriquecidas.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 py-16">
+                <Receipt className="text-neutral-300" size={36} />
+                <p className="text-neutral-900 font-bold">Nenhuma fatura encontrada</p>
+              </div>
+            ) : (
+              enriquecidas.map((f, i) => (
+                <div key={f.id} className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-black text-neutral-900">
+                        #{String(f.numero_parcela ?? i + 1).padStart(2, "0")}
+                      </p>
+                      <p className="text-xs text-neutral-500">
+                        Vence {formatDate(f.data_vencimento)}
+                      </p>
+                    </div>
+                    <FaturaStatusBadge status={f.statusReal} />
+                  </div>
+                  <div className="mt-2 flex items-center justify-between text-sm">
+                    <span className="text-neutral-500">
+                      {f.data_pagamento ? `Pago em ${formatDate(f.data_pagamento)}` : "Ainda não pago"}
+                    </span>
+                    <span className="font-bold text-neutral-900">{formatBRL(Number(f.valor))}</span>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-neutral-100 pt-3">
+                    {f.boleto_url ? (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="rounded-lg h-8 gap-1"
+                          onClick={() => window.open(f.boleto_url, "_blank")}
+                        >
+                          <Eye size={12} /> Ver
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="rounded-lg h-8 w-8 p-0"
+                          title="Baixar PDF"
+                          onClick={() => {
+                            const a = document.createElement("a");
+                            a.href = f.boleto_url;
+                            a.target = "_blank";
+                            a.rel = "noopener";
+                            a.download = `boleto-${apolice.numero}-${i + 1}.pdf`;
+                            document.body.appendChild(a);
+                            a.click();
+                            a.remove();
+                          }}
+                        >
+                          <Download size={12} />
+                        </Button>
+                      </>
+                    ) : (
+                      <span className="text-[10px] text-neutral-400 italic">
+                        Boleto não disponível
+                      </span>
+                    )}
+                    {f.linha_digitavel && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="rounded-lg h-8 w-8 p-0"
+                        title="Copiar linha digitável"
+                        onClick={() => copiar(f.linha_digitavel)}
+                      >
+                        <Copy size={12} />
+                      </Button>
+                    )}
+                    {f.comprovante_url ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="rounded-lg h-8 gap-1 text-green-700"
+                        title="Ver comprovante"
+                        onClick={() => window.open(f.comprovante_url, "_blank")}
+                      >
+                        <FileCheck size={12} /> Comprovante
+                      </Button>
+                    ) : f.status === "pago" ? (
+                      <span className="text-[10px] text-neutral-400 italic">
+                        Comprovante não enviado
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Tablet/desktop (md:+): tabela completa. */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left min-w-[760px]">
               <thead className="bg-neutral-50 text-neutral-500 text-[10px] font-black uppercase tracking-widest">
                 <tr>

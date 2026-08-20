@@ -285,6 +285,67 @@ function VerificacoesDocumentoPage() {
         </div>
 
         <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden shadow-sm">
+          {/* Mobile/tablet estreito (< md): cards empilhados, sem tabela pra arrastar. */}
+          <div className="md:hidden divide-y divide-neutral-100">
+            {loading ? (
+              <p className="text-center py-16 text-neutral-400">Carregando...</p>
+            ) : !filtradas.length ? (
+              <p className="text-center py-16 text-neutral-500">Nenhuma verificação encontrada.</p>
+            ) : (
+              filtradas.map((v) => (
+                <div key={v.id} className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-semibold truncate">{v.perfil?.nome ?? "—"}</p>
+                      <p className="text-xs text-neutral-500 truncate">{v.perfil?.email ?? "—"}</p>
+                    </div>
+                    <StatusBadge status={v.verification_status} />
+                  </div>
+                  <div className="mt-2 flex items-center gap-2">
+                    <Badge variant="outline" className="uppercase text-[10px] font-bold">
+                      {ROLE_LABEL[v.perfil?.role] ?? v.perfil?.role ?? "—"}
+                    </Badge>
+                    <span className="text-xs text-neutral-500">
+                      {DOC_LABEL[v.document_type] ?? v.document_type}
+                    </span>
+                    <span className="text-xs text-neutral-400">
+                      {v.submitted_at ? new Date(v.submitted_at).toLocaleDateString("pt-BR") : "—"}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex items-center gap-1 border-t border-neutral-100 pt-3">
+                    <Button size="sm" variant="ghost" className="gap-1" onClick={() => abrirDetalhes(v)}>
+                      <Eye size={14} /> Ver
+                    </Button>
+                    {AGUARDANDO_REVISAO.includes(v.verification_status) && (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="gap-1 text-emerald-700"
+                          disabled={processando === v.id}
+                          onClick={() => aprovar(v)}
+                        >
+                          <CheckCircle2 size={14} />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="gap-1 text-red-700"
+                          disabled={processando === v.id}
+                          onClick={() => { setRejectingId(v.id); setMotivo(""); }}
+                        >
+                          <XCircle size={14} />
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Tablet/desktop (md:+): tabela completa. */}
+          <div className="hidden md:block overflow-x-auto">
           <Table>
             <TableHeader className="bg-neutral-50">
               <TableRow>
@@ -355,6 +416,7 @@ function VerificacoesDocumentoPage() {
               )}
             </TableBody>
           </Table>
+          </div>
         </div>
       </div>
 

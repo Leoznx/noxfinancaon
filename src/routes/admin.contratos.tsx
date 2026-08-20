@@ -81,45 +81,75 @@ function ContratosAdminPage() {
         </div>
 
         <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden shadow-sm">
-          <Table>
-            <TableHeader className="bg-neutral-50">
-              <TableRow>
-                <TableHead className="px-6">Nº Contrato</TableHead>
-                <TableHead>Inquilino</TableHead>
-                <TableHead>Imóvel</TableHead>
-                <TableHead>Vigência</TableHead>
-                <TableHead>Prêmio</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right pr-6">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-16 text-neutral-400">Carregando...</TableCell></TableRow>
-              ) : !filtradas.length ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-16 text-neutral-500">Nenhum contrato encontrado.</TableCell></TableRow>
-              ) : filtradas.map((a) => (
-                <TableRow key={a.id} className="hover:bg-neutral-50/50">
-                  <TableCell className="px-6 font-bold text-neutral-900">{a.numero}</TableCell>
-                  <TableCell>
-                    <p className="font-semibold">{a.consulta?.tenant_name ?? "—"}</p>
+          {/* Mobile/tablet estreito: cards empilhados, sem tabela pra arrastar. */}
+          <div className="md:hidden divide-y divide-neutral-100">
+            {loading ? (
+              <p className="text-center py-16 text-neutral-400">Carregando...</p>
+            ) : !filtradas.length ? (
+              <p className="text-center py-16 text-neutral-500">Nenhum contrato encontrado.</p>
+            ) : filtradas.map((a) => (
+              <div key={a.id} className="p-4 space-y-2">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-bold text-neutral-900">{a.numero}</p>
+                    <p className="font-semibold text-sm">{a.consulta?.tenant_name ?? "—"}</p>
                     <p className="text-xs text-neutral-500">{a.consulta?.tenant_document ?? ""}</p>
-                  </TableCell>
-                  <TableCell className="text-xs text-neutral-500 max-w-[220px] truncate">{a.consulta?.property_address ?? "—"}</TableCell>
-                  <TableCell className="text-xs text-neutral-500">
-                    {new Date(a.vigencia_inicio).toLocaleDateString("pt-BR")} → {new Date(a.vigencia_fim).toLocaleDateString("pt-BR")}
-                  </TableCell>
-                  <TableCell>R$ {Number(a.valor_premio).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</TableCell>
-                  <TableCell><StatusBadge status={a.status} /></TableCell>
-                  <TableCell className="text-right pr-6">
-                    <Link to="/apolices/$id" params={{ id: a.id }}>
-                      <Button size="sm" variant="ghost" className="gap-1"><Eye size={14} /> Detalhes</Button>
-                    </Link>
-                  </TableCell>
+                  </div>
+                  <StatusBadge status={a.status} />
+                </div>
+                <p className="text-xs text-neutral-500 truncate">{a.consulta?.property_address ?? "—"}</p>
+                <div className="flex items-center justify-between text-xs text-neutral-500">
+                  <span>{new Date(a.vigencia_inicio).toLocaleDateString("pt-BR")} → {new Date(a.vigencia_fim).toLocaleDateString("pt-BR")}</span>
+                  <span className="font-semibold text-neutral-900">R$ {Number(a.valor_premio).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
+                </div>
+                <Link to="/apolices/$id" params={{ id: a.id }}>
+                  <Button size="sm" variant="outline" className="gap-1 w-full"><Eye size={14} /> Detalhes</Button>
+                </Link>
+              </div>
+            ))}
+          </div>
+          {/* Tablet/desktop: tabela completa. */}
+          <div className="hidden md:block overflow-x-auto">
+            <Table>
+              <TableHeader className="bg-neutral-50">
+                <TableRow>
+                  <TableHead className="px-6">Nº Contrato</TableHead>
+                  <TableHead>Inquilino</TableHead>
+                  <TableHead>Imóvel</TableHead>
+                  <TableHead>Vigência</TableHead>
+                  <TableHead>Prêmio</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right pr-6">Ações</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow><TableCell colSpan={7} className="text-center py-16 text-neutral-400">Carregando...</TableCell></TableRow>
+                ) : !filtradas.length ? (
+                  <TableRow><TableCell colSpan={7} className="text-center py-16 text-neutral-500">Nenhum contrato encontrado.</TableCell></TableRow>
+                ) : filtradas.map((a) => (
+                  <TableRow key={a.id} className="hover:bg-neutral-50/50">
+                    <TableCell className="px-6 font-bold text-neutral-900">{a.numero}</TableCell>
+                    <TableCell>
+                      <p className="font-semibold">{a.consulta?.tenant_name ?? "—"}</p>
+                      <p className="text-xs text-neutral-500">{a.consulta?.tenant_document ?? ""}</p>
+                    </TableCell>
+                    <TableCell className="text-xs text-neutral-500 max-w-[220px] truncate">{a.consulta?.property_address ?? "—"}</TableCell>
+                    <TableCell className="text-xs text-neutral-500">
+                      {new Date(a.vigencia_inicio).toLocaleDateString("pt-BR")} → {new Date(a.vigencia_fim).toLocaleDateString("pt-BR")}
+                    </TableCell>
+                    <TableCell>R$ {Number(a.valor_premio).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</TableCell>
+                    <TableCell><StatusBadge status={a.status} /></TableCell>
+                    <TableCell className="text-right pr-6">
+                      <Link to="/apolices/$id" params={{ id: a.id }}>
+                        <Button size="sm" variant="ghost" className="gap-1"><Eye size={14} /> Detalhes</Button>
+                      </Link>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </div>
       </div>
     </DashboardLayout>

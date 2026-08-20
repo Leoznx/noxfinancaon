@@ -162,6 +162,29 @@ function Metas() {
             <Card>
               <CardHeader><CardTitle>Exemplos de ganho mensal</CardTitle></CardHeader>
               <CardContent>
+                {/* Mobile/tablet estreito (< md): cards empilhados, sem tabela pra arrastar. */}
+                <div className="md:hidden divide-y divide-neutral-100">
+                  {EXEMPLOS.map((contrato) => {
+                    const comissao = calcularComissaoContratos(contrato);
+                    const bonus = calcularBonus(contrato);
+                    return (
+                      <div key={contrato} className="flex items-center justify-between gap-3 py-3">
+                        <div>
+                          <p className="font-medium">{contrato} contratos</p>
+                          <p className="text-xs text-neutral-500">
+                            Fixo {formatMoney(SALARIO_FIXO_VENDEDOR)} + Com. {formatMoney(comissao)} + Bônus {formatMoney(bonus)}
+                          </p>
+                        </div>
+                        <span className="font-bold shrink-0">
+                          {formatMoney(SALARIO_FIXO_VENDEDOR + comissao + bonus)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Tablet/desktop (md:+): tabela completa. */}
+                <div className="hidden md:block">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -188,6 +211,7 @@ function Metas() {
                     })}
                   </TableBody>
                 </Table>
+                </div>
               </CardContent>
             </Card>
 

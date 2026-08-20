@@ -145,7 +145,46 @@ function AdminVagasPage() {
           <div className="flex justify-end mb-4">
             <Button onClick={newVaga} className="bg-yellow-400 text-neutral-900 hover:bg-yellow-500 font-bold gap-2"><Plus size={16} /> Criar vaga</Button>
           </div>
-          <div className="bg-white border rounded-2xl overflow-x-auto">
+          {/* Mobile/tablet estreito (< md): cards empilhados, sem tabela pra arrastar. */}
+          <div className="md:hidden space-y-3">
+            {loading ? (
+              <p className="p-6 text-center text-neutral-500">Carregando...</p>
+            ) : vagas.length === 0 ? (
+              <p className="p-6 text-center text-neutral-500">Nenhuma vaga cadastrada.</p>
+            ) : (
+              vagas.map((v) => (
+                <div key={v.id} className="bg-white border rounded-2xl p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-bold truncate">{v.title}</p>
+                      <p className="text-xs text-neutral-500">{v.area} · {v.work_model}</p>
+                    </div>
+                    <Badge
+                      variant={v.status === "aberta" ? "default" : "secondary"}
+                      className={`shrink-0 ${v.status === "aberta" ? "bg-emerald-500" : v.status === "pausada" ? "bg-yellow-500" : "bg-neutral-500"}`}
+                    >
+                      {v.status}
+                    </Badge>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between text-xs text-neutral-500">
+                    <span>{[v.city, v.state].filter(Boolean).join("/") || "—"}</span>
+                    <span>{counts[v.id] ?? 0} candidato(s)</span>
+                    <span>{new Date(v.created_at).toLocaleDateString("pt-BR")}</span>
+                  </div>
+                  <div className="mt-3 flex gap-1 border-t pt-3">
+                    <Button size="sm" variant="ghost" onClick={() => editVaga(v)} title="Editar"><Pencil size={14} /></Button>
+                    {v.status === "aberta" && <Button size="sm" variant="ghost" onClick={() => setStatus(v.id, "pausada")} title="Pausar"><Pause size={14} /></Button>}
+                    {v.status === "pausada" && <Button size="sm" variant="ghost" onClick={() => setStatus(v.id, "aberta")} title="Reabrir"><Play size={14} /></Button>}
+                    {v.status !== "encerrada" && <Button size="sm" variant="ghost" onClick={() => setStatus(v.id, "encerrada")} title="Encerrar"><FileText size={14} /></Button>}
+                    <Button size="sm" variant="ghost" onClick={() => delVaga(v.id)} title="Excluir" className="text-red-600"><Trash2 size={14} /></Button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Tablet/desktop (md:+): tabela completa. */}
+          <div className="hidden md:block bg-white border rounded-2xl overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-neutral-50 text-left text-xs uppercase tracking-wider text-neutral-500">
                 <tr>
@@ -184,7 +223,49 @@ function AdminVagasPage() {
         </TabsContent>
 
         <TabsContent value="curriculos" className="mt-6">
-          <div className="bg-white border rounded-2xl overflow-x-auto">
+          {/* Mobile/tablet estreito (< md): cards empilhados, sem tabela pra arrastar. */}
+          <div className="md:hidden space-y-3">
+            {loading ? (
+              <p className="p-6 text-center text-neutral-500">Carregando...</p>
+            ) : cands.length === 0 ? (
+              <p className="p-6 text-center text-neutral-500">Nenhum currículo recebido.</p>
+            ) : (
+              cands.map((c) => {
+                const vaga = vagas.find((v) => v.id === c.job_id);
+                return (
+                  <div key={c.id} className="bg-white border rounded-2xl p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-bold truncate">{c.full_name}</p>
+                        <p className="text-xs text-neutral-500">{[c.city, c.state].filter(Boolean).join("/")}</p>
+                      </div>
+                      <span className="shrink-0 text-xs text-neutral-500">
+                        {new Date(c.created_at).toLocaleDateString("pt-BR")}
+                      </span>
+                    </div>
+                    <div className="mt-2 text-xs text-neutral-600">
+                      <p>{c.email} · {c.phone}</p>
+                      <p className="mt-0.5">
+                        {c.area_interest ?? "—"} ·{" "}
+                        {vaga?.title ?? <span className="italic text-neutral-400">Espontânea</span>} · {c.source.replace(/_/g, " ")}
+                      </p>
+                    </div>
+                    <div className="mt-3 flex items-center gap-2 border-t pt-3">
+                      <Select value={c.status} onValueChange={(v) => setCandStatus(c.id, v)}>
+                        <SelectTrigger className="h-8 flex-1 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>{STATUS_CAND.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                      </Select>
+                      <Button size="sm" variant="ghost" onClick={() => setOpenCandModal(c)} title="Detalhes"><Eye size={14} /></Button>
+                      <Button size="sm" variant="ghost" onClick={() => downloadResume(c.resume_file_path)} title="Baixar PDF"><Download size={14} /></Button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Tablet/desktop (md:+): tabela completa. */}
+          <div className="hidden md:block bg-white border rounded-2xl overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-neutral-50 text-left text-xs uppercase tracking-wider text-neutral-500">
                 <tr>

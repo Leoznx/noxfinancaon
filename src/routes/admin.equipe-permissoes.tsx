@@ -259,93 +259,169 @@ export function TabColaboradores() {
         </p>
       </CardHeader>
       <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Nome</TableHead>
-              <TableHead>E-mail</TableHead>
-              <TableHead>Cargo</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Criado em</TableHead>
-              <TableHead>Ações</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center text-sm py-6">
-                  Carregando…
-                </TableCell>
-              </TableRow>
-            ) : rows.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-6">
-                  Nenhum colaborador cadastrado.
-                </TableCell>
-              </TableRow>
-            ) : (
-              rows.map((u) => (
-                <TableRow key={u.id}>
-                  <TableCell className="font-medium">{u.full_name}</TableCell>
-                  <TableCell>{u.email}</TableCell>
-                  <TableCell>
-                    {u.role === "admin_master" ? (
-                      <Badge variant="outline">Admin Master</Badge>
-                    ) : (
-                      <Select value={u.role} onValueChange={(v) => alterarCargo(u.id, v)}>
-                        <SelectTrigger className="w-40">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {CARGOS_VISIVEIS.map((c) => (
-                            <SelectItem key={c} value={c}>
-                              {CARGO_LABEL[c]}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={
-                        u.status === "ativo"
-                          ? "default"
-                          : u.status === "bloqueado"
-                            ? "destructive"
-                            : "secondary"
-                      }
-                    >
-                      {u.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
+        {/* Mobile/tablet estreito: cards empilhados, sem tabela pra arrastar. */}
+        <div className="md:hidden divide-y divide-neutral-100 -mx-6">
+          {loading ? (
+            <p className="text-center text-sm py-6">Carregando…</p>
+          ) : rows.length === 0 ? (
+            <p className="text-center text-sm text-muted-foreground py-6">
+              Nenhum colaborador cadastrado.
+            </p>
+          ) : (
+            rows.map((u) => (
+              <div key={u.id} className="px-6 py-4 space-y-2">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-medium truncate">{u.full_name}</p>
+                    <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                  </div>
+                  <Badge
+                    variant={
+                      u.status === "ativo"
+                        ? "default"
+                        : u.status === "bloqueado"
+                          ? "destructive"
+                          : "secondary"
+                    }
+                    className="shrink-0"
+                  >
+                    {u.status}
+                  </Badge>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  {u.role === "admin_master" ? (
+                    <Badge variant="outline">Admin Master</Badge>
+                  ) : (
+                    <Select value={u.role} onValueChange={(v) => alterarCargo(u.id, v)}>
+                      <SelectTrigger className="w-40">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CARGOS_VISIVEIS.map((c) => (
+                          <SelectItem key={c} value={c}>
+                            {CARGO_LABEL[c]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  <span className="text-xs text-muted-foreground shrink-0">
                     {u.created_at ? new Date(u.created_at).toLocaleDateString("pt-BR") : "—"}
-                  </TableCell>
-                  <TableCell>
-                    {u.status === "ativo" ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => alterarStatus(u.id, "bloqueado")}
-                      >
-                        Bloquear
-                      </Button>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => alterarStatus(u.id, "ativo")}
-                      >
-                        Ativar
-                      </Button>
-                    )}
+                  </span>
+                </div>
+                {u.status === "ativo" ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => alterarStatus(u.id, "bloqueado")}
+                  >
+                    Bloquear
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => alterarStatus(u.id, "ativo")}
+                  >
+                    Ativar
+                  </Button>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+        {/* Tablet/desktop: tabela completa. */}
+        <div className="hidden md:block overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Nome</TableHead>
+                <TableHead>E-mail</TableHead>
+                <TableHead>Cargo</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Criado em</TableHead>
+                <TableHead>Ações</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center text-sm py-6">
+                    Carregando…
                   </TableCell>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+              ) : rows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-6">
+                    Nenhum colaborador cadastrado.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                rows.map((u) => (
+                  <TableRow key={u.id}>
+                    <TableCell className="font-medium">{u.full_name}</TableCell>
+                    <TableCell>{u.email}</TableCell>
+                    <TableCell>
+                      {u.role === "admin_master" ? (
+                        <Badge variant="outline">Admin Master</Badge>
+                      ) : (
+                        <Select value={u.role} onValueChange={(v) => alterarCargo(u.id, v)}>
+                          <SelectTrigger className="w-40">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {CARGOS_VISIVEIS.map((c) => (
+                              <SelectItem key={c} value={c}>
+                                {CARGO_LABEL[c]}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={
+                          u.status === "ativo"
+                            ? "default"
+                            : u.status === "bloqueado"
+                              ? "destructive"
+                              : "secondary"
+                        }
+                      >
+                        {u.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {u.created_at ? new Date(u.created_at).toLocaleDateString("pt-BR") : "—"}
+                    </TableCell>
+                    <TableCell>
+                      {u.status === "ativo" ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => alterarStatus(u.id, "bloqueado")}
+                        >
+                          Bloquear
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => alterarStatus(u.id, "ativo")}
+                        >
+                          Ativar
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </CardContent>
     </Card>
   );
@@ -592,67 +668,141 @@ export function TabEquipeComercial() {
         </Button>
       </CardHeader>
       <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>#</TableHead>
-              <TableHead>Vendedor</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Leads</TableHead>
-              <TableHead>Fechados</TableHead>
-              <TableHead>Ativados</TableHead>
-              <TableHead>Cancelados</TableHead>
-              <TableHead>Receita LTV</TableHead>
-              <TableHead>Comissão</TableHead>
-              <TableHead>Bônus</TableHead>
-              <TableHead>Reserva</TableHead>
-              <TableHead>Estornos</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              <TableRow>
-                <TableCell colSpan={12} className="text-center py-6 text-sm">
-                  Carregando…
-                </TableCell>
-              </TableRow>
-            ) : sorted.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={12} className="text-center py-6 text-sm text-muted-foreground">
-                  Sem vendedores cadastrados.
-                </TableCell>
-              </TableRow>
-            ) : (
-              sorted.map((v, i) => (
-                <TableRow key={v.id}>
-                  <TableCell className="font-bold">{i + 1}</TableCell>
-                  <TableCell>{v.full_name}</TableCell>
-                  <TableCell>
-                    <Badge variant={v.status === "ativo" ? "default" : "secondary"}>
-                      {v.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>{v.leadsCount}</TableCell>
-                  <TableCell>{v.perf?.contracts_closed ?? 0}</TableCell>
-                  <TableCell>{v.perf?.contracts_activated ?? 0}</TableCell>
-                  <TableCell>{v.perf?.contracts_canceled ?? 0}</TableCell>
-                  <TableCell>R$ {Number(v.perf?.generated_revenue_ltv ?? 0).toFixed(2)}</TableCell>
-                  <TableCell>R$ {Number(v.perf?.commission_total ?? 0).toFixed(2)}</TableCell>
-                  <TableCell>
-                    R$ {Number(v.perf?.bonus_total ?? 0).toFixed(2)}{" "}
+        {/* Mobile/tablet estreito: cards empilhados, sem tabela pra arrastar. */}
+        <div className="md:hidden divide-y divide-neutral-100 -mx-6">
+          {loading ? (
+            <p className="text-center py-6 text-sm">Carregando…</p>
+          ) : sorted.length === 0 ? (
+            <p className="text-center py-6 text-sm text-muted-foreground">
+              Sem vendedores cadastrados.
+            </p>
+          ) : (
+            sorted.map((v, i) => (
+              <div key={v.id} className="px-6 py-4 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="w-6 h-6 rounded-full bg-neutral-100 flex items-center justify-center text-xs font-bold shrink-0">
+                      {i + 1}
+                    </span>
+                    <p className="font-medium truncate">{v.full_name}</p>
+                  </div>
+                  <Badge variant={v.status === "ativo" ? "default" : "secondary"} className="shrink-0">
+                    {v.status}
+                  </Badge>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div>
+                    <span className="block text-muted-foreground">Leads</span>
+                    {v.leadsCount}
+                  </div>
+                  <div>
+                    <span className="block text-muted-foreground">Fechados</span>
+                    {v.perf?.contracts_closed ?? 0}
+                  </div>
+                  <div>
+                    <span className="block text-muted-foreground">Ativados</span>
+                    {v.perf?.contracts_activated ?? 0}
+                  </div>
+                  <div>
+                    <span className="block text-muted-foreground">Cancelados</span>
+                    {v.perf?.contracts_canceled ?? 0}
+                  </div>
+                  <div>
+                    <span className="block text-muted-foreground">Reserva</span>
+                    R$ {Number(v.reservas).toFixed(2)}
+                  </div>
+                  <div>
+                    <span className="block text-muted-foreground">Estornos</span>
+                    {v.estornos}
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-xs pt-2 border-t border-neutral-100">
+                  <div>
+                    <span className="block text-muted-foreground">Receita LTV</span>
+                    R$ {Number(v.perf?.generated_revenue_ltv ?? 0).toFixed(2)}
+                  </div>
+                  <div>
+                    <span className="block text-muted-foreground">Comissão</span>
+                    R$ {Number(v.perf?.commission_total ?? 0).toFixed(2)}
+                  </div>
+                  <div>
+                    <span className="block text-muted-foreground">Bônus</span>
+                    R$ {Number(v.perf?.bonus_total ?? 0).toFixed(2)}
                     {v.perf?.bonus_bloqueado ? (
                       <Badge variant="destructive" className="ml-1">
                         bloq.
                       </Badge>
                     ) : null}
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+        {/* Tablet/desktop: tabela completa. */}
+        <div className="hidden md:block overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>#</TableHead>
+                <TableHead>Vendedor</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Leads</TableHead>
+                <TableHead>Fechados</TableHead>
+                <TableHead>Ativados</TableHead>
+                <TableHead>Cancelados</TableHead>
+                <TableHead>Receita LTV</TableHead>
+                <TableHead>Comissão</TableHead>
+                <TableHead>Bônus</TableHead>
+                <TableHead>Reserva</TableHead>
+                <TableHead>Estornos</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={12} className="text-center py-6 text-sm">
+                    Carregando…
                   </TableCell>
-                  <TableCell>R$ {Number(v.reservas).toFixed(2)}</TableCell>
-                  <TableCell>{v.estornos}</TableCell>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+              ) : sorted.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={12} className="text-center py-6 text-sm text-muted-foreground">
+                    Sem vendedores cadastrados.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                sorted.map((v, i) => (
+                  <TableRow key={v.id}>
+                    <TableCell className="font-bold">{i + 1}</TableCell>
+                    <TableCell>{v.full_name}</TableCell>
+                    <TableCell>
+                      <Badge variant={v.status === "ativo" ? "default" : "secondary"}>
+                        {v.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>{v.leadsCount}</TableCell>
+                    <TableCell>{v.perf?.contracts_closed ?? 0}</TableCell>
+                    <TableCell>{v.perf?.contracts_activated ?? 0}</TableCell>
+                    <TableCell>{v.perf?.contracts_canceled ?? 0}</TableCell>
+                    <TableCell>R$ {Number(v.perf?.generated_revenue_ltv ?? 0).toFixed(2)}</TableCell>
+                    <TableCell>R$ {Number(v.perf?.commission_total ?? 0).toFixed(2)}</TableCell>
+                    <TableCell>
+                      R$ {Number(v.perf?.bonus_total ?? 0).toFixed(2)}{" "}
+                      {v.perf?.bonus_bloqueado ? (
+                        <Badge variant="destructive" className="ml-1">
+                          bloq.
+                        </Badge>
+                      ) : null}
+                    </TableCell>
+                    <TableCell>R$ {Number(v.reservas).toFixed(2)}</TableCell>
+                    <TableCell>{v.estornos}</TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </CardContent>
     </Card>
   );
@@ -684,48 +834,78 @@ export function TabAuditoria() {
         </p>
       </CardHeader>
       <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Data/Hora</TableHead>
-              <TableHead>Usuário</TableHead>
-              <TableHead>Cargo</TableHead>
-              <TableHead>Ação</TableHead>
-              <TableHead>Módulo</TableHead>
-              <TableHead>Registro</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center py-6 text-sm">
-                  Carregando…
-                </TableCell>
-              </TableRow>
-            ) : rows.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center py-6 text-sm text-muted-foreground">
-                  Nenhum registro de auditoria.
-                </TableCell>
-              </TableRow>
-            ) : (
-              rows.map((r) => (
-                <TableRow key={r.id}>
-                  <TableCell className="text-xs">
+        {/* Mobile/tablet estreito: cards empilhados, sem tabela pra arrastar. */}
+        <div className="md:hidden divide-y divide-neutral-100 -mx-6">
+          {loading ? (
+            <p className="text-center py-6 text-sm">Carregando…</p>
+          ) : rows.length === 0 ? (
+            <p className="text-center py-6 text-sm text-muted-foreground">
+              Nenhum registro de auditoria.
+            </p>
+          ) : (
+            rows.map((r) => (
+              <div key={r.id} className="px-6 py-3 space-y-1.5 text-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <span className="font-medium">{r.action}</span>
+                  <span className="text-xs text-muted-foreground shrink-0">
                     {new Date(r.created_at).toLocaleString("pt-BR")}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                  <span>Usuário: {r.actor_user_id?.substring(0, 8) ?? "—"}</span>
+                  <span>Cargo: {r.actor_role ?? "—"}</span>
+                  <span>Módulo: {r.table_name ?? "—"}</span>
+                  <span>Registro: {r.record_id?.substring(0, 8) ?? "—"}</span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+        {/* Tablet/desktop: tabela completa. */}
+        <div className="hidden md:block overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Data/Hora</TableHead>
+                <TableHead>Usuário</TableHead>
+                <TableHead>Cargo</TableHead>
+                <TableHead>Ação</TableHead>
+                <TableHead>Módulo</TableHead>
+                <TableHead>Registro</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-6 text-sm">
+                    Carregando…
                   </TableCell>
-                  <TableCell className="text-xs">
-                    {r.actor_user_id?.substring(0, 8) ?? "—"}
-                  </TableCell>
-                  <TableCell>{r.actor_role ?? "—"}</TableCell>
-                  <TableCell>{r.action}</TableCell>
-                  <TableCell>{r.table_name ?? "—"}</TableCell>
-                  <TableCell className="text-xs">{r.record_id?.substring(0, 8) ?? "—"}</TableCell>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+              ) : rows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-6 text-sm text-muted-foreground">
+                    Nenhum registro de auditoria.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                rows.map((r) => (
+                  <TableRow key={r.id}>
+                    <TableCell className="text-xs">
+                      {new Date(r.created_at).toLocaleString("pt-BR")}
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      {r.actor_user_id?.substring(0, 8) ?? "—"}
+                    </TableCell>
+                    <TableCell>{r.actor_role ?? "—"}</TableCell>
+                    <TableCell>{r.action}</TableCell>
+                    <TableCell>{r.table_name ?? "—"}</TableCell>
+                    <TableCell className="text-xs">{r.record_id?.substring(0, 8) ?? "—"}</TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </CardContent>
     </Card>
   );

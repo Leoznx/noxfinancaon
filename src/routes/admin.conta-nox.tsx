@@ -272,7 +272,79 @@ function ContaNoxPage() {
             </Select>
           </div>
 
-          <div className="rounded-2xl border border-neutral-200 bg-white overflow-x-auto">
+          <div className="rounded-2xl border border-neutral-200 bg-white overflow-hidden">
+            {/* Mobile/tablet estreito (< md): cards empilhados, sem tabela pra arrastar. */}
+            <div className="md:hidden divide-y divide-neutral-100">
+              {loading ? (
+                <p className="py-6 text-center text-sm">Carregando…</p>
+              ) : employeesFiltrados.length === 0 ? (
+                <p className="py-6 text-center text-sm text-muted-foreground">Nenhum funcionário encontrado.</p>
+              ) : (
+                employeesFiltrados.map((emp) => {
+                  const badge = STATUS_BADGE[emp.status];
+                  return (
+                    <div key={emp.id} className="p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-medium truncate">{emp.nome}</p>
+                          <p className="text-xs text-neutral-500 truncate">{emp.email}</p>
+                          <p className="text-xs text-neutral-500">{emp.telefone || "—"}</p>
+                        </div>
+                        <Badge className={`${badge.cls} border shrink-0`}>{badge.label}</Badge>
+                      </div>
+                      <div className="mt-3">
+                        {(NOX_INTERNAL_ROLES as readonly string[]).includes(emp.cargo) ? (
+                          <Select
+                            value={emp.cargo}
+                            onValueChange={(novoValor) =>
+                              setPendingRoleChange({ id: emp.id, nome: emp.nome, role: novoValor as NoxInternalRole })
+                            }
+                          >
+                            <SelectTrigger className="h-8 w-full">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {NOX_INTERNAL_ROLES.map((role) => (
+                                <SelectItem key={role} value={role}>
+                                  {noxInternalAccounts[role].label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <Badge variant="outline" className="capitalize">
+                            {emp.cargo.replace("_", " ")}
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="mt-2 text-xs text-neutral-500">
+                        Cadastro: {emp.criadoEm ? new Date(emp.criadoEm).toLocaleDateString("pt-BR") : "—"} · Último
+                        acesso: {emp.ultimoAcesso ? new Date(emp.ultimoAcesso).toLocaleString("pt-BR") : "—"}
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="mt-3 w-full"
+                        onClick={() => alternarStatus(emp)}
+                      >
+                        {emp.status === "bloqueado" ? (
+                          <>
+                            <UserCheck size={14} className="mr-1" /> Reativar
+                          </>
+                        ) : (
+                          <>
+                            <Ban size={14} className="mr-1" /> Bloquear
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Tablet/desktop (md:+): tabela completa. */}
+            <div className="hidden md:block overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -360,6 +432,7 @@ function ContaNoxPage() {
                 )}
               </TableBody>
             </Table>
+            </div>
           </div>
         </div>
       </div>

@@ -394,105 +394,179 @@ function CorretoresAdmin() {
       </div>
 
       <Card className="border-neutral-200 shadow-sm overflow-hidden bg-white">
-        <Table>
-          <TableHeader className="bg-neutral-50/50">
-            <TableRow>
-              <TableHead className="text-[10px] font-black uppercase tracking-widest py-5 px-8">Corretor</TableHead>
-              <TableHead className="text-[10px] font-black uppercase tracking-widest py-5">Identificação</TableHead>
-              <TableHead className="text-[10px] font-black uppercase tracking-widest py-5">Vínculo</TableHead>
-              <TableHead className="text-[10px] font-black uppercase tracking-widest py-5 text-center">Status</TableHead>
+        {/* Mobile/tablet estreito: cards empilhados, sem tabela pra arrastar. */}
+        <div className="md:hidden divide-y divide-neutral-100">
+          {loading ? (
+            <p className="h-32 flex items-center justify-center text-center text-neutral-400">Carregando corretores...</p>
+          ) : corretores.length === 0 ? (
+            <div className="h-64 flex flex-col items-center justify-center space-y-3 px-6 text-center">
+              <div className="w-16 h-16 rounded-full bg-neutral-50 flex items-center justify-center text-neutral-300">
+                <Mail size={32} />
+              </div>
+              <p className="text-neutral-900 font-bold">Nenhum corretor vinculado ainda.</p>
               {isImobiliaria && (
-                <TableHead className="text-[10px] font-black uppercase tracking-widest py-5 text-right px-8">Ações</TableHead>
+                <p className="text-sm text-neutral-500 max-w-md">
+                  Cadastre corretores pelo e-mail ou CPF já registrado na plataforma para acompanhar consultas e contratos da sua equipe.
+                </p>
               )}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              <TableRow>
-                <TableCell colSpan={isImobiliaria ? 5 : 4} className="h-32 text-center text-neutral-400">
-                  Carregando corretores...
-                </TableCell>
-              </TableRow>
-            ) : corretores.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={isImobiliaria ? 5 : 4} className="h-64 text-center">
-                  <div className="flex flex-col items-center justify-center space-y-3 px-6">
-                    <div className="w-16 h-16 rounded-full bg-neutral-50 flex items-center justify-center text-neutral-300">
-                      <Mail size={32} />
-                    </div>
-                    <p className="text-neutral-900 font-bold">Nenhum corretor vinculado ainda.</p>
-                    {isImobiliaria && (
-                      <p className="text-sm text-neutral-500 max-w-md">
-                        Cadastre corretores pelo e-mail ou CPF já registrado na plataforma para acompanhar consultas e contratos da sua equipe.
-                      </p>
-                    )}
+            </div>
+          ) : (
+            corretores.map((c) => (
+              <div key={c.id} className="p-4 space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-yellow-400 flex items-center justify-center font-black text-neutral-900 shrink-0">
+                    {c.profiles?.nome?.substring(0, 1) || "?"}
                   </div>
-                </TableCell>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-bold text-neutral-900 truncate">{c.profiles?.nome || "Sem nome"}</p>
+                    <p className="text-xs text-neutral-500 font-medium">
+                      Vinculado em {new Date(c.updated_at || c.created_at).toLocaleDateString("pt-BR")}
+                    </p>
+                  </div>
+                  <Badge variant="outline" className={`shrink-0 ${c.profiles?.status === "ativo" ? "bg-green-50 text-green-700 border-green-200" : "bg-yellow-50 text-yellow-700 border-yellow-200"}`}>
+                    {c.profiles?.status === "ativo" ? "Ativo" : "Pendente"}
+                  </Badge>
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-sm text-neutral-600">
+                    <Mail size={14} className="text-neutral-400 shrink-0" />
+                    <span className="truncate">{c.profiles?.email}</span>
+                  </div>
+                  {c.cpf && (
+                    <div className="flex items-center gap-2 text-sm text-neutral-600">
+                      <IdCard size={14} className="text-neutral-400 shrink-0" />
+                      {formatCpf(c.cpf)}
+                    </div>
+                  )}
+                  {c.profiles?.telefone && (
+                    <div className="flex items-center gap-2 text-sm text-neutral-600">
+                      <Phone size={14} className="text-neutral-400 shrink-0" />
+                      {c.profiles.telefone}
+                    </div>
+                  )}
+                  {c.creci && <div className="text-xs text-neutral-500 font-medium">CRECI {c.creci}</div>}
+                </div>
+                <p className="text-xs font-bold text-neutral-500">
+                  {c.imobiliaria_id ? "EQUIPE" : "AUTÔNOMO"}
+                </p>
+                {isImobiliaria && (
+                  <div className="flex items-center gap-2 pt-1">
+                    <Button variant="outline" size="sm" onClick={() => setDetailOf(c)} className="flex-1 h-9 rounded-lg text-neutral-700">
+                      <Eye size={16} className="mr-1.5" />
+                      Detalhes
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => setToUnlink(c)} className="flex-1 h-9 rounded-lg text-red-600 hover:text-red-700">
+                      <Trash2 size={16} className="mr-1.5" />
+                      Desvincular
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+        {/* Tablet/desktop: tabela completa. */}
+        <div className="hidden md:block overflow-x-auto">
+          <Table>
+            <TableHeader className="bg-neutral-50/50">
+              <TableRow>
+                <TableHead className="text-[10px] font-black uppercase tracking-widest py-5 px-8">Corretor</TableHead>
+                <TableHead className="text-[10px] font-black uppercase tracking-widest py-5">Identificação</TableHead>
+                <TableHead className="text-[10px] font-black uppercase tracking-widest py-5">Vínculo</TableHead>
+                <TableHead className="text-[10px] font-black uppercase tracking-widest py-5 text-center">Status</TableHead>
+                {isImobiliaria && (
+                  <TableHead className="text-[10px] font-black uppercase tracking-widest py-5 text-right px-8">Ações</TableHead>
+                )}
               </TableRow>
-            ) : (
-              corretores.map((c) => (
-                <TableRow key={c.id} className="hover:bg-neutral-50/50 transition-colors">
-                  <TableCell className="px-8 py-6">
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-full bg-yellow-400 flex items-center justify-center font-black text-neutral-900">
-                        {c.profiles?.nome?.substring(0, 1) || "?"}
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={isImobiliaria ? 5 : 4} className="h-32 text-center text-neutral-400">
+                    Carregando corretores...
+                  </TableCell>
+                </TableRow>
+              ) : corretores.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={isImobiliaria ? 5 : 4} className="h-64 text-center">
+                    <div className="flex flex-col items-center justify-center space-y-3 px-6">
+                      <div className="w-16 h-16 rounded-full bg-neutral-50 flex items-center justify-center text-neutral-300">
+                        <Mail size={32} />
                       </div>
-                      <div className="flex flex-col">
-                        <span className="font-bold text-neutral-900">{c.profiles?.nome || "Sem nome"}</span>
-                        <span className="text-xs text-neutral-500 font-medium">
-                          Vinculado em {new Date(c.updated_at || c.created_at).toLocaleDateString("pt-BR")}
-                        </span>
-                      </div>
+                      <p className="text-neutral-900 font-bold">Nenhum corretor vinculado ainda.</p>
+                      {isImobiliaria && (
+                        <p className="text-sm text-neutral-500 max-w-md">
+                          Cadastre corretores pelo e-mail ou CPF já registrado na plataforma para acompanhar consultas e contratos da sua equipe.
+                        </p>
+                      )}
                     </div>
                   </TableCell>
-                  <TableCell className="py-6">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2 text-sm text-neutral-600">
-                        <Mail size={14} className="text-neutral-400" />
-                        {c.profiles?.email}
-                      </div>
-                      {c.cpf && (
-                        <div className="flex items-center gap-2 text-sm text-neutral-600">
-                          <IdCard size={14} className="text-neutral-400" />
-                          {formatCpf(c.cpf)}
+                </TableRow>
+              ) : (
+                corretores.map((c) => (
+                  <TableRow key={c.id} className="hover:bg-neutral-50/50 transition-colors">
+                    <TableCell className="px-8 py-6">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-full bg-yellow-400 flex items-center justify-center font-black text-neutral-900">
+                          {c.profiles?.nome?.substring(0, 1) || "?"}
                         </div>
-                      )}
-                      {c.profiles?.telefone && (
-                        <div className="flex items-center gap-2 text-sm text-neutral-600">
-                          <Phone size={14} className="text-neutral-400" />
-                          {c.profiles.telefone}
+                        <div className="flex flex-col">
+                          <span className="font-bold text-neutral-900">{c.profiles?.nome || "Sem nome"}</span>
+                          <span className="text-xs text-neutral-500 font-medium">
+                            Vinculado em {new Date(c.updated_at || c.created_at).toLocaleDateString("pt-BR")}
+                          </span>
                         </div>
-                      )}
-                      {c.creci && <div className="text-xs text-neutral-500 font-medium">CRECI {c.creci}</div>}
-                    </div>
-                  </TableCell>
-                  <TableCell className="py-6 text-xs font-bold text-neutral-500">
-                    {c.imobiliaria_id ? "EQUIPE" : "AUTÔNOMO"}
-                  </TableCell>
-                  <TableCell className="py-6 text-center">
-                    <Badge variant="outline" className={c.profiles?.status === "ativo" ? "bg-green-50 text-green-700 border-green-200" : "bg-yellow-50 text-yellow-700 border-yellow-200"}>
-                      {c.profiles?.status === "ativo" ? "Ativo" : "Pendente"}
-                    </Badge>
-                  </TableCell>
-                  {isImobiliaria && (
-                    <TableCell className="px-8 py-6 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button variant="ghost" size="sm" onClick={() => setDetailOf(c)} className="h-9 px-3 rounded-lg text-neutral-700 hover:bg-neutral-100">
-                          <Eye size={16} className="mr-1.5" />
-                          Detalhes
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => setToUnlink(c)} className="h-9 px-3 rounded-lg text-red-600 hover:bg-red-50 hover:text-red-700">
-                          <Trash2 size={16} className="mr-1.5" />
-                          Desvincular
-                        </Button>
                       </div>
                     </TableCell>
-                  )}
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+                    <TableCell className="py-6">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 text-sm text-neutral-600">
+                          <Mail size={14} className="text-neutral-400" />
+                          {c.profiles?.email}
+                        </div>
+                        {c.cpf && (
+                          <div className="flex items-center gap-2 text-sm text-neutral-600">
+                            <IdCard size={14} className="text-neutral-400" />
+                            {formatCpf(c.cpf)}
+                          </div>
+                        )}
+                        {c.profiles?.telefone && (
+                          <div className="flex items-center gap-2 text-sm text-neutral-600">
+                            <Phone size={14} className="text-neutral-400" />
+                            {c.profiles.telefone}
+                          </div>
+                        )}
+                        {c.creci && <div className="text-xs text-neutral-500 font-medium">CRECI {c.creci}</div>}
+                      </div>
+                    </TableCell>
+                    <TableCell className="py-6 text-xs font-bold text-neutral-500">
+                      {c.imobiliaria_id ? "EQUIPE" : "AUTÔNOMO"}
+                    </TableCell>
+                    <TableCell className="py-6 text-center">
+                      <Badge variant="outline" className={c.profiles?.status === "ativo" ? "bg-green-50 text-green-700 border-green-200" : "bg-yellow-50 text-yellow-700 border-yellow-200"}>
+                        {c.profiles?.status === "ativo" ? "Ativo" : "Pendente"}
+                      </Badge>
+                    </TableCell>
+                    {isImobiliaria && (
+                      <TableCell className="px-8 py-6 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button variant="ghost" size="sm" onClick={() => setDetailOf(c)} className="h-9 px-3 rounded-lg text-neutral-700 hover:bg-neutral-100">
+                            <Eye size={16} className="mr-1.5" />
+                            Detalhes
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => setToUnlink(c)} className="h-9 px-3 rounded-lg text-red-600 hover:bg-red-50 hover:text-red-700">
+                            <Trash2 size={16} className="mr-1.5" />
+                            Desvincular
+                          </Button>
+                        </div>
+                      </TableCell>
+                    )}
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </Card>
 
       {isImobiliaria && !imobiliariaId && !loading && (
