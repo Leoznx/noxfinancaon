@@ -24,8 +24,15 @@ async function persistirResultado(
   consultaAtual: any,
   resultado: ResultadoSimulacaoCredito,
 ) {
-  const statusConsulta =
-    resultado.status === "aprovado" ? "aprovado" : resultado.status === "recusado" ? "reprovado" : "pendente";
+  // resultado.status já vem normalizado por normalizarStatus() em provider.ts como um de
+  // "aprovado" | "recusado" | "em_analise" | "pendente" — grava o mesmo valor, sem
+  // reescrever. Antes, este mapeamento tinha dois bugs: "recusado" virava "reprovado"
+  // (grafia diferente da usada em todo o resto do app, inclusive na constraint que
+  // considera resultado "final") e "em_analise" caía no branch padrão e virava
+  // "pendente" — ou seja, uma consulta reprovada ou em análise podia aparecer como
+  // aprovada ou pendente pro corretor. Ver mesmo contrato em credpagoWorker.ts
+  // (atualizarResultado), que já grava os dois campos com o valor normalizado.
+  const statusConsulta = resultado.status;
 
   // Preserva o resultado anterior (se houver) em external_history antes de sobrescrever —
   // a coluna já existia no schema pra esse propósito.
@@ -51,6 +58,12 @@ async function persistirResultado(
       automacao_processed_at: new Date().toISOString(),
       provider_returned_at: new Date().toISOString(),
       status: statusConsulta,
+      // A UI (ResultadoAutomacao.tsx e a lista de consultas) prioriza esta coluna como
+      // o veredito final e permanente da automação — sem gravá-la aqui, uma consulta
+      // recusada por este fluxo (manual assistido) ficava sem `resultado`, e a tela
+      // de resultado caía no branch padrão "aprovado" por não achar nem `resultado`
+      // nem `status` num estado "ainda em andamento" reconhecido.
+      resultado: statusConsulta,
     })
     .eq("id", consultaId);
 
