@@ -228,7 +228,80 @@ function ConsultasAdminPage() {
           </Select>
         </div>
 
-        <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden shadow-sm">
+        {/* Mobile/tablet estreito (< md): cards empilhados, sem tabela pra arrastar. */}
+        <div className="md:hidden space-y-3">
+          {loading ? (
+            <div className="text-center py-16 text-neutral-400 bg-white border border-neutral-200 rounded-xl">
+              Carregando...
+            </div>
+          ) : !filtradas.length ? (
+            <div className="text-center py-16 text-neutral-500 bg-white border border-neutral-200 rounded-xl">
+              Nenhuma consulta encontrada.
+            </div>
+          ) : (
+            filtradas.map((c) => {
+              const documento = c.tenant_document ?? c.documento ?? c.inquilinos?.cpf ?? null;
+              const criadaEm = new Date(c.created_at);
+              const aluguel = Number(
+                c.rent_value ?? c.valor_aluguel ?? c.imoveis?.valor_aluguel ?? 0,
+              );
+              return (
+                <div key={c.id} className="bg-white border border-neutral-200 rounded-xl shadow-sm p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-neutral-900 truncate">
+                        {c.tenant_name || c.inquilinos?.nome || "—"}
+                      </p>
+                      <p className="text-xs text-neutral-500">
+                        {documento ? formatDocumento(documento) : "—"}
+                      </p>
+                    </div>
+                    <div className="shrink-0">
+                      <StatusBadge status={resolverStatusConsulta(c)} />
+                    </div>
+                  </div>
+
+                  <div className="mt-3 space-y-1 text-xs text-neutral-600">
+                    <p className="truncate">{c.property_address ?? "—"}</p>
+                    <p className="font-semibold text-neutral-900">
+                      {aluguel > 0
+                        ? `R$ ${aluguel.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
+                        : "—"}
+                    </p>
+                    <p className="truncate">
+                      <span className="font-semibold">{c.solicitante?.nome ?? "—"}</span>
+                      {" · "}
+                      <span className="uppercase text-[10px] tracking-wide text-neutral-400">
+                        {c.solicitante?.role ?? c.role_solicitante ?? "—"}
+                      </span>
+                    </p>
+                  </div>
+
+                  <div className="mt-3 flex items-center justify-between border-t border-neutral-100 pt-3">
+                    <span className="text-[10px] text-neutral-400 font-medium">
+                      {criadaEm.toLocaleDateString("pt-BR")}{" "}
+                      {criadaEm.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                    {usaModal ? (
+                      <Button size="sm" variant="ghost" className="gap-1" onClick={() => setConsultaAberta(c)}>
+                        <Eye size={14} /> Ver
+                      </Button>
+                    ) : (
+                      <a href={`/consultas/${c.id}/resultado`}>
+                        <Button size="sm" variant="ghost" className="gap-1">
+                          <Eye size={14} /> Ver
+                        </Button>
+                      </a>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Tablet/desktop (md:+): tabela completa. */}
+        <div className="hidden md:block bg-white border border-neutral-200 rounded-xl overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
             <Table>
               <TableHeader className="bg-neutral-50">

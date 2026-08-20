@@ -261,7 +261,87 @@ function Consultas() {
         </Select>
       </div>
 
-      <Card className="border-neutral-200 shadow-sm overflow-hidden bg-white">
+      {/* Mobile/tablet estreito (< md): lista de cards, sem tabela — nada de arrastar pro
+          lado pra ler uma coluna cortada. A tabela completa (md:+) fica logo abaixo. */}
+      <div className="md:hidden space-y-3">
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-20 space-y-3 bg-white border border-neutral-200 rounded-2xl">
+            <div className="w-8 h-8 border-4 border-neutral-200 border-t-yellow-400 rounded-full animate-spin" />
+            <p className="text-sm font-bold text-neutral-500 uppercase tracking-widest">Carregando consultas...</p>
+          </div>
+        ) : filteredConsultas.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 space-y-4 bg-white border border-neutral-200 rounded-2xl px-6 text-center">
+            <div className="w-16 h-16 rounded-full bg-neutral-50 flex items-center justify-center text-neutral-300">
+              <FileText size={32} />
+            </div>
+            <div>
+              <p className="text-neutral-900 font-bold">Nenhuma consulta encontrada</p>
+              <p className="text-neutral-500 text-sm mt-1">Use a aba “Nova Consulta” no menu lateral para iniciar uma simulação.</p>
+            </div>
+          </div>
+        ) : (
+          filteredConsultas.map((c) => {
+            const nome = getNome(c);
+            const doc = getDoc(c);
+            const endereco = formatarEnderecoConsulta(c);
+            const aluguel = getAluguel(c);
+            return (
+              <Card key={c.id} className="border-neutral-200 shadow-sm bg-white p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-full bg-yellow-400 flex items-center justify-center font-black text-neutral-900 text-xs shrink-0">
+                      {nome.substring(0, 1).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-bold text-neutral-900 truncate">{nome}</p>
+                      <p className="text-xs text-neutral-500 font-medium">{doc === '—' ? doc : formatDocumento(doc)}</p>
+                    </div>
+                  </div>
+                  <div className="shrink-0">{getStatusBadge(c)}</div>
+                </div>
+
+                <div className="mt-3.5 space-y-1.5">
+                  <div className="flex items-center gap-1.5 text-xs text-neutral-600 font-bold min-w-0">
+                    <MapPin size={12} className="text-neutral-400 shrink-0" />
+                    <span className="truncate">{endereco}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-sm text-neutral-900 font-black">
+                    <DollarSign size={14} className="text-green-600 shrink-0" />
+                    {aluguel.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  </div>
+                  {user?.role === 'imobiliaria' && (
+                    <div className="flex items-center gap-1.5 text-xs text-neutral-600 font-bold">
+                      <User size={12} className="text-neutral-400 shrink-0" />
+                      {c.solicitante?.nome || '—'}
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-3.5 flex items-center justify-between border-t border-neutral-100 pt-3">
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-[10px] font-black text-neutral-400 uppercase tracking-wider truncate">
+                      {c.payment_status === 'aprovado' ? (c.planos?.nome || 'N/D') : 'Sem plano'}
+                    </span>
+                    <span className="text-[10px] text-neutral-400 font-medium">
+                      {new Date(c.updated_at || c.created_at).toLocaleDateString('pt-BR')} às{' '}
+                      {new Date(c.updated_at || c.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                  <Link to={`/consultas/${c.id}/resultado` as any} className="shrink-0">
+                    <Button variant="ghost" size="sm" className="h-9 px-3 rounded-lg font-black text-xs text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 gap-1.5">
+                      DETALHES
+                      <ChevronRight size={14} />
+                    </Button>
+                  </Link>
+                </div>
+              </Card>
+            );
+          })
+        )}
+      </div>
+
+      {/* Tablet/desktop (md:+): tabela completa. */}
+      <Card className="hidden md:block border-neutral-200 shadow-sm overflow-hidden bg-white">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>

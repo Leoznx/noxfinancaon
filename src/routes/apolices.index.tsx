@@ -168,7 +168,63 @@ function ApolicesList() {
         </div>
       )}
 
-      <Card className="border-neutral-200 shadow-sm overflow-hidden bg-white">
+      {/* Mobile/tablet estreito (< md): lista de cards, sem tabela pra arrastar pro lado. */}
+      <div className="md:hidden space-y-3">
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-20 text-neutral-400 bg-white border border-neutral-200 rounded-2xl">
+            Carregando contratos...
+          </div>
+        ) : filtradas.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 py-20 bg-white border border-neutral-200 rounded-2xl px-6 text-center">
+            <div className="w-14 h-14 rounded-full bg-neutral-50 flex items-center justify-center text-neutral-300">
+              <FileText size={28} />
+            </div>
+            <p className="text-neutral-900 font-bold">Nenhum contrato ativo encontrado.</p>
+          </div>
+        ) : (
+          filtradas.map((a) => (
+            <Card key={a.id} className="border-neutral-200 shadow-sm bg-white p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-black text-neutral-900">#{a.numero}</p>
+                  <p className="text-[10px] uppercase tracking-widest text-neutral-400 mt-0.5 truncate">
+                    {a.consulta?.plano?.nome || 'Plano padrão'}
+                  </p>
+                </div>
+                <div className="shrink-0">
+                  <StatusBadge status={a.status} />
+                </div>
+              </div>
+
+              <div className="mt-3.5 space-y-1">
+                <p className="font-bold text-neutral-900 text-sm truncate">{a.consulta?.inquilino?.nome || '—'}</p>
+                <p className="text-xs text-neutral-500 truncate">{a.consulta?.imovel?.endereco || ''}</p>
+                <p className="text-xs text-neutral-600">
+                  {user?.role === "imobiliaria" ? "Corretor: " : "Imobiliária: "}
+                  <span className="font-medium">
+                    {user?.role === "imobiliaria" ? (a.consulta?.solicitante?.nome || '—') : (a.imobiliaria?.nome || 'Autônomo')}
+                  </span>
+                </p>
+                <p className="text-xs text-neutral-600">
+                  {formatDate(a.vigencia_inicio)} <span className="text-neutral-300">→</span> {formatDate(a.vigencia_fim)}
+                </p>
+              </div>
+
+              <div className="mt-3.5 flex items-center justify-between border-t border-neutral-100 pt-3">
+                <span className="font-black text-neutral-900">{formatBRL(Number(a.valor_premio))}</span>
+                <Button asChild size="sm" className="bg-neutral-900 hover:bg-neutral-800 text-white rounded-lg gap-1.5 font-bold text-xs h-9 px-3">
+                  <Link to="/apolices/$id" params={{ id: a.id }}>
+                    Ver contrato <ArrowRight size={14} />
+                  </Link>
+                </Button>
+              </div>
+            </Card>
+          ))
+        )}
+      </div>
+
+      {/* Tablet/desktop (md:+): tabela completa. */}
+      <Card className="hidden md:block border-neutral-200 shadow-sm overflow-hidden bg-white">
         <div className="overflow-x-auto">
           <table className="w-full text-left min-w-[820px]">
             <thead className="bg-neutral-50 text-neutral-500 text-[10px] font-black uppercase tracking-widest">
