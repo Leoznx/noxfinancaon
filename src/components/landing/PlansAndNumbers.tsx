@@ -82,7 +82,7 @@ export const PlansSection = () => {
                   ))}
                 </div>
               </div>
-              <Link to="/simular">
+              <Link to="/consultas/nova">
                 <Button className={`w-full min-h-[44px] h-11 sm:h-12 rounded-lg font-bold text-xs sm:text-sm bg-neutral-900 text-white hover:bg-neutral-800 transition-all px-2`}>
                   <span className="sm:hidden">Contratar</span>
                   <span className="hidden sm:inline">Contratar este plano</span>

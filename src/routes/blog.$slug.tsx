@@ -183,7 +183,7 @@ function PostPage() {
           <h3 className="text-2xl md:text-3xl font-black">Conheça a NOX Fiança</h3>
           <p className="mt-2 text-neutral-300 max-w-xl">A plataforma que conecta corretores, imobiliárias, proprietários e inquilinos em uma jornada de locação mais simples, segura e digital.</p>
           <div className="mt-6 flex flex-col sm:flex-row gap-3 flex-wrap">
-            <Link to="/simular"><Button className="bg-yellow-400 text-neutral-900 hover:bg-yellow-500 font-bold">Solicitar análise</Button></Link>
+            <Link to="/consultas/nova"><Button className="bg-yellow-400 text-neutral-900 hover:bg-yellow-500 font-bold">Solicitar análise</Button></Link>
             <Link to="/cadastro"><Button variant="outline" className="border-white/30 bg-transparent text-white hover:bg-white/10">Criar acesso</Button></Link>
             <Link to="/contato"><Button variant="outline" className="border-white/30 bg-transparent text-white hover:bg-white/10">Falar com a NOX</Button></Link>
           </div>

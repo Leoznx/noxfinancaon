@@ -31,7 +31,7 @@ export const InstitutionalHero = () => (
           A NOX FIANÇA é a plataforma de seguro fiança 100% digital que elimina a burocracia do aluguel e oferece segurança total ao proprietário.
         </p>
         <div className="mb-10 flex flex-col gap-3 sm:mb-9 sm:flex-row sm:gap-4">
-          <Link to="/simular" className="w-full sm:w-auto">
+          <Link to="/consultas/nova" className="w-full sm:w-auto">
             <Button className="h-12 min-h-[44px] w-full rounded-lg bg-neutral-900 px-6 text-sm font-bold text-white shadow-xl shadow-neutral-100 transition-all hover:bg-neutral-800 active:scale-95 sm:w-auto sm:px-7 sm:text-base">
               Solicitar análise gratuita
             </Button>

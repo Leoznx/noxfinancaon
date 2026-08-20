@@ -126,7 +126,7 @@ function BlogPage() {
             <a href="#publicacoes" className="bg-yellow-400 hover:bg-yellow-500 text-neutral-900 px-6 py-3 rounded-xl font-bold inline-flex items-center gap-2 transition-all active:scale-95 shadow-xl shadow-yellow-500/20">
               Ler publicações <ArrowRight size={16} />
             </a>
-            <Link to="/simular" className="bg-white/10 hover:bg-white/20 backdrop-blur text-white border border-white/20 px-6 py-3 rounded-xl font-bold inline-flex items-center gap-2 transition-all active:scale-95">
+            <Link to="/consultas/nova" className="bg-white/10 hover:bg-white/20 backdrop-blur text-white border border-white/20 px-6 py-3 rounded-xl font-bold inline-flex items-center gap-2 transition-all active:scale-95">
               Solicitar análise
             </Link>
           </div>
@@ -327,7 +327,7 @@ function BlogPage() {
             <h2 className="mt-4 text-3xl md:text-5xl font-black tracking-tight">Pronto para simplificar sua locação?</h2>
             <p className="mt-3 text-neutral-300 max-w-xl mx-auto">A NOX Fiança conecta inquilinos, proprietários, corretores e imobiliárias em uma jornada digital, simples e segura.</p>
             <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
-              <Link to="/simular"><Button size="lg" className="bg-yellow-400 text-neutral-900 hover:bg-yellow-500 font-bold">Solicitar análise</Button></Link>
+              <Link to="/consultas/nova"><Button size="lg" className="bg-yellow-400 text-neutral-900 hover:bg-yellow-500 font-bold">Solicitar análise</Button></Link>
               <Link to="/seja-parceiro"><Button size="lg" variant="outline" className="border-white/30 bg-transparent text-white hover:bg-white/10">Seja parceiro</Button></Link>
             </div>
           </div>

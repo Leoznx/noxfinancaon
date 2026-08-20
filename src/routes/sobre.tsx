@@ -47,7 +47,7 @@ function SobrePage() {
             A NOX Fiança conecta corretores, imobiliárias, proprietários e inquilinos em uma experiência mais rápida, segura e digital.
           </p>
           <div className="mt-10 flex flex-wrap gap-3">
-            <Link to="/simular">
+            <Link to="/planos">
               <Button size="lg" className="bg-yellow-400 text-neutral-900 hover:bg-yellow-500 font-bold gap-2">Conheça nossos planos <ArrowRight size={16} /></Button>
             </Link>
             <Link to="/contato">
