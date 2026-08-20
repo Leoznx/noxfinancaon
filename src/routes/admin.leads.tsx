@@ -743,6 +743,52 @@ function MarketingLeadsAdmin() {
 function ContactsTable({ contacts, loading }: { contacts: MarketingContact[]; loading: boolean }) {
   return (
     <section className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm">
+      {/* Mobile/tablet estreito (< md): cards empilhados, sem tabela pra arrastar. */}
+      <div className="md:hidden divide-y divide-neutral-100">
+        {loading ? (
+          <p className="py-12 text-center text-neutral-400">Carregando base de marketing...</p>
+        ) : contacts.length === 0 ? (
+          <p className="py-12 text-center text-neutral-400">Nenhum contato encontrado.</p>
+        ) : (
+          contacts.map((contact) => (
+            <div key={contact.id} className="p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-black text-neutral-950 truncate">{contact.first_name}</p>
+                  <p className="text-xs text-neutral-500 truncate">{contact.full_name ?? "-"}</p>
+                </div>
+                <div className="shrink-0">
+                  <AudienceBadge audience={contact.audience} />
+                </div>
+              </div>
+              <div className="mt-2 space-y-0.5 text-xs text-neutral-700">
+                <p className="truncate">{contact.email ?? "-"}</p>
+                <p>{contact.phone ?? "-"}</p>
+                <p className="truncate text-neutral-600">{contact.city ?? "-"}</p>
+              </div>
+              <div className="mt-3 flex items-center justify-between border-t border-neutral-100 pt-3">
+                <div className="min-w-0">
+                  <p className="text-xs text-neutral-700 truncate">{contact.source_origin ?? "-"}</p>
+                  <p className="text-[10px] text-neutral-400">{contact.source_status ?? ""}</p>
+                </div>
+                <Badge
+                  variant="outline"
+                  className={
+                    contact.weekly_message_enabled
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-700 shrink-0"
+                      : "border-neutral-200 bg-neutral-50 text-neutral-500 shrink-0"
+                  }
+                >
+                  {contact.weekly_message_enabled ? "Ativo" : "Pausado"}
+                </Badge>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Tablet/desktop (md:+): tabela completa. */}
+      <div className="hidden md:block">
       <Table>
         <TableHeader>
           <TableRow>
@@ -802,6 +848,7 @@ function ContactsTable({ contacts, loading }: { contacts: MarketingContact[]; lo
           )}
         </TableBody>
       </Table>
+      </div>
     </section>
   );
 }
@@ -815,6 +862,38 @@ function ConsultaLeadsTable({
 }) {
   return (
     <section className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm">
+      {/* Mobile/tablet estreito (< md): cards empilhados, sem tabela pra arrastar. */}
+      <div className="md:hidden divide-y divide-neutral-100">
+        {loading ? (
+          <p className="py-12 text-center text-neutral-400">Carregando consultas...</p>
+        ) : contacts.length === 0 ? (
+          <p className="py-12 text-center text-neutral-400">Nenhuma consulta encontrada.</p>
+        ) : (
+          contacts.map((contact) => (
+            <div key={contact.id} className="p-4">
+              <div className="flex items-start justify-between gap-3">
+                <p className="font-black text-neutral-950">{contact.first_name}</p>
+                <Badge variant="outline" className="border-violet-200 bg-violet-50 text-violet-700 shrink-0">
+                  {contact.rent_range ?? "Sem faixa"}
+                </Badge>
+              </div>
+              <div className="mt-2 space-y-0.5 text-xs text-neutral-700">
+                <p>{contact.document ?? "-"}</p>
+                <p className="truncate">{contact.city ?? "-"}</p>
+              </div>
+              <div className="mt-2 flex items-center justify-between text-xs">
+                <span className="text-neutral-500">{contact.source_status ?? "-"}</span>
+                <span className="font-bold text-neutral-900">
+                  {contact.rent_value ? formatCurrency(contact.rent_value) : "-"}
+                </span>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Tablet/desktop (md:+): tabela completa. */}
+      <div className="hidden md:block">
       <Table>
         <TableHeader>
           <TableRow>
@@ -866,6 +945,7 @@ function ConsultaLeadsTable({
           )}
         </TableBody>
       </Table>
+      </div>
     </section>
   );
 }
@@ -1050,7 +1130,62 @@ function AdsPanel({
             Use rascunho para preparar criativos, ativo para acompanhar investimento e conversoes.
           </p>
         </div>
-        <div className="overflow-x-auto">
+        {/* Mobile/tablet estreito (< md): cards empilhados, sem tabela pra arrastar. */}
+        <div className="md:hidden divide-y divide-neutral-100">
+          {campaigns.length === 0 ? (
+            <p className="py-12 text-center text-neutral-400">Nenhuma campanha criada.</p>
+          ) : (
+            campaigns.map((campaign) => {
+              const metric = metricsByCampaign.get(campaign.id);
+              const url = buildUtmUrl(campaign);
+              return (
+                <div key={campaign.id} className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-black text-neutral-950 truncate">{campaign.name}</p>
+                      <p className="text-xs text-neutral-500">{PROVIDER_LABEL[campaign.provider]}</p>
+                    </div>
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      <AudienceBadge audience={campaign.audience} />
+                      <StatusBadge status={campaign.status} />
+                    </div>
+                  </div>
+                  {url && <p className="mt-1 truncate text-xs text-neutral-400">{url}</p>}
+                  <div className="mt-2 text-xs text-neutral-600">
+                    <p>
+                      {metric?.leads ?? 0} leads | {metric?.conversions ?? 0} conv. ·{" "}
+                      {formatCurrency(metric?.spend ?? 0)} investidos
+                    </p>
+                  </div>
+                  <div className="mt-3 flex items-center gap-2 border-t border-neutral-100 pt-3">
+                    {url && (
+                      <Button variant="ghost" size="sm" onClick={() => copyUrl(url)}>
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    )}
+                    <Select
+                      value={campaign.status}
+                      onValueChange={(value) => onStatusChange(campaign, value)}
+                    >
+                      <SelectTrigger className="h-8 flex-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="rascunho">Rascunho</SelectItem>
+                        <SelectItem value="ativo">Ativo</SelectItem>
+                        <SelectItem value="pausado">Pausado</SelectItem>
+                        <SelectItem value="encerrado">Encerrado</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Tablet/desktop (md:+): tabela completa. */}
+        <div className="hidden md:block overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>

@@ -161,33 +161,64 @@ function IndicacaoPage() {
             </div>
           ) : (
             <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden shadow-sm">
-              <Table>
-                <TableHeader className="bg-neutral-50">
-                  <TableRow>
-                    <TableHead className="px-6">Indicado</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Cadastro</TableHead>
-                    <TableHead>1º Contrato</TableHead>
-                    <TableHead>Recompensa</TableHead>
-                    <TableHead className="pr-6 text-right">Valor</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {referrals.map(r => (
-                    <TableRow key={r.id}>
-                      <TableCell className="px-6">
-                        <p className="font-semibold">{r.referred?.nome ?? r.referred_email ?? "—"}</p>
-                        <p className="text-xs text-neutral-500">{r.referred?.email ?? r.referred_email ?? ""}</p>
-                      </TableCell>
-                      <TableCell className="text-xs uppercase">{r.referred_role ?? r.referred?.role ?? "—"}</TableCell>
-                      <TableCell className="text-xs">{r.signup_at ? new Date(r.signup_at).toLocaleDateString("pt-BR") : "—"}</TableCell>
-                      <TableCell className="text-xs">{r.first_contract_at ? new Date(r.first_contract_at).toLocaleDateString("pt-BR") : <span className="text-neutral-400">—</span>}</TableCell>
-                      <TableCell><RecompensaBadge status={r.reward_status} /></TableCell>
-                      <TableCell className="pr-6 text-right font-semibold">{r.first_contract_id ? brl(r.reward_amount) : brl(0)}</TableCell>
+              {/* Mobile/tablet estreito: cards empilhados, sem tabela pra arrastar. */}
+              <div className="md:hidden divide-y divide-neutral-100">
+                {referrals.map(r => (
+                  <div key={r.id} className="p-4 space-y-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-semibold truncate">{r.referred?.nome ?? r.referred_email ?? "—"}</p>
+                        <p className="text-xs text-neutral-500 truncate">{r.referred?.email ?? r.referred_email ?? ""}</p>
+                      </div>
+                      <span className="text-[10px] font-bold uppercase tracking-wide text-neutral-500 shrink-0 mt-1">{r.referred_role ?? r.referred?.role ?? "—"}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs text-neutral-500">
+                      <div>
+                        <span className="block text-[10px] uppercase tracking-wide text-neutral-400">Cadastro</span>
+                        {r.signup_at ? new Date(r.signup_at).toLocaleDateString("pt-BR") : "—"}
+                      </div>
+                      <div>
+                        <span className="block text-[10px] uppercase tracking-wide text-neutral-400">1º Contrato</span>
+                        {r.first_contract_at ? new Date(r.first_contract_at).toLocaleDateString("pt-BR") : <span className="text-neutral-400">—</span>}
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between pt-1">
+                      <RecompensaBadge status={r.reward_status} />
+                      <span className="font-semibold">{r.first_contract_id ? brl(r.reward_amount) : brl(0)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {/* Tablet/desktop: tabela completa. */}
+              <div className="hidden md:block overflow-x-auto">
+                <Table>
+                  <TableHeader className="bg-neutral-50">
+                    <TableRow>
+                      <TableHead className="px-6">Indicado</TableHead>
+                      <TableHead>Tipo</TableHead>
+                      <TableHead>Cadastro</TableHead>
+                      <TableHead>1º Contrato</TableHead>
+                      <TableHead>Recompensa</TableHead>
+                      <TableHead className="pr-6 text-right">Valor</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {referrals.map(r => (
+                      <TableRow key={r.id}>
+                        <TableCell className="px-6">
+                          <p className="font-semibold">{r.referred?.nome ?? r.referred_email ?? "—"}</p>
+                          <p className="text-xs text-neutral-500">{r.referred?.email ?? r.referred_email ?? ""}</p>
+                        </TableCell>
+                        <TableCell className="text-xs uppercase">{r.referred_role ?? r.referred?.role ?? "—"}</TableCell>
+                        <TableCell className="text-xs">{r.signup_at ? new Date(r.signup_at).toLocaleDateString("pt-BR") : "—"}</TableCell>
+                        <TableCell className="text-xs">{r.first_contract_at ? new Date(r.first_contract_at).toLocaleDateString("pt-BR") : <span className="text-neutral-400">—</span>}</TableCell>
+                        <TableCell><RecompensaBadge status={r.reward_status} /></TableCell>
+                        <TableCell className="pr-6 text-right font-semibold">{r.first_contract_id ? brl(r.reward_amount) : brl(0)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           )}
           {!!totalPendente && (

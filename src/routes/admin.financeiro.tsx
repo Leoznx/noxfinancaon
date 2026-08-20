@@ -642,93 +642,129 @@ function WithdrawalsTable({
   onReject: (row: FinanceWithdrawal) => void;
   onPay: (row: FinanceWithdrawal) => void;
 }) {
+  const actions = (row: FinanceWithdrawal) => (
+    <>
+      <Button size="sm" variant="outline" onClick={() => onDetails(row.id)}>
+        <Eye className="mr-1.5 h-4 w-4" />
+        Detalhes
+      </Button>
+      {(["PENDING_REVIEW", "APPROVED", "MANUAL_REVIEW"] as WithdrawalStatus[]).includes(
+        row.status,
+      ) && (
+        <Button
+          size="sm"
+          className="bg-emerald-700 hover:bg-emerald-800"
+          onClick={() => onApprove(row)}
+        >
+          <CheckCircle2 className="mr-1.5 h-4 w-4" />
+          Aprovar
+        </Button>
+      )}
+      {!(["PAID", "REJECTED", "CANCELLED"] as WithdrawalStatus[]).includes(row.status) && (
+        <Button
+          size="sm"
+          variant="outline"
+          className="border-red-200 text-red-700 hover:bg-red-50"
+          onClick={() => onReject(row)}
+        >
+          <XCircle className="mr-1.5 h-4 w-4" />
+          Recusar
+        </Button>
+      )}
+      {row.status === "AWAITING_PAYMENT" && (
+        <Button
+          size="sm"
+          className="bg-yellow-400 font-bold text-neutral-950 hover:bg-yellow-300"
+          onClick={() => onPay(row)}
+        >
+          <FileCheck2 className="mr-1.5 h-4 w-4" />
+          Marcar como pago
+        </Button>
+      )}
+    </>
+  );
+
   return (
     <DataTable
       title="Solicitações em acompanhamento"
       description="Saques não pagos que exigem análise ou pagamento."
     >
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="pl-5">Solicitante</TableHead>
-            <TableHead>Valor</TableHead>
-            <TableHead>Valor líquido</TableHead>
-            <TableHead>Pix</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Data</TableHead>
-            <TableHead className="pr-5 text-right">Ações</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {loading ? (
-            <EmptyRow columns={7} loading />
-          ) : rows.length === 0 ? (
-            <EmptyRow columns={7}>Nenhuma solicitação de saque encontrada.</EmptyRow>
-          ) : (
-            rows.map((row) => (
-              <TableRow key={row.id}>
-                <TableCell className="pl-5">
-                  <PersonCell name={row.requester_name} secondary={row.requester_email} />
-                </TableCell>
-                <TableCell className="font-bold">{formatCents(row.amount_cents)}</TableCell>
-                <TableCell>{formatCents(row.net_amount_cents)}</TableCell>
-                <TableCell>
-                  <PixCell row={row} />
-                </TableCell>
-                <TableCell>
+      {/* Mobile/tablet estreito (< md): cards empilhados, sem tabela pra arrastar. */}
+      <div className="md:hidden divide-y divide-neutral-100">
+        {loading ? (
+          <CardsLoading />
+        ) : rows.length === 0 ? (
+          <CardsEmpty>Nenhuma solicitação de saque encontrada.</CardsEmpty>
+        ) : (
+          rows.map((row) => (
+            <div key={row.id} className="p-4">
+              <div className="flex items-start justify-between gap-3">
+                <PersonCell name={row.requester_name} secondary={row.requester_email} />
+                <div className="shrink-0">
                   <WithdrawalBadge status={row.status} />
-                </TableCell>
-                <TableCell className="whitespace-nowrap text-sm text-neutral-600">
-                  {dateTime(row.requested_at)}
-                </TableCell>
-                <TableCell className="pr-5">
-                  <div className="flex min-w-max justify-end gap-1.5">
-                    <Button size="sm" variant="outline" onClick={() => onDetails(row.id)}>
-                      <Eye className="mr-1.5 h-4 w-4" />
-                      Detalhes
-                    </Button>
-                    {(
-                      ["PENDING_REVIEW", "APPROVED", "MANUAL_REVIEW"] as WithdrawalStatus[]
-                    ).includes(row.status) && (
-                      <Button
-                        size="sm"
-                        className="bg-emerald-700 hover:bg-emerald-800"
-                        onClick={() => onApprove(row)}
-                      >
-                        <CheckCircle2 className="mr-1.5 h-4 w-4" />
-                        Aprovar
-                      </Button>
-                    )}
-                    {!(["PAID", "REJECTED", "CANCELLED"] as WithdrawalStatus[]).includes(
-                      row.status,
-                    ) && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="border-red-200 text-red-700 hover:bg-red-50"
-                        onClick={() => onReject(row)}
-                      >
-                        <XCircle className="mr-1.5 h-4 w-4" />
-                        Recusar
-                      </Button>
-                    )}
-                    {row.status === "AWAITING_PAYMENT" && (
-                      <Button
-                        size="sm"
-                        className="bg-yellow-400 font-bold text-neutral-950 hover:bg-yellow-300"
-                        onClick={() => onPay(row)}
-                      >
-                        <FileCheck2 className="mr-1.5 h-4 w-4" />
-                        Marcar como pago
-                      </Button>
-                    )}
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))
-          )}
-        </TableBody>
-      </Table>
+                </div>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                <MiniValue label="Valor" value={formatCents(row.amount_cents)} />
+                <MiniValue label="Valor líquido" value={formatCents(row.net_amount_cents)} />
+              </div>
+              <div className="mt-2">
+                <PixCell row={row} />
+              </div>
+              <p className="mt-2 text-[10px] text-neutral-400">{dateTime(row.requested_at)}</p>
+              <div className="mt-3 flex flex-wrap gap-1.5 border-t border-neutral-100 pt-3">
+                {actions(row)}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Tablet/desktop (md:+): tabela completa. */}
+      <div className="hidden md:block overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="pl-5">Solicitante</TableHead>
+              <TableHead>Valor</TableHead>
+              <TableHead>Valor líquido</TableHead>
+              <TableHead>Pix</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Data</TableHead>
+              <TableHead className="pr-5 text-right">Ações</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              <EmptyRow columns={7} loading />
+            ) : rows.length === 0 ? (
+              <EmptyRow columns={7}>Nenhuma solicitação de saque encontrada.</EmptyRow>
+            ) : (
+              rows.map((row) => (
+                <TableRow key={row.id}>
+                  <TableCell className="pl-5">
+                    <PersonCell name={row.requester_name} secondary={row.requester_email} />
+                  </TableCell>
+                  <TableCell className="font-bold">{formatCents(row.amount_cents)}</TableCell>
+                  <TableCell>{formatCents(row.net_amount_cents)}</TableCell>
+                  <TableCell>
+                    <PixCell row={row} />
+                  </TableCell>
+                  <TableCell>
+                    <WithdrawalBadge status={row.status} />
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-sm text-neutral-600">
+                    {dateTime(row.requested_at)}
+                  </TableCell>
+                  <TableCell className="pr-5">
+                    <div className="flex min-w-max justify-end gap-1.5">{actions(row)}</div>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
     </DataTable>
   );
 }
@@ -742,75 +778,121 @@ function CommissionsTable({
   loading: boolean;
   onWithdrawal: (id: string) => void;
 }) {
+  const contractLink = (row: FinanceCommission) => (
+    <a
+      className="inline-flex items-center gap-1 font-bold text-neutral-900 hover:underline"
+      href={`/apolices/${row.contract_id}`}
+    >
+      {row.contract_number || row.contract_id.slice(0, 8)}
+      <ExternalLink className="h-3 w-3" />
+    </a>
+  );
+
   return (
     <DataTable
       title="Comissões reais"
       description="Valores gerados pelo backend e vinculados aos contratos de origem."
     >
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="pl-5">Usuário</TableHead>
-            <TableHead>Contrato</TableHead>
-            <TableHead>Valor-base</TableHead>
-            <TableHead>Percentual</TableHead>
-            <TableHead>Comissão</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Disponível em</TableHead>
-            <TableHead className="pr-5">Saque vinculado</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {loading ? (
-            <EmptyRow columns={8} loading />
-          ) : rows.length === 0 ? (
-            <EmptyRow columns={8}>Nenhuma comissão registrada.</EmptyRow>
-          ) : (
-            rows.map((row) => (
-              <TableRow key={row.id}>
-                <TableCell className="pl-5">
-                  <PersonCell name={row.user_name} secondary={row.user_email} />
-                </TableCell>
-                <TableCell>
-                  <a
-                    className="inline-flex items-center gap-1 font-bold text-neutral-900 hover:underline"
-                    href={`/apolices/${row.contract_id}`}
-                  >
-                    {row.contract_number || row.contract_id.slice(0, 8)}
-                    <ExternalLink className="h-3 w-3" />
-                  </a>
-                </TableCell>
-                <TableCell>{formatCents(row.base_amount_cents)}</TableCell>
-                <TableCell>
-                  {row.percentage_applied == null ? "—" : `${row.percentage_applied}%`}
-                </TableCell>
-                <TableCell className="font-bold">{formatCents(row.amount_cents)}</TableCell>
-                <TableCell>
+      {/* Mobile/tablet estreito (< md): cards empilhados, sem tabela pra arrastar. */}
+      <div className="md:hidden divide-y divide-neutral-100">
+        {loading ? (
+          <CardsLoading />
+        ) : rows.length === 0 ? (
+          <CardsEmpty>Nenhuma comissão registrada.</CardsEmpty>
+        ) : (
+          rows.map((row) => (
+            <div key={row.id} className="p-4">
+              <div className="flex items-start justify-between gap-3">
+                <PersonCell name={row.user_name} secondary={row.user_email} />
+                <div className="shrink-0">
                   <Badge className={COMMISSION_TONES[row.status]}>
                     {COMMISSION_STATUS_LABELS[row.status]}
                   </Badge>
-                </TableCell>
-                <TableCell className="whitespace-nowrap text-sm">
-                  {dateTime(row.available_at)}
-                </TableCell>
-                <TableCell className="pr-5">
-                  {row.withdrawal_id ? (
-                    <Button
-                      variant="link"
-                      className="h-auto p-0 font-bold text-neutral-900"
-                      onClick={() => onWithdrawal(row.withdrawal_id!)}
-                    >
-                      Abrir saque
-                    </Button>
-                  ) : (
-                    "—"
-                  )}
-                </TableCell>
-              </TableRow>
-            ))
-          )}
-        </TableBody>
-      </Table>
+                </div>
+              </div>
+              <div className="mt-3">{contractLink(row)}</div>
+              <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                <MiniValue label="Valor-base" value={formatCents(row.base_amount_cents)} />
+                <MiniValue
+                  label="Percentual"
+                  value={row.percentage_applied == null ? "—" : `${row.percentage_applied}%`}
+                />
+                <MiniValue label="Comissão" value={formatCents(row.amount_cents)} />
+                <MiniValue label="Disponível em" value={dateTime(row.available_at)} />
+              </div>
+              {row.withdrawal_id && (
+                <Button
+                  variant="link"
+                  className="mt-2 h-auto p-0 font-bold text-neutral-900"
+                  onClick={() => onWithdrawal(row.withdrawal_id!)}
+                >
+                  Abrir saque
+                </Button>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Tablet/desktop (md:+): tabela completa. */}
+      <div className="hidden md:block overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="pl-5">Usuário</TableHead>
+              <TableHead>Contrato</TableHead>
+              <TableHead>Valor-base</TableHead>
+              <TableHead>Percentual</TableHead>
+              <TableHead>Comissão</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Disponível em</TableHead>
+              <TableHead className="pr-5">Saque vinculado</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              <EmptyRow columns={8} loading />
+            ) : rows.length === 0 ? (
+              <EmptyRow columns={8}>Nenhuma comissão registrada.</EmptyRow>
+            ) : (
+              rows.map((row) => (
+                <TableRow key={row.id}>
+                  <TableCell className="pl-5">
+                    <PersonCell name={row.user_name} secondary={row.user_email} />
+                  </TableCell>
+                  <TableCell>{contractLink(row)}</TableCell>
+                  <TableCell>{formatCents(row.base_amount_cents)}</TableCell>
+                  <TableCell>
+                    {row.percentage_applied == null ? "—" : `${row.percentage_applied}%`}
+                  </TableCell>
+                  <TableCell className="font-bold">{formatCents(row.amount_cents)}</TableCell>
+                  <TableCell>
+                    <Badge className={COMMISSION_TONES[row.status]}>
+                      {COMMISSION_STATUS_LABELS[row.status]}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-sm">
+                    {dateTime(row.available_at)}
+                  </TableCell>
+                  <TableCell className="pr-5">
+                    {row.withdrawal_id ? (
+                      <Button
+                        variant="link"
+                        className="h-auto p-0 font-bold text-neutral-900"
+                        onClick={() => onWithdrawal(row.withdrawal_id!)}
+                      >
+                        Abrir saque
+                      </Button>
+                    ) : (
+                      "—"
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
     </DataTable>
   );
 }
@@ -836,87 +918,131 @@ function PaymentsTable({
     }
   };
 
+  const receiptBadge = (row: FinanceWithdrawal) =>
+    row.receipt_available ? (
+      <Badge className="border-emerald-200 bg-emerald-50 text-emerald-800">
+        <FileCheck2 className="mr-1 h-3 w-3" />
+        Disponível
+      </Badge>
+    ) : (
+      <Badge variant="destructive">Ausente</Badge>
+    );
+
+  const actions = (row: FinanceWithdrawal) => (
+    <>
+      <Button size="sm" variant="outline" onClick={() => onDetails(row.id)}>
+        <Eye className="mr-1.5 h-4 w-4" />
+        Detalhes
+      </Button>
+      {row.receipt_available && (
+        <>
+          <Button
+            size="icon"
+            variant="outline"
+            aria-label="Visualizar comprovante"
+            onClick={() => void openReceipt(row, "view")}
+          >
+            <ExternalLink className="h-4 w-4" />
+          </Button>
+          <Button
+            size="icon"
+            variant="outline"
+            aria-label="Baixar comprovante"
+            onClick={() => void openReceipt(row, "download")}
+          >
+            <Download className="h-4 w-4" />
+          </Button>
+        </>
+      )}
+    </>
+  );
+
   return (
     <DataTable
       title="Pagamentos realizados"
       description="Saques pagos manualmente, com responsável e comprovante privado."
     >
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="pl-5">Solicitante</TableHead>
-            <TableHead>Valor pago</TableHead>
-            <TableHead>Banco</TableHead>
-            <TableHead>Pix</TableHead>
-            <TableHead>Pago em</TableHead>
-            <TableHead>Responsável</TableHead>
-            <TableHead>Comprovante</TableHead>
-            <TableHead className="pr-5 text-right">Ações</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {loading ? (
-            <EmptyRow columns={8} loading />
-          ) : rows.length === 0 ? (
-            <EmptyRow columns={8}>Nenhum pagamento de comissão registrado.</EmptyRow>
-          ) : (
-            rows.map((row) => (
-              <TableRow key={row.id}>
-                <TableCell className="pl-5">
-                  <PersonCell name={row.requester_name} secondary={row.requester_email} />
-                </TableCell>
-                <TableCell className="font-bold text-emerald-700">
-                  {formatCents(row.net_amount_cents)}
-                </TableCell>
-                <TableCell>{row.bank_name}</TableCell>
-                <TableCell>
-                  <PixCell row={row} />
-                </TableCell>
-                <TableCell className="whitespace-nowrap text-sm">{dateTime(row.paid_at)}</TableCell>
-                <TableCell>{row.paid_by_name || "—"}</TableCell>
-                <TableCell>
-                  {row.receipt_available ? (
-                    <Badge className="border-emerald-200 bg-emerald-50 text-emerald-800">
-                      <FileCheck2 className="mr-1 h-3 w-3" />
-                      Disponível
-                    </Badge>
-                  ) : (
-                    <Badge variant="destructive">Ausente</Badge>
-                  )}
-                </TableCell>
-                <TableCell className="pr-5">
-                  <div className="flex min-w-max justify-end gap-1.5">
-                    <Button size="sm" variant="outline" onClick={() => onDetails(row.id)}>
-                      <Eye className="mr-1.5 h-4 w-4" />
-                      Detalhes
-                    </Button>
-                    {row.receipt_available && (
-                      <>
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          aria-label="Visualizar comprovante"
-                          onClick={() => void openReceipt(row, "view")}
-                        >
-                          <ExternalLink className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          aria-label="Baixar comprovante"
-                          onClick={() => void openReceipt(row, "download")}
-                        >
-                          <Download className="h-4 w-4" />
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))
-          )}
-        </TableBody>
-      </Table>
+      {/* Mobile/tablet estreito (< md): cards empilhados, sem tabela pra arrastar. */}
+      <div className="md:hidden divide-y divide-neutral-100">
+        {loading ? (
+          <CardsLoading />
+        ) : rows.length === 0 ? (
+          <CardsEmpty>Nenhum pagamento de comissão registrado.</CardsEmpty>
+        ) : (
+          rows.map((row) => (
+            <div key={row.id} className="p-4">
+              <div className="flex items-start justify-between gap-3">
+                <PersonCell name={row.requester_name} secondary={row.requester_email} />
+                <div className="shrink-0">{receiptBadge(row)}</div>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                <MiniValue
+                  label="Valor pago"
+                  value={formatCents(row.net_amount_cents)}
+                  valueClassName="text-emerald-700"
+                />
+                <MiniValue label="Banco" value={row.bank_name} />
+                <MiniValue label="Pago em" value={dateTime(row.paid_at)} />
+                <MiniValue label="Responsável" value={row.paid_by_name || "—"} />
+              </div>
+              <div className="mt-2">
+                <PixCell row={row} />
+              </div>
+              <div className="mt-3 flex flex-wrap gap-1.5 border-t border-neutral-100 pt-3">
+                {actions(row)}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Tablet/desktop (md:+): tabela completa. */}
+      <div className="hidden md:block overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="pl-5">Solicitante</TableHead>
+              <TableHead>Valor pago</TableHead>
+              <TableHead>Banco</TableHead>
+              <TableHead>Pix</TableHead>
+              <TableHead>Pago em</TableHead>
+              <TableHead>Responsável</TableHead>
+              <TableHead>Comprovante</TableHead>
+              <TableHead className="pr-5 text-right">Ações</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              <EmptyRow columns={8} loading />
+            ) : rows.length === 0 ? (
+              <EmptyRow columns={8}>Nenhum pagamento de comissão registrado.</EmptyRow>
+            ) : (
+              rows.map((row) => (
+                <TableRow key={row.id}>
+                  <TableCell className="pl-5">
+                    <PersonCell name={row.requester_name} secondary={row.requester_email} />
+                  </TableCell>
+                  <TableCell className="font-bold text-emerald-700">
+                    {formatCents(row.net_amount_cents)}
+                  </TableCell>
+                  <TableCell>{row.bank_name}</TableCell>
+                  <TableCell>
+                    <PixCell row={row} />
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-sm">
+                    {dateTime(row.paid_at)}
+                  </TableCell>
+                  <TableCell>{row.paid_by_name || "—"}</TableCell>
+                  <TableCell>{receiptBadge(row)}</TableCell>
+                  <TableCell className="pr-5">
+                    <div className="flex min-w-max justify-end gap-1.5">{actions(row)}</div>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
     </DataTable>
   );
 }
@@ -963,6 +1089,40 @@ function EmptyRow({
         )}
       </TableCell>
     </TableRow>
+  );
+}
+
+/** Equivalentes de EmptyRow para a lista de cards do mobile (sem <table>/<tr>). */
+function CardsLoading() {
+  return (
+    <div className="flex h-44 items-center justify-center text-neutral-500">
+      <span className="inline-flex items-center gap-2">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Carregando dados reais...
+      </span>
+    </div>
+  );
+}
+
+function CardsEmpty({ children }: { children: React.ReactNode }) {
+  return <div className="flex h-44 items-center justify-center px-4 text-center text-neutral-500">{children}</div>;
+}
+
+/** Par label/valor compacto para os cards do mobile — mesmo conteúdo que uma célula da tabela. */
+function MiniValue({
+  label,
+  value,
+  valueClassName,
+}: {
+  label: string;
+  value: string;
+  valueClassName?: string;
+}) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[10px] font-bold uppercase tracking-wide text-neutral-400">{label}</p>
+      <p className={`truncate font-semibold text-neutral-900 ${valueClassName ?? ""}`}>{value}</p>
+    </div>
   );
 }
 

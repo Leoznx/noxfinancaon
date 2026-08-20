@@ -129,6 +129,55 @@ function AdminIndicacoesPage() {
         </div>
 
         <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden shadow-sm">
+          {/* Mobile/tablet estreito (< md): cards empilhados, sem tabela pra arrastar. */}
+          <div className="md:hidden divide-y divide-neutral-100">
+            {loading ? (
+              <p className="text-center py-16 text-neutral-400">Carregando...</p>
+            ) : !filtradas.length ? (
+              <p className="text-center py-16 text-neutral-500">Nenhuma indicação encontrada.</p>
+            ) : (
+              filtradas.map((r) => (
+                <div key={r.id} className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-semibold truncate">{r.referrer?.nome ?? "—"}</p>
+                      <p className="text-xs text-neutral-500 uppercase">{r.referrer_role ?? r.referrer?.role}</p>
+                    </div>
+                    <span className="shrink-0 font-semibold">{brl(r.reward_amount)}</span>
+                  </div>
+                  <div className="mt-2 text-xs text-neutral-600">
+                    <p className="font-semibold">Indicado: {r.referred?.nome ?? r.referred_email ?? "—"}</p>
+                    <p className="text-neutral-500">{r.referred?.email ?? r.referred_email}</p>
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <RewardBadge status={r.reward_status} />
+                    <FraudBadge status={r.fraud_status} />
+                  </div>
+                  <div className="mt-2 text-xs text-neutral-500">
+                    Cadastro: {r.signup_at ? new Date(r.signup_at).toLocaleDateString("pt-BR") : "—"} · 1º contrato:{" "}
+                    {r.first_contract_at ? new Date(r.first_contract_at).toLocaleDateString("pt-BR") : "—"}
+                  </div>
+                  <div className="mt-3 flex items-center gap-1 border-t border-neutral-100 pt-3">
+                    {r.reward_status === "em_analise" && (
+                      <Button size="sm" variant="ghost" className="text-emerald-700" title="Aprovar" onClick={() => aprovar(r)}><CheckCircle2 size={14} /></Button>
+                    )}
+                    {(r.reward_status === "em_analise" || r.reward_status === "aguardando_contrato") && (
+                      <Button size="sm" variant="ghost" className="text-red-700" title="Recusar" onClick={() => { setRejecting(r); setMotivo(""); }}><XCircle size={14} /></Button>
+                    )}
+                    {r.reward_status === "liberada" && (
+                      <Button size="sm" variant="ghost" className="text-emerald-700" title="Marcar paga" onClick={() => marcarPaga(r)}><DollarSign size={14} /></Button>
+                    )}
+                    {r.fraud_status !== "bloqueado" && (
+                      <Button size="sm" variant="ghost" className="text-neutral-700" title="Bloquear" onClick={() => bloquear(r)}><Ban size={14} /></Button>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Tablet/desktop (md:+): tabela completa. */}
+          <div className="hidden md:block overflow-x-auto">
           <Table>
             <TableHeader className="bg-neutral-50">
               <TableRow>
@@ -180,6 +229,7 @@ function AdminIndicacoesPage() {
               ))}
             </TableBody>
           </Table>
+          </div>
         </div>
       </div>
 

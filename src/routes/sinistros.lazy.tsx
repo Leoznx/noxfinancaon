@@ -199,7 +199,53 @@ function Sinistros() {
         )}
       </div>
 
-      <Card className="border-neutral-200 shadow-sm overflow-hidden">
+      {/* Mobile/tablet estreito (< md): cards empilhados, sem tabela pra arrastar. */}
+      <div className="md:hidden space-y-3">
+        {loading ? (
+          <div className="h-32 flex items-center justify-center text-neutral-400 bg-white border border-neutral-200 rounded-2xl">
+            Carregando sinistros...
+          </div>
+        ) : sinistros.length === 0 ? (
+          <div className="flex flex-col items-center justify-center space-y-4 h-64 bg-white border border-neutral-200 rounded-2xl px-6 text-center">
+            <div className="w-16 h-16 rounded-full bg-neutral-50 flex items-center justify-center text-neutral-300">
+              <Clock size={32} />
+            </div>
+            <div>
+              <p className="text-neutral-900 font-bold">Nenhum sinistro solicitado</p>
+              <p className="text-neutral-500 text-sm mt-1">{isAdmin ? "Os sinistros abertos pelos usuários aparecerão aqui automaticamente." : "Sua lista de acionamentos aparecerá aqui quando você abrir uma nova solicitação."}</p>
+            </div>
+          </div>
+        ) : (
+          sinistros.map((s) => (
+            <Card key={s.id} className="border-neutral-200 shadow-sm p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-bold text-neutral-900 truncate">{s.apolices?.numero}</p>
+                  <p className="text-xs text-neutral-500 font-medium truncate">
+                    {s.apolices?.consultas_credito?.inquilinos?.nome}
+                  </p>
+                </div>
+                <div className="shrink-0">{getStatusBadge(s.status)}</div>
+              </div>
+              <div className="mt-2 flex items-center gap-1.5 text-xs text-neutral-500 font-medium">
+                <MapPinIcon size={12} className="text-neutral-400 shrink-0" />
+                <span className="truncate">
+                  {s.apolices?.consultas_credito?.imoveis?.logradouro}, {s.apolices?.consultas_credito?.imoveis?.numero}
+                </span>
+              </div>
+              <div className="mt-3 flex items-center justify-between border-t border-neutral-100 pt-3">
+                <span className="text-xs text-neutral-500 font-medium">
+                  {new Date(s.created_at).toLocaleDateString('pt-BR')}
+                </span>
+                <Button variant="ghost" size="sm" className="font-bold text-xs text-neutral-500 hover:text-neutral-900">Ver detalhes</Button>
+              </div>
+            </Card>
+          ))
+        )}
+      </div>
+
+      {/* Tablet/desktop (md:+): tabela completa. */}
+      <Card className="hidden md:block border-neutral-200 shadow-sm overflow-hidden">
         <Table>
           <TableHeader className="bg-neutral-50">
             <TableRow>

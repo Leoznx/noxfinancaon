@@ -146,59 +146,95 @@ function UsuariosPage() {
         </div>
 
         <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden shadow-sm">
-          <Table>
-            <TableHeader className="bg-neutral-50">
-              <TableRow>
-                <TableHead className="px-6 py-4">Usuário</TableHead>
-                <TableHead className="px-6 py-4">Cargo</TableHead>
-                <TableHead className="px-6 py-4">Status</TableHead>
-                <TableHead className="px-6 py-4">Desde</TableHead>
-                <TableHead className="px-6 py-4 text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
+          {/* Mobile/tablet estreito: cards empilhados, sem tabela pra arrastar. */}
+          <div className="md:hidden divide-y divide-neutral-100">
+            {loading ? (
+              <p className="text-center py-20 text-neutral-400">Carregando equipe...</p>
+            ) : users.map((user) => (
+              <div key={user.id} className="p-4 space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-neutral-100 flex items-center justify-center border border-neutral-200 text-neutral-600 font-bold text-xs uppercase shrink-0">
+                    {user.nome?.substring(0, 2)}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-bold text-neutral-900 leading-tight truncate">{user.nome}</p>
+                    <p className="text-xs text-neutral-400 font-medium truncate">{user.email}</p>
+                  </div>
+                  <Badge className={
+                    user.status === 'ativo' ? 'bg-green-100 text-green-700 border-green-200' :
+                    user.status === 'aguardando_aceite' ? 'bg-amber-100 text-amber-700 border-amber-200' :
+                    'bg-neutral-100 text-neutral-700'
+                  }>
+                    {user.status?.replace('_', ' ')}
+                  </Badge>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    {user.role === 'admin' ? <Shield size={14} className="text-neutral-400" /> : <UserCog size={14} className="text-neutral-400" />}
+                    <span className="font-bold text-neutral-600 uppercase tracking-wider">{user.role}</span>
+                  </div>
+                  <span className="text-neutral-400">{new Date(user.created_at).toLocaleDateString('pt-BR')}</span>
+                </div>
+                <Button size="sm" variant="outline" className="w-full">Editar</Button>
+              </div>
+            ))}
+          </div>
+          {/* Tablet/desktop: tabela completa. */}
+          <div className="hidden md:block overflow-x-auto">
+            <Table>
+              <TableHeader className="bg-neutral-50">
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-20 text-neutral-400">Carregando equipe...</TableCell>
+                  <TableHead className="px-6 py-4">Usuário</TableHead>
+                  <TableHead className="px-6 py-4">Cargo</TableHead>
+                  <TableHead className="px-6 py-4">Status</TableHead>
+                  <TableHead className="px-6 py-4">Desde</TableHead>
+                  <TableHead className="px-6 py-4 text-right">Ações</TableHead>
                 </TableRow>
-              ) : users.map((user) => (
-                <TableRow key={user.id} className="hover:bg-neutral-50/50 transition-colors">
-                  <TableCell className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-full bg-neutral-100 flex items-center justify-center border border-neutral-200 text-neutral-600 font-bold text-xs uppercase">
-                        {user.nome?.substring(0, 2)}
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-20 text-neutral-400">Carregando equipe...</TableCell>
+                  </TableRow>
+                ) : users.map((user) => (
+                  <TableRow key={user.id} className="hover:bg-neutral-50/50 transition-colors">
+                    <TableCell className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full bg-neutral-100 flex items-center justify-center border border-neutral-200 text-neutral-600 font-bold text-xs uppercase">
+                          {user.nome?.substring(0, 2)}
+                        </div>
+                        <div>
+                          <p className="font-bold text-neutral-900 leading-tight">{user.nome}</p>
+                          <p className="text-xs text-neutral-400 font-medium">{user.email}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-bold text-neutral-900 leading-tight">{user.nome}</p>
-                        <p className="text-xs text-neutral-400 font-medium">{user.email}</p>
+                    </TableCell>
+                    <TableCell className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        {user.role === 'admin' ? <Shield size={14} className="text-neutral-400" /> : <UserCog size={14} className="text-neutral-400" />}
+                        <span className="text-xs font-bold text-neutral-600 uppercase tracking-wider">{user.role}</span>
                       </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      {user.role === 'admin' ? <Shield size={14} className="text-neutral-400" /> : <UserCog size={14} className="text-neutral-400" />}
-                      <span className="text-xs font-bold text-neutral-600 uppercase tracking-wider">{user.role}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="px-6 py-4">
-                    <Badge className={
-                      user.status === 'ativo' ? 'bg-green-100 text-green-700 border-green-200' : 
-                      user.status === 'aguardando_aceite' ? 'bg-amber-100 text-amber-700 border-amber-200' : 
-                      'bg-neutral-100 text-neutral-700'
-                    }>
-                      {user.status?.replace('_', ' ')}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="px-6 py-4 text-neutral-400 text-xs">
-                    {new Date(user.created_at).toLocaleDateString('pt-BR')}
-                  </TableCell>
-                  <TableCell className="px-6 py-4 text-right">
-                    <Button size="sm" variant="ghost">Editar</Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                    </TableCell>
+                    <TableCell className="px-6 py-4">
+                      <Badge className={
+                        user.status === 'ativo' ? 'bg-green-100 text-green-700 border-green-200' :
+                        user.status === 'aguardando_aceite' ? 'bg-amber-100 text-amber-700 border-amber-200' :
+                        'bg-neutral-100 text-neutral-700'
+                      }>
+                        {user.status?.replace('_', ' ')}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="px-6 py-4 text-neutral-400 text-xs">
+                      {new Date(user.created_at).toLocaleDateString('pt-BR')}
+                    </TableCell>
+                    <TableCell className="px-6 py-4 text-right">
+                      <Button size="sm" variant="ghost">Editar</Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </div>
       </div>
     </DashboardLayout>

@@ -238,56 +238,90 @@ export function MarketingDashboard() {
             Leads mais antigos e sem tratamento aparecem primeiro.
           </p>
         </div>
-        <Table>
-          <TableHeader className="bg-neutral-50">
-            <TableRow>
-              <TableHead className="px-6">Tipo</TableHead>
-              <TableHead>Nome</TableHead>
-              <TableHead>Origem</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Aguardando</TableHead>
-              <TableHead className="text-right pr-6">Acoes</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
+        {/* Mobile/tablet estreito: cards empilhados, sem tabela pra arrastar. */}
+        <div className="md:hidden divide-y divide-neutral-100">
+          {loading ? (
+            <p className="text-center py-12 text-neutral-400">Carregando...</p>
+          ) : !prioridades.length ? (
+            <p className="text-center py-12 text-neutral-500">Nenhuma prioridade no momento.</p>
+          ) : (
+            prioridades.map((p) => (
+              <div key={`${p.tipo}-${p.id}`} className="p-4 space-y-2">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-semibold uppercase text-neutral-500">{p.tipo}</p>
+                    <p className="font-semibold truncate">{p.nome}</p>
+                    <p className="text-xs text-neutral-500">{p.origem}</p>
+                  </div>
+                  <Badge variant="outline" className="text-xs shrink-0">
+                    {p.status}
+                  </Badge>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-neutral-600">Aguardando {tempo(p.data)}</span>
+                  <Link to={p.link}>
+                    <Button size="sm" variant="outline">
+                      <Eye size={14} />
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+        {/* Tablet/desktop: tabela completa. */}
+        <div className="hidden md:block overflow-x-auto">
+          <Table>
+            <TableHeader className="bg-neutral-50">
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-12 text-neutral-400">
-                  Carregando...
-                </TableCell>
+                <TableHead className="px-6">Tipo</TableHead>
+                <TableHead>Nome</TableHead>
+                <TableHead>Origem</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Aguardando</TableHead>
+                <TableHead className="text-right pr-6">Acoes</TableHead>
               </TableRow>
-            ) : !prioridades.length ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center py-12 text-neutral-500">
-                  Nenhuma prioridade no momento.
-                </TableCell>
-              </TableRow>
-            ) : (
-              prioridades.map((p) => (
-                <TableRow key={`${p.tipo}-${p.id}`}>
-                  <TableCell className="px-6 text-xs font-semibold uppercase text-neutral-600">
-                    {p.tipo}
-                  </TableCell>
-                  <TableCell className="font-semibold">{p.nome}</TableCell>
-                  <TableCell className="text-xs text-neutral-500">{p.origem}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="text-xs">
-                      {p.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-xs text-neutral-600">{tempo(p.data)}</TableCell>
-                  <TableCell className="text-right pr-6">
-                    <Link to={p.link}>
-                      <Button size="sm" variant="ghost">
-                        <Eye size={14} />
-                      </Button>
-                    </Link>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-12 text-neutral-400">
+                    Carregando...
                   </TableCell>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+              ) : !prioridades.length ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-12 text-neutral-500">
+                    Nenhuma prioridade no momento.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                prioridades.map((p) => (
+                  <TableRow key={`${p.tipo}-${p.id}`}>
+                    <TableCell className="px-6 text-xs font-semibold uppercase text-neutral-600">
+                      {p.tipo}
+                    </TableCell>
+                    <TableCell className="font-semibold">{p.nome}</TableCell>
+                    <TableCell className="text-xs text-neutral-500">{p.origem}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="text-xs">
+                        {p.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-xs text-neutral-600">{tempo(p.data)}</TableCell>
+                    <TableCell className="text-right pr-6">
+                      <Link to={p.link}>
+                        <Button size="sm" variant="ghost">
+                          <Eye size={14} />
+                        </Button>
+                      </Link>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </section>
     </div>
   );
