@@ -1357,11 +1357,15 @@ function ResumoPropostaLoft(p: any) {
                 <p className="font-bold">Data nascimento</p>
                 <p>{dataNascimento}</p>
               </div>
-              <div className="sm:col-span-4">
+              <div className="min-w-0 sm:col-span-4">
                 <p className="mb-4 font-bold">Documentos</p>
                 <div className="space-y-2">
                   {documentosNomes.length ? (
-                    documentosNomes.map((name: string) => <p key={name}>{name}</p>)
+                    documentosNomes.map((name: string) => (
+                      <p key={name} className="break-all">
+                        {name}
+                      </p>
+                    ))
                   ) : (
                     <p className="text-neutral-500">Nenhum documento enviado.</p>
                   )}
@@ -1430,9 +1434,12 @@ function ResumoPropostaLoft(p: any) {
                 Cobertura básica obrigatória, calculada sobre o valor do aluguel do imóvel.
               </p>
 
-              {/* Cobertura obrigatória — cartão em destaque, com personagem à direita */}
-              <div className="relative flex min-h-[280px] items-center justify-between gap-4 overflow-hidden rounded-md border border-slate-300 bg-white p-8">
-                <div className="max-w-[60%]">
+              {/* Cobertura obrigatória — cartão em destaque, com personagem à direita.
+                  No mobile o personagem fica em fluxo normal, abaixo do texto — como
+                  posição absoluta em cima do texto (só cabia no layout largo do
+                  desktop), no celular ele cobria as palavras do meio do parágrafo. */}
+              <div className="relative flex flex-col items-center gap-5 overflow-hidden rounded-md border border-slate-300 bg-white p-6 sm:min-h-[280px] sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:p-8">
+                <div className="sm:max-w-[60%]">
                   <div className="mb-3 flex items-center gap-3">
                     <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-yellow-400 text-neutral-900">
                       <Flame size={18} />
@@ -1459,7 +1466,7 @@ function ResumoPropostaLoft(p: any) {
                 <img
                   src="/assets/nox-incendio-personagem.webp"
                   alt="Personagem NOX Fiança bombeiro, representando a cobertura de incêndio"
-                  className="pointer-events-none absolute right-4 top-1/2 h-[280px] w-auto -translate-y-1/2 select-none sm:right-8"
+                  className="pointer-events-none h-40 w-auto select-none sm:absolute sm:right-8 sm:top-1/2 sm:h-[280px] sm:-translate-y-1/2"
                 />
               </div>
             </div>
@@ -2130,10 +2137,10 @@ function EtapaResumo(p: any) {
             {documentos.map((d: any) => (
               <li key={d.id} className="flex items-center gap-2 text-xs">
                 <CheckCircle2 size={14} className="text-emerald-500 shrink-0" />
-                <span className="font-semibold text-neutral-800">
+                <span className="shrink-0 font-semibold text-neutral-800">
                   {documentoLabel(d.document_type)}
                 </span>
-                <span className="text-neutral-400 truncate">— {d.file_name}</span>
+                <span className="min-w-0 flex-1 truncate text-neutral-400">— {d.file_name}</span>
               </li>
             ))}
           </ul>
