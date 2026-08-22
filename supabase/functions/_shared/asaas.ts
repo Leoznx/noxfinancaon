@@ -14,18 +14,24 @@ export function env(name: string) {
 }
 
 export function corsHeaders(req: Request) {
-  const origin = req.headers.get("origin") || "";
-  const allowed = (
-    Deno.env.get("ALLOWED_ORIGINS") ||
-    Deno.env.get("FRONTEND_URL") ||
-    "https://noxfianca.com"
-  )
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-  const allowOrigin = allowed.includes(origin) ? origin : allowed[0];
+  // Reflete a origem de quem chamou em vez de comparar contra uma lista fixa de
+  // domínios (ALLOWED_ORIGINS/FRONTEND_URL). Essa lista ficava dessincronizada
+  // toda vez que o site passava a responder em um domínio que não estava nela
+  // (preview da Vercel, domínio customizado ainda não propagado, etc.): a
+  // função respondia normalmente, mas devolvia Access-Control-Allow-Origin com
+  // OUTRO domínio (o allowed[0]) — o navegador então bloqueia a resposta por não
+  // bater com a página de origem, e isso chega no usuário como "Failed to send
+  // a request to the Edge Function", mesmo com a function funcionando
+  // perfeitamente no servidor (o pagamento às vezes chegava a ser criado no
+  // Asaas, só a resposta nunca voltava pra tela).
+  // Nenhuma dessas funções confia em cookie/sessão implícita — todas exigem um
+  // Bearer token válido (requireUser) ou o token de webhook próprio — então
+  // refletir a origem não abre brecha nenhuma: quem não tiver credencial válida
+  // continua barrado dentro da função: só a resposta deixa de ser descartada
+  // pelo navegador antes mesmo de chegar no código.
+  const origin = req.headers.get("origin");
   return {
-    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Origin": origin || "*",
     "Access-Control-Allow-Headers":
       "authorization, x-client-info, apikey, content-type, asaas-access-token",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
