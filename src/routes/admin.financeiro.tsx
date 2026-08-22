@@ -326,7 +326,7 @@ function FinanceiroAdminPage() {
         )}
 
         <Tabs defaultValue="withdrawals" className="space-y-5">
-          <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-2xl border border-neutral-200 bg-white p-1.5 shadow-sm">
+          <TabsList className="h-auto w-full flex-wrap justify-start gap-1 rounded-2xl border border-neutral-200 bg-white p-1.5 shadow-sm">
             <FinanceTab
               value="withdrawals"
               icon={Banknote}

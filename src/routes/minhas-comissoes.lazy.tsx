@@ -339,7 +339,7 @@ function CommissionsPage() {
         </section>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="h-auto min-h-12 w-full justify-start gap-1 overflow-x-auto overflow-y-hidden rounded-2xl border border-neutral-100 bg-white p-1.5 shadow-sm">
+          <TabsList className="h-auto min-h-12 w-full flex-wrap justify-start gap-1 rounded-2xl border border-neutral-100 bg-white p-1.5 shadow-sm">
             <TabsTrigger
               value="contracts"
               className="h-10 shrink-0 gap-2 px-4 data-[state=active]:bg-neutral-950 data-[state=active]:text-white"
