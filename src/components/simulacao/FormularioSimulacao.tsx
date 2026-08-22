@@ -54,12 +54,6 @@ export function FormularioSimulacao({ modo, onSubmit, dadosIniciais, disabled }:
   );
   const [erroCep, setErroCep] = useState<string | null>(null);
 
-  // Soma dos valores preenchidos - o total e' recalculado a cada digitacao e serve
-  // de demonstrativo tanto aqui quanto no resultado da simulacao.
-  const totalMensal = (aluguel || 0) + (condominio || 0) + (taxas || 0);
-  const formatarBRL = (valor: number) =>
-    valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
   const CEP_NAO_ENCONTRADO = "CEP não encontrado. Corrija o CEP para continuar.";
 
   const buscarCEP = async (valor: string) => {
@@ -348,43 +342,6 @@ export function FormularioSimulacao({ modo, onSubmit, dadosIniciais, disabled }:
                 />
               </div>
             </div>
-
-            {/* Demonstrativo do valor total — soma o que já foi preenchido */}
-            {totalMensal > 0 && (
-              <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4">
-                <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400 mb-2">
-                  Demonstrativo do valor total
-                </p>
-                <div className="space-y-1">
-                  {aluguel > 0 && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-neutral-600 font-medium">Aluguel</span>
-                      <span className="font-bold text-neutral-900 tabular-nums">{formatarBRL(aluguel)}</span>
-                    </div>
-                  )}
-                  {condominio > 0 && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-neutral-600 font-medium">Condomínio</span>
-                      <span className="font-bold text-neutral-900 tabular-nums">{formatarBRL(condominio)}</span>
-                    </div>
-                  )}
-                  {taxas > 0 && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-neutral-600 font-medium">Taxas</span>
-                      <span className="font-bold text-neutral-900 tabular-nums">{formatarBRL(taxas)}</span>
-                    </div>
-                  )}
-                </div>
-                <div className="mt-2 flex items-center justify-between border-t border-neutral-200 pt-2">
-                  <span className="text-[11px] font-black uppercase tracking-widest text-neutral-500">
-                    Valor total
-                  </span>
-                  <span className="text-lg font-black text-neutral-900 tabular-nums">
-                    {formatarBRL(totalMensal)}
-                  </span>
-                </div>
-              </div>
-            )}
           </section>
         </div>
 
