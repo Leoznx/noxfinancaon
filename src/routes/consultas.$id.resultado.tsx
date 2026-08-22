@@ -5,7 +5,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { ResultadoAutomacao } from "@/components/simulacao/ResultadoAutomacao";
 import type { ExtrasSelecionados, PlanoSelecionadoCalculo } from "@/components/simulacao/SeletorPlanos";
 import { supabase } from "@/integrations/supabase/client";
-import { isNomeValido, reenviarConsulta } from "@/lib/consultasCredito";
+import { isNomeValido, reenviarConsulta, registrarEventoProposta } from "@/lib/consultasCredito";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/consultas/$id/resultado")({
@@ -109,6 +109,15 @@ function ConsultaResultado() {
         .update(updatePayload)
         .eq("id", id);
       if (error) throw error;
+
+      // Passo a passo do funil — é o que o administrador lê em Consultas > Ver mais.
+      await registrarEventoProposta(
+        id,
+        "plano_selecionado",
+        `Plano ${(plano as any).nome} selecionado. Prêmio mensal de ${premioMensal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}.`,
+        { plano_id: planoId, valor_premio_mensal: premioMensal, valor_anual: anual },
+      );
+
       toast.success("Plano selecionado! Vamos completar os dados da proposta.");
       navigate({ to: `/consultas/${id}/dados-complementares` as any });
     } catch (e: any) {

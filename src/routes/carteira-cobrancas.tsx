@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { CobrancasAvulsasAbertas } from "@/components/CobrancasAvulsasAbertas";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useAuth } from "@/components/AuthProvider";
 import { supabase } from "@/integrations/supabase/client";
@@ -310,6 +311,8 @@ function CarteiraCobrancas() {
             Acompanhe as mensalidades da sua carteira de inquilinos e gere um boleto consolidado do mês.
           </p>
         </div>
+
+        <CobrancasAvulsasAbertas />
 
         {batchesPeriodo.map((batch) => {
           const open = batch.status === "active";

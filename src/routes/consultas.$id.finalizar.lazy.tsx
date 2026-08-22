@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { useAuth } from "@/components/AuthProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +36,7 @@ import {
   addBusinessDaysPreview,
   formatDateBr,
   generateInstallmentSchedulePreview,
+  getEdgeFunctionErrorDetails,
   getEdgeFunctionErrorMessage,
 } from "@/lib/asaas-payment";
 import {
@@ -69,6 +71,7 @@ import {
   salvarFormaPagamento,
   enviarProposta,
   listarHistoricoProposta,
+  registrarPagamentoDepois,
 } from "@/lib/finalizacao.functions";
 
 export const Route = createLazyFileRoute("/consultas/$id/finalizar")({
@@ -260,6 +263,17 @@ function calcularPercentualIncendio(
   return 3;
 }
 
+// Mesma classificação que a Edge Function aplica sobre `imovel_subtipo` para
+// escolher a alíquota do seguro incêndio. Precisa ser idêntica dos dois lados:
+// se a tela calcular como residencial e o backend como comercial, o valor não
+// bate e a cobrança é recusada com "O valor do pagamento mudou".
+const REGEX_SUBTIPO_COMERCIAL =
+  /comercial|consult|clinica|clínica|industria|indústria|servico|serviço|armazem|armazém/i;
+
+function classificarTipoSeguro(subtipo?: string | null): "residencial" | "comercial" {
+  return REGEX_SUBTIPO_COMERCIAL.test(String(subtipo ?? "")) ? "comercial" : "residencial";
+}
+
 function FinalizarPage() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
@@ -322,6 +336,25 @@ function FinalizarPage() {
           setComissaoPct(Number((data as any).insurance_commission_pct));
         if ((data as any).insurance_payment_method)
           setPagamento((data as any).insurance_payment_method);
+
+        // O tipo do imóvel é a base da alíquota do seguro incêndio no backend.
+        // Começar sempre em "residencial" fazia a tela mostrar um valor e o
+        // backend cobrar outro em todo imóvel comercial.
+        const subtipoSalvo = String((data as any).imovel_subtipo || (data as any).imoveis?.tipo || "");
+        if (subtipoSalvo) {
+          const tipoSalvo = classificarTipoSeguro(subtipoSalvo);
+          setTipoSeguroImovel(tipoSalvo);
+          if (tipoSalvo === "comercial") {
+            setComercialSubtipo(
+              COMERCIAL_OPCOES.find((opt) => opt.toLowerCase() === subtipoSalvo.toLowerCase()) ?? "",
+            );
+          } else {
+            setResidencialSubtipo(
+              RESIDENCIAL_OPCOES.find((opt) => opt.toLowerCase() === subtipoSalvo.toLowerCase()) ??
+                "Apartamento",
+            );
+          }
+        }
         if ((data as any).terms_accepted) setAceiteTermos(true);
         if (
           [
@@ -347,9 +380,14 @@ function FinalizarPage() {
   const inquilino = consulta?.inquilinos ?? {};
   const plano = consulta?.planos ?? {};
 
-  const aluguel = Number(imovel.valor_aluguel) || 0;
-  const condominio = Number(imovel.valor_condominio) || 0;
-  const taxas = Number(imovel.valor_taxas) || 0;
+  // Mesma cadeia de fallback usada pela Edge Function (calculateExpectedPayment):
+  // consultas sem linha em `imoveis` guardam o aluguel direto na consulta, e usar
+  // só `imoveis.valor_aluguel` fazia o valor exibido divergir do valor calculado
+  // no backend — o que derrubava a cobrança com "O valor do pagamento mudou".
+  const aluguel =
+    Number(imovel.valor_aluguel) || Number(consulta?.rent_value) || Number(consulta?.valor_aluguel) || 0;
+  const condominio = Number(imovel.valor_condominio) || Number(consulta?.valor_condominio) || 0;
+  const taxas = Number(imovel.valor_taxas) || Number(consulta?.valor_taxas) || 0;
   const totalLoc = aluguel + condominio + taxas;
   const premioMensal = Number(consulta?.valor_premio_mensal) || 0;
   const premioAnual = Number(consulta?.valor_anual) || premioMensal * 12;
@@ -468,6 +506,10 @@ function FinalizarPage() {
           insurance_coverages: coberturas,
           insurance_assistance: assistencia,
           insurance_commission_pct: comissaoPct,
+          imovel_subtipo:
+            tipoSeguroImovel === "comercial"
+              ? comercialSubtipo || "Comércio"
+              : residencialSubtipo || "Apartamento",
         },
       });
       const formaPagamentoLabel =
@@ -776,6 +818,12 @@ function FinalizarPage() {
 }
 
 function ResumoPropostaLoft(p: any) {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const fnPagarDepois = useServerFn(registrarPagamentoDepois);
+  // Onde a cobrança em aberto aparece para quem está usando o sistema.
+  const rotaFaturasAbertas =
+    user?.role === "inquilino" ? "/inquilino/faturas" : "/carteira-cobrancas";
   const {
     id,
     numeroProposta,
@@ -912,6 +960,133 @@ function ResumoPropostaLoft(p: any) {
     });
   }, [ehParceladoInquilino]);
 
+  /** Subtipo do imóvel escolhido na aba do seguro — vira `imovel_subtipo` na consulta. */
+  function subtipoSelecionado(): string {
+    if (tipoSeguroImovel === "comercial") return comercialSubtipo || "Comércio";
+    return residencialSubtipo || "Apartamento";
+  }
+
+  /**
+   * Salva configuração do seguro + forma de pagamento antes de criar a cobrança.
+   * O caminho normal são as server functions; se elas falharem (host sem as
+   * variáveis do Supabase, sessão sem header, indisponibilidade momentânea) o
+   * mesmo update é feito direto pelo cliente, porque a Edge Function precisa
+   * desses campos gravados para calcular o valor correto.
+   */
+  async function persistirAntesDoPagamento(params: { subtipo: string; metodoLabel: string }) {
+    try {
+      await fnSalvarConfig({
+        data: {
+          consultaId: id,
+          insurance_coverages: coberturas,
+          insurance_assistance: assistencia,
+          insurance_commission_pct: comissaoPct,
+          imovel_subtipo: params.subtipo,
+        },
+      });
+      await fnSalvarPagamento({
+        data: {
+          consultaId: id,
+          insurance_payment_method: pagamento as any,
+          insurance_payment_method_label: params.metodoLabel,
+          property_not_wood_confirmed: true,
+          terms_accepted: aceiteTermos,
+        },
+      });
+      return;
+    } catch (erroServerFn: any) {
+      console.error("Falha nas server functions da proposta, aplicando fallback:", erroServerFn);
+    }
+
+    const { error } = await supabase
+      .from("consultas_credito")
+      .update({
+        insurance_coverages: coberturas,
+        insurance_assistance: assistencia,
+        insurance_commission_pct: comissaoPct,
+        imovel_subtipo: params.subtipo,
+        insurance_payment_method: pagamento,
+        insurance_payment_method_label: params.metodoLabel,
+        property_not_wood_confirmed: true,
+        terms_accepted: true,
+        terms_accepted_at: new Date().toISOString(),
+        insurance_restriction_warning_acknowledged: true,
+      } as any)
+      .eq("id", id);
+    if (error) throw new Error("Não foi possível salvar a proposta: " + error.message);
+  }
+
+  /**
+   * Registra a proposta como enviada depois que a cobrança já existe no Asaas.
+   * Nunca pode derrubar o fluxo: o pagamento já foi criado, e travar aqui fazia
+   * a tela mostrar erro escondendo o Pix/boleto que o usuário precisa pagar.
+   */
+  async function registrarPropostaEnviada(): Promise<void> {
+    const agora = new Date().toISOString();
+    try {
+      const registro = await fnEnviar({ data: { consultaId: id } });
+      await onPropostaRegistrada(registro.enviadoEm);
+      return;
+    } catch (erroServerFn: any) {
+      console.error("Falha ao registrar proposta via server function:", erroServerFn);
+    }
+
+    try {
+      const { error } = await supabase
+        .from("consultas_credito")
+        .update({
+          status: "aguardando_ativacao",
+          substatus: "aguardando_pagamento",
+          proposta_enviada_em: agora,
+          activation_status: "aguardando_pagamento",
+        } as any)
+        .eq("id", id);
+      if (error) throw error;
+      await onPropostaRegistrada(agora);
+    } catch (erroFallback: any) {
+      console.error("Falha ao registrar proposta no fallback:", erroFallback);
+      toast.warning(
+        "A cobrança foi gerada, mas não foi possível atualizar a situação da proposta. Recarregue a página em instantes.",
+      );
+    }
+  }
+
+  /**
+   * "Pagar depois": o Pix/boleto já existe e continua válido. Registra a opção,
+   * deixa a fatura em aberto para o usuário e reforça que a assinatura só é
+   * liberada quando o pagamento for identificado.
+   */
+  async function handlePagarDepois(params: {
+    metodo: "pix" | "boleto";
+    valor: number;
+    vencimento: string | null;
+  }) {
+    try {
+      await fnPagarDepois({
+        data: {
+          consultaId: id,
+          metodo: params.metodo,
+          valor: params.valor,
+          vencimento: params.vencimento,
+        },
+      });
+    } catch (erro: any) {
+      console.error("Falha ao registrar pagamento adiado:", erro);
+      toast.error(
+        "Não foi possível registrar o pagamento para depois. A cobrança continua em aberto na sua aba de faturas.",
+      );
+      return;
+    }
+
+    toast.success(
+      "Cobrança deixada em aberto. A proposta será enviada para assinatura após o primeiro pagamento.",
+    );
+    setModalAsaasAberto(false);
+    setModalCronogramaAberto(false);
+    // Cada perfil tem a sua própria aba de faturas em aberto.
+    navigate({ to: rotaFaturasAbertas as any });
+  }
+
   async function handlePagarComAsaas() {
     if (pagandoRef.current) return;
 
@@ -939,22 +1114,16 @@ function ResumoPropostaLoft(p: any) {
         PAGAMENTOS.find((p) => p.id === pagamento)?.label ?? "Cartão de crédito";
       const incendioPagamentoLabel =
         incendioPagamento === "a_vista" ? "incêndio à vista" : "incêndio embutido na parcela";
-      await fnSalvarConfig({
-        data: {
-          consultaId: id,
-          insurance_coverages: coberturas,
-          insurance_assistance: assistencia,
-          insurance_commission_pct: comissaoPct,
-        },
-      });
-      await fnSalvarPagamento({
-        data: {
-          consultaId: id,
-          insurance_payment_method: pagamento as any,
-          insurance_payment_method_label: `${formaPagamentoLabel} - ${incendioPagamentoLabel}`,
-          property_not_wood_confirmed: true,
-          terms_accepted: aceiteTermos,
-        },
+      const subtipoEscolhido = subtipoSelecionado();
+      const metodoLabelCompleto = `${formaPagamentoLabel} - ${incendioPagamentoLabel}`;
+
+      // Grava o que a Edge Function vai reler antes de cobrar. Se a server
+      // function estiver indisponível, o mesmo update é feito direto pelo
+      // cliente (RLS já garante o acesso) — sem isso, uma falha de
+      // infraestrutura no /_serverFn impedia gerar Pix, boleto e cartão.
+      await persistirAntesDoPagamento({
+        subtipo: subtipoEscolhido,
+        metodoLabel: metodoLabelCompleto,
       });
 
       if (ehParceladoInquilino) {
@@ -973,8 +1142,7 @@ function ResumoPropostaLoft(p: any) {
         if ((planoData as any)?.error) throw new Error((planoData as any).error);
         if (!planoData?.installments?.length)
           throw new Error("O Asaas nao retornou o cronograma de boletos.");
-        const registro = await fnEnviar({ data: { consultaId: id } });
-        await onPropostaRegistrada(registro.enviadoEm);
+        await registrarPropostaEnviada();
         setCronogramaResultado(planoData);
         setModalCronogramaAberto(true);
         toast.success(`${planoData.installmentTotal} boletos gerados com sucesso.`);
@@ -1033,12 +1201,33 @@ function ResumoPropostaLoft(p: any) {
         };
       }
 
-      const { data, error } = await supabase.functions.invoke<NormalizedAsaasPayment>(
+      let { data, error } = await supabase.functions.invoke<NormalizedAsaasPayment>(
         "asaas-create-payment",
         {
           body,
         },
       );
+
+      // 409 = o valor calculado na tela divergiu do valor calculado no backend
+      // (a fonte de verdade). Em vez de deixar o usuário travado com "o valor
+      // mudou", refaz a cobrança com o valor que o backend espera e avisa qual
+      // é, para o resumo da tela ser corrigido no próximo carregamento.
+      if (error) {
+        const detalhes = await getEdgeFunctionErrorDetails(
+          error,
+          "Nao foi possivel gerar o pagamento agora. Tente novamente.",
+        );
+        const valorEsperado = Number(detalhes.payload?.expectedAmount);
+        if (detalhes.status === 409 && Number.isFinite(valorEsperado) && valorEsperado > 0) {
+          toast.info(`Valor atualizado para ${fmt(valorEsperado)} conforme o cadastro da proposta.`);
+          const retry = await supabase.functions.invoke<NormalizedAsaasPayment>(
+            "asaas-create-payment",
+            { body: { ...body, amount: Number(valorEsperado.toFixed(2)) } },
+          );
+          data = retry.data;
+          error = retry.error;
+        }
+      }
       setCartao(emptyCardForm);
 
       if (error) {
@@ -1052,8 +1241,7 @@ function ResumoPropostaLoft(p: any) {
       if ((data as any)?.error) throw new Error((data as any).error);
       if (!data?.success) throw new Error("O Asaas nao retornou os dados do pagamento.");
 
-      const registro = await fnEnviar({ data: { consultaId: id } });
-      await onPropostaRegistrada(registro.enviadoEm);
+      await registrarPropostaEnviada();
       setPagamentoAsaasResultado(data);
       setModalAsaasAberto(true);
       toast.success("Pagamento criado. O contrato será enviado pela D4Sign após a confirmação.");
@@ -1615,12 +1803,28 @@ function ResumoPropostaLoft(p: any) {
         resultado={pagamentoAsaasResultado}
         onAtualizarResultado={setPagamentoAsaasResultado}
         onFechar={() => setModalAsaasAberto(false)}
+        onPagarDepois={(resultado) =>
+          handlePagarDepois({
+            metodo: resultado.paymentMethod === "pix" ? "pix" : "boleto",
+            valor: resultado.amount,
+            vencimento: resultado.dueDate ? formatDateBr(resultado.dueDate) : null,
+          })
+        }
       />
 
       <ModalCronogramaBoletos
         open={modalCronogramaAberto}
         resultado={cronogramaResultado}
         onFechar={() => setModalCronogramaAberto(false)}
+        onPagarDepois={(resultado) =>
+          handlePagarDepois({
+            metodo: "boleto",
+            valor: resultado.installments[0]?.value ?? 0,
+            vencimento: resultado.installments[0]?.dueDate
+              ? formatDateBr(resultado.installments[0].dueDate)
+              : null,
+          })
+        }
       />
     </div>
   );

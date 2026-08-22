@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Check, Copy, FileText, CalendarClock } from "lucide-react";
+import { Check, Clock, Copy, FileText, CalendarClock } from "lucide-react";
 import { statusPagamentoLabel } from "@/lib/asaas-payment";
 import { MESES_PT, formatDateBr } from "@/lib/asaas-payment";
 import { toast } from "sonner";
@@ -38,12 +38,31 @@ interface ModalCronogramaBoletosProps {
   open: boolean;
   resultado: CronogramaResultado | null;
   onFechar: () => void;
+  /** "Pagar depois": deixa os boletos em aberto na aba de faturas do usuário. */
+  onPagarDepois?: (resultado: CronogramaResultado) => Promise<void> | void;
 }
 
-export function ModalCronogramaBoletos({ open, resultado, onFechar }: ModalCronogramaBoletosProps) {
+export function ModalCronogramaBoletos({
+  open,
+  resultado,
+  onFechar,
+  onPagarDepois,
+}: ModalCronogramaBoletosProps) {
+  const [adiando, setAdiando] = useState(false);
+
   if (!resultado) return null;
 
   const valorFmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+  async function pagarDepois() {
+    if (!onPagarDepois || !resultado) return;
+    setAdiando(true);
+    try {
+      await onPagarDepois(resultado);
+    } finally {
+      setAdiando(false);
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onFechar()}>
@@ -76,7 +95,31 @@ export function ModalCronogramaBoletos({ open, resultado, onFechar }: ModalCrono
           ))}
         </div>
 
+        {onPagarDepois && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+            <p className="flex items-center gap-1.5 font-bold">
+              <Clock className="h-3.5 w-3.5" /> Prefere pagar depois?
+            </p>
+            <p className="mt-1 leading-relaxed">
+              Os boletos ficam em aberto na aba de faturas e podem ser pagos a qualquer momento.
+              A proposta só é enviada para assinatura após a confirmação do primeiro pagamento.
+            </p>
+          </div>
+        )}
+
         <DialogFooter className="gap-2 sm:gap-2">
+          {onPagarDepois && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void pagarDepois()}
+              disabled={adiando}
+              className="w-full border-amber-300 text-amber-800 hover:bg-amber-50"
+            >
+              <Clock className="mr-2 h-4 w-4" />
+              {adiando ? "Registrando..." : "Pagar depois"}
+            </Button>
+          )}
           <Button type="button" variant="outline" onClick={onFechar} className="w-full">
             Fechar
           </Button>

@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { SeletorPlanos } from "@/components/simulacao/SeletorPlanos";
 import { useAuth } from "@/components/AuthProvider";
 import { DadosSimulacao } from "@/components/simulacao/FormularioSimulacao";
+import { registrarEventoProposta } from "@/lib/consultasCredito";
 
 export const Route = createFileRoute("/simular/resultado")({
   component: SimularResultadoWrapper,
@@ -78,6 +79,14 @@ function SimularResultado() {
         .update(updatePayload)
         .eq("id", consultaId);
       if (error) throw error;
+
+      // Passo a passo do funil — é o que o administrador lê em Consultas > Ver mais.
+      await registrarEventoProposta(
+        consultaId,
+        "plano_selecionado",
+        "Plano selecionado na simulação pública.",
+        { plano_id: planoId },
+      );
 
       localStorage.removeItem("nox_simulacao_pendente");
       toast.success("Plano selecionado! Vamos completar os dados da proposta.");

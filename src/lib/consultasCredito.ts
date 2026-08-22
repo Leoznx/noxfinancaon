@@ -296,6 +296,32 @@ export function watchConsultaCredito(
 }
 
 /** Status normalizado de uma consulta, do jeito que o painel mostra pro usuário. */
+/**
+ * Registra um passo do funil da proposta em `proposta_historico`. É essa trilha
+ * que o administrador lê na aba Consultas ("Ver mais") para acompanhar a
+ * performance do usuário depois da aprovação — por isso nunca pode derrubar o
+ * fluxo principal: falha aqui é só log.
+ */
+export async function registrarEventoProposta(
+  consultaId: string,
+  tipoEvento: string,
+  descricao: string,
+  metadata?: Record<string, unknown>,
+): Promise<void> {
+  try {
+    const { data: sessao } = await supabase.auth.getUser();
+    await supabase.from("proposta_historico").insert({
+      consulta_id: consultaId,
+      tipo_evento: tipoEvento,
+      descricao,
+      metadata: metadata ?? {},
+      created_by: sessao?.user?.id ?? null,
+    } as any);
+  } catch (erro) {
+    console.error("Não foi possível registrar o histórico da proposta:", erro);
+  }
+}
+
 export type StatusExibicaoConsulta =
   | "aprovado"
   | "recusado"

@@ -53,6 +53,7 @@ const SELECT_CONSULTA = `
   tenant_name, tenant_document, documento, property_address, rent_value, valor_aluguel,
   cep, imovel_cep, imovel_cidade, imovel_estado,
   role_solicitante, profile_id_solicitante, payment_status,
+  plano_id, valor_premio_mensal, valor_anual,
   solicitante:profiles!profile_id_solicitante (id, nome, email, telefone, role),
   inquilinos (nome, razao_social, cpf, cnpj),
   imoveis (cidade, estado, cep, valor_aluguel),
