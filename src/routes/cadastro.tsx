@@ -137,6 +137,10 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
   // 'aprovacao': e-mail + aprovação da equipe (imobiliária/corretor/proprietário).
   const [successType, setSuccessType] = useState<"confirmacao" | "aprovacao" | null>(null);
   const [successEmail, setSuccessEmail] = useState("");
+  // Corretor sem CRECI (recém-formado/em treinamento) ainda pode se cadastrar —
+  // o campo de CRECI vira "Treinamento" em vez de exigir um número que ele
+  // ainda não tem.
+  const [possuiCreci, setPossuiCreci] = useState<"sim" | "nao">("sim");
   const navigate = useNavigate();
   const returnTo = search.returnTo || '/dashboard';
   const checkInquilinoFn = useServerFn(checkInquilinoExists);
@@ -646,14 +650,41 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
                               />
                               {errors.cpf && <p className="text-[10px] text-red-500 -mt-3">{errors.cpf.message}</p>}
                               
-                              <Input 
-                                label="CRECI" 
-                                {...formCorretor.register("creci")} 
-                                placeholder="Ex: 123.456-F-RS" 
-                              />
-                              {errors.creci && <p className="text-[10px] text-red-500 -mt-3">{errors.creci.message}</p>}
+                              <div className="space-y-1">
+                                <Label className="text-xs font-medium text-neutral-700">CRECI</Label>
+                                <Select
+                                  onValueChange={(val: "sim" | "nao") => {
+                                    setPossuiCreci(val);
+                                    formCorretor.setValue(
+                                      "creci",
+                                      val === "nao" ? "Treinamento" : "",
+                                      { shouldValidate: true },
+                                    );
+                                  }}
+                                  defaultValue="sim"
+                                >
+                                  <SelectTrigger className="h-9">
+                                    <SelectValue placeholder="Selecione" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="sim">Tenho CRECI</SelectItem>
+                                    <SelectItem value="nao">Não tenho CRECI</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
 
-                              <Input 
+                              {possuiCreci === "sim" && (
+                                <>
+                                  <Input
+                                    label="Número do CRECI"
+                                    {...formCorretor.register("creci")}
+                                    placeholder="Ex: 123.456-F-RS"
+                                  />
+                                  {errors.creci && <p className="text-[10px] text-red-500 -mt-3">{errors.creci.message}</p>}
+                                </>
+                              )}
+
+                              <Input
                                 label="Telefone / WhatsApp" 
                                 {...formCorretor.register("telefone")} 
                                 placeholder="(00) 00000-0000"
