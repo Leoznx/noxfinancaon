@@ -18,7 +18,6 @@ import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { checkInquilinoExists } from "@/lib/inquilino-signup.functions";
 import {
-  listarImobiliariasCadastro,
   signUpInquilino,
   signUpProfissional,
   resendVerificationEmail,
@@ -99,16 +98,16 @@ const corretorSchema = z.object({
   cidade: z.string().min(2, "Cidade é obrigatória"),
   estado: z.string().length(2, "Selecione o estado"),
   vinculadoImobiliaria: z.enum(["sim", "nao"]),
-  imobiliariaId: z.string().optional(),
+  imobiliariaIdentificador: z.string().optional(),
   senha: z.string().min(8, "Mínimo 8 caracteres").regex(/[a-zA-Z]/, "Deve conter ao menos uma letra").regex(/[0-9]/, "Deve conter ao menos um número"),
   confirmarSenha: z.string(),
   termos: z.boolean().refine((val) => val === true, "Você deve aceitar os termos"),
 }).refine((data) => data.senha === data.confirmarSenha, {
   message: "As senhas não conferem",
   path: ["confirmarSenha"],
-}).refine((data) => data.vinculadoImobiliaria === "nao" || !!data.imobiliariaId, {
-  message: "Selecione a imobiliária à qual você está vinculado",
-  path: ["imobiliariaId"],
+}).refine((data) => data.vinculadoImobiliaria === "nao" || !!data.imobiliariaIdentificador?.trim(), {
+  message: "Informe o CNPJ ou o e-mail da imobiliária à qual você está vinculado",
+  path: ["imobiliariaIdentificador"],
 });
 
 const proprietarioSchema = z.object({
@@ -138,14 +137,11 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
   // 'aprovacao': e-mail + aprovação da equipe (imobiliária/corretor/proprietário).
   const [successType, setSuccessType] = useState<"confirmacao" | "aprovacao" | null>(null);
   const [successEmail, setSuccessEmail] = useState("");
-  const [imobiliarias, setImobiliarias] = useState<Array<{ id: string; razaoSocial: string }>>([]);
-  const [imobiliariasLoading, setImobiliariasLoading] = useState(true);
   const navigate = useNavigate();
   const returnTo = search.returnTo || '/dashboard';
   const checkInquilinoFn = useServerFn(checkInquilinoExists);
   const signUpInquilinoFn = useServerFn(signUpInquilino);
   const signUpProfissionalFn = useServerFn(signUpProfissional);
-  const listarImobiliariasFn = useServerFn(listarImobiliariasCadastro);
   const resendFn = useServerFn(resendVerificationEmail);
   const [resendCooldown, setResendCooldown] = useState(0);
 
@@ -185,20 +181,6 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
     }
   }, [routedPerfil]);
 
-  useEffect(() => {
-    const fetchImob = async () => {
-      try {
-        const result = await listarImobiliariasFn();
-        setImobiliarias(result.imobiliarias);
-      } catch {
-        setImobiliarias([]);
-      } finally {
-        setImobiliariasLoading(false);
-      }
-    };
-    void fetchImob();
-  }, [listarImobiliariasFn]);
-
   const handleTypeSelect = (type: CadastroPerfil) => {
     navigate({
       to: CADASTRO_ROUTES[type] as any,
@@ -236,7 +218,7 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
       cidade: "",
       estado: "",
       vinculadoImobiliaria: "nao" as const,
-      imobiliariaId: "",
+      imobiliariaIdentificador: "",
       senha: "",
       confirmarSenha: "",
       termos: false,
@@ -342,7 +324,7 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
           cpf: data.cpf,
           creci: accountType === 'corretor' ? data.creci : undefined,
           vinculadoImobiliaria: data.vinculadoImobiliaria === 'sim',
-          imobiliariaId: data.imobiliariaId,
+          imobiliariaIdentificador: data.imobiliariaIdentificador,
           cpfCnpj: data.cpfCnpj,
           cidade: data.cidade,
           estado: data.estado,
@@ -774,11 +756,11 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
                             <>
                               <div className="space-y-1">
                                 <Label className="text-xs font-medium text-neutral-700">Vinculado a uma imobiliária?</Label>
-                                <Select 
+                                <Select
                                   onValueChange={(val: "sim" | "nao") => {
                                     formCorretor.setValue("vinculadoImobiliaria", val, { shouldValidate: true });
                                     if (val === "nao") {
-                                      formCorretor.setValue("imobiliariaId", "", { shouldValidate: true });
+                                      formCorretor.setValue("imobiliariaIdentificador", "", { shouldValidate: true });
                                     }
                                   }}
                                   defaultValue="nao"
@@ -795,24 +777,15 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
 
                               {formCorretor.watch("vinculadoImobiliaria") === "sim" && (
                                 <div className="space-y-1">
-                                  <Label className="text-xs font-medium text-neutral-700">Selecione sua Imobiliária</Label>
-                                  <Select onValueChange={(val) => formCorretor.setValue("imobiliariaId", val, { shouldValidate: true })}>
-                                    <SelectTrigger className="h-9">
-                                      <SelectValue placeholder="Buscar imobiliária..." />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {imobiliariasLoading && (
-                                        <div className="px-2 py-3 text-xs text-neutral-500">Carregando imobiliárias...</div>
-                                      )}
-                                      {!imobiliariasLoading && imobiliarias.length === 0 && (
-                                        <div className="px-2 py-3 text-xs text-neutral-500">Nenhuma imobiliária cadastrada.</div>
-                                      )}
-                                      {imobiliarias.map((imob) => (
-                                        <SelectItem key={imob.id} value={imob.id}>{imob.razaoSocial}</SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                  {errors.imobiliariaId && <p className="text-[10px] text-red-500">{errors.imobiliariaId.message}</p>}
+                                  <Label className="text-xs font-medium text-neutral-700">CNPJ ou e-mail da Imobiliária</Label>
+                                  <Input
+                                    {...formCorretor.register("imobiliariaIdentificador")}
+                                    placeholder="00.000.000/0000-00 ou contato@imobiliaria.com"
+                                    autoComplete="off"
+                                    className="h-9"
+                                  />
+                                  <p className="text-[10px] text-neutral-500">Informe o CNPJ ou o e-mail já cadastrado da imobiliária para vincular sua conta a ela.</p>
+                                  {errors.imobiliariaIdentificador && <p className="text-[10px] text-red-500">{errors.imobiliariaIdentificador.message}</p>}
                                 </div>
                               )}
 
