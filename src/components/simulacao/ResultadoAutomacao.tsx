@@ -146,27 +146,71 @@ export function ResultadoAutomacao({
                 </div>
               </div>
 
-              {consulta.valor_aluguel != null && (
-                <strong className="text-xl sm:text-2xl font-bold text-green-900 mt-3">
-                  {formatarMoeda(consulta.valor_aluguel)}
-                </strong>
-              )}
-
-              <div className="h-px bg-green-300/70 my-3 w-full" />
-
-              <div className="text-green-900 text-sm leading-relaxed">
-                {isNomeValido(consulta.tenant_name) && (
-                  <p>
-                    Cliente: <strong className="font-bold">{consulta.tenant_name}</strong>
-                  </p>
-                )}
-                {consulta.documento && (
-                  <p>
-                    {consulta.tipo_pessoa === "PJ" ? "CNPJ" : "CPF"}:{" "}
-                    <strong className="font-bold">{formatDocumento(consulta.documento)}</strong>
-                  </p>
-                )}
-              </div>
+              {/* Demonstrativo: nome, documento e a soma de aluguel + condomínio + taxas —
+                  aparece só aqui, dentro do card verde de aprovado, e some do resto da tela. */}
+              {(() => {
+                const aluguelDemo = Number(consulta.valor_aluguel) || 0;
+                const condominioDemo = Number(consulta.valor_condominio) || 0;
+                const taxasDemo = Number(consulta.valor_taxas) || 0;
+                const totalDemo = aluguelDemo + condominioDemo + taxasDemo;
+                return (
+                  <div className="mt-3 w-full rounded-xl border border-green-300 bg-white/70 p-4 text-left">
+                    <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-green-700">
+                      Demonstrativo dos valores
+                    </p>
+                    <div className="space-y-1 text-sm">
+                      {isNomeValido(consulta.tenant_name) && (
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="font-medium text-green-800">Cliente</span>
+                          <span className="font-bold text-green-950">{consulta.tenant_name}</span>
+                        </div>
+                      )}
+                      {consulta.documento && (
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="font-medium text-green-800">
+                            {consulta.tipo_pessoa === "PJ" ? "CNPJ" : "CPF"}
+                          </span>
+                          <span className="font-bold text-green-950">
+                            {formatDocumento(consulta.documento)}
+                          </span>
+                        </div>
+                      )}
+                      {aluguelDemo > 0 && (
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="font-medium text-green-800">Aluguel</span>
+                          <span className="font-bold tabular-nums text-green-950">
+                            {formatarMoeda(aluguelDemo)}
+                          </span>
+                        </div>
+                      )}
+                      {condominioDemo > 0 && (
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="font-medium text-green-800">Condomínio</span>
+                          <span className="font-bold tabular-nums text-green-950">
+                            {formatarMoeda(condominioDemo)}
+                          </span>
+                        </div>
+                      )}
+                      {taxasDemo > 0 && (
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="font-medium text-green-800">Taxas</span>
+                          <span className="font-bold tabular-nums text-green-950">
+                            {formatarMoeda(taxasDemo)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="mt-2 flex items-center justify-between border-t border-green-300 pt-2">
+                      <span className="text-[11px] font-black uppercase tracking-widest text-green-700">
+                        Valor total
+                      </span>
+                      <span className="text-lg font-black tabular-nums text-green-950">
+                        {formatarMoeda(totalDemo)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="flex flex-1 items-end justify-center sm:justify-end overflow-hidden order-first sm:order-last sm:pr-6">

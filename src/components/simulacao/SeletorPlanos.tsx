@@ -312,12 +312,6 @@ export function SeletorPlanos({
     [planosCalculados, planoEscolhidoId]
   );
 
-  // Soma demonstrativa de aluguel + condomínio + taxas exibida acima dos planos.
-  const totalSimulado = useMemo(
-    () => (Number(valores.aluguel) || 0) + (Number(valores.condominio) || 0) + (Number(valores.taxas) || 0),
-    [valores],
-  );
-
   // Pintura interna: 4,8% do valor locatício aprovado (aluguel), em 3x.
   const pinturaTotal = useMemo(() => {
     const base = Number(valores.aluguel) || 0;
@@ -380,53 +374,6 @@ export function SeletorPlanos({
           )}
           <div>
             <h1 className="text-3xl font-black text-neutral-900 tracking-tight">Escolha o Plano Ideal</h1>
-            {/* Demonstrativo: mostra só os valores que foram preenchidos na simulação
-                (aluguel + condomínio + taxas) e o total que serve de base dos planos. */}
-            <div className="mt-4 max-w-md rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
-              <div className="flex items-center justify-between gap-3 mb-2">
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400">
-                  Demonstrativo dos valores
-                </p>
-                <button
-                  type="button"
-                  onClick={abrirEdicao}
-                  title="Alterar valores da simulação"
-                  aria-label="Alterar valores da simulação"
-                  className="group inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-neutral-200 bg-white text-neutral-500 hover:text-neutral-900 hover:border-neutral-900 hover:shadow-sm transition-all"
-                >
-                  <Pencil size={12} />
-                  <span className="text-[10px] font-bold uppercase tracking-widest">Editar</span>
-                </button>
-              </div>
-              <div className="space-y-1">
-                {Number(valores.aluguel) > 0 && (
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="font-medium text-neutral-600">Valor do aluguel</span>
-                    <span className="font-bold tabular-nums text-neutral-900">{formatarBRL(Number(valores.aluguel))}</span>
-                  </div>
-                )}
-                {Number(valores.condominio) > 0 && (
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="font-medium text-neutral-600">Condomínio</span>
-                    <span className="font-bold tabular-nums text-neutral-900">{formatarBRL(Number(valores.condominio))}</span>
-                  </div>
-                )}
-                {Number(valores.taxas) > 0 && (
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="font-medium text-neutral-600">Taxas</span>
-                    <span className="font-bold tabular-nums text-neutral-900">{formatarBRL(Number(valores.taxas))}</span>
-                  </div>
-                )}
-              </div>
-              <div className="mt-2 flex items-center justify-between border-t border-neutral-200 pt-2">
-                <span className="text-[11px] font-black uppercase tracking-widest text-neutral-500">
-                  Valor total
-                </span>
-                <span className="text-lg font-black tabular-nums text-neutral-900">
-                  {formatarBRL(totalSimulado)}
-                </span>
-              </div>
-            </div>
             <p className="hidden">
               Planos calculados para o valor total de{' '}
               <span className="text-neutral-900 font-bold">
