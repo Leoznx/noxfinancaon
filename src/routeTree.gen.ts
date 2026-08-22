@@ -49,6 +49,7 @@ import { Route as CadastroProprietarioRouteImport } from './routes/cadastro-prop
 import { Route as CadastroInquilinoRouteImport } from './routes/cadastro-inquilino'
 import { Route as CadastroImobiliariaRouteImport } from './routes/cadastro-imobiliaria'
 import { Route as CadastroCorretorRouteImport } from './routes/cadastro-corretor'
+import { Route as CadastroConcluidoRouteImport } from './routes/cadastro-concluido'
 import { Route as CadastroRouteImport } from './routes/cadastro'
 import { Route as ApolicesRouteImport } from './routes/apolices'
 import { Route as AplicativoRouteImport } from './routes/aplicativo'
@@ -318,6 +319,11 @@ const CadastroImobiliariaRoute = CadastroImobiliariaRouteImport.update({
 const CadastroCorretorRoute = CadastroCorretorRouteImport.update({
   id: '/cadastro-corretor',
   path: '/cadastro-corretor',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CadastroConcluidoRoute = CadastroConcluidoRouteImport.update({
+  id: '/cadastro-concluido',
+  path: '/cadastro-concluido',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CadastroRoute = CadastroRouteImport.update({
@@ -670,6 +676,7 @@ export interface FileRoutesByFullPath {
   '/aplicativo': typeof AplicativoRoute
   '/apolices': typeof ApolicesRouteWithChildren
   '/cadastro': typeof CadastroRoute
+  '/cadastro-concluido': typeof CadastroConcluidoRoute
   '/cadastro-corretor': typeof CadastroCorretorRoute
   '/cadastro-imobiliaria': typeof CadastroImobiliariaRoute
   '/cadastro-inquilino': typeof CadastroInquilinoRoute
@@ -776,6 +783,7 @@ export interface FileRoutesByTo {
   '/acesso-inquilino': typeof AcessoInquilinoRoute
   '/aplicativo': typeof AplicativoRoute
   '/cadastro': typeof CadastroRoute
+  '/cadastro-concluido': typeof CadastroConcluidoRoute
   '/cadastro-corretor': typeof CadastroCorretorRoute
   '/cadastro-imobiliaria': typeof CadastroImobiliariaRoute
   '/cadastro-inquilino': typeof CadastroInquilinoRoute
@@ -881,6 +889,7 @@ export interface FileRoutesById {
   '/aplicativo': typeof AplicativoRoute
   '/apolices': typeof ApolicesRouteWithChildren
   '/cadastro': typeof CadastroRoute
+  '/cadastro-concluido': typeof CadastroConcluidoRoute
   '/cadastro-corretor': typeof CadastroCorretorRoute
   '/cadastro-imobiliaria': typeof CadastroImobiliariaRoute
   '/cadastro-inquilino': typeof CadastroInquilinoRoute
@@ -990,6 +999,7 @@ export interface FileRouteTypes {
     | '/aplicativo'
     | '/apolices'
     | '/cadastro'
+    | '/cadastro-concluido'
     | '/cadastro-corretor'
     | '/cadastro-imobiliaria'
     | '/cadastro-inquilino'
@@ -1096,6 +1106,7 @@ export interface FileRouteTypes {
     | '/acesso-inquilino'
     | '/aplicativo'
     | '/cadastro'
+    | '/cadastro-concluido'
     | '/cadastro-corretor'
     | '/cadastro-imobiliaria'
     | '/cadastro-inquilino'
@@ -1200,6 +1211,7 @@ export interface FileRouteTypes {
     | '/aplicativo'
     | '/apolices'
     | '/cadastro'
+    | '/cadastro-concluido'
     | '/cadastro-corretor'
     | '/cadastro-imobiliaria'
     | '/cadastro-inquilino'
@@ -1308,6 +1320,7 @@ export interface RootRouteChildren {
   AplicativoRoute: typeof AplicativoRoute
   ApolicesRoute: typeof ApolicesRouteWithChildren
   CadastroRoute: typeof CadastroRoute
+  CadastroConcluidoRoute: typeof CadastroConcluidoRoute
   CadastroCorretorRoute: typeof CadastroCorretorRoute
   CadastroImobiliariaRoute: typeof CadastroImobiliariaRoute
   CadastroInquilinoRoute: typeof CadastroInquilinoRoute
@@ -1669,6 +1682,13 @@ declare module '@tanstack/react-router' {
       path: '/cadastro-corretor'
       fullPath: '/cadastro-corretor'
       preLoaderRoute: typeof CadastroCorretorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cadastro-concluido': {
+      id: '/cadastro-concluido'
+      path: '/cadastro-concluido'
+      fullPath: '/cadastro-concluido'
+      preLoaderRoute: typeof CadastroConcluidoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/cadastro': {
@@ -2226,6 +2246,7 @@ const rootRouteChildren: RootRouteChildren = {
   AplicativoRoute: AplicativoRoute,
   ApolicesRoute: ApolicesRouteWithChildren,
   CadastroRoute: CadastroRoute,
+  CadastroConcluidoRoute: CadastroConcluidoRoute,
   CadastroCorretorRoute: CadastroCorretorRoute,
   CadastroImobiliariaRoute: CadastroImobiliariaRoute,
   CadastroInquilinoRoute: CadastroInquilinoRoute,

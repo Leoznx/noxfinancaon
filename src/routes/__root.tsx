@@ -4,42 +4,96 @@ import {
   Outlet,
   Link,
   createRootRouteWithContext,
+  useNavigate,
   useRouter,
   useRouterState,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { AuthProvider } from "@/components/AuthProvider";
+import { AuthProvider, useAuth } from "@/components/AuthProvider";
 import { Toaster } from "@/components/ui/sonner";
 import { hasAuthEmailCallback, parseAuthEmailCallback } from "@/lib/auth-email-links";
+import { GOOGLE_ADS_TAG_ID, META_PIXEL_ID, trackPageView } from "@/lib/tracking";
+import { ROTA_CADASTRO_CONCLUIDO, precisaMostrarCadastroConcluido } from "@/lib/primeiroAcesso";
 
 import appCss from "../styles.css?url";
 
-const GOOGLE_ADS_TAG_ID = "AW-18391707457";
-
-declare global {
-  interface Window {
-    gtag?: (...args: unknown[]) => void;
-  }
-}
-
-function GoogleAdsPageViewTracker() {
+/**
+ * PageView em cada troca de rota. Como o site é uma SPA, o Google Ads e o Pixel
+ * da Meta só contariam o primeiro carregamento se dependessem apenas do
+ * código-base — o resto da navegação passa por aqui.
+ */
+function PageViewTracker() {
   const locationHref = useRouterState({ select: (state) => state.location.href });
   const isInitialPageView = React.useRef(true);
 
   React.useEffect(() => {
-    // The config command in the global tag records the initial page load.
+    // O `config` do gtag e o `fbq('track','PageView')` do código-base já contam
+    // o carregamento inicial — repetir aqui duplicaria a primeira visualização.
     if (isInitialPageView.current) {
       isInitialPageView.current = false;
       return;
     }
 
-    window.gtag?.("event", "page_view", {
-      page_location: window.location.href,
-      page_title: document.title,
-      send_to: GOOGLE_ADS_TAG_ID,
-    });
+    trackPageView();
   }, [locationHref]);
+
+  return null;
+}
+
+/**
+ * Rede de segurança do primeiro acesso.
+ *
+ * O login por senha já manda a conta nova para `/cadastro-concluido`. Os outros
+ * caminhos de entrada (link mágico do inquilino, modal de identificação) não
+ * passam por lá, então este observador cobre todos eles: viu sessão nova cujo
+ * perfil ainda não tem a conversão registrada, leva para a URL de conversão uma
+ * única vez.
+ */
+// Telas que já cuidam do próprio redirecionamento (o login manda a conta nova
+// direto para a URL de conversão, com o destino certo) ou onde a sessão ainda
+// está sendo montada. Entrar aqui só atrapalharia.
+const ROTAS_SEM_REDIRECIONAMENTO_DE_PRIMEIRO_ACESSO = [
+  ROTA_CADASTRO_CONCLUIDO,
+  "/login",
+  "/email-verificado",
+  "/acesso-inquilino",
+  "/completar-acesso-inquilino",
+  "/redefinir-senha",
+];
+
+function PrimeiroAcessoRedirect() {
+  const navigate = useNavigate();
+  const { user, isLoading } = useAuth();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const verificadoParaRef = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    if (isLoading || !user) return;
+    if (
+      ROTAS_SEM_REDIRECIONAMENTO_DE_PRIMEIRO_ACESSO.some(
+        (rota) => pathname === rota || pathname.startsWith(`${rota}/`),
+      )
+    )
+      return;
+    if (verificadoParaRef.current === user.id) return;
+    verificadoParaRef.current = user.id;
+
+    let ativo = true;
+    (async () => {
+      const precisa = await precisaMostrarCadastroConcluido(user.id);
+      if (!ativo || !precisa) return;
+      navigate({
+        to: ROTA_CADASTRO_CONCLUIDO,
+        search: { destino: window.location.pathname + window.location.search },
+        replace: true,
+      });
+    })();
+
+    return () => {
+      ativo = false;
+    };
+  }, [isLoading, navigate, pathname, user]);
 
   return null;
 }
@@ -150,6 +204,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "icon", type: "image/png", sizes: "32x32", href: "/favicon-32.png" },
       { rel: "icon", type: "image/png", sizes: "512x512", href: "/favicon-512.png" },
       { rel: "apple-touch-icon", sizes: "180x180", href: "/apple-touch-icon.png" },
+      { rel: "preconnect", href: "https://connect.facebook.net", crossOrigin: "anonymous" },
       { rel: "preconnect", href: "https://images.unsplash.com", crossOrigin: "anonymous" },
       { rel: "dns-prefetch", href: "https://images.unsplash.com" },
       {
@@ -169,6 +224,23 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
           function gtag(){dataLayer.push(arguments);}
           gtag('js', new Date());
           gtag('config', '${GOOGLE_ADS_TAG_ID}');
+        `,
+      },
+      // Meta Pixel Code — código-base oficial. Registra o PageView do
+      // carregamento inicial; as trocas de rota da SPA passam pelo
+      // PageViewTracker acima.
+      {
+        children: `
+          !function(f,b,e,v,n,t,s)
+          {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+          n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+          if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+          n.queue=[];t=b.createElement(e);t.async=!0;
+          t.src=v;s=b.getElementsByTagName(e)[0];
+          s.parentNode.insertBefore(t,s)}(window, document,'script',
+          'https://connect.facebook.net/en_US/fbevents.js');
+          fbq('init', '${META_PIXEL_ID}');
+          fbq('track', 'PageView');
         `,
       },
       {
@@ -208,6 +280,16 @@ function RootShell({ children }: { children: React.ReactNode }) {
         <HeadContent />
       </head>
       <body>
+        {/* Meta Pixel — fallback para navegadores com JavaScript desativado. */}
+        <noscript>
+          <img
+            height="1"
+            width="1"
+            style={{ display: "none" }}
+            alt=""
+            src={`https://www.facebook.com/tr?id=${META_PIXEL_ID}&ev=PageView&noscript=1`}
+          />
+        </noscript>
         {children}
         <Scripts />
       </body>
@@ -246,7 +328,8 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <GoogleAdsPageViewTracker />
+        <PageViewTracker />
+        <PrimeiroAcessoRedirect />
         <Outlet />
         <Toaster richColors position="top-right" />
       </AuthProvider>

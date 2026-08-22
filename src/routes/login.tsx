@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { LogoNox } from "@/components/LogoNox";
 import { z } from "zod";
 import { redirectPathForRole } from "@/lib/authRedirect";
+import { ROTA_CADASTRO_CONCLUIDO, jaMarcadoLocalmente } from "@/lib/primeiroAcesso";
 import { setCachedHeaderProfile } from "@/lib/profile-cache";
 import { getRememberMe, setRememberMe } from "@/lib/authStorage";
 import { useServerFn } from "@tanstack/react-start";
@@ -79,7 +80,7 @@ function LoginComponent() {
         }
         const { data: profileData } = await supabase
           .from("profiles")
-          .select("status, role, nome, avatar_url")
+          .select("status, role, nome, avatar_url, cadastro_concluido_em")
           .eq("id", session.user.id)
           .maybeSingle();
         if (!ativo) return;
@@ -116,7 +117,7 @@ function LoginComponent() {
     login(user.email, profile.role, user.id);
 
     if (returnTo === "/simular/resultado") {
-      navigate({ to: "/simular/resultado" });
+      irPara("/simular/resultado", user.id, profile);
       return;
     }
 
@@ -140,11 +141,33 @@ function LoginComponent() {
     }
     if (internalRole) effectiveRole = internalRole;
 
-    navigate({
-      to: (returnTo && returnTo !== "/login"
-        ? returnTo
-        : redirectPathForRole(effectiveRole)) as any,
-    });
+    irPara(
+      returnTo && returnTo !== "/login" ? returnTo : redirectPathForRole(effectiveRole),
+      user.id,
+      profile,
+    );
+  };
+
+  /**
+   * Conta nova entra pela URL de conversão (`/cadastro-concluido`) antes do
+   * destino final — é lá que o Pixel da Meta e o Google Ads registram o
+   * cadastro. Quem já passou por ela (ou já era cliente) vai direto ao destino:
+   * `cadastro_concluido_em` só é nulo no primeiro acesso.
+   */
+  const irPara = (destino: string, userId: string, profile: any) => {
+    const primeiroAcesso =
+      profile?.cadastro_concluido_em == null && !jaMarcadoLocalmente(userId);
+
+    if (primeiroAcesso) {
+      navigate({
+        to: ROTA_CADASTRO_CONCLUIDO,
+        search: { destino },
+        replace: true,
+      });
+      return;
+    }
+
+    navigate({ to: destino as any });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -165,7 +188,7 @@ function LoginComponent() {
 
       const { data: profileData, error: profileError } = await supabase
         .from("profiles")
-        .select("status, role, nome, avatar_url")
+        .select("status, role, nome, avatar_url, cadastro_concluido_em")
         .eq("id", authData.user.id)
         .single();
 

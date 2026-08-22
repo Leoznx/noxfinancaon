@@ -2036,6 +2036,7 @@ export type Database = {
           aprovado_em: string | null
           aprovado_por: string | null
           avatar_url: string | null
+          cadastro_concluido_em: string | null
           cnpj: string | null
           contratos_ativos_count: number | null
           created_at: string
@@ -2058,6 +2059,7 @@ export type Database = {
           aprovado_em?: string | null
           aprovado_por?: string | null
           avatar_url?: string | null
+          cadastro_concluido_em?: string | null
           cnpj?: string | null
           contratos_ativos_count?: number | null
           created_at?: string
@@ -2080,6 +2082,7 @@ export type Database = {
           aprovado_em?: string | null
           aprovado_por?: string | null
           avatar_url?: string | null
+          cadastro_concluido_em?: string | null
           cnpj?: string | null
           contratos_ativos_count?: number | null
           created_at?: string
