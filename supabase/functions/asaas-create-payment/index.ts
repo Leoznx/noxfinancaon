@@ -1,6 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import {
   AsaasApiError,
+  describePaymentError,
+  paymentErrorStatus,
   FireMode,
   PaymentMethod,
   asaasFetch,
@@ -131,7 +133,26 @@ serve(async (req) => {
       return jsonResponse(req, normalizedPaymentResponse(atualizado.raw_response, atualizado));
     }
 
-    const customerId = await ensureAsaasCustomer(supabase, consulta);
+    let customerId: string;
+    try {
+      customerId = await ensureAsaasCustomer(supabase, consulta);
+    } catch (error) {
+      console.error("[asaas-create-payment] falha ao preparar cliente Asaas", {
+        proposalId,
+        message: error instanceof Error ? error.message : String(error),
+      });
+      return jsonResponse(
+        req,
+        {
+          ok: false,
+          error: describePaymentError(
+            error,
+            "Nao foi possivel preparar o cadastro de cobranca. Confira os dados do inquilino e tente novamente.",
+          ),
+        },
+        paymentErrorStatus(error, 502),
+      );
+    }
     const dueDate = paymentMethod === "boleto" ? addBusinessDays(3) : todayDate();
     const billingType =
       paymentMethod === "pix" ? "PIX" : paymentMethod === "boleto" ? "BOLETO" : "CREDIT_CARD";
@@ -194,8 +215,14 @@ serve(async (req) => {
       });
       return jsonResponse(
         req,
-        { ok: false, error: "Nao foi possivel gerar o pagamento agora. Tente novamente." },
-        502,
+        {
+          ok: false,
+          error: describePaymentError(
+            error,
+            "Nao foi possivel gerar o pagamento agora. Tente novamente.",
+          ),
+        },
+        paymentErrorStatus(error, 502),
       );
     }
 
@@ -344,8 +371,11 @@ serve(async (req) => {
     });
     return jsonResponse(
       req,
-      { ok: false, error: "Nao foi possivel gerar o pagamento agora." },
-      500,
+      {
+        ok: false,
+        error: describePaymentError(error, "Nao foi possivel gerar o pagamento agora."),
+      },
+      paymentErrorStatus(error, 500),
     );
   }
 });

@@ -7,19 +7,29 @@ const salvarConfigSchema = z.object({
   insurance_coverages: z.array(z.string()).default([]),
   insurance_assistance: z.string().nullable(),
   insurance_commission_pct: z.number().min(0).max(20),
+  /**
+   * Subtipo do imóvel escolhido na tela do seguro. Precisa ser gravado antes de
+   * gerar a cobrança: a Edge Function calcula a alíquota do seguro incêndio a
+   * partir dele, e se a tela e o banco discordarem o Asaas recusa o pagamento
+   * com "O valor do pagamento mudou".
+   */
+  imovel_subtipo: z.string().trim().min(1).optional(),
 });
 
 export const salvarConfiguracaoSeguro = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((d: unknown) => salvarConfigSchema.parse(d))
   .handler(async ({ data, context }) => {
+    const payload: Record<string, unknown> = {
+      insurance_coverages: data.insurance_coverages,
+      insurance_assistance: data.insurance_assistance,
+      insurance_commission_pct: data.insurance_commission_pct,
+    };
+    if (data.imovel_subtipo) payload.imovel_subtipo = data.imovel_subtipo;
+
     const { error } = await context.supabase
       .from("consultas_credito")
-      .update({
-        insurance_coverages: data.insurance_coverages,
-        insurance_assistance: data.insurance_assistance,
-        insurance_commission_pct: data.insurance_commission_pct,
-      } as any)
+      .update(payload as any)
       .eq("id", data.consultaId);
     if (error) throw new Error(error.message);
     return { ok: true };
@@ -107,6 +117,51 @@ export const enviarProposta = createServerFn({ method: "POST" })
     }
 
     return { ok: true, enviadoEm: now };
+  });
+
+const pagamentoDepoisSchema = z.object({
+  consultaId: z.string().uuid(),
+  metodo: z.enum(["pix", "boleto"]),
+  valor: z.number().nonnegative().optional(),
+  vencimento: z.string().nullable().optional(),
+});
+
+/**
+ * "Pagar depois": o Pix/boleto já foi gerado e continua válido, mas o usuário
+ * optou por não pagar agora. A cobrança fica em aberto na aba de faturas dele e
+ * o contrato só segue para assinatura quando o Asaas confirmar o pagamento —
+ * é exatamente o mesmo gatilho do fluxo normal, nada é liberado antes.
+ */
+export const registrarPagamentoDepois = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: unknown) => pagamentoDepoisSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    const metodoLabel = data.metodo === "pix" ? "Pix" : "boleto";
+    const valorLabel =
+      typeof data.valor === "number" && data.valor > 0
+        ? ` no valor de ${data.valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`
+        : "";
+    const vencimentoLabel = data.vencimento ? ` Vencimento em ${data.vencimento}.` : "";
+
+    const { error } = await context.supabase
+      .from("consultas_credito")
+      .update({
+        substatus: "aguardando_pagamento",
+        activation_status: "aguardando_pagamento",
+        payment_deferred: true,
+        payment_deferred_at: new Date().toISOString(),
+      } as any)
+      .eq("id", data.consultaId);
+    if (error) throw new Error(error.message);
+
+    await context.supabase.from("proposta_historico").insert({
+      consulta_id: data.consultaId,
+      tipo_evento: "pagamento_adiado",
+      descricao: `Pagamento adiado pelo usuário: ${metodoLabel}${valorLabel} ficou em aberto na aba de faturas.${vencimentoLabel} O envio para assinatura acontece somente após a confirmação do primeiro pagamento.`,
+      created_by: context.userId,
+    } as any);
+
+    return { ok: true };
   });
 
 export const listarHistoricoProposta = createServerFn({ method: "GET" })

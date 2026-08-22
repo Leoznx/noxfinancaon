@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Building2, Calendar, Copy, IdCard, Mail, MapPin, Phone, UserRound } from "lucide-react";
+import { Building2, Calendar, Clock, Copy, FileText, IdCard, Mail, MapPin, Phone, UserRound } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -74,14 +74,84 @@ function formatarTelefone(telefone?: string | null): string | null {
   return maskPhone(digits);
 }
 
+type EventoHistorico = {
+  id: string;
+  tipo_evento: string;
+  descricao: string;
+  created_at: string;
+};
+
+/** Rótulo curto de cada etapa do funil, para a leitura rápida de performance. */
+const LABEL_EVENTO: Record<string, string> = {
+  plano_selecionado: "Plano escolhido",
+  documentos_enviados: "Documentos enviados",
+  dados_complementares: "Dados complementares",
+  pagamento_selecionado: "Forma de pagamento",
+  pagamento_adiado: "Pagamento adiado",
+  proposta_registrada: "Proposta registrada",
+  aguardando_pagamento: "Aguardando pagamento",
+  pagamento_confirmado: "Pagamento confirmado",
+  contrato_d4sign_pendente: "Contrato pendente",
+  contrato_enviado: "Contrato enviado para assinatura",
+  contrato_assinado: "Contrato assinado",
+  ativacao_enviada: "Link de ativação enviado",
+  fianca_ativada: "Fiança ativada",
+};
+
+/** Etapa em que a proposta está hoje, em texto direto para o administrador. */
+const LABEL_ETAPA: Record<string, string> = {
+  pendente_documentacao: "Aguardando documentação",
+  dados_complementares: "Preenchendo dados complementares",
+  documentacao_complementar_enviada: "Documentação enviada para análise",
+  falta_documentos: "Falta de documentos",
+  aguardando_pagamento: "Aguardando pagamento",
+  aguardando_assinatura: "Aguardando assinatura",
+  aguardando_assinatura_d4sign: "Aguardando assinatura (D4Sign)",
+  aguardando_ativacao: "Aguardando ativação",
+  ativado: "Fiança ativada",
+  finalizada: "Finalizada",
+};
+
 export function ConsultaDetalhesModal({ consulta, open, onOpenChange }: Props) {
   const [extras, setExtras] = useState<ExtrasSolicitante | null>(null);
+  const [historico, setHistorico] = useState<EventoHistorico[] | null>(null);
 
   const profileIdSolicitante = consulta?.profile_id_solicitante ?? null;
   const emailSolicitante = consulta?.solicitante?.email ?? null;
 
   // Cidade do solicitante não existe em `profiles` — corretor guarda em `corretores`,
   // imobiliária em `imobiliarias`. Busca só quando a caixa abre, pra não pesar a lista.
+  const consultaId = consulta?.id ?? null;
+
+  // Passo a passo da proposta depois da aprovação — é o que o administrador usa
+  // para acompanhar a performance de quem fez a consulta.
+  useEffect(() => {
+    if (!open || !consultaId) {
+      setHistorico(null);
+      return;
+    }
+    let ativo = true;
+
+    (async () => {
+      const { data, error } = await supabase
+        .from("proposta_historico")
+        .select("id, tipo_evento, descricao, created_at")
+        .eq("consulta_id", consultaId)
+        .order("created_at", { ascending: true });
+      if (!ativo) return;
+      if (error) {
+        console.error("Erro ao carregar histórico da proposta:", error);
+        setHistorico([]);
+        return;
+      }
+      setHistorico((data as EventoHistorico[]) ?? []);
+    })();
+
+    return () => {
+      ativo = false;
+    };
+  }, [open, consultaId]);
+
   useEffect(() => {
     if (!open) {
       setExtras(null);
@@ -163,6 +233,20 @@ export function ConsultaDetalhesModal({ consulta, open, onOpenChange }: Props) {
 
   const aluguel = Number(consulta.rent_value ?? consulta.valor_aluguel ?? consulta.imoveis?.valor_aluguel ?? 0);
 
+  const moeda = (valor: unknown) => {
+    const numero = Number(valor ?? 0);
+    return numero > 0
+      ? numero.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+      : null;
+  };
+  const planoEscolhido = consulta.planos?.nome ?? null;
+  const premioMensal = moeda(consulta.valor_premio_mensal);
+  const valorAnual = moeda(consulta.valor_anual);
+  const etapaAtual =
+    LABEL_ETAPA[String(consulta.substatus ?? "")] ??
+    LABEL_ETAPA[String(consulta.status ?? "")] ??
+    (consulta.substatus || consulta.status || null);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -239,6 +323,55 @@ export function ConsultaDetalhesModal({ consulta, open, onOpenChange }: Props) {
             }
           />
         </Secao>
+
+        {/* Plano escolhido + passo a passo pós-aprovação: é o que mostra até onde
+            o usuário levou a proposta e onde ela parou. */}
+        {(planoEscolhido || aprovada) && (
+          <Secao titulo="Plano contratado">
+            <Campo icone={FileText} rotulo="Plano escolhido" valor={planoEscolhido} />
+            <Campo icone={Building2} rotulo="Prêmio mensal" valor={premioMensal} />
+            <Campo icone={Building2} rotulo="Total anual" valor={valorAnual} />
+            <Campo icone={Clock} rotulo="Etapa atual" valor={etapaAtual} />
+          </Secao>
+        )}
+
+        {planoEscolhido && (
+          <section className="rounded-xl border border-neutral-200 bg-neutral-50/60 p-4">
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-neutral-400">
+              Passo a passo após a aprovação
+            </h3>
+            {historico === null ? (
+              <p className="mt-3 text-sm text-neutral-400">Carregando histórico...</p>
+            ) : !historico.length ? (
+              <p className="mt-3 text-sm text-neutral-500">
+                Nenhuma etapa registrada depois da escolha do plano.
+              </p>
+            ) : (
+              <ol className="mt-3 space-y-3">
+                {historico.map((evento, indice) => (
+                  <li key={evento.id} className="flex gap-3">
+                    <div className="flex flex-col items-center">
+                      <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-500" />
+                      {indice < historico.length - 1 && (
+                        <span className="mt-1 w-px flex-1 bg-neutral-200" />
+                      )}
+                    </div>
+                    <div className="min-w-0 pb-1">
+                      <p className="text-sm font-semibold text-neutral-900">
+                        {LABEL_EVENTO[evento.tipo_evento] ??
+                          evento.tipo_evento.replace(/_/g, " ")}
+                      </p>
+                      <p className="text-sm text-neutral-600 break-words">{evento.descricao}</p>
+                      <p className="text-[11px] font-medium text-neutral-400">
+                        {new Date(evento.created_at).toLocaleString("pt-BR")}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </section>
+        )}
       </DialogContent>
     </Dialog>
   );

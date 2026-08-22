@@ -5,6 +5,8 @@ import {
   addBusinessDays,
   asaasFetch,
   calculateMonthlyInstallmentValue,
+  describePaymentError,
+  paymentErrorStatus,
   corsHeaders,
   formatBRL,
   formatDateBr,
@@ -121,7 +123,26 @@ serve(async (req) => {
       count: INSTALLMENT_COUNT,
     });
 
-    const customerId = await ensureAsaasCustomer(supabase, consulta);
+    let customerId: string;
+    try {
+      customerId = await ensureAsaasCustomer(supabase, consulta);
+    } catch (error) {
+      console.error("[asaas-create-installment-plan] falha ao preparar cliente Asaas", {
+        proposalId,
+        message: error instanceof Error ? error.message : String(error),
+      });
+      return jsonResponse(
+        req,
+        {
+          ok: false,
+          error: describePaymentError(
+            error,
+            "Nao foi possivel preparar o cadastro de cobranca. Confira os dados do inquilino e tente novamente.",
+          ),
+        },
+        paymentErrorStatus(error, 502),
+      );
+    }
     const criadas: any[] = [...jaCriadas.values()];
 
     for (const item of schedule) {
@@ -156,7 +177,7 @@ serve(async (req) => {
           req,
           {
             ok: false,
-            error: `Nao foi possivel gerar a mensalidade ${item.installmentNumber}/${INSTALLMENT_COUNT}. As mensalidades ja criadas foram preservadas. Tente novamente.`,
+            error: `Nao foi possivel gerar a mensalidade ${item.installmentNumber}/${INSTALLMENT_COUNT}: ${describePaymentError(error, "tente novamente")}. As mensalidades ja criadas foram preservadas.`,
             created: criadas.length,
             total: INSTALLMENT_COUNT,
           },
@@ -321,7 +342,11 @@ serve(async (req) => {
     console.error("[asaas-create-installment-plan] erro", {
       message: error instanceof Error ? error.message : String(error),
     });
-    return jsonResponse(req, { ok: false, error: "Nao foi possivel gerar os boletos agora." }, 500);
+    return jsonResponse(
+      req,
+      { ok: false, error: describePaymentError(error, "Nao foi possivel gerar os boletos agora.") },
+      paymentErrorStatus(error, 500),
+    );
   }
 });
 

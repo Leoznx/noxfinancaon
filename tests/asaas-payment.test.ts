@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { getEdgeFunctionErrorMessage } from "../src/lib/asaas-payment";
+import { getEdgeFunctionErrorDetails, getEdgeFunctionErrorMessage } from "../src/lib/asaas-payment";
 
 test("exibe o erro util devolvido pela Edge Function", async () => {
   const error = Object.assign(new Error("Edge Function returned a non-2xx status code"), {
@@ -31,4 +31,25 @@ test("usa uma mensagem segura para erros desconhecidos", async () => {
     await getEdgeFunctionErrorMessage(null, "Falha no pagamento."),
     "Falha no pagamento.",
   );
+});
+
+test("expoe o valor esperado quando o backend recusa por divergencia de valor", async () => {
+  const error = Object.assign(new Error("Edge Function returned a non-2xx status code"), {
+    context: new Response(
+      JSON.stringify({ error: "O valor do pagamento mudou.", expectedAmount: 412.35 }),
+      { headers: { "content-type": "application/json" }, status: 409 },
+    ),
+  });
+
+  const detalhes = await getEdgeFunctionErrorDetails(error, "Falha no pagamento.");
+  assert.equal(detalhes.status, 409);
+  assert.equal(detalhes.message, "O valor do pagamento mudou.");
+  assert.equal(detalhes.payload?.expectedAmount, 412.35);
+});
+
+test("cai no fallback quando a resposta nao traz payload utilizavel", async () => {
+  const detalhes = await getEdgeFunctionErrorDetails({}, "Falha no pagamento.");
+  assert.equal(detalhes.message, "Falha no pagamento.");
+  assert.equal(detalhes.payload, null);
+  assert.equal(detalhes.status, null);
 });

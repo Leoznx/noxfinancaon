@@ -78,6 +78,45 @@ export class AsaasApiError extends Error {
   }
 }
 
+/**
+ * Mensagem legivel de uma falha ao gerar cobranca. O Asaas devolve o motivo real
+ * em `errors[].description` ("CPF invalido", "Cartao recusado", "CEP obrigatorio"
+ * ...) - sem repassar isso o usuario so via "Nao foi possivel gerar o pagamento"
+ * e nao tinha como saber o que corrigir. Erros de infraestrutura (5xx, timeout,
+ * chave ausente) continuam com a mensagem generica, porque nao ha nada que o
+ * usuario possa corrigir neles.
+ */
+export function describePaymentError(error: unknown, fallback: string): string {
+  if (error instanceof HttpError) return error.publicMessage;
+
+  if (error instanceof AsaasApiError) {
+    const response = error.response as { errors?: { description?: unknown }[] } | null;
+    const descricoes = Array.isArray(response?.errors)
+      ? response!.errors
+          .map((item) => (typeof item?.description === "string" ? item.description.trim() : ""))
+          .filter(Boolean)
+      : [];
+    if (descricoes.length && error.status < 500) return descricoes.join(" ");
+    return fallback;
+  }
+
+  // Erros de validacao que a propria aplicacao levanta (ex.: ensureAsaasCustomer
+  // pedindo nome/e-mail/telefone/CPF) ja vem com texto pronto pro usuario.
+  if (error instanceof Error && error.message.trim() && !/^Missing environment variable/.test(error.message)) {
+    return error.message.trim();
+  }
+  return fallback;
+}
+
+/** Status HTTP adequado para a falha: 4xx quando o usuario pode corrigir, 5xx quando nao. */
+export function paymentErrorStatus(error: unknown, fallback = 500): number {
+  if (error instanceof HttpError) return error.status;
+  if (error instanceof AsaasApiError) return error.status >= 500 ? 502 : 400;
+  if (error instanceof Error && /^Missing environment variable/.test(error.message)) return 500;
+  if (error instanceof Error && error.message.trim()) return 400;
+  return fallback;
+}
+
 export function normalizeDocumento(value: unknown) {
   return String(value || "").replace(/\D/g, "");
 }

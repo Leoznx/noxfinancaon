@@ -3,7 +3,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ChevronRight, HelpCircle, Lock, MapPin, Plus, UserRound, Building2 } from "lucide-react";
+import { AlertCircle, ChevronRight, HelpCircle, Lock, MapPin, Plus, UserRound, Building2 } from "lucide-react";
 import CurrencyInput from "react-currency-input-field";
 import { IMaskInput } from "react-imask";
 import { toast } from "sonner";
@@ -46,21 +46,50 @@ export function FormularioSimulacao({ modo, onSubmit, dadosIniciais, disabled }:
   const [condominio, setCondominio] = useState<number>(dadosIniciais?.valores?.condominio || 0);
   const [taxas, setTaxas] = useState<number>(dadosIniciais?.valores?.taxas || 0);
   const [erro, setErro] = useState<string | null>(null);
+  // Estado da busca do CEP. Enquanto nao voltar `ok` (com cidade/UF), o formulario
+  // nao deixa simular: CEP sem regiao encontrada e' CEP errado, e o usuario precisa
+  // corrigir antes de seguir.
+  const [cepStatus, setCepStatus] = useState<'vazio' | 'buscando' | 'ok' | 'invalido'>(
+    dadosIniciais?.endereco ? 'ok' : 'vazio',
+  );
+  const [erroCep, setErroCep] = useState<string | null>(null);
+
+  // Soma dos valores preenchidos - o total e' recalculado a cada digitacao e serve
+  // de demonstrativo tanto aqui quanto no resultado da simulacao.
+  const totalMensal = (aluguel || 0) + (condominio || 0) + (taxas || 0);
+  const formatarBRL = (valor: number) =>
+    valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+  const CEP_NAO_ENCONTRADO = "CEP não encontrado. Corrija o CEP para continuar.";
 
   const buscarCEP = async (valor: string) => {
     const limpo = valor.replace(/\D/g, '');
-    if (limpo.length === 8) {
-      try {
-        const response = await fetch(`https://viacep.com.br/ws/${limpo}/json/`);
-        const data = await response.json();
-        if (!data.erro) {
-          setEndereco({ cidade: data.localidade, uf: data.uf });
-        } else {
-          setEndereco(null);
-        }
-      } catch (err) {
-        console.error("Erro ao buscar CEP", err);
+    if (limpo.length !== 8) {
+      setEndereco(null);
+      setCepStatus(limpo.length ? 'invalido' : 'vazio');
+      setErroCep(limpo.length ? "Informe um CEP com 8 dígitos." : null);
+      return;
+    }
+
+    setCepStatus('buscando');
+    setErroCep(null);
+    try {
+      const response = await fetch(`https://viacep.com.br/ws/${limpo}/json/`);
+      const data = await response.json();
+      if (!data.erro && data.localidade && data.uf) {
+        setEndereco({ cidade: data.localidade, uf: data.uf });
+        setCepStatus('ok');
+        setErroCep(null);
+      } else {
+        setEndereco(null);
+        setCepStatus('invalido');
+        setErroCep(CEP_NAO_ENCONTRADO);
       }
+    } catch (err) {
+      console.error("Erro ao buscar CEP", err);
+      setEndereco(null);
+      setCepStatus('invalido');
+      setErroCep("Não foi possível validar o CEP agora. Verifique o número e tente novamente.");
     }
   };
 
@@ -76,7 +105,19 @@ export function FormularioSimulacao({ modo, onSubmit, dadosIniciais, disabled }:
     }
     if (!cep || cep.replace(/\D/g, '').length < 8) {
       const msg = "Informe um CEP válido do imóvel.";
+      setErro(msg); setErroCep("Informe um CEP com 8 dígitos."); toast.error(msg); return;
+    }
+    if (cepStatus === 'buscando') {
+      const msg = "Aguarde a validação do CEP para continuar.";
       setErro(msg); toast.error(msg); return;
+    }
+    // Nenhuma cidade/UF encontrada = CEP errado. Bloqueia a simulação e pede a
+    // correção; assim que a região aparecer, o usuário segue normalmente.
+    if (!endereco) {
+      const msg = CEP_NAO_ENCONTRADO;
+      setErro(msg); setErroCep(msg); toast.error(msg);
+      document.getElementById('cep-simulacao')?.focus();
+      return;
     }
 
     // Validação extra apenas no modo INTERNO (corretor já logado preenchendo dados oficiais)
@@ -213,16 +254,41 @@ export function FormularioSimulacao({ modo, onSubmit, dadosIniciais, disabled }:
             <div className="space-y-2">
               <Label className="text-xs font-bold text-neutral-500 uppercase tracking-widest">CEP</Label>
               <IMaskInput 
+                id="cep-simulacao"
                 mask="00000-000" 
                 value={cep}
-                onAccept={(val: any) => { setCep(val); if(val.length === 9) buscarCEP(val); }} 
-                className="flex h-14 w-full rounded-lg border border-neutral-200 bg-white px-4 py-2 text-base font-medium focus:ring-2 focus:ring-yellow-400 outline-none transition-all" 
+                onAccept={(val: any) => {
+                  setCep(val);
+                  setErro(null);
+                  if (val.replace(/\D/g, '').length === 8) {
+                    buscarCEP(val);
+                  } else {
+                    setEndereco(null);
+                    setCepStatus(val ? 'invalido' : 'vazio');
+                    setErroCep(null);
+                  }
+                }}
+                aria-invalid={cepStatus === 'invalido'}
+                className={`flex h-14 w-full rounded-lg border bg-white px-4 py-2 text-base font-medium outline-none transition-all ${
+                  cepStatus === 'invalido'
+                    ? 'border-red-400 focus:ring-2 focus:ring-red-400'
+                    : 'border-neutral-200 focus:ring-2 focus:ring-yellow-400'
+                }`}
                 placeholder="00000-000" 
               />
-              {endereco && (
+              {cepStatus === 'buscando' && (
+                <p className="text-xs text-neutral-500 mt-1 font-bold uppercase">Buscando região...</p>
+              )}
+              {cepStatus === 'ok' && endereco && (
                 <p className="text-xs text-neutral-500 mt-1 flex items-center gap-1 font-bold uppercase">
                   <MapPin className="w-4 h-4 text-yellow-600" strokeWidth={1.5} />
                   {endereco.cidade}, {endereco.uf}
+                </p>
+              )}
+              {cepStatus === 'invalido' && erroCep && (
+                <p className="text-xs text-red-600 mt-1 flex items-center gap-1 font-bold">
+                  <AlertCircle className="w-4 h-4" strokeWidth={2} />
+                  {erroCep}
                 </p>
               )}
             </div>
@@ -282,6 +348,43 @@ export function FormularioSimulacao({ modo, onSubmit, dadosIniciais, disabled }:
                 />
               </div>
             </div>
+
+            {/* Demonstrativo do valor total — soma o que já foi preenchido */}
+            {totalMensal > 0 && (
+              <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400 mb-2">
+                  Demonstrativo do valor total
+                </p>
+                <div className="space-y-1">
+                  {aluguel > 0 && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-neutral-600 font-medium">Aluguel</span>
+                      <span className="font-bold text-neutral-900 tabular-nums">{formatarBRL(aluguel)}</span>
+                    </div>
+                  )}
+                  {condominio > 0 && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-neutral-600 font-medium">Condomínio</span>
+                      <span className="font-bold text-neutral-900 tabular-nums">{formatarBRL(condominio)}</span>
+                    </div>
+                  )}
+                  {taxas > 0 && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-neutral-600 font-medium">Taxas</span>
+                      <span className="font-bold text-neutral-900 tabular-nums">{formatarBRL(taxas)}</span>
+                    </div>
+                  )}
+                </div>
+                <div className="mt-2 flex items-center justify-between border-t border-neutral-200 pt-2">
+                  <span className="text-[11px] font-black uppercase tracking-widest text-neutral-500">
+                    Valor total
+                  </span>
+                  <span className="text-lg font-black text-neutral-900 tabular-nums">
+                    {formatarBRL(totalMensal)}
+                  </span>
+                </div>
+              </div>
+            )}
           </section>
         </div>
 

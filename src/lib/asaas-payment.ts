@@ -57,6 +57,38 @@ export async function getEdgeFunctionErrorMessage(
   return fallback;
 }
 
+/**
+ * Igual a `getEdgeFunctionErrorMessage`, mas devolve tambem o corpo JSON da
+ * resposta. O 409 de valor divergente traz `expectedAmount`, e sem ele a tela
+ * nao tem como explicar quanto o backend espera cobrar.
+ */
+export async function getEdgeFunctionErrorDetails(
+  error: unknown,
+  fallback: string,
+): Promise<{ message: string; payload: Record<string, unknown> | null; status: number | null }> {
+  const context = (error as { context?: unknown } | null)?.context;
+  let payload: Record<string, unknown> | null = null;
+  let status: number | null = null;
+
+  if (context instanceof Response) {
+    status = context.status;
+    try {
+      payload = (await context.clone().json()) as Record<string, unknown>;
+    } catch {
+      payload = null;
+    }
+  }
+
+  const detail = payload?.error ?? payload?.message;
+  if (typeof detail === "string" && detail.trim()) {
+    return { message: detail.trim(), payload, status };
+  }
+  if (error instanceof Error && error.message.trim()) {
+    return { message: error.message.trim(), payload, status };
+  }
+  return { message: fallback, payload, status };
+}
+
 export function statusPagamentoLabel(status?: string | null) {
   const labels: Record<string, string> = {
     pending: "Aguardando pagamento",
