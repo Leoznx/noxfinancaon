@@ -185,16 +185,17 @@ export function FormularioSimulacao({ modo, onSubmit, dadosIniciais, disabled }:
                 {inquilinos.map((inq, i) => (
                   <div key={i} className="space-y-2">
                     <Label className="text-xs font-bold text-neutral-500 uppercase tracking-widest">Inquilino {i + 1}</Label>
-                    <IMaskInput 
-                      mask="000.000.000-00" 
+                    <IMaskInput
+                      mask="000.000.000-00"
                       value={inq.cpf}
                       onAccept={(val: any) => {
                         const newInqs = [...inquilinos];
                         newInqs[i].cpf = val;
                         setInquilinos(newInqs);
                       }}
-                      className="flex h-14 w-full rounded-lg border border-neutral-200 bg-white px-4 py-2 text-base font-medium focus:ring-2 focus:ring-yellow-400 outline-none transition-all" 
-                      placeholder="CPF" 
+                      autoComplete="off"
+                      className="flex h-14 w-full rounded-lg border border-neutral-200 bg-white px-4 py-2 text-base font-medium focus:ring-2 focus:ring-yellow-400 outline-none transition-all"
+                      placeholder="CPF"
                     />
                   </div>
                 ))}
@@ -209,11 +210,12 @@ export function FormularioSimulacao({ modo, onSubmit, dadosIniciais, disabled }:
                 <div className="space-y-2">
                   <Label className="text-xs font-bold text-neutral-500 uppercase tracking-widest">CNPJ</Label>
                   <IMaskInput 
-                    mask="00.000.000/0000-00" 
+                    mask="00.000.000/0000-00"
                     value={cnpj}
                     onAccept={(val: any) => setCnpj(val)}
-                    className="flex h-14 w-full rounded-lg border border-neutral-200 bg-white px-4 py-2 text-base font-medium focus:ring-2 focus:ring-yellow-400 outline-none transition-all" 
-                    placeholder="00.000.000/0000-00" 
+                    autoComplete="off"
+                    className="flex h-14 w-full rounded-lg border border-neutral-200 bg-white px-4 py-2 text-base font-medium focus:ring-2 focus:ring-yellow-400 outline-none transition-all"
+                    placeholder="00.000.000/0000-00"
                   />
                 </div>
               </div>
@@ -247,9 +249,9 @@ export function FormularioSimulacao({ modo, onSubmit, dadosIniciais, disabled }:
 
             <div className="space-y-2">
               <Label className="text-xs font-bold text-neutral-500 uppercase tracking-widest">CEP</Label>
-              <IMaskInput 
+              <IMaskInput
                 id="cep-simulacao"
-                mask="00000-000" 
+                mask="00000-000"
                 value={cep}
                 onAccept={(val: any) => {
                   setCep(val);
@@ -262,6 +264,7 @@ export function FormularioSimulacao({ modo, onSubmit, dadosIniciais, disabled }:
                     setErroCep(null);
                   }
                 }}
+                autoComplete="off"
                 aria-invalid={cepStatus === 'invalido'}
                 className={`flex h-14 w-full rounded-lg border bg-white px-4 py-2 text-base font-medium outline-none transition-all ${
                   cepStatus === 'invalido'
@@ -290,28 +293,30 @@ export function FormularioSimulacao({ modo, onSubmit, dadosIniciais, disabled }:
             <div className="grid grid-cols-3 gap-2 sm:gap-3 items-end">
               <div className="space-y-1.5 sm:space-y-2 min-w-0">
                 <Label className="text-[10px] sm:text-xs font-bold text-neutral-500 uppercase tracking-wider sm:tracking-widest block h-4 sm:h-5">Aluguel</Label>
-                <CurrencyInput 
-                  prefix="R$ " 
-                  decimalsLimit={2} 
+                <CurrencyInput
+                  prefix="R$ "
+                  decimalsLimit={2}
                   value={aluguel || ''}
                   onValueChange={(v, name, values) => {
                     setAluguel(values?.float || 0);
-                  }} 
-                  className="flex h-12 sm:h-14 w-full min-w-0 rounded-lg border border-neutral-200 bg-white px-2 sm:px-4 py-2 text-sm sm:text-base font-bold text-neutral-900 focus:ring-2 focus:ring-yellow-400 outline-none transition-all" 
-                  placeholder="R$ 0,00" 
+                  }}
+                  autoComplete="off"
+                  className="flex h-12 sm:h-14 w-full min-w-0 rounded-lg border border-neutral-200 bg-white px-2 sm:px-4 py-2 text-sm sm:text-base font-bold text-neutral-900 focus:ring-2 focus:ring-yellow-400 outline-none transition-all"
+                  placeholder="R$ 0,00"
                 />
               </div>
               <div className="space-y-1.5 sm:space-y-2 min-w-0">
                 <Label className="text-[10px] sm:text-xs font-bold text-neutral-500 uppercase tracking-wider sm:tracking-widest block h-4 sm:h-5">Condomínio</Label>
-                <CurrencyInput 
-                  prefix="R$ " 
-                  decimalsLimit={2} 
+                <CurrencyInput
+                  prefix="R$ "
+                  decimalsLimit={2}
                   value={condominio || ''}
                   onValueChange={(v, name, values) => {
                     setCondominio(values?.float || 0);
-                  }} 
-                  className="flex h-12 sm:h-14 w-full min-w-0 rounded-lg border border-neutral-200 bg-white px-2 sm:px-4 py-2 text-sm sm:text-base font-medium focus:ring-2 focus:ring-yellow-400 outline-none transition-all" 
-                  placeholder="R$ 0,00" 
+                  }}
+                  autoComplete="off"
+                  className="flex h-12 sm:h-14 w-full min-w-0 rounded-lg border border-neutral-200 bg-white px-2 sm:px-4 py-2 text-sm sm:text-base font-medium focus:ring-2 focus:ring-yellow-400 outline-none transition-all"
+                  placeholder="R$ 0,00"
                 />
               </div>
               <div className="space-y-1.5 sm:space-y-2 min-w-0">
@@ -330,15 +335,16 @@ export function FormularioSimulacao({ modo, onSubmit, dadosIniciais, disabled }:
                     </Tooltip>
                   </TooltipProvider>
                 </div>
-                <CurrencyInput 
-                  prefix="R$ " 
-                  decimalsLimit={2} 
+                <CurrencyInput
+                  prefix="R$ "
+                  decimalsLimit={2}
                   value={taxas || ''}
                   onValueChange={(v, name, values) => {
                     setTaxas(values?.float || 0);
-                  }} 
-                  className="flex h-12 sm:h-14 w-full min-w-0 rounded-lg border border-neutral-200 bg-white px-2 sm:px-4 py-2 text-sm sm:text-base font-medium focus:ring-2 focus:ring-yellow-400 outline-none transition-all" 
-                  placeholder="R$ 0,00" 
+                  }}
+                  autoComplete="off"
+                  className="flex h-12 sm:h-14 w-full min-w-0 rounded-lg border border-neutral-200 bg-white px-2 sm:px-4 py-2 text-sm sm:text-base font-medium focus:ring-2 focus:ring-yellow-400 outline-none transition-all"
+                  placeholder="R$ 0,00"
                 />
               </div>
             </div>

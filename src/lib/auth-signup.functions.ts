@@ -33,27 +33,6 @@ function isAlreadyRegisteredError(message: string | undefined) {
 }
 
 // ============================================================================
-// Lista pública controlada para o cadastro de corretores. A consulta usa o
-// servidor porque o visitante ainda não possui sessão e recebe somente os dois
-// campos necessários para escolher a empresa.
-export const listarImobiliariasCadastro = createServerFn({ method: "GET" }).handler(async () => {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { data, error } = await supabaseAdmin
-    .from("imobiliarias")
-    .select("id, razao_social")
-    .order("razao_social", { ascending: true });
-
-  if (error) throw new Error("Não foi possível carregar as imobiliárias.");
-
-  return {
-    imobiliarias: (data ?? []).map((imobiliaria: { id: string; razao_social: string }) => ({
-      id: imobiliaria.id,
-      razaoSocial: imobiliaria.razao_social,
-    })),
-  };
-});
-
-// ============================================================================
 // Inquilino
 // ============================================================================
 
@@ -166,18 +145,21 @@ const profissionalSchema = z.object({
   cpf: z.string().optional(),
   creci: z.string().optional(),
   vinculadoImobiliaria: z.boolean().optional(),
-  imobiliariaId: z.string().optional(),
+  // CNPJ ou e-mail já cadastrado da imobiliária — nunca o id: o visitante não
+  // tem acesso à lista de imobiliárias, então precisa identificar a empresa
+  // por um dado que ele já sabe (CNPJ ou e-mail de contato).
+  imobiliariaIdentificador: z.string().optional(),
   // Proprietário
   cpfCnpj: z.string().optional(),
   // Comuns a corretor/proprietário
   cidade: z.string().optional(),
   estado: z.string().optional(),
 }).superRefine((data, ctx) => {
-  if (data.role === "corretor" && data.vinculadoImobiliaria && !data.imobiliariaId) {
+  if (data.role === "corretor" && data.vinculadoImobiliaria && !data.imobiliariaIdentificador?.trim()) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      path: ["imobiliariaId"],
-      message: "Selecione a imobiliária à qual o corretor está vinculado.",
+      path: ["imobiliariaIdentificador"],
+      message: "Informe o CNPJ ou o e-mail da imobiliária à qual o corretor está vinculado.",
     });
   }
 });
@@ -192,15 +174,30 @@ export const signUpProfissional = createServerFn({ method: "POST" })
       return { ok: false as const, error: "ja_existe" as const };
     }
 
+    // Vinculado por CNPJ ou e-mail de contato (nunca por id vindo do cliente —
+    // o visitante nunca recebe a lista de imobiliárias). O CNPJ é comparado só
+    // pelos dígitos porque a coluna guarda o valor mascarado ("00.000.000/0000-00").
+    let imobiliariaIdResolvida: string | null = null;
     if (data.role === "corretor" && data.vinculadoImobiliaria) {
-      const { data: imobiliaria, error: imobiliariaError } = await supabaseAdmin
+      const identificador = (data.imobiliariaIdentificador || "").trim();
+      const isEmail = identificador.includes("@");
+      const digitosIdentificador = identificador.replace(/\D/g, "");
+
+      const { data: candidatas, error: imobiliariaError } = await supabaseAdmin
         .from("imobiliarias")
-        .select("id")
-        .eq("id", data.imobiliariaId!)
-        .maybeSingle();
-      if (imobiliariaError || !imobiliaria) {
+        .select("id, cnpj, contato_email");
+      if (imobiliariaError) {
         return { ok: false as const, error: "imobiliaria_nao_encontrada" as const };
       }
+      const encontrada = (candidatas ?? []).find((imob: { id: string; cnpj: string | null; contato_email: string | null }) =>
+        isEmail
+          ? String(imob.contato_email || "").toLowerCase() === identificador.toLowerCase()
+          : !!digitosIdentificador && String(imob.cnpj || "").replace(/\D/g, "") === digitosIdentificador,
+      );
+      if (!encontrada) {
+        return { ok: false as const, error: "imobiliaria_nao_encontrada" as const };
+      }
+      imobiliariaIdResolvida = encontrada.id;
     }
 
     const nomeExibicao = data.role === "imobiliaria" ? data.razaoSocial! : data.nome!;
@@ -261,7 +258,7 @@ export const signUpProfissional = createServerFn({ method: "POST" })
         cidade: data.cidade,
         estado: data.estado,
         vinculado_imobiliaria: data.vinculadoImobiliaria ?? false,
-        imobiliaria_id: data.vinculadoImobiliaria ? data.imobiliariaId : null,
+        imobiliaria_id: data.vinculadoImobiliaria ? imobiliariaIdResolvida : null,
       } as any);
     } else if (data.role === "proprietario") {
       await supabaseAdmin.from("proprietarios").insert({
