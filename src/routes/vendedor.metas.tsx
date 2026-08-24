@@ -264,7 +264,7 @@ function Metas() {
                     </Badge>
                   </div>
                 </CardHeader>
-                <CardContent className="flex min-h-0 flex-1 flex-col justify-center p-4">
+                <CardContent className="flex min-h-0 flex-1 flex-col justify-center p-3">
                   <IndividualGoalTrend progress={progress} />
                 </CardContent>
               </Card>
@@ -283,21 +283,25 @@ function Metas() {
                     </Badge>
                   </div>
                 </CardHeader>
-                <CardContent className="flex min-h-0 flex-1 flex-col justify-center p-3">
+                <CardContent className="min-h-0 flex-1 overflow-hidden p-0">
                   {ranking.length === 0 ? (
-                    <EmptyBlock
-                      icon={Trophy}
-                      text="O ranking aparecerá quando a equipe registrar resultados."
-                    />
+                    <div className="p-3">
+                      <EmptyBlock
+                        icon={Trophy}
+                        text="O ranking aparecerá quando a equipe registrar resultados."
+                      />
+                    </div>
                   ) : (
-                    <div className="space-y-2">
-                      {ranking.slice(0, 3).map((seller) => (
-                        <TeamHighlight
-                          key={seller.id}
-                          seller={seller}
-                          current={seller.id === progress.seller_id}
-                        />
-                      ))}
+                    <div className="h-full min-h-0 overflow-y-auto overscroll-contain">
+                      <ol className="divide-y divide-neutral-100">
+                        {ranking.map((seller) => (
+                          <TeamHighlight
+                            key={seller.id}
+                            seller={seller}
+                            current={seller.id === progress.seller_id}
+                          />
+                        ))}
+                      </ol>
                     </div>
                   )}
                 </CardContent>
@@ -381,37 +385,37 @@ function IndividualGoalTrend({ progress }: { progress: SellerMonthlyProgress }) 
     percentage: sellerGoalPercentage(metric.value, metric.target),
   }));
   const points = metrics.map((metric, index) => ({
-    x: 34 + index * 116,
-    y: 98 - metric.percentage * 0.72,
+    x: 48 + index * 132,
+    y: 104 - metric.percentage * 0.68,
   }));
   const linePath = points
     .map((point, index) => `${index === 0 ? "M" : "L"}${point.x} ${point.y}`)
     .join(" ");
-  const areaPath = `${linePath} L${points[points.length - 1].x} 105 L${points[0].x} 105 Z`;
+  const areaPath = `${linePath} L${points[points.length - 1].x} 108 L${points[0].x} 108 Z`;
 
   return (
     <div
-      className="flex min-h-0 flex-1 flex-col justify-center"
+      className="mx-auto flex w-full max-w-[560px] flex-col justify-center"
       aria-label="Gráfico das suas metas individuais"
     >
-      <svg className="min-h-[120px] w-full flex-1" viewBox="0 0 300 120" role="img">
+      <svg className="h-[136px] w-full" viewBox="0 0 360 128" role="img">
         <defs>
           <linearGradient id="seller-goal-area" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#facc15" stopOpacity="0.35" />
             <stop offset="100%" stopColor="#facc15" stopOpacity="0.03" />
           </linearGradient>
         </defs>
-        {[26, 62, 98].map((y) => (
-          <line key={y} x1="18" x2="282" y1={y} y2={y} stroke="#e5e5e5" strokeWidth="1" />
+        {[36, 70, 104].map((y) => (
+          <line key={y} x1="28" x2="340" y1={y} y2={y} stroke="#ededed" strokeWidth="1" />
         ))}
         <line
-          x1="18"
-          x2="282"
-          y1="26"
-          y2="26"
+          x1="28"
+          x2="340"
+          y1="36"
+          y2="36"
           stroke="#eab308"
-          strokeDasharray="5 5"
-          opacity="0.7"
+          strokeDasharray="4 5"
+          opacity="0.55"
         />
         <path d={areaPath} fill="url(#seller-goal-area)" />
         <path
@@ -420,36 +424,43 @@ function IndividualGoalTrend({ progress }: { progress: SellerMonthlyProgress }) 
           stroke="#eab308"
           strokeLinecap="round"
           strokeLinejoin="round"
-          strokeWidth="4"
+          strokeWidth="2.5"
         />
         {points.map((point, index) => (
           <g key={metrics[index].label}>
-            <circle cx={point.x} cy={point.y} r="7" fill="white" stroke="#eab308" strokeWidth="4" />
+            <circle
+              cx={point.x}
+              cy={point.y}
+              r="4.5"
+              fill="white"
+              stroke="#eab308"
+              strokeWidth="2.5"
+            />
             <text
               x={point.x}
-              y={Math.max(14, point.y - 11)}
+              y={Math.max(17, point.y - 9)}
               textAnchor="middle"
-              className="fill-neutral-950 text-[10px] font-black"
+              className="fill-neutral-800 text-[9px] font-black"
             >
               {metrics[index].percentage}%
             </text>
           </g>
         ))}
       </svg>
-      <div className="grid grid-cols-3 gap-2 border-t border-neutral-100 pt-2 text-center">
+      <div className="grid grid-cols-3 divide-x divide-neutral-200 rounded-xl bg-neutral-50 px-2 py-2 text-center">
         {metrics.map((metric) => (
           <div key={metric.label} className="min-w-0">
-            <p className="truncate text-[9px] font-black uppercase tracking-wide text-neutral-400">
+            <p className="truncate text-[8px] font-black uppercase tracking-wide text-neutral-400">
               {metric.label}
             </p>
-            <p className="mt-0.5 text-xs font-black text-neutral-950">
+            <p className="mt-0.5 text-[11px] font-black text-neutral-950">
               {metric.value}/{metric.target ?? 0}
             </p>
           </div>
         ))}
       </div>
-      <p className="mt-2 text-center text-[9px] font-medium text-neutral-400">
-        A linha compara apenas seu avanço em cada objetivo deste mês.
+      <p className="mt-1.5 text-center text-[8px] font-medium text-neutral-400">
+        Progresso individual em relação às suas metas do mês.
       </p>
     </div>
   );
@@ -486,23 +497,21 @@ function MiniStat({ label, value }: { label: string; value: string | number }) {
 
 function TeamHighlight({ seller, current }: { seller: RankingRow; current: boolean }) {
   return (
-    <article
-      className={`grid grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-2.5 rounded-xl border px-2.5 py-2.5 ${
+    <li
+      className={`grid min-h-12 grid-cols-[24px_auto_minmax(0,1fr)_auto] items-center gap-2.5 px-3 py-2 transition-colors ${
         seller.position === 1
-          ? "border-yellow-400 bg-yellow-50"
+          ? "bg-yellow-50/80"
           : current
-            ? "border-yellow-300 bg-yellow-50/50"
-            : "border-neutral-200 bg-white"
+            ? "bg-yellow-50/40"
+            : "bg-white hover:bg-neutral-50"
       }`}
     >
       <span
-        className={`flex h-8 w-8 items-center justify-center rounded-lg text-xs font-black ${
-          seller.position === 1 ? "bg-yellow-400 text-black" : "bg-neutral-100 text-neutral-600"
-        }`}
+        className={`text-right text-sm font-black ${seller.position === 1 ? "text-yellow-600" : "text-neutral-400"}`}
       >
-        {seller.position}º
+        {seller.position}.
       </span>
-      <Avatar className="h-9 w-9 border border-neutral-200">
+      <Avatar className="h-8 w-8 border border-neutral-200">
         <AvatarImage
           src={seller.avatarUrl || defaultAvatarForName(seller.name)}
           alt={`Foto de ${seller.name}`}
@@ -511,20 +520,20 @@ function TeamHighlight({ seller, current }: { seller: RankingRow; current: boole
         <AvatarFallback>{initials(seller.name)}</AvatarFallback>
       </Avatar>
       <div className="min-w-0">
-        <p className="truncate text-xs font-black text-neutral-950">
+        <p className={`truncate text-xs text-neutral-950 ${current ? "font-black" : "font-bold"}`}>
           {seller.name}{" "}
           {current && <span className="text-[8px] uppercase text-yellow-600">Você</span>}
         </p>
-        <p className="mt-0.5 truncate text-[9px] text-neutral-500">
+        <p className="mt-0.5 truncate text-[8px] text-neutral-400">
           {seller.contracts} {seller.contracts === 1 ? "contrato" : "contratos"} · {seller.leads}{" "}
           leads
         </p>
       </div>
       <div className="text-right">
-        <p className="text-lg font-black text-yellow-500">{seller.contracts}</p>
-        <p className="text-[7px] font-black uppercase tracking-wide text-neutral-400">fechados</p>
+        <p className="text-sm font-black text-neutral-800">{seller.contracts}</p>
+        <p className="text-[6px] font-black uppercase tracking-wide text-neutral-400">contratos</p>
       </div>
-    </article>
+    </li>
   );
 }
 
