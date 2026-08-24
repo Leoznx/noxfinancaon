@@ -157,7 +157,9 @@ function CommissionsPage() {
           <>
             <CommissionProgressCard contracts={contracts} level={level} monthlyGain={monthlyGain} />
             <CommissionStatsGrid summary={summary} />
-            {progress ? <CommissionIncentives rewards={rewards} progress={progress} /> : null}
+            {progress ? (
+              <CommissionIncentives rewards={rewards} progress={progress} rows={rows} />
+            ) : null}
             <CommissionHistory rows={rows} />
           </>
         )}

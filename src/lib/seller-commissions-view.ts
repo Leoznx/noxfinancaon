@@ -89,6 +89,13 @@ export function summarizeCommissions(rows: SellerCommissionRow[]) {
   );
 }
 
+export function getCommissionEntryAmount(row: SellerCommissionRow) {
+  const released = Number(row.released_amount ?? 0);
+  const commission = Number(row.commission_amount ?? 0);
+  const bonus = Number(row.bonus_amount ?? 0);
+  return (released > 0 ? released : commission) + bonus;
+}
+
 export function getCommissionCustomerName(row: SellerCommissionRow) {
   const tenant = row.apolices?.consulta;
   return (

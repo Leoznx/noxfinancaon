@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   filterCommissionHistory,
   getCommissionCustomerName,
+  getCommissionEntryAmount,
   summarizeCommissions,
   type SellerCommissionRow,
 } from "../src/lib/seller-commissions-view";
@@ -28,10 +29,19 @@ function row(overrides: Partial<SellerCommissionRow>): SellerCommissionRow {
 }
 
 test("resume os valores financeiros sem arredondamento manual", () => {
-  assert.deepEqual(summarizeCommissions([
-    row({ id: "a" }),
-    row({ id: "b", commission_amount: 55, bonus_amount: 400, reserve_amount: 8.25, released_amount: 46.75 }),
-  ]), { comissao: 90, bonus: 400, retido: 13.5, liberado: 76.5 });
+  assert.deepEqual(
+    summarizeCommissions([
+      row({ id: "a" }),
+      row({
+        id: "b",
+        commission_amount: 55,
+        bonus_amount: 400,
+        reserve_amount: 8.25,
+        released_amount: 46.75,
+      }),
+    ]),
+    { comissao: 90, bonus: 400, retido: 13.5, liberado: 76.5 },
+  );
 });
 
 test("filtra período e estados conforme os status financeiros reais", () => {
@@ -42,21 +52,51 @@ test("filtra período e estados conforme os status financeiros reais", () => {
     row({ id: "old", month: 1 }),
   ];
   const reference = new Date(2026, 7, 24);
-  assert.deepEqual(filterCommissionHistory(rows, "paid", "current", reference).map((item) => item.id), ["paid-current"]);
-  assert.deepEqual(filterCommissionHistory(rows, "retained", "current", reference).map((item) => item.id), ["retained-current"]);
-  assert.deepEqual(filterCommissionHistory(rows, "all", "previous", reference).map((item) => item.id), ["previous"]);
-  assert.deepEqual(filterCommissionHistory(rows, "all", "year", reference).map((item) => item.id), rows.map((item) => item.id));
+  assert.deepEqual(
+    filterCommissionHistory(rows, "paid", "current", reference).map((item) => item.id),
+    ["paid-current"],
+  );
+  assert.deepEqual(
+    filterCommissionHistory(rows, "retained", "current", reference).map((item) => item.id),
+    ["retained-current"],
+  );
+  assert.deepEqual(
+    filterCommissionHistory(rows, "all", "previous", reference).map((item) => item.id),
+    ["previous"],
+  );
+  assert.deepEqual(
+    filterCommissionHistory(rows, "all", "year", reference).map((item) => item.id),
+    rows.map((item) => item.id),
+  );
+});
+
+test("calcula a entrada pelo valor liberado e soma a bonificação", () => {
+  assert.equal(
+    getCommissionEntryAmount(
+      row({ released_amount: 29.75, commission_amount: 35, bonus_amount: 400 }),
+    ),
+    429.75,
+  );
+  assert.equal(
+    getCommissionEntryAmount(row({ released_amount: 0, commission_amount: 55, bonus_amount: 0 })),
+    55,
+  );
 });
 
 test("prioriza o nome real informado na consulta da apólice", () => {
-  assert.equal(getCommissionCustomerName(row({
-    apolices: {
-      numero: "NOX-1",
-      status: "ativa",
-      consulta: {
-        tenant_name: "João Silva",
-        inquilino: { nome: "Nome antigo", razao_social: null },
-      },
-    },
-  })), "João Silva");
+  assert.equal(
+    getCommissionCustomerName(
+      row({
+        apolices: {
+          numero: "NOX-1",
+          status: "ativa",
+          consulta: {
+            tenant_name: "João Silva",
+            inquilino: { nome: "Nome antigo", razao_social: null },
+          },
+        },
+      }),
+    ),
+    "João Silva",
+  );
 });
