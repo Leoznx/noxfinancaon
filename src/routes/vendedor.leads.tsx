@@ -22,6 +22,7 @@ import {
   Phone,
   RefreshCw,
   Search,
+  SlidersHorizontal,
   Users,
   XCircle,
 } from "lucide-react";
@@ -61,6 +62,7 @@ function MeusLeads() {
   const [observacoes, setObservacoes] = useState<Record<string, string>>({});
   const [datasFollow, setDatasFollow] = useState<Record<string, string>>({});
   const [detalhe, setDetalhe] = useState<any | null>(null);
+  const [edicaoLeadId, setEdicaoLeadId] = useState<string | null>(null);
   const tamanhoPagina = useResponsiveLeadPageSize();
 
   async function carregar() {
@@ -133,7 +135,12 @@ function MeusLeads() {
 
   useEffect(() => {
     setPagina(1);
+    setEdicaoLeadId(null);
   }, [busca, statusFiltro, followFiltro, mesFiltro, tamanhoPagina]);
+
+  useEffect(() => {
+    setEdicaoLeadId(null);
+  }, [pagina]);
 
   useEffect(() => {
     setPagina((atual) => Math.min(atual, totalPaginas));
@@ -303,10 +310,10 @@ function MeusLeads() {
                 Página {pagina} de {totalPaginas} · até {tamanhoPagina} leads por página
               </span>
             </div>
-            <div className="grid gap-3 xl:grid-cols-2">
+            <div className="grid gap-2.5 xl:grid-cols-2 2xl:grid-cols-3">
               {leadsPaginados.map((lead) => (
-                <article key={lead.id} className="rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm sm:p-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <article key={lead.id} className="rounded-xl border border-neutral-200 bg-white p-2.5 shadow-sm sm:p-3">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">
                       <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
                         <StatusBadge status={lead.status} />
@@ -327,7 +334,7 @@ function MeusLeads() {
                       <p className="text-xs text-neutral-500">{lead.city || lead.interest || "Lead comercial NOX"}</p>
                     </div>
                     <Select value={lead.status} onValueChange={(valor) => alterarStatus(lead, valor)}>
-                      <SelectTrigger className="h-9 w-full text-xs sm:w-44">
+                      <SelectTrigger className="h-8 w-full text-xs sm:w-36">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -340,73 +347,92 @@ function MeusLeads() {
                     </Select>
                   </div>
 
-                  <div className="mt-3 grid grid-cols-1 gap-2 min-[440px]:grid-cols-3">
+                  <div className="mt-2 grid grid-cols-3 gap-1.5">
                     <ContatoItem icon={Phone} label="Telefone" value={lead.phone || "-"} href={lead.phone ? `tel:${lead.phone}` : undefined} />
                     <ContatoItem icon={MessageCircle} label="WhatsApp" value="Abrir conversa" href={whatsappUrl(lead.full_name, lead.phone)} />
                     <ContatoItem icon={Mail} label="E-mail" value={lead.email || "-"} href={lead.email ? `mailto:${lead.email}` : undefined} />
                   </div>
 
-                  <div className="mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_190px]">
-                    <div>
-                      <label className="mb-1 block text-[10px] font-black uppercase tracking-widest text-neutral-400">Observações</label>
-                      <Textarea
-                        className="min-h-[68px] resize-y text-xs"
-                        value={observacoes[lead.id] ?? ""}
-                        onChange={(e) => setObservacoes((prev) => ({ ...prev, [lead.id]: e.target.value }))}
-                        placeholder="Registre o que aconteceu no contato..."
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-[10px] font-black uppercase tracking-widest text-neutral-400">Próximo follow-up</label>
-                      <Input
-                        className="h-9 text-xs"
-                        type="datetime-local"
-                        value={datasFollow[lead.id] ?? ""}
-                        onChange={(e) => setDatasFollow((prev) => ({ ...prev, [lead.id]: e.target.value }))}
-                      />
-                      <p className="mt-1.5 text-[11px] font-medium text-neutral-500">Atual: {formatDateTime(lead.next_action_at) || "sem follow-up"}</p>
-                    </div>
-                  </div>
+                  <p className="mt-1.5 flex items-center gap-1 text-[10px] font-medium text-neutral-500">
+                    <CalendarClock className="h-3 w-3 shrink-0" />
+                    Follow-up: {formatDateTime(lead.next_action_at) || "sem agendamento"}
+                  </p>
 
-                  <div className="mt-3 flex flex-wrap gap-1.5 sm:justify-end">
-                    <Button size="sm" variant="outline" className="h-8 gap-1.5 px-2.5 text-xs" onClick={() => setDetalhe(lead)}>
-                      <Eye className="h-3.5 w-3.5" />
+                  {edicaoLeadId === lead.id && (
+                    <div className="mt-2 rounded-lg border border-neutral-200 bg-neutral-50/70 p-2.5">
+                      <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_170px]">
+                        <div>
+                          <label className="mb-1 block text-[9px] font-black uppercase tracking-widest text-neutral-400">Observações</label>
+                          <Textarea
+                            className="min-h-[50px] resize-y bg-white text-xs"
+                            value={observacoes[lead.id] ?? ""}
+                            onChange={(e) => setObservacoes((prev) => ({ ...prev, [lead.id]: e.target.value }))}
+                            placeholder="Registre o contato..."
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-[9px] font-black uppercase tracking-widest text-neutral-400">Próximo follow-up</label>
+                          <Input
+                            className="h-8 bg-white text-[11px]"
+                            type="datetime-local"
+                            value={datasFollow[lead.id] ?? ""}
+                            onChange={(e) => setDatasFollow((prev) => ({ ...prev, [lead.id]: e.target.value }))}
+                          />
+                        </div>
+                      </div>
+                      <div className="mt-2 flex flex-wrap justify-end gap-1.5">
+                        <Button size="sm" variant="outline" className="h-7 bg-white px-2 text-[11px]" onClick={() => salvarObservacao(lead)} disabled={salvandoId === lead.id}>
+                          Salvar observação
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 bg-white px-2 text-[11px]"
+                          onClick={() => registrarFollowup(lead)}
+                          disabled={salvandoId === lead.id || ["atendido", "convertido", "perdido"].includes(lead.status)}
+                        >
+                          Agendar follow-up
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="mt-2 flex flex-wrap gap-1 sm:justify-end">
+                    <Button size="sm" variant="outline" className="h-7 gap-1 px-2 text-[11px]" onClick={() => setDetalhe(lead)}>
+                      <Eye className="h-3 w-3" />
                       Ver detalhes
                     </Button>
-                    <Button size="sm" variant="outline" className="h-8 px-2.5 text-xs" onClick={() => salvarObservacao(lead)} disabled={salvandoId === lead.id}>
-                      Salvar observação
-                    </Button>
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-8 px-2.5 text-xs"
-                      onClick={() => registrarFollowup(lead)}
-                      disabled={salvandoId === lead.id || ["atendido", "convertido", "perdido"].includes(lead.status)}
+                      className="h-7 gap-1 px-2 text-[11px]"
+                      onClick={() => setEdicaoLeadId((atual) => (atual === lead.id ? null : lead.id))}
                     >
-                      Agendar follow-up
+                      <SlidersHorizontal className="h-3 w-3" />
+                      {edicaoLeadId === lead.id ? "Fechar edição" : "Atender lead"}
                     </Button>
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-8 gap-1.5 px-2.5 text-xs"
+                      className="h-7 gap-1 px-2 text-[11px]"
                       onClick={() => alterarStatus(lead, "perdido")}
                       disabled={salvandoId === lead.id}
                     >
-                      <XCircle className="h-3.5 w-3.5" />
+                      <XCircle className="h-3 w-3" />
                       Perdido
                     </Button>
                     <Button
                       size="sm"
-                      className="h-8 gap-1.5 bg-neutral-950 px-2.5 text-xs text-white hover:bg-neutral-800"
+                      className="h-7 gap-1 bg-neutral-950 px-2 text-[11px] text-white hover:bg-neutral-800"
                       onClick={() => alterarStatus(lead, "convertido")}
                       disabled={salvandoId === lead.id}
                     >
-                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      <CheckCircle2 className="h-3 w-3" />
                       Convertido
                     </Button>
-                    <Button asChild size="sm" variant="outline" className="h-8 gap-1.5 px-2.5 text-xs" onClick={() => alterarStatus(lead, "em_atendimento")}>
+                    <Button asChild size="sm" variant="outline" className="h-7 gap-1 px-2 text-[11px]" onClick={() => alterarStatus(lead, "em_atendimento")}>
                       <Link to="/vendedor/pipeline">
-                        <MoveRight className="h-3.5 w-3.5" />
+                        <MoveRight className="h-3 w-3" />
                         Pipeline
                       </Link>
                     </Button>
@@ -461,10 +487,10 @@ function ResumoCard({ icon: Icon, label, value, destaque = false }: any) {
 
 function ContatoItem({ icon: Icon, label, value, href }: any) {
   const content = (
-    <div className="rounded-xl border border-neutral-100 bg-neutral-50 p-2.5 transition hover:border-yellow-200 hover:bg-yellow-50">
-      <Icon className="mb-1 h-4 w-4 text-yellow-700" />
-      <p className="text-[9px] font-black uppercase tracking-widest text-neutral-400">{label}</p>
-      <p className="truncate text-xs font-bold text-neutral-900">{value}</p>
+    <div className="rounded-lg border border-neutral-100 bg-neutral-50 p-2 transition hover:border-yellow-200 hover:bg-yellow-50">
+      <Icon className="mb-0.5 h-3.5 w-3.5 text-yellow-700" />
+      <p className="text-[8px] font-black uppercase tracking-widest text-neutral-400">{label}</p>
+      <p className="truncate text-[11px] font-bold text-neutral-900">{value}</p>
     </div>
   );
   if (!href) return content;
