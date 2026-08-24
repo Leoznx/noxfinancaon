@@ -1,5 +1,11 @@
 // Modelo oficial de comissionamento do Vendedor interno NOX.
 // Não existe valor fixo: o ganho é composto somente por comissão + bônus.
+export const MARCOS_BONUS_VENDEDOR = [
+  { contratos: 15, rotulo: "15", bonus: 400 },
+  { contratos: 30, rotulo: "30", bonus: 600 },
+  { contratos: 46, rotulo: "45+", bonus: 1200 },
+] as const;
+
 /** Comissão progressiva por contrato fechado no mês. */
 export function calcularComissaoContratos(contratos: number): number {
   const total = Math.max(0, Math.floor(contratos));
