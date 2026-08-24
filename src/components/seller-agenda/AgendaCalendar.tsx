@@ -112,7 +112,7 @@ export function AgendaCalendar({
           return (
             <div
               key={day.toISOString()}
-              className={`group relative min-h-[64px] border-b border-r border-neutral-100 p-1.5 text-left transition duration-200 sm:min-h-[68px] ${
+              className={`group relative min-h-[68px] border-b border-r border-neutral-100 p-1.5 text-left transition duration-200 sm:min-h-[80px] ${
                 index % 7 === 6 ? "border-r-0" : ""
               } ${selected ? "bg-yellow-50 ring-1 ring-inset ring-yellow-400" : "hover:bg-neutral-50"} ${
                 !isSameMonth(day, month) ? "bg-neutral-50/60 text-neutral-300" : ""
