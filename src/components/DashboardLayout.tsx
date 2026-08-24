@@ -39,6 +39,7 @@ import {
   Shuffle,
   IdCard,
   ContactRound,
+  ChevronDown,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { SinoNotificacoes } from "./SinoNotificacoes";
@@ -703,6 +704,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 iniciaisUsuario
               )}
             </Link>
+            {cargoInterno === "vendedor" && (
+              <ChevronDown className="h-4 w-4 text-neutral-500" aria-hidden="true" />
+            )}
           </div>
         </header>
 
