@@ -1,15 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   AlertCircle,
-  ArrowUpRight,
   Award,
   CalendarDays,
+  ChartNoAxesCombined,
   CheckCircle2,
-  Gift,
-  ImageIcon,
   RefreshCw,
-  Sparkles,
   Target,
   Trophy,
   Users,
@@ -23,14 +20,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { defaultAvatarForName } from "@/lib/gender-avatar";
-import {
-  sellerGoalPercentage,
-  sellerOverallProgress,
-  sellerRewardCriterion,
-  sellerRewardCurrent,
-} from "@/lib/seller-goals-dashboard";
+import { sellerGoalPercentage, sellerOverallProgress } from "@/lib/seller-goals-dashboard";
 import { fetchMySellerMonthlyProgress, type SellerMonthlyProgress } from "@/lib/seller-progress";
-import { fetchSellerRewards, type SellerReward } from "@/lib/seller-rewards";
 
 export const Route = createFileRoute("/vendedor/metas")({
   component: () => (
@@ -70,7 +61,6 @@ function Metas() {
   const year = now.getFullYear();
   const [progress, setProgress] = useState<SellerMonthlyProgress | null>(null);
   const [ranking, setRanking] = useState<RankingRow[]>([]);
-  const [rewards, setRewards] = useState<SellerReward[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState("");
 
@@ -78,14 +68,12 @@ function Metas() {
     setLoading(true);
     setErro("");
     try {
-      const [progressData, rewardsData, rankingResponse] = await Promise.all([
+      const [progressData, rankingResponse] = await Promise.all([
         fetchMySellerMonthlyProgress(month, year),
-        fetchSellerRewards(month, year),
         (supabase as any).rpc("ranking_vendedores", { p_month: month, p_year: year }),
       ]);
       if (rankingResponse.error) throw rankingResponse.error;
       setProgress(progressData);
-      setRewards(rewardsData);
       setRanking(
         ((rankingResponse.data as Record<string, unknown>[] | null) ?? [])
           .map((row) => ({
@@ -111,7 +99,6 @@ function Metas() {
     const channel = supabase
       .channel("seller-monthly-goals")
       .on("postgres_changes", { event: "*", schema: "public", table: "seller_goals" }, refresh)
-      .on("postgres_changes", { event: "*", schema: "public", table: "seller_rewards" }, refresh)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "seller_appointments" },
@@ -142,47 +129,62 @@ function Metas() {
     progress?.target_clients != null &&
     progress?.target_contracts != null;
   const currentPosition = ranking.find((seller) => seller.id === progress?.seller_id)?.position;
-  const teamContracts = useMemo(
-    () => ranking.reduce((total, seller) => total + seller.contracts, 0),
-    [ranking],
-  );
+  const completedGoals = progress
+    ? [
+        [progress.meetings_completed, progress.target_meetings],
+        [progress.clients_registered, progress.target_clients],
+        [progress.contracts_closed, progress.target_contracts],
+      ]
+        .filter(([, target]) => target != null)
+        .filter(([current, target]) => Number(current) >= Number(target)).length
+    : 0;
+
+  useEffect(() => {
+    const previousHtmlOverflow = document.documentElement.style.overflowY;
+    const previousBodyOverflow = document.body.style.overflowY;
+    document.documentElement.style.overflowY = "hidden";
+    document.body.style.overflowY = "hidden";
+    return () => {
+      document.documentElement.style.overflowY = previousHtmlOverflow;
+      document.body.style.overflowY = previousBodyOverflow;
+    };
+  }, []);
 
   return (
-    <DashboardLayout>
-      <div className="space-y-5 pb-8 text-neutral-950">
-        <section className="relative overflow-hidden rounded-[26px] border border-yellow-300 bg-[radial-gradient(circle_at_92%_20%,rgba(250,204,21,0.28),transparent_24%),linear-gradient(115deg,#ffffff_0%,#fffef8_60%,#fff4b3_100%)] px-5 py-6 shadow-sm sm:px-7 lg:py-7">
-          <div className="pointer-events-none absolute -right-12 -top-20 h-52 w-52 rounded-full border-[28px] border-yellow-400/15" />
-          <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <span className="inline-flex items-center gap-2 rounded-full border border-yellow-400 bg-white/80 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-yellow-700 shadow-sm">
-                <CalendarDays className="h-3.5 w-3.5" /> {MONTHS[month - 1]} de {year}
+    <DashboardLayout lockDesktopViewport>
+      <main className="flex h-full min-h-0 flex-col gap-3 overflow-hidden text-neutral-950">
+        <section className="relative shrink-0 overflow-hidden rounded-[22px] border border-yellow-300 bg-[radial-gradient(circle_at_92%_20%,rgba(250,204,21,0.25),transparent_24%),linear-gradient(115deg,#ffffff_0%,#fffef8_60%,#fff4b3_100%)] px-5 py-4 shadow-sm sm:px-6">
+          <div className="pointer-events-none absolute -right-10 -top-24 h-48 w-48 rounded-full border-[24px] border-yellow-400/15" />
+          <div className="relative flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <span className="inline-flex items-center gap-2 rounded-full border border-yellow-400 bg-white/80 px-3 py-1 text-[9px] font-black uppercase tracking-[0.18em] text-yellow-700 shadow-sm">
+                <CalendarDays className="h-3 w-3" /> {MONTHS[month - 1]} de {year}
               </span>
-              <h1 className="mt-4 text-3xl font-black tracking-[-0.045em] sm:text-4xl">
+              <h1 className="mt-2 text-2xl font-black tracking-[-0.045em] sm:text-3xl">
                 Minhas <span className="text-yellow-400">Metas</span>
               </h1>
-              <p className="mt-2 max-w-2xl text-sm font-medium text-neutral-600">
-                Acompanhe seus resultados, avance no ranking e desbloqueie as recompensas da equipe
-                NOX.
+              <p className="mt-1 max-w-2xl truncate text-xs font-medium text-neutral-600 sm:text-sm">
+                Seu desempenho individual do mês, com metas e resultados exclusivos da sua conta.
               </p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex shrink-0 items-center gap-2">
               {currentPosition && (
-                <div className="rounded-2xl border border-yellow-300 bg-white/85 px-4 py-2.5 text-right shadow-sm">
-                  <p className="text-[9px] font-black uppercase tracking-[0.16em] text-neutral-400">
-                    Sua posição
+                <div className="rounded-xl border border-yellow-300 bg-white/85 px-3 py-2 text-right shadow-sm">
+                  <p className="text-[8px] font-black uppercase tracking-[0.14em] text-neutral-400">
+                    Ranking
                   </p>
-                  <p className="text-xl font-black text-neutral-950">{currentPosition}º lugar</p>
+                  <p className="text-base font-black text-neutral-950">{currentPosition}º lugar</p>
                 </div>
               )}
               <Button
                 variant="outline"
                 size="icon"
-                className="h-12 w-12 rounded-2xl border-yellow-300 bg-white/90"
+                className="h-10 w-10 rounded-xl border-yellow-300 bg-white/90"
                 onClick={carregar}
                 disabled={loading}
                 aria-label="Atualizar metas"
               >
-                <RefreshCw className={`h-5 w-5 ${loading ? "animate-spin" : ""}`} />
+                <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
               </Button>
             </div>
           </div>
@@ -193,15 +195,18 @@ function Metas() {
         {loading ? (
           <MetasSkeleton />
         ) : !erro && progress ? (
-          <>
+          <div className="flex min-h-0 flex-1 flex-col gap-3">
             {!hasGoals && (
               <Estado
                 titulo="Metas ainda não definidas"
-                descricao="O administrador precisa definir as três metas do mês na Equipe NOX."
+                descricao="O administrador precisa definir as três metas individuais deste mês."
               />
             )}
 
-            <section className="grid gap-4 lg:grid-cols-3" aria-label="Metas principais do mês">
+            <section
+              className="grid shrink-0 grid-cols-3 gap-3"
+              aria-label="Metas individuais do mês"
+            >
               <GoalCard
                 icon={Video}
                 label="Reuniões realizadas"
@@ -222,52 +227,63 @@ function Metas() {
               />
             </section>
 
-            <section className="grid items-stretch gap-4 xl:grid-cols-[0.9fr_1.08fr_1.25fr]">
-              <Card className="overflow-hidden border-neutral-200 shadow-sm">
-                <CardHeader className="border-b border-neutral-100 pb-4">
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <Target className="h-5 w-5 text-yellow-500" /> Progresso geral
+            <section className="grid min-h-0 flex-1 items-stretch gap-3 lg:grid-cols-[0.82fr_1.18fr_1fr]">
+              <Card className="flex min-h-0 flex-col overflow-hidden border-neutral-200 shadow-sm">
+                <CardHeader className="shrink-0 border-b border-neutral-100 px-4 py-3">
+                  <CardTitle className="flex items-center gap-2 text-sm">
+                    <Target className="h-4 w-4 text-yellow-500" /> Progresso individual
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="flex min-h-[390px] flex-col items-center justify-center p-6 text-center">
+                <CardContent className="flex min-h-0 flex-1 flex-col items-center justify-center p-4 text-center">
                   <CircularProgress value={overallProgress} />
-                  <p className="mt-6 text-lg font-black text-neutral-950">
+                  <p className="mt-3 text-sm font-black text-neutral-950">
                     {overallProgress >= 100
                       ? "Objetivo do mês concluído!"
                       : overallProgress >= 60
                         ? "Você está no caminho certo."
                         : "Cada resultado faz a diferença."}
                   </p>
-                  <p className="mt-2 max-w-xs text-sm leading-6 text-neutral-500">
-                    {overallProgress >= 100
-                      ? "Continue superando seus números e busque novas recompensas."
-                      : "Mantenha o foco nas metas ativas para conquistar reconhecimento e premiações."}
-                  </p>
-                  <div className="mt-6 grid w-full grid-cols-2 gap-2 rounded-2xl bg-neutral-50 p-3">
-                    <MiniStat label="Contratos da equipe" value={teamContracts} />
-                    <MiniStat
-                      label="Sua colocação"
-                      value={currentPosition ? `${currentPosition}º` : "—"}
-                    />
+                  <div className="mt-3 grid w-full grid-cols-2 gap-2 rounded-xl bg-neutral-50 p-2">
+                    <MiniStat label="Seus contratos" value={contracts} />
+                    <MiniStat label="Metas concluídas" value={`${completedGoals}/3`} />
                   </div>
                 </CardContent>
               </Card>
 
-              <Card className="overflow-hidden border-yellow-200 shadow-sm">
-                <CardHeader className="border-b border-yellow-100 bg-yellow-50/50 pb-4">
+              <Card className="flex min-h-0 flex-col overflow-hidden border-neutral-200 shadow-sm">
+                <CardHeader className="shrink-0 border-b border-neutral-100 bg-[linear-gradient(120deg,#fffdf2,#ffffff)] px-4 py-3">
                   <div className="flex items-center justify-between gap-3">
-                    <CardTitle className="flex items-center gap-2 text-base">
-                      <Award className="h-5 w-5 text-yellow-600" /> Destaques da equipe
+                    <CardTitle className="flex items-center gap-2 text-sm">
+                      <ChartNoAxesCombined className="h-4 w-4 text-yellow-600" /> Evolução das metas
                     </CardTitle>
                     <Badge
                       variant="outline"
-                      className="border-yellow-300 bg-white text-[9px] font-black uppercase tracking-wider text-yellow-700"
+                      className="border-yellow-300 bg-white text-[8px] font-black uppercase tracking-wider text-yellow-700"
+                    >
+                      Somente seus dados
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="flex min-h-0 flex-1 flex-col justify-center p-4">
+                  <IndividualGoalTrend progress={progress} />
+                </CardContent>
+              </Card>
+
+              <Card className="flex min-h-0 flex-col overflow-hidden border-yellow-200 shadow-sm">
+                <CardHeader className="shrink-0 border-b border-yellow-100 bg-yellow-50/50 px-4 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <CardTitle className="flex items-center gap-2 text-sm">
+                      <Award className="h-4 w-4 text-yellow-600" /> Destaques da equipe
+                    </CardTitle>
+                    <Badge
+                      variant="outline"
+                      className="border-yellow-300 bg-white text-[8px] font-black uppercase tracking-wider text-yellow-700"
                     >
                       Ranking mensal
                     </Badge>
                   </div>
                 </CardHeader>
-                <CardContent className="p-3">
+                <CardContent className="flex min-h-0 flex-1 flex-col justify-center p-3">
                   {ranking.length === 0 ? (
                     <EmptyBlock
                       icon={Trophy}
@@ -275,7 +291,7 @@ function Metas() {
                     />
                   ) : (
                     <div className="space-y-2">
-                      {ranking.slice(0, 7).map((seller) => (
+                      {ranking.slice(0, 3).map((seller) => (
                         <TeamHighlight
                           key={seller.id}
                           seller={seller}
@@ -286,66 +302,10 @@ function Metas() {
                   )}
                 </CardContent>
               </Card>
-
-              <Card className="overflow-hidden border-yellow-200 shadow-sm">
-                <CardHeader className="border-b border-yellow-100 bg-[linear-gradient(120deg,#fffbe8,#ffffff)] pb-4">
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <Gift className="h-5 w-5 text-yellow-600" /> Recompensas do mês
-                  </CardTitle>
-                  <p className="text-xs leading-5 text-neutral-500">
-                    Complete os desafios e desbloqueie as premiações definidas pela NOX.
-                  </p>
-                </CardHeader>
-                <CardContent className="p-3">
-                  {rewards.length === 0 ? (
-                    <EmptyBlock
-                      icon={Gift}
-                      text="Nenhuma recompensa foi configurada para este mês."
-                    />
-                  ) : (
-                    <div className="space-y-3">
-                      {rewards.map((reward) => (
-                        <RewardCard key={reward.id} reward={reward} progress={progress} />
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
             </section>
-
-            <Card className="overflow-hidden border-neutral-200 shadow-sm">
-              <CardHeader className="border-b border-neutral-100 bg-neutral-50/60">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Sparkles className="h-5 w-5 text-yellow-500" /> Bonificação por produção
-                </CardTitle>
-                <p className="text-xs text-neutral-500">
-                  As faixas são cumulativas e avançam automaticamente com os contratos do mês.
-                </p>
-              </CardHeader>
-              <CardContent className="grid gap-3 p-4 md:grid-cols-3">
-                <Tier
-                  title="1º ao 15º contrato"
-                  value="R$ 35 cada"
-                  bonus="No 15º: + R$ 400"
-                  active={contracts <= 15}
-                />
-                <Tier
-                  title="16º ao 25º contrato"
-                  value="R$ 55 cada"
-                  bonus="No 30º: + R$ 600"
-                  active={contracts >= 16 && contracts <= 25}
-                />
-                <Tier
-                  title="A partir do 26º"
-                  value="R$ 75 cada"
-                  bonus="Acima de 45: + R$ 1.200"
-                  active={contracts >= 26}
-                />
-              </CardContent>
-            </Card>
-          </>
+          </div>
         ) : null}
-      </div>
+      </main>
     </DashboardLayout>
   );
 }
@@ -365,26 +325,26 @@ function GoalCard({
   const remaining = target == null ? null : Math.max(0, target - current);
   return (
     <Card className="group overflow-hidden border-neutral-200 shadow-sm transition hover:-translate-y-0.5 hover:border-yellow-300 hover:shadow-md">
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-yellow-300 bg-yellow-50 text-yellow-700">
-            <Icon className="h-5 w-5" />
+      <CardContent className="p-3 sm:p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-yellow-300 bg-yellow-50 text-yellow-700">
+            <Icon className="h-4 w-4" />
           </div>
-          <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-[10px] font-black text-neutral-500">
+          <span className="rounded-full bg-neutral-100 px-2 py-1 text-[9px] font-black text-neutral-500">
             {percentage}%
           </span>
         </div>
-        <p className="mt-4 text-sm font-black text-neutral-700">{label}</p>
-        <p className="mt-1 text-3xl font-black tracking-tight text-neutral-950">
-          {current} <span className="text-base text-neutral-400">/ {target ?? 0}</span>
+        <p className="mt-2 truncate text-xs font-black text-neutral-700 sm:text-sm">{label}</p>
+        <p className="mt-0.5 text-2xl font-black tracking-tight text-neutral-950">
+          {current} <span className="text-sm text-neutral-400">/ {target ?? 0}</span>
         </p>
-        <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-neutral-100">
+        <div className="mt-2 h-2 overflow-hidden rounded-full bg-neutral-100">
           <div
             className="h-full rounded-full bg-gradient-to-r from-yellow-500 to-yellow-300 transition-all duration-500"
             style={{ width: `${percentage}%` }}
           />
         </div>
-        <div className="mt-2 flex items-center justify-between gap-2 text-[11px] font-semibold">
+        <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px] font-semibold">
           <span className="text-neutral-500">
             {remaining == null
               ? "Aguardando definição"
@@ -399,16 +359,112 @@ function GoalCard({
   );
 }
 
+function IndividualGoalTrend({ progress }: { progress: SellerMonthlyProgress }) {
+  const metrics = [
+    {
+      label: "Reuniões",
+      value: progress.meetings_completed,
+      target: progress.target_meetings,
+    },
+    {
+      label: "Clientes",
+      value: progress.clients_registered,
+      target: progress.target_clients,
+    },
+    {
+      label: "Contratos",
+      value: progress.contracts_closed,
+      target: progress.target_contracts,
+    },
+  ].map((metric) => ({
+    ...metric,
+    percentage: sellerGoalPercentage(metric.value, metric.target),
+  }));
+  const points = metrics.map((metric, index) => ({
+    x: 34 + index * 116,
+    y: 98 - metric.percentage * 0.72,
+  }));
+  const linePath = points
+    .map((point, index) => `${index === 0 ? "M" : "L"}${point.x} ${point.y}`)
+    .join(" ");
+  const areaPath = `${linePath} L${points[points.length - 1].x} 105 L${points[0].x} 105 Z`;
+
+  return (
+    <div
+      className="flex min-h-0 flex-1 flex-col justify-center"
+      aria-label="Gráfico das suas metas individuais"
+    >
+      <svg className="min-h-[120px] w-full flex-1" viewBox="0 0 300 120" role="img">
+        <defs>
+          <linearGradient id="seller-goal-area" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#facc15" stopOpacity="0.35" />
+            <stop offset="100%" stopColor="#facc15" stopOpacity="0.03" />
+          </linearGradient>
+        </defs>
+        {[26, 62, 98].map((y) => (
+          <line key={y} x1="18" x2="282" y1={y} y2={y} stroke="#e5e5e5" strokeWidth="1" />
+        ))}
+        <line
+          x1="18"
+          x2="282"
+          y1="26"
+          y2="26"
+          stroke="#eab308"
+          strokeDasharray="5 5"
+          opacity="0.7"
+        />
+        <path d={areaPath} fill="url(#seller-goal-area)" />
+        <path
+          d={linePath}
+          fill="none"
+          stroke="#eab308"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="4"
+        />
+        {points.map((point, index) => (
+          <g key={metrics[index].label}>
+            <circle cx={point.x} cy={point.y} r="7" fill="white" stroke="#eab308" strokeWidth="4" />
+            <text
+              x={point.x}
+              y={Math.max(14, point.y - 11)}
+              textAnchor="middle"
+              className="fill-neutral-950 text-[10px] font-black"
+            >
+              {metrics[index].percentage}%
+            </text>
+          </g>
+        ))}
+      </svg>
+      <div className="grid grid-cols-3 gap-2 border-t border-neutral-100 pt-2 text-center">
+        {metrics.map((metric) => (
+          <div key={metric.label} className="min-w-0">
+            <p className="truncate text-[9px] font-black uppercase tracking-wide text-neutral-400">
+              {metric.label}
+            </p>
+            <p className="mt-0.5 text-xs font-black text-neutral-950">
+              {metric.value}/{metric.target ?? 0}
+            </p>
+          </div>
+        ))}
+      </div>
+      <p className="mt-2 text-center text-[9px] font-medium text-neutral-400">
+        A linha compara apenas seu avanço em cada objetivo deste mês.
+      </p>
+    </div>
+  );
+}
+
 function CircularProgress({ value }: { value: number }) {
   return (
     <div
-      className="flex h-36 w-36 items-center justify-center rounded-full p-3 shadow-[0_12px_34px_rgba(234,179,8,0.18)]"
+      className="flex h-28 w-28 items-center justify-center rounded-full p-2.5 shadow-[0_10px_28px_rgba(234,179,8,0.16)]"
       style={{ background: `conic-gradient(#facc15 ${value * 3.6}deg, #eeeeee 0deg)` }}
       role="img"
       aria-label={`${value}% do objetivo mensal concluído`}
     >
       <div className="flex h-full w-full flex-col items-center justify-center rounded-full bg-white shadow-inner">
-        <strong className="text-3xl font-black text-neutral-950">{value}%</strong>
+        <strong className="text-2xl font-black text-neutral-950">{value}%</strong>
         <span className="mt-1 text-[8px] font-black uppercase tracking-[0.16em] text-neutral-400">
           objetivo mensal
         </span>
@@ -419,8 +475,8 @@ function CircularProgress({ value }: { value: number }) {
 
 function MiniStat({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-xl bg-white px-2 py-3 shadow-sm">
-      <b className="block text-lg text-neutral-950">{value}</b>
+    <div className="rounded-lg bg-white px-2 py-2 shadow-sm">
+      <b className="block text-base text-neutral-950">{value}</b>
       <span className="mt-1 block text-[9px] font-bold uppercase tracking-wide text-neutral-400">
         {label}
       </span>
@@ -472,116 +528,26 @@ function TeamHighlight({ seller, current }: { seller: RankingRow; current: boole
   );
 }
 
-function RewardCard({
-  reward,
-  progress,
-}: {
-  reward: SellerReward;
-  progress: SellerMonthlyProgress;
-}) {
-  const current = sellerRewardCurrent(progress, reward.metric);
-  const percentage = sellerGoalPercentage(current, reward.target);
-  const remaining = Math.max(0, reward.target - current);
-  const [imageFailed, setImageFailed] = useState(false);
+function EmptyBlock({ icon: Icon, text }: { icon: typeof Trophy; text: string }) {
   return (
-    <article className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
-      <div className="grid grid-cols-[92px_minmax(0,1fr)] gap-3 p-3">
-        {imageFailed ? (
-          <div className="flex h-[92px] items-center justify-center rounded-xl bg-yellow-50 text-yellow-600">
-            <ImageIcon className="h-6 w-6" />
-          </div>
-        ) : (
-          <img
-            src={reward.image_url}
-            alt={reward.title}
-            className="h-[92px] w-[92px] rounded-xl bg-neutral-100 object-cover"
-            onError={() => setImageFailed(true)}
-          />
-        )}
-        <div className="min-w-0 py-0.5">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-black text-neutral-950">{reward.title}</p>
-              <p className="mt-0.5 text-[10px] font-bold text-yellow-700">
-                {sellerRewardCriterion(reward.metric, reward.target)}
-              </p>
-            </div>
-            {remaining === 0 && <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />}
-          </div>
-          {reward.description && (
-            <p className="mt-2 line-clamp-2 text-[10px] leading-4 text-neutral-500">
-              {reward.description}
-            </p>
-          )}
-        </div>
-      </div>
-      <div className="border-t border-neutral-100 bg-neutral-50/70 px-3 py-3">
-        <div className="flex items-center justify-between text-[10px] font-black">
-          <span className={remaining === 0 ? "text-emerald-700" : "text-neutral-600"}>
-            {remaining === 0 ? "Recompensa conquistada" : `Faltam ${remaining} para desbloquear`}
-          </span>
-          <span className="rounded-full border border-yellow-300 bg-yellow-50 px-2 py-0.5 text-yellow-800">
-            {current}/{reward.target}
-          </span>
-        </div>
-        <div className="mt-2 h-2 overflow-hidden rounded-full bg-neutral-200">
-          <div className="h-full rounded-full bg-yellow-400" style={{ width: `${percentage}%` }} />
-        </div>
-      </div>
-    </article>
-  );
-}
-
-function Tier({
-  title,
-  value,
-  bonus,
-  active,
-}: {
-  title: string;
-  value: string;
-  bonus: string;
-  active: boolean;
-}) {
-  return (
-    <div
-      className={`relative overflow-hidden rounded-2xl border p-4 ${
-        active
-          ? "border-yellow-400 bg-yellow-50 ring-2 ring-yellow-100"
-          : "border-neutral-200 bg-white"
-      }`}
-    >
-      <div className="flex items-center justify-between gap-2">
-        <p className="font-black text-neutral-950">{title}</p>
-        {active && <Badge className="bg-yellow-400 text-[9px] text-black">FAIXA ATUAL</Badge>}
-      </div>
-      <p className="mt-3 text-lg font-black text-yellow-700">{value}</p>
-      <p className="mt-0.5 text-xs text-neutral-500">{bonus}</p>
-      <ArrowUpRight className="absolute bottom-3 right-3 h-5 w-5 text-yellow-400/50" />
-    </div>
-  );
-}
-
-function EmptyBlock({ icon: Icon, text }: { icon: typeof Gift; text: string }) {
-  return (
-    <div className="flex min-h-52 flex-col items-center justify-center rounded-2xl border border-dashed border-neutral-300 bg-neutral-50 p-6 text-center">
-      <Icon className="h-7 w-7 text-yellow-500" />
-      <p className="mt-3 max-w-xs text-sm font-semibold leading-5 text-neutral-500">{text}</p>
+    <div className="flex min-h-36 flex-col items-center justify-center rounded-xl border border-dashed border-neutral-300 bg-neutral-50 p-4 text-center">
+      <Icon className="h-6 w-6 text-yellow-500" />
+      <p className="mt-2 max-w-xs text-xs font-semibold leading-5 text-neutral-500">{text}</p>
     </div>
   );
 }
 
 function MetasSkeleton() {
   return (
-    <div className="animate-pulse space-y-4">
-      <div className="grid gap-4 lg:grid-cols-3">
+    <div className="min-h-0 flex-1 animate-pulse space-y-3">
+      <div className="grid grid-cols-3 gap-3">
         {[1, 2, 3].map((item) => (
-          <div key={item} className="h-52 rounded-2xl bg-neutral-100" />
+          <div key={item} className="h-36 rounded-2xl bg-neutral-100" />
         ))}
       </div>
-      <div className="grid gap-4 xl:grid-cols-3">
+      <div className="grid h-[calc(100%-9.75rem)] grid-cols-3 gap-3">
         {[1, 2, 3].map((item) => (
-          <div key={item} className="h-[430px] rounded-2xl bg-neutral-100" />
+          <div key={item} className="rounded-2xl bg-neutral-100" />
         ))}
       </div>
     </div>
