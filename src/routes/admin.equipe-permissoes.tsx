@@ -199,6 +199,7 @@ export function TabColaboradores() {
     const { data } = await supabase
       .from("internal_users" as any)
       .select("*")
+      .neq("status", "excluido")
       .order("created_at", { ascending: false });
     setRows((data as any[]) ?? []);
     setLoading(false);
@@ -231,13 +232,13 @@ export function TabColaboradores() {
   };
   const excluirColaborador = async (employee: any) => {
     const confirmed = window.confirm(
-      `Excluir permanentemente ${employee.full_name || employee.email}?\n\nO cargo, o perfil e o login serão apagados. Esta ação não pode ser desfeita.`,
+      `Remover permanentemente o acesso de ${employee.full_name || employee.email}?\n\nO login será inutilizado e os dados pessoais serão anonimizados. Registros necessários para auditoria serão preservados. Esta ação não pode ser desfeita.`,
     );
     if (!confirmed) return;
     setDeletingId(employee.id);
     try {
       await deleteNoxEmployee(employee.id);
-      toast.success("Colaborador e cadastro excluídos permanentemente.");
+      toast.success("Login removido e cadastro anonimizado permanentemente.");
       await carregar();
     } catch (error: any) {
       toast.error(error.message || "Não foi possível excluir o colaborador.");

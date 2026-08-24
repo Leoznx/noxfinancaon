@@ -72,7 +72,27 @@ type MenuItem = {
   href: string;
   module?: string;
   highlight?: boolean;
+  keywords?: string[];
+  children?: MenuSubItem[];
 };
+
+type MenuSubItem = {
+  label: string;
+  href: string;
+  keywords?: string[];
+};
+
+type VisibleMenuItem = Omit<MenuItem, "children"> & {
+  parentLabel?: string;
+};
+
+function normalizeMenuSearch(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
 
 // module: chave em role_permissions (ver permissoes-cache.ts). Admin/admin_master/
 // analista vê o catálogo administrativo sem a gestão financeira; os módulos aqui
@@ -88,21 +108,104 @@ const adminItems: MenuItem[] = [
   { icon: IdCard, label: "Aprovações de Documentos", href: "/admin/verificacoes", module: "documentos" },
   { icon: Search, label: "Consultas", href: "/admin/consultas", module: "consultas" },
   { icon: FileText, label: "Contratos Ativos", href: "/admin/contratos", module: "contratos" },
-  { icon: Users, label: "Usuários", href: "/admin/usuarios", module: "usuarios" },
-  { icon: DollarSign, label: "Financeiro", href: "/admin/financeiro", module: "financeiro" },
-  { icon: Wallet, label: "Faturamento", href: "/admin/faturamento", module: "faturamento" },
+  {
+    icon: Users,
+    label: "Usuários",
+    href: "/admin/usuarios",
+    module: "usuarios",
+    children: [
+      { label: "Todos os usuários", href: "/admin/usuarios?tab=todos" },
+      { label: "Proprietários", href: "/admin/usuarios?tab=proprietario" },
+      { label: "Imobiliárias", href: "/admin/usuarios?tab=imobiliaria" },
+      { label: "Inquilinos", href: "/admin/usuarios?tab=inquilino" },
+      { label: "Corretores", href: "/admin/usuarios?tab=corretor" },
+      { label: "Equipe e administradores", href: "/admin/usuarios?tab=equipe" },
+    ],
+  },
+  {
+    icon: DollarSign,
+    label: "Financeiro",
+    href: "/admin/financeiro",
+    module: "financeiro",
+    children: [
+      { label: "Saques", href: "/admin/financeiro?tab=withdrawals" },
+      { label: "Comissões", href: "/admin/financeiro?tab=commissions" },
+      { label: "Pagamentos", href: "/admin/financeiro?tab=payments" },
+    ],
+  },
+  {
+    icon: Wallet,
+    label: "Faturamento",
+    href: "/admin/faturamento",
+    module: "faturamento",
+    children: [
+      { label: "A receber", href: "/admin/faturamento?tab=receber" },
+      { label: "Vencidos", href: "/admin/faturamento?tab=vencidos" },
+      { label: "Pagos", href: "/admin/faturamento?tab=pagos" },
+    ],
+  },
   { icon: ShieldAlert, label: "Sinistros", href: "/sinistros", module: "sinistros" },
-  { icon: UserPlus, label: "Leads Marketing", href: "/admin/leads", module: "leads" },
+  {
+    icon: UserPlus,
+    label: "Leads Marketing",
+    href: "/admin/leads",
+    module: "leads",
+    children: [
+      { label: "Leads", href: "/admin/leads?tab=leads" },
+      { label: "Inquilinos", href: "/admin/leads?tab=inquilinos" },
+      { label: "Corretores", href: "/admin/leads?tab=corretores" },
+      { label: "Imobiliárias", href: "/admin/leads?tab=imobiliarias" },
+      { label: "Leads de consulta", href: "/admin/leads?tab=leads_consulta" },
+      {
+        label: "Facebook e Google Ads",
+        href: "/admin/leads?tab=ads",
+        keywords: ["anúncios", "campanhas"],
+      },
+    ],
+  },
   {
     icon: Shuffle,
     label: "Distribuição de Leads",
     href: "/admin/distribuicao-leads",
     module: "distribuicao_leads",
   },
-  { icon: Briefcase, label: "Vagas abertas", href: "/admin/vagas", module: "vagas_abertas" },
-  { icon: Users2, label: "Equipe NOX", href: "/admin/equipe-nox", module: "equipe_nox" },
+  {
+    icon: Briefcase,
+    label: "Vagas abertas",
+    href: "/admin/vagas",
+    module: "vagas_abertas",
+    children: [
+      { label: "Vagas cadastradas", href: "/admin/vagas?tab=vagas" },
+      { label: "Currículos recebidos", href: "/admin/vagas?tab=curriculos" },
+    ],
+  },
+  {
+    icon: Users2,
+    label: "Equipe NOX",
+    href: "/admin/equipe-nox",
+    module: "equipe_nox",
+    children: [
+      { label: "Metas", href: "/admin/equipe-nox?tab=metas" },
+      { label: "Agenda", href: "/admin/equipe-nox?tab=agenda" },
+      { label: "Comissões", href: "/admin/equipe-nox?tab=comissoes" },
+      { label: "Colaboradores", href: "/admin/equipe-nox?tab=colaboradores" },
+      { label: "Equipe Comercial", href: "/admin/equipe-nox?tab=equipe-comercial" },
+      { label: "Auditoria", href: "/admin/equipe-nox?tab=auditoria" },
+    ],
+  },
   { icon: KeyRound, label: "Conta NOX", href: "/admin/conta-nox", module: "conta_nox" },
-  { icon: Settings, label: "Configurações", href: "/configuracoes" },
+  {
+    icon: Settings,
+    label: "Configurações",
+    href: "/configuracoes",
+    children: [
+      { label: "Perfil", href: "/configuracoes?tab=perfil" },
+      { label: "Conta", href: "/configuracoes?tab=conta" },
+      { label: "Segurança", href: "/configuracoes?tab=seguranca" },
+      { label: "Notificações", href: "/configuracoes?tab=notificacoes" },
+      { label: "Plano e Nível", href: "/configuracoes?tab=comissoes" },
+    ],
+  },
 ];
 
 // Catálogo completo usado só pra filtrar o menu dos cargos internos (juridico/
@@ -210,6 +313,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const { user, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [menuSearch, setMenuSearch] = useState("");
   const perfilCacheInicial = getCachedHeaderProfile(user?.email);
   const [nomeUsuario, setNomeUsuario] = useState(perfilCacheInicial?.nome || "");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(perfilCacheInicial?.avatarUrl || null);
@@ -382,6 +486,40 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   }
 
   const nomeTopo = nomeUsuario || user?.email?.split("@")[0] || "Usuário";
+  const canSearchAdminMenu =
+    user?.role === "admin" ||
+    user?.role === "admin_master" ||
+    user?.internalRole === "admin_master";
+  const normalizedMenuSearch = normalizeMenuSearch(menuSearch);
+  const visibleMenuItems: VisibleMenuItem[] =
+    canSearchAdminMenu && normalizedMenuSearch
+      ? menuItems.flatMap((item) => {
+          const { children: _children, ...parentItem } = item;
+          const parentHaystack = normalizeMenuSearch(
+            [item.label, ...(item.keywords ?? [])].join(" "),
+          );
+          const matches: VisibleMenuItem[] = parentHaystack.includes(normalizedMenuSearch)
+            ? [parentItem]
+            : [];
+
+          for (const child of item.children ?? []) {
+            const childHaystack = normalizeMenuSearch(
+              [item.label, child.label, ...(child.keywords ?? [])].join(" "),
+            );
+            if (childHaystack.includes(normalizedMenuSearch)) {
+              matches.push({
+                icon: item.icon,
+                label: child.label,
+                href: child.href,
+                module: item.module,
+                parentLabel: item.label,
+              });
+            }
+          }
+
+          return matches;
+        })
+      : menuItems.map(({ children: _children, ...item }) => item);
   const iniciaisUsuario =
     nomeTopo
       .split(" ")
@@ -429,13 +567,37 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           </button>
         </div>
 
+        {canSearchAdminMenu && (
+          <div className="px-4 pt-4">
+            <label className="sr-only" htmlFor="admin-menu-search">
+              Pesquisar abas e subabas
+            </label>
+            <div className="relative">
+              <Search
+                size={17}
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500"
+              />
+              <input
+                id="admin-menu-search"
+                type="search"
+                value={menuSearch}
+                onChange={(event) => setMenuSearch(event.target.value)}
+                onKeyDown={(event) => event.key === "Escape" && setMenuSearch("")}
+                placeholder="Pesquisar abas e subabas..."
+                autoComplete="off"
+                className="h-10 w-full rounded-xl border border-white/10 bg-white/5 pl-10 pr-3 text-sm text-white outline-none placeholder:text-neutral-500 focus:border-yellow-400/70 focus:ring-2 focus:ring-yellow-400/20"
+              />
+            </div>
+          </div>
+        )}
+
         <nav className="flex-1 overflow-y-auto sidebar-scrollbar p-4 py-6 space-y-1.5">
-          {menuItems.map((item) => {
-            const isActive = location.pathname === item.href;
+          {visibleMenuItems.map((item) => {
+            const isActive = location.pathname === item.href.split("?")[0];
             const isHighlight = item.highlight;
             return (
               <Link
-                key={item.href}
+                key={`${item.href}-${item.parentLabel ?? "principal"}`}
                 to={item.href}
                 className={`flex items-center gap-3 pl-3 pr-4 py-3 rounded-xl border-l-4 transition-all ${
                   isActive
@@ -446,10 +608,22 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 }`}
               >
                 <item.icon size={20} strokeWidth={isActive || isHighlight ? 2.2 : 1.5} />
-                <span className="text-sm">{item.label}</span>
+                <span className="min-w-0 text-sm">
+                  <span className="block truncate">{item.label}</span>
+                  {item.parentLabel && (
+                    <span className="block truncate text-[10px] font-medium text-neutral-500">
+                      {item.parentLabel} › subaba
+                    </span>
+                  )}
+                </span>
               </Link>
             );
           })}
+          {canSearchAdminMenu && normalizedMenuSearch && visibleMenuItems.length === 0 && (
+            <p className="px-3 py-6 text-center text-xs text-neutral-500">
+              Nenhuma aba encontrada.
+            </p>
+          )}
         </nav>
 
         <div className="p-6 border-t border-white/10 space-y-4">

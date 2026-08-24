@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useEffect, useMemo, useState } from "react";
@@ -37,7 +37,12 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+const USER_TABS = ["todos", "proprietario", "imobiliaria", "inquilino", "corretor", "equipe"] as const;
+type UserTab = (typeof USER_TABS)[number];
+
 export const Route = createFileRoute("/admin/usuarios")({
+  validateSearch: (search): { tab?: UserTab } =>
+    USER_TABS.includes(search.tab as UserTab) ? { tab: search.tab as UserTab } : {},
   component: () => (
     <ProtectedRoute
       roles={["admin", "analista", "juridico", "suporte", "admin_master"]}
@@ -90,6 +95,9 @@ type UsuarioLinha = {
 };
 
 function UsuariosUnificadosPage() {
+  const navigate = useNavigate();
+  const search = useSearch({ from: "/admin/usuarios" });
+  const activeTab: UserTab = (search.tab as UserTab) ?? "todos";
   const { user } = useAuth();
   const isAdminMaster = user?.role === "admin_master" || user?.internalRole === "admin_master";
   const [loading, setLoading] = useState(true);
@@ -108,6 +116,7 @@ function UsuariosUnificadosPage() {
       const { data: profiles, error } = await supabase
         .from("profiles")
         .select("id, nome, email, telefone, role, created_at")
+        .or("status.is.null,status.neq.excluido")
         .order("created_at", { ascending: false });
       if (error) throw error;
 
@@ -318,7 +327,13 @@ function UsuariosUnificadosPage() {
           </Select>
         </div>
 
-        <Tabs defaultValue="todos" className="w-full">
+        <Tabs
+          value={activeTab}
+          onValueChange={(tab) =>
+            navigate({ to: "/admin/usuarios", search: { tab: tab as UserTab }, replace: true })
+          }
+          className="w-full"
+        >
           <TabsList className="bg-neutral-100 p-1 rounded-lg h-auto flex-wrap justify-start">
             <TabsTrigger value="todos" className="gap-2">
               Todos{" "}

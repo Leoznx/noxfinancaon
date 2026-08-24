@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import {
   AlertTriangle,
   Banknote,
@@ -76,7 +76,14 @@ import {
   type WithdrawalStatus,
 } from "@/lib/withdrawals";
 
+const FINANCE_TABS = ["withdrawals", "commissions", "payments"] as const;
+type FinanceTabKey = (typeof FINANCE_TABS)[number];
+
 export const Route = createFileRoute("/admin/financeiro")({
+  validateSearch: (search): { tab?: FinanceTabKey } =>
+    FINANCE_TABS.includes(search.tab as FinanceTabKey)
+      ? { tab: search.tab as FinanceTabKey }
+      : {},
   component: () => (
     <ProtectedRoute roles={["admin", "admin_master", "financeiro"]} moduleKey="financeiro">
       <FinanceiroAdminPage />
@@ -169,6 +176,9 @@ function withdrawalParams(filters: FinanceFilters) {
 }
 
 function FinanceiroAdminPage() {
+  const navigate = useNavigate();
+  const search = useSearch({ from: "/admin/financeiro" });
+  const activeTab: FinanceTabKey = (search.tab as FinanceTabKey) ?? "withdrawals";
   const [summary, setSummary] = useState<FinanceSummary>(EMPTY_SUMMARY);
   const [openWithdrawals, setOpenWithdrawals] = useState<FinanceWithdrawal[]>([]);
   const [payments, setPayments] = useState<FinanceWithdrawal[]>([]);
@@ -325,7 +335,17 @@ function FinanceiroAdminPage() {
           </div>
         )}
 
-        <Tabs defaultValue="withdrawals" className="space-y-5">
+        <Tabs
+          value={activeTab}
+          onValueChange={(tab) =>
+            navigate({
+              to: "/admin/financeiro",
+              search: { tab: tab as FinanceTabKey },
+              replace: true,
+            })
+          }
+          className="space-y-5"
+        >
           <TabsList className="h-auto w-full flex-wrap justify-start gap-1 rounded-2xl border border-neutral-200 bg-white p-1.5 shadow-sm">
             <FinanceTab
               value="withdrawals"

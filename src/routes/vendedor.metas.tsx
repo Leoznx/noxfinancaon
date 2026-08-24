@@ -150,9 +150,6 @@ function Metas() {
                 <CardContent className="grid gap-5 p-6 lg:grid-cols-[1fr_auto] lg:items-center">
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <Badge className="bg-neutral-950 text-yellow-300 hover:bg-neutral-950">
-                        Nível {nivel.nome}
-                      </Badge>
                       <span className="text-sm font-bold text-neutral-700">
                         {formatMoney(nivel.valorPorProximoContrato)} por próximo contrato
                       </span>

@@ -94,7 +94,11 @@ serve(async (req) => {
     after: null,
   });
 
-  const { error: deleteError } = await admin.auth.admin.deleteUser(employee.auth_user_id);
+  // A exclusão lógica do Auth é irreversível e encerra o acesso, mas preserva
+  // as chaves necessárias para histórico financeiro, comissões e auditoria.
+  // Uma exclusão física pode falhar quando o colaborador já aprovou ou criou
+  // registros que, corretamente, não podem ser apagados em cascata.
+  const { error: deleteError } = await admin.auth.admin.deleteUser(employee.auth_user_id, true);
   if (deleteError) {
     console.error("[delete-nox-employee] auth.admin.deleteUser", {
       employeeId,
@@ -106,10 +110,48 @@ serve(async (req) => {
     );
   }
 
-  // As FKs usam ON DELETE CASCADE. A limpeza defensiva abaixo também remove
-  // uma eventual linha órfã criada antes dessas constraints existirem.
-  await admin.from("internal_users").delete().eq("id", employeeId);
-  await admin.from("profiles").delete().eq("id", employee.auth_user_id);
+  const deletedEmail = `excluido+${employee.auth_user_id}@nox.invalid`;
+  const [{ error: internalCleanupError }, { error: profileCleanupError }] = await Promise.all([
+    admin
+      .from("internal_users")
+      .update({
+        full_name: "Colaborador excluído",
+        email: deletedEmail,
+        phone: null,
+        status: "excluido",
+      })
+      .eq("id", employeeId),
+    admin
+      .from("profiles")
+      .update({
+        nome: "Usuário excluído",
+        email: deletedEmail,
+        telefone: null,
+        avatar_url: null,
+        status: "excluido",
+      })
+      .eq("id", employee.auth_user_id),
+  ]);
 
-  return response({ ok: true, deletedUserId: employee.auth_user_id });
+  if (internalCleanupError || profileCleanupError) {
+    console.error("[delete-nox-employee] cleanup", {
+      employeeId,
+      internal: internalCleanupError?.message,
+      profile: profileCleanupError?.message,
+    });
+    return response(
+      {
+        ok: false,
+        error: "O login foi removido, mas não foi possível concluir a anonimização do cadastro.",
+      },
+      500,
+    );
+  }
+
+  return response({
+    ok: true,
+    deletedUserId: employee.auth_user_id,
+    accessRemoved: true,
+    recordsAnonymized: true,
+  });
 });

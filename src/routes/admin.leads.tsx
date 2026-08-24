@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
@@ -39,7 +39,14 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 
+const MARKETING_TABS = ["leads", "inquilinos", "corretores", "imobiliarias", "leads_consulta", "ads"] as const;
+type MarketingTab = (typeof MARKETING_TABS)[number];
+
 export const Route = createFileRoute("/admin/leads")({
+  validateSearch: (search): { tab?: MarketingTab } =>
+    MARKETING_TABS.includes(search.tab as MarketingTab)
+      ? { tab: search.tab as MarketingTab }
+      : {},
   component: () => (
     <ProtectedRoute roles={["admin", "analista", "admin_master", "marketing"]} moduleKey="leads">
       <MarketingLeadsAdmin />
@@ -403,13 +410,17 @@ function dedupeContacts(contacts: MarketingContact[]) {
 }
 
 function MarketingLeadsAdmin() {
+  const navigate = useNavigate();
+  const routeSearch = useSearch({ from: "/admin/leads" });
   const [contacts, setContacts] = useState<MarketingContact[]>([]);
   const [integrations, setIntegrations] = useState<MarketingIntegration[]>([]);
   const [campaigns, setCampaigns] = useState<MarketingCampaign[]>([]);
   const [metrics, setMetrics] = useState<CampaignMetric[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<Audience | "ads">("leads");
+  const activeTab: MarketingTab = (routeSearch.tab as MarketingTab) ?? "leads";
+  const setActiveTab = (tab: MarketingTab) =>
+    navigate({ to: "/admin/leads", search: { tab }, replace: true });
   const [searchTerm, setSearchTerm] = useState("");
   const [campaignDraft, setCampaignDraft] = useState(emptyCampaign);
 
@@ -684,7 +695,7 @@ function MarketingLeadsAdmin() {
           <StatCard icon={BarChart3} label="Investimento" value={formatCurrency(stats.spend)} />
         </div>
 
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as Audience | "ads")}>
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as MarketingTab)}>
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <TabsList className="h-auto flex-wrap justify-start">
               <TabsTrigger value="leads">Leads</TabsTrigger>

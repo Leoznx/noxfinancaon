@@ -1,4 +1,4 @@
-import { createLazyFileRoute } from "@tanstack/react-router";
+import { createLazyFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useEffect, useMemo, useState } from "react";
@@ -40,6 +40,8 @@ const STATUS_ABERTO = ["pending", "risk_analysis", "approved"];
 const STATUS_EXCLUIDOS_DOS_TOTAIS = ["cancelled", "refunded", "partially_refunded", "refused", "chargeback", "chargeback_dispute", "refund_processing", "refund_denied"];
 
 function FaturamentoAdminPage() {
+  const navigate = useNavigate();
+  const routeSearch = useSearch({ from: "/admin/faturamento" });
   const [parcelas, setParcelas] = useState<any[]>([]);
   const [lotes, setLotes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,7 +50,13 @@ function FaturamentoAdminPage() {
   const now = useMemo(() => new Date(), []);
   // selectedYM: 'YYYY-MM' OR 'all'
   const [selectedYM, setSelectedYM] = useState<string>(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
-  const [tab, setTab] = useState("receber");
+  const tab = routeSearch.tab ?? "receber";
+  const setTab = (nextTab: string) =>
+    navigate({
+      to: "/admin/faturamento",
+      search: { tab: nextTab as "receber" | "vencidos" | "pagos" },
+      replace: true,
+    });
 
   const carregar = async () => {
     setLoading(true);

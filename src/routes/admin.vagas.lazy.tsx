@@ -1,4 +1,4 @@
-import { createLazyFileRoute } from "@tanstack/react-router";
+import { createLazyFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -44,7 +44,15 @@ const STATUS_VAGA = ["aberta", "pausada", "encerrada"] as const;
 const STATUS_CAND = ["novo", "em_analise", "selecionado", "recusado", "contratado", "arquivado"] as const;
 
 function AdminVagasPage() {
-  const [tab, setTab] = useState("vagas");
+  const navigate = useNavigate();
+  const routeSearch = useSearch({ from: "/admin/vagas" });
+  const tab = routeSearch.tab ?? "vagas";
+  const setTab = (nextTab: string) =>
+    navigate({
+      to: "/admin/vagas",
+      search: { tab: nextTab as "vagas" | "curriculos" },
+      replace: true,
+    });
   const [vagas, setVagas] = useState<Vaga[]>([]);
   const [cands, setCands] = useState<Cand[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
