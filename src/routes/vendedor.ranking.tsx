@@ -98,6 +98,18 @@ function Ranking() {
     void carregar();
   }, [carregar]);
 
+  useEffect(() => {
+    const htmlOverflow = document.documentElement.style.overflow;
+    const bodyOverflow = document.body.style.overflow;
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.documentElement.style.overflow = htmlOverflow;
+      document.body.style.overflow = bodyOverflow;
+    };
+  }, []);
+
   const resumo = useMemo(() => {
     const contratos = linhas.reduce((total, linha) => total + linha.contratosFechados, 0);
     const leads = linhas.reduce((total, linha) => total + linha.totalLeads, 0);
@@ -124,29 +136,29 @@ function Ranking() {
   }
 
   return (
-    <DashboardLayout>
-      <div className="w-full space-y-7 bg-white text-neutral-950">
-        <section className="relative overflow-hidden border-b border-yellow-300 bg-[radial-gradient(circle_at_92%_8%,rgba(250,204,21,0.30),transparent_26%),linear-gradient(115deg,#ffffff_0%,#fffef7_62%,#fff5bd_100%)] px-1 pb-8 pt-2 sm:px-2 lg:px-4 lg:pb-10">
-          <div className="pointer-events-none absolute -right-12 -top-36 h-80 w-80 rounded-full border-[34px] border-yellow-400/15" />
-          <div className="relative flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
+    <DashboardLayout lockDesktopViewport>
+      <div className="relative -m-4 flex h-[calc(100dvh-4rem)] w-[calc(100%+2rem)] flex-col overflow-hidden bg-[radial-gradient(circle_at_82%_74%,rgba(250,204,21,0.12),transparent_28%),linear-gradient(180deg,#fffef7_0%,#fffbeb_100%)] text-neutral-950 sm:-m-6 sm:w-[calc(100%+3rem)] lg:-m-10 lg:w-[calc(100%+5rem)] xl:-m-6 xl:w-[calc(100%+3rem)]">
+        <section className="relative shrink-0 overflow-hidden border-b border-yellow-300 bg-[radial-gradient(circle_at_92%_8%,rgba(250,204,21,0.30),transparent_26%),linear-gradient(115deg,#ffffff_0%,#fffef7_62%,#fff2a8_100%)] px-4 py-3 sm:px-6 lg:px-8 lg:py-4">
+          <div className="pointer-events-none absolute -right-12 -top-36 h-72 w-72 rounded-full border-[30px] border-yellow-400/15" />
+          <div className="relative flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div>
-              <span className="inline-flex items-center gap-2 rounded-full border border-yellow-400 bg-yellow-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-yellow-700">
-                <Sparkles className="h-3.5 w-3.5" />
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-yellow-400 bg-yellow-50 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.2em] text-yellow-700">
+                <Sparkles className="h-3 w-3" />
                 Ranking ao vivo
               </span>
-              <h1 className="mt-4 text-3xl font-black tracking-[-0.045em] sm:text-4xl">
+              <h1 className="mt-2 text-2xl font-black tracking-[-0.045em] sm:text-3xl">
                 Ranking da <span className="text-yellow-400">Equipe</span>
               </h1>
-              <p className="mt-2 max-w-2xl text-sm font-medium text-neutral-600">
+              <p className="mt-1 max-w-2xl text-xs font-medium text-neutral-600">
                 Acompanhe contratos, leads e conversão e celebre os melhores resultados do mês.
               </p>
             </div>
 
-            <div className="flex h-14 w-full items-center justify-between rounded-2xl border border-yellow-300 bg-white/90 px-2 shadow-sm backdrop-blur-sm sm:w-[370px]">
+            <div className="flex h-12 w-full items-center justify-between rounded-2xl border border-yellow-300 bg-white/90 px-1.5 shadow-sm backdrop-blur-sm sm:w-[330px]">
               <button
                 type="button"
                 onClick={() => mudarMes(-1)}
-                className="flex h-10 w-10 items-center justify-center rounded-xl text-neutral-500 transition hover:bg-yellow-50 hover:text-neutral-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400"
+                className="flex h-9 w-9 items-center justify-center rounded-xl text-neutral-500 transition hover:bg-yellow-50 hover:text-neutral-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400"
                 aria-label="Ver mês anterior"
               >
                 <ChevronLeft className="h-5 w-5" />
@@ -161,7 +173,7 @@ function Ranking() {
                 type="button"
                 onClick={() => mudarMes(1)}
                 disabled={periodoAtual}
-                className="flex h-10 w-10 items-center justify-center rounded-xl text-neutral-500 transition hover:bg-yellow-50 hover:text-neutral-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400 disabled:cursor-not-allowed disabled:opacity-25"
+                className="flex h-9 w-9 items-center justify-center rounded-xl text-neutral-500 transition hover:bg-yellow-50 hover:text-neutral-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400 disabled:cursor-not-allowed disabled:opacity-25"
                 aria-label="Ver mês seguinte"
               >
                 <ChevronRight className="h-5 w-5" />
@@ -170,8 +182,8 @@ function Ranking() {
           </div>
         </section>
 
-        <div className="space-y-8 px-1 pb-8 sm:px-2 lg:px-4">
-          <section className="grid gap-3 sm:grid-cols-2" aria-label="Resumo do período">
+        <div className="flex min-h-0 flex-1 flex-col gap-3 p-3 sm:p-4 lg:p-5">
+          <section className="grid shrink-0 gap-3 sm:grid-cols-2" aria-label="Resumo do período">
             <MetricCard
               icon={Trophy}
               label="Contratos fechados"
@@ -198,11 +210,11 @@ function Ranking() {
             />
           ) : !erro ? (
             <>
-              <section className="relative py-2 pb-20 lg:pb-24">
+              <section className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
                 <div className="pointer-events-none absolute inset-0 opacity-60 [background-image:radial-gradient(circle,rgba(234,179,8,0.18)_1px,transparent_1px)] [background-size:92px_76px]" />
-                <div className="relative mb-10 flex flex-col gap-4 border-b border-neutral-200 pb-5 sm:flex-row sm:items-center sm:justify-between">
+                <div className="relative mb-3 flex shrink-0 flex-col gap-2 border-b border-neutral-200 pb-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <h2 className="flex items-center gap-2 text-lg font-black">
+                    <h2 className="flex items-center gap-2 text-base font-black">
                       <Trophy className="h-5 w-5 text-yellow-400" />
                       Pódio de contratos
                     </h2>
@@ -214,14 +226,14 @@ function Ranking() {
                     variant="ghost"
                     onClick={carregar}
                     disabled={loading}
-                    className="w-fit gap-2 rounded-xl border border-yellow-300 bg-yellow-50 text-xs font-bold text-yellow-700 hover:bg-yellow-100 hover:text-yellow-800"
+                    className="h-9 w-fit gap-2 rounded-xl border border-yellow-300 bg-yellow-50 px-3 text-[11px] font-bold text-yellow-700 hover:bg-yellow-100 hover:text-yellow-800"
                   >
                     <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
                     Atualizar ranking
                   </Button>
                 </div>
 
-                <div className="relative grid items-start gap-5 lg:grid-cols-3 lg:grid-rows-1">
+                <div className="relative grid min-h-0 flex-1 items-start gap-4 lg:grid-cols-3 lg:grid-rows-1">
                   {podio.map((linha) => (
                     <PodioCard key={linha.id} linha={linha} destaque={linha.id === sellerId} />
                   ))}
@@ -229,21 +241,18 @@ function Ranking() {
               </section>
 
               {restante.length > 0 && (
-                <section className="overflow-hidden rounded-[24px] border border-neutral-200 bg-white shadow-sm">
-                  <div className="flex items-center justify-between border-b border-neutral-200 bg-neutral-50 px-5 py-4 sm:px-6">
+                <section className="relative shrink-0 border-t border-neutral-200 pt-2">
+                  <div className="flex items-center justify-between gap-3">
                     <div>
-                      <h2 className="text-sm font-black text-neutral-950">
+                      <h2 className="text-xs font-black text-neutral-950">
                         Classificação completa
                       </h2>
-                      <p className="mt-0.5 text-[11px] text-neutral-500">
-                        Demais posições da equipe comercial
-                      </p>
                     </div>
                     <span className="rounded-full border border-yellow-300 bg-yellow-50 px-3 py-1 text-[10px] font-bold text-yellow-800">
                       {linhas.length} vendedores
                     </span>
                   </div>
-                  <div className="divide-y divide-neutral-100">
+                  <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
                     {restante.map((linha) => (
                       <LinhaLista key={linha.id} linha={linha} destaque={linha.id === sellerId} />
                     ))}
@@ -273,17 +282,17 @@ function MetricCard({
 }) {
   return (
     <article
-      className={`flex min-h-20 items-center gap-3 rounded-2xl border p-3.5 shadow-sm transition ${active ? "border-yellow-400 bg-yellow-50" : "border-neutral-200 bg-white"}`}
+      className={`flex min-h-14 items-center gap-2.5 rounded-xl border px-3 py-2 shadow-sm transition ${active ? "border-yellow-400 bg-yellow-50" : "border-neutral-200 bg-white/85"}`}
     >
       <span
-        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border ${active ? "border-yellow-400 bg-yellow-100 text-yellow-700" : "border-neutral-200 bg-neutral-50 text-neutral-600"}`}
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${active ? "border-yellow-400 bg-yellow-100 text-yellow-700" : "border-neutral-200 bg-neutral-50 text-neutral-600"}`}
       >
         <Icon className="h-5 w-5" />
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2">
           <p className="truncate text-xs font-bold text-neutral-800">{label}</p>
-          <b className={`text-xl ${active ? "text-yellow-600" : "text-neutral-950"}`}>{value}</b>
+          <b className={`text-lg ${active ? "text-yellow-600" : "text-neutral-950"}`}>{value}</b>
         </div>
         <p className="mt-0.5 truncate text-[10px] font-medium text-neutral-500">{detail}</p>
       </div>
@@ -294,36 +303,36 @@ function MetricCard({
 const PODIO_STYLE = {
   1: {
     order: "order-1 lg:col-start-2 lg:row-start-1",
-    card: "min-h-[350px] border-yellow-400 bg-[linear-gradient(150deg,#fff9d9_0%,#ffffff_52%)] shadow-[0_24px_60px_rgba(234,179,8,0.16)]",
-    avatar: "h-24 w-24 border-yellow-400 shadow-[0_0_28px_rgba(250,204,21,0.25)]",
+    card: "mx-auto min-h-[260px] w-full max-w-[360px] border-yellow-400 bg-[linear-gradient(150deg,#fff9d9_0%,#ffffff_52%)] shadow-[0_18px_48px_rgba(234,179,8,0.14)]",
+    avatar: "h-20 w-20 border-yellow-400 shadow-[0_0_24px_rgba(250,204,21,0.22)]",
     accent: "text-yellow-600",
     icon: Crown,
     label: "1º lugar",
     trophy: "/assets/ranking/nox-ranking-dourado.png",
     trophyAlt: "Troféu dourado do primeiro lugar",
-    trophyClass: "-bottom-12 -right-4 h-32 sm:-right-6 sm:h-36",
+    trophyClass: "-bottom-6 -right-3 h-28 sm:-right-5 sm:h-28",
   },
   2: {
-    order: "order-2 lg:col-start-1 lg:row-start-1 lg:translate-y-10",
-    card: "min-h-[310px] border-slate-300 bg-[linear-gradient(150deg,#f1f5f9_0%,#ffffff_52%)] shadow-[0_18px_46px_rgba(15,23,42,0.08)]",
-    avatar: "h-20 w-20 border-slate-300",
+    order: "order-2 lg:col-start-1 lg:row-start-1 lg:translate-y-6",
+    card: "mx-auto min-h-[232px] w-full max-w-[340px] border-slate-300 bg-[linear-gradient(150deg,#f1f5f9_0%,#ffffff_52%)] shadow-[0_14px_38px_rgba(15,23,42,0.07)]",
+    avatar: "h-16 w-16 border-slate-300",
     accent: "text-slate-600",
     icon: Medal,
     label: "2º lugar",
     trophy: "/assets/ranking/nox-ranking-prata.png",
     trophyAlt: "Troféu de prata do segundo lugar",
-    trophyClass: "-bottom-10 -right-3 h-28 sm:-right-5 sm:h-32",
+    trophyClass: "-bottom-5 -right-3 h-24 sm:-right-4 sm:h-24",
   },
   3: {
-    order: "order-3 lg:col-start-3 lg:row-start-1 lg:translate-y-16",
-    card: "min-h-[310px] border-orange-300 bg-[linear-gradient(150deg,#fff3e8_0%,#ffffff_52%)] shadow-[0_18px_46px_rgba(154,52,18,0.09)]",
-    avatar: "h-20 w-20 border-orange-500",
+    order: "order-3 lg:col-start-3 lg:row-start-1 lg:translate-y-10",
+    card: "mx-auto min-h-[232px] w-full max-w-[340px] border-orange-300 bg-[linear-gradient(150deg,#fff3e8_0%,#ffffff_52%)] shadow-[0_14px_38px_rgba(154,52,18,0.08)]",
+    avatar: "h-16 w-16 border-orange-500",
     accent: "text-orange-700",
     icon: Medal,
     label: "3º lugar",
     trophy: "/assets/ranking/nox-ranking-bronze-transparent.png",
     trophyAlt: "Troféu de bronze do terceiro lugar",
-    trophyClass: "-bottom-10 -right-3 h-28 sm:-right-5 sm:h-32",
+    trophyClass: "-bottom-5 -right-3 h-24 sm:-right-4 sm:h-24",
   },
 } as const;
 
@@ -332,35 +341,35 @@ function PodioCard({ linha, destaque }: { linha: LinhaRanking; destaque: boolean
   const Icone = estilo.icon;
   return (
     <article
-      className={`${estilo.order} relative flex flex-col items-center overflow-visible rounded-[24px] border p-5 text-center ${estilo.card}`}
+      className={`${estilo.order} relative flex flex-col items-center overflow-visible rounded-[20px] border p-3.5 text-center ${estilo.card}`}
     >
       <div
-        className={`mb-4 flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.2em] ${estilo.accent}`}
+        className={`mb-2.5 flex items-center gap-1.5 text-[8px] font-black uppercase tracking-[0.2em] ${estilo.accent}`}
       >
         <Icone className="h-4 w-4" />
         {estilo.label}
       </div>
       <SellerAvatar linha={linha} className={`${estilo.avatar} border-2`} />
-      <div className="mt-4 flex min-h-12 flex-col items-center justify-center">
-        <h3 className="max-w-full truncate text-lg font-black text-neutral-950">{linha.nome}</h3>
+      <div className="mt-2 flex min-h-9 flex-col items-center justify-center">
+        <h3 className="max-w-full truncate text-base font-black text-neutral-950">{linha.nome}</h3>
         {destaque && (
           <Badge className="mt-1 border-yellow-400 bg-yellow-100 text-[9px] font-black uppercase tracking-widest text-yellow-800">
             Você
           </Badge>
         )}
       </div>
-      <strong className={`mt-3 text-4xl font-black tracking-tight ${estilo.accent}`}>
+      <strong className={`mt-1.5 text-3xl font-black tracking-tight ${estilo.accent}`}>
         {linha.contratosFechados}
       </strong>
       <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-neutral-500">
         contratos fechados
       </span>
-      <div className="mt-5 grid w-full grid-cols-3 divide-x divide-neutral-200 rounded-xl border border-neutral-200 bg-white/80 py-2.5 shadow-sm">
+      <div className="mt-2.5 grid w-full grid-cols-3 divide-x divide-neutral-200 rounded-xl border border-neutral-200 bg-white/80 py-1.5 shadow-sm">
         <PodioStat value={linha.totalLeads} label="leads" />
         <PodioStat value={linha.emAtendimento} label="atendimento" />
         <PodioStat value={`${linha.taxaConversao.toFixed(0)}%`} label="conversão" />
       </div>
-      <p className="mt-3 text-[10px] font-semibold text-neutral-500">
+      <p className="mt-1.5 text-[9px] font-semibold text-neutral-500">
         {formatMoney(linha.comissoes)} em comissões no mês
       </p>
       <img
@@ -401,7 +410,7 @@ function SellerAvatar({ linha, className = "" }: { linha: LinhaRanking; classNam
 function LinhaLista({ linha, destaque }: { linha: LinhaRanking; destaque: boolean }) {
   return (
     <article
-      className={`grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-4 transition sm:gap-5 sm:px-6 ${destaque ? "bg-yellow-50" : "hover:bg-neutral-50"}`}
+      className={`grid w-[300px] shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-xl border border-neutral-200 px-3 py-2 transition ${destaque ? "bg-yellow-50" : "bg-white/80 hover:bg-white"}`}
     >
       <span
         className={`flex h-9 w-9 items-center justify-center rounded-full border text-xs font-black ${destaque ? "border-yellow-400 bg-yellow-100 text-yellow-700" : "border-neutral-200 bg-neutral-50 text-neutral-600"}`}
@@ -409,9 +418,9 @@ function LinhaLista({ linha, destaque }: { linha: LinhaRanking; destaque: boolea
         {linha.posicao}º
       </span>
       <div className="flex min-w-0 items-center gap-3">
-        <SellerAvatar linha={linha} className="h-11 w-11 border border-neutral-200" />
+        <SellerAvatar linha={linha} className="h-9 w-9 border border-neutral-200" />
         <div className="min-w-0">
-          <p className="truncate text-sm font-bold text-neutral-950">
+          <p className="truncate text-xs font-bold text-neutral-950">
             {linha.nome}
             {destaque && (
               <span className="ml-2 text-[9px] uppercase tracking-widest text-yellow-400">
@@ -426,7 +435,7 @@ function LinhaLista({ linha, destaque }: { linha: LinhaRanking; destaque: boolea
         </div>
       </div>
       <div className="text-right">
-        <p className="text-xl font-black text-yellow-400">{linha.contratosFechados}</p>
+        <p className="text-lg font-black text-yellow-500">{linha.contratosFechados}</p>
         <p className="text-[8px] font-bold uppercase tracking-[0.14em] text-neutral-600">
           fechados
         </p>
@@ -437,12 +446,12 @@ function LinhaLista({ linha, destaque }: { linha: LinhaRanking; destaque: boolea
 
 function RankingSkeleton() {
   return (
-    <div className="animate-pulse border-y border-neutral-200 bg-white p-6">
+    <div className="min-h-0 flex-1 animate-pulse border-y border-neutral-200 bg-white/50 p-4">
       <div className="h-6 w-52 rounded bg-neutral-200" />
-      <div className="mt-8 grid items-end gap-4 lg:grid-cols-3">
-        <div className="h-[292px] rounded-[24px] bg-neutral-100" />
-        <div className="h-[330px] rounded-[24px] bg-yellow-100" />
-        <div className="h-[292px] rounded-[24px] bg-neutral-100" />
+      <div className="mt-4 grid items-end gap-4 lg:grid-cols-3">
+        <div className="h-[232px] rounded-[20px] bg-neutral-100" />
+        <div className="h-[260px] rounded-[20px] bg-yellow-100" />
+        <div className="h-[232px] rounded-[20px] bg-neutral-100" />
       </div>
     </div>
   );
