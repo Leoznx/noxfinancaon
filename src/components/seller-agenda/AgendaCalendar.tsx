@@ -17,12 +17,12 @@ import { Button } from "@/components/ui/button";
 import { agendaTypeKey, type SellerAppointment } from "@/lib/seller-agenda";
 
 const EVENT_STYLE: Record<string, string> = {
-  reuniao: "border-red-100 bg-red-50 text-red-700",
-  follow_up: "border-blue-100 bg-blue-50 text-blue-700",
-  visita: "border-amber-100 bg-amber-50 text-amber-800",
-  call: "border-violet-100 bg-violet-50 text-violet-700",
-  retorno: "border-emerald-100 bg-emerald-50 text-emerald-700",
-  outro: "border-neutral-200 bg-neutral-100 text-neutral-700",
+  reuniao: "border-sky-200 bg-sky-100 text-sky-800",
+  follow_up: "border-violet-200 bg-violet-100 text-violet-800",
+  visita: "border-lime-200 bg-lime-100 text-lime-800",
+  call: "border-cyan-200 bg-cyan-100 text-cyan-800",
+  retorno: "border-emerald-200 bg-emerald-100 text-emerald-800",
+  outro: "border-slate-200 bg-slate-100 text-slate-700",
 };
 
 function dayKey(date: Date | string) {
@@ -141,13 +141,14 @@ export function AgendaCalendar({
                         onDateSelect(day);
                         onEventOpen(item);
                       }}
-                      className={`pointer-events-auto block w-full truncate rounded border px-1 py-0.5 text-left text-[8px] font-bold leading-none transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400 ${EVENT_STYLE[agendaTypeKey(item.type)]}`}
+                      className={`pointer-events-auto block w-full truncate rounded-md border px-1.5 py-1 text-left font-sans text-[10px] font-semibold leading-tight tracking-normal transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400 xl:text-[11px] ${EVENT_STYLE[agendaTypeKey(item.type)]}`}
                     >
-                      {format(new Date(item.scheduled_at), "HH:mm")} {item.title}
+                      <span className="mr-1 font-bold tabular-nums">{format(new Date(item.scheduled_at), "HH:mm")}</span>
+                      {item.title}
                     </button>
                   ))}
                   {dayItems.length > 2 && (
-                    <span className="block px-1 text-[8px] font-extrabold leading-none text-neutral-400">+{dayItems.length - 2} outros</span>
+                    <span className="block px-1 text-[9px] font-bold leading-none text-neutral-500">+{dayItems.length - 2} outros</span>
                   )}
                 </span>
                 {dayItems.length > 0 && (

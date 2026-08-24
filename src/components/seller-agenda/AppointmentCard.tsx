@@ -11,12 +11,12 @@ import {
 } from "@/lib/seller-agenda";
 
 const TYPE_STYLE: Record<string, string> = {
-  reuniao: "border-red-100 bg-red-50 text-red-700",
-  follow_up: "border-blue-100 bg-blue-50 text-blue-700",
-  visita: "border-amber-100 bg-amber-50 text-amber-800",
-  call: "border-violet-100 bg-violet-50 text-violet-700",
-  retorno: "border-emerald-100 bg-emerald-50 text-emerald-700",
-  outro: "border-neutral-200 bg-neutral-100 text-neutral-700",
+  reuniao: "border-sky-200 bg-sky-100 text-sky-800",
+  follow_up: "border-violet-200 bg-violet-100 text-violet-800",
+  visita: "border-lime-200 bg-lime-100 text-lime-800",
+  call: "border-cyan-200 bg-cyan-100 text-cyan-800",
+  retorno: "border-emerald-200 bg-emerald-100 text-emerald-800",
+  outro: "border-slate-200 bg-slate-100 text-slate-700",
 };
 
 const STATUS_STYLE: Record<string, string> = {
@@ -55,7 +55,7 @@ export function AppointmentCard({
         </div>
         <button type="button" onClick={() => onView(item)} className="min-w-0 flex-1 text-left focus-visible:outline-none">
           <div className="flex flex-wrap items-center gap-1.5">
-            <Badge variant="outline" className={`px-2 py-0 text-[9px] font-extrabold ${TYPE_STYLE[agendaTypeKey(item.type)]}`}>
+            <Badge variant="outline" className={`px-2 py-0.5 font-sans text-[10px] font-semibold tracking-normal ${TYPE_STYLE[agendaTypeKey(item.type)]}`}>
               {agendaTypeLabel(item.type)}
             </Badge>
             <Badge
@@ -115,4 +115,3 @@ export function AppointmentCard({
     </article>
   );
 }
-
