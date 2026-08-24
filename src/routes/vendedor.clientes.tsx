@@ -4,30 +4,29 @@ import {
   Building2,
   CalendarDays,
   CheckCircle2,
+  Clock3,
   FileCheck2,
-  Mail,
   MapPin,
+  PhoneCall,
   RefreshCw,
-  UserPlus,
   Users,
 } from "lucide-react";
-import { toast } from "sonner";
 
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { SellerClientRegistrationFlow } from "@/components/seller-clients/SellerClientRegistrationFlow";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import {
   fetchSellerClientContracts,
   fetchSellerClientMonthlyHistory,
+  fetchSellerClientPhoneHistory,
   fetchSellerClients,
-  registerSellerClient,
   type SellerClient,
   type SellerClientContract,
   type SellerClientMonthlyHistory,
+  type SellerClientPhoneContact,
 } from "@/lib/seller-clients";
 
 export const Route = createFileRoute("/vendedor/clientes")({
@@ -75,27 +74,38 @@ function formatDate(value: string) {
   });
 }
 
+function formatDateTime(value: string) {
+  return new Date(value).toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function SellerClientsPage() {
-  const [email, setEmail] = useState("");
   const [clients, setClients] = useState<SellerClient[]>([]);
   const [history, setHistory] = useState<SellerClientMonthlyHistory[]>([]);
+  const [phoneContacts, setPhoneContacts] = useState<SellerClientPhoneContact[]>([]);
   const [contracts, setContracts] = useState<SellerClientContract[]>([]);
   const [selectedPeriod, setSelectedPeriod] = useState(currentPeriod);
   const [loadingOverview, setLoadingOverview] = useState(true);
   const [loadingContracts, setLoadingContracts] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
   const loadOverview = useCallback(async () => {
     setLoadingOverview(true);
     setError("");
     try {
-      const [clientsData, historyData] = await Promise.all([
+      const [clientsData, historyData, phoneContactsData] = await Promise.all([
         fetchSellerClients(),
         fetchSellerClientMonthlyHistory(),
+        fetchSellerClientPhoneHistory(),
       ]);
       setClients(clientsData);
       setHistory(historyData);
+      setPhoneContacts(phoneContactsData);
     } catch (caught: any) {
       setError(caught.message || "Não foi possível carregar os clientes cadastrados.");
     } finally {
@@ -132,6 +142,8 @@ function SellerClientsPage() {
     const refreshFromRealtime = () => void refresh();
     const channel = supabase
       .channel("seller-client-dashboard")
+      .on("postgres_changes", { event: "*", schema: "public", table: "seller_client_phone_contacts" }, refreshFromRealtime)
+      .on("postgres_changes", { event: "*", schema: "public", table: "seller_client_partnerships" }, refreshFromRealtime)
       .on("postgres_changes", { event: "*", schema: "public", table: "corretores" }, refreshFromRealtime)
       .on("postgres_changes", { event: "*", schema: "public", table: "apolices" }, refreshFromRealtime)
       .on("postgres_changes", { event: "*", schema: "public", table: "faturas_inquilino" }, refreshFromRealtime)
@@ -155,27 +167,6 @@ function SellerClientsPage() {
     };
   }, [history, selectedPeriod]);
 
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const normalizedEmail = email.trim().toLowerCase();
-    if (!normalizedEmail || !normalizedEmail.includes("@")) {
-      toast.error("Informe o e-mail de login do cliente.");
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      await registerSellerClient(normalizedEmail);
-      setEmail("");
-      toast.success("Cliente cadastrado e produção vinculada.");
-      await refresh();
-    } catch (caught: any) {
-      toast.error(caught.message || "Não foi possível cadastrar o cliente.");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
   return (
     <DashboardLayout>
       <div className="space-y-7">
@@ -187,36 +178,43 @@ function SellerClientsPage() {
               </Badge>
               <h1 className="text-3xl font-black tracking-tight text-neutral-950">Cadastrar cliente</h1>
               <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-neutral-800">
-                Informe o e-mail usado no login NOX. Corretores autônomos entram individualmente;
-                imobiliárias carregam a empresa e toda a equipe vinculada, inclusive novos corretores.
+                Consulte primeiro o telefone com DDD. Se estiver livre, o contato entra no seu histórico
+                antes do atendimento e o cadastro completo é liberado pelo e-mail NOX.
               </p>
             </div>
 
-            <form onSubmit={submit} className="rounded-2xl border border-black/10 bg-white p-5 shadow-sm">
-              <Label htmlFor="client-email" className="text-xs font-black uppercase tracking-widest text-neutral-600">
-                E-mail de login do cliente
-              </Label>
-              <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-                <div className="relative flex-1">
-                  <Mail className="absolute left-3 top-3 h-5 w-5 text-neutral-400" />
-                  <Input
-                    id="client-email"
-                    type="email"
-                    autoComplete="email"
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
-                    placeholder="cliente@empresa.com.br"
-                    className="h-11 pl-10"
-                    disabled={submitting}
-                  />
-                </div>
-                <Button type="submit" className="h-11 gap-2 bg-neutral-950 px-5 text-white hover:bg-neutral-800" disabled={submitting}>
-                  {submitting ? <RefreshCw className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
-                  {submitting ? "Cadastrando" : "Cadastrar"}
-                </Button>
-              </div>
-            </form>
+            <SellerClientRegistrationFlow
+              onPhoneClaimed={() => void loadOverview()}
+              onRegistered={() => void refresh()}
+            />
           </div>
+        </section>
+
+        <section className="space-y-3">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <Clock3 className="h-5 w-5 text-neutral-700" />
+                <h2 className="text-lg font-black text-neutral-950">Histórico de pré-atendimentos</h2>
+                <Badge variant="secondary">{phoneContacts.length}</Badge>
+              </div>
+              <p className="mt-1 text-sm text-neutral-500">
+                Telefones que você já consultou e reservou para atendimento.
+              </p>
+            </div>
+          </div>
+
+          {loadingOverview ? (
+            <LoadingCard label="Carregando pré-atendimentos..." />
+          ) : phoneContacts.length === 0 ? (
+            <EmptyCard text="Nenhum telefone consultado ainda." />
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {phoneContacts.map((contact) => (
+                <PhoneContactCard key={contact.contact_id} contact={contact} />
+              ))}
+            </div>
+          )}
         </section>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -415,6 +413,35 @@ function ClientCard({ client }: { client: SellerClient }) {
           )}
         </div>
       )}
+    </article>
+  );
+}
+
+function PhoneContactCard({ contact }: { contact: SellerClientPhoneContact }) {
+  const registered = contact.status === "cadastrado";
+  return (
+    <article className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <PhoneCall className="h-5 w-5 shrink-0 text-yellow-600" aria-hidden="true" />
+          <div className="min-w-0">
+            <p className="font-black text-neutral-950">{contact.phone_display}</p>
+            <p className="truncate text-xs text-neutral-500">{contact.client_email || "Cadastro ainda não finalizado"}</p>
+          </div>
+        </div>
+        <Badge className={registered ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-100" : "bg-amber-100 text-amber-800 hover:bg-amber-100"}>
+          {registered ? "Cadastrado" : "Em atendimento"}
+        </Badge>
+      </div>
+
+      {(contact.broker_name || contact.agency_name || contact.city) && (
+        <p className="mt-3 truncate text-xs font-semibold text-neutral-600">
+          {[contact.broker_name, contact.agency_name, contact.city].filter(Boolean).join(" · ")}
+        </p>
+      )}
+      <p className="mt-3 text-[11px] font-medium text-neutral-400">
+        Último contato em {formatDateTime(contact.last_contact_at)}
+      </p>
     </article>
   );
 }
