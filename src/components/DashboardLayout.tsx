@@ -106,7 +106,12 @@ const adminItems: MenuItem[] = [
     module: "dashboard_admin",
   },
   { icon: UserCheck, label: "Aprovações", href: "/admin/aprovacoes", module: "aprovacoes" },
-  { icon: IdCard, label: "Aprovações de Documentos", href: "/admin/verificacoes", module: "documentos" },
+  {
+    icon: IdCard,
+    label: "Aprovações de Documentos",
+    href: "/admin/verificacoes",
+    module: "documentos",
+  },
   { icon: Search, label: "Consultas", href: "/admin/consultas", module: "consultas" },
   { icon: FileText, label: "Contratos Ativos", href: "/admin/contratos", module: "contratos" },
   {
@@ -310,7 +315,13 @@ const JURIDICO_DASHBOARD_ITEM = {
   href: "/dashboard",
 };
 
-export function DashboardLayout({ children }: { children: React.ReactNode }) {
+export function DashboardLayout({
+  children,
+  lockDesktopViewport = false,
+}: {
+  children: React.ReactNode;
+  lockDesktopViewport?: boolean;
+}) {
   const location = useLocation();
   const { user, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -536,7 +547,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <div className="min-h-screen bg-neutral-50 flex">
+    <div
+      className={`min-h-screen bg-neutral-50 flex ${
+        lockDesktopViewport ? "xl:h-screen xl:min-h-0 xl:overflow-hidden" : ""
+      }`}
+    >
       {/* Overlay mobile */}
       {mobileOpen && (
         <div
@@ -668,8 +683,12 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 lg:ml-64 min-h-screen flex flex-col w-full min-w-0">
-        <header className="h-16 border-b border-neutral-200 flex items-center justify-between gap-3 px-4 sm:px-6 lg:px-10 bg-white/80 backdrop-blur-md sticky top-0 z-40">
+      <main
+        className={`flex-1 lg:ml-64 min-h-screen flex flex-col w-full min-w-0 ${
+          lockDesktopViewport ? "xl:h-screen xl:min-h-0 xl:overflow-hidden" : ""
+        }`}
+      >
+        <header className="h-16 shrink-0 border-b border-neutral-200 flex items-center justify-between gap-3 px-4 sm:px-6 lg:px-10 bg-white/80 backdrop-blur-md sticky top-0 z-40">
           <div className="flex items-center gap-3 min-w-0">
             <button
               className="lg:hidden p-2 -ml-2 text-neutral-700 hover:text-neutral-900 shrink-0"
@@ -710,10 +729,21 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <div className="p-4 sm:p-6 lg:p-10 flex-1 overflow-x-hidden">{children}</div>
+        <div
+          className={`p-4 sm:p-6 lg:p-10 flex-1 overflow-x-hidden ${
+            lockDesktopViewport ? "xl:min-h-0 xl:overflow-hidden xl:p-6" : ""
+          }`}
+        >
+          {children}
+        </div>
 
-        <footer className="p-6 sm:p-8 text-center text-xs text-neutral-400 border-t border-neutral-100 font-medium bg-white">
-          © {new Date().getFullYear()} NOX FIANÇA - Plataforma Institucional de Seguro Fiança Locatícia
+        <footer
+          className={`p-6 sm:p-8 text-center text-xs text-neutral-400 border-t border-neutral-100 font-medium bg-white ${
+            lockDesktopViewport ? "xl:hidden" : ""
+          }`}
+        >
+          © {new Date().getFullYear()} NOX FIANÇA - Plataforma Institucional de Seguro Fiança
+          Locatícia
         </footer>
       </main>
     </div>

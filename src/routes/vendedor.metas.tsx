@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AlertCircle, RefreshCw, Target, Trophy, Users, Video } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -8,9 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
-import { calcularGanhoTotal, getNivelComissaoVendedor } from "@/lib/comissao-vendedor";
 import { fetchMySellerMonthlyProgress, type SellerMonthlyProgress } from "@/lib/seller-progress";
-import { formatMoney } from "@/lib/vendedor-portal";
 
 export const Route = createFileRoute("/vendedor/metas")({
   component: () => (
@@ -71,7 +69,11 @@ function Metas() {
         { event: "*", schema: "public", table: "seller_client_partnerships" },
         refresh,
       )
-      .on("postgres_changes", { event: "*", schema: "public", table: "apolices" }, refresh)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "seller_commissions" },
+        refresh,
+      )
       .subscribe();
     window.addEventListener("focus", refresh);
     return () => {
@@ -81,8 +83,6 @@ function Metas() {
   }, [carregar]);
 
   const contracts = progress?.contracts_closed ?? 0;
-  const ganho = useMemo(() => calcularGanhoTotal(contracts), [contracts]);
-  const nivel = useMemo(() => getNivelComissaoVendedor(contracts), [contracts]);
   const hasGoals =
     progress?.target_meetings != null &&
     progress?.target_clients != null &&
@@ -146,33 +146,6 @@ function Metas() {
                 />
               </div>
 
-              <Card className="overflow-hidden border-yellow-300 bg-gradient-to-br from-yellow-50 to-white">
-                <CardContent className="grid gap-5 p-6 lg:grid-cols-[1fr_auto] lg:items-center">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-bold text-neutral-700">
-                        {formatMoney(nivel.valorPorProximoContrato)} por próximo contrato
-                      </span>
-                    </div>
-                    <p className="mt-3 text-lg font-black text-neutral-950">{nivel.mensagem}</p>
-                    <p className="mt-1 text-sm text-neutral-500">
-                      A contagem considera os contratos fechados pelos clientes que você cadastrou.
-                    </p>
-                  </div>
-                  <div className="rounded-2xl bg-neutral-950 p-5 text-white lg:min-w-64">
-                    <p className="text-xs font-black uppercase tracking-widest text-neutral-400">
-                      Comissões do mês
-                    </p>
-                    <p className="mt-1 text-3xl font-black text-yellow-300">
-                      {formatMoney(ganho.total)}
-                    </p>
-                    <p className="mt-2 text-xs text-neutral-300">
-                      Comissão {formatMoney(ganho.comissao)} + bônus {formatMoney(ganho.bonus)}
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-
               <Card>
                 <CardHeader>
                   <CardTitle>Faixas e bônus cumulativos</CardTitle>
@@ -229,7 +202,7 @@ function GoalCard({
         <div>
           <p className="text-sm font-bold text-neutral-600">{label}</p>
           <p className="text-3xl font-black text-neutral-950">
-            {current} <span className="text-base text-neutral-400">/ {target ?? "—"}</span>
+            {current} <span className="text-base text-neutral-400">/ {target ?? 0}</span>
           </p>
         </div>
         <Progress value={percentage} className="h-2" />
