@@ -52,7 +52,10 @@ import { ptBR } from "date-fns/locale";
 import { useAuth } from "@/components/AuthProvider";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { formatMoney, formatDateTime, toDatetimeLocal } from "@/lib/vendedor-portal";
-import { META_PADRAO_VENDEDOR } from "@/lib/comissao-vendedor";
+import {
+  fetchSellerTeamMonthlyProgress,
+  type SellerTeamMonthlyProgress,
+} from "@/lib/seller-progress";
 import { TabAuditoria, TabColaboradores, TabEquipeComercial } from "./admin.equipe-permissoes";
 
 const VALID_TABS = [
@@ -182,85 +185,128 @@ function TabMetas() {
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
-  const [linhas, setLinhas] = useState<any[]>([]);
-  const [edits, setEdits] = useState<Record<string, string>>({});
+  const [linhas, setLinhas] = useState<SellerTeamMonthlyProgress[]>([]);
+  const [edits, setEdits] = useState<
+    Record<string, { meetings: string; clients: string; contracts: string }>
+  >({});
   const [loading, setLoading] = useState(true);
   const [salvandoId, setSalvandoId] = useState<string | null>(null);
 
   const carregar = useCallback(async () => {
     setLoading(true);
     try {
-      const [{ data: vendedores }, { data: metas }, { data: performance }] = await Promise.all([
-        supabase
-          .from("internal_users" as any)
-          .select("id, full_name")
-          .eq("role", "vendedor")
-          .eq("status", "ativo")
-          .order("full_name"),
-        supabase
-          .from("seller_goals" as any)
-          .select("seller_id, target_contracts")
-          .eq("month", month)
-          .eq("year", year),
-        supabase
-          .from("seller_performance" as any)
-          .select("seller_id, contracts_activated")
-          .eq("month", month)
-          .eq("year", year),
-      ]);
-      const metaMap = new Map(
-        ((metas as any[]) ?? []).map((m) => [m.seller_id, m.target_contracts]),
-      );
-      const perfMap = new Map(
-        ((performance as any[]) ?? []).map((p) => [p.seller_id, p.contracts_activated]),
-      );
-      setLinhas(
-        ((vendedores as any[]) ?? []).map((v) => ({
-          id: v.id,
-          nome: v.full_name,
-          meta: metaMap.get(v.id) ?? null,
-          progresso: perfMap.get(v.id) ?? 0,
-        })),
-      );
+      setLinhas(await fetchSellerTeamMonthlyProgress(month, year));
       setEdits({});
+    } catch (error: any) {
+      toast.error(error.message || "Não foi possível carregar as metas da equipe.");
     } finally {
       setLoading(false);
     }
   }, [month, year]);
   useEffect(() => {
-    carregar();
+    void carregar();
   }, [carregar]);
 
-  const salvar = async (sellerId: string, nome: string) => {
-    const valor = Number(edits[sellerId]);
-    if (!Number.isFinite(valor) || valor < 0) {
-      toast.error("Informe uma meta válida.");
+  useEffect(() => {
+    const refresh = () => void carregar();
+    const channel = supabase
+      .channel("admin-seller-goals-live")
+      .on("postgres_changes", { event: "*", schema: "public", table: "seller_goals" }, refresh)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "seller_appointments" },
+        refresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "seller_client_partnerships" },
+        refresh,
+      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "apolices" }, refresh)
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [carregar]);
+
+  const salvar = async (linha: SellerTeamMonthlyProgress) => {
+    const edit = edits[linha.seller_id] ?? {
+      meetings: linha.target_meetings == null ? "" : String(linha.target_meetings),
+      clients: linha.target_clients == null ? "" : String(linha.target_clients),
+      contracts: linha.target_contracts == null ? "" : String(linha.target_contracts),
+    };
+    const rawValues = [edit.meetings, edit.clients, edit.contracts];
+    const values = rawValues.map(Number);
+    if (
+      rawValues.some((value) => value.trim() === "") ||
+      values.some((value) => !Number.isInteger(value) || value < 0)
+    ) {
+      toast.error("Preencha as três metas com números inteiros iguais ou maiores que zero.");
       return;
     }
-    setSalvandoId(sellerId);
-    const antes = linhas.find((l) => l.id === sellerId)?.meta ?? null;
-    const { error } = await supabase
-      .from("seller_goals" as any)
-      .upsert(
-        { seller_id: sellerId, month, year, target_contracts: valor },
-        { onConflict: "seller_id,month,year" },
-      );
+    const [targetMeetings, targetClients, targetContracts] = values;
+    setSalvandoId(linha.seller_id);
+    const { error } = await supabase.from("seller_goals" as any).upsert(
+      {
+        seller_id: linha.seller_id,
+        month,
+        year,
+        target_meetings: targetMeetings,
+        target_clients: targetClients,
+        target_contracts: targetContracts,
+      },
+      { onConflict: "seller_id,month,year" },
+    );
     setSalvandoId(null);
     if (error) {
       toast.error(error.message);
       return;
     }
-    toast.success(`Meta de ${nome} atualizada.`);
+    toast.success(`Metas de ${linha.seller_name} atualizadas.`);
     registrarAuditoria({
       actorUserId: user?.id,
       actorRole: user?.internalRole || user?.role,
-      action: "definir_meta",
+      action: "definir_metas_mensais",
       tableName: "seller_goals",
-      recordId: sellerId,
-      before: { target_contracts: antes, month, year },
-      after: { target_contracts: valor, month, year },
+      recordId: linha.seller_id,
+      before: {
+        target_meetings: linha.target_meetings,
+        target_clients: linha.target_clients,
+        target_contracts: linha.target_contracts,
+        month,
+        year,
+      },
+      after: {
+        target_meetings: targetMeetings,
+        target_clients: targetClients,
+        target_contracts: targetContracts,
+        month,
+        year,
+      },
     });
-    carregar();
+    void carregar();
+  };
+
+  const updateEdit = (
+    linha: SellerTeamMonthlyProgress,
+    key: "meetings" | "clients" | "contracts",
+    value: string,
+  ) => {
+    setEdits((current) => ({
+      ...current,
+      [linha.seller_id]: {
+        meetings:
+          current[linha.seller_id]?.meetings ??
+          (linha.target_meetings == null ? "" : String(linha.target_meetings)),
+        clients:
+          current[linha.seller_id]?.clients ??
+          (linha.target_clients == null ? "" : String(linha.target_clients)),
+        contracts:
+          current[linha.seller_id]?.contracts ??
+          (linha.target_contracts == null ? "" : String(linha.target_contracts)),
+        [key]: value,
+      },
+    }));
   };
 
   return (
@@ -269,7 +315,8 @@ function TabMetas() {
         <div>
           <CardTitle>Metas mensais por vendedor</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Defina a meta de contratos do mês e acompanhe o progresso real de cada vendedor.
+            Defina reuniões realizadas, clientes cadastrados e contratos fechados. O progresso é
+            automático e atualizado em tempo real.
           </p>
         </div>
         <SeletorMes
@@ -290,44 +337,93 @@ function TabMetas() {
           </p>
         ) : (
           linhas.map((linha) => {
-            const metaAtual = linha.meta ?? META_PADRAO_VENDEDOR;
-            const pct = Math.min(100, Math.round((linha.progresso / metaAtual) * 100));
-            const valorEdit = edits[linha.id] ?? (linha.meta != null ? String(linha.meta) : "");
+            const edit = edits[linha.seller_id];
             return (
-              <div key={linha.id} className="rounded-xl border border-neutral-100 p-4">
+              <div
+                key={linha.seller_id}
+                className="space-y-4 rounded-xl border border-neutral-100 p-4"
+              >
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="font-bold text-neutral-950">{linha.nome}</p>
-                    <p className="text-xs text-neutral-500">
-                      {linha.progresso} / {linha.meta ?? `${META_PADRAO_VENDEDOR} (padrão)`}{" "}
-                      contratos · {pct}%
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      type="number"
-                      min={0}
-                      className="w-28"
-                      placeholder={String(META_PADRAO_VENDEDOR)}
-                      value={valorEdit}
-                      onChange={(e) => setEdits({ ...edits, [linha.id]: e.target.value })}
-                    />
-                    <Button
-                      size="sm"
-                      disabled={salvandoId === linha.id || !edits[linha.id]}
-                      onClick={() => salvar(linha.id, linha.nome)}
-                    >
-                      {salvandoId === linha.id ? "Salvando…" : "Salvar meta"}
-                    </Button>
-                  </div>
+                  <p className="font-bold text-neutral-950">{linha.seller_name}</p>
+                  <Button
+                    size="sm"
+                    disabled={salvandoId === linha.seller_id}
+                    onClick={() => salvar(linha)}
+                  >
+                    {salvandoId === linha.seller_id ? "Salvando…" : "Salvar metas"}
+                  </Button>
                 </div>
-                <Progress value={pct} className="mt-3 h-2" />
+                <div className="grid gap-3 lg:grid-cols-3">
+                  <MetaEditor
+                    label="Reuniões realizadas"
+                    current={linha.meetings_completed}
+                    target={linha.target_meetings}
+                    value={
+                      edit?.meetings ??
+                      (linha.target_meetings == null ? "" : String(linha.target_meetings))
+                    }
+                    onChange={(value) => updateEdit(linha, "meetings", value)}
+                  />
+                  <MetaEditor
+                    label="Clientes cadastrados"
+                    current={linha.clients_registered}
+                    target={linha.target_clients}
+                    value={
+                      edit?.clients ??
+                      (linha.target_clients == null ? "" : String(linha.target_clients))
+                    }
+                    onChange={(value) => updateEdit(linha, "clients", value)}
+                  />
+                  <MetaEditor
+                    label="Contratos fechados"
+                    current={linha.contracts_closed}
+                    target={linha.target_contracts}
+                    value={
+                      edit?.contracts ??
+                      (linha.target_contracts == null ? "" : String(linha.target_contracts))
+                    }
+                    onChange={(value) => updateEdit(linha, "contracts", value)}
+                  />
+                </div>
               </div>
             );
           })
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function MetaEditor({
+  label,
+  current,
+  target,
+  value,
+  onChange,
+}: {
+  label: string;
+  current: number;
+  target: number | null;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const pct = target && target > 0 ? Math.min(100, Math.round((current / target) * 100)) : 0;
+  return (
+    <div className="rounded-xl bg-neutral-50 p-3">
+      <Label className="text-xs font-bold">{label}</Label>
+      <div className="mt-2 flex items-center gap-2">
+        <Input
+          type="number"
+          min={0}
+          step={1}
+          value={value}
+          placeholder="Definir"
+          onChange={(event) => onChange(event.target.value)}
+        />
+        <span className="shrink-0 text-xs font-bold text-neutral-500">{current} feitos</span>
+      </div>
+      <Progress value={pct} className="mt-2 h-2" />
+    </div>
   );
 }
 
@@ -738,10 +834,16 @@ function TabComissoes() {
                     </Badge>
                   </div>
                   <div className="mt-1.5 text-xs text-neutral-500">
-                    Comissão {formatMoney(l.commission_amount)} · Bônus {formatMoney(l.bonus_amount)} · Reserva{" "}
-                    {formatMoney(l.reserve_amount)} · Liberado {formatMoney(l.released_amount)}
+                    Comissão {formatMoney(l.commission_amount)} · Bônus{" "}
+                    {formatMoney(l.bonus_amount)} · Reserva {formatMoney(l.reserve_amount)} ·
+                    Liberado {formatMoney(l.released_amount)}
                   </div>
-                  <Button size="sm" variant="outline" className="mt-2" onClick={() => setEditando(l)}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="mt-2"
+                    onClick={() => setEditando(l)}
+                  >
                     Editar
                   </Button>
                 </div>
@@ -751,56 +853,59 @@ function TabComissoes() {
 
           {/* Tablet/desktop (md:+): tabela completa. */}
           <div className="hidden md:block">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Vendedor</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Comissão</TableHead>
-                <TableHead>Bônus</TableHead>
-                <TableHead>Reserva</TableHead>
-                <TableHead>Liberado</TableHead>
-                <TableHead>Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={7} className="py-6 text-center text-sm">
-                    Carregando…
-                  </TableCell>
+                  <TableHead>Vendedor</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Comissão</TableHead>
+                  <TableHead>Bônus</TableHead>
+                  <TableHead>Reserva</TableHead>
+                  <TableHead>Liberado</TableHead>
+                  <TableHead>Ações</TableHead>
                 </TableRow>
-              ) : linhas.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="py-6 text-center text-sm text-muted-foreground">
-                    Nenhuma comissão lançada neste mês.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                linhas.map((l) => (
-                  <TableRow key={l.id}>
-                    <TableCell className="font-medium">
-                      {l.internal_users?.full_name ?? "—"}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">
-                        {STATUS_COMISSAO.find((s) => s.v === l.status)?.l ?? l.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{formatMoney(l.commission_amount)}</TableCell>
-                    <TableCell>{formatMoney(l.bonus_amount)}</TableCell>
-                    <TableCell>{formatMoney(l.reserve_amount)}</TableCell>
-                    <TableCell>{formatMoney(l.released_amount)}</TableCell>
-                    <TableCell>
-                      <Button size="sm" variant="outline" onClick={() => setEditando(l)}>
-                        Editar
-                      </Button>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="py-6 text-center text-sm">
+                      Carregando…
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                ) : linhas.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={7}
+                      className="py-6 text-center text-sm text-muted-foreground"
+                    >
+                      Nenhuma comissão lançada neste mês.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  linhas.map((l) => (
+                    <TableRow key={l.id}>
+                      <TableCell className="font-medium">
+                        {l.internal_users?.full_name ?? "—"}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">
+                          {STATUS_COMISSAO.find((s) => s.v === l.status)?.l ?? l.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{formatMoney(l.commission_amount)}</TableCell>
+                      <TableCell>{formatMoney(l.bonus_amount)}</TableCell>
+                      <TableCell>{formatMoney(l.reserve_amount)}</TableCell>
+                      <TableCell>{formatMoney(l.released_amount)}</TableCell>
+                      <TableCell>
+                        <Button size="sm" variant="outline" onClick={() => setEditando(l)}>
+                          Editar
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
           </div>
         </CardContent>
       </Card>

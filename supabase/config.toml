@@ -84,3 +84,6 @@ verify_jwt = true
 
 [functions.calcular-comissoes-contrato]
 verify_jwt = true
+
+[functions.delete-nox-employee]
+verify_jwt = true

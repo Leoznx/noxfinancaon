@@ -24,10 +24,11 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Users, ShieldCheck, Briefcase, History, UserX, UserCheck } from "lucide-react";
+import { Users, ShieldCheck, Briefcase, History, UserX, UserCheck, Trash2 } from "lucide-react";
 import { z } from "zod";
 import { useAuth } from "@/components/AuthProvider";
 import { registrarAuditoria } from "@/lib/auditoria";
+import { deleteNoxEmployee } from "@/lib/delete-nox-employee";
 
 const VALID_TABS = ["colaboradores", "permissoes", "equipe-comercial", "auditoria"] as const;
 type TabKey = (typeof VALID_TABS)[number];
@@ -191,6 +192,7 @@ export function TabColaboradores() {
   const { user } = useAuth();
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const carregar = async () => {
     setLoading(true);
@@ -227,27 +229,21 @@ export function TabColaboradores() {
     });
     carregar();
   };
-  const alterarStatus = async (id: string, status: string) => {
-    const antes = rows.find((r) => r.id === id);
-    const { error } = await supabase
-      .from("internal_users" as any)
-      .update({ status })
-      .eq("id", id);
-    if (error) {
-      toast.error(error.message);
-      return;
+  const excluirColaborador = async (employee: any) => {
+    const confirmed = window.confirm(
+      `Excluir permanentemente ${employee.full_name || employee.email}?\n\nO cargo, o perfil e o login serão apagados. Esta ação não pode ser desfeita.`,
+    );
+    if (!confirmed) return;
+    setDeletingId(employee.id);
+    try {
+      await deleteNoxEmployee(employee.id);
+      toast.success("Colaborador e cadastro excluídos permanentemente.");
+      await carregar();
+    } catch (error: any) {
+      toast.error(error.message || "Não foi possível excluir o colaborador.");
+    } finally {
+      setDeletingId(null);
     }
-    toast.success("Status atualizado");
-    registrarAuditoria({
-      actorUserId: user?.id,
-      actorRole: user?.internalRole || user?.role,
-      action: "alterar_status",
-      tableName: "internal_users",
-      recordId: id,
-      before: { status: antes?.status },
-      after: { status },
-    });
-    carregar();
   };
 
   return (
@@ -309,23 +305,16 @@ export function TabColaboradores() {
                     {u.created_at ? new Date(u.created_at).toLocaleDateString("pt-BR") : "—"}
                   </span>
                 </div>
-                {u.status === "ativo" ? (
+                {u.role !== "admin_master" && (
                   <Button
                     size="sm"
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => alterarStatus(u.id, "bloqueado")}
+                    variant="destructive"
+                    className="w-full gap-2"
+                    disabled={deletingId === u.id}
+                    onClick={() => excluirColaborador(u)}
                   >
-                    Bloquear
-                  </Button>
-                ) : (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => alterarStatus(u.id, "ativo")}
-                  >
-                    Ativar
+                    <Trash2 className="h-4 w-4" />
+                    {deletingId === u.id ? "Excluindo…" : "Excluir colaborador"}
                   </Button>
                 )}
               </div>
@@ -398,22 +387,19 @@ export function TabColaboradores() {
                       {u.created_at ? new Date(u.created_at).toLocaleDateString("pt-BR") : "—"}
                     </TableCell>
                     <TableCell>
-                      {u.status === "ativo" ? (
+                      {u.role !== "admin_master" ? (
                         <Button
                           size="sm"
-                          variant="outline"
-                          onClick={() => alterarStatus(u.id, "bloqueado")}
+                          variant="destructive"
+                          className="gap-2"
+                          disabled={deletingId === u.id}
+                          onClick={() => excluirColaborador(u)}
                         >
-                          Bloquear
+                          <Trash2 className="h-4 w-4" />
+                          {deletingId === u.id ? "Excluindo…" : "Excluir"}
                         </Button>
                       ) : (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => alterarStatus(u.id, "ativo")}
-                        >
-                          Ativar
-                        </Button>
+                        <span className="text-xs text-muted-foreground">Protegido</span>
                       )}
                     </TableCell>
                   </TableRow>
@@ -686,7 +672,10 @@ export function TabEquipeComercial() {
                     </span>
                     <p className="font-medium truncate">{v.full_name}</p>
                   </div>
-                  <Badge variant={v.status === "ativo" ? "default" : "secondary"} className="shrink-0">
+                  <Badge
+                    variant={v.status === "ativo" ? "default" : "secondary"}
+                    className="shrink-0"
+                  >
                     {v.status}
                   </Badge>
                 </div>
@@ -767,7 +756,10 @@ export function TabEquipeComercial() {
                 </TableRow>
               ) : sorted.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={12} className="text-center py-6 text-sm text-muted-foreground">
+                  <TableCell
+                    colSpan={12}
+                    className="text-center py-6 text-sm text-muted-foreground"
+                  >
                     Sem vendedores cadastrados.
                   </TableCell>
                 </TableRow>
@@ -785,7 +777,9 @@ export function TabEquipeComercial() {
                     <TableCell>{v.perf?.contracts_closed ?? 0}</TableCell>
                     <TableCell>{v.perf?.contracts_activated ?? 0}</TableCell>
                     <TableCell>{v.perf?.contracts_canceled ?? 0}</TableCell>
-                    <TableCell>R$ {Number(v.perf?.generated_revenue_ltv ?? 0).toFixed(2)}</TableCell>
+                    <TableCell>
+                      R$ {Number(v.perf?.generated_revenue_ltv ?? 0).toFixed(2)}
+                    </TableCell>
                     <TableCell>R$ {Number(v.perf?.commission_total ?? 0).toFixed(2)}</TableCell>
                     <TableCell>
                       R$ {Number(v.perf?.bonus_total ?? 0).toFixed(2)}{" "}
