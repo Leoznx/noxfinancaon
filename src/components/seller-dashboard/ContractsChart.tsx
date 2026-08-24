@@ -153,9 +153,11 @@ export function ContractsChart({
                 <LabelList
                   dataKey="contracts"
                   position="top"
+                  formatter={formatPositiveLabel}
                   fill="#383838"
                   fontSize={9}
                   fontWeight={700}
+                  offset={6}
                 />
               </Bar>
               <Line
@@ -170,9 +172,11 @@ export function ContractsChart({
                 <LabelList
                   dataKey="accumulated"
                   position="top"
+                  formatter={formatPositiveLabel}
                   fill="#111111"
                   fontSize={8.5}
-                  offset={8}
+                  fontWeight={600}
+                  offset={20}
                 />
               </Line>
             </ComposedChart>
@@ -181,4 +185,9 @@ export function ContractsChart({
       </div>
     </section>
   );
+}
+
+function formatPositiveLabel(value: number | string) {
+  const numericValue = Number(value);
+  return numericValue > 0 ? numericValue : "";
 }
