@@ -12,6 +12,17 @@ import {
   Users,
   Video,
 } from "lucide-react";
+import {
+  Bar,
+  CartesianGrid,
+  ComposedChart,
+  LabelList,
+  Line,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -264,7 +275,7 @@ function Metas() {
                     </Badge>
                   </div>
                 </CardHeader>
-                <CardContent className="flex min-h-0 flex-1 flex-col justify-center p-3">
+                <CardContent className="flex min-h-0 flex-1 p-2 sm:p-3">
                   <IndividualGoalTrend progress={progress} />
                 </CardContent>
               </Card>
@@ -384,84 +395,106 @@ function IndividualGoalTrend({ progress }: { progress: SellerMonthlyProgress }) 
     ...metric,
     percentage: sellerGoalPercentage(metric.value, metric.target),
   }));
-  const points = metrics.map((metric, index) => ({
-    x: 48 + index * 132,
-    y: 104 - metric.percentage * 0.68,
-  }));
-  const linePath = points
-    .map((point, index) => `${index === 0 ? "M" : "L"}${point.x} ${point.y}`)
-    .join(" ");
-  const areaPath = `${linePath} L${points[points.length - 1].x} 108 L${points[0].x} 108 Z`;
 
   return (
     <div
-      className="mx-auto flex w-full max-w-[560px] flex-col justify-center"
+      className="flex h-full min-h-[250px] w-full min-w-0 flex-col"
       aria-label="Gráfico das suas metas individuais"
     >
-      <svg className="h-[136px] w-full" viewBox="0 0 360 128" role="img">
-        <defs>
-          <linearGradient id="seller-goal-area" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#facc15" stopOpacity="0.35" />
-            <stop offset="100%" stopColor="#facc15" stopOpacity="0.03" />
-          </linearGradient>
-        </defs>
-        {[36, 70, 104].map((y) => (
-          <line key={y} x1="28" x2="340" y1={y} y2={y} stroke="#ededed" strokeWidth="1" />
-        ))}
-        <line
-          x1="28"
-          x2="340"
-          y1="36"
-          y2="36"
-          stroke="#eab308"
-          strokeDasharray="4 5"
-          opacity="0.55"
-        />
-        <path d={areaPath} fill="url(#seller-goal-area)" />
-        <path
-          d={linePath}
-          fill="none"
-          stroke="#eab308"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth="2.5"
-        />
-        {points.map((point, index) => (
-          <g key={metrics[index].label}>
-            <circle
-              cx={point.x}
-              cy={point.y}
-              r="4.5"
-              fill="white"
-              stroke="#eab308"
-              strokeWidth="2.5"
-            />
-            <text
-              x={point.x}
-              y={Math.max(17, point.y - 9)}
-              textAnchor="middle"
-              className="fill-neutral-800 text-[9px] font-black"
-            >
-              {metrics[index].percentage}%
-            </text>
-          </g>
-        ))}
-      </svg>
-      <div className="grid grid-cols-3 divide-x divide-neutral-200 rounded-xl bg-neutral-50 px-2 py-2 text-center">
-        {metrics.map((metric) => (
-          <div key={metric.label} className="min-w-0">
-            <p className="truncate text-[8px] font-black uppercase tracking-wide text-neutral-400">
-              {metric.label}
-            </p>
-            <p className="mt-0.5 text-[11px] font-black text-neutral-950">
-              {metric.value}/{metric.target ?? 0}
-            </p>
-          </div>
-        ))}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-2 pb-1 pt-0.5 text-[10px] font-semibold text-neutral-500">
+        <span className="flex items-center gap-2">
+          <span className="h-2.5 w-2.5 rounded-sm bg-[#ffc400]" /> Realizado (qtd)
+        </span>
+        <span className="flex items-center gap-2">
+          <span className="h-0.5 w-5 bg-neutral-950" /> Atingimento (%)
+        </span>
       </div>
-      <p className="mt-1.5 text-center text-[8px] font-medium text-neutral-400">
-        Progresso individual em relação às suas metas do mês.
-      </p>
+      <div className="min-h-[210px] min-w-0 flex-1">
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart data={metrics} margin={{ top: 30, right: 0, bottom: 2, left: -18 }}>
+            <CartesianGrid vertical={false} stroke="#ededed" strokeDasharray="3 3" />
+            <XAxis
+              dataKey="label"
+              tickLine={false}
+              axisLine={false}
+              tick={{ fill: "#6b7280", fontSize: 10, fontWeight: 600 }}
+              dy={8}
+            />
+            <YAxis
+              yAxisId="quantity"
+              allowDecimals={false}
+              tickLine={false}
+              axisLine={false}
+              tick={{ fill: "#6b7280", fontSize: 9 }}
+              domain={[0, (dataMax: number) => Math.max(1, Math.ceil(dataMax * 1.15))]}
+            />
+            <YAxis
+              yAxisId="percentage"
+              orientation="right"
+              domain={[0, 100]}
+              ticks={[0, 25, 50, 75, 100]}
+              tickFormatter={(value) => `${value}%`}
+              tickLine={false}
+              axisLine={false}
+              tick={{ fill: "#6b7280", fontSize: 9 }}
+            />
+            <Tooltip
+              cursor={{ fill: "#fff8d6", opacity: 0.65 }}
+              contentStyle={{
+                borderRadius: 10,
+                border: "1px solid #e8e8e8",
+                boxShadow: "0 8px 30px rgba(0,0,0,.08)",
+                fontSize: 11,
+              }}
+              formatter={(value, name) => [
+                name === "percentage" ? `${Number(value)}%` : Number(value),
+                name === "percentage" ? "Atingimento" : "Realizado",
+              ]}
+              labelFormatter={(_, payload) => {
+                const item = payload[0]?.payload as (typeof metrics)[number] | undefined;
+                return item
+                  ? `${item.label}: ${item.value} de ${item.target ?? 0}`
+                  : "Meta individual";
+              }}
+            />
+            <Bar
+              yAxisId="quantity"
+              dataKey="value"
+              fill="#ffc400"
+              radius={[5, 5, 0, 0]}
+              maxBarSize={48}
+            >
+              <LabelList
+                dataKey="value"
+                position="top"
+                fill="#5f4a00"
+                fontSize={10}
+                fontWeight={800}
+                offset={7}
+              />
+            </Bar>
+            <Line
+              yAxisId="percentage"
+              type="linear"
+              dataKey="percentage"
+              stroke="#111111"
+              strokeWidth={2}
+              dot={{ r: 3.5, fill: "#111111", strokeWidth: 0 }}
+              activeDot={{ r: 5 }}
+            >
+              <LabelList
+                dataKey="percentage"
+                position="top"
+                formatter={(value: number) => `${value}%`}
+                fill="#111111"
+                fontSize={9}
+                fontWeight={800}
+                offset={13}
+              />
+            </Line>
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   );
 }
