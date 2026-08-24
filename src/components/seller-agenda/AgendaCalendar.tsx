@@ -62,10 +62,10 @@ export function AgendaCalendar({
 
   return (
     <section className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-[0_2px_8px_rgba(0,0,0,0.03)]">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-100 px-4 py-3.5 sm:px-5">
+      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 px-4 py-2.5">
         <div>
           <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-neutral-400">Calendário mensal</p>
-          <h2 className="mt-0.5 text-lg font-black capitalize text-neutral-950">
+          <h2 className="text-base font-black capitalize text-neutral-950">
             {format(month, "MMMM 'de' yyyy", { locale: ptBR })}
           </h2>
         </div>
@@ -74,20 +74,20 @@ export function AgendaCalendar({
             type="button"
             size="icon"
             variant="outline"
-            className="h-9 w-9"
+            className="h-8 w-8"
             aria-label="Mês anterior"
             onClick={() => onMonthChange(subMonths(month, 1))}
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <Button type="button" variant="outline" className="h-9 px-3 text-xs font-bold" onClick={goToday}>
+          <Button type="button" variant="outline" className="h-8 px-3 text-xs font-bold" onClick={goToday}>
             Hoje
           </Button>
           <Button
             type="button"
             size="icon"
             variant="outline"
-            className="h-9 w-9"
+            className="h-8 w-8"
             aria-label="Próximo mês"
             onClick={() => onMonthChange(addMonths(month, 1))}
           >
@@ -98,7 +98,7 @@ export function AgendaCalendar({
 
       <div className="grid grid-cols-7 border-b border-neutral-100 bg-neutral-50/70">
         {["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"].map((weekday) => (
-          <div key={weekday} className="py-2.5 text-center text-[9px] font-black tracking-[0.12em] text-neutral-400 sm:text-[10px]">
+          <div key={weekday} className="py-1.5 text-center text-[9px] font-black tracking-[0.12em] text-neutral-400 sm:text-[10px]">
             {weekday}
           </div>
         ))}
@@ -112,7 +112,7 @@ export function AgendaCalendar({
           return (
             <div
               key={day.toISOString()}
-              className={`group relative min-h-[86px] border-b border-r border-neutral-100 p-1.5 text-left transition duration-200 sm:min-h-[108px] sm:p-2 ${
+              className={`group relative min-h-[64px] border-b border-r border-neutral-100 p-1.5 text-left transition duration-200 sm:min-h-[68px] ${
                 index % 7 === 6 ? "border-r-0" : ""
               } ${selected ? "bg-yellow-50 ring-1 ring-inset ring-yellow-400" : "hover:bg-neutral-50"} ${
                 !isSameMonth(day, month) ? "bg-neutral-50/60 text-neutral-300" : ""
@@ -126,14 +126,14 @@ export function AgendaCalendar({
               />
               <div className="pointer-events-none relative z-[1]">
                 <span
-                  className={`grid h-6 w-6 place-items-center rounded-full text-[11px] font-extrabold ${
+                  className={`grid h-5 w-5 place-items-center rounded-full text-[10px] font-extrabold ${
                     today ? "bg-yellow-400 text-neutral-950" : !isSameMonth(day, month) ? "text-neutral-300" : "text-neutral-600"
                   }`}
                 >
                   {format(day, "d")}
                 </span>
-                <span className="mt-1.5 hidden space-y-1 sm:block">
-                  {dayItems.slice(0, 3).map((item) => (
+                <span className="mt-1 hidden space-y-0.5 sm:block">
+                  {dayItems.slice(0, 2).map((item) => (
                     <button
                       type="button"
                       key={item.id}
@@ -141,13 +141,13 @@ export function AgendaCalendar({
                         onDateSelect(day);
                         onEventOpen(item);
                       }}
-                      className={`pointer-events-auto block w-full truncate rounded-md border px-1.5 py-1 text-left text-[9px] font-bold leading-none transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400 ${EVENT_STYLE[agendaTypeKey(item.type)]}`}
+                      className={`pointer-events-auto block w-full truncate rounded border px-1 py-0.5 text-left text-[8px] font-bold leading-none transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400 ${EVENT_STYLE[agendaTypeKey(item.type)]}`}
                     >
                       {format(new Date(item.scheduled_at), "HH:mm")} {item.title}
                     </button>
                   ))}
-                  {dayItems.length > 3 && (
-                    <span className="block px-1 text-[9px] font-extrabold text-neutral-400">+{dayItems.length - 3} outros</span>
+                  {dayItems.length > 2 && (
+                    <span className="block px-1 text-[8px] font-extrabold leading-none text-neutral-400">+{dayItems.length - 2} outros</span>
                   )}
                 </span>
                 {dayItems.length > 0 && (

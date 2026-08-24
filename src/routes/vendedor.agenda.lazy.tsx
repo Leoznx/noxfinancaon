@@ -209,19 +209,19 @@ function AgendaPage() {
   }
 
   return (
-    <DashboardLayout>
-      <main className="space-y-4 pb-6 sm:space-y-5">
-        <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <DashboardLayout lockDesktopViewport={view === "calendario"}>
+      <main className="space-y-3 pb-4 xl:h-full xl:min-h-0 xl:pb-0">
+        <header className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div className="flex items-start gap-3">
-            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-yellow-100 text-yellow-800"><CalendarClock className="h-5 w-5" /></span>
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-yellow-100 text-yellow-800"><CalendarClock className="h-5 w-5" /></span>
             <div>
-              <h1 className="text-2xl font-black tracking-tight text-neutral-950 sm:text-3xl">Minha Agenda</h1>
-              <p className="mt-0.5 text-sm font-medium text-neutral-500">Reuniões, retornos, follow-ups e compromissos comerciais.</p>
+              <h1 className="text-2xl font-black tracking-tight text-neutral-950">Minha Agenda</h1>
+              <p className="text-xs font-medium text-neutral-500 sm:text-sm">Reuniões, retornos, follow-ups e compromissos comerciais.</p>
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" className="h-10 gap-2 font-bold" onClick={() => load(true)} disabled={refreshing}><RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Atualizar</Button>
-            <Button type="button" className="h-10 gap-2 bg-yellow-400 font-extrabold text-black hover:bg-yellow-500" onClick={() => openNew()}><Plus className="h-4 w-4" /> Novo compromisso</Button>
+            <Button type="button" variant="outline" className="h-9 gap-2 font-bold" onClick={() => load(true)} disabled={refreshing}><RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Atualizar</Button>
+            <Button type="button" className="h-9 gap-2 bg-yellow-400 font-extrabold text-black hover:bg-yellow-500" onClick={() => openNew()}><Plus className="h-4 w-4" /> Novo compromisso</Button>
           </div>
         </header>
 
@@ -232,7 +232,7 @@ function AgendaPage() {
         <AgendaControls view={view} filter={filter} onViewChange={(nextView) => { setView(nextView); if (nextView === "lista") setListScope("month"); }} onFilterChange={setFilter} />
 
         {error ? <ErrorState message={error} onRetry={() => load()} /> : loading ? <AgendaSkeleton /> : view === "calendario" ? (
-          <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="grid items-start gap-3 xl:min-h-0 xl:grid-cols-[minmax(0,1fr)_340px]">
             <AgendaCalendar month={month} selectedDate={selectedDate} items={filtered} onMonthChange={changeMonth} onDateSelect={selectDate} onEventOpen={setViewing} />
             <AgendaDayPanel date={selectedDate} items={selectedItems} onNew={() => openNew(selectedDate)} onView={setViewing} onEdit={openEdit} onComplete={complete} onDelete={setDeleteTarget} />
           </div>
@@ -265,8 +265,8 @@ function AgendaPage() {
 
 function AgendaSkeleton() {
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]" aria-label="Carregando agenda">
-      <div className="h-[620px] animate-pulse rounded-2xl border border-neutral-200 bg-white p-5"><div className="h-6 w-44 rounded bg-neutral-100" /><div className="mt-6 grid grid-cols-7 gap-2">{Array.from({ length: 35 }).map((_, index) => <div key={index} className="h-20 rounded-lg bg-neutral-50" />)}</div></div>
+    <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_340px]" aria-label="Carregando agenda">
+      <div className="h-[500px] animate-pulse rounded-2xl border border-neutral-200 bg-white p-4"><div className="h-6 w-44 rounded bg-neutral-100" /><div className="mt-4 grid grid-cols-7 gap-2">{Array.from({ length: 35 }).map((_, index) => <div key={index} className="h-14 rounded-lg bg-neutral-50" />)}</div></div>
       <div className="h-96 animate-pulse rounded-2xl border border-neutral-200 bg-white p-5"><div className="h-5 w-32 rounded bg-neutral-100" /><div className="mt-5 h-24 rounded-xl bg-neutral-50" /><div className="mt-3 h-24 rounded-xl bg-neutral-50" /></div>
     </div>
   );

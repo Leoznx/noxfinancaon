@@ -23,8 +23,8 @@ export function AgendaDayPanel({
   onDelete: (item: SellerAppointment) => void;
 }) {
   return (
-    <aside className="self-start overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-[0_2px_8px_rgba(0,0,0,0.03)] xl:sticky xl:top-4">
-      <header className="border-b border-neutral-100 px-4 py-4">
+    <aside className="self-start overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-[0_2px_8px_rgba(0,0,0,0.03)] xl:sticky xl:top-3">
+      <header className="border-b border-neutral-100 px-4 py-3">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-neutral-400">Agenda do dia</p>
@@ -41,17 +41,17 @@ export function AgendaDayPanel({
         </div>
       </header>
 
-      <div className="max-h-[650px] overflow-y-auto p-3.5">
+      <div className="max-h-[410px] overflow-y-auto p-3">
         {items.length === 0 ? (
-          <div className="flex min-h-64 flex-col items-center justify-center rounded-xl border border-dashed border-neutral-200 bg-neutral-50/50 px-5 text-center">
-            <span className="grid h-12 w-12 place-items-center rounded-2xl bg-yellow-100 text-yellow-800">
-              <CalendarPlus2 className="h-6 w-6" />
+          <div className="flex min-h-52 flex-col items-center justify-center rounded-xl border border-dashed border-neutral-200 bg-neutral-50/50 px-5 text-center">
+            <span className="grid h-10 w-10 place-items-center rounded-xl bg-yellow-100 text-yellow-800">
+              <CalendarPlus2 className="h-5 w-5" />
             </span>
-            <h3 className="mt-4 text-sm font-black text-neutral-950">Nenhum compromisso para este dia</h3>
+            <h3 className="mt-3 text-sm font-black text-neutral-950">Nenhum compromisso para este dia</h3>
             <p className="mt-1 max-w-56 text-xs leading-relaxed text-neutral-500">
               Organize um retorno, reunião ou follow-up para manter sua operação em movimento.
             </p>
-            <Button type="button" className="mt-4 h-9 bg-yellow-400 text-xs font-extrabold text-black hover:bg-yellow-500" onClick={onNew}>
+            <Button type="button" className="mt-3 h-8 bg-yellow-400 text-xs font-extrabold text-black hover:bg-yellow-500" onClick={onNew}>
               <CalendarPlus2 className="mr-1.5 h-4 w-4" /> Novo compromisso
             </Button>
           </div>
@@ -74,4 +74,3 @@ export function AgendaDayPanel({
     </aside>
   );
 }
-
