@@ -245,7 +245,7 @@ serve(async (req) => {
     });
     const internalStatus = mapAsaasStatus(raw?.status);
     let boletoBarcode = raw?.identificationField || raw?.nossoNumero || null;
-    let boletoUrl = raw?.bankSlipUrl || raw?.invoiceUrl || null;
+    const boletoUrl = raw?.bankSlipUrl || raw?.invoiceUrl || null;
     let pixQrCode: string | null = null;
     let pixCopyPaste: string | null = null;
     let pixExpiresAt: string | null = null;

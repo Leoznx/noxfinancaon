@@ -2746,7 +2746,9 @@ export type Database = {
           id: string
           month: number
           seller_id: string
+          target_clients: number | null
           target_contracts: number
+          target_meetings: number | null
           updated_at: string
           year: number
         }
@@ -2755,7 +2757,9 @@ export type Database = {
           id?: string
           month: number
           seller_id: string
+          target_clients?: number | null
           target_contracts?: number
+          target_meetings?: number | null
           updated_at?: string
           year: number
         }
@@ -2764,7 +2768,9 @@ export type Database = {
           id?: string
           month?: number
           seller_id?: string
+          target_clients?: number | null
           target_contracts?: number
+          target_meetings?: number | null
           updated_at?: string
           year?: number
         }
@@ -2777,6 +2783,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      seller_rewards: {
+        Row: {
+          active: boolean
+          created_at: string
+          created_by: string | null
+          description: string | null
+          display_order: number
+          id: string
+          image_url: string
+          metric: string
+          month: number
+          target: number
+          title: string
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          display_order?: number
+          id?: string
+          image_url: string
+          metric: string
+          month: number
+          target: number
+          title: string
+          updated_at?: string
+          year: number
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          display_order?: number
+          id?: string
+          image_url?: string
+          metric?: string
+          month?: number
+          target?: number
+          title?: string
+          updated_at?: string
+          year?: number
+        }
+        Relationships: []
       }
       seller_performance: {
         Row: {

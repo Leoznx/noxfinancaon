@@ -191,6 +191,7 @@ const adminItems: MenuItem[] = [
     module: "equipe_nox",
     children: [
       { label: "Metas", href: "/admin/equipe-nox?tab=metas" },
+      { label: "Recompensas", href: "/admin/equipe-nox?tab=recompensas" },
       { label: "Agenda", href: "/admin/equipe-nox?tab=agenda" },
       { label: "Comissões", href: "/admin/equipe-nox?tab=comissoes" },
       { label: "Colaboradores", href: "/admin/equipe-nox?tab=colaboradores" },

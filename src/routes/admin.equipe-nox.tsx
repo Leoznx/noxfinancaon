@@ -44,6 +44,7 @@ import {
   ChevronRight,
   Users,
   Briefcase,
+  Gift,
   History,
 } from "lucide-react";
 import { z } from "zod";
@@ -57,9 +58,11 @@ import {
   type SellerTeamMonthlyProgress,
 } from "@/lib/seller-progress";
 import { TabAuditoria, TabColaboradores, TabEquipeComercial } from "./admin.equipe-permissoes";
+import { SellerRewardsTab } from "@/components/admin/SellerRewardsTab";
 
 const VALID_TABS = [
   "metas",
+  "recompensas",
   "agenda",
   "comissoes",
   "colaboradores",
@@ -96,7 +99,7 @@ function EquipeNoxPage() {
           <div>
             <h1 className="text-2xl font-bold text-neutral-950">Equipe NOX</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Metas, agenda, comissoes, colaboradores e auditoria em um so lugar.
+              Metas, recompensas, agenda, comissões, colaboradores e auditoria em um só lugar.
             </p>
           </div>
         </div>
@@ -106,6 +109,10 @@ function EquipeNoxPage() {
             <TabsTrigger value="metas">
               <Target className="mr-2 h-4 w-4" />
               Metas
+            </TabsTrigger>
+            <TabsTrigger value="recompensas">
+              <Gift className="mr-2 h-4 w-4" />
+              Recompensas
             </TabsTrigger>
             <TabsTrigger value="agenda">
               <Bell className="mr-2 h-4 w-4" />
@@ -130,6 +137,9 @@ function EquipeNoxPage() {
           </TabsList>
           <TabsContent value="metas" className="mt-4">
             <TabMetas />
+          </TabsContent>
+          <TabsContent value="recompensas" className="mt-4">
+            <SellerRewardsTab />
           </TabsContent>
           <TabsContent value="agenda" className="mt-4">
             <TabAgenda />
