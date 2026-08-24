@@ -217,7 +217,7 @@ function Ranking() {
             />
           ) : !erro ? (
             <>
-              <section className="relative overflow-hidden rounded-[24px] border border-white/10 bg-[radial-gradient(circle_at_50%_54%,rgba(250,204,21,0.10),transparent_28%),#101010] p-4 sm:p-6 lg:p-8">
+              <section className="relative overflow-hidden rounded-[24px] border border-white/10 bg-[radial-gradient(circle_at_50%_54%,rgba(250,204,21,0.10),transparent_28%),#101010] p-4 pb-14 sm:p-6 sm:pb-16 lg:p-8 lg:pb-16">
                 <div className="pointer-events-none absolute inset-0 opacity-40 [background-image:radial-gradient(circle,rgba(250,204,21,0.35)_1px,transparent_1px)] [background-size:110px_80px]" />
                 <div className="relative mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>
@@ -316,6 +316,9 @@ const PODIO_STYLE = {
     accent: "text-yellow-400",
     icon: Crown,
     label: "1º lugar",
+    trophy: "/assets/ranking/nox-ranking-dourado.png",
+    trophyAlt: "Troféu dourado do primeiro lugar",
+    trophyClass: "-bottom-12 -right-4 h-32 sm:-right-6 sm:h-36",
   },
   2: {
     order: "order-2 lg:order-1",
@@ -324,6 +327,9 @@ const PODIO_STYLE = {
     accent: "text-slate-300",
     icon: Medal,
     label: "2º lugar",
+    trophy: "/assets/ranking/nox-ranking-prata.png",
+    trophyAlt: "Troféu de prata do segundo lugar",
+    trophyClass: "-bottom-10 -right-3 h-28 sm:-right-5 sm:h-32",
   },
   3: {
     order: "order-3 lg:order-3",
@@ -332,6 +338,9 @@ const PODIO_STYLE = {
     accent: "text-orange-400",
     icon: Medal,
     label: "3º lugar",
+    trophy: "/assets/ranking/nox-ranking-bronze.png",
+    trophyAlt: "Troféu de bronze do terceiro lugar",
+    trophyClass: "-bottom-10 -right-3 h-28 mix-blend-screen sm:-right-5 sm:h-32",
   },
 } as const;
 
@@ -340,7 +349,7 @@ function PodioCard({ linha, destaque }: { linha: LinhaRanking; destaque: boolean
   const Icone = estilo.icon;
   return (
     <article
-      className={`${estilo.order} flex flex-col items-center rounded-[24px] border p-5 text-center ${estilo.card}`}
+      className={`${estilo.order} relative flex flex-col items-center overflow-visible rounded-[24px] border p-5 text-center ${estilo.card}`}
     >
       <div
         className={`mb-4 flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.2em] ${estilo.accent}`}
@@ -371,6 +380,11 @@ function PodioCard({ linha, destaque }: { linha: LinhaRanking; destaque: boolean
       <p className="mt-3 text-[10px] font-semibold text-neutral-500">
         {formatMoney(linha.comissoes)} em comissões no mês
       </p>
+      <img
+        src={estilo.trophy}
+        alt={estilo.trophyAlt}
+        className={`pointer-events-none absolute z-20 w-auto select-none object-contain drop-shadow-[0_10px_18px_rgba(0,0,0,0.65)] ${estilo.trophyClass}`}
+      />
     </article>
   );
 }
