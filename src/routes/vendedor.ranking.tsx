@@ -6,7 +6,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Crown,
-  Headphones,
   Medal,
   RefreshCw,
   Sparkles,
@@ -102,11 +101,8 @@ function Ranking() {
   const resumo = useMemo(() => {
     const contratos = linhas.reduce((total, linha) => total + linha.contratosFechados, 0);
     const leads = linhas.reduce((total, linha) => total + linha.totalLeads, 0);
-    const atendimento = linhas.reduce((total, linha) => total + linha.emAtendimento, 0);
     return {
       contratos,
-      leads,
-      atendimento,
       conversao: leads > 0 ? (contratos / leads) * 100 : 0,
     };
   }, [linhas]);
@@ -129,35 +125,35 @@ function Ranking() {
 
   return (
     <DashboardLayout>
-      <div className="mx-auto w-full max-w-[1500px] overflow-hidden rounded-[28px] border border-neutral-800 bg-[#0b0b0b] text-white shadow-[0_24px_80px_rgba(0,0,0,0.22)]">
-        <section className="relative overflow-hidden border-b border-yellow-400/15 bg-[radial-gradient(circle_at_90%_10%,rgba(250,204,21,0.18),transparent_28%),linear-gradient(115deg,#111_0%,#111_56%,#251d08_100%)] px-5 py-6 sm:px-8 lg:px-10 lg:py-8">
-          <div className="pointer-events-none absolute -right-10 -top-28 h-72 w-72 rounded-full border-[30px] border-yellow-400/[0.06]" />
+      <div className="w-full space-y-7 bg-white text-neutral-950">
+        <section className="relative overflow-hidden border-b border-yellow-300 bg-[radial-gradient(circle_at_92%_8%,rgba(250,204,21,0.30),transparent_26%),linear-gradient(115deg,#ffffff_0%,#fffef7_62%,#fff5bd_100%)] px-1 pb-8 pt-2 sm:px-2 lg:px-4 lg:pb-10">
+          <div className="pointer-events-none absolute -right-12 -top-36 h-80 w-80 rounded-full border-[34px] border-yellow-400/15" />
           <div className="relative flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
             <div>
-              <span className="inline-flex items-center gap-2 rounded-full border border-yellow-400/40 bg-yellow-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-yellow-300">
+              <span className="inline-flex items-center gap-2 rounded-full border border-yellow-400 bg-yellow-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-yellow-700">
                 <Sparkles className="h-3.5 w-3.5" />
                 Ranking ao vivo
               </span>
               <h1 className="mt-4 text-3xl font-black tracking-[-0.045em] sm:text-4xl">
                 Ranking da <span className="text-yellow-400">Equipe</span>
               </h1>
-              <p className="mt-2 max-w-2xl text-sm font-medium text-neutral-400">
+              <p className="mt-2 max-w-2xl text-sm font-medium text-neutral-600">
                 Acompanhe contratos, leads e conversão e celebre os melhores resultados do mês.
               </p>
             </div>
 
-            <div className="flex h-14 w-full items-center justify-between rounded-2xl border border-white/10 bg-black/35 px-2 shadow-inner backdrop-blur-sm sm:w-[370px]">
+            <div className="flex h-14 w-full items-center justify-between rounded-2xl border border-yellow-300 bg-white/90 px-2 shadow-sm backdrop-blur-sm sm:w-[370px]">
               <button
                 type="button"
                 onClick={() => mudarMes(-1)}
-                className="flex h-10 w-10 items-center justify-center rounded-xl text-neutral-400 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400"
+                className="flex h-10 w-10 items-center justify-center rounded-xl text-neutral-500 transition hover:bg-yellow-50 hover:text-neutral-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400"
                 aria-label="Ver mês anterior"
               >
                 <ChevronLeft className="h-5 w-5" />
               </button>
               <div className="min-w-0 px-2 text-center">
-                <p className="truncate text-sm font-black text-white">{periodoLabel}</p>
-                <p className="mt-0.5 text-[9px] font-bold uppercase tracking-[0.16em] text-yellow-400">
+                <p className="truncate text-sm font-black text-neutral-950">{periodoLabel}</p>
+                <p className="mt-0.5 text-[9px] font-bold uppercase tracking-[0.16em] text-yellow-600">
                   {periodoAtual ? "Mês atual" : "Histórico mensal"}
                 </p>
               </div>
@@ -165,7 +161,7 @@ function Ranking() {
                 type="button"
                 onClick={() => mudarMes(1)}
                 disabled={periodoAtual}
-                className="flex h-10 w-10 items-center justify-center rounded-xl text-neutral-400 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400 disabled:cursor-not-allowed disabled:opacity-25"
+                className="flex h-10 w-10 items-center justify-center rounded-xl text-neutral-500 transition hover:bg-yellow-50 hover:text-neutral-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400 disabled:cursor-not-allowed disabled:opacity-25"
                 aria-label="Ver mês seguinte"
               >
                 <ChevronRight className="h-5 w-5" />
@@ -174,29 +170,14 @@ function Ranking() {
           </div>
         </section>
 
-        <div className="space-y-4 p-3 sm:p-5 lg:p-6">
-          <section
-            className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
-            aria-label="Resumo do período"
-          >
+        <div className="space-y-8 px-1 pb-8 sm:px-2 lg:px-4">
+          <section className="grid gap-3 sm:grid-cols-2" aria-label="Resumo do período">
             <MetricCard
               icon={Trophy}
               label="Contratos fechados"
               value={resumo.contratos}
               detail="Produção da equipe no mês"
               active
-            />
-            <MetricCard
-              icon={Users}
-              label="Leads trabalhados"
-              value={resumo.leads}
-              detail="Novos leads no período"
-            />
-            <MetricCard
-              icon={Headphones}
-              label="Em atendimento"
-              value={resumo.atendimento}
-              detail="Oportunidades em andamento"
             />
             <MetricCard
               icon={BarChart3}
@@ -217,9 +198,9 @@ function Ranking() {
             />
           ) : !erro ? (
             <>
-              <section className="relative overflow-hidden rounded-[24px] border border-white/10 bg-[radial-gradient(circle_at_50%_54%,rgba(250,204,21,0.10),transparent_28%),#101010] p-4 pb-14 sm:p-6 sm:pb-16 lg:p-8 lg:pb-16">
-                <div className="pointer-events-none absolute inset-0 opacity-40 [background-image:radial-gradient(circle,rgba(250,204,21,0.35)_1px,transparent_1px)] [background-size:110px_80px]" />
-                <div className="relative mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <section className="relative py-2 pb-20 lg:pb-24">
+                <div className="pointer-events-none absolute inset-0 opacity-60 [background-image:radial-gradient(circle,rgba(234,179,8,0.18)_1px,transparent_1px)] [background-size:92px_76px]" />
+                <div className="relative mb-10 flex flex-col gap-4 border-b border-neutral-200 pb-5 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <h2 className="flex items-center gap-2 text-lg font-black">
                       <Trophy className="h-5 w-5 text-yellow-400" />
@@ -233,14 +214,14 @@ function Ranking() {
                     variant="ghost"
                     onClick={carregar}
                     disabled={loading}
-                    className="w-fit gap-2 rounded-xl text-xs font-bold text-yellow-400 hover:bg-yellow-400/10 hover:text-yellow-300"
+                    className="w-fit gap-2 rounded-xl border border-yellow-300 bg-yellow-50 text-xs font-bold text-yellow-700 hover:bg-yellow-100 hover:text-yellow-800"
                   >
                     <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
                     Atualizar ranking
                   </Button>
                 </div>
 
-                <div className="relative grid items-end gap-4 lg:grid-cols-3">
+                <div className="relative grid items-start gap-5 lg:grid-cols-3 lg:grid-rows-1">
                   {podio.map((linha) => (
                     <PodioCard key={linha.id} linha={linha} destaque={linha.id === sellerId} />
                   ))}
@@ -248,19 +229,21 @@ function Ranking() {
               </section>
 
               {restante.length > 0 && (
-                <section className="overflow-hidden rounded-[24px] border border-white/10 bg-[#111]">
-                  <div className="flex items-center justify-between border-b border-white/10 px-5 py-4 sm:px-6">
+                <section className="overflow-hidden rounded-[24px] border border-neutral-200 bg-white shadow-sm">
+                  <div className="flex items-center justify-between border-b border-neutral-200 bg-neutral-50 px-5 py-4 sm:px-6">
                     <div>
-                      <h2 className="text-sm font-black text-white">Classificação completa</h2>
+                      <h2 className="text-sm font-black text-neutral-950">
+                        Classificação completa
+                      </h2>
                       <p className="mt-0.5 text-[11px] text-neutral-500">
                         Demais posições da equipe comercial
                       </p>
                     </div>
-                    <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-bold text-neutral-400">
+                    <span className="rounded-full border border-yellow-300 bg-yellow-50 px-3 py-1 text-[10px] font-bold text-yellow-800">
                       {linhas.length} vendedores
                     </span>
                   </div>
-                  <div className="divide-y divide-white/[0.07]">
+                  <div className="divide-y divide-neutral-100">
                     {restante.map((linha) => (
                       <LinhaLista key={linha.id} linha={linha} destaque={linha.id === sellerId} />
                     ))}
@@ -290,19 +273,19 @@ function MetricCard({
 }) {
   return (
     <article
-      className={`flex min-h-20 items-center gap-3 rounded-2xl border p-3.5 transition ${active ? "border-yellow-400/70 bg-yellow-400/[0.09]" : "border-white/10 bg-white/[0.025]"}`}
+      className={`flex min-h-20 items-center gap-3 rounded-2xl border p-3.5 shadow-sm transition ${active ? "border-yellow-400 bg-yellow-50" : "border-neutral-200 bg-white"}`}
     >
       <span
-        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border ${active ? "border-yellow-400/50 bg-yellow-400/15 text-yellow-400" : "border-white/10 bg-black/30 text-neutral-400"}`}
+        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border ${active ? "border-yellow-400 bg-yellow-100 text-yellow-700" : "border-neutral-200 bg-neutral-50 text-neutral-600"}`}
       >
         <Icon className="h-5 w-5" />
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2">
-          <p className="truncate text-xs font-bold text-neutral-200">{label}</p>
-          <b className={`text-xl ${active ? "text-yellow-400" : "text-white"}`}>{value}</b>
+          <p className="truncate text-xs font-bold text-neutral-800">{label}</p>
+          <b className={`text-xl ${active ? "text-yellow-600" : "text-neutral-950"}`}>{value}</b>
         </div>
-        <p className="mt-0.5 truncate text-[10px] font-medium text-neutral-600">{detail}</p>
+        <p className="mt-0.5 truncate text-[10px] font-medium text-neutral-500">{detail}</p>
       </div>
     </article>
   );
@@ -310,10 +293,10 @@ function MetricCard({
 
 const PODIO_STYLE = {
   1: {
-    order: "order-1 lg:order-2",
-    card: "min-h-[330px] border-yellow-400/80 bg-[linear-gradient(150deg,rgba(250,204,21,0.16),rgba(18,18,18,0.96)_48%)] shadow-[0_0_50px_rgba(250,204,21,0.12)]",
+    order: "order-1 lg:col-start-2 lg:row-start-1",
+    card: "min-h-[350px] border-yellow-400 bg-[linear-gradient(150deg,#fff9d9_0%,#ffffff_52%)] shadow-[0_24px_60px_rgba(234,179,8,0.16)]",
     avatar: "h-24 w-24 border-yellow-400 shadow-[0_0_28px_rgba(250,204,21,0.25)]",
-    accent: "text-yellow-400",
+    accent: "text-yellow-600",
     icon: Crown,
     label: "1º lugar",
     trophy: "/assets/ranking/nox-ranking-dourado.png",
@@ -321,10 +304,10 @@ const PODIO_STYLE = {
     trophyClass: "-bottom-12 -right-4 h-32 sm:-right-6 sm:h-36",
   },
   2: {
-    order: "order-2 lg:order-1",
-    card: "min-h-[292px] border-slate-300/40 bg-[linear-gradient(150deg,rgba(203,213,225,0.11),rgba(18,18,18,0.96)_48%)]",
+    order: "order-2 lg:col-start-1 lg:row-start-1 lg:translate-y-10",
+    card: "min-h-[310px] border-slate-300 bg-[linear-gradient(150deg,#f1f5f9_0%,#ffffff_52%)] shadow-[0_18px_46px_rgba(15,23,42,0.08)]",
     avatar: "h-20 w-20 border-slate-300",
-    accent: "text-slate-300",
+    accent: "text-slate-600",
     icon: Medal,
     label: "2º lugar",
     trophy: "/assets/ranking/nox-ranking-prata.png",
@@ -332,15 +315,15 @@ const PODIO_STYLE = {
     trophyClass: "-bottom-10 -right-3 h-28 sm:-right-5 sm:h-32",
   },
   3: {
-    order: "order-3 lg:order-3",
-    card: "min-h-[292px] border-orange-500/45 bg-[linear-gradient(150deg,rgba(194,65,12,0.12),rgba(18,18,18,0.96)_48%)]",
+    order: "order-3 lg:col-start-3 lg:row-start-1 lg:translate-y-16",
+    card: "min-h-[310px] border-orange-300 bg-[linear-gradient(150deg,#fff3e8_0%,#ffffff_52%)] shadow-[0_18px_46px_rgba(154,52,18,0.09)]",
     avatar: "h-20 w-20 border-orange-500",
-    accent: "text-orange-400",
+    accent: "text-orange-700",
     icon: Medal,
     label: "3º lugar",
-    trophy: "/assets/ranking/nox-ranking-bronze.png",
+    trophy: "/assets/ranking/nox-ranking-bronze-transparent.png",
     trophyAlt: "Troféu de bronze do terceiro lugar",
-    trophyClass: "-bottom-10 -right-3 h-28 mix-blend-screen sm:-right-5 sm:h-32",
+    trophyClass: "-bottom-10 -right-3 h-28 sm:-right-5 sm:h-32",
   },
 } as const;
 
@@ -359,9 +342,9 @@ function PodioCard({ linha, destaque }: { linha: LinhaRanking; destaque: boolean
       </div>
       <SellerAvatar linha={linha} className={`${estilo.avatar} border-2`} />
       <div className="mt-4 flex min-h-12 flex-col items-center justify-center">
-        <h3 className="max-w-full truncate text-lg font-black text-white">{linha.nome}</h3>
+        <h3 className="max-w-full truncate text-lg font-black text-neutral-950">{linha.nome}</h3>
         {destaque && (
-          <Badge className="mt-1 border-yellow-400/30 bg-yellow-400/10 text-[9px] font-black uppercase tracking-widest text-yellow-300">
+          <Badge className="mt-1 border-yellow-400 bg-yellow-100 text-[9px] font-black uppercase tracking-widest text-yellow-800">
             Você
           </Badge>
         )}
@@ -372,7 +355,7 @@ function PodioCard({ linha, destaque }: { linha: LinhaRanking; destaque: boolean
       <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-neutral-500">
         contratos fechados
       </span>
-      <div className="mt-5 grid w-full grid-cols-3 divide-x divide-white/10 rounded-xl border border-white/10 bg-black/25 py-2.5">
+      <div className="mt-5 grid w-full grid-cols-3 divide-x divide-neutral-200 rounded-xl border border-neutral-200 bg-white/80 py-2.5 shadow-sm">
         <PodioStat value={linha.totalLeads} label="leads" />
         <PodioStat value={linha.emAtendimento} label="atendimento" />
         <PodioStat value={`${linha.taxaConversao.toFixed(0)}%`} label="conversão" />
@@ -383,7 +366,7 @@ function PodioCard({ linha, destaque }: { linha: LinhaRanking; destaque: boolean
       <img
         src={estilo.trophy}
         alt={estilo.trophyAlt}
-        className={`pointer-events-none absolute z-20 w-auto select-none object-contain drop-shadow-[0_10px_18px_rgba(0,0,0,0.65)] ${estilo.trophyClass}`}
+        className={`pointer-events-none absolute z-20 w-auto select-none object-contain drop-shadow-[0_12px_15px_rgba(0,0,0,0.24)] ${estilo.trophyClass}`}
       />
     </article>
   );
@@ -392,7 +375,7 @@ function PodioCard({ linha, destaque }: { linha: LinhaRanking; destaque: boolean
 function PodioStat({ value, label }: { value: string | number; label: string }) {
   return (
     <span className="px-1">
-      <b className="block text-xs text-white">{value}</b>
+      <b className="block text-xs text-neutral-950">{value}</b>
       <span className="mt-0.5 block truncate text-[8px] uppercase tracking-wide text-neutral-600">
         {label}
       </span>
@@ -402,13 +385,13 @@ function PodioStat({ value, label }: { value: string | number; label: string }) 
 
 function SellerAvatar({ linha, className = "" }: { linha: LinhaRanking; className?: string }) {
   return (
-    <Avatar className={`bg-neutral-900 ${className}`}>
+    <Avatar className={`bg-neutral-100 ${className}`}>
       <AvatarImage
         src={linha.avatarUrl || defaultAvatarForName(linha.nome)}
         alt={`Foto de ${linha.nome}`}
         className="object-cover"
       />
-      <AvatarFallback className="bg-neutral-800 text-sm font-black text-white">
+      <AvatarFallback className="bg-neutral-200 text-sm font-black text-neutral-800">
         {iniciais(linha.nome)}
       </AvatarFallback>
     </Avatar>
@@ -418,17 +401,17 @@ function SellerAvatar({ linha, className = "" }: { linha: LinhaRanking; classNam
 function LinhaLista({ linha, destaque }: { linha: LinhaRanking; destaque: boolean }) {
   return (
     <article
-      className={`grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-4 transition sm:gap-5 sm:px-6 ${destaque ? "bg-yellow-400/[0.07]" : "hover:bg-white/[0.025]"}`}
+      className={`grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-4 transition sm:gap-5 sm:px-6 ${destaque ? "bg-yellow-50" : "hover:bg-neutral-50"}`}
     >
       <span
-        className={`flex h-9 w-9 items-center justify-center rounded-full border text-xs font-black ${destaque ? "border-yellow-400/40 bg-yellow-400/10 text-yellow-400" : "border-white/10 bg-white/5 text-neutral-400"}`}
+        className={`flex h-9 w-9 items-center justify-center rounded-full border text-xs font-black ${destaque ? "border-yellow-400 bg-yellow-100 text-yellow-700" : "border-neutral-200 bg-neutral-50 text-neutral-600"}`}
       >
         {linha.posicao}º
       </span>
       <div className="flex min-w-0 items-center gap-3">
-        <SellerAvatar linha={linha} className="h-11 w-11 border border-white/10" />
+        <SellerAvatar linha={linha} className="h-11 w-11 border border-neutral-200" />
         <div className="min-w-0">
-          <p className="truncate text-sm font-bold text-white">
+          <p className="truncate text-sm font-bold text-neutral-950">
             {linha.nome}
             {destaque && (
               <span className="ml-2 text-[9px] uppercase tracking-widest text-yellow-400">
@@ -454,12 +437,12 @@ function LinhaLista({ linha, destaque }: { linha: LinhaRanking; destaque: boolea
 
 function RankingSkeleton() {
   return (
-    <div className="animate-pulse rounded-[24px] border border-white/10 bg-white/[0.025] p-6">
-      <div className="h-6 w-52 rounded bg-white/10" />
+    <div className="animate-pulse border-y border-neutral-200 bg-white p-6">
+      <div className="h-6 w-52 rounded bg-neutral-200" />
       <div className="mt-8 grid items-end gap-4 lg:grid-cols-3">
-        <div className="h-[292px] rounded-[24px] bg-white/5" />
-        <div className="h-[330px] rounded-[24px] bg-yellow-400/[0.06]" />
-        <div className="h-[292px] rounded-[24px] bg-white/5" />
+        <div className="h-[292px] rounded-[24px] bg-neutral-100" />
+        <div className="h-[330px] rounded-[24px] bg-yellow-100" />
+        <div className="h-[292px] rounded-[24px] bg-neutral-100" />
       </div>
     </div>
   );
@@ -476,7 +459,7 @@ function Estado({
 }) {
   return (
     <div
-      className={`rounded-[24px] border p-10 text-center ${erro ? "border-red-500/30 bg-red-500/10 text-red-200" : "border-dashed border-white/10 bg-white/[0.02] text-neutral-400"}`}
+      className={`rounded-[24px] border p-10 text-center ${erro ? "border-red-200 bg-red-50 text-red-800" : "border-dashed border-neutral-300 bg-neutral-50 text-neutral-600"}`}
     >
       {erro ? (
         <AlertCircle className="mx-auto mb-3 h-5 w-5 text-red-400" />
