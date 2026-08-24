@@ -69,6 +69,7 @@ import { Route as VendedorMetasRouteImport } from './routes/vendedor.metas'
 import { Route as VendedorMateriaisRouteImport } from './routes/vendedor.materiais'
 import { Route as VendedorLeadsRouteImport } from './routes/vendedor.leads'
 import { Route as VendedorComissoesRouteImport } from './routes/vendedor.comissoes'
+import { Route as VendedorClientesRouteImport } from './routes/vendedor.clientes'
 import { Route as VendedorAgendaRouteImport } from './routes/vendedor.agenda'
 import { Route as SimularResultadoRouteImport } from './routes/simular.resultado'
 import { Route as PainelNotificacoesRouteImport } from './routes/painel/notificacoes'
@@ -423,6 +424,11 @@ const VendedorComissoesRoute = VendedorComissoesRouteImport.update({
   path: '/comissoes',
   getParentRoute: () => VendedorRoute,
 } as any)
+const VendedorClientesRoute = VendedorClientesRouteImport.update({
+  id: '/clientes',
+  path: '/clientes',
+  getParentRoute: () => VendedorRoute,
+} as any)
 const VendedorAgendaRoute = VendedorAgendaRouteImport.update({
   id: '/agenda',
   path: '/agenda',
@@ -758,6 +764,7 @@ export interface FileRoutesByFullPath {
   '/painel/notificacoes': typeof PainelNotificacoesRoute
   '/simular/resultado': typeof SimularResultadoRoute
   '/vendedor/agenda': typeof VendedorAgendaRoute
+  '/vendedor/clientes': typeof VendedorClientesRoute
   '/vendedor/comissoes': typeof VendedorComissoesRoute
   '/vendedor/leads': typeof VendedorLeadsRoute
   '/vendedor/materiais': typeof VendedorMateriaisRoute
@@ -862,6 +869,7 @@ export interface FileRoutesByTo {
   '/painel/notificacoes': typeof PainelNotificacoesRoute
   '/simular/resultado': typeof SimularResultadoRoute
   '/vendedor/agenda': typeof VendedorAgendaRoute
+  '/vendedor/clientes': typeof VendedorClientesRoute
   '/vendedor/comissoes': typeof VendedorComissoesRoute
   '/vendedor/leads': typeof VendedorLeadsRoute
   '/vendedor/materiais': typeof VendedorMateriaisRoute
@@ -971,6 +979,7 @@ export interface FileRoutesById {
   '/painel/notificacoes': typeof PainelNotificacoesRoute
   '/simular/resultado': typeof SimularResultadoRoute
   '/vendedor/agenda': typeof VendedorAgendaRoute
+  '/vendedor/clientes': typeof VendedorClientesRoute
   '/vendedor/comissoes': typeof VendedorComissoesRoute
   '/vendedor/leads': typeof VendedorLeadsRoute
   '/vendedor/materiais': typeof VendedorMateriaisRoute
@@ -1081,6 +1090,7 @@ export interface FileRouteTypes {
     | '/painel/notificacoes'
     | '/simular/resultado'
     | '/vendedor/agenda'
+    | '/vendedor/clientes'
     | '/vendedor/comissoes'
     | '/vendedor/leads'
     | '/vendedor/materiais'
@@ -1185,6 +1195,7 @@ export interface FileRouteTypes {
     | '/painel/notificacoes'
     | '/simular/resultado'
     | '/vendedor/agenda'
+    | '/vendedor/clientes'
     | '/vendedor/comissoes'
     | '/vendedor/leads'
     | '/vendedor/materiais'
@@ -1293,6 +1304,7 @@ export interface FileRouteTypes {
     | '/painel/notificacoes'
     | '/simular/resultado'
     | '/vendedor/agenda'
+    | '/vendedor/clientes'
     | '/vendedor/comissoes'
     | '/vendedor/leads'
     | '/vendedor/materiais'
@@ -1824,6 +1836,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof VendedorComissoesRouteImport
       parentRoute: typeof VendedorRoute
     }
+    '/vendedor/clientes': {
+      id: '/vendedor/clientes'
+      path: '/clientes'
+      fullPath: '/vendedor/clientes'
+      preLoaderRoute: typeof VendedorClientesRouteImport
+      parentRoute: typeof VendedorRoute
+    }
     '/vendedor/agenda': {
       id: '/vendedor/agenda'
       path: '/agenda'
@@ -2214,6 +2233,7 @@ const SimularRouteWithChildren =
 
 interface VendedorRouteChildren {
   VendedorAgendaRoute: typeof VendedorAgendaRoute
+  VendedorClientesRoute: typeof VendedorClientesRoute
   VendedorComissoesRoute: typeof VendedorComissoesRoute
   VendedorLeadsRoute: typeof VendedorLeadsRoute
   VendedorMateriaisRoute: typeof VendedorMateriaisRoute
@@ -2226,6 +2246,7 @@ interface VendedorRouteChildren {
 
 const VendedorRouteChildren: VendedorRouteChildren = {
   VendedorAgendaRoute: VendedorAgendaRoute,
+  VendedorClientesRoute: VendedorClientesRoute,
   VendedorComissoesRoute: VendedorComissoesRoute,
   VendedorLeadsRoute: VendedorLeadsRoute,
   VendedorMateriaisRoute: VendedorMateriaisRoute,

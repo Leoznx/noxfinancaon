@@ -38,6 +38,7 @@ import {
   Users2,
   Shuffle,
   IdCard,
+  ContactRound,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { SinoNotificacoes } from "./SinoNotificacoes";
@@ -175,6 +176,12 @@ const adminMasterItems = adminItems;
 // separados. Dashboard e Meu Perfil sem module = sempre visíveis (todo mundo
 // precisa de um ponto de entrada e acesso ao próprio perfil).
 const vendedorItems = [
+  {
+    icon: ContactRound,
+    label: "Cadastrar Cliente",
+    href: "/vendedor/clientes",
+    highlight: true,
+  },
   { icon: LayoutDashboard, label: "Dashboard", href: "/vendedor" },
   { icon: Users, label: "Meus Leads", href: "/vendedor/leads", module: "leads_proprios" },
   { icon: ListChecks, label: "Pipeline", href: "/vendedor/pipeline", module: "pipeline" },
@@ -356,8 +363,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   // é isso que faz "remover a permissão Financeiro" sumir a aba do menu.
   if (cargoInterno === "vendedor") {
     menuItems = [
-      vendedorItems[0], // Dashboard - sempre visível
-      ...vendedorItems.slice(1, -1).filter((item) => podeVerModulo(permissoesCargo, item.module)),
+      vendedorItems[0], // Cadastrar Cliente - primeira aba destacada e sempre visível
+      vendedorItems[1], // Dashboard - sempre visível
+      ...vendedorItems.slice(2, -1).filter((item) => podeVerModulo(permissoesCargo, item.module)),
       vendedorItems[vendedorItems.length - 1], // Meu Perfil - sempre visível
     ];
   } else if (cargoInterno) {
