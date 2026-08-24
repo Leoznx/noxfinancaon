@@ -39,7 +39,6 @@ import {
   Shuffle,
   IdCard,
   ContactRound,
-  ChevronDown,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { SinoNotificacoes } from "./SinoNotificacoes";
@@ -303,7 +302,7 @@ const vendedorItems = [
     module: "comissoes_proprias",
   },
   { icon: Trophy, label: "Ranking", href: "/vendedor/ranking", module: "ranking" },
-  { icon: User, label: "Meu Perfil", href: "/vendedor/perfil" },
+  { icon: User, label: "Meu Perfil", href: "/configuracoes" },
 ];
 
 // Cargos internos gateados por role_permissions (ver DashboardLayout abaixo) -
@@ -723,9 +722,6 @@ export function DashboardLayout({
                 iniciaisUsuario
               )}
             </Link>
-            {cargoInterno === "vendedor" && (
-              <ChevronDown className="h-4 w-4 text-neutral-500" aria-hidden="true" />
-            )}
           </div>
         </header>
 
