@@ -2569,45 +2569,54 @@ export type Database = {
       }
       seller_appointments: {
         Row: {
+          completed_at: string | null
           created_at: string
           id: string
           lead_id: string | null
           meeting_group_id: string | null
           notes: string | null
+          partnership_id: string | null
           priority: string
           reminder_minutes: number | null
           scheduled_at: string
           seller_id: string
+          source: string
           status: string
           title: string
           type: string
           updated_at: string
         }
         Insert: {
+          completed_at?: string | null
           created_at?: string
           id?: string
           lead_id?: string | null
           meeting_group_id?: string | null
           notes?: string | null
+          partnership_id?: string | null
           priority?: string
           reminder_minutes?: number | null
           scheduled_at: string
           seller_id: string
+          source?: string
           status?: string
           title: string
           type?: string
           updated_at?: string
         }
         Update: {
+          completed_at?: string | null
           created_at?: string
           id?: string
           lead_id?: string | null
           meeting_group_id?: string | null
           notes?: string | null
+          partnership_id?: string | null
           priority?: string
           reminder_minutes?: number | null
           scheduled_at?: string
           seller_id?: string
+          source?: string
           status?: string
           title?: string
           type?: string
@@ -2619,6 +2628,13 @@ export type Database = {
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "sales_leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "seller_appointments_partnership_id_fkey"
+            columns: ["partnership_id"]
+            isOneToOne: false
+            referencedRelation: "seller_client_partnerships"
             referencedColumns: ["id"]
           },
           {
@@ -3167,6 +3183,7 @@ export type Database = {
     Functions: {
       aplicar_clawback_vendedor: { Args: never; Returns: number }
       atualizar_niveis_diariamente: { Args: never; Returns: undefined }
+      get_my_seller_agenda_summary: { Args: never; Returns: Json }
       calcular_bonus_vendedor: { Args: { contratos: number }; Returns: number }
       calcular_comissao_vendedor: {
         Args: { contratos: number }
