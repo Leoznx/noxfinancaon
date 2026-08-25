@@ -496,7 +496,7 @@ export function DashboardLayout({
         (item) =>
           podeVerModulo(permissoesCargo, item.module) &&
           item.module !== undefined &&
-          (cargoInterno !== "juridico" || item.module !== "dashboard_admin"),
+          (cargoInterno !== "juridico" || !["dashboard_admin", "documentos"].includes(item.module)),
       ),
       CARGO_GATEADO_MENU_ITEM,
     ];
