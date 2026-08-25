@@ -91,7 +91,7 @@ const SCENARIO_PRESENTATION: Record<
   },
   pendente: {
     icon: Clock3,
-    iconClass: "text-yellow-300",
+    iconClass: "text-yellow-600",
     caption: "Análise demonstrativa",
   },
 };
@@ -126,7 +126,7 @@ function DemoAccountsPage() {
               </div>
               <h1 className="mt-6 max-w-4xl text-4xl font-black leading-[0.98] tracking-[-0.055em] text-neutral-950 sm:text-5xl lg:text-[58px]">
                 Entre no produto pelos olhos de
-                <span className="ml-2 box-decoration-clone bg-yellow-300 px-2">cada cliente.</span>
+                <span className="ml-2">cada cliente.</span>
               </h1>
               <p className="mt-6 max-w-2xl text-sm font-medium leading-7 text-neutral-600 sm:text-base">
                 Quatro pontos de vista, o mesmo produto real. Escolha um ambiente e conduza a
@@ -153,11 +153,11 @@ function DemoAccountsPage() {
             </div>
           </div>
 
-          <div className="grid divide-y divide-white/15 bg-neutral-950 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+          <div className="grid divide-y divide-neutral-200 border-t border-neutral-200 bg-yellow-50 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
             {HERO_FACTS.map(([value, label]) => (
               <div key={label} className="flex items-baseline gap-3 px-6 py-4 sm:px-8">
-                <span className="text-2xl font-black tracking-[-0.04em] text-yellow-300">{value}</span>
-                <span className="text-[10px] font-black uppercase tracking-[0.16em] text-white/65">
+                <span className="text-2xl font-black tracking-[-0.04em] text-neutral-950">{value}</span>
+                <span className="text-[10px] font-black uppercase tracking-[0.16em] text-neutral-500">
                   {label}
                 </span>
               </div>
@@ -195,11 +195,11 @@ function DemoAccountsPage() {
                       <span className="block text-4xl font-black tracking-[-0.06em] text-neutral-200 transition-colors group-hover:text-yellow-400">
                         {presentation.index}
                       </span>
-                      <Icon className="mt-0 h-7 w-7 text-neutral-950 sm:mt-3" strokeWidth={1.8} />
                     </div>
 
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <Icon className="h-6 w-6 text-neutral-950" strokeWidth={1.8} />
                         <h3 className="text-xl font-black tracking-[-0.025em] text-neutral-950">
                           {profile.label}
                         </h3>
@@ -226,7 +226,7 @@ function DemoAccountsPage() {
                     <button
                       type="button"
                       onClick={() => openDemo(profileKey)}
-                      className="flex h-12 items-center justify-center gap-3 rounded-xl bg-neutral-950 px-5 text-xs font-black text-white transition hover:bg-yellow-400 hover:text-neutral-950 sm:min-w-[150px]"
+                      className="flex h-12 items-center justify-center gap-3 rounded-xl bg-yellow-300 px-5 text-xs font-black text-neutral-950 transition hover:bg-yellow-400 sm:min-w-[150px]"
                     >
                       Entrar como {profile.label.toLowerCase()}
                       <ArrowUpRight className="h-4 w-4" />
@@ -237,13 +237,13 @@ function DemoAccountsPage() {
             </div>
           </section>
 
-          <aside className="overflow-hidden rounded-[26px] bg-neutral-950 text-white shadow-sm lg:sticky lg:top-6">
+          <aside className="overflow-hidden rounded-[26px] border border-neutral-200 bg-white text-neutral-950 shadow-sm lg:sticky lg:top-6">
             <div className="p-6 sm:p-7">
               <div className="flex items-center justify-between gap-4">
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-yellow-300">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-yellow-700">
                   Roteiro de apresentação
                 </p>
-                <KeyRound className="h-6 w-6 text-yellow-300" />
+                <KeyRound className="h-6 w-6 text-yellow-600" />
               </div>
               <h2 className="mt-4 text-2xl font-black leading-tight tracking-[-0.035em]">
                 Mostre o fluxo completo em três movimentos.
@@ -256,30 +256,30 @@ function DemoAccountsPage() {
                   ["03", "Avance pelo plano, dados e pagamento demonstrativo."],
                 ].map(([step, text]) => (
                   <li key={step} className="grid grid-cols-[34px_1fr] gap-3">
-                    <span className="text-sm font-black text-yellow-300">{step}</span>
-                    <p className="text-sm font-medium leading-6 text-white/72">{text}</p>
+                    <span className="text-sm font-black text-yellow-700">{step}</span>
+                    <p className="text-sm font-medium leading-6 text-neutral-600">{text}</p>
                   </li>
                 ))}
               </ol>
             </div>
 
-            <div className="border-y border-white/15 px-6 sm:px-7">
+            <div className="border-y border-neutral-200 px-6 sm:px-7">
               {DEMO_CPF_SCENARIOS.map((scenario) => {
                 const presentation = SCENARIO_PRESENTATION[scenario.decision];
                 const Icon = presentation.icon;
                 return (
                   <div
                     key={scenario.cpf}
-                    className="grid grid-cols-[24px_1fr_auto] items-center gap-3 border-b border-white/10 py-4 last:border-b-0"
+                    className="grid grid-cols-[24px_1fr_auto] items-center gap-3 border-b border-neutral-200 py-4 last:border-b-0"
                   >
                     <Icon className={`h-5 w-5 ${presentation.iconClass}`} strokeWidth={1.8} />
                     <div>
-                      <p className="font-mono text-sm font-black text-white">{scenario.cpf}</p>
-                      <p className="mt-0.5 text-[10px] font-semibold text-white/45">
+                      <p className="font-mono text-sm font-black text-neutral-950">{scenario.cpf}</p>
+                      <p className="mt-0.5 text-[10px] font-semibold text-neutral-500">
                         {presentation.caption}
                       </p>
                     </div>
-                    <span className="text-[9px] font-black uppercase tracking-[0.14em] text-white/60">
+                    <span className="text-[9px] font-black uppercase tracking-[0.14em] text-neutral-500">
                       {scenario.label}
                     </span>
                   </div>
