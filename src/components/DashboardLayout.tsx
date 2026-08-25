@@ -58,6 +58,7 @@ import {
   podeVerModulo,
   type PermissoesPorModulo,
 } from "@/lib/permissoes-cache";
+import { isDemoSession } from "@/lib/demo-session";
 
 const CARGOS_INTERNOS_GATEADOS = [
   "juridico",
@@ -546,8 +547,9 @@ export function DashboardLayout({
       .toUpperCase() || "US";
 
   const handleLogout = async () => {
+    const wasDemo = isDemoSession();
     await logout();
-    window.location.replace("/");
+    window.location.replace(wasDemo ? "/vendedor/contas-demo" : "/");
   };
 
   return (

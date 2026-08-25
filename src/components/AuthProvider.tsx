@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from "react";
 import { setCachedHeaderProfile } from "@/lib/profile-cache";
 import { getPreferredStorage, clearAuthTokensFromBothStorages } from "@/lib/authStorage";
+import { clearDemoSession, isDemoSession } from "@/lib/demo-session";
 
 export type Role =
   | "admin"
@@ -18,12 +19,7 @@ export type Role =
   | "vendedor";
 
 export type InternalRole =
-  | "admin_master"
-  | "juridico"
-  | "financeiro"
-  | "marketing"
-  | "suporte"
-  | "vendedor";
+  "admin_master" | "juridico" | "financeiro" | "marketing" | "suporte" | "vendedor";
 
 const INTERNAL_ROLES: InternalRole[] = [
   "admin_master",
@@ -57,8 +53,11 @@ function clearStoredAuth() {
   if (typeof window === "undefined") return;
 
   try {
-    window.localStorage.removeItem("nox_user");
-    window.sessionStorage.removeItem("nox_user");
+    if (isDemoSession()) window.sessionStorage.removeItem("nox_user");
+    else {
+      window.localStorage.removeItem("nox_user");
+      window.sessionStorage.removeItem("nox_user");
+    }
   } catch {}
   clearAuthTokensFromBothStorages();
 }
@@ -103,7 +102,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (savedUser) {
         const parsed = JSON.parse(savedUser);
         if (parsed && typeof parsed === "object" && parsed.id && parsed.email && parsed.role) {
-          setUser({ id: parsed.id, email: parsed.email, role: parsed.role, internalRole: parsed.internalRole ?? null });
+          setUser({
+            id: parsed.id,
+            email: parsed.email,
+            role: parsed.role,
+            internalRole: parsed.internalRole ?? null,
+          });
         }
       }
     } catch (e) {
@@ -130,7 +134,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     (async () => {
       const { supabase } = await import("@/integrations/supabase/client");
 
-      const syncFromSession = async (userId: string, email: string, authUser?: any, isFreshSignIn?: boolean) => {
+      const syncFromSession = async (
+        userId: string,
+        email: string,
+        authUser?: any,
+        isFreshSignIn?: boolean,
+      ) => {
         if (isLoggingOutRef.current) return false;
         const syncVersion = authVersionRef.current;
         try {
@@ -140,12 +149,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .eq("id", userId)
             .maybeSingle();
           if (profileError) throw profileError;
-          if (!active || isLoggingOutRef.current || syncVersion !== authVersionRef.current) return false;
+          if (!active || isLoggingOutRef.current || syncVersion !== authVersionRef.current)
+            return false;
           const role = (profile as any)?.role as Role | undefined;
           if (!role) return; // profile ainda não existe (ex.: trigger em voo) — não força estado incompleto
           setCachedHeaderProfile({
             email,
-            nome: (profile as any)?.nome || authUser?.user_metadata?.nome || authUser?.user_metadata?.full_name || null,
+            nome:
+              (profile as any)?.nome ||
+              authUser?.user_metadata?.nome ||
+              authUser?.user_metadata?.full_name ||
+              null,
             avatarUrl: (profile as any)?.avatar_url || null,
           });
           login(email, role, userId);
@@ -227,7 +241,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // não existe nenhuma linha lá (edge case legado).
     try {
       const { supabase } = await import("@/integrations/supabase/client");
-      const { data: { user: authUser } } = await supabase.auth.getUser();
+      const {
+        data: { user: authUser },
+      } = await supabase.auth.getUser();
       if (!authUser) {
         return INTERNAL_ROLES.includes(role as InternalRole) ? (role as InternalRole) : null;
       }
@@ -254,18 +270,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const baseUser: User = { id, email, role, internalRole: null };
     setUser(baseUser);
-    try { getPreferredStorage().setItem("nox_user", JSON.stringify(baseUser)); } catch {}
+    try {
+      getPreferredStorage().setItem("nox_user", JSON.stringify(baseUser));
+    } catch {}
     // Only attempt to enrich for users that could be internal
-    resolveInternalRole(role).then((internalRole) => {
-      if (isLoggingOutRef.current || loginVersion !== authVersionRef.current) return;
-      if (!internalRole) return; // keep base user — don't break external profiles
-      const enriched: User = { id, email, role, internalRole };
-      setUser(enriched);
-      try { getPreferredStorage().setItem("nox_user", JSON.stringify(enriched)); } catch {}
-    }).catch((e) => console.warn("[Auth] enrich failed", e));
+    resolveInternalRole(role)
+      .then((internalRole) => {
+        if (isLoggingOutRef.current || loginVersion !== authVersionRef.current) return;
+        if (!internalRole) return; // keep base user — don't break external profiles
+        const enriched: User = { id, email, role, internalRole };
+        setUser(enriched);
+        try {
+          getPreferredStorage().setItem("nox_user", JSON.stringify(enriched));
+        } catch {}
+      })
+      .catch((e) => console.warn("[Auth] enrich failed", e));
   };
 
   const logout = async () => {
+    const wasDemo = isDemoSession();
     isLoggingOutRef.current = true;
     authVersionRef.current += 1;
     setUser(null);
@@ -273,17 +296,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       sessionStorage.setItem(LOGOUT_IN_PROGRESS_KEY, "1");
     } catch {}
     try {
-      localStorage.removeItem("nox_user");
+      if (wasDemo) sessionStorage.removeItem("nox_user");
+      else localStorage.removeItem("nox_user");
     } catch {}
 
     try {
       const { supabase } = await import("@/integrations/supabase/client");
-      await supabase.auth.signOut();
+      await supabase.auth.signOut(wasDemo ? { scope: "local" } : undefined);
     } catch {
       clearStoredAuth();
     } finally {
       clearStoredAuth();
       clearLogoutMarker();
+      if (wasDemo) clearDemoSession();
     }
   };
 

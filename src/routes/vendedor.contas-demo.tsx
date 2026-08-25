@@ -40,7 +40,11 @@ function DemoAccountsPage() {
       typeof crypto !== "undefined" && "randomUUID" in crypto
         ? crypto.randomUUID()
         : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    window.open(`/demo/${profile}?session=${encodeURIComponent(session)}`, "_blank", "noopener,noreferrer");
+    window.open(
+      `/demo/${profile}?session=${encodeURIComponent(session)}`,
+      "_blank",
+      "noopener,noreferrer",
+    );
   }
 
   return (
@@ -56,7 +60,8 @@ function DemoAccountsPage() {
                 Contas demo
               </h1>
               <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-neutral-800 sm:text-base">
-                Apresente toda a jornada NOX usando dados fictícios. Cada perfil abre em uma nova aba e nunca aciona consultas, cobranças ou contratos reais.
+                Abra uma réplica fiel da conta original de cada perfil, com os mesmos menus, telas e
+                recursos. Os dados de apresentação já ficam preenchidos automaticamente.
               </p>
             </div>
             <div className="grid h-20 w-20 shrink-0 place-items-center rounded-3xl border border-black/10 bg-white/70 shadow-sm">
@@ -89,9 +94,12 @@ function DemoAccountsPage() {
                   </div>
                 </div>
                 <div className="mt-5 rounded-2xl border border-neutral-100 bg-neutral-50 p-4">
-                  <p className="text-xs font-black uppercase tracking-wider text-neutral-500">Recursos disponíveis</p>
+                  <p className="text-xs font-black uppercase tracking-wider text-neutral-500">
+                    Recursos disponíveis
+                  </p>
                   <p className="mt-2 text-sm font-semibold leading-6 text-neutral-800">
-                    Consulta por CPF, resultado, escolha do plano, dados liberados, pagamento e contrato simulados.
+                    Interface original do perfil, sem telas ou etapas criadas apenas para a
+                    demonstração.
                   </p>
                 </div>
                 <Button
@@ -112,19 +120,27 @@ function DemoAccountsPage() {
             <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-yellow-600" />
             <div>
               <h2 className="font-black text-neutral-950">CPFs de demonstração</h2>
-              <p className="mt-1 text-sm text-neutral-500">Use estes três cenários em qualquer uma das contas.</p>
+              <p className="mt-1 text-sm text-neutral-500">
+                Use estes três cenários em qualquer uma das contas.
+              </p>
             </div>
           </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             {DEMO_CPF_SCENARIOS.map((scenario) => (
-              <div key={scenario.cpf} className="rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3">
+              <div
+                key={scenario.cpf}
+                className="rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3"
+              >
                 <p className="font-mono text-sm font-black text-neutral-950">{scenario.cpf}</p>
-                <p className="mt-1 text-xs font-bold text-neutral-500">Resultado: {scenario.label}</p>
+                <p className="mt-1 text-xs font-bold text-neutral-500">
+                  Resultado: {scenario.label}
+                </p>
               </div>
             ))}
           </div>
           <p className="mt-4 text-xs font-semibold leading-5 text-neutral-500">
-            Isolamento garantido: as demonstrações ficam apenas na aba aberta e não são salvas no banco administrativo.
+            Os cenários são gravados somente nas contas demonstrativas e não acionam a análise de
+            crédito real.
           </p>
         </section>
       </div>

@@ -3,18 +3,27 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { AlertCircle, ChevronRight, HelpCircle, Lock, MapPin, Plus, UserRound, Building2 } from "lucide-react";
+import {
+  AlertCircle,
+  ChevronRight,
+  HelpCircle,
+  Lock,
+  MapPin,
+  Plus,
+  UserRound,
+  Building2,
+} from "lucide-react";
 import CurrencyInput from "react-currency-input-field";
 import { IMaskInput } from "react-imask";
 import { toast } from "sonner";
 import { validateCPF, validateCNPJ } from "@/utils/validators";
 
 export interface DadosSimulacao {
-  tipoInquilino: 'PF' | 'PJ';
+  tipoInquilino: "PF" | "PJ";
   inquilinos: { cpf: string; nome: string }[];
   razaoSocial: string;
   cnpj: string;
-  tipoImovel: 'Residencial' | 'Comercial';
+  tipoImovel: "Residencial" | "Comercial";
   cep: string;
   endereco: { cidade: string; uf: string } | null;
   valores: {
@@ -25,23 +34,39 @@ export interface DadosSimulacao {
 }
 
 interface FormularioSimulacaoProps {
-  modo: 'publico' | 'interno';
+  modo: "publico" | "interno";
   onSubmit: (dados: DadosSimulacao) => void;
   dadosIniciais?: Partial<DadosSimulacao>;
   /** Desabilita o botão de envio — usado para bloquear novos cliques enquanto uma consulta já está em andamento. */
   disabled?: boolean;
+  /** Aceita os documentos reservados aos cenários internos das contas demonstrativas. */
+  allowDemoDocuments?: boolean;
 }
 
-export function FormularioSimulacao({ modo, onSubmit, dadosIniciais, disabled }: FormularioSimulacaoProps) {
-  const [tipoInquilino, setTipoInquilino] = useState<'PF' | 'PJ'>(dadosIniciais?.tipoInquilino || 'PF');
-  const [inquilinos, setInquilinos] = useState(dadosIniciais?.inquilinos || [{ cpf: '', nome: '' }]);
-  const [razaoSocial, setRazaoSocial] = useState(dadosIniciais?.razaoSocial || '');
-  const [cnpj, setCnpj] = useState(dadosIniciais?.cnpj || '');
-  
-  const [tipoImovel, setTipoImovel] = useState<'Residencial' | 'Comercial'>(dadosIniciais?.tipoImovel || 'Residencial');
-  const [cep, setCep] = useState(dadosIniciais?.cep || '');
-  const [endereco, setEndereco] = useState<{cidade: string, uf: string} | null>(dadosIniciais?.endereco || null);
-  
+export function FormularioSimulacao({
+  modo,
+  onSubmit,
+  dadosIniciais,
+  disabled,
+  allowDemoDocuments = false,
+}: FormularioSimulacaoProps) {
+  const [tipoInquilino, setTipoInquilino] = useState<"PF" | "PJ">(
+    dadosIniciais?.tipoInquilino || "PF",
+  );
+  const [inquilinos, setInquilinos] = useState(
+    dadosIniciais?.inquilinos || [{ cpf: "", nome: "" }],
+  );
+  const [razaoSocial, setRazaoSocial] = useState(dadosIniciais?.razaoSocial || "");
+  const [cnpj, setCnpj] = useState(dadosIniciais?.cnpj || "");
+
+  const [tipoImovel, setTipoImovel] = useState<"Residencial" | "Comercial">(
+    dadosIniciais?.tipoImovel || "Residencial",
+  );
+  const [cep, setCep] = useState(dadosIniciais?.cep || "");
+  const [endereco, setEndereco] = useState<{ cidade: string; uf: string } | null>(
+    dadosIniciais?.endereco || null,
+  );
+
   const [aluguel, setAluguel] = useState<number>(dadosIniciais?.valores?.aluguel || 0);
   const [condominio, setCondominio] = useState<number>(dadosIniciais?.valores?.condominio || 0);
   const [taxas, setTaxas] = useState<number>(dadosIniciais?.valores?.taxas || 0);
@@ -49,40 +74,40 @@ export function FormularioSimulacao({ modo, onSubmit, dadosIniciais, disabled }:
   // Estado da busca do CEP. Enquanto nao voltar `ok` (com cidade/UF), o formulario
   // nao deixa simular: CEP sem regiao encontrada e' CEP errado, e o usuario precisa
   // corrigir antes de seguir.
-  const [cepStatus, setCepStatus] = useState<'vazio' | 'buscando' | 'ok' | 'invalido'>(
-    dadosIniciais?.endereco ? 'ok' : 'vazio',
+  const [cepStatus, setCepStatus] = useState<"vazio" | "buscando" | "ok" | "invalido">(
+    dadosIniciais?.endereco ? "ok" : "vazio",
   );
   const [erroCep, setErroCep] = useState<string | null>(null);
 
   const CEP_NAO_ENCONTRADO = "CEP não encontrado. Corrija o CEP para continuar.";
 
   const buscarCEP = async (valor: string) => {
-    const limpo = valor.replace(/\D/g, '');
+    const limpo = valor.replace(/\D/g, "");
     if (limpo.length !== 8) {
       setEndereco(null);
-      setCepStatus(limpo.length ? 'invalido' : 'vazio');
+      setCepStatus(limpo.length ? "invalido" : "vazio");
       setErroCep(limpo.length ? "Informe um CEP com 8 dígitos." : null);
       return;
     }
 
-    setCepStatus('buscando');
+    setCepStatus("buscando");
     setErroCep(null);
     try {
       const response = await fetch(`https://viacep.com.br/ws/${limpo}/json/`);
       const data = await response.json();
       if (!data.erro && data.localidade && data.uf) {
         setEndereco({ cidade: data.localidade, uf: data.uf });
-        setCepStatus('ok');
+        setCepStatus("ok");
         setErroCep(null);
       } else {
         setEndereco(null);
-        setCepStatus('invalido');
+        setCepStatus("invalido");
         setErroCep(CEP_NAO_ENCONTRADO);
       }
     } catch (err) {
       console.error("Erro ao buscar CEP", err);
       setEndereco(null);
-      setCepStatus('invalido');
+      setCepStatus("invalido");
       setErroCep("Não foi possível validar o CEP agora. Verifique o número e tente novamente.");
     }
   };
@@ -95,38 +120,57 @@ export function FormularioSimulacao({ modo, onSubmit, dadosIniciais, disabled }:
     // Validação mínima — só bloqueia o que é essencial pra calcular
     if (!aluguel || aluguel <= 0) {
       const msg = "Informe o valor do aluguel para calcular a simulação.";
-      setErro(msg); toast.error(msg); return;
+      setErro(msg);
+      toast.error(msg);
+      return;
     }
-    if (!cep || cep.replace(/\D/g, '').length < 8) {
+    if (!cep || cep.replace(/\D/g, "").length < 8) {
       const msg = "Informe um CEP válido do imóvel.";
-      setErro(msg); setErroCep("Informe um CEP com 8 dígitos."); toast.error(msg); return;
+      setErro(msg);
+      setErroCep("Informe um CEP com 8 dígitos.");
+      toast.error(msg);
+      return;
     }
-    if (cepStatus === 'buscando') {
+    if (cepStatus === "buscando") {
       const msg = "Aguarde a validação do CEP para continuar.";
-      setErro(msg); toast.error(msg); return;
+      setErro(msg);
+      toast.error(msg);
+      return;
     }
     // Nenhuma cidade/UF encontrada = CEP errado. Bloqueia a simulação e pede a
     // correção; assim que a região aparecer, o usuário segue normalmente.
     if (!endereco) {
       const msg = CEP_NAO_ENCONTRADO;
-      setErro(msg); setErroCep(msg); toast.error(msg);
-      document.getElementById('cep-simulacao')?.focus();
+      setErro(msg);
+      setErroCep(msg);
+      toast.error(msg);
+      document.getElementById("cep-simulacao")?.focus();
       return;
     }
 
     // Validação extra apenas no modo INTERNO (corretor já logado preenchendo dados oficiais)
-    if (modo === 'interno') {
-      if (tipoInquilino === 'PF') {
+    if (modo === "interno") {
+      if (tipoInquilino === "PF") {
         for (const inq of inquilinos) {
-          if (!validateCPF(inq.cpf)) {
-            const msg = `CPF inválido: ${inq.cpf || '(vazio)'}`;
-            setErro(msg); toast.error(msg); return;
+          if (
+            !validateCPF(inq.cpf) &&
+            !(
+              allowDemoDocuments &&
+              ["99999999999", "88888888888", "00000000000"].includes(inq.cpf.replace(/\D/g, ""))
+            )
+          ) {
+            const msg = `CPF inválido: ${inq.cpf || "(vazio)"}`;
+            setErro(msg);
+            toast.error(msg);
+            return;
           }
         }
       } else {
         if (!validateCNPJ(cnpj)) {
           const msg = "CNPJ inválido.";
-          setErro(msg); toast.error(msg); return;
+          setErro(msg);
+          toast.error(msg);
+          return;
         }
       }
     }
@@ -139,10 +183,9 @@ export function FormularioSimulacao({ modo, onSubmit, dadosIniciais, disabled }:
       tipoImovel,
       cep,
       endereco,
-      valores: { aluguel, condominio, taxas }
+      valores: { aluguel, condominio, taxas },
     });
   };
-
 
   return (
     <div className="w-full max-w-5xl">
@@ -160,31 +203,33 @@ export function FormularioSimulacao({ modo, onSubmit, dadosIniciais, disabled }:
             <h2 className="text-sm font-semibold uppercase tracking-wider text-neutral-600 mb-4">
               Dados do inquilino
             </h2>
-            
+
             <div className="grid grid-cols-2 gap-2 sm:gap-3">
-              <Button 
-                type="button" 
-                variant={tipoInquilino === 'PF' ? 'default' : 'outline'}
-                onClick={() => setTipoInquilino('PF')}
-                className={`flex-1 flex items-center justify-center gap-1.5 sm:gap-2 h-12 sm:h-14 px-2 sm:px-4 font-bold text-xs sm:text-base whitespace-nowrap ${tipoInquilino === 'PF' ? 'bg-neutral-900 text-white' : 'text-neutral-600'}`}
+              <Button
+                type="button"
+                variant={tipoInquilino === "PF" ? "default" : "outline"}
+                onClick={() => setTipoInquilino("PF")}
+                className={`flex-1 flex items-center justify-center gap-1.5 sm:gap-2 h-12 sm:h-14 px-2 sm:px-4 font-bold text-xs sm:text-base whitespace-nowrap ${tipoInquilino === "PF" ? "bg-neutral-900 text-white" : "text-neutral-600"}`}
               >
                 <UserRound size={16} className="shrink-0 sm:w-5 sm:h-5" /> Pessoa Física
               </Button>
-              <Button 
-                type="button" 
-                variant={tipoInquilino === 'PJ' ? 'default' : 'outline'}
-                onClick={() => setTipoInquilino('PJ')}
-                className={`flex-1 flex items-center justify-center gap-1.5 sm:gap-2 h-12 sm:h-14 px-2 sm:px-4 font-bold text-xs sm:text-base whitespace-nowrap ${tipoInquilino === 'PJ' ? 'bg-neutral-900 text-white' : 'text-neutral-600'}`}
+              <Button
+                type="button"
+                variant={tipoInquilino === "PJ" ? "default" : "outline"}
+                onClick={() => setTipoInquilino("PJ")}
+                className={`flex-1 flex items-center justify-center gap-1.5 sm:gap-2 h-12 sm:h-14 px-2 sm:px-4 font-bold text-xs sm:text-base whitespace-nowrap ${tipoInquilino === "PJ" ? "bg-neutral-900 text-white" : "text-neutral-600"}`}
               >
                 <Building2 size={16} className="shrink-0 sm:w-5 sm:h-5" /> Pessoa Jurídica
               </Button>
             </div>
 
-            {tipoInquilino === 'PF' ? (
+            {tipoInquilino === "PF" ? (
               <div className="space-y-4">
                 {inquilinos.map((inq, i) => (
                   <div key={i} className="space-y-2">
-                    <Label className="text-xs font-bold text-neutral-500 uppercase tracking-widest">Inquilino {i + 1}</Label>
+                    <Label className="text-xs font-bold text-neutral-500 uppercase tracking-widest">
+                      Inquilino {i + 1}
+                    </Label>
                     <IMaskInput
                       mask="000.000.000-00"
                       value={inq.cpf}
@@ -200,7 +245,11 @@ export function FormularioSimulacao({ modo, onSubmit, dadosIniciais, disabled }:
                   </div>
                 ))}
                 {inquilinos.length < 3 && (
-                  <button type="button" onClick={() => setInquilinos([...inquilinos, { cpf: '', nome: '' }])} className="text-sm text-yellow-700 hover:underline flex items-center gap-1 font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setInquilinos([...inquilinos, { cpf: "", nome: "" }])}
+                    className="text-sm text-yellow-700 hover:underline flex items-center gap-1 font-bold"
+                  >
                     <Plus className="w-4 h-4" /> Adicionar outro inquilino
                   </button>
                 )}
@@ -208,8 +257,10 @@ export function FormularioSimulacao({ modo, onSubmit, dadosIniciais, disabled }:
             ) : (
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label className="text-xs font-bold text-neutral-500 uppercase tracking-widest">CNPJ</Label>
-                  <IMaskInput 
+                  <Label className="text-xs font-bold text-neutral-500 uppercase tracking-widest">
+                    CNPJ
+                  </Label>
+                  <IMaskInput
                     mask="00.000.000/0000-00"
                     value={cnpj}
                     onAccept={(val: any) => setCnpj(val)}
@@ -227,28 +278,30 @@ export function FormularioSimulacao({ modo, onSubmit, dadosIniciais, disabled }:
             <h2 className="text-sm font-semibold uppercase tracking-wider text-neutral-600 mb-4">
               Dados do imóvel
             </h2>
-            
+
             <div className="grid grid-cols-2 gap-2 sm:gap-3">
-              <Button 
-                type="button" 
-                variant={tipoImovel === 'Residencial' ? 'default' : 'outline'}
-                onClick={() => setTipoImovel('Residencial')}
-                className={`flex-1 h-12 sm:h-14 px-2 sm:px-4 font-bold text-xs sm:text-base whitespace-nowrap ${tipoImovel === 'Residencial' ? 'bg-neutral-900 text-white' : 'text-neutral-600'}`}
+              <Button
+                type="button"
+                variant={tipoImovel === "Residencial" ? "default" : "outline"}
+                onClick={() => setTipoImovel("Residencial")}
+                className={`flex-1 h-12 sm:h-14 px-2 sm:px-4 font-bold text-xs sm:text-base whitespace-nowrap ${tipoImovel === "Residencial" ? "bg-neutral-900 text-white" : "text-neutral-600"}`}
               >
                 Residencial
               </Button>
-              <Button 
-                type="button" 
-                variant={tipoImovel === 'Comercial' ? 'default' : 'outline'}
-                onClick={() => setTipoImovel('Comercial')}
-                className={`flex-1 h-12 sm:h-14 px-2 sm:px-4 font-bold text-xs sm:text-base whitespace-nowrap ${tipoImovel === 'Comercial' ? 'bg-neutral-900 text-white' : 'text-neutral-600'}`}
+              <Button
+                type="button"
+                variant={tipoImovel === "Comercial" ? "default" : "outline"}
+                onClick={() => setTipoImovel("Comercial")}
+                className={`flex-1 h-12 sm:h-14 px-2 sm:px-4 font-bold text-xs sm:text-base whitespace-nowrap ${tipoImovel === "Comercial" ? "bg-neutral-900 text-white" : "text-neutral-600"}`}
               >
                 Comercial
               </Button>
             </div>
 
             <div className="space-y-2">
-              <Label className="text-xs font-bold text-neutral-500 uppercase tracking-widest">CEP</Label>
+              <Label className="text-xs font-bold text-neutral-500 uppercase tracking-widest">
+                CEP
+              </Label>
               <IMaskInput
                 id="cep-simulacao"
                 mask="00000-000"
@@ -256,33 +309,35 @@ export function FormularioSimulacao({ modo, onSubmit, dadosIniciais, disabled }:
                 onAccept={(val: any) => {
                   setCep(val);
                   setErro(null);
-                  if (val.replace(/\D/g, '').length === 8) {
+                  if (val.replace(/\D/g, "").length === 8) {
                     buscarCEP(val);
                   } else {
                     setEndereco(null);
-                    setCepStatus(val ? 'invalido' : 'vazio');
+                    setCepStatus(val ? "invalido" : "vazio");
                     setErroCep(null);
                   }
                 }}
                 autoComplete="off"
-                aria-invalid={cepStatus === 'invalido'}
+                aria-invalid={cepStatus === "invalido"}
                 className={`flex h-14 w-full rounded-lg border bg-white px-4 py-2 text-base font-medium outline-none transition-all ${
-                  cepStatus === 'invalido'
-                    ? 'border-red-400 focus:ring-2 focus:ring-red-400'
-                    : 'border-neutral-200 focus:ring-2 focus:ring-yellow-400'
+                  cepStatus === "invalido"
+                    ? "border-red-400 focus:ring-2 focus:ring-red-400"
+                    : "border-neutral-200 focus:ring-2 focus:ring-yellow-400"
                 }`}
-                placeholder="00000-000" 
+                placeholder="00000-000"
               />
-              {cepStatus === 'buscando' && (
-                <p className="text-xs text-neutral-500 mt-1 font-bold uppercase">Buscando região...</p>
+              {cepStatus === "buscando" && (
+                <p className="text-xs text-neutral-500 mt-1 font-bold uppercase">
+                  Buscando região...
+                </p>
               )}
-              {cepStatus === 'ok' && endereco && (
+              {cepStatus === "ok" && endereco && (
                 <p className="text-xs text-neutral-500 mt-1 flex items-center gap-1 font-bold uppercase">
                   <MapPin className="w-4 h-4 text-yellow-600" strokeWidth={1.5} />
                   {endereco.cidade}, {endereco.uf}
                 </p>
               )}
-              {cepStatus === 'invalido' && erroCep && (
+              {cepStatus === "invalido" && erroCep && (
                 <p className="text-xs text-red-600 mt-1 flex items-center gap-1 font-bold">
                   <AlertCircle className="w-4 h-4" strokeWidth={2} />
                   {erroCep}
@@ -292,11 +347,13 @@ export function FormularioSimulacao({ modo, onSubmit, dadosIniciais, disabled }:
 
             <div className="grid grid-cols-3 gap-2 sm:gap-3 items-end">
               <div className="space-y-1.5 sm:space-y-2 min-w-0">
-                <Label className="text-[10px] sm:text-xs font-bold text-neutral-500 uppercase tracking-wider sm:tracking-widest block h-4 sm:h-5">Aluguel</Label>
+                <Label className="text-[10px] sm:text-xs font-bold text-neutral-500 uppercase tracking-wider sm:tracking-widest block h-4 sm:h-5">
+                  Aluguel
+                </Label>
                 <CurrencyInput
                   prefix="R$ "
                   decimalsLimit={2}
-                  value={aluguel || ''}
+                  value={aluguel || ""}
                   onValueChange={(v, name, values) => {
                     setAluguel(values?.float || 0);
                   }}
@@ -306,11 +363,13 @@ export function FormularioSimulacao({ modo, onSubmit, dadosIniciais, disabled }:
                 />
               </div>
               <div className="space-y-1.5 sm:space-y-2 min-w-0">
-                <Label className="text-[10px] sm:text-xs font-bold text-neutral-500 uppercase tracking-wider sm:tracking-widest block h-4 sm:h-5">Condomínio</Label>
+                <Label className="text-[10px] sm:text-xs font-bold text-neutral-500 uppercase tracking-wider sm:tracking-widest block h-4 sm:h-5">
+                  Condomínio
+                </Label>
                 <CurrencyInput
                   prefix="R$ "
                   decimalsLimit={2}
-                  value={condominio || ''}
+                  value={condominio || ""}
                   onValueChange={(v, name, values) => {
                     setCondominio(values?.float || 0);
                   }}
@@ -321,7 +380,9 @@ export function FormularioSimulacao({ modo, onSubmit, dadosIniciais, disabled }:
               </div>
               <div className="space-y-1.5 sm:space-y-2 min-w-0">
                 <div className="flex items-center gap-1 h-4 sm:h-5">
-                  <Label className="text-[10px] sm:text-xs font-bold text-neutral-500 uppercase tracking-wider sm:tracking-widest">Taxas</Label>
+                  <Label className="text-[10px] sm:text-xs font-bold text-neutral-500 uppercase tracking-wider sm:tracking-widest">
+                    Taxas
+                  </Label>
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -338,7 +399,7 @@ export function FormularioSimulacao({ modo, onSubmit, dadosIniciais, disabled }:
                 <CurrencyInput
                   prefix="R$ "
                   decimalsLimit={2}
-                  value={taxas || ''}
+                  value={taxas || ""}
                   onValueChange={(v, name, values) => {
                     setTaxas(values?.float || 0);
                   }}
@@ -355,10 +416,9 @@ export function FormularioSimulacao({ modo, onSubmit, dadosIniciais, disabled }:
         <div className="mt-8 flex items-start gap-3 text-sm text-neutral-600 bg-neutral-50 rounded-lg p-4 border border-neutral-100">
           <Lock className="w-5 h-5 text-neutral-400 flex-shrink-0 mt-0.5" strokeWidth={1.5} />
           <span>
-            {modo === 'publico' 
-              ? 'Para visualizar o resultado, será necessário entrar ou criar uma conta gratuita.'
-              : 'Para visualizar o resultado, preencha todos os dados corretamente.'
-            }
+            {modo === "publico"
+              ? "Para visualizar o resultado, será necessário entrar ou criar uma conta gratuita."
+              : "Para visualizar o resultado, preencha todos os dados corretamente."}
           </span>
         </div>
 
@@ -374,12 +434,10 @@ export function FormularioSimulacao({ modo, onSubmit, dadosIniciais, disabled }:
           disabled={disabled}
           className="w-full mt-8 bg-neutral-900 hover:bg-neutral-800 disabled:bg-neutral-300 text-white py-8 rounded-xl font-bold text-xl inline-flex items-center justify-center gap-2 transition-all shadow-xl shadow-neutral-200 active:scale-[0.98]"
         >
-          {modo === 'publico' ? 'Simular crédito e entrar' : 'Simular crédito'}
+          {modo === "publico" ? "Simular crédito e entrar" : "Simular crédito"}
           <ChevronRight className="w-6 h-6" strokeWidth={2.5} />
         </Button>
-
       </form>
     </div>
   );
 }
-

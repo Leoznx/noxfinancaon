@@ -4,6 +4,16 @@
 // com storages fixos, o próprio adapter de storage passado ao client decide, a cada
 // leitura/escrita, se usa localStorage ou sessionStorage, olhando essa preferência.
 const REMEMBER_KEY = "nox_remember_me";
+const DEMO_SESSION_KEY = "nox_demo_session";
+
+function usesDemoSessionStorage(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return Boolean(window.sessionStorage.getItem(DEMO_SESSION_KEY));
+  } catch {
+    return false;
+  }
+}
 
 // A preferência em si é só um booleano, não um segredo — sempre em localStorage pra
 // sobreviver ao fechamento do navegador (é o que permite saber, na próxima visita, se
@@ -26,6 +36,7 @@ export function setRememberMe(remember: boolean): void {
 }
 
 export function getPreferredStorage(): Storage {
+  if (usesDemoSessionStorage()) return window.sessionStorage;
   return getRememberMe() ? window.localStorage : window.sessionStorage;
 }
 
@@ -48,6 +59,12 @@ export const dynamicAuthStorage = {
     }
   },
   setItem(key: string, value: string) {
+    if (usesDemoSessionStorage()) {
+      try {
+        window.sessionStorage.setItem(key, value);
+      } catch {}
+      return;
+    }
     try {
       otherStorage().removeItem(key);
     } catch {}
@@ -56,6 +73,12 @@ export const dynamicAuthStorage = {
     } catch {}
   },
   removeItem(key: string) {
+    if (usesDemoSessionStorage()) {
+      try {
+        window.sessionStorage.removeItem(key);
+      } catch {}
+      return;
+    }
     try {
       window.localStorage.removeItem(key);
     } catch {}
@@ -72,7 +95,10 @@ function isSupabaseAuthTokenKey(key: string | null): boolean {
 /** Limpa qualquer token de sessão do Supabase dos dois storages — usado no logout. */
 export function clearAuthTokensFromBothStorages(): void {
   if (typeof window === "undefined") return;
-  for (const storage of [window.localStorage, window.sessionStorage]) {
+  const storages = usesDemoSessionStorage()
+    ? [window.sessionStorage]
+    : [window.localStorage, window.sessionStorage];
+  for (const storage of storages) {
     try {
       for (let i = storage.length - 1; i >= 0; i -= 1) {
         const key = storage.key(i);

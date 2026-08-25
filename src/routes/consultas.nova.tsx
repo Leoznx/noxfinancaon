@@ -8,12 +8,15 @@ import { toast } from "sonner";
 import { useAuth } from "@/components/AuthProvider";
 import {
   criarConsultaParaAutomacao,
+  criarConsultaDemonstrativa,
   reenviarConsulta,
   watchConsultaCredito,
   progressoConsulta,
   STATUS_FINAIS,
   type StatusConsulta,
 } from "@/lib/consultasCredito";
+import { DEMO_SIMULATION_DATA } from "@/lib/demo-accounts";
+import { isDemoSession } from "@/lib/demo-session";
 
 export const Route = createFileRoute("/consultas/nova")({
   component: () => (
@@ -33,6 +36,7 @@ function NovaConsulta() {
   const [etapaAutomacao, setEtapaAutomacao] = useState<string | null>(null);
   const stopWatchRef = useRef<(() => void) | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const demoSession = isDemoSession();
 
   const pararEscuta = () => {
     stopWatchRef.current?.();
@@ -56,7 +60,9 @@ function NovaConsulta() {
         if (!STATUS_FINAIS.includes(status)) return;
         if (status === "erro") {
           setErroAutomacao(
-            consulta.error_message || consulta.mensagem || "Não foi possível concluir a consulta no momento.",
+            consulta.error_message ||
+              consulta.mensagem ||
+              "Não foi possível concluir a consulta no momento.",
           );
           pararEscuta();
           return;
@@ -99,7 +105,8 @@ function NovaConsulta() {
     setProgresso(5);
     setEtapaAutomacao(null);
     try {
-      const id = await criarConsultaParaAutomacao({
+      const criarConsulta = demoSession ? criarConsultaDemonstrativa : criarConsultaParaAutomacao;
+      const id = await criarConsulta({
         dados,
         userEmail: user.email,
         userRole: user.role,
@@ -139,7 +146,13 @@ function NovaConsulta() {
     <DashboardLayout>
       <div className="flex-1 flex flex-col px-6 py-6">
         <div className="w-full max-w-5xl mx-auto">
-          <FormularioSimulacao modo="interno" onSubmit={handleSimular} disabled={isSubmitting || modalAberto} />
+          <FormularioSimulacao
+            modo="interno"
+            onSubmit={handleSimular}
+            disabled={isSubmitting || modalAberto}
+            dadosIniciais={demoSession ? DEMO_SIMULATION_DATA : undefined}
+            allowDemoDocuments={demoSession}
+          />
           {isSubmitting && (
             <p className="mt-4 text-sm font-bold text-neutral-500 uppercase tracking-widest">
               Enviando consulta…

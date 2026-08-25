@@ -3,15 +3,11 @@ import { normalizeDocumento } from "@/utils/documento";
 import { upsertConsultaCredito } from "@/lib/consultas";
 import type { DadosSimulacao } from "@/components/simulacao/FormularioSimulacao";
 import type { RealtimeChannel } from "@supabase/supabase-js";
+import { getDemoDecision } from "@/lib/demo-accounts";
 
 /** Status do fluxo de automação local CredPago. */
 export type StatusConsulta =
-  | "pendente"
-  | "processando"
-  | "aprovado"
-  | "recusado"
-  | "em_analise"
-  | "erro";
+  "pendente" | "processando" | "aprovado" | "recusado" | "em_analise" | "erro";
 
 export const STATUS_FINAIS: StatusConsulta[] = ["aprovado", "recusado", "em_analise", "erro"];
 
@@ -98,7 +94,8 @@ export function maskDocumento(doc?: string | null): string {
 export function formatDocumento(doc?: string | null): string {
   const d = normalizeDocumento(doc);
   if (d.length === 11) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
-  if (d.length === 14) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
+  if (d.length === 14)
+    return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
   return d;
 }
 
@@ -165,6 +162,60 @@ export async function criarConsultaParaAutomacao({
     .eq("id", consultaId);
   if (error) throw error;
 
+  return consultaId;
+}
+
+/**
+ * Usa exatamente o mesmo cadastro e as mesmas telas da consulta oficial, mas
+ * conclui internamente os três documentos reservados ao modo demo. A origem
+ * nunca é `nox_financa`, portanto o worker CredPago não reivindica a linha.
+ */
+export async function criarConsultaDemonstrativa({
+  dados,
+  userEmail,
+  userRole,
+}: CriarConsultaParams): Promise<string> {
+  const rawDoc = dados.tipoInquilino === "PF" ? dados.inquilinos[0]?.cpf || "" : dados.cnpj || "";
+  const decision = getDemoDecision(rawDoc);
+  if (!decision) throw new Error("Use um dos documentos de demonstração disponíveis.");
+
+  const consultaId = await upsertConsultaCredito({ dados, userEmail, userRole });
+  const documento = normalizeDocumento(rawDoc);
+  const status = decision === "pendente" ? "em_analise" : decision;
+  const mensagem =
+    decision === "aprovado"
+      ? "Crédito aprovado."
+      : decision === "recusado"
+        ? "Crédito recusado."
+        : "Sua simulação está em análise.";
+
+  const { error } = await supabase
+    .from("consultas_credito")
+    .update({
+      tipo_pessoa: dados.tipoInquilino,
+      documento,
+      documento_masked: maskDocumento(documento),
+      tenant_name:
+        dados.tipoInquilino === "PF"
+          ? dados.inquilinos[0]?.nome || "João da Silva"
+          : dados.razaoSocial,
+      tipo_imovel: dados.tipoImovel,
+      cep: dados.cep,
+      valor_aluguel: dados.valores.aluguel,
+      valor_condominio: dados.valores.condominio,
+      valor_taxas: dados.valores.taxas,
+      status,
+      resultado: status,
+      mensagem,
+      origem: "demo",
+      automation_step: "demonstracao",
+      automation_started_at: new Date().toISOString(),
+      automation_finished_at: new Date().toISOString(),
+      error_message: null,
+      raw_response: { demo: true, decision },
+    } as any)
+    .eq("id", consultaId);
+  if (error) throw error;
   return consultaId;
 }
 
@@ -323,13 +374,7 @@ export async function registrarEventoProposta(
 }
 
 export type StatusExibicaoConsulta =
-  | "aprovado"
-  | "recusado"
-  | "em_analise"
-  | "falta_documentos"
-  | "erro"
-  | "processando"
-  | "pendente";
+  "aprovado" | "recusado" | "em_analise" | "falta_documentos" | "erro" | "processando" | "pendente";
 
 /**
  * `resultado` guarda o veredito da análise de crédito de forma permanente (a automação
