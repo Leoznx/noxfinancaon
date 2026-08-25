@@ -157,10 +157,7 @@ function VendedorDashboard() {
           <DashboardSkeleton />
         ) : data && computed ? (
           <>
-            <SellerPerformanceBanner
-              rankingPosition={data.metrics.rankingPosition}
-              goalPercentage={computed.goalPercentage}
-            />
+            <SellerPerformanceBanner />
 
             {error && (
               <div className="xl:absolute xl:right-0 xl:top-12 xl:z-20 xl:w-[440px]">
