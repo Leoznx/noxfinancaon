@@ -53,10 +53,9 @@ const PERIODOS: { value: Periodo; label: string }[] = [
   { value: "12m", label: "Últimos 12 meses" },
 ];
 
-const DOCUMENT_COLORS = {
+const APPROVAL_COLORS = {
   aprovado: "#32B86B",
   pendente: "#F3BD00",
-  em_analise: "#3478E5",
   recusado: "#EF3E45",
 };
 
@@ -110,26 +109,25 @@ export function JuridicoDashboard() {
     [data.consultas],
   );
 
-  const documentStatus = useMemo(() => {
-    const counts = { aprovado: 0, pendente: 0, em_analise: 0, recusado: 0 };
-    for (const item of data.documentos) {
-      const status = normalize(item.verification_status);
-      if (status === "aprovado") counts.aprovado += 1;
-      else if (status === "recusado" || status === "reprovado") counts.recusado += 1;
-      else if (status === "enviado" || status === "em_analise") counts.em_analise += 1;
-      else counts.pendente += 1;
+  const approvalStatus = useMemo(() => {
+    const counts = { aprovado: 0, pendente: 0, recusado: 0 };
+    for (const item of data.consultas) {
+      const status = normalize(item.status);
+      const resultado = normalize(item.resultado);
+      if (status === "aprovado" || resultado === "aprovado") counts.aprovado += 1;
+      else if (["recusado", "reprovado"].includes(status) || ["recusado", "reprovado"].includes(resultado)) counts.recusado += 1;
+      else if (isAwaitingReview(item) || isInReview(item)) counts.pendente += 1;
     }
     const total = Object.values(counts).reduce((sum, value) => sum + value, 0);
     return {
       total,
       items: [
-        { key: "aprovado", label: "Aprovados", value: counts.aprovado, color: DOCUMENT_COLORS.aprovado },
-        { key: "pendente", label: "Pendentes", value: counts.pendente, color: DOCUMENT_COLORS.pendente },
-        { key: "em_analise", label: "Em análise", value: counts.em_analise, color: DOCUMENT_COLORS.em_analise },
-        { key: "recusado", label: "Reprovados", value: counts.recusado, color: DOCUMENT_COLORS.recusado },
+        { key: "aprovado", label: "Aprovados", value: counts.aprovado, color: APPROVAL_COLORS.aprovado },
+        { key: "recusado", label: "Reprovados", value: counts.recusado, color: APPROVAL_COLORS.recusado },
+        { key: "pendente", label: "Pendentes", value: counts.pendente, color: APPROVAL_COLORS.pendente },
       ],
     };
-  }, [data.documentos]);
+  }, [data.consultas]);
 
   const expiringContracts = useMemo(() => {
     const today = startOfLocalDay(new Date()).getTime();
@@ -220,37 +218,37 @@ export function JuridicoDashboard() {
         </div>
 
         <div className="flex min-h-[300px] flex-col rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm xl:col-span-3 xl:col-start-7 xl:row-start-1 xl:h-full xl:min-h-0 xl:overflow-hidden">
-          <h2 className="text-sm font-extrabold text-neutral-950">Documentos por status</h2>
-          {documentStatus.total ? (
+          <h2 className="text-sm font-extrabold text-neutral-950">Aprovações por status</h2>
+          {approvalStatus.total ? (
             <>
               <div className="relative mx-auto mt-1.5 h-[132px] w-full max-w-[190px] shrink-0 xl:h-[118px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={documentStatus.items} dataKey="value" nameKey="label" innerRadius={40} outerRadius={57} paddingAngle={1} stroke="none">
-                      {documentStatus.items.map((item) => <Cell key={item.key} fill={item.color} />)}
+                    <Pie data={approvalStatus.items} dataKey="value" nameKey="label" innerRadius={40} outerRadius={57} paddingAngle={1} stroke="none">
+                      {approvalStatus.items.map((item) => <Cell key={item.key} fill={item.color} />)}
                     </Pie>
                     <Tooltip contentStyle={{ borderRadius: 12, borderColor: "#E5E5E5", fontSize: 12 }} />
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
                   <span className="text-[10px] font-semibold text-neutral-500">Total</span>
-                  <strong className="text-xl font-black text-neutral-950">{documentStatus.total}</strong>
-                  <span className="text-[10px] text-neutral-500">documentos</span>
+                  <strong className="text-xl font-black text-neutral-950">{approvalStatus.total}</strong>
+                  <span className="text-[10px] text-neutral-500">aprovações</span>
                 </div>
               </div>
               <div className="space-y-1.5">
-                {documentStatus.items.map((item) => (
+                {approvalStatus.items.map((item) => (
                   <div key={item.key} className="flex items-center gap-2 text-xs">
                     <span className="h-2 w-2 rounded-full" style={{ backgroundColor: item.color }} />
                     <span className="flex-1 text-neutral-600">{item.label}</span>
                     <strong className="text-neutral-900">{item.value}</strong>
-                    <span className="w-9 text-right text-neutral-400">{percentage(item.value, documentStatus.total)}%</span>
+                    <span className="w-9 text-right text-neutral-400">{percentage(item.value, approvalStatus.total)}%</span>
                   </div>
                 ))}
               </div>
             </>
           ) : <EmptyState />}
-          <CardFooterLink to="/admin/verificacoes" label="Ver relatório completo" />
+          <CardFooterLink to="/admin/aprovacoes" label="Ver todas as aprovações" />
         </div>
 
         <div className="flex min-h-[280px] flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm xl:col-span-6 xl:col-start-1 xl:row-start-2 xl:h-full xl:min-h-0">
@@ -273,7 +271,7 @@ export function JuridicoDashboard() {
                   <strong className="text-neutral-700">{elapsedTime(item.created_at)}</strong>
                 </div>
                 <Button asChild variant="outline" size="sm" className="w-full gap-2">
-                  <Link to="/consultas/$id/resultado" params={{ id: item.id }}><Eye size={14} /> Visualizar</Link>
+                  <Link to="/admin/aprovacoes" search={{ consulta: item.id }}><Eye size={14} /> Visualizar aprovação</Link>
                 </Button>
               </div>
             )) : <EmptyState />}
@@ -300,15 +298,15 @@ export function JuridicoDashboard() {
                     <TableCell className="whitespace-nowrap py-1.5 text-[10px] font-semibold text-neutral-600">{elapsedTime(item.created_at)}</TableCell>
                     <TableCell className="py-1.5 pr-3 text-right">
                       <Button asChild variant="ghost" size="icon" className="h-7 w-7">
-                        <Link to="/consultas/$id/resultado" params={{ id: item.id }} aria-label={`Visualizar ${item.tenant_name || "processo"}`}><Eye size={15} /></Link>
+                        <Link to="/admin/aprovacoes" search={{ consulta: item.id }} aria-label={`Abrir detalhes da aprovação de ${item.tenant_name || "processo"}`}><Eye size={15} /></Link>
                       </Button>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Mais opções"><MoreVertical size={14} /></Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem asChild><Link to="/consultas/$id/resultado" params={{ id: item.id }}>Ver detalhes</Link></DropdownMenuItem>
-                          <DropdownMenuItem asChild><Link to="/admin/aprovacoes">Abrir fluxo de aprovação</Link></DropdownMenuItem>
+                          <DropdownMenuItem asChild><Link to="/admin/aprovacoes" search={{ consulta: item.id }}>Ver detalhes da aprovação</Link></DropdownMenuItem>
+                          <DropdownMenuItem asChild><Link to="/admin/aprovacoes" search={{ consulta: item.id }}>Abrir fluxo de aprovação</Link></DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
