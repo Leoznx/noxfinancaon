@@ -120,7 +120,7 @@ function Dashboard() {
 
   if (isJuridico) {
     return (
-      <DashboardLayout>
+      <DashboardLayout lockDesktopViewport>
         <JuridicoDashboard />
       </DashboardLayout>
     );

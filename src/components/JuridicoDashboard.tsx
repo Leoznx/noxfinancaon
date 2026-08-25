@@ -12,12 +12,9 @@ import {
   FileSearch,
   FileText,
   FileWarning,
-  Gavel,
   MoreVertical,
   RefreshCw,
-  Scale,
   ShieldAlert,
-  ShieldCheck,
   XCircle,
   type LucideProps,
 } from "lucide-react";
@@ -146,7 +143,7 @@ export function JuridicoDashboard() {
       data.consultas
         .filter((item) => isAwaitingReview(item) || isInReview(item))
         .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-        .slice(0, 8),
+        .slice(0, 4),
     [data.consultas],
   );
 
@@ -196,7 +193,7 @@ export function JuridicoDashboard() {
       .map((item) => ({ ...item, days: Math.ceil((localDate(item.vigencia_fim).getTime() - today) / 86_400_000) }))
       .filter((item) => item.days >= 0 && item.days <= 90)
       .sort((a, b) => a.days - b.days)
-      .slice(0, 5);
+      .slice(0, 4);
   }, [data.contratos]);
 
   const activities = useMemo(() => buildActivities(data, originsById), [data, originsById]);
@@ -205,63 +202,43 @@ export function JuridicoDashboard() {
   if (loading) return <JuridicoDashboardSkeleton />;
 
   return (
-    <div className="space-y-5 lg:space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="flex items-center gap-3 text-2xl font-extrabold tracking-tight text-neutral-950 sm:text-3xl">
-            <Scale size={30} strokeWidth={1.6} />
-            Painel Jurídico
-          </h1>
-          <p className="mt-1.5 text-sm font-medium text-neutral-500">
-            Acompanhe aprovações, documentos, contratos e pendências jurídicas em tempo real.
-          </p>
-        </div>
-        {error ? (
-          <Button variant="outline" size="sm" className="gap-2 self-start" onClick={retry}>
-            <RefreshCw size={14} /> Tentar novamente
-          </Button>
-        ) : null}
-      </div>
-
+    <div className="relative space-y-3 xl:grid xl:h-full xl:min-h-0 xl:grid-rows-[76px_94px_minmax(0,1.08fr)_minmax(0,0.92fr)] xl:gap-3 xl:overflow-hidden xl:space-y-0">
       {error ? (
-        <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+        <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-800 xl:absolute xl:right-2 xl:top-2 xl:z-30 xl:w-[430px] xl:shadow-lg">
           <ShieldAlert className="mt-0.5 shrink-0" size={18} />
-          <div>
+          <div className="min-w-0 flex-1">
             <p className="font-bold">Não foi possível atualizar todos os dados.</p>
             <p className="mt-0.5 text-xs text-red-700">Os dados disponíveis continuam visíveis. Tente novamente em instantes.</p>
           </div>
+          <Button variant="ghost" size="sm" className="h-7 shrink-0 gap-1 px-2 text-xs" onClick={retry}>
+            <RefreshCw size={13} /> Atualizar
+          </Button>
         </div>
       ) : null}
 
-      <section className="relative overflow-hidden rounded-2xl border border-yellow-300/80 bg-gradient-to-r from-yellow-50 via-white to-amber-50/70 px-5 py-5 sm:px-7">
+      <section className="relative overflow-hidden rounded-2xl border border-yellow-300/80 bg-gradient-to-r from-yellow-50 via-white to-amber-50/70 px-4 py-3 sm:px-5 xl:h-full xl:py-1.5">
         <div className="absolute -left-10 -top-16 h-40 w-40 rounded-full bg-yellow-300/20 blur-2xl" />
-        <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-center gap-4">
-            <div className="relative hidden h-16 w-28 shrink-0 sm:block">
-              <span className="absolute bottom-0 left-0 flex h-11 w-11 rotate-[-7deg] items-center justify-center rounded-2xl border border-amber-200 bg-white text-amber-700 shadow-sm">
-                <Gavel size={23} />
-              </span>
-              <span className="absolute left-9 top-0 flex h-14 w-14 items-center justify-center rounded-2xl border border-yellow-300 bg-yellow-400 text-neutral-950 shadow-sm">
-                <ShieldCheck size={27} />
-              </span>
-              <span className="absolute bottom-0 right-0 flex h-10 w-10 rotate-[6deg] items-center justify-center rounded-xl border border-amber-200 bg-white text-amber-700 shadow-sm">
-                <FileText size={20} />
-              </span>
-            </div>
-            <div>
-              <h2 className="text-base font-extrabold text-neutral-950 sm:text-lg">Controle, agilidade e segurança jurídica.</h2>
-              <p className="mt-1 text-sm text-neutral-600">Centralize análises, acompanhe prazos e garanta decisões com mais eficiência.</p>
+        <div className="relative flex h-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-3 xl:h-full">
+            <img
+              src="/dashboard/juridico-protecao.png"
+              alt="Proteção e segurança jurídica"
+              className="hidden h-[62px] w-[176px] shrink-0 object-contain object-left sm:block xl:h-[68px] xl:w-[190px]"
+            />
+            <div className="min-w-0">
+              <h2 className="text-sm font-extrabold leading-tight text-neutral-950 sm:text-[15px]">Proteção jurídica com controle e agilidade.</h2>
+              <p className="mt-1 text-xs leading-4 text-neutral-600">Centralize análises, acompanhe prazos e decida com mais segurança.</p>
             </div>
           </div>
-          <Button asChild variant="outline" className="w-full gap-2 border-yellow-300 bg-white font-bold shadow-sm hover:bg-yellow-50 lg:w-auto">
+          <Button asChild variant="outline" className="h-8 w-full shrink-0 gap-2 border-yellow-300 bg-white px-3 text-xs font-bold shadow-sm hover:bg-yellow-50 sm:w-auto">
             <Link to="/admin/aprovacoes">
-              <RefreshCw size={15} /> Ver fluxo jurídico
+              <RefreshCw size={14} /> Ver fluxo jurídico
             </Link>
           </Button>
         </div>
       </section>
 
-      <section className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
+      <section className="grid grid-cols-2 gap-2.5 md:grid-cols-4 xl:h-full xl:min-h-0 xl:grid-cols-8 xl:gap-2.5">
         <StatCard label="Novas hoje" value={stats.consultasHoje} Icon={FileSearch} tone="neutral" comparison={stats.comparacoes.novas} />
         <StatCard label="Aguardando análise" value={stats.aguardando} Icon={Clock3} tone="amber" />
         <StatCard label="Em análise" value={stats.emAnalise} Icon={Activity} tone="blue" />
@@ -272,12 +249,12 @@ export function JuridicoDashboard() {
         <StatCard label="Sinistros abertos" value={stats.sinistrosAbertos} Icon={ShieldAlert} tone="red" />
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-12">
-        <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm sm:p-5 xl:col-span-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <section className="grid min-h-0 gap-3 xl:h-full xl:grid-cols-12">
+        <div className="flex min-h-[300px] flex-col rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm xl:col-span-6 xl:h-full xl:min-h-0 xl:overflow-hidden">
+          <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-sm font-extrabold text-neutral-950">Movimentação jurídica</h2>
-              <div className="mt-2 flex items-center gap-4 text-[11px] font-semibold text-neutral-500">
+              <div className="mt-1 flex items-center gap-4 text-[10px] font-semibold text-neutral-500">
                 <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-yellow-400" /> Entradas</span>
                 <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 bg-neutral-950" /> Concluídas</span>
               </div>
@@ -285,13 +262,13 @@ export function JuridicoDashboard() {
             <select
               value={periodo}
               onChange={(event) => setPeriodo(event.target.value as Periodo)}
-              className="h-9 rounded-xl border border-neutral-200 bg-white px-3 text-xs font-bold text-neutral-700 outline-none focus:border-yellow-400"
+              className="h-8 rounded-lg border border-neutral-200 bg-white px-2.5 text-[11px] font-bold text-neutral-700 outline-none focus:border-yellow-400"
               aria-label="Período do gráfico"
             >
               {PERIODOS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
             </select>
           </div>
-          <div className="mt-4 h-[265px] w-full">
+          <div className="mt-2 h-[240px] min-h-0 w-full xl:h-auto xl:flex-1">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={movement} margin={{ top: 8, right: 4, left: -24, bottom: 0 }}>
                 <CartesianGrid stroke="#ECECEC" strokeDasharray="3 4" vertical={false} />
@@ -308,14 +285,14 @@ export function JuridicoDashboard() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm sm:p-5 xl:col-span-3">
+        <div className="flex min-h-[300px] flex-col rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm xl:col-span-3 xl:h-full xl:min-h-0 xl:overflow-hidden">
           <h2 className="text-sm font-extrabold text-neutral-950">Documentos por status</h2>
           {documentStatus.total ? (
             <>
-              <div className="relative mx-auto mt-3 h-[170px] max-w-[230px]">
+              <div className="relative mx-auto mt-1.5 h-[132px] w-full max-w-[190px] shrink-0 xl:h-[118px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={documentStatus.items} dataKey="value" nameKey="label" innerRadius={54} outerRadius={76} paddingAngle={1} stroke="none">
+                    <Pie data={documentStatus.items} dataKey="value" nameKey="label" innerRadius={40} outerRadius={57} paddingAngle={1} stroke="none">
                       {documentStatus.items.map((item) => <Cell key={item.key} fill={item.color} />)}
                     </Pie>
                     <Tooltip contentStyle={{ borderRadius: 12, borderColor: "#E5E5E5", fontSize: 12 }} />
@@ -323,11 +300,11 @@ export function JuridicoDashboard() {
                 </ResponsiveContainer>
                 <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
                   <span className="text-[10px] font-semibold text-neutral-500">Total</span>
-                  <strong className="text-2xl font-black text-neutral-950">{documentStatus.total}</strong>
+                  <strong className="text-xl font-black text-neutral-950">{documentStatus.total}</strong>
                   <span className="text-[10px] text-neutral-500">documentos</span>
                 </div>
               </div>
-              <div className="space-y-2.5">
+              <div className="space-y-1.5">
                 {documentStatus.items.map((item) => (
                   <div key={item.key} className="flex items-center gap-2 text-xs">
                     <span className="h-2 w-2 rounded-full" style={{ backgroundColor: item.color }} />
@@ -342,13 +319,13 @@ export function JuridicoDashboard() {
           <CardFooterLink to="/admin/verificacoes" label="Ver relatório completo" />
         </div>
 
-        <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm sm:p-5 xl:col-span-3">
+        <div className="flex min-h-[300px] flex-col rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm xl:col-span-3 xl:h-full xl:min-h-0 xl:overflow-hidden">
           <h2 className="text-sm font-extrabold text-neutral-950">Docs pendentes por origem</h2>
           {pendingByOrigin.length ? (
-            <div className="mt-5 space-y-4">
+            <div className="mt-3 space-y-2.5 xl:min-h-0 xl:flex-1">
               {pendingByOrigin.map((item) => (
                 <div key={item.name}>
-                  <div className="mb-1.5 flex items-center justify-between gap-3 text-xs">
+                  <div className="mb-1 flex items-center justify-between gap-3 text-[11px]">
                     <span className="truncate font-medium text-neutral-700">{item.name}</span>
                     <strong className="text-neutral-950">{item.value}</strong>
                   </div>
@@ -366,11 +343,11 @@ export function JuridicoDashboard() {
         </div>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-12">
-        <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm xl:col-span-6">
-          <div className="border-b border-neutral-100 px-4 py-4 sm:px-5">
+      <section className="grid min-h-0 gap-3 xl:h-full xl:grid-cols-12">
+        <div className="flex min-h-[280px] flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm xl:col-span-6 xl:h-full xl:min-h-0">
+          <div className="shrink-0 border-b border-neutral-100 px-3 py-2.5">
             <h2 className="text-sm font-extrabold text-neutral-950">Prioridades de análise</h2>
-            <p className="mt-1 text-xs text-neutral-500">Processos ordenados pelos que estão aguardando há mais tempo.</p>
+            <p className="mt-0.5 text-[10px] text-neutral-500">Processos ordenados pelos que estão aguardando há mais tempo.</p>
           </div>
           <div className="divide-y divide-neutral-100 md:hidden">
             {priorities.length ? priorities.map((item) => (
@@ -392,33 +369,33 @@ export function JuridicoDashboard() {
               </div>
             )) : <EmptyState />}
           </div>
-          <div className="hidden overflow-x-auto md:block">
+          <div className="hidden min-h-0 flex-1 overflow-hidden md:block">
             <Table>
               <TableHeader className="bg-neutral-50/80">
                 <TableRow>
-                  <TableHead className="pl-5 text-[10px] uppercase tracking-wider">Inquilino</TableHead>
-                  <TableHead className="text-[10px] uppercase tracking-wider">CPF</TableHead>
-                  <TableHead className="text-[10px] uppercase tracking-wider">Origem</TableHead>
-                  <TableHead className="text-[10px] uppercase tracking-wider">Status</TableHead>
-                  <TableHead className="text-[10px] uppercase tracking-wider">Aguardando</TableHead>
-                  <TableHead className="pr-4 text-right text-[10px] uppercase tracking-wider">Ações</TableHead>
+                  <TableHead className="h-7 py-1 pl-3 text-[9px] uppercase tracking-wider">Inquilino</TableHead>
+                  <TableHead className="h-7 py-1 text-[9px] uppercase tracking-wider">CPF</TableHead>
+                  <TableHead className="h-7 py-1 text-[9px] uppercase tracking-wider">Origem</TableHead>
+                  <TableHead className="h-7 py-1 text-[9px] uppercase tracking-wider">Status</TableHead>
+                  <TableHead className="h-7 py-1 text-[9px] uppercase tracking-wider">Aguardando</TableHead>
+                  <TableHead className="h-7 py-1 pr-3 text-right text-[9px] uppercase tracking-wider">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {priorities.length ? priorities.map((item) => (
                   <TableRow key={item.id}>
-                    <TableCell className="max-w-[180px] truncate pl-5 text-xs font-bold">{item.tenant_name || "—"}</TableCell>
-                    <TableCell className="whitespace-nowrap text-[11px] text-neutral-500">{item.tenant_document || "—"}</TableCell>
-                    <TableCell className="max-w-[150px] truncate text-[11px] text-neutral-500">{originName(item)}</TableCell>
-                    <TableCell><ConsultaStatusBadge item={item} /></TableCell>
-                    <TableCell className="whitespace-nowrap text-[11px] font-semibold text-neutral-600">{elapsedTime(item.created_at)}</TableCell>
-                    <TableCell className="pr-4 text-right">
-                      <Button asChild variant="ghost" size="icon" className="h-8 w-8">
+                    <TableCell className="max-w-[180px] truncate py-1.5 pl-3 text-[11px] font-bold">{item.tenant_name || "—"}</TableCell>
+                    <TableCell className="whitespace-nowrap py-1.5 text-[10px] text-neutral-500">{item.tenant_document || "—"}</TableCell>
+                    <TableCell className="max-w-[150px] truncate py-1.5 text-[10px] text-neutral-500">{originName(item)}</TableCell>
+                    <TableCell className="py-1.5"><ConsultaStatusBadge item={item} /></TableCell>
+                    <TableCell className="whitespace-nowrap py-1.5 text-[10px] font-semibold text-neutral-600">{elapsedTime(item.created_at)}</TableCell>
+                    <TableCell className="py-1.5 pr-3 text-right">
+                      <Button asChild variant="ghost" size="icon" className="h-7 w-7">
                         <Link to="/consultas/$id/resultado" params={{ id: item.id }} aria-label={`Visualizar ${item.tenant_name || "processo"}`}><Eye size={15} /></Link>
                       </Button>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Mais opções"><MoreVertical size={15} /></Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Mais opções"><MoreVertical size={14} /></Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem asChild><Link to="/consultas/$id/resultado" params={{ id: item.id }}>Ver detalhes</Link></DropdownMenuItem>
@@ -434,17 +411,17 @@ export function JuridicoDashboard() {
           <CardFooterLink to="/admin/aprovacoes" label="Ver todas as prioridades" />
         </div>
 
-        <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm sm:p-5 xl:col-span-3">
+        <div className="flex min-h-[280px] flex-col rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm xl:col-span-3 xl:h-full xl:min-h-0 xl:overflow-hidden">
           <h2 className="text-sm font-extrabold text-neutral-950">Contratos próximos do vencimento</h2>
           {expiringContracts.length ? (
-            <div className="mt-3 divide-y divide-neutral-100">
+            <div className="mt-1.5 min-h-0 flex-1 divide-y divide-neutral-100 overflow-hidden">
               {expiringContracts.map((item) => (
-                <Link key={item.id} to="/apolices/$id" params={{ id: item.id }} className="group flex items-center gap-3 py-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600"><CalendarDays size={17} /></span>
+                <Link key={item.id} to="/apolices/$id" params={{ id: item.id }} className="group flex items-center gap-2 py-1.5">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600"><CalendarDays size={15} /></span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-xs font-extrabold text-neutral-950">Contrato #{item.numero}</span>
-                    <span className="mt-0.5 block truncate text-[11px] text-neutral-500">{item.consulta?.tenant_name || "Inquilino não informado"}</span>
-                    <span className="block text-[10px] text-neutral-400">Vencimento: {formatDate(item.vigencia_fim)}</span>
+                    <span className="block truncate text-[10px] text-neutral-500">{item.consulta?.tenant_name || "Inquilino não informado"}</span>
+                    <span className="block text-[9px] text-neutral-400">Vencimento: {formatDate(item.vigencia_fim)}</span>
                   </span>
                   <Badge className="border border-amber-200 bg-amber-50 text-[10px] font-bold text-amber-700 shadow-none hover:bg-amber-50">{item.days} dias</Badge>
                 </Link>
@@ -454,15 +431,15 @@ export function JuridicoDashboard() {
           <CardFooterLink to="/admin/contratos" label="Ver todos os contratos" />
         </div>
 
-        <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm sm:p-5 xl:col-span-3">
+        <div className="flex min-h-[280px] flex-col rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm xl:col-span-3 xl:h-full xl:min-h-0 xl:overflow-hidden">
           <h2 className="text-sm font-extrabold text-neutral-950">Últimas atividades</h2>
           {activities.length ? (
-            <div className="mt-3 divide-y divide-neutral-100">
+            <div className="mt-1.5 min-h-0 flex-1 divide-y divide-neutral-100 overflow-hidden">
               {activities.map((item) => {
                 const Icon = item.Icon;
                 return (
-                  <Link key={item.id} to={item.to} className="flex items-start gap-3 py-3">
-                    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${toneClasses[item.tone].soft} ${toneClasses[item.tone].text}`}><Icon size={15} /></span>
+                  <Link key={item.id} to={item.to} className="flex items-start gap-2 py-1.5">
+                    <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${toneClasses[item.tone].soft} ${toneClasses[item.tone].text}`}><Icon size={14} /></span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-xs font-extrabold text-neutral-950">{item.title}</span>
                       <span className="mt-0.5 block truncate text-[10px] text-neutral-500">{item.detail}</span>
@@ -494,17 +471,17 @@ function StatCard({
   comparison?: string | null;
 }) {
   return (
-    <div className="min-h-[126px] rounded-2xl border border-neutral-200 bg-white p-3.5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-      <div className="flex items-start gap-2.5">
-        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${toneClasses[tone].soft} ${toneClasses[tone].text}`}>
-          <Icon size={18} strokeWidth={1.8} />
+    <div className="relative min-h-[108px] rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md xl:h-full xl:min-h-0 xl:overflow-hidden xl:p-2.5">
+      <div className="flex items-start gap-2">
+        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${toneClasses[tone].soft} ${toneClasses[tone].text}`}>
+          <Icon size={16} strokeWidth={1.8} />
         </span>
-        <div className="min-w-0 pt-0.5">
-          <p className="min-h-7 text-[10px] font-bold leading-3.5 text-neutral-600">{label}</p>
-          <strong className="mt-0.5 block text-2xl font-black tabular-nums tracking-tight text-neutral-950">{value}</strong>
+        <div className="min-w-0">
+          <p className="min-h-6 text-[9px] font-bold leading-3 text-neutral-600">{label}</p>
+          <strong className="block text-xl font-black tabular-nums tracking-tight text-neutral-950">{value}</strong>
         </div>
       </div>
-      {comparison ? <p className={`mt-2 text-[9px] font-bold ${comparison.startsWith("-") ? "text-red-500" : "text-emerald-600"}`}>{comparison}</p> : null}
+      {comparison ? <p className={`mt-1 text-[8px] font-bold xl:absolute xl:bottom-2.5 xl:left-2.5 ${comparison.startsWith("-") ? "text-red-500" : "text-emerald-600"}`}>{comparison}</p> : null}
     </div>
   );
 }
@@ -520,28 +497,32 @@ function ConsultaStatusBadge({ item }: { item: JuridicoConsulta }) {
 
 function CardFooterLink({ to, label }: { to: string; label: string }) {
   return (
-    <Link to={to} className="mt-4 flex h-9 items-center justify-center gap-2 rounded-xl border border-neutral-200 text-[11px] font-bold text-neutral-700 transition hover:border-yellow-300 hover:bg-yellow-50 hover:text-neutral-950">
+    <Link to={to} className="mt-3 flex h-8 shrink-0 items-center justify-center gap-2 rounded-lg border border-neutral-200 text-[10px] font-bold text-neutral-700 transition hover:border-yellow-300 hover:bg-yellow-50 hover:text-neutral-950 xl:mt-auto">
       {label} <ArrowRight size={13} />
     </Link>
   );
 }
 
 function EmptyState() {
-  return <div className="flex min-h-28 items-center justify-center px-4 text-center text-xs text-neutral-400">Nenhum registro encontrado.</div>;
+  return <div className="flex min-h-20 flex-1 items-center justify-center px-4 text-center text-xs text-neutral-400 xl:min-h-0">Nenhum registro encontrado.</div>;
 }
 
 function JuridicoDashboardSkeleton() {
   return (
-    <div className="space-y-5 animate-pulse">
-      <div className="space-y-2"><div className="h-8 w-56 rounded-lg bg-neutral-200" /><div className="h-4 w-full max-w-xl rounded bg-neutral-100" /></div>
-      <div className="h-24 rounded-2xl border border-yellow-100 bg-yellow-50/60" />
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
-        {Array.from({ length: 8 }).map((_, index) => <div key={index} className="h-[126px] rounded-2xl border border-neutral-100 bg-white" />)}
+    <div className="animate-pulse space-y-3 xl:grid xl:h-full xl:min-h-0 xl:grid-rows-[76px_94px_minmax(0,1.08fr)_minmax(0,0.92fr)] xl:gap-3 xl:space-y-0">
+      <div className="rounded-2xl border border-yellow-100 bg-yellow-50/60" />
+      <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4 xl:grid-cols-8">
+        {Array.from({ length: 8 }).map((_, index) => <div key={index} className="h-[108px] rounded-2xl border border-neutral-100 bg-white xl:h-full" />)}
       </div>
-      <div className="grid gap-4 xl:grid-cols-12">
-        <div className="h-80 rounded-2xl border border-neutral-100 bg-white xl:col-span-6" />
-        <div className="h-80 rounded-2xl border border-neutral-100 bg-white xl:col-span-3" />
-        <div className="h-80 rounded-2xl border border-neutral-100 bg-white xl:col-span-3" />
+      <div className="grid gap-3 xl:h-full xl:grid-cols-12">
+        <div className="h-72 rounded-2xl border border-neutral-100 bg-white xl:col-span-6 xl:h-full" />
+        <div className="h-72 rounded-2xl border border-neutral-100 bg-white xl:col-span-3 xl:h-full" />
+        <div className="h-72 rounded-2xl border border-neutral-100 bg-white xl:col-span-3 xl:h-full" />
+      </div>
+      <div className="grid gap-3 xl:h-full xl:grid-cols-12">
+        <div className="h-64 rounded-2xl border border-neutral-100 bg-white xl:col-span-6 xl:h-full" />
+        <div className="h-64 rounded-2xl border border-neutral-100 bg-white xl:col-span-3 xl:h-full" />
+        <div className="h-64 rounded-2xl border border-neutral-100 bg-white xl:col-span-3 xl:h-full" />
       </div>
     </div>
   );
@@ -609,7 +590,7 @@ function buildActivities(data: JuridicoDashboardData, originsById: Map<string, {
   for (const claim of data.sinistros) {
     items.push({ id: `claim-${claim.id}`, title: "Sinistro aberto", detail: `${claim.apolice?.numero ? `Contrato ${claim.apolice.numero}` : "Contrato não informado"}${claim.apolice?.consulta?.tenant_name ? ` · ${claim.apolice.consulta.tenant_name}` : ""}`, date: claim.created_at, tone: "purple", Icon: ShieldAlert, to: "/sinistros" });
   }
-  return items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 6);
+  return items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 4);
 }
 
 function isAwaitingReview(item: JuridicoConsulta) {
