@@ -149,23 +149,12 @@ function Metas() {
         .filter(([current, target]) => Number(current) >= Number(target)).length
     : 0;
 
-  useEffect(() => {
-    const previousHtmlOverflow = document.documentElement.style.overflowY;
-    const previousBodyOverflow = document.body.style.overflowY;
-    document.documentElement.style.overflowY = "hidden";
-    document.body.style.overflowY = "hidden";
-    return () => {
-      document.documentElement.style.overflowY = previousHtmlOverflow;
-      document.body.style.overflowY = previousBodyOverflow;
-    };
-  }, []);
-
   return (
     <DashboardLayout lockDesktopViewport>
-      <main className="flex h-full min-h-0 flex-col gap-3 overflow-hidden text-neutral-950">
-        <section className="relative shrink-0 overflow-hidden rounded-[22px] border border-yellow-300 bg-[radial-gradient(circle_at_92%_20%,rgba(250,204,21,0.25),transparent_24%),linear-gradient(115deg,#ffffff_0%,#fffef8_60%,#fff4b3_100%)] px-5 py-4 shadow-sm sm:px-6">
+      <main className="flex min-h-0 flex-col gap-3 overflow-visible text-neutral-950 xl:h-full xl:overflow-hidden">
+        <section className="relative shrink-0 overflow-hidden rounded-[22px] border border-yellow-300 bg-[radial-gradient(circle_at_92%_20%,rgba(250,204,21,0.25),transparent_24%),linear-gradient(115deg,#ffffff_0%,#fffef8_60%,#fff4b3_100%)] px-4 py-4 shadow-sm sm:px-6">
           <div className="pointer-events-none absolute -right-10 -top-24 h-48 w-48 rounded-full border-[24px] border-yellow-400/15" />
-          <div className="relative flex items-center justify-between gap-4">
+          <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
             <div className="min-w-0">
               <span className="inline-flex items-center gap-2 rounded-full border border-yellow-400 bg-white/80 px-3 py-1 text-[9px] font-black uppercase tracking-[0.18em] text-yellow-700 shadow-sm">
                 <CalendarDays className="h-3 w-3" /> {MONTHS[month - 1]} de {year}
@@ -173,11 +162,11 @@ function Metas() {
               <h1 className="mt-2 text-2xl font-black tracking-[-0.045em] sm:text-3xl">
                 Minhas <span className="text-yellow-400">Metas</span>
               </h1>
-              <p className="mt-1 max-w-2xl truncate text-xs font-medium text-neutral-600 sm:text-sm">
+              <p className="mt-1 max-w-2xl text-xs font-medium leading-5 text-neutral-600 sm:text-sm">
                 Seu desempenho individual do mês, com metas e resultados exclusivos da sua conta.
               </p>
             </div>
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="flex w-full shrink-0 items-center justify-between gap-2 sm:w-auto sm:justify-end">
               {currentPosition && (
                 <div className="rounded-xl border border-yellow-300 bg-white/85 px-3 py-2 text-right shadow-sm">
                   <p className="text-[8px] font-black uppercase tracking-[0.14em] text-neutral-400">
@@ -214,7 +203,7 @@ function Metas() {
             )}
 
             <section
-              className="grid shrink-0 grid-cols-3 gap-3"
+              className="grid shrink-0 grid-cols-1 gap-3 sm:grid-cols-3"
               aria-label="Metas individuais do mês"
             >
               <GoalCard
@@ -237,8 +226,8 @@ function Metas() {
               />
             </section>
 
-            <section className="grid min-h-0 flex-1 items-stretch gap-3 lg:grid-cols-[0.82fr_1.18fr_1fr]">
-              <Card className="flex min-h-0 flex-col overflow-hidden border-neutral-200 shadow-sm">
+            <section className="grid min-h-0 flex-1 items-stretch gap-3 xl:grid-cols-[0.82fr_1.18fr_1fr]">
+              <Card className="flex min-h-[300px] flex-col overflow-hidden border-neutral-200 shadow-sm xl:min-h-0">
                 <CardHeader className="shrink-0 border-b border-neutral-100 px-4 py-3">
                   <CardTitle className="flex items-center gap-2 text-sm">
                     <Target className="h-4 w-4 text-yellow-500" /> Progresso individual
@@ -260,7 +249,7 @@ function Metas() {
                 </CardContent>
               </Card>
 
-              <Card className="flex min-h-0 flex-col overflow-hidden border-neutral-200 shadow-sm">
+              <Card className="flex min-h-[330px] flex-col overflow-hidden border-neutral-200 shadow-sm xl:min-h-0">
                 <CardHeader className="shrink-0 border-b border-neutral-100 bg-[linear-gradient(120deg,#fffdf2,#ffffff)] px-4 py-3">
                   <div className="flex items-center justify-between gap-3">
                     <CardTitle className="flex items-center gap-2 text-sm">
@@ -279,7 +268,7 @@ function Metas() {
                 </CardContent>
               </Card>
 
-              <Card className="flex min-h-0 flex-col overflow-hidden border-yellow-200 shadow-sm">
+              <Card className="flex min-h-[280px] flex-col overflow-hidden border-yellow-200 shadow-sm xl:min-h-0">
                 <CardHeader className="shrink-0 border-b border-yellow-100 bg-yellow-50/50 px-4 py-3">
                   <div className="flex items-center justify-between gap-3">
                     <CardTitle className="flex items-center gap-2 text-sm">
@@ -293,7 +282,7 @@ function Metas() {
                     </Badge>
                   </div>
                 </CardHeader>
-                <CardContent className="min-h-0 flex-1 overflow-hidden p-0">
+                <CardContent className="min-h-0 flex-1 overflow-visible p-0 xl:overflow-hidden">
                   {ranking.length === 0 ? (
                     <div className="p-3">
                       <EmptyBlock
@@ -302,7 +291,7 @@ function Metas() {
                       />
                     </div>
                   ) : (
-                    <div className="h-full min-h-0 overflow-y-auto overscroll-contain">
+                    <div className="min-h-0 overflow-visible xl:h-full xl:overflow-y-auto xl:overscroll-contain">
                       <ol className="divide-y divide-neutral-100">
                         {ranking.map((seller) => (
                           <TeamHighlight
@@ -348,7 +337,7 @@ function GoalCard({
             {percentage}%
           </span>
         </div>
-        <p className="mt-2 truncate text-xs font-black text-neutral-700 sm:text-sm">{label}</p>
+        <p className="mt-2 text-xs font-black leading-5 text-neutral-700 sm:text-sm">{label}</p>
         <p className="mt-0.5 text-2xl font-black tracking-tight text-neutral-950">
           {current} <span className="text-sm text-neutral-400">/ {target ?? 0}</span>
         </p>
@@ -543,12 +532,12 @@ function EmptyBlock({ icon: Icon, text }: { icon: typeof Trophy; text: string })
 function MetasSkeleton() {
   return (
     <div className="min-h-0 flex-1 animate-pulse space-y-3">
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {[1, 2, 3].map((item) => (
           <div key={item} className="h-36 rounded-2xl bg-neutral-100" />
         ))}
       </div>
-      <div className="grid h-[calc(100%-9.75rem)] grid-cols-3 gap-3">
+      <div className="grid gap-3 xl:h-[calc(100%-9.75rem)] xl:grid-cols-3">
         {[1, 2, 3].map((item) => (
           <div key={item} className="rounded-2xl bg-neutral-100" />
         ))}

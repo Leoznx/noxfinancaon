@@ -98,18 +98,6 @@ function Ranking() {
     void carregar();
   }, [carregar]);
 
-  useEffect(() => {
-    const htmlOverflow = document.documentElement.style.overflow;
-    const bodyOverflow = document.body.style.overflow;
-    document.documentElement.style.overflow = "hidden";
-    document.body.style.overflow = "hidden";
-
-    return () => {
-      document.documentElement.style.overflow = htmlOverflow;
-      document.body.style.overflow = bodyOverflow;
-    };
-  }, []);
-
   const resumo = useMemo(() => {
     const contratos = linhas.reduce((total, linha) => total + linha.contratosFechados, 0);
     const leads = linhas.reduce((total, linha) => total + linha.totalLeads, 0);
@@ -137,7 +125,7 @@ function Ranking() {
 
   return (
     <DashboardLayout lockDesktopViewport>
-      <div className="relative -m-4 flex h-[calc(100dvh-4rem)] w-[calc(100%+2rem)] flex-col overflow-hidden bg-[radial-gradient(circle_at_82%_74%,rgba(250,204,21,0.12),transparent_28%),linear-gradient(180deg,#fffef7_0%,#fffbeb_100%)] text-neutral-950 sm:-m-6 sm:w-[calc(100%+3rem)] lg:-m-10 lg:w-[calc(100%+5rem)] xl:-m-6 xl:w-[calc(100%+3rem)]">
+      <div className="relative -m-4 flex min-h-[calc(100dvh-4rem)] w-[calc(100%+2rem)] flex-col overflow-visible bg-[radial-gradient(circle_at_82%_74%,rgba(250,204,21,0.12),transparent_28%),linear-gradient(180deg,#fffef7_0%,#fffbeb_100%)] text-neutral-950 sm:-m-6 sm:w-[calc(100%+3rem)] lg:-m-10 lg:w-[calc(100%+5rem)] xl:-m-6 xl:h-[calc(100dvh-4rem)] xl:min-h-0 xl:w-[calc(100%+3rem)] xl:overflow-hidden">
         <section className="relative shrink-0 overflow-hidden border-b border-yellow-300 bg-[radial-gradient(circle_at_92%_8%,rgba(250,204,21,0.30),transparent_26%),linear-gradient(115deg,#ffffff_0%,#fffef7_62%,#fff2a8_100%)] px-4 py-3 sm:px-6 lg:px-8 lg:py-4">
           <div className="pointer-events-none absolute -right-12 -top-36 h-72 w-72 rounded-full border-[30px] border-yellow-400/15" />
           <div className="relative flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
@@ -182,7 +170,7 @@ function Ranking() {
           </div>
         </section>
 
-        <div className="flex min-h-0 flex-1 flex-col gap-3 p-3 sm:p-4 lg:p-5">
+        <div className="flex flex-col gap-3 p-3 sm:p-4 lg:p-5 xl:min-h-0 xl:flex-1">
           <section className="grid shrink-0 gap-3 sm:grid-cols-2" aria-label="Resumo do período">
             <MetricCard
               icon={Trophy}
@@ -210,7 +198,7 @@ function Ranking() {
             />
           ) : !erro ? (
             <>
-              <section className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+              <section className="relative flex flex-col overflow-visible xl:min-h-0 xl:flex-1 xl:overflow-hidden">
                 <div className="pointer-events-none absolute inset-0 opacity-60 [background-image:radial-gradient(circle,rgba(234,179,8,0.18)_1px,transparent_1px)] [background-size:92px_76px]" />
                 <div className="relative mb-3 flex shrink-0 flex-col gap-2 border-b border-neutral-200 pb-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
@@ -233,7 +221,7 @@ function Ranking() {
                   </Button>
                 </div>
 
-                <div className="relative grid min-h-0 flex-1 items-start gap-4 lg:grid-cols-3 lg:grid-rows-1">
+                <div className="relative grid items-start gap-4 md:grid-cols-3 md:grid-rows-1 xl:min-h-0 xl:flex-1">
                   {podio.map((linha) => (
                     <PodioCard key={linha.id} linha={linha} destaque={linha.id === sellerId} />
                   ))}
@@ -252,7 +240,7 @@ function Ranking() {
                       {linhas.length} vendedores
                     </span>
                   </div>
-                  <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+                  <div className="mt-2 grid gap-2 md:grid-cols-2 xl:flex xl:overflow-x-auto xl:pb-1">
                     {restante.map((linha) => (
                       <LinhaLista key={linha.id} linha={linha} destaque={linha.id === sellerId} />
                     ))}
@@ -302,7 +290,7 @@ function MetricCard({
 
 const PODIO_STYLE = {
   1: {
-    order: "order-1 lg:col-start-2 lg:row-start-1",
+    order: "order-1 md:col-start-2 md:row-start-1",
     card: "mx-auto min-h-[260px] w-full max-w-[360px] border-yellow-400 bg-[linear-gradient(150deg,#fff9d9_0%,#ffffff_52%)] shadow-[0_18px_48px_rgba(234,179,8,0.14)]",
     avatar: "h-20 w-20 border-yellow-400 shadow-[0_0_24px_rgba(250,204,21,0.22)]",
     accent: "text-yellow-600",
@@ -313,7 +301,7 @@ const PODIO_STYLE = {
     trophyClass: "-bottom-6 -right-3 h-28 sm:-right-5 sm:h-28",
   },
   2: {
-    order: "order-2 lg:col-start-1 lg:row-start-1 lg:translate-y-6",
+    order: "order-2 md:col-start-1 md:row-start-1 md:translate-y-6",
     card: "mx-auto min-h-[232px] w-full max-w-[340px] border-slate-300 bg-[linear-gradient(150deg,#f1f5f9_0%,#ffffff_52%)] shadow-[0_14px_38px_rgba(15,23,42,0.07)]",
     avatar: "h-16 w-16 border-slate-300",
     accent: "text-slate-600",
@@ -324,7 +312,7 @@ const PODIO_STYLE = {
     trophyClass: "-bottom-5 -right-3 h-24 sm:-right-4 sm:h-24",
   },
   3: {
-    order: "order-3 lg:col-start-3 lg:row-start-1 lg:translate-y-10",
+    order: "order-3 md:col-start-3 md:row-start-1 md:translate-y-10",
     card: "mx-auto min-h-[232px] w-full max-w-[340px] border-orange-300 bg-[linear-gradient(150deg,#fff3e8_0%,#ffffff_52%)] shadow-[0_14px_38px_rgba(154,52,18,0.08)]",
     avatar: "h-16 w-16 border-orange-500",
     accent: "text-orange-700",
@@ -410,7 +398,7 @@ function SellerAvatar({ linha, className = "" }: { linha: LinhaRanking; classNam
 function LinhaLista({ linha, destaque }: { linha: LinhaRanking; destaque: boolean }) {
   return (
     <article
-      className={`grid w-[300px] shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-xl border border-neutral-200 px-3 py-2 transition ${destaque ? "bg-yellow-50" : "bg-white/80 hover:bg-white"}`}
+      className={`grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-xl border border-neutral-200 px-3 py-2 transition xl:w-[300px] xl:shrink-0 ${destaque ? "bg-yellow-50" : "bg-white/80 hover:bg-white"}`}
     >
       <span
         className={`flex h-9 w-9 items-center justify-center rounded-full border text-xs font-black ${destaque ? "border-yellow-400 bg-yellow-100 text-yellow-700" : "border-neutral-200 bg-neutral-50 text-neutral-600"}`}
@@ -448,7 +436,7 @@ function RankingSkeleton() {
   return (
     <div className="min-h-0 flex-1 animate-pulse border-y border-neutral-200 bg-white/50 p-4">
       <div className="h-6 w-52 rounded bg-neutral-200" />
-      <div className="mt-4 grid items-end gap-4 lg:grid-cols-3">
+      <div className="mt-4 grid items-end gap-4 md:grid-cols-3">
         <div className="h-[232px] rounded-[20px] bg-neutral-100" />
         <div className="h-[260px] rounded-[20px] bg-yellow-100" />
         <div className="h-[232px] rounded-[20px] bg-neutral-100" />
