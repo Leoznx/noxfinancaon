@@ -4,9 +4,12 @@ import {
   Building2,
   CheckCircle2,
   Clock3,
+  CreditCard,
   Home,
   KeyRound,
   LockKeyhole,
+  MousePointerClick,
+  Search,
   ShieldCheck,
   UserRound,
   Users,
@@ -34,7 +37,6 @@ export const Route = createFileRoute("/vendedor/contas-demo")({
 const PROFILE_PRESENTATION: Record<
   DemoProfileKey,
   {
-    index: string;
     icon: LucideIcon;
     eyebrow: string;
     description: string;
@@ -42,35 +44,27 @@ const PROFILE_PRESENTATION: Record<
   }
 > = {
   proprietario: {
-    index: "01",
     icon: Home,
     eyebrow: "Gestão do imóvel",
-    description:
-      "Acompanhe consultas, contratos ativos, faturas e sinistros pelo olhar do proprietário.",
+    description: "Consultas, contratos, faturas e sinistros pelo olhar do proprietário.",
     highlights: ["Consultas", "Contratos", "Sinistros"],
   },
   corretor: {
-    index: "02",
     icon: UserRound,
     eyebrow: "Operação comercial",
-    description:
-      "Simule crédito e percorra a jornada comercial completa usada pelo corretor parceiro.",
+    description: "Simulação de crédito e jornada comercial completa do corretor parceiro.",
     highlights: ["Simulação", "Carteira", "Comissões"],
   },
   imobiliaria: {
-    index: "03",
     icon: Building2,
     eyebrow: "Gestão de carteira",
-    description:
-      "Explore a equipe de corretores, os contratos e a cobrança consolidada da imobiliária.",
+    description: "Equipe de corretores, contratos e cobrança consolidada da imobiliária.",
     highlights: ["Equipe", "Cobranças", "Contratos"],
   },
   inquilino: {
-    index: "04",
     icon: Users,
     eyebrow: "Jornada do locatário",
-    description:
-      "Confira documentos, faturas e o acompanhamento do seguro pela visão do inquilino.",
+    description: "Documentos, faturas e acompanhamento do seguro pela visão do inquilino.",
     highlights: ["Seguro", "Documentos", "Faturas"],
   },
 };
@@ -81,26 +75,42 @@ const SCENARIO_PRESENTATION: Record<
 > = {
   aprovado: {
     icon: CheckCircle2,
-    iconClass: "text-emerald-400",
+    iconClass: "text-emerald-600",
     caption: "Crédito liberado",
   },
   recusado: {
     icon: XCircle,
-    iconClass: "text-red-400",
-    caption: "Crédito não liberado",
+    iconClass: "text-red-500",
+    caption: "Crédito recusado",
   },
   pendente: {
     icon: Clock3,
     iconClass: "text-yellow-600",
-    caption: "Análise demonstrativa",
+    caption: "Em análise",
   },
 };
 
-const HERO_FACTS = [
-  ["04", "perfis reais"],
-  ["01", "sessão isolada"],
-  ["0", "consultas reais"],
-] as const;
+const SCRIPT_STEPS: Array<{
+  icon: LucideIcon;
+  title: string;
+  text: string;
+}> = [
+  {
+    icon: MousePointerClick,
+    title: "Escolha uma conta",
+    text: "Abra a visão que combina com o cliente.",
+  },
+  {
+    icon: Search,
+    title: "Simule o crédito",
+    text: "Use um dos CPFs demonstrativos abaixo.",
+  },
+  {
+    icon: CreditCard,
+    title: "Conclua o fluxo",
+    text: "Avance até pagamento e contrato fake.",
+  },
+];
 
 function DemoAccountsPage() {
   function openDemo(profile: DemoProfileKey) {
@@ -117,169 +127,158 @@ function DemoAccountsPage() {
 
   return (
     <DashboardLayout>
-      <div className="mx-auto w-full max-w-[1360px] space-y-6 pb-10">
-        <section className="overflow-hidden rounded-[30px] border border-neutral-200 bg-white shadow-[0_18px_55px_rgba(0,0,0,0.06)]">
-          <div className="grid lg:grid-cols-[minmax(0,1.45fr)_minmax(310px,0.55fr)]">
-            <div className="p-6 sm:p-9 lg:p-11">
-              <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.2em] text-neutral-500">
-                <KeyRound className="h-4 w-4 text-yellow-500" /> Central de demonstração
-              </div>
-              <h1 className="mt-6 max-w-4xl text-4xl font-black leading-[0.98] tracking-[-0.055em] text-neutral-950 sm:text-5xl lg:text-[58px]">
-                Entre no produto pelos olhos de
-                <span className="ml-2">cada cliente.</span>
-              </h1>
-              <p className="mt-6 max-w-2xl text-sm font-medium leading-7 text-neutral-600 sm:text-base">
-                Quatro pontos de vista, o mesmo produto real. Escolha um ambiente e conduza a
-                apresentação sem cadastro, preparação ou risco de acionar uma consulta verdadeira.
-              </p>
+      <div className="mx-auto w-full max-w-[1260px] space-y-5 pb-10">
+        <section className="grid overflow-hidden rounded-[26px] border border-neutral-200 bg-white shadow-[0_14px_42px_rgba(0,0,0,0.05)] lg:grid-cols-[minmax(0,1fr)_280px]">
+          <div className="p-6 sm:p-8">
+            <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">
+              <KeyRound className="h-4 w-4 text-yellow-600" /> Central de demonstração
             </div>
-
-            <div className="relative flex min-h-[250px] flex-col justify-between overflow-hidden border-t border-neutral-200 bg-yellow-300 p-7 lg:border-l lg:border-t-0 lg:p-9">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-black uppercase tracking-[0.2em] text-neutral-800">
-                  Acesso do vendedor
-                </span>
-                <ShieldCheck className="h-8 w-8 text-neutral-950" />
-              </div>
-              <div>
-                <p className="text-[92px] font-black leading-[0.72] tracking-[-0.09em] text-neutral-950 sm:text-[112px]">
-                  04
-                </p>
-                <p className="mt-5 max-w-[230px] text-sm font-black uppercase leading-5 tracking-[0.13em] text-neutral-900">
-                  ambientes prontos para apresentar
-                </p>
-              </div>
-              <KeyRound className="absolute -bottom-8 -right-6 h-36 w-36 rotate-[-12deg] text-black/[0.07]" />
-            </div>
+            <h1 className="mt-4 max-w-3xl text-3xl font-black leading-[1.02] tracking-[-0.045em] text-neutral-950 sm:text-4xl lg:text-[42px]">
+              Entre no produto pelos olhos de cada cliente.
+            </h1>
+            <p className="mt-4 max-w-2xl text-sm font-medium leading-6 text-neutral-600">
+              Escolha um perfil e apresente todo o fluxo sem cadastro ou consulta real.
+            </p>
           </div>
 
-          <div className="grid divide-y divide-neutral-200 border-t border-neutral-200 bg-yellow-50 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-            {HERO_FACTS.map(([value, label]) => (
-              <div key={label} className="flex items-baseline gap-3 px-6 py-4 sm:px-8">
-                <span className="text-2xl font-black tracking-[-0.04em] text-neutral-950">{value}</span>
-                <span className="text-[10px] font-black uppercase tracking-[0.16em] text-neutral-500">
-                  {label}
-                </span>
-              </div>
-            ))}
+          <div className="relative flex min-h-[150px] flex-col justify-between overflow-hidden border-t border-neutral-200 bg-yellow-300 p-6 lg:border-l lg:border-t-0">
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-[10px] font-black uppercase tracking-[0.18em] text-neutral-800">
+                Acesso do vendedor
+              </span>
+              <ShieldCheck className="h-7 w-7 text-neutral-950" />
+            </div>
+            <div className="relative z-10 flex items-end gap-3">
+              <span className="text-6xl font-black leading-none tracking-[-0.08em] text-neutral-950">4</span>
+              <span className="max-w-[120px] pb-1 text-[11px] font-black uppercase leading-4 tracking-[0.12em] text-neutral-900">
+                contas prontas
+              </span>
+            </div>
+            <KeyRound className="absolute -bottom-7 -right-5 h-28 w-28 rotate-[-12deg] text-black/[0.06]" />
           </div>
         </section>
 
-        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.55fr)_minmax(330px,0.65fr)]">
-          <section className="overflow-hidden rounded-[26px] border border-neutral-200 bg-white shadow-sm">
-            <div className="flex flex-col gap-3 border-b border-neutral-200 px-5 py-5 sm:flex-row sm:items-end sm:justify-between sm:px-7">
+        <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_310px]">
+          <section className="overflow-hidden rounded-[24px] border border-neutral-200 bg-white shadow-sm">
+            <div className="flex flex-col gap-2 border-b border-neutral-200 px-5 py-5 sm:flex-row sm:items-end sm:justify-between sm:px-6">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-yellow-600">
-                  Ambientes disponíveis
+                <p className="text-[9px] font-black uppercase tracking-[0.2em] text-yellow-700">
+                  Contas disponíveis
                 </p>
-                <h2 className="mt-2 text-2xl font-black tracking-[-0.035em] text-neutral-950">
-                  Escolha o ponto de vista
+                <h2 className="mt-1.5 text-2xl font-black tracking-[-0.035em] text-neutral-950">
+                  Escolha o perfil
                 </h2>
               </div>
-              <p className="max-w-xs text-xs font-semibold leading-5 text-neutral-500">
-                Cada acesso abre em uma nova aba e preserva sua sessão de vendedor.
+              <p className="max-w-[250px] text-xs font-semibold leading-5 text-neutral-500">
+                Cada conta abre em uma nova aba.
               </p>
             </div>
 
-            <div className="divide-y divide-neutral-200">
+            <div className="grid gap-4 p-4 sm:grid-cols-2 sm:p-5">
               {DEMO_PROFILE_KEYS.map((profileKey) => {
                 const profile = DEMO_PROFILES[profileKey];
                 const presentation = PROFILE_PRESENTATION[profileKey];
                 const Icon = presentation.icon;
                 return (
-                  <article
+                  <button
                     key={profileKey}
-                    className="group grid gap-5 px-5 py-6 transition-colors hover:bg-yellow-50 sm:grid-cols-[64px_minmax(0,1fr)_auto] sm:items-center sm:px-7"
+                    type="button"
+                    onClick={() => openDemo(profileKey)}
+                    className="group flex min-h-[290px] flex-col rounded-[22px] border border-neutral-200 bg-white p-5 text-left transition duration-200 hover:-translate-y-1 hover:border-yellow-400 hover:shadow-[0_16px_35px_rgba(0,0,0,0.08)] focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400 sm:aspect-square"
                   >
-                    <div className="flex items-center gap-4 sm:block">
-                      <span className="block text-4xl font-black tracking-[-0.06em] text-neutral-200 transition-colors group-hover:text-yellow-400">
-                        {presentation.index}
+                    <div className="flex items-center gap-4">
+                      <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border-2 border-neutral-900 bg-yellow-50 transition-colors group-hover:bg-yellow-300">
+                        <Icon className="h-8 w-8 text-neutral-950" strokeWidth={1.7} />
                       </span>
-                    </div>
-
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                        <Icon className="h-6 w-6 text-neutral-950" strokeWidth={1.8} />
+                      <div className="min-w-0">
                         <h3 className="text-xl font-black tracking-[-0.025em] text-neutral-950">
                           {profile.label}
                         </h3>
-                        <span className="text-[9px] font-black uppercase tracking-[0.18em] text-yellow-700">
-                          Persona João
-                        </span>
-                      </div>
-                      <p className="mt-1 text-[10px] font-black uppercase tracking-[0.17em] text-neutral-400">
-                        {presentation.eyebrow}
-                      </p>
-                      <p className="mt-3 max-w-xl text-sm font-medium leading-6 text-neutral-600">
-                        {presentation.description}
-                      </p>
-                      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-black uppercase tracking-[0.12em] text-neutral-500">
-                        {presentation.highlights.map((highlight, index) => (
-                          <span key={highlight} className="flex items-center gap-3">
-                            {index > 0 && <span className="h-1 w-1 rounded-full bg-yellow-400" />}
-                            {highlight}
-                          </span>
-                        ))}
+                        <p className="mt-1 text-[9px] font-black uppercase tracking-[0.16em] text-yellow-700">
+                          {presentation.eyebrow}
+                        </p>
                       </div>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => openDemo(profileKey)}
-                      className="flex h-12 items-center justify-center gap-3 rounded-xl bg-yellow-300 px-5 text-xs font-black text-neutral-950 transition hover:bg-yellow-400 sm:min-w-[150px]"
-                    >
+                    <p className="mt-5 text-sm font-medium leading-6 text-neutral-600">
+                      {presentation.description}
+                    </p>
+
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {presentation.highlights.map((highlight) => (
+                        <span
+                          key={highlight}
+                          className="rounded-full border border-neutral-200 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.1em] text-neutral-500"
+                        >
+                          {highlight}
+                        </span>
+                      ))}
+                    </div>
+
+                    <span className="mt-auto flex items-center justify-between border-t border-neutral-200 pt-4 text-xs font-black text-neutral-950">
                       Entrar como {profile.label.toLowerCase()}
-                      <ArrowUpRight className="h-4 w-4" />
-                    </button>
-                  </article>
+                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-yellow-300 transition-transform group-hover:translate-x-1">
+                        <ArrowUpRight className="h-4 w-4" />
+                      </span>
+                    </span>
+                  </button>
                 );
               })}
             </div>
           </section>
 
-          <aside className="overflow-hidden rounded-[26px] border border-neutral-200 bg-white text-neutral-950 shadow-sm lg:sticky lg:top-6">
-            <div className="p-6 sm:p-7">
+          <aside className="overflow-hidden rounded-[24px] border border-neutral-200 bg-white text-neutral-950 shadow-sm lg:sticky lg:top-5">
+            <div className="p-5">
               <div className="flex items-center justify-between gap-4">
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-yellow-700">
-                  Roteiro de apresentação
-                </p>
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-[0.18em] text-yellow-700">
+                    Roteiro rápido
+                  </p>
+                  <h2 className="mt-1.5 text-xl font-black tracking-[-0.03em]">
+                    Apresente em 3 passos
+                  </h2>
+                </div>
                 <KeyRound className="h-6 w-6 text-yellow-600" />
               </div>
-              <h2 className="mt-4 text-2xl font-black leading-tight tracking-[-0.035em]">
-                Mostre o fluxo completo em três movimentos.
-              </h2>
 
-              <ol className="mt-7 space-y-5">
-                {[
-                  ["01", "Escolha o perfil que mais se aproxima do cliente."],
-                  ["02", "Rode um dos CPFs abaixo na simulação de crédito."],
-                  ["03", "Avance pelo plano, dados e pagamento demonstrativo."],
-                ].map(([step, text]) => (
-                  <li key={step} className="grid grid-cols-[34px_1fr] gap-3">
-                    <span className="text-sm font-black text-yellow-700">{step}</span>
-                    <p className="text-sm font-medium leading-6 text-neutral-600">{text}</p>
-                  </li>
-                ))}
-              </ol>
+              <div className="mt-4 space-y-2.5">
+                {SCRIPT_STEPS.map((step) => {
+                  const Icon = step.icon;
+                  return (
+                    <div
+                      key={step.title}
+                      className="flex items-center gap-3 rounded-2xl border border-neutral-200 bg-neutral-50 p-3"
+                    >
+                      <Icon className="h-5 w-5 shrink-0 text-yellow-700" strokeWidth={1.8} />
+                      <div>
+                        <p className="text-xs font-black text-neutral-950">{step.title}</p>
+                        <p className="mt-0.5 text-[10px] font-medium leading-4 text-neutral-500">
+                          {step.text}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
-            <div className="border-y border-neutral-200 px-6 sm:px-7">
+            <div className="border-t border-neutral-200 px-5 py-2">
               {DEMO_CPF_SCENARIOS.map((scenario) => {
                 const presentation = SCENARIO_PRESENTATION[scenario.decision];
                 const Icon = presentation.icon;
                 return (
                   <div
                     key={scenario.cpf}
-                    className="grid grid-cols-[24px_1fr_auto] items-center gap-3 border-b border-neutral-200 py-4 last:border-b-0"
+                    className="flex items-center gap-3 border-b border-neutral-200 py-3 last:border-b-0"
                   >
                     <Icon className={`h-5 w-5 ${presentation.iconClass}`} strokeWidth={1.8} />
-                    <div>
-                      <p className="font-mono text-sm font-black text-neutral-950">{scenario.cpf}</p>
-                      <p className="mt-0.5 text-[10px] font-semibold text-neutral-500">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-mono text-xs font-black text-neutral-950">{scenario.cpf}</p>
+                      <p className="mt-0.5 text-[9px] font-semibold text-neutral-500">
                         {presentation.caption}
                       </p>
                     </div>
-                    <span className="text-[9px] font-black uppercase tracking-[0.14em] text-neutral-500">
+                    <span className="text-[8px] font-black uppercase tracking-[0.1em] text-neutral-500">
                       {scenario.label}
                     </span>
                   </div>
@@ -287,11 +286,10 @@ function DemoAccountsPage() {
               })}
             </div>
 
-            <div className="flex gap-3 bg-yellow-300 p-5 text-neutral-950 sm:px-7">
-              <LockKeyhole className="mt-0.5 h-5 w-5 shrink-0" />
-              <p className="text-xs font-bold leading-5">
-                Sessões isoladas: nenhum cenário aciona a análise de crédito real ou aparece para o
-                administrador.
+            <div className="flex gap-2.5 border-t border-yellow-200 bg-yellow-50 p-4 text-neutral-950">
+              <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0" />
+              <p className="text-[10px] font-bold leading-4">
+                Ambiente isolado, sem consulta real ou registro no painel administrativo.
               </p>
             </div>
           </aside>
