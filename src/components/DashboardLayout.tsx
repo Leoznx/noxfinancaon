@@ -623,7 +623,9 @@ export function DashboardLayout({
                 to={item.href}
                 className={`flex items-center gap-3 pl-3 pr-4 py-3 rounded-xl border-l-4 transition-all ${
                   isActive
-                    ? "bg-white/10 border-yellow-400 text-white font-semibold"
+                    ? cargoInterno === "juridico"
+                      ? "bg-yellow-400 border-yellow-400 text-neutral-950 font-bold shadow-sm shadow-yellow-400/20"
+                      : "bg-white/10 border-yellow-400 text-white font-semibold"
                     : isHighlight
                       ? "bg-yellow-400 border-transparent text-neutral-900 font-bold hover:bg-yellow-500 shadow-sm shadow-yellow-400/20"
                       : "border-transparent text-neutral-400 hover:bg-white/5 hover:text-white"
