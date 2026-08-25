@@ -168,17 +168,7 @@ export function ContractsChart({
                 strokeWidth={1.7}
                 dot={{ r: 2.6, fill: "#111111", strokeWidth: 0 }}
                 activeDot={{ r: 4 }}
-              >
-                <LabelList
-                  dataKey="accumulated"
-                  position="top"
-                  formatter={formatPositiveLabel}
-                  fill="#111111"
-                  fontSize={8.5}
-                  fontWeight={600}
-                  offset={20}
-                />
-              </Line>
+              />
             </ComposedChart>
           </ResponsiveContainer>
         )}

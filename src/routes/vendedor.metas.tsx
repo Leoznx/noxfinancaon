@@ -17,7 +17,6 @@ import {
   CartesianGrid,
   ComposedChart,
   LabelList,
-  Line,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -391,10 +390,7 @@ function IndividualGoalTrend({ progress }: { progress: SellerMonthlyProgress }) 
       value: progress.contracts_closed,
       target: progress.target_contracts,
     },
-  ].map((metric) => ({
-    ...metric,
-    percentage: sellerGoalPercentage(metric.value, metric.target),
-  }));
+  ];
 
   return (
     <div
@@ -405,13 +401,10 @@ function IndividualGoalTrend({ progress }: { progress: SellerMonthlyProgress }) 
         <span className="flex items-center gap-2">
           <span className="h-2.5 w-2.5 rounded-sm bg-[#ffc400]" /> Realizado (qtd)
         </span>
-        <span className="flex items-center gap-2">
-          <span className="h-0.5 w-5 bg-neutral-950" /> Atingimento (%)
-        </span>
       </div>
       <div className="min-h-[210px] min-w-0 flex-1">
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={metrics} margin={{ top: 30, right: 0, bottom: 2, left: -18 }}>
+          <ComposedChart data={metrics} margin={{ top: 30, right: 10, bottom: 2, left: -18 }}>
             <CartesianGrid vertical={false} stroke="#ededed" strokeDasharray="3 3" />
             <XAxis
               dataKey="label"
@@ -428,16 +421,6 @@ function IndividualGoalTrend({ progress }: { progress: SellerMonthlyProgress }) 
               tick={{ fill: "#6b7280", fontSize: 9 }}
               domain={[0, (dataMax: number) => Math.max(1, Math.ceil(dataMax * 1.15))]}
             />
-            <YAxis
-              yAxisId="percentage"
-              orientation="right"
-              domain={[0, 100]}
-              ticks={[0, 25, 50, 75, 100]}
-              tickFormatter={(value) => `${value}%`}
-              tickLine={false}
-              axisLine={false}
-              tick={{ fill: "#6b7280", fontSize: 9 }}
-            />
             <Tooltip
               cursor={{ fill: "#fff8d6", opacity: 0.65 }}
               contentStyle={{
@@ -446,10 +429,7 @@ function IndividualGoalTrend({ progress }: { progress: SellerMonthlyProgress }) 
                 boxShadow: "0 8px 30px rgba(0,0,0,.08)",
                 fontSize: 11,
               }}
-              formatter={(value, name) => [
-                name === "percentage" ? `${Number(value)}%` : Number(value),
-                name === "percentage" ? "Atingimento" : "Realizado",
-              ]}
+              formatter={(value) => [Number(value), "Realizado"]}
               labelFormatter={(_, payload) => {
                 const item = payload[0]?.payload as (typeof metrics)[number] | undefined;
                 return item
@@ -473,25 +453,6 @@ function IndividualGoalTrend({ progress }: { progress: SellerMonthlyProgress }) 
                 offset={7}
               />
             </Bar>
-            <Line
-              yAxisId="percentage"
-              type="linear"
-              dataKey="percentage"
-              stroke="#111111"
-              strokeWidth={2}
-              dot={{ r: 3.5, fill: "#111111", strokeWidth: 0 }}
-              activeDot={{ r: 5 }}
-            >
-              <LabelList
-                dataKey="percentage"
-                position="top"
-                formatter={(value: number) => `${value}%`}
-                fill="#111111"
-                fontSize={9}
-                fontWeight={800}
-                offset={13}
-              />
-            </Line>
           </ComposedChart>
         </ResponsiveContainer>
       </div>
