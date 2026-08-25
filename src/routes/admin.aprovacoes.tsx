@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,9 @@ import { Search, Eye, CheckCircle2, XCircle, Download, FileText } from "lucide-r
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/admin/aprovacoes")({
+  validateSearch: (search: Record<string, unknown>): { consulta?: string } => ({
+    consulta: typeof search.consulta === "string" && search.consulta.trim() ? search.consulta : undefined,
+  }),
   component: () => (
     <ProtectedRoute roles={["admin", "analista", "juridico", "admin_master"]} moduleKey="aprovacoes">
       <AprovacoesPage />
@@ -29,6 +32,8 @@ const estaNaFilaManual = (c: any) =>
   docsEnviados(c) || (c.status === "em_analise" && !suspensaPorFaltaDeDocumentos(c));
 
 function AprovacoesPage() {
+  const { consulta: consultaSearchId } = Route.useSearch();
+  const openedSearchDetailRef = useRef<string | null>(null);
   const [linhas, setLinhas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState("");
@@ -141,7 +146,7 @@ function AprovacoesPage() {
     setRejectingId(null); setMotivo(""); load();
   };
 
-  const abrirDetalhes = async (consulta: any) => {
+  const abrirDetalhes = useCallback(async (consulta: any) => {
     setDetalhe(consulta);
     setDocsDetalhe([]);
     setLoadingDetalhe(true);
@@ -171,7 +176,15 @@ function AprovacoesPage() {
     } finally {
       setLoadingDetalhe(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!consultaSearchId || openedSearchDetailRef.current === consultaSearchId) return;
+    const consulta = linhas.find((item) => item.id === consultaSearchId);
+    if (!consulta) return;
+    openedSearchDetailRef.current = consultaSearchId;
+    void abrirDetalhes(consulta);
+  }, [abrirDetalhes, consultaSearchId, linhas]);
 
   const detalheMeta = detalhe?.documentos?.analise_complementar ?? {};
   const labelDocumento = (tipo?: string | null) => {

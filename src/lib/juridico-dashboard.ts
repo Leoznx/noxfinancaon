@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 export type JuridicoConsulta = {
   id: string;
   status: string;
+  resultado: string | null;
   substatus: string | null;
   created_at: string;
   updated_at: string;
@@ -91,7 +92,7 @@ export async function fetchJuridicoDashboardData(): Promise<{
     supabase
       .from("consultas_credito")
       .select(
-        "id, status, substatus, created_at, updated_at, approved_at, rejected_at, tenant_name, tenant_document, role_solicitante, solicitante:profiles!consultas_credito_profile_id_solicitante_fkey(nome, email, role)",
+        "id, status, resultado, substatus, created_at, updated_at, approved_at, rejected_at, tenant_name, tenant_document, role_solicitante, solicitante:profiles!consultas_credito_profile_id_solicitante_fkey(nome, email, role)",
       )
       .order("created_at", { ascending: false })
       .limit(5000),
