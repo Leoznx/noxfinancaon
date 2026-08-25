@@ -9,7 +9,16 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { UserPlus, Mail, Phone, Trash2, Info, Eye, IdCard, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
@@ -32,6 +41,26 @@ function formatCpf(cpf?: string | null) {
   return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9, 11)}`;
 }
 
+type CorretorSearchMode = "cpf" | "email" | "telefone";
+
+function normalizePhoneInput(value: string) {
+  let digits = value.replace(/\D/g, "");
+  if ((digits.length === 12 || digits.length === 13) && digits.startsWith("55")) {
+    digits = digits.slice(2);
+  }
+  return digits.slice(0, 11);
+}
+
+function formatPhone(value?: string | null) {
+  const digits = normalizePhoneInput(value || "");
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  if (digits.length <= 10) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  }
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+}
+
 function CorretoresAdmin() {
   const { user } = useAuth();
   const [corretores, setCorretores] = useState<any[]>([]);
@@ -39,7 +68,7 @@ function CorretoresAdmin() {
   const [open, setOpen] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [isLinking, setIsLinking] = useState(false);
-  const [searchMode, setSearchMode] = useState<"cpf" | "email">("cpf");
+  const [searchMode, setSearchMode] = useState<CorretorSearchMode>("cpf");
   const [searchInput, setSearchInput] = useState("");
   const [foundCorretor, setFoundCorretor] = useState<any | null>(null);
   const [imobiliariaId, setImobiliariaId] = useState<string | null>(null);
@@ -48,15 +77,11 @@ function CorretoresAdmin() {
   const [detailApolices, setDetailApolices] = useState<any[]>([]);
   const [loadingDetailApolices, setLoadingDetailApolices] = useState(false);
 
-
   const isImobiliaria = user?.role === "imobiliaria";
 
   const fetchLinkedCorretores = useCallback(async (imobId: string) => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from("corretores")
-      .select("*, profiles:profile_id (nome, email, telefone, status)")
-      .eq("imobiliaria_id", imobId);
+    const { data, error } = await supabase.from("corretores").select("*, profiles:profile_id (nome, email, telefone, status)").eq("imobiliaria_id", imobId);
     if (error) toast.error("Erro ao carregar corretores: " + error.message);
     setCorretores(data || []);
     setLoading(false);
@@ -64,9 +89,7 @@ function CorretoresAdmin() {
 
   const fetchAllCorretores = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from("corretores")
-      .select("*, profiles:profile_id (nome, email, telefone, status)");
+    const { data, error } = await supabase.from("corretores").select("*, profiles:profile_id (nome, email, telefone, status)");
     if (error) toast.error("Erro ao carregar corretores: " + error.message);
     setCorretores(data || []);
     setLoading(false);
@@ -79,11 +102,7 @@ function CorretoresAdmin() {
       setLoading(false);
       return;
     }
-    const { data: imob } = await supabase
-      .from("imobiliarias")
-      .select("id")
-      .ilike("contato_email", userEmail)
-      .maybeSingle();
+    const { data: imob } = await supabase.from("imobiliarias").select("id").ilike("contato_email", userEmail).maybeSingle();
     if (imob?.id) {
       setImobiliariaId(imob.id);
       await fetchLinkedCorretores(imob.id);
@@ -119,13 +138,20 @@ function CorretoresAdmin() {
           return;
         }
         queryValue = digits;
-      } else {
+      } else if (searchMode === "email") {
         const email = searchInput.trim().toLowerCase();
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
           toast.error("Digite um e-mail válido.");
           return;
         }
         queryValue = email;
+      } else {
+        const phone = normalizePhoneInput(searchInput);
+        if (phone.length !== 10 && phone.length !== 11) {
+          toast.error("Digite um telefone válido com DDD.");
+          return;
+        }
+        queryValue = phone;
       }
 
       const { data, error } = await supabase.rpc("find_corretor", {
@@ -172,18 +198,13 @@ function CorretoresAdmin() {
     }
   };
 
-
   const handleConfirmLink = async () => {
-    if (!foundCorretor || !imobiliariaId) {
-      toast.error("Não foi possível identificar sua imobiliária. Atualize a página e tente novamente.");
-      return;
-    }
+    if (!foundCorretor) return;
     setIsLinking(true);
     try {
-      const { error } = await supabase
-        .from("corretores")
-        .update({ imobiliaria_id: imobiliariaId, vinculado_imobiliaria: true })
-        .eq("id", foundCorretor.id);
+      const { error } = await supabase.rpc("link_my_corretor", {
+        p_corretor_id: foundCorretor.id,
+      });
       if (error) {
         toast.error("Não foi possível vincular: " + error.message);
         return;
@@ -191,26 +212,26 @@ function CorretoresAdmin() {
       toast.success("Corretor vinculado com sucesso à sua imobiliária.");
       setOpen(false);
       resetModal();
-      await fetchLinkedCorretores(imobiliariaId);
+      if (imobiliariaId) await fetchLinkedCorretores(imobiliariaId);
+      else await resolveImobiliariaId();
     } finally {
       setIsLinking(false);
     }
   };
 
   const handleUnlink = async () => {
-    if (!toUnlink || !imobiliariaId) return;
-    const { error } = await supabase
-      .from("corretores")
-      .update({ imobiliaria_id: null, vinculado_imobiliaria: false })
-      .eq("id", toUnlink.id)
-      .eq("imobiliaria_id", imobiliariaId);
+    if (!toUnlink) return;
+    const { error } = await supabase.rpc("unlink_my_corretor", {
+      p_corretor_id: toUnlink.id,
+    });
     if (error) {
       toast.error("Erro ao desvincular: " + error.message);
       return;
     }
     toast.success("Corretor desvinculado com sucesso.");
     setToUnlink(null);
-    await fetchLinkedCorretores(imobiliariaId);
+    if (imobiliariaId) await fetchLinkedCorretores(imobiliariaId);
+    else await resolveImobiliariaId();
   };
 
   useEffect(() => {
@@ -223,24 +244,26 @@ function CorretoresAdmin() {
       setLoadingDetailApolices(true);
       // apolices não guarda o profile do corretor diretamente (coluna nunca
       // preenchida) — o vínculo real é via consulta_id -> profile_id_solicitante.
-      const { data: consultasDoCorretor } = await supabase
-        .from("consultas_credito")
-        .select("id")
-        .eq("profile_id_solicitante", detailOf.profile_id);
+      const { data: consultasDoCorretor } = await supabase.from("consultas_credito").select("id").eq("profile_id_solicitante", detailOf.profile_id);
       const ids = (consultasDoCorretor || []).map((c: any) => c.id);
       if (ids.length === 0) {
-        if (!cancelled) { setDetailApolices([]); setLoadingDetailApolices(false); }
+        if (!cancelled) {
+          setDetailApolices([]);
+          setLoadingDetailApolices(false);
+        }
         return;
       }
       const { data, error } = await supabase
         .from("apolices")
-        .select(`
+        .select(
+          `
           id, numero, status, valor_premio,
           consulta:consultas_credito(
             inquilino:inquilinos(nome),
             imovel:imoveis(endereco, cidade, estado)
           )
-        `)
+        `,
+        )
         .in("consulta_id", ids)
         .eq("status", "ativa")
         .order("created_at", { ascending: false });
@@ -250,7 +273,9 @@ function CorretoresAdmin() {
         setLoadingDetailApolices(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [detailOf]);
 
   return (
@@ -259,18 +284,19 @@ function CorretoresAdmin() {
         <div>
           <h1 className="text-3xl font-bold text-neutral-900 tracking-tight">Meus Corretores</h1>
           <p className="text-neutral-500 mt-1">
-            {isImobiliaria
-              ? "Gerencie a equipe de corretores vinculada à sua imobiliária."
-              : "Lista de corretores cadastrados na plataforma."}
+            {isImobiliaria ? "Gerencie a equipe de corretores vinculada à sua imobiliária." : "Lista de corretores cadastrados na plataforma."}
           </p>
         </div>
 
         {isImobiliaria && (
-          <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetModal(); }}>
-            <Button
-              onClick={() => setOpen(true)}
-              className="bg-neutral-900 hover:bg-neutral-800 text-white font-bold h-12 px-6 rounded-xl flex items-center gap-2"
-            >
+          <Dialog
+            open={open}
+            onOpenChange={(v) => {
+              setOpen(v);
+              if (!v) resetModal();
+            }}
+          >
+            <Button onClick={() => setOpen(true)} className="bg-neutral-900 hover:bg-neutral-800 text-white font-bold h-12 px-6 rounded-xl flex items-center gap-2">
               <UserPlus size={20} />
               CADASTRAR CORRETOR
             </Button>
@@ -279,35 +305,30 @@ function CorretoresAdmin() {
                 <form onSubmit={handleSearch}>
                   <DialogHeader className="mb-4">
                     <DialogTitle className="text-2xl font-bold">Vincular corretor</DialogTitle>
-                    <DialogDescription>
-                      Busque um corretor já cadastrado na plataforma para vinculá-lo à sua imobiliária.
-                    </DialogDescription>
+                    <DialogDescription>Busque um corretor já cadastrado na plataforma para vinculá-lo à sua imobiliária.</DialogDescription>
                   </DialogHeader>
 
                   <div className="rounded-xl bg-yellow-50 border border-yellow-200 p-4 flex gap-3 mb-6">
                     <Info size={18} className="text-yellow-700 flex-shrink-0 mt-0.5" />
-                    <p className="text-xs text-yellow-900 leading-relaxed">
-                      Só é possível vincular corretores que já possuem cadastro ativo na plataforma.
-                    </p>
+                    <p className="text-xs text-yellow-900 leading-relaxed">Só é possível vincular corretores que já possuem cadastro ativo na plataforma.</p>
                   </div>
 
                   <div className="mb-5">
-                    <Label className="text-xs font-black uppercase tracking-widest text-neutral-400 mb-2 block">
-                      Buscar por
-                    </Label>
-                    <div className="grid grid-cols-2 gap-2 p-1 bg-neutral-100 rounded-xl">
-                      {(["cpf", "email"] as const).map((m) => (
+                    <Label className="text-xs font-black uppercase tracking-widest text-neutral-400 mb-2 block">Buscar por</Label>
+                    <div className="grid grid-cols-3 gap-2 p-1 bg-neutral-100 rounded-xl">
+                      {(["cpf", "email", "telefone"] as const).map((m) => (
                         <button
                           key={m}
                           type="button"
-                          onClick={() => { setSearchMode(m); setSearchInput(""); }}
+                          onClick={() => {
+                            setSearchMode(m);
+                            setSearchInput("");
+                          }}
                           className={`h-10 rounded-lg text-sm font-bold uppercase tracking-wide transition-all ${
-                            searchMode === m
-                              ? "bg-neutral-900 text-white shadow"
-                              : "bg-transparent text-neutral-500 hover:text-neutral-900"
+                            searchMode === m ? "bg-neutral-900 text-white shadow" : "bg-transparent text-neutral-500 hover:text-neutral-900"
                           }`}
                         >
-                          {m === "cpf" ? "CPF" : "E-mail"}
+                          {m === "cpf" ? "CPF" : m === "email" ? "E-mail" : "Telefone"}
                         </button>
                       ))}
                     </div>
@@ -315,34 +336,34 @@ function CorretoresAdmin() {
 
                   <div className="space-y-1.5 mb-8">
                     <Label className="text-xs font-black uppercase tracking-widest text-neutral-400">
-                      {searchMode === "cpf" ? "CPF do corretor" : "E-mail do corretor"}
+                      {searchMode === "cpf" ? "CPF do corretor" : searchMode === "email" ? "E-mail do corretor" : "Telefone do corretor"}
                     </Label>
-                    {searchMode === "cpf" ? (
-                      <Input
-                        required
-                        autoFocus
-                        inputMode="numeric"
-                        value={formatCpf(searchInput)}
-                        onChange={(e) => setSearchInput(e.target.value.replace(/\D/g, "").slice(0, 11))}
-                        placeholder="000.000.000-00"
-                        className="h-12 px-4 rounded-xl border-neutral-200 font-mono tracking-wider"
-                      />
-                    ) : (
-                      <Input
-                        required
-                        autoFocus
-                        type="email"
-                        value={searchInput}
-                        onChange={(e) => setSearchInput(e.target.value)}
-                        placeholder="corretor@email.com"
-                        className="h-12 px-4 rounded-xl border-neutral-200"
-                      />
-                    )}
+                    <Input
+                      required
+                      autoFocus
+                      type={searchMode === "email" ? "email" : "text"}
+                      inputMode={searchMode === "email" ? "email" : searchMode === "telefone" ? "tel" : "numeric"}
+                      value={searchMode === "cpf" ? formatCpf(searchInput) : searchMode === "telefone" ? formatPhone(searchInput) : searchInput}
+                      onChange={(e) =>
+                        setSearchInput(
+                          searchMode === "cpf" ? e.target.value.replace(/\D/g, "").slice(0, 11) : searchMode === "telefone" ? normalizePhoneInput(e.target.value) : e.target.value,
+                        )
+                      }
+                      placeholder={searchMode === "cpf" ? "000.000.000-00" : searchMode === "telefone" ? "(00) 00000-0000" : "corretor@email.com"}
+                      className={`h-12 px-4 rounded-xl border-neutral-200 ${searchMode === "email" ? "" : "font-mono tracking-wider"}`}
+                    />
                   </div>
 
-
                   <DialogFooter className="gap-2">
-                    <Button type="button" variant="outline" onClick={() => { setOpen(false); resetModal(); }} className="h-12 rounded-xl">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setOpen(false);
+                        resetModal();
+                      }}
+                      className="h-12 rounded-xl"
+                    >
                       Cancelar
                     </Button>
                     <Button type="submit" disabled={isSearching} className="h-12 bg-yellow-400 hover:bg-yellow-500 text-neutral-900 font-black rounded-xl">
@@ -357,21 +378,22 @@ function CorretoresAdmin() {
                       <CheckCircle2 className="text-green-600" size={26} />
                       Corretor encontrado
                     </DialogTitle>
-                    <DialogDescription>
-                      Confira os dados antes de vincular à sua imobiliária.
-                    </DialogDescription>
+                    <DialogDescription>Confira os dados antes de vincular à sua imobiliária.</DialogDescription>
                   </DialogHeader>
 
                   <Card className="p-5 mb-6 bg-neutral-50 border-neutral-200 space-y-3">
                     <Row label="Nome completo" value={foundCorretor.nome} />
                     <Row label="CPF" value={formatCpf(foundCorretor.cpf)} />
                     <Row label="E-mail" value={foundCorretor.email} />
-                    {foundCorretor.telefone && <Row label="Telefone" value={foundCorretor.telefone} />}
+                    {foundCorretor.telefone && <Row label="Telefone" value={formatPhone(foundCorretor.telefone)} />}
                     {foundCorretor.creci && <Row label="CRECI" value={foundCorretor.creci} />}
                     <Row
                       label="Status"
                       value={
-                        <Badge variant="outline" className={foundCorretor.status === "ativo" ? "bg-green-50 text-green-700 border-green-200" : "bg-yellow-50 text-yellow-700 border-yellow-200"}>
+                        <Badge
+                          variant="outline"
+                          className={foundCorretor.status === "ativo" ? "bg-green-50 text-green-700 border-green-200" : "bg-yellow-50 text-yellow-700 border-yellow-200"}
+                        >
                           {foundCorretor.status === "ativo" ? "Ativo" : "Pendente"}
                         </Badge>
                       }
@@ -419,11 +441,12 @@ function CorretoresAdmin() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="font-bold text-neutral-900 truncate">{c.profiles?.nome || "Sem nome"}</p>
-                    <p className="text-xs text-neutral-500 font-medium">
-                      Vinculado em {new Date(c.updated_at || c.created_at).toLocaleDateString("pt-BR")}
-                    </p>
+                    <p className="text-xs text-neutral-500 font-medium">Vinculado em {new Date(c.updated_at || c.created_at).toLocaleDateString("pt-BR")}</p>
                   </div>
-                  <Badge variant="outline" className={`shrink-0 ${c.profiles?.status === "ativo" ? "bg-green-50 text-green-700 border-green-200" : "bg-yellow-50 text-yellow-700 border-yellow-200"}`}>
+                  <Badge
+                    variant="outline"
+                    className={`shrink-0 ${c.profiles?.status === "ativo" ? "bg-green-50 text-green-700 border-green-200" : "bg-yellow-50 text-yellow-700 border-yellow-200"}`}
+                  >
                     {c.profiles?.status === "ativo" ? "Ativo" : "Pendente"}
                   </Badge>
                 </div>
@@ -441,14 +464,12 @@ function CorretoresAdmin() {
                   {c.profiles?.telefone && (
                     <div className="flex items-center gap-2 text-sm text-neutral-600">
                       <Phone size={14} className="text-neutral-400 shrink-0" />
-                      {c.profiles.telefone}
+                      {formatPhone(c.profiles.telefone)}
                     </div>
                   )}
                   {c.creci && <div className="text-xs text-neutral-500 font-medium">CRECI {c.creci}</div>}
                 </div>
-                <p className="text-xs font-bold text-neutral-500">
-                  {c.imobiliaria_id ? "EQUIPE" : "AUTÔNOMO"}
-                </p>
+                <p className="text-xs font-bold text-neutral-500">{c.imobiliaria_id ? "EQUIPE" : "AUTÔNOMO"}</p>
                 {isImobiliaria && (
                   <div className="flex items-center gap-2 pt-1">
                     <Button variant="outline" size="sm" onClick={() => setDetailOf(c)} className="flex-1 h-9 rounded-lg text-neutral-700">
@@ -474,9 +495,7 @@ function CorretoresAdmin() {
                 <TableHead className="text-[10px] font-black uppercase tracking-widest py-5">Identificação</TableHead>
                 <TableHead className="text-[10px] font-black uppercase tracking-widest py-5">Vínculo</TableHead>
                 <TableHead className="text-[10px] font-black uppercase tracking-widest py-5 text-center">Status</TableHead>
-                {isImobiliaria && (
-                  <TableHead className="text-[10px] font-black uppercase tracking-widest py-5 text-right px-8">Ações</TableHead>
-                )}
+                {isImobiliaria && <TableHead className="text-[10px] font-black uppercase tracking-widest py-5 text-right px-8">Ações</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -512,9 +531,7 @@ function CorretoresAdmin() {
                         </div>
                         <div className="flex flex-col">
                           <span className="font-bold text-neutral-900">{c.profiles?.nome || "Sem nome"}</span>
-                          <span className="text-xs text-neutral-500 font-medium">
-                            Vinculado em {new Date(c.updated_at || c.created_at).toLocaleDateString("pt-BR")}
-                          </span>
+                          <span className="text-xs text-neutral-500 font-medium">Vinculado em {new Date(c.updated_at || c.created_at).toLocaleDateString("pt-BR")}</span>
                         </div>
                       </div>
                     </TableCell>
@@ -533,17 +550,18 @@ function CorretoresAdmin() {
                         {c.profiles?.telefone && (
                           <div className="flex items-center gap-2 text-sm text-neutral-600">
                             <Phone size={14} className="text-neutral-400" />
-                            {c.profiles.telefone}
+                            {formatPhone(c.profiles.telefone)}
                           </div>
                         )}
                         {c.creci && <div className="text-xs text-neutral-500 font-medium">CRECI {c.creci}</div>}
                       </div>
                     </TableCell>
-                    <TableCell className="py-6 text-xs font-bold text-neutral-500">
-                      {c.imobiliaria_id ? "EQUIPE" : "AUTÔNOMO"}
-                    </TableCell>
+                    <TableCell className="py-6 text-xs font-bold text-neutral-500">{c.imobiliaria_id ? "EQUIPE" : "AUTÔNOMO"}</TableCell>
                     <TableCell className="py-6 text-center">
-                      <Badge variant="outline" className={c.profiles?.status === "ativo" ? "bg-green-50 text-green-700 border-green-200" : "bg-yellow-50 text-yellow-700 border-yellow-200"}>
+                      <Badge
+                        variant="outline"
+                        className={c.profiles?.status === "ativo" ? "bg-green-50 text-green-700 border-green-200" : "bg-yellow-50 text-yellow-700 border-yellow-200"}
+                      >
                         {c.profiles?.status === "ativo" ? "Ativo" : "Pendente"}
                       </Badge>
                     </TableCell>
@@ -570,9 +588,7 @@ function CorretoresAdmin() {
       </Card>
 
       {isImobiliaria && !imobiliariaId && !loading && (
-        <p className="mt-4 text-xs text-neutral-500">
-          Complete os dados da sua empresa em Configurações quando possível para personalizar seu painel.
-        </p>
+        <p className="mt-4 text-xs text-neutral-500">Complete os dados da sua empresa em Configurações quando possível para personalizar seu painel.</p>
       )}
 
       <AlertDialog open={!!toUnlink} onOpenChange={(o) => !o && setToUnlink(null)}>
@@ -602,12 +618,15 @@ function CorretoresAdmin() {
             <Card className="p-5 bg-neutral-50 border-neutral-200 space-y-3">
               <Row label="E-mail" value={detailOf.profiles?.email} />
               {detailOf.cpf && <Row label="CPF" value={formatCpf(detailOf.cpf)} />}
-              {detailOf.profiles?.telefone && <Row label="Telefone" value={detailOf.profiles.telefone} />}
+              {detailOf.profiles?.telefone && <Row label="Telefone" value={formatPhone(detailOf.profiles.telefone)} />}
               {detailOf.creci && <Row label="CRECI" value={detailOf.creci} />}
               <Row
                 label="Status"
                 value={
-                  <Badge variant="outline" className={detailOf.profiles?.status === "ativo" ? "bg-green-50 text-green-700 border-green-200" : "bg-yellow-50 text-yellow-700 border-yellow-200"}>
+                  <Badge
+                    variant="outline"
+                    className={detailOf.profiles?.status === "ativo" ? "bg-green-50 text-green-700 border-green-200" : "bg-yellow-50 text-yellow-700 border-yellow-200"}
+                  >
                     {detailOf.profiles?.status === "ativo" ? "Ativo" : "Pendente"}
                   </Badge>
                 }
@@ -617,9 +636,7 @@ function CorretoresAdmin() {
           )}
 
           <div className="mt-5">
-            <h4 className="text-xs font-black uppercase tracking-widest text-neutral-400 mb-3">
-              Contratos ativos
-            </h4>
+            <h4 className="text-xs font-black uppercase tracking-widest text-neutral-400 mb-3">Contratos ativos</h4>
             {loadingDetailApolices ? (
               <p className="text-sm text-neutral-400 py-2">Carregando contratos...</p>
             ) : detailApolices.length === 0 ? (
@@ -635,7 +652,10 @@ function CorretoresAdmin() {
                       <p className="text-xs text-neutral-500 truncate">{a.consulta?.imovel?.endereco || ""}</p>
                     </div>
                     <span className="text-xs font-black text-neutral-900 shrink-0">
-                      {Number(a.valor_premio || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                      {Number(a.valor_premio || 0).toLocaleString("pt-BR", {
+                        style: "currency",
+                        currency: "BRL",
+                      })}
                     </span>
                   </div>
                 ))}

@@ -52,7 +52,7 @@ SELECT ok(NOT has_function_privilege('anon', 'public.get_my_commission_contracts
 SELECT ok(NOT has_function_privilege('anon', 'public.get_finance_dashboard_summary()', 'EXECUTE'), 'anon cannot execute finance dashboard RPC');
 SELECT ok(NOT has_function_privilege('anon', 'public.list_finance_commissions()', 'EXECUTE'), 'anon cannot list finance commissions');
 
-SELECT ok(has_function_privilege('anon', 'public.find_corretor(text,text)', 'EXECUTE'), 'public broker lookup remains available');
+SELECT ok(NOT has_function_privilege('anon', 'public.find_corretor(text,text)', 'EXECUTE'), 'anonymous users cannot enumerate broker data');
 SELECT ok(has_function_privilege('anon', 'public.validar_ativacao_token(text,text)', 'EXECUTE'), 'public activation remains available');
 SELECT ok(has_function_privilege('anon', 'public.criar_lead_site_publico(text,text,text,text,text,text)', 'EXECUTE'), 'public lead capture remains available');
 
@@ -64,7 +64,6 @@ SELECT ok(NOT EXISTS (
     AND p.prosecdef
     AND has_function_privilege('anon', p.oid, 'EXECUTE')
     AND p.oid NOT IN (
-      'public.find_corretor(text,text)'::regprocedure,
       'public.validar_ativacao_token(text,text)'::regprocedure,
       'public.criar_lead_site_publico(text,text,text,text,text,text)'::regprocedure
     )

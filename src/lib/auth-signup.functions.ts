@@ -6,11 +6,7 @@ import { defaultAvatarForName } from "@/lib/gender-avatar";
 import { buildAuthEmailCallbackUrl } from "@/lib/auth-email-links";
 
 function buildVerificationLink(properties: { hashed_token: string; verification_type: string }) {
-  const appUrl =
-    process.env.APP_URL ||
-    process.env.APP_BASE_URL ||
-    process.env.FRONTEND_URL ||
-    "https://noxfianca.com";
+  const appUrl = process.env.APP_URL || process.env.APP_BASE_URL || process.env.FRONTEND_URL || "https://noxfianca.com";
   return buildAuthEmailCallbackUrl({
     appUrl,
     path: "/email-verificado",
@@ -20,11 +16,7 @@ function buildVerificationLink(properties: { hashed_token: string; verification_
 }
 
 async function emailAlreadyRegistered(supabaseAdmin: any, email: string) {
-  const { data } = await supabaseAdmin
-    .from("profiles")
-    .select("id")
-    .ilike("email", email)
-    .maybeSingle();
+  const { data } = await supabaseAdmin.from("profiles").select("id").ilike("email", email).maybeSingle();
   return !!data;
 }
 
@@ -54,11 +46,7 @@ export const signUpInquilino = createServerFn({ method: "POST" })
     if (await emailAlreadyRegistered(supabaseAdmin, emailLower)) {
       return { ok: false as const, error: "ja_existe" as const };
     }
-    const { data: byCpf } = await supabaseAdmin
-      .from("inquilinos")
-      .select("id, profile_id")
-      .eq("cpf", cpfNorm)
-      .maybeSingle();
+    const { data: byCpf } = await supabaseAdmin.from("inquilinos").select("id, profile_id").eq("cpf", cpfNorm).maybeSingle();
     if ((byCpf as any)?.profile_id) {
       return { ok: false as const, error: "ja_existe" as const };
     }
@@ -75,9 +63,7 @@ export const signUpInquilino = createServerFn({ method: "POST" })
     if (linkError || !linkData?.user) {
       return {
         ok: false as const,
-        error: isAlreadyRegisteredError(linkError?.message)
-          ? ("ja_existe" as const)
-          : ("erro" as const),
+        error: isAlreadyRegisteredError(linkError?.message) ? ("ja_existe" as const) : ("erro" as const),
       };
     }
 
@@ -102,11 +88,9 @@ export const signUpInquilino = createServerFn({ method: "POST" })
       .eq("id", userId)
       .is("avatar_url", null);
 
-    await supabaseAdmin
-      .from("inquilinos")
-      .upsert({ profile_id: userId, nome: data.nome, cpf: cpfNorm, tipo: "PF" } as any, {
-        onConflict: "cpf",
-      });
+    await supabaseAdmin.from("inquilinos").upsert({ profile_id: userId, nome: data.nome, cpf: cpfNorm, tipo: "PF" } as any, {
+      onConflict: "cpf",
+    });
 
     const { linkedConsultas } = await linkTenantRecordsByCpf(supabaseAdmin, userId, cpfNorm);
 
@@ -128,47 +112,50 @@ export const signUpInquilino = createServerFn({ method: "POST" })
 // Imobiliária / Corretor / Proprietário
 // ============================================================================
 
-const profissionalSchema = z.object({
-  role: z.enum(["imobiliaria", "corretor", "proprietario"]),
-  email: z.string().email(),
-  senha: z.string().min(8),
-  telefone: z.string().min(8),
-  // Imobiliária
-  razaoSocial: z.string().optional(),
-  nomeFantasia: z.string().optional(),
-  cnpj: z.string().optional(),
-  creciJuridico: z.string().optional(),
-  cargo: z.string().optional(),
-  responsavelNome: z.string().optional(),
-  // Corretor
-  nome: z.string().optional(),
-  cpf: z.string().optional(),
-  creci: z.string().optional(),
-  vinculadoImobiliaria: z.boolean().optional(),
-  // CNPJ ou e-mail já cadastrado da imobiliária — nunca o id: o visitante não
-  // tem acesso à lista de imobiliárias, então precisa identificar a empresa
-  // por um dado que ele já sabe (CNPJ ou e-mail de contato).
-  imobiliariaIdentificador: z.string().optional(),
-  // Proprietário
-  cpfCnpj: z.string().optional(),
-  // Comuns a corretor/proprietário
-  cidade: z.string().optional(),
-  estado: z.string().optional(),
-}).superRefine((data, ctx) => {
-  if (data.role === "corretor" && data.vinculadoImobiliaria && !data.imobiliariaIdentificador?.trim()) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["imobiliariaIdentificador"],
-      message: "Informe o CNPJ ou o e-mail da imobiliária à qual o corretor está vinculado.",
-    });
-  }
-});
+const profissionalSchema = z
+  .object({
+    role: z.enum(["imobiliaria", "corretor", "proprietario"]),
+    email: z.string().email(),
+    senha: z.string().min(8),
+    telefone: z.string().min(8),
+    // Imobiliária
+    razaoSocial: z.string().optional(),
+    nomeFantasia: z.string().optional(),
+    cnpj: z.string().optional(),
+    creciJuridico: z.string().optional(),
+    cargo: z.string().optional(),
+    responsavelNome: z.string().optional(),
+    // Corretor
+    nome: z.string().optional(),
+    cpf: z.string().optional(),
+    creci: z.string().optional(),
+    vinculadoImobiliaria: z.boolean().optional(),
+    // CNPJ ou e-mail já cadastrado da imobiliária — nunca o id: o visitante não
+    // tem acesso à lista de imobiliárias, então precisa identificar a empresa
+    // por um dado que ele já sabe (CNPJ ou e-mail de contato).
+    imobiliariaIdentificador: z.string().optional(),
+    // Proprietário
+    cpfCnpj: z.string().optional(),
+    // Comuns a corretor/proprietário
+    cidade: z.string().optional(),
+    estado: z.string().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.role === "corretor" && data.vinculadoImobiliaria && !data.imobiliariaIdentificador?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["imobiliariaIdentificador"],
+        message: "Informe o CNPJ ou o e-mail da imobiliária à qual o corretor está vinculado.",
+      });
+    }
+  });
 
 export const signUpProfissional = createServerFn({ method: "POST" })
   .validator((data: unknown) => profissionalSchema.parse(data))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const emailLower = data.email.toLowerCase().trim();
+    const cpfCorretor = data.role === "corretor" ? (data.cpf || "").replace(/\D/g, "") : undefined;
 
     if (await emailAlreadyRegistered(supabaseAdmin, emailLower)) {
       return { ok: false as const, error: "ja_existe" as const };
@@ -183,9 +170,7 @@ export const signUpProfissional = createServerFn({ method: "POST" })
       const isEmail = identificador.includes("@");
       const digitosIdentificador = identificador.replace(/\D/g, "");
 
-      const { data: candidatas, error: imobiliariaError } = await supabaseAdmin
-        .from("imobiliarias")
-        .select("id, cnpj, contato_email");
+      const { data: candidatas, error: imobiliariaError } = await supabaseAdmin.from("imobiliarias").select("id, cnpj, contato_email");
       if (imobiliariaError) {
         return { ok: false as const, error: "imobiliaria_nao_encontrada" as const };
       }
@@ -207,16 +192,26 @@ export const signUpProfissional = createServerFn({ method: "POST" })
       email: emailLower,
       password: data.senha,
       options: {
-        data: { nome: nomeExibicao, role: data.role },
+        data: {
+          nome: nomeExibicao,
+          role: data.role,
+          telefone: data.telefone,
+          ...(data.role === "corretor"
+            ? {
+                cpf: cpfCorretor,
+                creci: data.creci,
+                cidade: data.cidade,
+                estado: data.estado,
+              }
+            : {}),
+        },
       },
     });
 
     if (linkError || !linkData?.user) {
       return {
         ok: false as const,
-        error: isAlreadyRegisteredError(linkError?.message)
-          ? ("ja_existe" as const)
-          : ("erro" as const),
+        error: isAlreadyRegisteredError(linkError?.message) ? ("ja_existe" as const) : ("erro" as const),
       };
     }
 
@@ -251,15 +246,22 @@ export const signUpProfissional = createServerFn({ method: "POST" })
         contato_telefone: data.telefone,
       } as any);
     } else if (data.role === "corretor") {
-      await supabaseAdmin.from("corretores").insert({
-        profile_id: userId,
-        cpf: data.cpf,
-        creci: data.creci,
-        cidade: data.cidade,
-        estado: data.estado,
-        vinculado_imobiliaria: data.vinculadoImobiliaria ?? false,
-        imobiliaria_id: data.vinculadoImobiliaria ? imobiliariaIdResolvida : null,
-      } as any);
+      const { error: corretorError } = await supabaseAdmin.from("corretores").upsert(
+        {
+          profile_id: userId,
+          cpf: cpfCorretor,
+          creci: data.creci,
+          cidade: data.cidade,
+          estado: data.estado,
+          vinculado_imobiliaria: data.vinculadoImobiliaria ?? false,
+          imobiliaria_id: data.vinculadoImobiliaria ? imobiliariaIdResolvida : null,
+        } as any,
+        { onConflict: "profile_id" },
+      );
+      if (corretorError) {
+        await supabaseAdmin.auth.admin.deleteUser(userId);
+        return { ok: false as const, error: "erro" as const };
+      }
     } else if (data.role === "proprietario") {
       await supabaseAdmin.from("proprietarios").insert({
         profile_id: userId,
@@ -302,11 +304,7 @@ export const resendVerificationEmail = createServerFn({ method: "POST" })
     const emailLower = data.email.toLowerCase().trim();
 
     try {
-      const { data: profile } = await supabaseAdmin
-        .from("profiles")
-        .select("id, nome")
-        .ilike("email", emailLower)
-        .maybeSingle();
+      const { data: profile } = await supabaseAdmin.from("profiles").select("id, nome").ilike("email", emailLower).maybeSingle();
       if (!profile) return { ok: true as const };
 
       const { data: authUser } = await supabaseAdmin.auth.admin.getUserById((profile as any).id);
@@ -320,9 +318,7 @@ export const resendVerificationEmail = createServerFn({ method: "POST" })
         .gte("sent_at", new Date(now - 60 * 60 * 1000).toISOString());
 
       const sends = (recentSends ?? []) as { sent_at: string }[];
-      const lastSentTooRecently = sends.some(
-        (s) => now - new Date(s.sent_at).getTime() < RESEND_MIN_INTERVAL_MS,
-      );
+      const lastSentTooRecently = sends.some((s) => now - new Date(s.sent_at).getTime() < RESEND_MIN_INTERVAL_MS);
       if (lastSentTooRecently || sends.length >= RESEND_MAX_PER_HOUR) {
         return { ok: true as const };
       }

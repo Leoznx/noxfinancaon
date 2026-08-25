@@ -3301,9 +3301,17 @@ export type Database = {
       is_admin: { Args: { _uid: string }; Returns: boolean }
       is_internal: { Args: { _uid: string }; Returns: boolean }
       liberar_reservas_vendedor: { Args: never; Returns: number }
+      link_my_corretor: {
+        Args: { p_corretor_id: string }
+        Returns: string
+      }
       materializar_comissoes_vendedor: {
         Args: { p_ano?: number; p_mes?: number }
         Returns: number
+      }
+      unlink_my_corretor: {
+        Args: { p_corretor_id: string }
+        Returns: boolean
       }
       validar_ativacao_token: {
         Args: { _cpf: string; _token: string }
