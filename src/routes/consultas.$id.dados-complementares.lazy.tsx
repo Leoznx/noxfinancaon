@@ -5,6 +5,8 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { supabase } from "@/integrations/supabase/client";
 import { ensureTenantUser } from "@/lib/proposta.functions";
+import { DEMO_COMPLEMENTARY_DATA } from "@/lib/demo-accounts";
+import { isDemoSession } from "@/lib/demo-session";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -63,6 +65,7 @@ function DadosComplementaresPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [consulta, setConsulta] = useState<any>(null);
+  const [demoMode, setDemoMode] = useState(false);
   const [existingDocs, setExistingDocs] = useState<any[]>([]);
   const [formError, setFormError] = useState("");
 
@@ -112,20 +115,45 @@ function DadosComplementaresPage() {
         setConsulta(data);
         const i = (data as any).inquilinos ?? {};
         const im = (data as any).imoveis ?? {};
-        setNome(i.nome ?? (data as any).tenant_name ?? "");
-        setCpf(maskCPF(i.cpf ?? (data as any).tenant_document ?? ""));
-        setEmail(i.email ?? (data as any).tenant_email ?? "");
-        setTelefone(maskTel(i.telefone ?? (data as any).tenant_telefone ?? ""));
-        setNascimento((data as any).tenant_data_nascimento ?? "");
-        setCep(maskCEP((data as any).imovel_cep ?? im.cep ?? ""));
-        setEndereco((data as any).imovel_endereco ?? im.endereco ?? "");
-        setBairro((data as any).imovel_bairro ?? im.bairro ?? "");
-        setCidade((data as any).imovel_cidade ?? im.cidade ?? "");
-        setEstado((data as any).imovel_estado ?? im.estado ?? "");
-        setNumero((data as any).imovel_numero ?? im.numero ?? "");
-        setComplemento((data as any).imovel_complemento ?? im.complemento ?? "");
-        setSubtipo((data as any).imovel_subtipo ?? "");
-        if ((data as any).payment_type) setPaymentType((data as any).payment_type);
+        const isDemo = isDemoSession() && (
+          (data as any).origem === "demo" || (data as any).raw_response?.demo === true
+        );
+        setDemoMode(isDemo);
+
+        if (isDemo) {
+          const demo = DEMO_COMPLEMENTARY_DATA;
+          setNome(demo.inquilino.nome);
+          setCpf(maskCPF(i.cpf ?? (data as any).tenant_document ?? ""));
+          setEmail(demo.inquilino.email);
+          setTelefone(demo.inquilino.telefone);
+          setNascimento(demo.inquilino.nascimentoISO);
+          setCep(demo.imovel.cep);
+          setEndereco(demo.imovel.endereco);
+          setBairro(demo.imovel.bairro);
+          setCidade(demo.imovel.cidade);
+          setEstado(demo.imovel.estado);
+          setNumero(demo.imovel.numero);
+          setComplemento(demo.imovel.complemento);
+          setSubtipo(demo.imovel.subtipo);
+          setPaymentType(demo.paymentType);
+          setContratoAssinado(demo.contratoAssinado);
+          setDocInquilinoSubtype(demo.documentoFoto);
+        } else {
+          setNome(i.nome ?? (data as any).tenant_name ?? "");
+          setCpf(maskCPF(i.cpf ?? (data as any).tenant_document ?? ""));
+          setEmail(i.email ?? (data as any).tenant_email ?? "");
+          setTelefone(maskTel(i.telefone ?? (data as any).tenant_telefone ?? ""));
+          setNascimento((data as any).tenant_data_nascimento ?? "");
+          setCep(maskCEP((data as any).imovel_cep ?? im.cep ?? ""));
+          setEndereco((data as any).imovel_endereco ?? im.endereco ?? "");
+          setBairro((data as any).imovel_bairro ?? im.bairro ?? "");
+          setCidade((data as any).imovel_cidade ?? im.cidade ?? "");
+          setEstado((data as any).imovel_estado ?? im.estado ?? "");
+          setNumero((data as any).imovel_numero ?? im.numero ?? "");
+          setComplemento((data as any).imovel_complemento ?? im.complemento ?? "");
+          setSubtipo((data as any).imovel_subtipo ?? "");
+          if ((data as any).payment_type) setPaymentType((data as any).payment_type);
+        }
 
         const { data: docs } = await supabase
           .from("documentos_proposta")
@@ -134,9 +162,11 @@ function DadosComplementaresPage() {
         setExistingDocs(docs ?? []);
         const docContratoExistente = (docs ?? []).find((doc: any) => doc.document_type === "contrato_locacao");
         const docInq = (docs ?? []).find((doc: any) => doc.document_type === "documento_foto" || doc.document_type === "documento_inquilino");
-        if (docInq?.document_subtype) setDocInquilinoSubtype(docInq.document_subtype as "cnh" | "rg");
-        if (docContratoExistente?.document_subtype === "assinado_todas_partes") setContratoAssinado("sim");
-        if (docContratoExistente?.document_subtype === "pendente_assinatura") setContratoAssinado("nao");
+        if (!isDemo) {
+          if (docInq?.document_subtype) setDocInquilinoSubtype(docInq.document_subtype as "cnh" | "rg");
+          if (docContratoExistente?.document_subtype === "assinado_todas_partes") setContratoAssinado("sim");
+          if (docContratoExistente?.document_subtype === "pendente_assinatura") setContratoAssinado("nao");
+        }
       } catch (e: any) {
         toast.error("Erro ao carregar consulta: " + e.message);
       } finally {
@@ -191,13 +221,15 @@ function DadosComplementaresPage() {
     if (!email.trim()) e.email = true;
     if (!telefone.trim()) e.telefone = true;
     if (!paymentType) e.paymentType = true;
-    if (!docVistoria && !hasExistingDoc("vistoria_imovel")) e.docVistoria = true;
-    if (!docContrato && !hasExistingDoc("contrato_locacao")) e.docContrato = true;
-    if (!contratoAssinado) e.contratoAssinado = true;
-    if (!docInquilinoSubtype) e.docInquilinoSubtype = true;
-    if (!docInquilino && !hasExistingDoc("documento_foto", "documento_inquilino")) e.docInquilino = true;
-    if (!docResidencia && !hasExistingDoc("comprovante_residencia", "comprovante_residencia_imovel")) e.docResidencia = true;
-    if (!docRenda && !hasExistingDoc("comprovante_renda")) e.docRenda = true;
+    if (!demoMode) {
+      if (!docVistoria && !hasExistingDoc("vistoria_imovel")) e.docVistoria = true;
+      if (!docContrato && !hasExistingDoc("contrato_locacao")) e.docContrato = true;
+      if (!contratoAssinado) e.contratoAssinado = true;
+      if (!docInquilinoSubtype) e.docInquilinoSubtype = true;
+      if (!docInquilino && !hasExistingDoc("documento_foto", "documento_inquilino")) e.docInquilino = true;
+      if (!docResidencia && !hasExistingDoc("comprovante_residencia", "comprovante_residencia_imovel")) e.docResidencia = true;
+      if (!docRenda && !hasExistingDoc("comprovante_renda")) e.docRenda = true;
+    }
 
     setErrors(e);
     if (Object.keys(e).length > 0) {
@@ -301,13 +333,17 @@ function DadosComplementaresPage() {
               contrato_locacao_pendencia: contratoPendente
                 ? "Enviar contrato de locação assinado e atualizado após finalizar."
                 : null,
-              documentos_obrigatorios: [
-                "vistoria_imovel",
-                "contrato_locacao",
-                "comprovante_residencia",
-                "comprovante_renda",
-                "documento_foto",
-              ],
+              demonstracao: demoMode,
+              documentos_liberados_automaticamente: demoMode,
+              documentos_obrigatorios: demoMode
+                ? []
+                : [
+                    "vistoria_imovel",
+                    "contrato_locacao",
+                    "comprovante_residencia",
+                    "comprovante_renda",
+                    "documento_foto",
+                  ],
             },
           },
         } as any)
@@ -377,8 +413,22 @@ function DadosComplementaresPage() {
         <div className="w-full max-w-4xl mx-auto space-y-6">
           <div>
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-neutral-900">Dados complementares</h1>
-            <p className="text-sm text-neutral-500 mt-1">Complete as informações para avançar com a proposta.</p>
+            <p className="text-sm text-neutral-500 mt-1">
+              {demoMode
+                ? "Os dados de teste já estão preenchidos para você avançar com a demonstração."
+                : "Complete as informações para avançar com a proposta."}
+            </p>
           </div>
+
+          {demoMode && (
+            <div className="flex gap-3 rounded-2xl border border-yellow-300 bg-yellow-50 p-4 text-sm text-neutral-700">
+              <CheckCircle2 size={20} className="mt-0.5 shrink-0 text-yellow-700" />
+              <div>
+                <p className="font-black text-neutral-900">Dados e documentos de demonstração liberados</p>
+                <p className="mt-1 text-xs leading-relaxed">Você pode revisar os dados abaixo e clicar em Próximo sem anexar arquivos.</p>
+              </div>
+            </div>
+          )}
 
           {/* Endereço */}
           <section className="bg-white rounded-2xl border border-neutral-100 p-5 sm:p-6 space-y-4">
@@ -441,6 +491,17 @@ function DadosComplementaresPage() {
           </section>
 
           {/* Documentos */}
+          {demoMode ? (
+            <section className="rounded-2xl border border-yellow-200 bg-white p-5 sm:p-6">
+              <div className="flex items-start gap-3">
+                <CheckCircle2 size={22} className="mt-0.5 shrink-0 text-yellow-600" />
+                <div>
+                  <h2 className="text-sm font-black uppercase tracking-widest text-neutral-700">Documentos de teste</h2>
+                  <p className="mt-1 text-sm text-neutral-500">Vistoria, contrato, documento com foto, residência e renda estão validados automaticamente nesta demonstração.</p>
+                </div>
+              </div>
+            </section>
+          ) : (
           <section className="bg-white rounded-2xl border border-neutral-100 p-5 sm:p-6 space-y-5">
             <div>
               <h2 className="text-sm font-black uppercase tracking-widest text-neutral-700">Documentos</h2>
@@ -543,6 +604,7 @@ function DadosComplementaresPage() {
               />
             </div>
           </section>
+          )}
 
           {formError && (
             <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700" data-error="true">

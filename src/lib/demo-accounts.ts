@@ -70,6 +70,28 @@ export const DEMO_SIMULATION_DATA: DadosSimulacao = {
   valores: { aluguel: 2000, condominio: 400, taxas: 100 },
 };
 
+export const DEMO_COMPLEMENTARY_DATA = {
+  imovel: {
+    cep: "88330-015",
+    subtipo: "Apartamento",
+    endereco: "Avenida Atlântica",
+    bairro: "Centro",
+    cidade: "Balneário Camboriú",
+    estado: "SC",
+    numero: "2200",
+    complemento: "Apto 1201",
+  },
+  inquilino: {
+    nome: "João da Silva",
+    nascimentoISO: "1990-05-15",
+    email: "inquilino@nox.com",
+    telefone: "(47) 99999-9999",
+  },
+  paymentType: "inquilino" as const,
+  contratoAssinado: "sim" as const,
+  documentoFoto: "cnh" as const,
+} as const;
+
 export function isDemoProfileKey(value: string): value is DemoProfileKey {
   return (DEMO_PROFILE_KEYS as readonly string[]).includes(value);
 }
