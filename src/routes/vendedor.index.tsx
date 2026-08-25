@@ -158,8 +158,6 @@ function VendedorDashboard() {
         ) : data && computed ? (
           <>
             <SellerPerformanceBanner
-              contractsGrowth={computed.contractsGrowth}
-              commissionsGrowth={computed.commissionsGrowth}
               rankingPosition={data.metrics.rankingPosition}
               goalPercentage={computed.goalPercentage}
             />
