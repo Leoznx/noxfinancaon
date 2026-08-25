@@ -47,8 +47,10 @@ export type SellerClientPhoneClaim = {
   outcome: SellerClientPhoneClaimOutcome;
   phone_display: string;
   seller_name: string;
+  contact_status: "em_atendimento" | "cadastrado";
   first_contact_at: string;
   last_contact_at: string;
+  expires_at: string | null;
 };
 
 export type SellerClientPhoneContact = {
@@ -64,6 +66,7 @@ export type SellerClientPhoneContact = {
   last_contact_at: string;
   registered_at: string | null;
   partnership_id: string | null;
+  expires_at: string;
 };
 
 export type RegisterSellerClientDetails = {
