@@ -68,6 +68,7 @@ import { Route as VendedorPerfilRouteImport } from './routes/vendedor.perfil'
 import { Route as VendedorMetasRouteImport } from './routes/vendedor.metas'
 import { Route as VendedorMateriaisRouteImport } from './routes/vendedor.materiais'
 import { Route as VendedorLeadsRouteImport } from './routes/vendedor.leads'
+import { Route as VendedorContasDemoRouteImport } from './routes/vendedor.contas-demo'
 import { Route as VendedorComissoesRouteImport } from './routes/vendedor.comissoes'
 import { Route as VendedorClientesRouteImport } from './routes/vendedor.clientes'
 import { Route as VendedorAgendaRouteImport } from './routes/vendedor.agenda'
@@ -82,6 +83,7 @@ import { Route as InquilinoPainelRouteImport } from './routes/inquilino.painel'
 import { Route as InquilinoFaturasRouteImport } from './routes/inquilino.faturas'
 import { Route as InquilinoDocumentosRouteImport } from './routes/inquilino.documentos'
 import { Route as FaturasInquilinosIdRouteImport } from './routes/faturas-inquilinos.$id'
+import { Route as DemoPerfilRouteImport } from './routes/demo.$perfil'
 import { Route as ConsultasNovaRouteImport } from './routes/consultas.nova'
 import { Route as ConfiguracoesNiveisComissaoRouteImport } from './routes/configuracoes.niveis-comissao'
 import { Route as BlogSlugRouteImport } from './routes/blog.$slug'
@@ -419,6 +421,11 @@ const VendedorLeadsRoute = VendedorLeadsRouteImport.update({
   path: '/leads',
   getParentRoute: () => VendedorRoute,
 } as any)
+const VendedorContasDemoRoute = VendedorContasDemoRouteImport.update({
+  id: '/contas-demo',
+  path: '/contas-demo',
+  getParentRoute: () => VendedorRoute,
+} as any)
 const VendedorComissoesRoute = VendedorComissoesRouteImport.update({
   id: '/comissoes',
   path: '/comissoes',
@@ -493,6 +500,11 @@ const FaturasInquilinosIdRoute = FaturasInquilinosIdRouteImport.update({
 } as any).lazy(() =>
   import('./routes/faturas-inquilinos.$id.lazy').then((d) => d.Route),
 )
+const DemoPerfilRoute = DemoPerfilRouteImport.update({
+  id: '/demo/$perfil',
+  path: '/demo/$perfil',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ConsultasNovaRoute = ConsultasNovaRouteImport.update({
   id: '/nova',
   path: '/nova',
@@ -752,6 +764,7 @@ export interface FileRoutesByFullPath {
   '/blog/$slug': typeof BlogSlugRoute
   '/configuracoes/niveis-comissao': typeof ConfiguracoesNiveisComissaoRoute
   '/consultas/nova': typeof ConsultasNovaRoute
+  '/demo/$perfil': typeof DemoPerfilRoute
   '/faturas-inquilinos/$id': typeof FaturasInquilinosIdRoute
   '/inquilino/documentos': typeof InquilinoDocumentosRoute
   '/inquilino/faturas': typeof InquilinoFaturasRoute
@@ -766,6 +779,7 @@ export interface FileRoutesByFullPath {
   '/vendedor/agenda': typeof VendedorAgendaRoute
   '/vendedor/clientes': typeof VendedorClientesRoute
   '/vendedor/comissoes': typeof VendedorComissoesRoute
+  '/vendedor/contas-demo': typeof VendedorContasDemoRoute
   '/vendedor/leads': typeof VendedorLeadsRoute
   '/vendedor/materiais': typeof VendedorMateriaisRoute
   '/vendedor/metas': typeof VendedorMetasRoute
@@ -857,6 +871,7 @@ export interface FileRoutesByTo {
   '/blog/$slug': typeof BlogSlugRoute
   '/configuracoes/niveis-comissao': typeof ConfiguracoesNiveisComissaoRoute
   '/consultas/nova': typeof ConsultasNovaRoute
+  '/demo/$perfil': typeof DemoPerfilRoute
   '/faturas-inquilinos/$id': typeof FaturasInquilinosIdRoute
   '/inquilino/documentos': typeof InquilinoDocumentosRoute
   '/inquilino/faturas': typeof InquilinoFaturasRoute
@@ -871,6 +886,7 @@ export interface FileRoutesByTo {
   '/vendedor/agenda': typeof VendedorAgendaRoute
   '/vendedor/clientes': typeof VendedorClientesRoute
   '/vendedor/comissoes': typeof VendedorComissoesRoute
+  '/vendedor/contas-demo': typeof VendedorContasDemoRoute
   '/vendedor/leads': typeof VendedorLeadsRoute
   '/vendedor/materiais': typeof VendedorMateriaisRoute
   '/vendedor/metas': typeof VendedorMetasRoute
@@ -967,6 +983,7 @@ export interface FileRoutesById {
   '/blog/$slug': typeof BlogSlugRoute
   '/configuracoes/niveis-comissao': typeof ConfiguracoesNiveisComissaoRoute
   '/consultas/nova': typeof ConsultasNovaRoute
+  '/demo/$perfil': typeof DemoPerfilRoute
   '/faturas-inquilinos/$id': typeof FaturasInquilinosIdRoute
   '/inquilino/documentos': typeof InquilinoDocumentosRoute
   '/inquilino/faturas': typeof InquilinoFaturasRoute
@@ -981,6 +998,7 @@ export interface FileRoutesById {
   '/vendedor/agenda': typeof VendedorAgendaRoute
   '/vendedor/clientes': typeof VendedorClientesRoute
   '/vendedor/comissoes': typeof VendedorComissoesRoute
+  '/vendedor/contas-demo': typeof VendedorContasDemoRoute
   '/vendedor/leads': typeof VendedorLeadsRoute
   '/vendedor/materiais': typeof VendedorMateriaisRoute
   '/vendedor/metas': typeof VendedorMetasRoute
@@ -1078,6 +1096,7 @@ export interface FileRouteTypes {
     | '/blog/$slug'
     | '/configuracoes/niveis-comissao'
     | '/consultas/nova'
+    | '/demo/$perfil'
     | '/faturas-inquilinos/$id'
     | '/inquilino/documentos'
     | '/inquilino/faturas'
@@ -1092,6 +1111,7 @@ export interface FileRouteTypes {
     | '/vendedor/agenda'
     | '/vendedor/clientes'
     | '/vendedor/comissoes'
+    | '/vendedor/contas-demo'
     | '/vendedor/leads'
     | '/vendedor/materiais'
     | '/vendedor/metas'
@@ -1183,6 +1203,7 @@ export interface FileRouteTypes {
     | '/blog/$slug'
     | '/configuracoes/niveis-comissao'
     | '/consultas/nova'
+    | '/demo/$perfil'
     | '/faturas-inquilinos/$id'
     | '/inquilino/documentos'
     | '/inquilino/faturas'
@@ -1197,6 +1218,7 @@ export interface FileRouteTypes {
     | '/vendedor/agenda'
     | '/vendedor/clientes'
     | '/vendedor/comissoes'
+    | '/vendedor/contas-demo'
     | '/vendedor/leads'
     | '/vendedor/materiais'
     | '/vendedor/metas'
@@ -1292,6 +1314,7 @@ export interface FileRouteTypes {
     | '/blog/$slug'
     | '/configuracoes/niveis-comissao'
     | '/consultas/nova'
+    | '/demo/$perfil'
     | '/faturas-inquilinos/$id'
     | '/inquilino/documentos'
     | '/inquilino/faturas'
@@ -1306,6 +1329,7 @@ export interface FileRouteTypes {
     | '/vendedor/agenda'
     | '/vendedor/clientes'
     | '/vendedor/comissoes'
+    | '/vendedor/contas-demo'
     | '/vendedor/leads'
     | '/vendedor/materiais'
     | '/vendedor/metas'
@@ -1399,6 +1423,7 @@ export interface RootRouteChildren {
   AdminVerificacoesRoute: typeof AdminVerificacoesRoute
   AtivarFiancaTokenRoute: typeof AtivarFiancaTokenRoute
   BlogSlugRoute: typeof BlogSlugRoute
+  DemoPerfilRoute: typeof DemoPerfilRoute
   FaturasInquilinosIdRoute: typeof FaturasInquilinosIdRoute
   InquilinoDocumentosRoute: typeof InquilinoDocumentosRoute
   InquilinoFaturasRoute: typeof InquilinoFaturasRoute
@@ -1829,6 +1854,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof VendedorLeadsRouteImport
       parentRoute: typeof VendedorRoute
     }
+    '/vendedor/contas-demo': {
+      id: '/vendedor/contas-demo'
+      path: '/contas-demo'
+      fullPath: '/vendedor/contas-demo'
+      preLoaderRoute: typeof VendedorContasDemoRouteImport
+      parentRoute: typeof VendedorRoute
+    }
     '/vendedor/comissoes': {
       id: '/vendedor/comissoes'
       path: '/comissoes'
@@ -1925,6 +1957,13 @@ declare module '@tanstack/react-router' {
       path: '/faturas-inquilinos/$id'
       fullPath: '/faturas-inquilinos/$id'
       preLoaderRoute: typeof FaturasInquilinosIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/demo/$perfil': {
+      id: '/demo/$perfil'
+      path: '/demo/$perfil'
+      fullPath: '/demo/$perfil'
+      preLoaderRoute: typeof DemoPerfilRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/consultas/nova': {
@@ -2235,6 +2274,7 @@ interface VendedorRouteChildren {
   VendedorAgendaRoute: typeof VendedorAgendaRoute
   VendedorClientesRoute: typeof VendedorClientesRoute
   VendedorComissoesRoute: typeof VendedorComissoesRoute
+  VendedorContasDemoRoute: typeof VendedorContasDemoRoute
   VendedorLeadsRoute: typeof VendedorLeadsRoute
   VendedorMateriaisRoute: typeof VendedorMateriaisRoute
   VendedorMetasRoute: typeof VendedorMetasRoute
@@ -2248,6 +2288,7 @@ const VendedorRouteChildren: VendedorRouteChildren = {
   VendedorAgendaRoute: VendedorAgendaRoute,
   VendedorClientesRoute: VendedorClientesRoute,
   VendedorComissoesRoute: VendedorComissoesRoute,
+  VendedorContasDemoRoute: VendedorContasDemoRoute,
   VendedorLeadsRoute: VendedorLeadsRoute,
   VendedorMateriaisRoute: VendedorMateriaisRoute,
   VendedorMetasRoute: VendedorMetasRoute,
@@ -2334,6 +2375,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminVerificacoesRoute: AdminVerificacoesRoute,
   AtivarFiancaTokenRoute: AtivarFiancaTokenRoute,
   BlogSlugRoute: BlogSlugRoute,
+  DemoPerfilRoute: DemoPerfilRoute,
   FaturasInquilinosIdRoute: FaturasInquilinosIdRoute,
   InquilinoDocumentosRoute: InquilinoDocumentosRoute,
   InquilinoFaturasRoute: InquilinoFaturasRoute,

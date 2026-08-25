@@ -76,6 +76,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const authVersionRef = useRef(0);
 
   useEffect(() => {
+    // O portal demonstrativo é deliberadamente isolado: ele não restaura a
+    // sessão real do vendedor e não inicializa o client do Supabase. Além de
+    // impedir qualquer chamada de produção, isso mantém a aba demo independente
+    // mesmo quando o vendedor escolheu uma sessão restrita à aba original.
+    if (window.location.pathname.startsWith("/demo/")) {
+      setUser(null);
+      setIsLoading(false);
+      return;
+    }
+
     try {
       isLoggingOutRef.current = sessionStorage.getItem(LOGOUT_IN_PROGRESS_KEY) === "1";
     } catch {}
@@ -108,6 +118,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // uma sessão válida — ex.: o usuário confirma o e-mail de cadastro e volta pra Home com a
   // sessão só na URL/no client do Supabase, ou o token é revogado/expira em outra aba.
   useEffect(() => {
+    if (window.location.pathname.startsWith("/demo/")) {
+      setUser(null);
+      setIsLoading(false);
+      return;
+    }
+
     let active = true;
     let unsubscribe: (() => void) | null = null;
 

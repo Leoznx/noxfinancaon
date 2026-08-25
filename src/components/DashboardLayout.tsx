@@ -39,6 +39,7 @@ import {
   Shuffle,
   IdCard,
   ContactRound,
+  MonitorPlay,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { SinoNotificacoes } from "./SinoNotificacoes";
@@ -292,6 +293,7 @@ const vendedorItems = [
     highlight: true,
   },
   { icon: LayoutDashboard, label: "Dashboard", href: "/vendedor" },
+  { icon: MonitorPlay, label: "Contas demo", href: "/vendedor/contas-demo" },
   { icon: Users, label: "Meus Leads", href: "/vendedor/leads", module: "leads_proprios" },
   { icon: ListChecks, label: "Atendimento", href: "/vendedor/pipeline", module: "pipeline" },
   { icon: Bell, label: "Minha Agenda", href: "/vendedor/agenda", module: "agenda" },
@@ -481,7 +483,9 @@ export function DashboardLayout({
     menuItems = [
       vendedorItems[0], // Cadastrar Cliente - primeira aba destacada e sempre visível
       vendedorItems[1], // Dashboard - sempre visível
-      ...vendedorItems.slice(2, -1).filter((item) => podeVerModulo(permissoesCargo, item.module)),
+      ...vendedorItems
+        .slice(2, -1)
+        .filter((item) => !item.module || podeVerModulo(permissoesCargo, item.module)),
       vendedorItems[vendedorItems.length - 1], // Meu Perfil - sempre visível
     ];
   } else if (cargoInterno) {
