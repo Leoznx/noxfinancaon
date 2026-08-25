@@ -35,9 +35,9 @@ export function PipelineSummary({
 
   return (
     <DashboardSection
-      title="Pipeline"
+      title="Atendimento"
       info="Distribuição dos seus leads por etapa"
-      footer="Ver pipeline completo"
+      footer="Ver atendimentos"
       href="/vendedor/pipeline"
     >
       <div className="space-y-3">

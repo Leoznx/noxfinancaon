@@ -293,7 +293,7 @@ const vendedorItems = [
   },
   { icon: LayoutDashboard, label: "Dashboard", href: "/vendedor" },
   { icon: Users, label: "Meus Leads", href: "/vendedor/leads", module: "leads_proprios" },
-  { icon: ListChecks, label: "Pipeline", href: "/vendedor/pipeline", module: "pipeline" },
+  { icon: ListChecks, label: "Atendimento", href: "/vendedor/pipeline", module: "pipeline" },
   { icon: Bell, label: "Minha Agenda", href: "/vendedor/agenda", module: "agenda" },
   { icon: Target, label: "Minhas Metas", href: "/vendedor/metas", module: "metas" },
   {

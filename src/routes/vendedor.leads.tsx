@@ -433,7 +433,7 @@ function MeusLeads() {
                     <Button asChild size="sm" variant="outline" className="h-7 gap-1 px-2 text-[11px]" onClick={() => alterarStatus(lead, "em_atendimento")}>
                       <Link to="/vendedor/pipeline">
                         <MoveRight className="h-3 w-3" />
-                        Pipeline
+                        Atendimento
                       </Link>
                     </Button>
                   </div>
