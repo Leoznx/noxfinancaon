@@ -1,17 +1,12 @@
 import { useCallback, useEffect, useMemo, useState, type ComponentType } from "react";
 import { Link } from "@tanstack/react-router";
 import {
-  Activity,
   ArrowRight,
-  BriefcaseBusiness,
   CalendarDays,
   CheckCircle2,
   Clock3,
   Eye,
-  FileCheck2,
-  FileSearch,
   FileText,
-  FileWarning,
   MoreVertical,
   RefreshCw,
   ShieldAlert,
@@ -65,8 +60,6 @@ const DOCUMENT_COLORS = {
   recusado: "#EF3E45",
 };
 
-const PENDING_DOCUMENT_STATUSES = new Set(["pendente", "enviado", "em_analise"]);
-const CLOSED_CLAIM_STATUSES = new Set(["encerrado", "resolvido", "cancelado", "reprovado", "recusado"]);
 const ACTIVE_CONTRACT_STATUSES = new Set(["ativa", "active", "vigente"]);
 
 export function JuridicoDashboard() {
@@ -108,36 +101,6 @@ export function JuridicoDashboard() {
 
   const originsById = useMemo(() => new Map(data.origens.map((item) => [item.id, item])), [data.origens]);
 
-  const stats = useMemo(() => {
-    const consultasHoje = data.consultas.filter((item) => isToday(item.created_at)).length;
-    const consultasOntem = data.consultas.filter((item) => isYesterday(item.created_at)).length;
-    const aguardando = data.consultas.filter(isAwaitingReview).length;
-    const emAnalise = data.consultas.filter(isInReview).length;
-    const aprovadasHoje = data.consultas.filter((item) => item.approved_at && isToday(item.approved_at)).length;
-    const aprovadasOntem = data.consultas.filter((item) => item.approved_at && isYesterday(item.approved_at)).length;
-    const reprovadasHoje = data.consultas.filter((item) => item.rejected_at && isToday(item.rejected_at)).length;
-    const reprovadasOntem = data.consultas.filter((item) => item.rejected_at && isYesterday(item.rejected_at)).length;
-    const docsPendentes = data.documentos.filter((item) => PENDING_DOCUMENT_STATUSES.has(normalize(item.verification_status))).length;
-    const contratosAtivos = data.contratos.filter((item) => ACTIVE_CONTRACT_STATUSES.has(normalize(item.status))).length;
-    const sinistrosAbertos = data.sinistros.filter((item) => !CLOSED_CLAIM_STATUSES.has(normalize(item.status))).length;
-
-    return {
-      consultasHoje,
-      aguardando,
-      emAnalise,
-      aprovadasHoje,
-      reprovadasHoje,
-      docsPendentes,
-      contratosAtivos,
-      sinistrosAbertos,
-      comparacoes: {
-        novas: comparisonText(consultasHoje, consultasOntem),
-        aprovadas: comparisonText(aprovadasHoje, aprovadasOntem),
-        reprovadas: comparisonText(reprovadasHoje, reprovadasOntem),
-      },
-    };
-  }, [data]);
-
   const priorities = useMemo(
     () =>
       data.consultas
@@ -168,24 +131,6 @@ export function JuridicoDashboard() {
     };
   }, [data.documentos]);
 
-  const pendingByOrigin = useMemo(() => {
-    const grouped = new Map<string, number>();
-    for (const item of data.documentos) {
-      if (!PENDING_DOCUMENT_STATUSES.has(normalize(item.verification_status))) continue;
-      const profile = originsById.get(item.user_id);
-      const name = profile?.nome?.trim() || roleLabel(profile?.role) || "Origem não informada";
-      grouped.set(name, (grouped.get(name) ?? 0) + 1);
-    }
-    const ordered = [...grouped.entries()]
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value);
-    if (ordered.length <= 5) return ordered;
-    return [
-      ...ordered.slice(0, 5),
-      { name: "Outros", value: ordered.slice(5).reduce((sum, item) => sum + item.value, 0) },
-    ];
-  }, [data.documentos, originsById]);
-
   const expiringContracts = useMemo(() => {
     const today = startOfLocalDay(new Date()).getTime();
     return data.contratos
@@ -202,7 +147,7 @@ export function JuridicoDashboard() {
   if (loading) return <JuridicoDashboardSkeleton />;
 
   return (
-    <div className="relative space-y-3 xl:grid xl:h-full xl:min-h-0 xl:grid-rows-[76px_94px_minmax(0,1.08fr)_minmax(0,0.92fr)] xl:gap-3 xl:overflow-hidden xl:space-y-0">
+    <div className="relative space-y-3 xl:grid xl:h-full xl:min-h-0 xl:grid-rows-[174px_minmax(0,1fr)] xl:gap-3 xl:overflow-hidden xl:space-y-0">
       {error ? (
         <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-800 xl:absolute xl:right-2 xl:top-2 xl:z-30 xl:w-[430px] xl:shadow-lg">
           <ShieldAlert className="mt-0.5 shrink-0" size={18} />
@@ -216,21 +161,21 @@ export function JuridicoDashboard() {
         </div>
       ) : null}
 
-      <section className="relative overflow-hidden rounded-2xl border border-yellow-300/80 bg-gradient-to-r from-yellow-50 via-white to-amber-50/70 px-4 py-3 sm:px-5 xl:h-full xl:py-1.5">
-        <div className="absolute -left-10 -top-16 h-40 w-40 rounded-full bg-yellow-300/20 blur-2xl" />
+      <section className="relative min-h-[150px] overflow-hidden rounded-2xl border border-yellow-300/80 bg-gradient-to-r from-yellow-50 via-white to-amber-50/70 px-5 py-5 sm:px-7 xl:h-full xl:min-h-0 xl:py-3">
+        <div className="absolute -left-10 -top-16 h-52 w-52 rounded-full bg-yellow-300/20 blur-2xl" />
         <div className="relative flex h-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-center gap-3 xl:h-full">
             <img
               src="/dashboard/juridico-protecao.png"
               alt="Proteção e segurança jurídica"
-              className="hidden h-[62px] w-[176px] shrink-0 object-contain object-left sm:block xl:h-[68px] xl:w-[190px]"
+              className="hidden h-[104px] w-[300px] shrink-0 object-contain object-left sm:block xl:h-[148px] xl:w-[420px]"
             />
             <div className="min-w-0">
-              <h2 className="text-sm font-extrabold leading-tight text-neutral-950 sm:text-[15px]">Proteção jurídica com controle e agilidade.</h2>
-              <p className="mt-1 text-xs leading-4 text-neutral-600">Centralize análises, acompanhe prazos e decida com mais segurança.</p>
+              <h2 className="text-base font-extrabold leading-tight text-neutral-950 sm:text-lg xl:text-xl">Proteção jurídica com controle e agilidade.</h2>
+              <p className="mt-1.5 text-xs leading-4 text-neutral-600 sm:text-sm">Centralize análises, acompanhe prazos e decida com mais segurança.</p>
             </div>
           </div>
-          <Button asChild variant="outline" className="h-8 w-full shrink-0 gap-2 border-yellow-300 bg-white px-3 text-xs font-bold shadow-sm hover:bg-yellow-50 sm:w-auto">
+          <Button asChild variant="outline" className="h-9 w-full shrink-0 gap-2 border-yellow-300 bg-white px-4 text-xs font-bold shadow-sm hover:bg-yellow-50 sm:w-auto">
             <Link to="/admin/aprovacoes">
               <RefreshCw size={14} /> Ver fluxo jurídico
             </Link>
@@ -238,19 +183,8 @@ export function JuridicoDashboard() {
         </div>
       </section>
 
-      <section className="grid grid-cols-2 gap-2.5 md:grid-cols-4 xl:h-full xl:min-h-0 xl:grid-cols-8 xl:gap-2.5">
-        <StatCard label="Novas hoje" value={stats.consultasHoje} Icon={FileSearch} tone="neutral" comparison={stats.comparacoes.novas} />
-        <StatCard label="Aguardando análise" value={stats.aguardando} Icon={Clock3} tone="amber" />
-        <StatCard label="Em análise" value={stats.emAnalise} Icon={Activity} tone="blue" />
-        <StatCard label="Aprovadas hoje" value={stats.aprovadasHoje} Icon={FileCheck2} tone="green" comparison={stats.comparacoes.aprovadas} />
-        <StatCard label="Reprovadas hoje" value={stats.reprovadasHoje} Icon={XCircle} tone="red" comparison={stats.comparacoes.reprovadas} />
-        <StatCard label="Docs pendentes" value={stats.docsPendentes} Icon={FileWarning} tone="orange" />
-        <StatCard label="Contratos ativos" value={stats.contratosAtivos} Icon={BriefcaseBusiness} tone="purple" />
-        <StatCard label="Sinistros abertos" value={stats.sinistrosAbertos} Icon={ShieldAlert} tone="red" />
-      </section>
-
-      <section className="grid min-h-0 gap-3 xl:h-full xl:grid-cols-12">
-        <div className="flex min-h-[300px] flex-col rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm xl:col-span-6 xl:h-full xl:min-h-0 xl:overflow-hidden">
+      <section className="grid min-h-0 gap-3 xl:h-full xl:grid-cols-12 xl:grid-rows-[minmax(0,1.08fr)_minmax(0,0.92fr)]">
+        <div className="flex min-h-[300px] flex-col rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm xl:col-span-6 xl:col-start-1 xl:row-start-1 xl:h-full xl:min-h-0 xl:overflow-hidden">
           <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-sm font-extrabold text-neutral-950">Movimentação jurídica</h2>
@@ -285,7 +219,7 @@ export function JuridicoDashboard() {
           </div>
         </div>
 
-        <div className="flex min-h-[300px] flex-col rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm xl:col-span-3 xl:h-full xl:min-h-0 xl:overflow-hidden">
+        <div className="flex min-h-[300px] flex-col rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm xl:col-span-3 xl:col-start-7 xl:row-start-1 xl:h-full xl:min-h-0 xl:overflow-hidden">
           <h2 className="text-sm font-extrabold text-neutral-950">Documentos por status</h2>
           {documentStatus.total ? (
             <>
@@ -319,32 +253,7 @@ export function JuridicoDashboard() {
           <CardFooterLink to="/admin/verificacoes" label="Ver relatório completo" />
         </div>
 
-        <div className="flex min-h-[300px] flex-col rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm xl:col-span-3 xl:h-full xl:min-h-0 xl:overflow-hidden">
-          <h2 className="text-sm font-extrabold text-neutral-950">Docs pendentes por origem</h2>
-          {pendingByOrigin.length ? (
-            <div className="mt-3 space-y-2.5 xl:min-h-0 xl:flex-1">
-              {pendingByOrigin.map((item) => (
-                <div key={item.name}>
-                  <div className="mb-1 flex items-center justify-between gap-3 text-[11px]">
-                    <span className="truncate font-medium text-neutral-700">{item.name}</span>
-                    <strong className="text-neutral-950">{item.value}</strong>
-                  </div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-neutral-100">
-                    <div
-                      className="h-full rounded-full bg-yellow-400"
-                      style={{ width: `${Math.max(8, (item.value / Math.max(pendingByOrigin[0]?.value ?? 1, 1)) * 100)}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : <EmptyState />}
-          <CardFooterLink to="/admin/verificacoes" label="Ver todas as origens" />
-        </div>
-      </section>
-
-      <section className="grid min-h-0 gap-3 xl:h-full xl:grid-cols-12">
-        <div className="flex min-h-[280px] flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm xl:col-span-6 xl:h-full xl:min-h-0">
+        <div className="flex min-h-[280px] flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm xl:col-span-6 xl:col-start-1 xl:row-start-2 xl:h-full xl:min-h-0">
           <div className="shrink-0 border-b border-neutral-100 px-3 py-2.5">
             <h2 className="text-sm font-extrabold text-neutral-950">Prioridades de análise</h2>
             <p className="mt-0.5 text-[10px] text-neutral-500">Processos ordenados pelos que estão aguardando há mais tempo.</p>
@@ -411,7 +320,7 @@ export function JuridicoDashboard() {
           <CardFooterLink to="/admin/aprovacoes" label="Ver todas as prioridades" />
         </div>
 
-        <div className="flex min-h-[280px] flex-col rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm xl:col-span-3 xl:h-full xl:min-h-0 xl:overflow-hidden">
+        <div className="flex min-h-[280px] flex-col rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm xl:col-span-3 xl:col-start-7 xl:row-start-2 xl:h-full xl:min-h-0 xl:overflow-hidden">
           <h2 className="text-sm font-extrabold text-neutral-950">Contratos próximos do vencimento</h2>
           {expiringContracts.length ? (
             <div className="mt-1.5 min-h-0 flex-1 divide-y divide-neutral-100 overflow-hidden">
@@ -431,15 +340,15 @@ export function JuridicoDashboard() {
           <CardFooterLink to="/admin/contratos" label="Ver todos os contratos" />
         </div>
 
-        <div className="flex min-h-[280px] flex-col rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm xl:col-span-3 xl:h-full xl:min-h-0 xl:overflow-hidden">
+        <div className="flex min-h-[420px] flex-col rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm xl:col-span-3 xl:col-start-10 xl:row-span-2 xl:row-start-1 xl:h-full xl:min-h-0 xl:overflow-hidden">
           <h2 className="text-sm font-extrabold text-neutral-950">Últimas atividades</h2>
           {activities.length ? (
             <div className="mt-1.5 min-h-0 flex-1 divide-y divide-neutral-100 overflow-hidden">
               {activities.map((item) => {
                 const Icon = item.Icon;
                 return (
-                  <Link key={item.id} to={item.to} className="flex items-start gap-2 py-1.5">
-                    <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${toneClasses[item.tone].soft} ${toneClasses[item.tone].text}`}><Icon size={14} /></span>
+                  <Link key={item.id} to={item.to} className="flex items-start gap-2.5 py-2.5 xl:py-3">
+                    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${toneClasses[item.tone].soft} ${toneClasses[item.tone].text}`}><Icon size={15} /></span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-xs font-extrabold text-neutral-950">{item.title}</span>
                       <span className="mt-0.5 block truncate text-[10px] text-neutral-500">{item.detail}</span>
@@ -453,35 +362,6 @@ export function JuridicoDashboard() {
           <CardFooterLink to="/admin/aprovacoes" label="Ver todas as atividades" />
         </div>
       </section>
-    </div>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  Icon,
-  tone,
-  comparison,
-}: {
-  label: string;
-  value: number;
-  Icon: ComponentType<LucideProps>;
-  tone: Tone;
-  comparison?: string | null;
-}) {
-  return (
-    <div className="relative min-h-[108px] rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md xl:h-full xl:min-h-0 xl:overflow-hidden xl:p-2.5">
-      <div className="flex items-start gap-2">
-        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${toneClasses[tone].soft} ${toneClasses[tone].text}`}>
-          <Icon size={16} strokeWidth={1.8} />
-        </span>
-        <div className="min-w-0">
-          <p className="min-h-6 text-[9px] font-bold leading-3 text-neutral-600">{label}</p>
-          <strong className="block text-xl font-black tabular-nums tracking-tight text-neutral-950">{value}</strong>
-        </div>
-      </div>
-      {comparison ? <p className={`mt-1 text-[8px] font-bold xl:absolute xl:bottom-2.5 xl:left-2.5 ${comparison.startsWith("-") ? "text-red-500" : "text-emerald-600"}`}>{comparison}</p> : null}
     </div>
   );
 }
@@ -509,20 +389,14 @@ function EmptyState() {
 
 function JuridicoDashboardSkeleton() {
   return (
-    <div className="animate-pulse space-y-3 xl:grid xl:h-full xl:min-h-0 xl:grid-rows-[76px_94px_minmax(0,1.08fr)_minmax(0,0.92fr)] xl:gap-3 xl:space-y-0">
+    <div className="animate-pulse space-y-3 xl:grid xl:h-full xl:min-h-0 xl:grid-rows-[174px_minmax(0,1fr)] xl:gap-3 xl:space-y-0">
       <div className="rounded-2xl border border-yellow-100 bg-yellow-50/60" />
-      <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4 xl:grid-cols-8">
-        {Array.from({ length: 8 }).map((_, index) => <div key={index} className="h-[108px] rounded-2xl border border-neutral-100 bg-white xl:h-full" />)}
-      </div>
-      <div className="grid gap-3 xl:h-full xl:grid-cols-12">
-        <div className="h-72 rounded-2xl border border-neutral-100 bg-white xl:col-span-6 xl:h-full" />
-        <div className="h-72 rounded-2xl border border-neutral-100 bg-white xl:col-span-3 xl:h-full" />
-        <div className="h-72 rounded-2xl border border-neutral-100 bg-white xl:col-span-3 xl:h-full" />
-      </div>
-      <div className="grid gap-3 xl:h-full xl:grid-cols-12">
-        <div className="h-64 rounded-2xl border border-neutral-100 bg-white xl:col-span-6 xl:h-full" />
-        <div className="h-64 rounded-2xl border border-neutral-100 bg-white xl:col-span-3 xl:h-full" />
-        <div className="h-64 rounded-2xl border border-neutral-100 bg-white xl:col-span-3 xl:h-full" />
+      <div className="grid gap-3 xl:h-full xl:grid-cols-12 xl:grid-rows-2">
+        <div className="h-72 rounded-2xl border border-neutral-100 bg-white xl:col-span-6 xl:col-start-1 xl:row-start-1 xl:h-full" />
+        <div className="h-72 rounded-2xl border border-neutral-100 bg-white xl:col-span-3 xl:col-start-7 xl:row-start-1 xl:h-full" />
+        <div className="h-64 rounded-2xl border border-neutral-100 bg-white xl:col-span-6 xl:col-start-1 xl:row-start-2 xl:h-full" />
+        <div className="h-64 rounded-2xl border border-neutral-100 bg-white xl:col-span-3 xl:col-start-7 xl:row-start-2 xl:h-full" />
+        <div className="h-[420px] rounded-2xl border border-neutral-100 bg-white xl:col-span-3 xl:col-start-10 xl:row-span-2 xl:row-start-1 xl:h-full" />
       </div>
     </div>
   );
@@ -590,7 +464,7 @@ function buildActivities(data: JuridicoDashboardData, originsById: Map<string, {
   for (const claim of data.sinistros) {
     items.push({ id: `claim-${claim.id}`, title: "Sinistro aberto", detail: `${claim.apolice?.numero ? `Contrato ${claim.apolice.numero}` : "Contrato não informado"}${claim.apolice?.consulta?.tenant_name ? ` · ${claim.apolice.consulta.tenant_name}` : ""}`, date: claim.created_at, tone: "purple", Icon: ShieldAlert, to: "/sinistros" });
   }
-  return items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 4);
+  return items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 8);
 }
 
 function isAwaitingReview(item: JuridicoConsulta) {
@@ -634,24 +508,8 @@ function monthKey(value: Date) {
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}`;
 }
 
-function isToday(value: string) {
-  return dayKey(new Date(value)) === dayKey(new Date());
-}
-
-function isYesterday(value: string) {
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  return dayKey(new Date(value)) === dayKey(yesterday);
-}
-
 function percentage(value: number, total: number) {
   return total ? Math.round((value / total) * 100) : 0;
-}
-
-function comparisonText(current: number, previous: number) {
-  if (previous === 0) return null;
-  const diff = Math.round(((current - previous) / previous) * 100);
-  return `${diff > 0 ? "+" : ""}${diff}% vs ontem`;
 }
 
 function elapsedTime(value: string) {
