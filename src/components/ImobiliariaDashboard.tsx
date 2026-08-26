@@ -85,7 +85,7 @@ export function ImobiliariaDashboard({ profileId, email }: { profileId: string; 
   const displayedMonths = data.months.slice(-Number(chartPeriod));
 
   return (
-    <div className="mx-auto w-full max-w-[1580px] space-y-3.5 animate-in fade-in duration-300 xl:grid xl:h-full xl:min-h-0 xl:grid-rows-[320px_84px_minmax(0,1fr)] xl:gap-2.5 xl:space-y-0">
+    <div className="mx-auto w-full max-w-[1580px] space-y-3.5 animate-in fade-in duration-300 xl:grid xl:h-full xl:min-h-[784px] xl:grid-rows-[320px_84px_minmax(360px,1fr)] xl:gap-2.5 xl:space-y-0">
       <HeroBanner />
 
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:h-full xl:grid-cols-4 xl:gap-2.5">
@@ -195,7 +195,7 @@ function PolicyStatusChart({ data }: { data: ImobiliariaDashboardData["policySta
   const total = data.reduce((sum, item) => sum + item.value, 0);
   const chartData = total > 0
     ? data
-    : [{ key: "empty", label: "Sem apólices", value: 1, color: "#F1F1F1" }];
+    : [{ key: "empty", label: "Sem apólices", value: 1, color: "#E8E8E8" }];
   return (
     <div
       className="mt-3 flex min-h-[440px] flex-1 flex-col xl:mt-2 xl:min-h-0"
