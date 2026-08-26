@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Lock, Mail, Info, Settings, Eye, EyeOff } from "lucide-react";
-import { useAuth } from "@/components/AuthProvider";
+import { useAuth, type InternalRole } from "@/components/AuthProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { LogoNox } from "@/components/LogoNox";
@@ -99,7 +99,7 @@ function LoginComponent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const INTERNAL_ROLE_SET = new Set([
+  const INTERNAL_ROLE_SET = new Set<InternalRole>([
     "admin_master",
     "juridico",
     "financeiro",
@@ -114,32 +114,41 @@ function LoginComponent() {
       nome: profile?.nome || user.user_metadata?.nome || user.user_metadata?.full_name || null,
       avatarUrl: profile?.avatar_url || null,
     });
-    login(user.email, profile.role, user.id);
-
-    if (returnTo === "/simular/resultado") {
-      irPara("/simular/resultado", user.id, profile);
-      return;
-    }
-
     // Prioriza internalRole quando existir (cargo interno sobre profile.role='admin')
     let effectiveRole: string = profile.role;
-    let internalRole: string | null =
-      internalRoleHint && INTERNAL_ROLE_SET.has(internalRoleHint) ? internalRoleHint : null;
+    let internalRole: InternalRole | null =
+      internalRoleHint && INTERNAL_ROLE_SET.has(internalRoleHint as InternalRole)
+        ? (internalRoleHint as InternalRole)
+        : null;
     if (!internalRole) {
       try {
         const { data: ir } = await supabase
           .from("internal_users" as any)
           .select("role,status")
           .eq("auth_user_id", user.id)
-          .eq("status", "ativo")
           .maybeSingle();
         const r = (ir as any)?.role;
-        if (r && INTERNAL_ROLE_SET.has(r)) internalRole = r;
+        if ((ir as any)?.status === "ativo" && r && INTERNAL_ROLE_SET.has(r as InternalRole)) {
+          internalRole = r as InternalRole;
+        } else if (!ir && INTERNAL_ROLE_SET.has(profile.role as InternalRole)) {
+          // Compatibilidade com contas internas antigas, anteriores à tabela
+          // internal_users, cujo cargo ainda vive somente em profiles.role.
+          internalRole = profile.role as InternalRole;
+        }
       } catch (e) {
         console.warn("[login] internal role lookup failed", e);
+        if (INTERNAL_ROLE_SET.has(profile.role as InternalRole)) {
+          internalRole = profile.role as InternalRole;
+        }
       }
     }
     if (internalRole) effectiveRole = internalRole;
+    login(user.email, profile.role, user.id, internalRole);
+
+    if (returnTo === "/simular/resultado") {
+      irPara("/simular/resultado", user.id, profile);
+      return;
+    }
 
     irPara(
       returnTo && returnTo !== "/login" ? returnTo : redirectPathForRole(effectiveRole),
