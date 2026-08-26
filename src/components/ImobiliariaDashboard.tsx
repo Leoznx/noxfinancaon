@@ -1,7 +1,5 @@
 import { Link } from "@tanstack/react-router";
 import {
-  Bar,
-  BarChart,
   CartesianGrid,
   Cell,
   Legend,
@@ -16,16 +14,14 @@ import {
 } from "recharts";
 import {
   CalendarDays,
-  CheckCircle2,
   DollarSign,
-  FileCheck2,
   FileText,
   Search,
   ShieldCheck,
   TrendingUp,
   Users,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState, type ComponentType } from "react";
+import { useCallback, useEffect, useState, type ComponentType } from "react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -35,7 +31,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { fetchNivelInfo, type NivelInfo } from "@/lib/niveis-parceria";
 import {
   fetchImobiliariaDashboard,
   formatCurrency,
@@ -44,30 +39,17 @@ import {
 
 type Icon = ComponentType<{ className?: string; size?: number; strokeWidth?: number }>;
 
-const LEVEL_ASSET: Record<string, string> = {
-  BRONZE: "/assets/nox-icon-fidelidade-bronze.webp",
-  PRATA: "/assets/nox-icon-fidelidade-prata.webp",
-  OURO: "/assets/nox-icon-fidelidade-ouro.webp",
-  DIAMANTE: "/assets/nox-icon-fidelidade-diamante.webp",
-};
-
 export function ImobiliariaDashboard({ profileId, email }: { profileId: string; email: string }) {
   const [data, setData] = useState<ImobiliariaDashboardData | null>(null);
-  const [level, setLevel] = useState<NivelInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [chartPeriod, setChartPeriod] = useState("6");
-  const [commissionPeriod, setCommissionPeriod] = useState("year");
 
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [dashboardData, levelData] = await Promise.all([
-        fetchImobiliariaDashboard(profileId, email),
-        fetchNivelInfo(profileId, "imobiliaria"),
-      ]);
+      const dashboardData = await fetchImobiliariaDashboard(profileId, email);
       setData(dashboardData);
-      setLevel(levelData);
     } catch (cause) {
       const failure = cause as { message?: string; details?: string; hint?: string; code?: string };
       console.error(
@@ -100,59 +82,11 @@ export function ImobiliariaDashboard({ profileId, email }: { profileId: string; 
   if (loading) return <DashboardSkeleton />;
   if (error || !data) return <DashboardError message={error ?? "Dados indisponíveis."} onRetry={load} />;
 
-  const levelName = level?.nivelAtual?.nome_nivel?.toUpperCase() || "BRONZE";
-  const levelTarget = Number(level?.proximoNivel?.min_contratos || level?.contratosAtivos || 1);
-  const activeContracts = level?.contratosAtivos ?? 0;
-  const levelProgress = level?.proximoNivel ? Math.min(100, (activeContracts / levelTarget) * 100) : 100;
-  const remaining = Math.max(0, levelTarget - activeContracts);
   const displayedMonths = data.months.slice(-Number(chartPeriod));
-  const currentYear = String(new Date().getFullYear());
-  const commissionMonths = commissionPeriod === "year"
-    ? data.months.filter((month) => month.key.startsWith(currentYear))
-    : data.months;
 
   return (
-    <div className="mx-auto w-full max-w-[1580px] space-y-3.5 animate-in fade-in duration-300 xl:grid xl:h-full xl:min-h-0 xl:grid-rows-[160px_82px_76px_minmax(0,1.15fr)_minmax(0,0.85fr)] xl:gap-2.5 xl:space-y-0">
+    <div className="mx-auto w-full max-w-[1580px] space-y-3.5 animate-in fade-in duration-300 xl:grid xl:h-full xl:min-h-0 xl:grid-rows-[220px_84px_minmax(0,1fr)] xl:gap-2.5 xl:space-y-0">
       <HeroBanner />
-
-      <section className="grid gap-3 rounded-2xl border border-neutral-200/80 bg-white p-4 shadow-[0_5px_22px_rgba(0,0,0,0.035)] md:grid-cols-[minmax(230px,320px)_1fr_auto] md:items-center md:px-6 xl:h-full xl:gap-2 xl:overflow-hidden xl:px-4 xl:py-2">
-        <div className="flex min-w-0 items-center gap-4 xl:gap-3">
-          <img
-            src={LEVEL_ASSET[levelName] ?? LEVEL_ASSET.BRONZE}
-            alt={`Nível ${levelName}`}
-            className="h-16 w-16 shrink-0 object-contain sm:h-[72px] sm:w-[72px] xl:h-14 xl:w-14"
-          />
-          <div className="min-w-0">
-            <p className="text-[9px] font-black uppercase tracking-[0.22em] text-neutral-400">Status de parceria</p>
-            <h2 className="truncate text-xl font-black tracking-tight text-neutral-950 xl:text-lg">{levelName}</h2>
-            <span className="mt-1 inline-flex rounded-full bg-neutral-950 px-3 py-1 text-[10px] font-extrabold text-white">
-              {Number(level?.nivelAtual?.percentual_comissao || 0).toLocaleString("pt-BR")}% comissão
-            </span>
-          </div>
-        </div>
-
-        <div className="min-w-0 space-y-2 md:px-5 xl:space-y-1.5">
-          <p className="text-[9px] font-black uppercase tracking-[0.22em] text-neutral-400">Progresso para o próximo nível</p>
-          <div className="h-2 overflow-hidden rounded-full bg-neutral-100">
-            <div
-              className="h-full rounded-full bg-[#FFC400] transition-[width] duration-700 ease-out"
-              style={{ width: `${levelProgress}%` }}
-            />
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between gap-4 md:min-w-[230px]">
-          <div>
-            <p className="text-sm font-black tabular-nums text-neutral-950">{activeContracts} / {levelTarget} contratos</p>
-            <p className="mt-1 text-xs text-neutral-500">
-              {level?.proximoNivel ? <>Faltam <strong className="text-[#D7A600]">{remaining} contratos</strong> para {level.proximoNivel.nome_nivel}</> : "Nível máximo alcançado"}
-            </p>
-          </div>
-          <Button asChild variant="outline" size="sm" className="h-9 shrink-0 rounded-lg text-xs font-bold">
-            <Link to="/plano-carreira">Ver detalhes</Link>
-          </Button>
-        </div>
-      </section>
 
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:h-full xl:grid-cols-4 xl:gap-2.5">
         <MetricCard icon={Search} label="Consultas pendentes" value={String(data.stats.consultasPendentes)} trend={data.trends.consultas} />
@@ -161,14 +95,14 @@ export function ImobiliariaDashboard({ profileId, email }: { profileId: string; 
         <MetricCard icon={DollarSign} label="Comissões acumuladas" value={formatCurrency(data.stats.comissoesAcumuladas)} trend={data.trends.comissoes} />
       </section>
 
-      <section className="grid gap-3 xl:min-h-0 xl:grid-cols-[1.15fr_0.9fr_1.1fr] xl:gap-2.5">
-        <DashboardPanel className="min-h-[310px] xl:h-full xl:min-h-0 xl:overflow-hidden">
+      <section className="grid gap-3 xl:min-h-0 xl:grid-cols-[1.18fr_0.9fr_1fr] xl:gap-2.5">
+        <DashboardPanel className="min-h-[480px] xl:flex xl:h-full xl:min-h-0 xl:flex-col xl:overflow-hidden">
           <PanelHeader title="Consultas e contratos por mês">
             <CompactSelect value={chartPeriod} onValueChange={setChartPeriod} items={[{ value: "6", label: "Últimos 6 meses" }, { value: "12", label: "Últimos 12 meses" }]} />
           </PanelHeader>
-          <div className="mt-3 h-[238px] xl:mt-2 xl:h-[calc(100%-2.25rem)]">
+          <div className="mt-3 h-[410px] min-h-0 xl:mt-2 xl:h-auto xl:flex-1">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={displayedMonths} margin={{ top: 8, right: 8, left: -24, bottom: 0 }}>
+              <LineChart data={displayedMonths} margin={{ top: 20, right: 14, left: -18, bottom: 12 }}>
                 <CartesianGrid stroke="#EEEEEE" strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "#858585", fontSize: 10 }} />
                 <YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={{ fill: "#A3A3A3", fontSize: 10 }} />
@@ -181,72 +115,12 @@ export function ImobiliariaDashboard({ profileId, email }: { profileId: string; 
           </div>
         </DashboardPanel>
 
-        <DashboardPanel className="min-h-[310px] xl:h-full xl:min-h-0 xl:overflow-hidden">
+        <DashboardPanel className="min-h-[520px] xl:flex xl:h-full xl:min-h-0 xl:flex-col xl:overflow-hidden">
           <PanelHeader title="Status das apólices" />
           <PolicyStatusChart data={data.policyStatus} />
         </DashboardPanel>
 
-        <DashboardPanel className="min-h-[310px] xl:h-full xl:min-h-0 xl:overflow-hidden">
-          <PanelHeader title="Comissões mensais (R$)">
-            <CompactSelect value={commissionPeriod} onValueChange={setCommissionPeriod} items={[{ value: "year", label: "Este ano" }, { value: "12", label: "Últimos 12 meses" }]} />
-          </PanelHeader>
-          <div className="mt-3 h-[238px] xl:mt-2 xl:h-[calc(100%-2.25rem)]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={commissionMonths} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
-                <CartesianGrid stroke="#EEEEEE" strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "#858585", fontSize: 10 }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: "#A3A3A3", fontSize: 10 }} tickFormatter={formatAxisMoney} />
-                <Tooltip content={<ChartTooltip currency />} cursor={{ fill: "#FAFAFA" }} />
-                <Bar dataKey="comissoes" name="Comissões" fill="#FFC400" radius={[5, 5, 0, 0]} maxBarSize={30} animationDuration={650} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </DashboardPanel>
-      </section>
-
-      <section className="grid gap-3 xl:min-h-0 xl:grid-cols-3 xl:gap-2.5">
-        <ListPanel title="Atividades recentes" href="/consultas" empty="Nenhuma atividade recente.">
-          {data.activities.map((activity) => (
-            <ListRow
-              key={activity.id}
-              icon={activity.type === "contrato" ? FileCheck2 : activity.type === "aprovacao" ? CheckCircle2 : Search}
-              title={activity.title}
-              subtitle={activity.detail}
-              aside={relativeTime(activity.createdAt)}
-            />
-          ))}
-        </ListPanel>
-
-        <ListPanel title="Documentos pendentes" href="/apolices" empty="Nenhum documento pendente.">
-          {data.documents.map((document) => (
-            <ListRow
-              key={document.id}
-              icon={FileText}
-              title={document.type}
-              subtitle={`Inquilino: ${document.tenant}`}
-              aside={<StatusBadge status={document.status} />}
-            />
-          ))}
-        </ListPanel>
-
-        <ListPanel title="Próximos vencimentos" href="/faturas-inquilinos" empty="Nenhum vencimento futuro.">
-          {data.invoices.map((invoice) => (
-            <ListRow
-              key={invoice.id}
-              icon={CalendarDays}
-              title={`Fatura #${invoice.number}`}
-              subtitle={`Vencimento: ${formatDate(invoice.dueDate)}`}
-              aside={
-                <div className="text-right">
-                  <p className="text-xs font-bold tabular-nums text-neutral-900">{formatCurrency(invoice.value)}</p>
-                  <span className="mt-1 inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-[9px] font-bold text-amber-700">
-                    {invoice.daysUntilDue === 0 ? "Vence hoje" : `Em ${invoice.daysUntilDue} dias`}
-                  </span>
-                </div>
-              }
-            />
-          ))}
-        </ListPanel>
+        <InvoicePanel invoices={data.invoices} />
       </section>
     </div>
   );
@@ -254,7 +128,7 @@ export function ImobiliariaDashboard({ profileId, email }: { profileId: string; 
 
 function HeroBanner() {
   return (
-    <section className="relative min-h-[300px] overflow-hidden rounded-[24px] border border-amber-100 bg-[radial-gradient(circle_at_88%_85%,rgba(255,196,0,0.2),transparent_34%),linear-gradient(112deg,#fffdf8_0%,#ffffff_54%,#fff7d8_100%)] shadow-[0_8px_30px_rgba(0,0,0,0.035)] sm:min-h-[210px] xl:h-full xl:min-h-0">
+    <section className="relative min-h-[330px] overflow-hidden rounded-[24px] border border-amber-100 bg-[radial-gradient(circle_at_88%_85%,rgba(255,196,0,0.2),transparent_34%),linear-gradient(112deg,#fffdf8_0%,#ffffff_54%,#fff7d8_100%)] shadow-[0_8px_30px_rgba(0,0,0,0.035)] sm:min-h-[260px] xl:h-full xl:min-h-0">
       <img
         src="/dashboard/agency-panel-art.png"
         alt="Equipe da imobiliária NOX diante de um empreendimento"
@@ -319,11 +193,11 @@ function CompactSelect({ value, onValueChange, items }: { value: string; onValue
 function PolicyStatusChart({ data }: { data: ImobiliariaDashboardData["policyStatus"] }) {
   const total = data.reduce((sum, item) => sum + item.value, 0);
   return (
-    <div className="mt-3 grid h-[238px] grid-cols-[minmax(130px,1fr)_minmax(115px,0.9fr)] items-center gap-2 xl:mt-2 xl:h-[calc(100%-2rem)]">
-      <div className="relative h-full min-w-0">
+    <div className="mt-3 flex min-h-[440px] flex-1 flex-col xl:mt-2 xl:min-h-0">
+      <div className="relative min-h-[250px] flex-1">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
-            <Pie data={data} dataKey="value" nameKey="label" innerRadius="57%" outerRadius="82%" paddingAngle={1} stroke="#FFFFFF" strokeWidth={2} animationDuration={650}>
+            <Pie data={data} dataKey="value" nameKey="label" innerRadius="55%" outerRadius="78%" paddingAngle={1} stroke="#FFFFFF" strokeWidth={2} animationDuration={650}>
               {data.map((item) => <Cell key={item.key} fill={item.color} />)}
             </Pie>
             <Tooltip content={<ChartTooltip />} />
@@ -334,54 +208,79 @@ function PolicyStatusChart({ data }: { data: ImobiliariaDashboardData["policySta
           <span className="text-[10px] text-neutral-500">Total</span>
         </div>
       </div>
-      <div className="space-y-4 xl:space-y-2.5">
-        {data.map((item) => (
-          <div key={item.key} className="flex items-start gap-2">
-            <span className="mt-1 h-2 w-2 shrink-0 rounded-full" style={{ background: item.color }} />
-            <div>
-              <p className="text-[11px] font-semibold text-neutral-700">{item.label}</p>
-              <p className="text-[10px] text-neutral-400">{item.value} ({total ? Math.round((item.value / total) * 100) : 0}%)</p>
+      <div className="relative mx-auto h-[170px] w-full max-w-[360px] shrink-0">
+        <svg aria-hidden="true" className="absolute inset-0 h-full w-full" viewBox="0 0 360 170" fill="none">
+          <defs>
+            <linearGradient id="agency-status-triangle" x1="180" y1="10" x2="180" y2="154" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#FFFDF5" />
+              <stop offset="1" stopColor="#FFF5C7" />
+            </linearGradient>
+          </defs>
+          <path d="M180 10L340 154H20L180 10Z" fill="url(#agency-status-triangle)" stroke="#F4C430" strokeWidth="1.2" />
+          <path d="M180 28L309 145H51L180 28Z" stroke="#E8D68B" strokeDasharray="4 5" />
+        </svg>
+        {data.map((item, index) => {
+          const position = index === 0
+            ? "left-1/2 top-5 -translate-x-1/2"
+            : index === 1
+              ? "bottom-2 left-4"
+              : "bottom-2 right-4";
+          return (
+            <div key={item.key} className={`absolute flex min-w-[104px] items-center gap-2 rounded-xl border border-white/90 bg-white/95 px-2.5 py-2 shadow-sm ${position}`}>
+              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: item.color }} />
+              <div className="min-w-0">
+                <p className="truncate text-[10px] font-bold text-neutral-700">{item.label}</p>
+                <p className="text-[9px] text-neutral-400">{item.value} ({total ? Math.round((item.value / total) * 100) : 0}%)</p>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
 }
 
-function ListPanel({ title, href, empty, children }: { title: string; href: string; empty: string; children: React.ReactNode[] }) {
+function InvoicePanel({ invoices }: { invoices: ImobiliariaDashboardData["invoices"] }) {
   return (
-    <DashboardPanel className="h-full overflow-hidden">
-      <PanelHeader title={title}>
+    <DashboardPanel className="flex min-h-[520px] flex-col overflow-hidden xl:h-full xl:min-h-0">
+      <PanelHeader title="Próximos vencimentos">
         <Button asChild variant="ghost" size="sm" className="h-7 rounded-lg px-2 text-[10px] text-neutral-500">
-          <Link to={href}>Ver todos</Link>
+          <Link to="/faturas-inquilinos">Ver todos</Link>
         </Button>
       </PanelHeader>
-      <div className="mt-2 divide-y divide-neutral-100 xl:mt-1">
-        {children.length ? children : <p className="flex h-[150px] items-center justify-center text-xs text-neutral-400 xl:h-[calc(100%-2rem)]">{empty}</p>}
+      <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1 [scrollbar-color:#d4d4d4_transparent] [scrollbar-width:thin]">
+        {invoices.length ? (
+          <div className="space-y-2.5">
+            {invoices.map((invoice) => (
+              <article key={invoice.id} className="flex items-center gap-3 rounded-xl border border-neutral-100 bg-neutral-50/70 p-3 transition-colors hover:border-amber-200 hover:bg-amber-50/40">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-neutral-200 bg-white text-neutral-700">
+                  <CalendarDays size={17} strokeWidth={1.8} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[11px] font-bold text-neutral-800">Fatura #{invoice.number}</p>
+                  <p className="mt-0.5 text-[10px] text-neutral-400">Vencimento: {formatDate(invoice.dueDate)}</p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="text-[11px] font-black tabular-nums text-neutral-900">{formatCurrency(invoice.value)}</p>
+                  <span className="mt-1 inline-flex rounded-full bg-amber-50 px-2 py-1 text-[9px] font-bold text-amber-700">
+                    {invoice.daysUntilDue <= 0 ? "Vence hoje" : `Em ${invoice.daysUntilDue} ${invoice.daysUntilDue === 1 ? "dia" : "dias"}`}
+                  </span>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="flex h-full min-h-[330px] flex-col items-center justify-center px-6 text-center">
+            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-50 text-[#D9A900]">
+              <CalendarDays size={27} strokeWidth={1.6} />
+            </div>
+            <p className="text-sm font-black text-neutral-800">Nenhum vencimento futuro</p>
+            <p className="mt-1 max-w-[240px] text-[11px] leading-relaxed text-neutral-400">As próximas faturas aparecerão aqui em ordem de vencimento.</p>
+          </div>
+        )}
       </div>
     </DashboardPanel>
   );
-}
-
-function ListRow({ icon: Icon, title, subtitle, aside }: { icon: Icon; title: string; subtitle: string; aside: React.ReactNode }) {
-  return (
-    <div className="flex min-h-[58px] items-center gap-3 py-2.5 xl:min-h-[42px] xl:gap-2 xl:py-1.5">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-neutral-200 bg-neutral-50 text-neutral-700 xl:h-7 xl:w-7">
-        <Icon size={15} strokeWidth={1.8} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-[11px] font-bold text-neutral-800">{title}</p>
-        <p className="mt-0.5 truncate text-[10px] text-neutral-400">{subtitle}</p>
-      </div>
-      <div className="shrink-0 text-[9px] text-neutral-400">{aside}</div>
-    </div>
-  );
-}
-
-function StatusBadge({ status }: { status: "aguardando" | "pendente" | "aprovado" }) {
-  const styles = status === "pendente" ? "bg-red-50 text-red-600" : status === "aprovado" ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-700";
-  return <span className={`rounded-full px-2 py-1 text-[9px] font-bold capitalize ${styles}`}>{status}</span>;
 }
 
 function ChartTooltip({ active, payload, label, currency = false }: any) {
@@ -401,10 +300,9 @@ function ChartTooltip({ active, payload, label, currency = false }: any) {
 function DashboardSkeleton() {
   return (
     <div className="mx-auto max-w-[1580px] animate-pulse space-y-3.5">
-      <div className="h-[218px] rounded-[24px] bg-neutral-100" />
-      <div className="h-24 rounded-2xl bg-neutral-100" />
+      <div className="h-[330px] rounded-[24px] bg-neutral-100 sm:h-[260px] xl:h-[220px]" />
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{Array.from({ length: 4 }, (_, index) => <div key={index} className="h-24 rounded-2xl bg-neutral-100" />)}</div>
-      <div className="grid gap-3 xl:grid-cols-3">{Array.from({ length: 3 }, (_, index) => <div key={index} className="h-[310px] rounded-2xl bg-neutral-100" />)}</div>
+      <div className="grid gap-3 xl:grid-cols-3">{Array.from({ length: 3 }, (_, index) => <div key={index} className="h-[520px] rounded-2xl bg-neutral-100" />)}</div>
     </div>
   );
 }
@@ -420,23 +318,6 @@ function DashboardError({ message, onRetry }: { message: string; onRetry: () => 
   );
 }
 
-function formatAxisMoney(value: number) {
-  if (value >= 1_000_000) return `${(value / 1_000_000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mi`;
-  if (value >= 1_000) return `${Math.round(value / 1_000)}k`;
-  return String(value);
-}
-
 function formatDate(value: string) {
   return new Date(`${value}T12:00:00`).toLocaleDateString("pt-BR");
-}
-
-function relativeTime(value: string) {
-  const diffMinutes = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 60_000));
-  if (diffMinutes < 1) return "Agora";
-  if (diffMinutes < 60) return `Há ${diffMinutes} min`;
-  const hours = Math.floor(diffMinutes / 60);
-  if (hours < 24) return `Há ${hours} h`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `Há ${days} d`;
-  return new Date(value).toLocaleDateString("pt-BR");
 }

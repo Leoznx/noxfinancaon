@@ -321,7 +321,7 @@ export async function fetchImobiliariaDashboard(
   today.setHours(0, 0, 0, 0);
   const invoices: ImobiliariaDashboardInvoice[] = ((invoicesResult.data ?? []) as any[])
     .filter((row) => !PAID_INVOICE_STATUS.has(normalize(row.status)) && new Date(`${row.vencimento}T12:00:00`) >= today)
-    .slice(0, 3)
+    .slice(0, 8)
     .map((row) => {
       const due = new Date(`${row.vencimento}T12:00:00`);
       return {
