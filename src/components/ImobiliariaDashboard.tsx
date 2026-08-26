@@ -85,7 +85,7 @@ export function ImobiliariaDashboard({ profileId, email }: { profileId: string; 
   const displayedMonths = data.months.slice(-Number(chartPeriod));
 
   return (
-    <div className="mx-auto w-full max-w-[1580px] space-y-3.5 animate-in fade-in duration-300 xl:grid xl:h-full xl:min-h-0 xl:grid-rows-[220px_84px_minmax(0,1fr)] xl:gap-2.5 xl:space-y-0">
+    <div className="mx-auto w-full max-w-[1580px] space-y-3.5 animate-in fade-in duration-300 xl:grid xl:h-full xl:min-h-0 xl:grid-rows-[260px_84px_minmax(0,1fr)] xl:gap-2.5 xl:space-y-0">
       <HeroBanner />
 
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:h-full xl:grid-cols-4 xl:gap-2.5">
@@ -128,16 +128,16 @@ export function ImobiliariaDashboard({ profileId, email }: { profileId: string; 
 
 function HeroBanner() {
   return (
-    <section className="relative min-h-[330px] overflow-hidden rounded-[24px] border border-amber-100 bg-[radial-gradient(circle_at_88%_85%,rgba(255,196,0,0.2),transparent_34%),linear-gradient(112deg,#fffdf8_0%,#ffffff_54%,#fff7d8_100%)] shadow-[0_8px_30px_rgba(0,0,0,0.035)] sm:min-h-[260px] xl:h-full xl:min-h-0">
+    <section className="relative min-h-[380px] overflow-hidden rounded-[24px] border border-amber-100 bg-[radial-gradient(circle_at_88%_85%,rgba(255,196,0,0.2),transparent_34%),linear-gradient(112deg,#fffdf8_0%,#ffffff_54%,#fff7d8_100%)] shadow-[0_8px_30px_rgba(0,0,0,0.035)] sm:min-h-[300px] xl:h-full xl:min-h-0">
       <img
         src="/dashboard/agency-panel-art.png"
         alt="Equipe da imobiliária NOX diante de um empreendimento"
-        className="pointer-events-none absolute -bottom-5 -left-12 z-10 w-[86%] max-w-[340px] select-none object-contain sm:-bottom-[72px] sm:-left-5 sm:w-[50%] sm:max-w-[390px] xl:-bottom-[172px] xl:left-[1%] xl:w-[46%] xl:max-w-[580px] 2xl:max-w-[620px]"
+        className="pointer-events-none absolute bottom-0 left-1/2 z-10 max-h-[62%] w-[96%] max-w-[370px] -translate-x-1/2 select-none object-contain object-bottom sm:left-[2%] sm:h-[96%] sm:max-h-none sm:w-[50%] sm:max-w-none sm:translate-x-0 xl:h-full xl:w-[48%]"
       />
       <img
         src="/dashboard/agency-panel-copy.png"
         alt="Sua imobiliária mais ágil, mais profissional"
-        className="pointer-events-none absolute right-3 top-5 z-20 w-[82%] max-w-[330px] select-none object-contain sm:right-[3%] sm:top-1/2 sm:w-[48%] sm:max-w-[420px] sm:-translate-y-1/2 xl:right-[8%] xl:w-[38%] xl:max-w-[480px]"
+        className="pointer-events-none absolute right-1/2 top-4 z-20 w-[90%] max-w-[360px] translate-x-1/2 select-none object-contain sm:right-[3%] sm:top-1/2 sm:w-[52%] sm:max-w-[560px] sm:translate-x-0 sm:-translate-y-1/2 xl:right-[4%] xl:w-[46%] xl:max-w-[650px]"
       />
     </section>
   );
@@ -208,33 +208,16 @@ function PolicyStatusChart({ data }: { data: ImobiliariaDashboardData["policySta
           <span className="text-[10px] text-neutral-500">Total</span>
         </div>
       </div>
-      <div className="relative mx-auto h-[170px] w-full max-w-[360px] shrink-0">
-        <svg aria-hidden="true" className="absolute inset-0 h-full w-full" viewBox="0 0 360 170" fill="none">
-          <defs>
-            <linearGradient id="agency-status-triangle" x1="180" y1="10" x2="180" y2="154" gradientUnits="userSpaceOnUse">
-              <stop stopColor="#FFFDF5" />
-              <stop offset="1" stopColor="#FFF5C7" />
-            </linearGradient>
-          </defs>
-          <path d="M180 10L340 154H20L180 10Z" fill="url(#agency-status-triangle)" stroke="#F4C430" strokeWidth="1.2" />
-          <path d="M180 28L309 145H51L180 28Z" stroke="#E8D68B" strokeDasharray="4 5" />
-        </svg>
-        {data.map((item, index) => {
-          const position = index === 0
-            ? "left-1/2 top-5 -translate-x-1/2"
-            : index === 1
-              ? "bottom-2 left-4"
-              : "bottom-2 right-4";
-          return (
-            <div key={item.key} className={`absolute flex min-w-[104px] items-center gap-2 rounded-xl border border-white/90 bg-white/95 px-2.5 py-2 shadow-sm ${position}`}>
-              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: item.color }} />
-              <div className="min-w-0">
-                <p className="truncate text-[10px] font-bold text-neutral-700">{item.label}</p>
-                <p className="text-[9px] text-neutral-400">{item.value} ({total ? Math.round((item.value / total) * 100) : 0}%)</p>
-              </div>
-            </div>
-          );
-        })}
+      <div className="mx-auto mb-3 w-full max-w-[330px] shrink-0 divide-y divide-amber-100 overflow-hidden rounded-2xl border border-amber-300 bg-[linear-gradient(145deg,#fffef9,#fff8dc)] p-2.5 shadow-[0_8px_24px_rgba(217,169,0,0.08)]">
+        {data.map((item) => (
+          <div key={item.key} className="flex items-center gap-2.5 px-3 py-2.5">
+            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: item.color }} />
+            <p className="min-w-0 text-[11px] text-neutral-600">
+              <strong className="font-extrabold text-neutral-800">{item.label}</strong>{" "}
+              <span className="tabular-nums">{item.value} ({total ? Math.round((item.value / total) * 100) : 0}%)</span>
+            </p>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -300,7 +283,7 @@ function ChartTooltip({ active, payload, label, currency = false }: any) {
 function DashboardSkeleton() {
   return (
     <div className="mx-auto max-w-[1580px] animate-pulse space-y-3.5">
-      <div className="h-[330px] rounded-[24px] bg-neutral-100 sm:h-[260px] xl:h-[220px]" />
+      <div className="h-[380px] rounded-[24px] bg-neutral-100 sm:h-[300px] xl:h-[260px]" />
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{Array.from({ length: 4 }, (_, index) => <div key={index} className="h-24 rounded-2xl bg-neutral-100" />)}</div>
       <div className="grid gap-3 xl:grid-cols-3">{Array.from({ length: 3 }, (_, index) => <div key={index} className="h-[520px] rounded-2xl bg-neutral-100" />)}</div>
     </div>
