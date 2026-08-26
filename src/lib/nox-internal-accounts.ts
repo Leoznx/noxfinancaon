@@ -24,7 +24,7 @@ export const noxInternalAccounts = {
   juridico: {
     label: "Jurídico",
     route: "/login/juridiconox",
-    dashboardRoute: "/admin/aprovacoes",
+    dashboardRoute: "/dashboard",
     cardDescription: "Cadastro destinado aos colaboradores do setor jurídico da NOX Fiança.",
     formTitle: "Criar conta do Jurídico NOX",
     formDescription: "Preencha seus dados para acessar o ambiente jurídico da NOX Fiança.",
