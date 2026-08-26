@@ -112,8 +112,8 @@ export function ImobiliariaDashboard({ profileId, email }: { profileId: string; 
     : data.months;
 
   return (
-    <div className="mx-auto w-full max-w-[1580px] space-y-3.5 animate-in fade-in duration-300 xl:grid xl:h-full xl:min-h-0 xl:grid-rows-[128px_82px_76px_minmax(0,1.15fr)_minmax(0,0.85fr)] xl:gap-2.5 xl:space-y-0">
-      <HeroBanner notifications={data.notifications} />
+    <div className="mx-auto w-full max-w-[1580px] space-y-3.5 animate-in fade-in duration-300 xl:grid xl:h-full xl:min-h-0 xl:grid-rows-[160px_82px_76px_minmax(0,1.15fr)_minmax(0,0.85fr)] xl:gap-2.5 xl:space-y-0">
+      <HeroBanner />
 
       <section className="grid gap-3 rounded-2xl border border-neutral-200/80 bg-white p-4 shadow-[0_5px_22px_rgba(0,0,0,0.035)] md:grid-cols-[minmax(230px,320px)_1fr_auto] md:items-center md:px-6 xl:h-full xl:gap-2 xl:overflow-hidden xl:px-4 xl:py-2">
         <div className="flex min-w-0 items-center gap-4 xl:gap-3">
@@ -252,48 +252,19 @@ export function ImobiliariaDashboard({ profileId, email }: { profileId: string; 
   );
 }
 
-function HeroBanner({ notifications }: { notifications: ImobiliariaDashboardData["notifications"] }) {
-  const cards = notifications.length > 0 ? notifications.slice(0, 4) : [null];
+function HeroBanner() {
   return (
-    <section className="relative min-h-[178px] overflow-hidden rounded-[24px] border border-amber-100 bg-[radial-gradient(circle_at_94%_85%,rgba(255,196,0,0.22),transparent_27%),linear-gradient(115deg,#fffdf7_0%,#ffffff_58%,#fff8df_100%)] px-6 py-6 shadow-[0_8px_30px_rgba(0,0,0,0.035)] sm:px-8 xl:h-full xl:min-h-0 xl:px-6 xl:py-4">
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 hidden h-36 md:block">
-        <svg viewBox="0 0 1200 160" preserveAspectRatio="none" className="h-full w-full opacity-55" aria-hidden="true">
-          <path d="M380 160 C620 110 620 12 880 65 C1040 98 1110 45 1200 8" fill="none" stroke="#FFC400" strokeWidth="1.4" />
-          <path d="M330 160 C570 120 650 38 880 76 C1060 106 1125 65 1200 28" fill="none" stroke="#F3D778" strokeWidth="1" />
-          <path d="M460 160 C690 118 720 60 915 91 C1070 116 1140 80 1200 50" fill="none" stroke="#E5E5E5" strokeWidth="1" />
-        </svg>
-      </div>
-
-      <div className="relative z-10 max-w-md">
-        <h1 className="text-[30px] font-black leading-[0.94] tracking-[-0.045em] text-neutral-950 sm:text-[34px] xl:text-[27px]">
-          Quanto mais<br />
-          <span className="text-[#F4BC00]">CONTRATOS,</span><br />
-          mais comissão.
-        </h1>
-        <p className="mt-3 max-w-sm text-sm leading-relaxed text-neutral-600 xl:mt-2 xl:text-[11px] xl:leading-4">
-          A cada contrato fechado, sua parceria cresce e sua comissão aumenta.
-        </p>
-      </div>
-
-      <div className="relative z-20 mt-5 grid gap-2.5 sm:grid-cols-2 md:absolute md:inset-y-0 md:left-[48%] md:right-7 md:mt-0 md:content-center md:grid-cols-2 xl:right-5 xl:gap-2">
-        {cards.map((notification, index) => (
-          <div
-            key={notification?.id ?? "empty"}
-            className={`flex items-center gap-3 rounded-xl border border-white/80 bg-white/90 p-3 shadow-[0_9px_24px_rgba(32,25,0,0.08)] backdrop-blur xl:gap-2 xl:p-2 ${index % 2 ? "md:translate-y-5 xl:translate-y-2" : "md:-translate-y-3 xl:-translate-y-1"}`}
-          >
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#FFC400]">
-              <img src="/brand/simbolo-nox.svg" alt="" className="h-5 w-5 object-contain" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-black text-neutral-950">{notification ? "Contrato fechado" : "Novas comissões"}</p>
-              <p className="mt-0.5 truncate text-[10px] text-neutral-500">
-                {notification ? `Sua comissão: ${formatCurrency(notification.value)}` : "Os próximos contratos aparecerão aqui."}
-              </p>
-            </div>
-            {notification && <span className="self-start whitespace-nowrap text-[8px] text-neutral-400">{relativeTime(notification.createdAt)}</span>}
-          </div>
-        ))}
-      </div>
+    <section className="relative min-h-[300px] overflow-hidden rounded-[24px] border border-amber-100 bg-[radial-gradient(circle_at_88%_85%,rgba(255,196,0,0.2),transparent_34%),linear-gradient(112deg,#fffdf8_0%,#ffffff_54%,#fff7d8_100%)] shadow-[0_8px_30px_rgba(0,0,0,0.035)] sm:min-h-[210px] xl:h-full xl:min-h-0">
+      <img
+        src="/dashboard/agency-panel-art.png"
+        alt="Equipe da imobiliária NOX diante de um empreendimento"
+        className="pointer-events-none absolute -bottom-5 -left-12 z-10 w-[86%] max-w-[340px] select-none object-contain sm:-bottom-[72px] sm:-left-5 sm:w-[50%] sm:max-w-[390px] xl:-bottom-[172px] xl:left-[1%] xl:w-[46%] xl:max-w-[580px] 2xl:max-w-[620px]"
+      />
+      <img
+        src="/dashboard/agency-panel-copy.png"
+        alt="Sua imobiliária mais ágil, mais profissional"
+        className="pointer-events-none absolute right-3 top-5 z-20 w-[82%] max-w-[330px] select-none object-contain sm:right-[3%] sm:top-1/2 sm:w-[48%] sm:max-w-[420px] sm:-translate-y-1/2 xl:right-[8%] xl:w-[38%] xl:max-w-[480px]"
+      />
     </section>
   );
 }
