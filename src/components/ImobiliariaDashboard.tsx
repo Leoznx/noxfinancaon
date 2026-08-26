@@ -133,7 +133,7 @@ function HeroBanner() {
       <img
         src="/dashboard/agency-panel-art.png"
         alt="Equipe da imobiliária NOX diante de um empreendimento"
-        className="pointer-events-none absolute -bottom-[12%] -left-[5%] z-10 w-[114%] max-w-[444px] select-none object-contain sm:-bottom-[2%] sm:left-[3%] sm:h-[98%] sm:w-[54%] sm:max-w-none xl:-bottom-[18%] xl:-left-[1%] xl:h-[110%] xl:w-auto 2xl:-bottom-[24%] 2xl:left-0 2xl:h-[145%]"
+        className="pointer-events-none absolute -bottom-[15%] -left-[5%] z-10 w-[114%] max-w-[444px] select-none object-contain sm:-bottom-[12%] sm:left-[3%] sm:h-[98%] sm:w-[54%] sm:max-w-none xl:-bottom-[24%] xl:-left-[1%] xl:h-[110%] xl:w-auto 2xl:-bottom-[30%] 2xl:left-0 2xl:h-[145%]"
       />
       <img
         src="/dashboard/agency-panel-copy.png"
@@ -195,7 +195,7 @@ function PolicyStatusChart({ data }: { data: ImobiliariaDashboardData["policySta
   const total = data.reduce((sum, item) => sum + item.value, 0);
   return (
     <div className="mt-3 flex min-h-[440px] flex-1 flex-col xl:mt-2 xl:min-h-0">
-      <div className="relative min-h-[250px] flex-1">
+      <div className="relative min-h-[210px] flex-1 xl:min-h-0">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie data={data} dataKey="value" nameKey="label" innerRadius="55%" outerRadius="78%" paddingAngle={1} stroke="#FFFFFF" strokeWidth={2} animationDuration={650}>
@@ -209,11 +209,11 @@ function PolicyStatusChart({ data }: { data: ImobiliariaDashboardData["policySta
           <span className="text-[10px] text-neutral-500">Total</span>
         </div>
       </div>
-      <div className="mx-auto mb-3 w-full max-w-[330px] shrink-0 divide-y divide-amber-100 overflow-hidden rounded-2xl border border-amber-300 bg-[linear-gradient(145deg,#fffef9,#fff8dc)] p-2.5 shadow-[0_8px_24px_rgba(217,169,0,0.08)]">
+      <div className="mx-auto mb-1.5 w-full max-w-[280px] shrink-0 divide-y divide-amber-100 overflow-hidden rounded-xl border border-amber-300 bg-[linear-gradient(145deg,#fffef9,#fff8dc)] p-1.5 shadow-[0_8px_24px_rgba(217,169,0,0.08)]">
         {data.map((item) => (
-          <div key={item.key} className="flex items-center gap-2.5 px-3 py-2.5">
-            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: item.color }} />
-            <p className="min-w-0 text-[11px] text-neutral-600">
+          <div key={item.key} className="flex items-center gap-2 px-2 py-1.5">
+            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: item.color }} />
+            <p className="min-w-0 text-[10px] text-neutral-600">
               <strong className="font-extrabold text-neutral-800">{item.label}</strong>{" "}
               <span className="tabular-nums">{item.value} ({total ? Math.round((item.value / total) * 100) : 0}%)</span>
             </p>
