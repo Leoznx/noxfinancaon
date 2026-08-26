@@ -398,6 +398,8 @@ export function DashboardLayout({
             .from("imobiliarias")
             .select("razao_social, nome_fantasia")
             .ilike("contato_email", user.email)
+            .order("created_at", { ascending: false })
+            .limit(1)
             .maybeSingle();
           nomeFinal = agency?.nome_fantasia || agency?.razao_social || nomeFinal;
         }

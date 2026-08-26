@@ -131,6 +131,8 @@ async function resolveAgency(profileId: string, email: string) {
     .from("imobiliarias")
     .select("id, razao_social, nome_fantasia")
     .ilike("contato_email", email)
+    .order("created_at", { ascending: false })
+    .limit(1)
     .maybeSingle();
   if (agencyError) throw agencyError;
 

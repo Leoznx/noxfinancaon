@@ -29,6 +29,8 @@ export async function fetchNivelInfo(profileId: string, role: string): Promise<N
         .from("imobiliarias")
         .select("id")
         .ilike("contato_email", profile.email)
+        .order("created_at", { ascending: false })
+        .limit(1)
         .maybeSingle();
       if (agencyError) throw agencyError;
 
