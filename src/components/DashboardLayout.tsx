@@ -650,7 +650,7 @@ export function DashboardLayout({
                     ? cargoInterno === "juridico" || isImobiliaria
                       ? "bg-yellow-400 border-yellow-400 text-neutral-950 font-bold shadow-sm shadow-yellow-400/20"
                       : "bg-white/10 border-yellow-400 text-white font-semibold"
-                    : isHighlight
+                    : isHighlight && !isImobiliaria
                       ? "bg-yellow-400 border-transparent text-neutral-900 font-bold hover:bg-yellow-500 shadow-sm shadow-yellow-400/20"
                       : "border-transparent text-neutral-400 hover:bg-white/5 hover:text-white"
                 }`}
@@ -727,7 +727,9 @@ export function DashboardLayout({
 
       {/* Main Content */}
       <main
-        className={`flex-1 lg:ml-64 min-h-screen flex flex-col w-full min-w-0 ${
+        className={`flex-1 lg:ml-64 min-h-screen flex flex-col min-w-0 ${
+          isImobiliaria ? "w-full lg:w-[calc(100%-16rem)]" : "w-full"
+        } ${
           lockDesktopViewport ? "xl:h-screen xl:min-h-0 xl:overflow-hidden" : ""
         }`}
       >
