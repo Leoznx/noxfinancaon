@@ -40,6 +40,7 @@ import {
   IdCard,
   ContactRound,
   MonitorPlay,
+  ArrowRight,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { SinoNotificacoes } from "./SinoNotificacoes";
@@ -558,16 +559,22 @@ export function DashboardLayout({
       .join("")
       .toUpperCase() || "US";
 
-  const handleHeaderSearch = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const query = normalizeMenuSearch(headerSearch);
+  const openHeaderSearchResult = (value: string, exact = false) => {
+    const query = normalizeMenuSearch(value);
     if (!query) return;
     const match = menuItems.find((item) =>
-      normalizeMenuSearch([item.label, ...(item.keywords ?? [])].join(" ")).includes(query),
+      exact
+        ? normalizeMenuSearch(item.label) === query
+        : normalizeMenuSearch([item.label, ...(item.keywords ?? [])].join(" ")).includes(query),
     );
     if (!match) return;
     setHeaderSearch("");
     void navigate({ to: match.href as any });
+  };
+
+  const handleHeaderSearch = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    openHeaderSearchResult(headerSearch);
   };
 
   const handleLogout = async () => {
@@ -770,10 +777,21 @@ export function DashboardLayout({
                   id="agency-dashboard-search"
                   list="agency-dashboard-search-options"
                   value={headerSearch}
-                  onChange={(event) => setHeaderSearch(event.target.value)}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setHeaderSearch(value);
+                    openHeaderSearchResult(value, true);
+                  }}
                   placeholder="Buscar..."
-                  className="h-9 w-52 rounded-xl border border-neutral-200 bg-white pl-9 pr-3 text-xs text-neutral-800 outline-none transition focus:border-yellow-400 focus:ring-2 focus:ring-yellow-400/20 xl:w-64"
+                  className="h-9 w-52 rounded-xl border border-neutral-200 bg-white pl-9 pr-9 text-xs text-neutral-800 outline-none transition focus:border-yellow-400 focus:ring-2 focus:ring-yellow-400/20 xl:w-64"
                 />
+                <button
+                  type="submit"
+                  aria-label="Abrir resultado da busca"
+                  className="absolute right-1.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-lg text-neutral-400 transition hover:bg-yellow-100 hover:text-neutral-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400"
+                >
+                  <ArrowRight size={13} />
+                </button>
                 <datalist id="agency-dashboard-search-options">
                   {menuItems.map((item) => (
                     <option key={item.href} value={item.label} />
