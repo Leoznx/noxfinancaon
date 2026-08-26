@@ -202,7 +202,7 @@ function PolicyStatusChart({ data }: { data: ImobiliariaDashboardData["policySta
       role="img"
       aria-label={`Status das apólices: ${data.map((item) => `${item.label} ${item.value}`).join(", ")}`}
     >
-      <div className="relative min-h-[210px] flex-1 xl:min-h-0">
+      <div className="relative h-[300px] shrink-0 xl:h-auto xl:min-h-[210px] xl:flex-1">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie data={chartData} dataKey="value" nameKey="label" innerRadius="55%" outerRadius="78%" paddingAngle={total > 0 ? 1 : 0} stroke="#FFFFFF" strokeWidth={2} animationDuration={650}>
