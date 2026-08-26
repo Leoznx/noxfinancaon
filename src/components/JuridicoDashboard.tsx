@@ -188,7 +188,7 @@ export function JuridicoDashboard() {
               <h2 className="text-sm font-extrabold text-neutral-950">Movimentação jurídica</h2>
               <div className="mt-1 flex items-center gap-4 text-[10px] font-semibold text-neutral-500">
                 <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-yellow-400" /> Entradas</span>
-                <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 bg-neutral-950" /> Concluídas</span>
+                <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 bg-neutral-950" /> Evolução das entradas</span>
               </div>
             </div>
             <select
@@ -208,10 +208,20 @@ export function JuridicoDashboard() {
                 <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: "#888" }} tickLine={false} axisLine={false} />
                 <Tooltip
                   cursor={{ fill: "#FFF9DC" }}
-                  contentStyle={{ borderRadius: 12, borderColor: "#E5E5E5", fontSize: 12, boxShadow: "0 8px 24px rgba(0,0,0,.08)" }}
+                  content={({ active, label, payload }) => {
+                    const point = payload?.[0]?.payload as { entradas?: number; concluidas?: number } | undefined;
+                    if (!active || !point) return null;
+                    return (
+                      <div className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-xs shadow-lg">
+                        <p className="mb-1 font-semibold text-neutral-600">{label}</p>
+                        <p className="font-bold text-yellow-500">Entradas: {point.entradas ?? 0}</p>
+                        <p className="mt-1 text-neutral-700">Concluídas: {point.concluidas ?? 0}</p>
+                      </div>
+                    );
+                  }}
                 />
                 <Bar dataKey="entradas" name="Entradas" fill="#FFD000" radius={[4, 4, 0, 0]} maxBarSize={28} />
-                <Line dataKey="concluidas" name="Concluídas" type="monotone" stroke="#111111" strokeWidth={2} dot={{ r: 2.5, fill: "#111111" }} activeDot={{ r: 4 }} />
+                <Line dataKey="entradas" name="Evolução das entradas" type="monotone" stroke="#111111" strokeWidth={2} dot={{ r: 2.5, fill: "#111111" }} activeDot={{ r: 4 }} />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
