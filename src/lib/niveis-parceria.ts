@@ -15,9 +15,40 @@ export type NivelInfo = {
  * elas sempre dava 0 mesmo com contratos reais vinculados ao profile.
  */
 export async function fetchNivelInfo(profileId: string, role: string): Promise<NivelInfo | null> {
+  let profileIds = [profileId];
+  if (role === "imobiliaria") {
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("email")
+      .eq("id", profileId)
+      .maybeSingle();
+    if (profileError) throw profileError;
+
+    if (profile?.email) {
+      const { data: agency, error: agencyError } = await supabase
+        .from("imobiliarias")
+        .select("id")
+        .ilike("contato_email", profile.email)
+        .maybeSingle();
+      if (agencyError) throw agencyError;
+
+      if (agency?.id) {
+        const { data: brokers, error: brokersError } = await supabase
+          .from("corretores")
+          .select("profile_id")
+          .eq("imobiliaria_id", agency.id);
+        if (brokersError) throw brokersError;
+        profileIds = [
+          profileId,
+          ...(brokers ?? []).map((broker) => broker.profile_id).filter((id): id is string => Boolean(id)),
+        ];
+      }
+    }
+  }
+
   const [niveisRes, consultasRes] = await Promise.all([
     supabase.from("niveis_perfil" as any).select("*").eq("tipo_perfil", role).eq("ativo", true).order("ordem", { ascending: true }),
-    supabase.from("consultas_credito").select("id").eq("profile_id_solicitante", profileId),
+    supabase.from("consultas_credito").select("id").in("profile_id_solicitante", profileIds),
   ]);
   if (niveisRes.error) throw niveisRes.error;
   if (consultasRes.error) throw consultasRes.error;

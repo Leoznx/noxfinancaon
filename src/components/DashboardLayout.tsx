@@ -46,7 +46,7 @@ import { SinoNotificacoes } from "./SinoNotificacoes";
 import { useState, useEffect } from "react";
 
 import { LogoNox } from "./LogoNox";
-import { Link, useLocation } from "@tanstack/react-router";
+import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { Button } from "./ui/button";
 import { useAuth } from "./AuthProvider";
 import { getCachedHeaderProfile, setCachedHeaderProfile } from "@/lib/profile-cache";
@@ -326,9 +326,11 @@ export function DashboardLayout({
   lockDesktopViewport?: boolean;
 }) {
   const location = useLocation();
+  const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [menuSearch, setMenuSearch] = useState("");
+  const [headerSearch, setHeaderSearch] = useState("");
   const perfilCacheInicial = getCachedHeaderProfile(user?.email);
   const [nomeUsuario, setNomeUsuario] = useState(perfilCacheInicial?.nome || "");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(perfilCacheInicial?.avatarUrl || null);
@@ -390,7 +392,15 @@ export function DashboardLayout({
         }
 
         if (!ativo) return;
-        const nomeFinal = perfil?.nome || nomeMetadata || user.email.split("@")[0] || "Usuário";
+        let nomeFinal = perfil?.nome || nomeMetadata || user.email.split("@")[0] || "Usuário";
+        if (user.role === "imobiliaria") {
+          const { data: agency } = await supabase
+            .from("imobiliarias")
+            .select("razao_social, nome_fantasia")
+            .ilike("contato_email", user.email)
+            .maybeSingle();
+          nomeFinal = agency?.nome_fantasia || agency?.razao_social || nomeFinal;
+        }
         const avatarFinal = perfil?.avatar_url || perfilCache?.avatarUrl || null;
         setNomeUsuario(nomeFinal);
         setAvatarUrl(avatarFinal);
@@ -407,7 +417,7 @@ export function DashboardLayout({
     return () => {
       ativo = false;
     };
-  }, [user?.email]);
+  }, [user?.email, user?.role]);
 
   const isCorretor = user?.role === "corretor";
   const isImobiliaria = user?.role === "imobiliaria";
@@ -546,6 +556,18 @@ export function DashboardLayout({
       .join("")
       .toUpperCase() || "US";
 
+  const handleHeaderSearch = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const query = normalizeMenuSearch(headerSearch);
+    if (!query) return;
+    const match = menuItems.find((item) =>
+      normalizeMenuSearch([item.label, ...(item.keywords ?? [])].join(" ")).includes(query),
+    );
+    if (!match) return;
+    setHeaderSearch("");
+    void navigate({ to: match.href as any });
+  };
+
   const handleLogout = async () => {
     const wasDemo = isDemoSession();
     await logout();
@@ -623,7 +645,7 @@ export function DashboardLayout({
                 to={item.href}
                 className={`flex items-center gap-3 pl-3 pr-4 py-3 rounded-xl border-l-4 transition-all ${
                   isActive
-                    ? cargoInterno === "juridico"
+                    ? cargoInterno === "juridico" || isImobiliaria
                       ? "bg-yellow-400 border-yellow-400 text-neutral-950 font-bold shadow-sm shadow-yellow-400/20"
                       : "bg-white/10 border-yellow-400 text-white font-semibold"
                     : isHighlight
@@ -675,6 +697,17 @@ export function DashboardLayout({
                       }}
                     />
                   </div>
+                  {nivelInfo.proximoNivel && (
+                    <div className="pt-1 text-[9px] leading-relaxed text-neutral-400">
+                      <p>
+                        Próximo nível:{" "}
+                        <span className="font-bold text-white">{nivelInfo.proximoNivel.nome_nivel}</span>
+                      </p>
+                      <p>
+                        Faltam {Math.max(0, nivelInfo.proximoNivel.min_contratos - nivelInfo.contratosAtivos)} contratos
+                      </p>
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -720,6 +753,30 @@ export function DashboardLayout({
             <div className="sm:hidden text-sm font-bold text-neutral-900 truncate">{nomeTopo}</div>
           </div>
           <div className="flex items-center gap-3 shrink-0">
+            {isImobiliaria && (
+              <form onSubmit={handleHeaderSearch} className="relative hidden md:block">
+                <label htmlFor="agency-dashboard-search" className="sr-only">
+                  Buscar no painel
+                </label>
+                <Search
+                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400"
+                  size={15}
+                />
+                <input
+                  id="agency-dashboard-search"
+                  list="agency-dashboard-search-options"
+                  value={headerSearch}
+                  onChange={(event) => setHeaderSearch(event.target.value)}
+                  placeholder="Buscar..."
+                  className="h-9 w-52 rounded-xl border border-neutral-200 bg-white pl-9 pr-3 text-xs text-neutral-800 outline-none transition focus:border-yellow-400 focus:ring-2 focus:ring-yellow-400/20 xl:w-64"
+                />
+                <datalist id="agency-dashboard-search-options">
+                  {menuItems.map((item) => (
+                    <option key={item.href} value={item.label} />
+                  ))}
+                </datalist>
+              </form>
+            )}
             <SinoNotificacoes />
             <Link
               to="/configuracoes"

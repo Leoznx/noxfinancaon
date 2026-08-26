@@ -6,6 +6,7 @@ import { DashboardEquipeBanner } from "@/components/DashboardEquipeBanner";
 import { JuridicoDashboard } from "@/components/JuridicoDashboard";
 import { FinanceiroDashboard } from "@/components/FinanceiroDashboard";
 import { MarketingDashboard } from "@/components/MarketingDashboard";
+import { ImobiliariaDashboard } from "@/components/ImobiliariaDashboard";
 import { Trophy, Search, FileText, Users, DollarSign, ArrowUpRight, TrendingUp, Home, AlertCircle, CheckCircle2 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { Card } from "@/components/ui/card";
@@ -48,7 +49,7 @@ function Dashboard() {
   // o roundtrip que existia aqui só pra buscar de novo o que já estava em mãos (era o
   // maior gargalo do "demora pra carregar" do dashboard).
   const carregarDados = useCallback(async () => {
-    if (!user?.id || isJuridico || isFinanceiro || isMarketing) {
+    if (!user?.id || isJuridico || isFinanceiro || isMarketing || isImobiliaria) {
       setLoadingConsultas(false);
       return;
     }
@@ -138,6 +139,14 @@ function Dashboard() {
     return (
       <DashboardLayout>
         <MarketingDashboard />
+      </DashboardLayout>
+    );
+  }
+
+  if (isImobiliaria && user?.id && user.email) {
+    return (
+      <DashboardLayout>
+        <ImobiliariaDashboard profileId={user.id} email={user.email} />
       </DashboardLayout>
     );
   }
