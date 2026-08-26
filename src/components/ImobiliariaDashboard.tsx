@@ -69,7 +69,10 @@ export function ImobiliariaDashboard({ profileId, email }: { profileId: string; 
       setData(dashboardData);
       setLevel(levelData);
     } catch (cause) {
-      console.error("[ImobiliariaDashboard] erro ao carregar painel:", cause);
+      const failure = cause as { message?: string; details?: string; hint?: string; code?: string };
+      console.error(
+        `[ImobiliariaDashboard] ${failure.code || "erro"}: ${failure.message || "falha desconhecida"}${failure.details ? ` | ${failure.details}` : ""}${failure.hint ? ` | ${failure.hint}` : ""}`,
+      );
       setError("Não foi possível carregar os dados da imobiliária agora.");
     } finally {
       setLoading(false);
