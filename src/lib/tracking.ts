@@ -8,14 +8,8 @@
 
 export const META_PIXEL_ID = "1585883566320931";
 export const GOOGLE_ADS_TAG_ID = "AW-18391707457";
-
-/**
- * Rótulo da conversão de cadastro no Google Ads (a parte depois da barra em
- * `AW-XXXXXXXX/RÓTULO`). Opcional: sem ele o site ainda envia o evento padrão
- * `sign_up`, que aparece no Google Analytics/Ads, mas não marca a conversão
- * específica configurada na conta.
- */
-const GOOGLE_ADS_SIGNUP_LABEL = import.meta.env.VITE_GOOGLE_ADS_SIGNUP_LABEL as string | undefined;
+export const GOOGLE_ADS_SIGNUP_DESTINATION =
+  "AW-18391707457/1MnBCKjjtOgcEMHe7MFE";
 
 declare global {
   interface Window {
@@ -47,9 +41,9 @@ export function trackCadastroConcluido() {
   window.fbq?.("track", "CompleteRegistration");
 
   window.gtag?.("event", "sign_up", { send_to: GOOGLE_ADS_TAG_ID });
-  if (GOOGLE_ADS_SIGNUP_LABEL) {
-    window.gtag?.("event", "conversion", {
-      send_to: `${GOOGLE_ADS_TAG_ID}/${GOOGLE_ADS_SIGNUP_LABEL}`,
-    });
-  }
+  window.gtag?.("event", "conversion", {
+    send_to: GOOGLE_ADS_SIGNUP_DESTINATION,
+    value: 1.0,
+    currency: "BRL",
+  });
 }

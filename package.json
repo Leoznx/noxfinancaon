@@ -18,6 +18,7 @@
     "test:automation": "tsx --test automation/*.test.ts",
     "test:withdrawals": "tsx --test tests/withdrawal-pix.test.ts",
     "test:auth-links": "tsx --test tests/auth-email-links.test.ts",
+    "test:tracking": "tsx --test tests/tracking.test.ts",
     "test:billing": "tsx --test tests/billing-automation.test.ts",
     "test:payments": "tsx --test tests/asaas-payment.test.ts",
     "typecheck": "tsc --noEmit"
