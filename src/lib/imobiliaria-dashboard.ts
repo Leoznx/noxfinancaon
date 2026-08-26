@@ -67,8 +67,27 @@ export type ImobiliariaDashboardData = {
   notifications: ImobiliariaDashboardNotification[];
 };
 
-const FINAL_APPROVED = new Set(["aprovado", "approved", "ativa", "active"]);
-const IN_ANALYSIS = new Set(["processando", "em_analise", "analysis", "risk_analysis"]);
+const APPROVED_WORKFLOW = new Set([
+  "aprovado",
+  "approved",
+  "aprovada",
+  "ativa",
+  "active",
+  "pendente_documentacao",
+  "dados_complementares",
+  "finalizada",
+  "aguardando_ativacao",
+  "ativado",
+]);
+const ANALYSIS_WORKFLOW = new Set(["processando", "em_analise", "analysis", "risk_analysis"]);
+const REJECTED_WORKFLOW = new Set([
+  "reprovado",
+  "reprovada",
+  "recusado",
+  "recusada",
+  "rejected",
+  "denied",
+]);
 const PAID_INVOICE_STATUS = new Set([
   "paid",
   "confirmed",
@@ -80,6 +99,19 @@ const PAID_INVOICE_STATUS = new Set([
 
 function normalize(value: unknown) {
   return String(value ?? "").trim().toLowerCase();
+}
+
+function consultationWorkflow(
+  consultation: { id?: string; status?: unknown; resultado?: unknown },
+  policyConsultationIds: Set<string>,
+) {
+  if (consultation.id && policyConsultationIds.has(consultation.id)) return "approved" as const;
+
+  const values = [normalize(consultation.resultado), normalize(consultation.status)].filter(Boolean);
+  if (values.some((value) => APPROVED_WORKFLOW.has(value))) return "approved" as const;
+  if (values.some((value) => REJECTED_WORKFLOW.has(value))) return "rejected" as const;
+  if (values.some((value) => ANALYSIS_WORKFLOW.has(value))) return "analysis" as const;
+  return "pending" as const;
 }
 
 function relation<T>(value: T | T[] | null | undefined): T | null {
@@ -195,6 +227,9 @@ export async function fetchImobiliariaDashboard(
   if (policiesResult.error) throw policiesResult.error;
   const policies = (policiesResult.data ?? []) as any[];
   const policyIds = policies.map((row) => row.id);
+  const policyConsultationIds = new Set<string>(
+    policies.map((row) => row.consulta_id).filter((id): id is string => Boolean(id)),
+  );
 
   const [documentsResult, invoicesResult] = await Promise.all([
     policyIds.length
@@ -256,23 +291,18 @@ export async function fetchImobiliariaDashboard(
     previousPolicies.map((row) => consultationById.get(row.consulta_id)?.inquilino_id).filter(Boolean),
   ).size;
 
+  const workflowTotals = consultations.reduce(
+    (totals, consultation) => {
+      const workflow = consultationWorkflow(consultation, policyConsultationIds);
+      if (workflow !== "rejected") totals[workflow] += 1;
+      return totals;
+    },
+    { approved: 0, analysis: 0, pending: 0 },
+  );
   const policyStatus: ImobiliariaDashboardStatus[] = [
-    { key: "aprovadas", label: "Aprovadas", value: activePolicies.length, color: "#FFC400" },
-    {
-      key: "analise",
-      label: "Em análise",
-      value: consultations.filter((row) => IN_ANALYSIS.has(normalize(row.resultado || row.status))).length,
-      color: "#171717",
-    },
-    {
-      key: "pendentes",
-      label: "Pendentes",
-      value: consultations.filter((row) => {
-        const status = normalize(row.resultado || row.status);
-        return CONSULTA_STATUS_PENDENTE.includes(normalize(row.status)) && !IN_ANALYSIS.has(status);
-      }).length,
-      color: "#E5E5E5",
-    },
+    { key: "aprovadas", label: "Aprovadas", value: workflowTotals.approved, color: "#FFC400" },
+    { key: "analise", label: "Em análise", value: workflowTotals.analysis, color: "#171717" },
+    { key: "pendentes", label: "Pendentes", value: workflowTotals.pending, color: "#E5E5E5" },
   ];
 
   const policyActivities: ImobiliariaDashboardActivity[] = policies.slice(0, 5).map((policy) => ({
@@ -285,7 +315,7 @@ export async function fetchImobiliariaDashboard(
     createdAt: policy.created_at,
   }));
   const approvedActivities: ImobiliariaDashboardActivity[] = consultations
-    .filter((row) => FINAL_APPROVED.has(normalize(row.resultado || row.status)))
+    .filter((row) => consultationWorkflow(row, policyConsultationIds) === "approved")
     .slice(0, 5)
     .map((row) => ({
       id: `approval-${row.id}`,

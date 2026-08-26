@@ -193,15 +193,22 @@ function CompactSelect({ value, onValueChange, items }: { value: string; onValue
 
 function PolicyStatusChart({ data }: { data: ImobiliariaDashboardData["policyStatus"] }) {
   const total = data.reduce((sum, item) => sum + item.value, 0);
+  const chartData = total > 0
+    ? data
+    : [{ key: "empty", label: "Sem apólices", value: 1, color: "#F1F1F1" }];
   return (
-    <div className="mt-3 flex min-h-[440px] flex-1 flex-col xl:mt-2 xl:min-h-0">
+    <div
+      className="mt-3 flex min-h-[440px] flex-1 flex-col xl:mt-2 xl:min-h-0"
+      role="img"
+      aria-label={`Status das apólices: ${data.map((item) => `${item.label} ${item.value}`).join(", ")}`}
+    >
       <div className="relative min-h-[210px] flex-1 xl:min-h-0">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
-            <Pie data={data} dataKey="value" nameKey="label" innerRadius="55%" outerRadius="78%" paddingAngle={1} stroke="#FFFFFF" strokeWidth={2} animationDuration={650}>
-              {data.map((item) => <Cell key={item.key} fill={item.color} />)}
+            <Pie data={chartData} dataKey="value" nameKey="label" innerRadius="55%" outerRadius="78%" paddingAngle={total > 0 ? 1 : 0} stroke="#FFFFFF" strokeWidth={2} animationDuration={650}>
+              {chartData.map((item) => <Cell key={item.key} fill={item.color} />)}
             </Pie>
-            <Tooltip content={<ChartTooltip />} />
+            {total > 0 ? <Tooltip content={<ChartTooltip />} /> : null}
           </PieChart>
         </ResponsiveContainer>
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
