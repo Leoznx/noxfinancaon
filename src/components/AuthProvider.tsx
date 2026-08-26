@@ -39,7 +39,12 @@ interface User {
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, role: Role, id: string) => void;
+  login: (
+    email: string,
+    role: Role,
+    id: string,
+    internalRoleHint?: InternalRole | null,
+  ) => void;
   logout: () => Promise<void>;
   isLoading: boolean;
   hasInternalRole: (...roles: InternalRole[]) => boolean;
@@ -143,16 +148,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (isLoggingOutRef.current) return false;
         const syncVersion = authVersionRef.current;
         try {
-          const { data: profile, error: profileError } = await supabase
-            .from("profiles")
-            .select("role,nome,avatar_url")
-            .eq("id", userId)
-            .maybeSingle();
+          const [profileResult, internalUserResult] = await Promise.all([
+            supabase
+              .from("profiles")
+              .select("role,nome,avatar_url")
+              .eq("id", userId)
+              .maybeSingle(),
+            supabase
+              .from("internal_users" as any)
+              .select("role,status")
+              .eq("auth_user_id", userId)
+              .maybeSingle(),
+          ]);
+          const { data: profile, error: profileError } = profileResult;
           if (profileError) throw profileError;
           if (!active || isLoggingOutRef.current || syncVersion !== authVersionRef.current)
             return false;
           const role = (profile as any)?.role as Role | undefined;
           if (!role) return; // profile ainda não existe (ex.: trigger em voo) — não força estado incompleto
+          const internalUser = internalUserResult.data as
+            | { role?: string | null; status?: string | null }
+            | null;
+          const internalRole = internalUser
+            ? internalUser.status === "ativo" &&
+              INTERNAL_ROLES.includes(internalUser.role as InternalRole)
+              ? (internalUser.role as InternalRole)
+              : null
+            : INTERNAL_ROLES.includes(role as InternalRole)
+              ? (role as InternalRole)
+              : null;
           setCachedHeaderProfile({
             email,
             nome:
@@ -162,7 +186,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               null,
             avatarUrl: (profile as any)?.avatar_url || null,
           });
-          login(email, role, userId);
+          // A rota protegida só é liberada depois que o cargo interno já está
+          // resolvido. Assim /dashboard nunca monta o painel genérico antes do
+          // painel específico de Jurídico, Financeiro, Marketing ou Vendedor.
+          login(email, role, userId, internalRole);
 
           // Só na hora do SIGNED_IN de verdade (ex.: acabou de confirmar o e-mail do
           // cadastro) — não no getSession() passivo de todo carregamento de página —
@@ -231,7 +258,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const resolveInternalRole = async (role: Role): Promise<InternalRole | null> => {
+  const resolveInternalRole = async (
+    role: Role,
+    userId: string,
+  ): Promise<InternalRole | null> => {
     // Antes, quando profiles.role já era um nome de cargo interno (ex.: 'suporte'),
     // isso retornava direto sem nunca consultar internal_users — trocar o cargo ou
     // bloquear alguém pela aba Colaboradores não tinha efeito nenhum na prática,
@@ -241,16 +271,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // não existe nenhuma linha lá (edge case legado).
     try {
       const { supabase } = await import("@/integrations/supabase/client");
-      const {
-        data: { user: authUser },
-      } = await supabase.auth.getUser();
-      if (!authUser) {
-        return INTERNAL_ROLES.includes(role as InternalRole) ? (role as InternalRole) : null;
-      }
       const { data } = await supabase
         .from("internal_users" as any)
         .select("role,status")
-        .eq("auth_user_id", authUser.id)
+        .eq("auth_user_id", userId)
         .maybeSingle();
       if (data) {
         return (data as any).status === "ativo" ? ((data as any).role as InternalRole) : null;
@@ -262,22 +286,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const login = (email: string, role: Role, id: string) => {
+  const login = (
+    email: string,
+    role: Role,
+    id: string,
+    internalRoleHint?: InternalRole | null,
+  ) => {
     isLoggingOutRef.current = false;
     authVersionRef.current += 1;
     const loginVersion = authVersionRef.current;
     clearLogoutMarker();
 
-    const baseUser: User = { id, email, role, internalRole: null };
+    const immediateInternalRole =
+      internalRoleHint !== undefined
+        ? internalRoleHint
+        : INTERNAL_ROLES.includes(role as InternalRole)
+          ? (role as InternalRole)
+          : null;
+    const baseUser: User = { id, email, role, internalRole: immediateInternalRole };
     setUser(baseUser);
     try {
       getPreferredStorage().setItem("nox_user", JSON.stringify(baseUser));
     } catch {}
-    // Only attempt to enrich for users that could be internal
-    resolveInternalRole(role)
+    // Quando o chamador já consultou internal_users, o estado acima é definitivo
+    // e não precisa de um segundo roundtrip. Chamadas legadas ainda são enriquecidas.
+    if (internalRoleHint !== undefined) return;
+    resolveInternalRole(role, id)
       .then((internalRole) => {
         if (isLoggingOutRef.current || loginVersion !== authVersionRef.current) return;
-        if (!internalRole) return; // keep base user — don't break external profiles
         const enriched: User = { id, email, role, internalRole };
         setUser(enriched);
         try {
