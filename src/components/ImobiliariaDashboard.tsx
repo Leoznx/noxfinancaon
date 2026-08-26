@@ -85,7 +85,7 @@ export function ImobiliariaDashboard({ profileId, email }: { profileId: string; 
   const displayedMonths = data.months.slice(-Number(chartPeriod));
 
   return (
-    <div className="mx-auto w-full max-w-[1580px] space-y-3.5 animate-in fade-in duration-300 xl:grid xl:h-full xl:min-h-0 xl:grid-rows-[260px_84px_minmax(0,1fr)] xl:gap-2.5 xl:space-y-0">
+    <div className="mx-auto w-full max-w-[1580px] space-y-3.5 animate-in fade-in duration-300 xl:grid xl:h-full xl:min-h-0 xl:grid-rows-[320px_84px_minmax(0,1fr)] xl:gap-2.5 xl:space-y-0">
       <HeroBanner />
 
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:h-full xl:grid-cols-4 xl:gap-2.5">
@@ -128,11 +128,12 @@ export function ImobiliariaDashboard({ profileId, email }: { profileId: string; 
 
 function HeroBanner() {
   return (
-    <section className="relative min-h-[380px] overflow-hidden rounded-[24px] border border-amber-100 bg-[radial-gradient(circle_at_88%_85%,rgba(255,196,0,0.2),transparent_34%),linear-gradient(112deg,#fffdf8_0%,#ffffff_54%,#fff7d8_100%)] shadow-[0_8px_30px_rgba(0,0,0,0.035)] sm:min-h-[300px] xl:h-full xl:min-h-0">
+    <section className="relative min-h-[420px] overflow-hidden rounded-[24px] border border-amber-100 bg-[radial-gradient(circle_at_88%_85%,rgba(255,196,0,0.2),transparent_34%),linear-gradient(112deg,#fffdf8_0%,#ffffff_54%,#fff7d8_100%)] shadow-[0_8px_30px_rgba(0,0,0,0.035)] sm:min-h-[350px] xl:h-full xl:min-h-0">
+      <div aria-hidden="true" className="pointer-events-none absolute -bottom-[28%] -left-[6%] z-0 h-[125%] w-[58%] rounded-full bg-[radial-gradient(ellipse_at_center,rgba(255,196,0,0.52)_0%,rgba(255,211,61,0.28)_42%,rgba(255,233,151,0.12)_62%,transparent_78%)] blur-2xl" />
       <img
         src="/dashboard/agency-panel-art.png"
         alt="Equipe da imobiliária NOX diante de um empreendimento"
-        className="pointer-events-none absolute bottom-0 left-1/2 z-10 max-h-[62%] w-[96%] max-w-[370px] -translate-x-1/2 select-none object-contain object-bottom sm:left-[2%] sm:h-[96%] sm:max-h-none sm:w-[50%] sm:max-w-none sm:translate-x-0 xl:h-full xl:w-[48%]"
+        className="pointer-events-none absolute bottom-0 left-1/2 z-10 max-h-[62%] w-full max-w-[390px] -translate-x-1/2 select-none object-contain object-bottom sm:left-[1.5%] sm:h-[98%] sm:max-h-none sm:w-[54%] sm:max-w-none sm:translate-x-0 xl:h-full xl:w-[54%]"
       />
       <img
         src="/dashboard/agency-panel-copy.png"
@@ -283,7 +284,7 @@ function ChartTooltip({ active, payload, label, currency = false }: any) {
 function DashboardSkeleton() {
   return (
     <div className="mx-auto max-w-[1580px] animate-pulse space-y-3.5">
-      <div className="h-[380px] rounded-[24px] bg-neutral-100 sm:h-[300px] xl:h-[260px]" />
+      <div className="h-[420px] rounded-[24px] bg-neutral-100 sm:h-[350px] xl:h-[320px]" />
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{Array.from({ length: 4 }, (_, index) => <div key={index} className="h-24 rounded-2xl bg-neutral-100" />)}</div>
       <div className="grid gap-3 xl:grid-cols-3">{Array.from({ length: 3 }, (_, index) => <div key={index} className="h-[520px] rounded-2xl bg-neutral-100" />)}</div>
     </div>
