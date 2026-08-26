@@ -145,7 +145,7 @@ function Dashboard() {
 
   if (isImobiliaria && user?.id && user.email) {
     return (
-      <DashboardLayout>
+      <DashboardLayout lockDesktopViewport>
         <ImobiliariaDashboard profileId={user.id} email={user.email} />
       </DashboardLayout>
     );

@@ -43,6 +43,8 @@ function formatCpf(cpf?: string | null) {
 
 type CorretorSearchMode = "cpf" | "email" | "telefone";
 
+const LINKABLE_CORRETOR_STATUSES = new Set(["ativo", "pendente", "pendente_aprovacao"]);
+
 function normalizePhoneInput(value: string) {
   let digits = value.replace(/\D/g, "");
   if ((digits.length === 12 || digits.length === 13) && digits.startsWith("55")) {
@@ -170,8 +172,8 @@ function CorretoresAdmin() {
         toast.error("Corretor não encontrado. Peça para ele se cadastrar primeiro na plataforma.");
         return;
       }
-      if (row.status && row.status !== "ativo") {
-        toast.error("Este corretor ainda não está ativo na plataforma.");
+      if (!row.status || !LINKABLE_CORRETOR_STATUSES.has(row.status)) {
+        toast.error("Este corretor está bloqueado ou indisponível para vínculo.");
         return;
       }
       if (row.imobiliaria_id && row.imobiliaria_id === imobiliariaId) {
@@ -310,7 +312,9 @@ function CorretoresAdmin() {
 
                   <div className="rounded-xl bg-yellow-50 border border-yellow-200 p-4 flex gap-3 mb-6">
                     <Info size={18} className="text-yellow-700 flex-shrink-0 mt-0.5" />
-                    <p className="text-xs text-yellow-900 leading-relaxed">Só é possível vincular corretores que já possuem cadastro ativo na plataforma.</p>
+                    <p className="text-xs text-yellow-900 leading-relaxed">
+                      Corretores cadastrados podem ser vinculados mesmo enquanto aguardam a ativação da conta.
+                    </p>
                   </div>
 
                   <div className="mb-5">
@@ -394,7 +398,7 @@ function CorretoresAdmin() {
                           variant="outline"
                           className={foundCorretor.status === "ativo" ? "bg-green-50 text-green-700 border-green-200" : "bg-yellow-50 text-yellow-700 border-yellow-200"}
                         >
-                          {foundCorretor.status === "ativo" ? "Ativo" : "Pendente"}
+                          {foundCorretor.status === "ativo" ? "Ativo" : "Aguardando ativação"}
                         </Badge>
                       }
                     />
