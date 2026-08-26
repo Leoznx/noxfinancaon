@@ -180,10 +180,6 @@ function CorretoresAdmin() {
         toast.error("Este corretor já está vinculado à sua imobiliária.");
         return;
       }
-      if (row.imobiliaria_id) {
-        toast.error("Este corretor já possui vínculo com outra imobiliária.");
-        return;
-      }
 
       setFoundCorretor({
         id: row.corretor_id,

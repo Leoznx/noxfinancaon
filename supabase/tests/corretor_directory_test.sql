@@ -3,7 +3,7 @@ BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET LOCAL search_path = public, extensions, pg_catalog;
 
-SELECT plan(20);
+SELECT plan(24);
 
 SELECT is(
   public.normalize_cpf_lookup('091.355.439-14'),
@@ -50,6 +50,31 @@ SELECT is(
   public.is_corretor_linkable_status(NULL::text),
   false,
   'corretor sem status não pode ser vinculado'
+);
+
+SELECT is(
+  public.has_registered_imobiliaria_owner(NULL::uuid),
+  false,
+  'vínculo sem imobiliária não possui conta proprietária'
+);
+SELECT is(
+  public.has_registered_imobiliaria_owner(gen_random_uuid()),
+  false,
+  'ID de imobiliária inexistente é tratado como vínculo órfão'
+);
+SELECT ok(
+  position(
+    'has_registered_imobiliaria_owner' IN
+    pg_get_functiondef('public.link_my_corretor(uuid)'::regprocedure)
+  ) > 0,
+  'vínculo valida se a imobiliária anterior ainda possui conta'
+);
+SELECT ok(
+  position(
+    'RETURNING corretor.id INTO v_cleared_id' IN
+    pg_get_functiondef('public.unlink_my_corretor(uuid)'::regprocedure)
+  ) > 0,
+  'desvínculo confirma que o registro foi efetivamente liberado'
 );
 
 SELECT ok(
