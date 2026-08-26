@@ -133,7 +133,7 @@ function HeroBanner() {
       <img
         src="/dashboard/agency-panel-art.png"
         alt="Equipe da imobiliária NOX diante de um empreendimento"
-        className="pointer-events-none absolute -bottom-[12%] -left-[5%] z-10 w-[114%] max-w-[444px] select-none object-contain sm:-bottom-[2%] sm:left-[3%] sm:h-[98%] sm:w-[54%] sm:max-w-none xl:-bottom-[8%] xl:-left-[1%] xl:h-[110%] xl:w-auto 2xl:-bottom-[24%] 2xl:left-0 2xl:h-[145%]"
+        className="pointer-events-none absolute -bottom-[12%] -left-[5%] z-10 w-[114%] max-w-[444px] select-none object-contain sm:-bottom-[2%] sm:left-[3%] sm:h-[98%] sm:w-[54%] sm:max-w-none xl:-bottom-[18%] xl:-left-[1%] xl:h-[110%] xl:w-auto 2xl:-bottom-[24%] 2xl:left-0 2xl:h-[145%]"
       />
       <img
         src="/dashboard/agency-panel-copy.png"
