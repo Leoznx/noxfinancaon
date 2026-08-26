@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { NivelCorretorCard } from "@/components/NivelCorretorCard";
@@ -14,6 +14,7 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchNivelInfo, type NivelInfo } from "@/lib/niveis-parceria";
 import { fetchDashboardStats, type DashboardStats } from "@/lib/dashboard-stats";
+import { redirectPathForRole } from "@/lib/authRedirect";
 
 const formatarBRL = (v: number) => (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -27,6 +28,19 @@ export const Route = createFileRoute("/dashboard")({
 });
 
 function Dashboard() {
+  const { user } = useAuth();
+  const dashboardPath = redirectPathForRole(user?.internalRole || user?.role);
+
+  // /dashboard é compartilhada por vários perfis. Quem possui uma rota própria
+  // nunca deve cair no painel genérico antigo ao abrir este endereço diretamente.
+  if (user && dashboardPath !== "/dashboard") {
+    return <Navigate to={dashboardPath as any} replace />;
+  }
+
+  return <DashboardForRole />;
+}
+
+function DashboardForRole() {
   const { user } = useAuth();
   const isJuridico = user?.internalRole === "juridico" || user?.role === "juridico";
   const isFinanceiro = user?.internalRole === "financeiro" || user?.role === "financeiro";

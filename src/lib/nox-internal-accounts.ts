@@ -15,7 +15,7 @@ export const noxInternalAccounts = {
   financeiro: {
     label: "Financeiro",
     route: "/login/financeironox",
-    dashboardRoute: "/admin/financeiro",
+    dashboardRoute: "/dashboard",
     cardDescription: "Cadastro destinado aos colaboradores do setor financeiro da NOX Fiança.",
     formTitle: "Criar conta do Financeiro NOX",
     formDescription: "Preencha seus dados para acessar o ambiente financeiro da NOX Fiança.",
@@ -33,7 +33,7 @@ export const noxInternalAccounts = {
   marketing: {
     label: "Marketing",
     route: "/login/marketingnox",
-    dashboardRoute: "/admin/leads",
+    dashboardRoute: "/dashboard",
     cardDescription: "Cadastro destinado aos colaboradores do setor de marketing da NOX Fiança.",
     formTitle: "Criar conta de Marketing NOX",
     formDescription: "Preencha seus dados para acessar o ambiente de marketing da NOX Fiança.",
