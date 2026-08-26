@@ -3,7 +3,7 @@ BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET LOCAL search_path = public, extensions, pg_catalog;
 
-SELECT plan(15);
+SELECT plan(20);
 
 SELECT is(
   public.normalize_cpf_lookup('091.355.439-14'),
@@ -24,6 +24,32 @@ SELECT is(
   public.normalize_br_phone_lookup('9999'),
   NULL,
   'telefone inválido não participa da busca'
+);
+
+SELECT is(
+  public.is_corretor_linkable_status('ativo'),
+  true,
+  'corretor ativo pode ser vinculado'
+);
+SELECT is(
+  public.is_corretor_linkable_status('pendente'),
+  true,
+  'corretor pendente pode ser vinculado'
+);
+SELECT is(
+  public.is_corretor_linkable_status('pendente_aprovacao'),
+  true,
+  'corretor aguardando aprovação pode ser vinculado'
+);
+SELECT is(
+  public.is_corretor_linkable_status('bloqueado'),
+  false,
+  'corretor bloqueado não pode ser vinculado'
+);
+SELECT is(
+  public.is_corretor_linkable_status(NULL::text),
+  false,
+  'corretor sem status não pode ser vinculado'
 );
 
 SELECT ok(
