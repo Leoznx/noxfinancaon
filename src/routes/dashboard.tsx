@@ -1,4 +1,4 @@
-import { createFileRoute, Navigate } from "@tanstack/react-router";
+import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { NivelCorretorCard } from "@/components/NivelCorretorCard";
@@ -7,7 +7,8 @@ import { JuridicoDashboard } from "@/components/JuridicoDashboard";
 import { FinanceiroDashboard } from "@/components/FinanceiroDashboard";
 import { MarketingDashboard } from "@/components/MarketingDashboard";
 import { ImobiliariaDashboard } from "@/components/ImobiliariaDashboard";
-import { Trophy, Search, FileText, Users, DollarSign, TrendingUp } from "lucide-react";
+import { CorretorDashboard } from "@/components/CorretorDashboard";
+import { Trophy, Search, FileText, Users, DollarSign, ArrowUpRight, TrendingUp, Home, AlertCircle, CheckCircle2 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -40,7 +41,6 @@ function Dashboard() {
   if (user?.role === "proprietario") {
     return <OwnerDashboard />;
   }
-
   return <DashboardForRole />;
 }
 
@@ -66,7 +66,7 @@ function DashboardForRole() {
   // o roundtrip que existia aqui só pra buscar de novo o que já estava em mãos (era o
   // maior gargalo do "demora pra carregar" do dashboard).
   const carregarDados = useCallback(async () => {
-    if (!user?.id || isJuridico || isFinanceiro || isMarketing || isImobiliaria) {
+    if (!user?.id || isJuridico || isFinanceiro || isMarketing || isImobiliaria || isCorretor) {
       setLoadingConsultas(false);
       return;
     }
@@ -156,6 +156,14 @@ function DashboardForRole() {
     return (
       <DashboardLayout>
         <MarketingDashboard />
+      </DashboardLayout>
+    );
+  }
+
+  if (isCorretor && user?.id) {
+    return (
+      <DashboardLayout lockDesktopViewport>
+        <CorretorDashboard profileId={user.id} />
       </DashboardLayout>
     );
   }

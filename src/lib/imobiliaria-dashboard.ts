@@ -34,6 +34,8 @@ export type ImobiliariaDashboardDocument = {
 export type ImobiliariaDashboardInvoice = {
   id: string;
   number: string;
+  tenant: string;
+  property: string;
   dueDate: string;
   value: number;
   daysUntilDue: number;
@@ -189,8 +191,11 @@ async function resolveAgency(profileId: string, email: string) {
 export async function fetchImobiliariaDashboard(
   profileId: string,
   email: string,
+  scope?: { profileIds: string[]; dashboardName: string },
 ): Promise<ImobiliariaDashboardData> {
-  const { profileIds, agencyName } = await resolveAgency(profileId, email);
+  const { profileIds, agencyName } = scope
+    ? { profileIds: scope.profileIds, agencyName: scope.dashboardName }
+    : await resolveAgency(profileId, email);
   const monthsBase = monthRange(12);
 
   const [consultationsResult, commissionsResult] = await Promise.all([
@@ -357,6 +362,8 @@ export async function fetchImobiliariaDashboard(
       return {
         id: row.id,
         number: `FT-${String(row.numero_parcela).padStart(2, "0")}${row.id.slice(0, 4).toUpperCase()}`,
+        tenant: tenantName(consultationById.get(row.consulta_id)),
+        property: propertyLabel(consultationById.get(row.consulta_id)),
         dueDate: row.vencimento,
         value: Number(row.valor || 0),
         daysUntilDue: Math.max(0, Math.ceil((due.getTime() - today.getTime()) / 86_400_000)),
@@ -391,6 +398,13 @@ export async function fetchImobiliariaDashboard(
       .slice(0, 4)
       .map((row) => ({ id: row.id, value: Number(row.valor || 0), createdAt: row.created_at })),
   };
+}
+
+export function fetchCorretorDashboard(profileId: string) {
+  return fetchImobiliariaDashboard(profileId, "", {
+    profileIds: [profileId],
+    dashboardName: "Seu desempenho",
+  });
 }
 
 export function formatCurrency(value: number) {

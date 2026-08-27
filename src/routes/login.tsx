@@ -412,13 +412,6 @@ function LoginComponent() {
           </section>
         </main>
 
-        <footer className="flex min-h-16 flex-col items-center justify-center border-t border-neutral-200 bg-white px-5 py-4 text-center text-xs font-medium text-neutral-500 sm:text-sm lg:min-h-[72px] lg:flex-row">
-          <span>© {new Date().getFullYear()} NOX FIANÇA</span>
-          <span className="mt-1 lg:mt-0">
-            <span className="hidden lg:inline">&nbsp; · &nbsp;</span>
-            Plataforma Institucional de Seguro Fiança Locatícia
-          </span>
-        </footer>
       </div>
     </div>
   );

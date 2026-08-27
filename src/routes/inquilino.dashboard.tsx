@@ -8,10 +8,9 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import {
   TenantDashboardHero,
+  TenantScoreCard,
   TenantDashboardSummary,
-  TenantDocumentsPanel,
   TenantInvoicesPanel,
-  TenantTimelinePanel,
 } from "@/components/tenant-dashboard/TenantDashboardSections";
 import { supabase } from "@/integrations/supabase/client";
 import { reissuePayment } from "@/lib/automated-billing";
@@ -207,7 +206,7 @@ function TenantDashboardPage() {
   }
 
   return (
-    <DashboardLayout>
+    <DashboardLayout lockDesktopViewport>
       <input
         ref={inputRef}
         type="file"
@@ -215,7 +214,7 @@ function TenantDashboardPage() {
         onChange={handleUpload}
         className="hidden"
       />
-      <div className="mx-auto w-full max-w-[1540px] space-y-4 pb-1">
+      <div className="mx-auto w-full max-w-[1540px] space-y-4 pb-1 xl:grid xl:h-full xl:grid-rows-[minmax(132px,0.58fr)_minmax(76px,0.34fr)_minmax(0,1fr)] xl:gap-3 xl:space-y-0 xl:overflow-hidden">
         {loading ? (
           <DashboardLoading />
         ) : error || !data ? (
@@ -236,7 +235,7 @@ function TenantDashboardPage() {
           <>
             <TenantDashboardHero data={data} />
             <TenantDashboardSummary data={data} />
-            <div className="grid gap-4 xl:grid-cols-[1.28fr_1fr_1fr]">
+            <div className="grid min-h-0 gap-4 xl:h-full xl:grid-cols-[0.88fr_1.66fr] xl:gap-3">
               <TenantInvoicesPanel
                 invoices={data.invoices}
                 actions={{
@@ -252,11 +251,7 @@ function TenantDashboardPage() {
                   uploading,
                 }}
               />
-              <TenantDocumentsPanel
-                documents={data.documents}
-                onOpen={(document) => void openDocument(document)}
-              />
-              <TenantTimelinePanel data={data} />
+              <TenantScoreCard name={data.tenantName} invoices={data.invoices} />
             </div>
           </>
         )}
@@ -270,7 +265,7 @@ function DashboardLoading() {
     <div className="flex min-h-[620px] items-center justify-center rounded-3xl border border-neutral-200 bg-white">
       <div className="flex items-center gap-3 text-sm font-semibold text-neutral-500">
         <Loader2 className="animate-spin text-[#e6aa00]" size={20} />
-        Carregando seu contrato...
+        Carregando seu dashboard...
       </div>
     </div>
   );

@@ -8,7 +8,7 @@
   --radius-lg: 0.75rem;
   --radius-xl: 1rem;
   --radius-2xl: 1.5rem;
-  
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -34,33 +34,33 @@
   /* INSTITUTIONAL LIGHT THEME */
   --background: oklch(1 0 0); /* #FFFFFF */
   --foreground: oklch(0.141 0.005 285.823); /* #0A0A0A */
-  
+
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.141 0.005 285.823);
-  
+
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.141 0.005 285.823);
-  
+
   --primary: oklch(0.141 0.005 285.823); /* Preto para botões primários */
   --primary-foreground: oklch(1 0 0);
-  
+
   --secondary: oklch(0.967 0.001 286.375); /* #FAFAFA approx */
   --secondary-foreground: oklch(0.141 0.005 285.823);
-  
+
   --muted: oklch(0.967 0.001 286.375);
   --muted-foreground: oklch(0.552 0.016 285.938);
-  
+
   --accent: oklch(0.85 0.2 95 / 0.1); /* Suave amarelo NOX */
-  --accent-foreground: #FACC15; /* Amarelo sol vivo */
-  
+  --accent-foreground: #facc15; /* Amarelo sol vivo */
+
   --destructive: oklch(0.511 0.19 28.31); /* #B91C1C approx */
   --destructive-foreground: oklch(1 0 0);
-  
+
   --border: oklch(0.92 0.004 286.32); /* #E5E5E5 approx */
   --input: oklch(0.92 0.004 286.32);
   --ring: oklch(0.141 0.005 285.823);
-  
-  --brand-yellow: #FFD60A; /* Amarelo sol vivo atualizado */
+
+  --brand-yellow: #ffd60a; /* Amarelo sol vivo atualizado */
 }
 
 @layer base {
@@ -71,13 +71,20 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
-    font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    font-family:
+      ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+      "Segoe UI Symbol", "Noto Color Emoji";
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     letter-spacing: -0.01em;
   }
 
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     letter-spacing: -0.03em;
   }
 }
@@ -86,7 +93,7 @@
   .animate-marquee {
     animation: marquee 40s linear infinite;
   }
-  
+
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }
@@ -240,18 +247,32 @@
 }
 
 @keyframes marquee {
-  from { transform: translateX(0); }
-  to { transform: translateX(-50%); }
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
 }
 
 @keyframes shimmer {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .animate-fade-in {
@@ -259,17 +280,30 @@
 }
 
 @keyframes shake {
-  0%, 100% { transform: rotate(0deg); }
-  10%, 30%, 50%, 70%, 90% { transform: rotate(-10deg); }
-  20%, 40%, 60%, 80% { transform: rotate(10deg); }
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  10%,
+  30%,
+  50%,
+  70%,
+  90% {
+    transform: rotate(-10deg);
+  }
+  20%,
+  40%,
+  60%,
+  80% {
+    transform: rotate(10deg);
+  }
 }
 
 .animate-shake {
   animation: shake 0.8s ease-in-out;
 }
 
-
-a[href*="lovable.dev"], 
+a[href*="lovable.dev"],
 iframe[src*="lovable.dev"],
 div[style*="Edit with Lovable"],
 .lovable-badge {
@@ -279,4 +313,25 @@ div[style*="Edit with Lovable"],
   pointer-events: none !important;
   position: absolute !important;
   z-index: -9999 !important;
+}
+@media (min-width: 1280px) and (max-height: 700px) {
+  .tenant-score-card {
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.25rem !important;
+  }
+
+  .tenant-score-kicker {
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.25rem !important;
+    font-size: 0.45rem !important;
+  }
+
+  .tenant-score-name {
+    margin-top: 0.25rem !important;
+    font-size: 0.875rem !important;
+  }
+
+  .tenant-score-gauge {
+    max-height: 10rem !important;
+  }
 }

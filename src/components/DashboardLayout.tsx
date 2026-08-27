@@ -272,8 +272,6 @@ const proprietarioItems = [
 const inquilinoItems = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/inquilino/dashboard" },
   { icon: ShieldCheck, label: "Meu Seguro", href: "/inquilino/painel" },
-  { icon: Search, label: "Contratar Seguro", href: "/consultas/nova", highlight: true },
-  { icon: History, label: "Minhas Consultas", href: "/consultas" },
   { icon: FileText, label: "Documentos", href: "/inquilino/documentos" },
   { icon: Receipt, label: "Faturas", href: "/inquilino/faturas" },
   { icon: UserCircle, label: "Meu Perfil", href: "/configuracoes" },

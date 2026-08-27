@@ -54,6 +54,7 @@ export type TenantDashboardDocument = {
 };
 
 export type TenantDashboardData = {
+  tenantName: string;
   consultation: TenantConsultation | null;
   consultations: TenantConsultation[];
   signature: TenantContractSignature | null;
@@ -93,14 +94,16 @@ export async function fetchTenantDashboard(
   userId: string,
   email?: string | null,
 ): Promise<TenantDashboardData> {
-  const [byUser, byEmail] = await Promise.all([
+  const [byUser, byEmail, profileResult] = await Promise.all([
     supabase.from("consultas_credito").select(CONSULTATION_SELECT).eq("tenant_user_id", userId),
     email
       ? supabase.from("consultas_credito").select(CONSULTATION_SELECT).ilike("tenant_email", email)
       : Promise.resolve({ data: [], error: null }),
+    supabase.from("profiles").select("nome").eq("id", userId).maybeSingle(),
   ]);
   if (byUser.error) throw byUser.error;
   if (byEmail.error) throw byEmail.error;
+  if (profileResult.error) throw profileResult.error;
 
   const consultations = Array.from(
     new Map(
@@ -196,6 +199,7 @@ export async function fetchTenantDashboard(
   );
 
   return {
+    tenantName: String(profileResult.data?.nome || email || "Cliente NOX"),
     consultation: preferredConsultation,
     consultations,
     signature,
