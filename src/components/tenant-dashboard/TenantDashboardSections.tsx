@@ -117,22 +117,22 @@ function getTenantContractState(data: TenantDashboardData): ContractState {
 export function TenantDashboardHero({ data }: { data: TenantDashboardData }) {
   const state = getTenantContractState(data);
   return (
-    <section className="relative min-h-[212px] overflow-hidden rounded-[26px] border border-[#f4df9c] bg-[linear-gradient(118deg,#fffdf8_0%,#fff8dd_48%,#fffdf9_100%)] px-6 py-6 shadow-[0_14px_42px_rgba(117,86,0,0.06)] sm:px-10">
+    <section className="relative min-h-[212px] overflow-hidden rounded-[26px] border border-[#f4df9c] bg-[linear-gradient(118deg,#fffdf8_0%,#fff8dd_48%,#fffdf9_100%)] px-6 py-6 shadow-[0_14px_42px_rgba(117,86,0,0.06)] sm:px-10 xl:h-full xl:min-h-0 xl:px-8 xl:py-4">
       <div className="pointer-events-none absolute inset-0 opacity-50 [background:linear-gradient(135deg,transparent_22%,rgba(255,214,79,.22)_22.2%,transparent_22.6%,transparent_72%,rgba(255,214,79,.18)_72.2%,transparent_72.6%)]" />
       <div className="relative z-10 flex max-w-xl flex-col items-start">
         <span className="inline-flex items-center gap-2 rounded-xl border border-[#e6ad18] bg-white/75 px-3 py-2 text-xs font-extrabold text-[#7f5710] shadow-sm backdrop-blur-sm">
           <ShieldCheck size={17} strokeWidth={2.2} />
           {state.badge}
         </span>
-        <h1 className="mt-4 text-[2rem] font-black leading-none tracking-[-0.045em] text-neutral-950 sm:text-[2.65rem]">
+        <h1 className="mt-4 text-[2rem] font-black leading-none tracking-[-0.045em] text-neutral-950 sm:text-[2.65rem] xl:mt-3 xl:text-[2.1rem]">
           Meu seguro-fiança
         </h1>
         <p className="mt-2 text-sm font-medium text-neutral-600 sm:text-base">
-          Parcelas, proteção e seu Score NOX em um só lugar.
+          Parcelas, proteção e seu score para locação em um só lugar.
         </p>
         <Link
           to="/inquilino/painel"
-          className="mt-5 inline-flex h-10 items-center gap-3 rounded-xl border border-neutral-200 bg-white px-4 text-xs font-extrabold text-neutral-900 shadow-sm transition hover:-translate-y-0.5 hover:border-[#e8c352] hover:shadow-md"
+          className="mt-5 inline-flex h-10 items-center gap-3 rounded-xl border border-neutral-200 bg-white px-4 text-xs font-extrabold text-neutral-900 shadow-sm transition hover:-translate-y-0.5 hover:border-[#e8c352] hover:shadow-md xl:mt-3 xl:h-9"
         >
           Ver detalhes do contrato <ChevronRight size={16} />
         </Link>
@@ -140,7 +140,7 @@ export function TenantDashboardHero({ data }: { data: TenantDashboardData }) {
       <img
         src="/assets/tenant-dashboard/tenant-contract-hero-v2.png"
         alt="Contrato, proteção, imóvel e cobranças"
-        className="pointer-events-none absolute -bottom-4 right-[-2%] hidden h-[226px] w-[58%] object-contain object-right-bottom lg:block xl:right-[1%] xl:w-[62%]"
+        className="pointer-events-none absolute -bottom-4 right-[-2%] hidden h-[226px] w-[58%] object-contain object-right-bottom lg:block xl:right-[1%] xl:h-full xl:w-[62%]"
       />
     </section>
   );
@@ -190,13 +190,13 @@ export function TenantDashboardSummary({ data }: { data: TenantDashboardData }) 
   ];
 
   return (
-    <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+    <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5 xl:h-full">
       {cards.map(({ icon: Icon, label, value, detail }) => (
         <article
           key={label}
-          className="flex min-h-[108px] items-center gap-4 rounded-2xl border border-neutral-200 bg-white px-4 py-4 shadow-[0_8px_22px_rgba(15,23,42,0.045)]"
+          className="flex min-h-[108px] items-center gap-4 rounded-2xl border border-neutral-200 bg-white px-4 py-4 shadow-[0_8px_22px_rgba(15,23,42,0.045)] xl:h-full xl:min-h-0 xl:gap-3 xl:px-3 xl:py-2"
         >
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#fff7dc] text-[#eca900]">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#fff7dc] text-[#eca900] xl:h-10 xl:w-10 xl:rounded-xl">
             <Icon size={24} strokeWidth={1.8} />
           </span>
           <span className="min-w-0">
@@ -251,7 +251,7 @@ export function TenantInvoicesPanel({
     .slice(0, 3);
 
   return (
-    <section className="flex min-h-[374px] flex-col rounded-2xl border border-neutral-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
+    <section className="flex min-h-[374px] flex-col rounded-2xl border border-neutral-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.05)] xl:h-full xl:min-h-0 xl:p-3">
       <PanelTitle icon={ReceiptText} title="Minhas faturas">
         <Link
           to="/inquilino/faturas"
@@ -277,7 +277,7 @@ export function TenantInvoicesPanel({
               <Link
                 key={item.id}
                 to="/inquilino/faturas"
-                className="grid min-h-[62px] grid-cols-[52px_1fr_auto] items-center gap-3 py-2.5 md:grid-cols-[84px_1fr_90px_92px_18px]"
+                className="grid min-h-[62px] grid-cols-[52px_1fr_auto] items-center gap-3 py-2.5 md:grid-cols-[84px_1fr_90px_92px_18px] xl:h-12 xl:min-h-0 xl:py-1"
               >
                 <span className="flex h-11 w-11 flex-col items-center justify-center rounded-lg border border-neutral-200 bg-neutral-50 leading-none">
                   <b className="text-sm text-neutral-900">{due.day}</b>
@@ -308,15 +308,15 @@ export function TenantInvoicesPanel({
       )}
 
       {rows.some((item) => isTenantInvoiceOpen(item.status)) ? (
-        <div className="mt-3 flex items-center gap-2 rounded-xl border border-[#f1d891] bg-[#fffaf0] px-3 py-2 text-[11px] text-neutral-600">
+        <div className="mt-3 flex items-center gap-2 rounded-xl border border-[#f1d891] bg-[#fffaf0] px-3 py-2 text-[11px] text-neutral-600 xl:mt-2 xl:py-1.5">
           <Clock3 size={15} className="shrink-0 text-[#d99500]" />
           Mantenha suas faturas em dia para evitar interrupções no contrato.
         </div>
       ) : null}
 
-      <div className="mt-auto border-t border-neutral-100 pt-3">
+      <div className="mt-auto border-t border-neutral-100 pt-3 xl:pt-2">
         <h3 className="text-sm font-black text-neutral-950">Ações rápidas</h3>
-        <div className="mt-2 grid grid-cols-3 gap-2">
+        <div className="mt-2 grid grid-cols-3 gap-2 xl:mt-1">
           <QuickButton
             icon={FileDown}
             title="Baixar boleto"
@@ -353,28 +353,29 @@ export function TenantScoreCard({
   const level = tenantScoreLevel(result.score);
   const progress = Math.max(0, Math.min(1, result.score / result.maxScore));
   const gaugeLength = Math.PI * 130;
+  const visibleProgress = Math.max(progress, 0.015);
   const markerAngle = Math.PI * (1 - progress);
   const markerX = 180 + 130 * Math.cos(markerAngle);
   const markerY = 170 - 130 * Math.sin(markerAngle);
 
   return (
-    <section className="relative flex min-h-[374px] items-center justify-center overflow-hidden rounded-2xl border border-neutral-200 bg-white px-5 py-6 shadow-[0_8px_24px_rgba(15,23,42,0.05)] sm:px-8">
+    <section className="tenant-score-card relative flex min-h-[374px] items-center justify-center overflow-hidden rounded-2xl border border-neutral-200 bg-white px-5 py-6 shadow-[0_8px_24px_rgba(15,23,42,0.05)] sm:px-8 xl:h-full xl:min-h-0 xl:py-3">
       <span className="pointer-events-none absolute -left-28 -top-32 h-72 w-72 rounded-full bg-red-50/70 blur-3xl" />
       <span className="pointer-events-none absolute -bottom-40 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-yellow-50 blur-3xl" />
       <span className="pointer-events-none absolute -right-28 -top-32 h-72 w-72 rounded-full bg-emerald-50/70 blur-3xl" />
 
       <div className="relative flex w-full max-w-[680px] flex-col items-center text-center">
-        <span className="inline-flex items-center gap-2 rounded-full border border-[#f0d781] bg-[#fffaf0] px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.22em] text-[#9d6900]">
-          <Sparkles size={13} /> Score NOX
+        <span className="tenant-score-kicker inline-flex items-center gap-2 rounded-full border border-[#f0d781] bg-[#fffaf0] px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.22em] text-[#9d6900]">
+          <Sparkles size={13} /> Score para locação
         </span>
-        <p className="mt-3 max-w-full truncate text-base font-black text-neutral-950 sm:text-lg">
+        <p className="tenant-score-name mt-3 max-w-full truncate text-base font-black text-neutral-950 sm:text-lg">
           {name}
         </p>
         <svg
-          viewBox="0 0 360 205"
+          viewBox="0 0 360 180"
           role="img"
-          aria-label={`Score NOX de ${result.score} pontos, classificação ${level.label}`}
-          className="mt-1 w-full max-w-[600px] overflow-visible"
+          aria-label={`Score para locação de ${result.score} pontos, classificação ${level.label}`}
+          className="tenant-score-gauge mt-1 max-h-[280px] w-full max-w-[600px] overflow-visible xl:max-h-[230px]"
         >
           <defs>
             <linearGradient id="tenant-score-gauge" x1="0" y1="0" x2="1" y2="0">
@@ -396,7 +397,7 @@ export function TenantScoreCard({
             stroke="url(#tenant-score-gauge)"
             strokeWidth="26"
             strokeLinecap="round"
-            strokeDasharray={`${gaugeLength * progress} ${gaugeLength}`}
+            strokeDasharray={`${gaugeLength * visibleProgress} ${gaugeLength}`}
           />
           <circle
             cx={markerX}
@@ -427,17 +428,6 @@ export function TenantScoreCard({
             letterSpacing="1.6"
           >
             {level.label.toUpperCase()}
-          </text>
-          <text
-            x="180"
-            y="190"
-            textAnchor="middle"
-            fill="#8b8b8b"
-            fontSize="9"
-            fontWeight="800"
-            letterSpacing="1.4"
-          >
-            DE {result.maxScore} PONTOS
           </text>
         </svg>
       </div>
@@ -645,7 +635,7 @@ function QuickButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="flex min-h-[62px] items-center gap-2 rounded-xl border border-neutral-200 bg-white px-2 text-left transition hover:border-[#e6bb2f] hover:bg-[#fffdf5] disabled:opacity-60"
+      className="flex min-h-[62px] items-center gap-2 rounded-xl border border-neutral-200 bg-white px-2 text-left transition hover:border-[#e6bb2f] hover:bg-[#fffdf5] disabled:opacity-60 xl:h-12 xl:min-h-0"
     >
       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#fff5cf] text-[#e4a400]">
         <Icon size={17} />

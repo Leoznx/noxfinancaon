@@ -19,7 +19,7 @@ function invoice(
   return { id, dueDate, status, paidAt };
 }
 
-test("cadastro sem parcelas começa com 824 pontos", () => {
+test("cadastro sem parcelas começa com zero pontos", () => {
   const result = calculateTenantScore([], TODAY);
   assert.equal(result.score, TENANT_SCORE_BASE);
   assert.equal(result.earnedPoints, 0);
@@ -56,12 +56,15 @@ test("atrasos usam as quatro faixas acumuladas no resultado", () => {
   assert.ok(lossFor("late_4_5") >= 21 && lossFor("late_4_5") <= 56);
   assert.ok(lossFor("late_6_30") >= 56 && lossFor("late_6_30") <= 123);
   assert.ok(lossFor("late_over_30") >= 123 && lossFor("late_over_30") <= 342);
-  assert.equal(result.lostPoints, losses.reduce((sum, value) => sum + value, 0));
+  assert.equal(
+    result.lostPoints,
+    losses.reduce((sum, value) => sum + value, 0),
+  );
   assert.equal(result.score, Math.max(0, TENANT_SCORE_BASE - result.lostPoints));
 });
 
-test("ganhos nunca ultrapassam 950 pontos", () => {
-  const rows = Array.from({ length: 20 }, (_, index) =>
+test("ganhos acumulados nunca ultrapassam o limite interno", () => {
+  const rows = Array.from({ length: 80 }, (_, index) =>
     invoice(
       `early-${index}`,
       `2026-${String((index % 8) + 1).padStart(2, "0")}-20`,

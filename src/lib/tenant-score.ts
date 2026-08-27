@@ -1,4 +1,4 @@
-export const TENANT_SCORE_BASE = 824;
+export const TENANT_SCORE_BASE = 0;
 export const TENANT_SCORE_MAX = 950;
 
 export type TenantScoreInvoice = {
@@ -9,12 +9,7 @@ export type TenantScoreInvoice = {
 };
 
 export type TenantScoreEventKind =
-  | "paid_early"
-  | "paid_on_time"
-  | "late_1_3"
-  | "late_4_5"
-  | "late_6_30"
-  | "late_over_30";
+  "paid_early" | "paid_on_time" | "late_1_3" | "late_4_5" | "late_6_30" | "late_over_30";
 
 export type TenantScoreEvent = {
   invoiceId: string;
@@ -158,10 +153,7 @@ export function calculateTenantScore(
   }
 
   events.sort((first, second) => first.dueDate.localeCompare(second.dueDate));
-  const earnedPoints = events.reduce(
-    (total, event) => total + Math.max(0, event.points),
-    0,
-  );
+  const earnedPoints = events.reduce((total, event) => total + Math.max(0, event.points), 0);
   const lostPoints = events.reduce(
     (total, event) => total + Math.abs(Math.min(0, event.points)),
     0,
