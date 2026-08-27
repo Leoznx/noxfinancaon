@@ -19,7 +19,7 @@ function invoice(
   return { id, dueDate, status, paidAt };
 }
 
-test("cadastro sem parcelas começa com zero pontos", () => {
+test("todo cadastro de inquilino começa com 812 pontos", () => {
   const result = calculateTenantScore([], TODAY);
   assert.equal(result.score, TENANT_SCORE_BASE);
   assert.equal(result.earnedPoints, 0);

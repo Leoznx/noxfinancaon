@@ -1,4 +1,4 @@
-export const TENANT_SCORE_BASE = 0;
+export const TENANT_SCORE_BASE = 812;
 export const TENANT_SCORE_MAX = 950;
 
 export type TenantScoreInvoice = {
