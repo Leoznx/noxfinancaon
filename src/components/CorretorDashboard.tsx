@@ -169,9 +169,9 @@ function HeroBanner({
         src="/dashboard/broker-performance-hero.png"
         alt=""
         aria-hidden="true"
-        className="pointer-events-none absolute left-[-10%] top-[24%] h-auto w-[120%] max-w-none select-none sm:left-[20%] sm:top-[-5%] sm:w-[60%] xl:left-[21%] xl:top-[-11%] xl:w-[58%] 2xl:left-[22%]"
+        className="pointer-events-none absolute left-[-10%] top-[31%] h-auto w-[118%] max-w-none select-none sm:left-[27%] sm:top-[2%] sm:w-[48%] xl:left-[30%] xl:top-[-15%] xl:h-[290px] xl:w-auto 2xl:left-[31%]"
       />
-      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,253,248,1)_0%,rgba(255,253,248,0.98)_27%,rgba(255,253,248,0.72)_34%,rgba(255,253,248,0.04)_49%,rgba(255,253,248,0)_100%)]" />
+      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,253,248,1)_0%,rgba(255,253,248,0.98)_27%,rgba(255,253,248,0.72)_34%,rgba(255,253,248,0.04)_47%,rgba(255,253,248,0)_66%,rgba(255,253,248,0.88)_88%,rgba(255,253,248,1)_100%)]" />
 
       <div className="relative z-10 flex h-full max-w-[470px] flex-col justify-center px-6 py-7 sm:px-9 xl:px-10 xl:py-5">
         <h1 className="text-3xl font-black leading-[0.98] tracking-[-0.045em] text-neutral-950 sm:text-[34px] xl:text-[32px]">
