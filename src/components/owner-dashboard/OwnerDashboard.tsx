@@ -273,7 +273,7 @@ function OwnerSummaryGrid({ data }: { data: OwnerDashboardData }) {
             <span>
               Você ainda não possui imóveis cadastrados.{" "}
               <Link
-                to="/consultas/nova"
+                to="/cadastrar-imovel"
                 className="font-extrabold text-amber-600 hover:text-amber-700"
               >
                 Cadastrar imóvel
