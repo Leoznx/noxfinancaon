@@ -240,31 +240,34 @@ function LoginComponent() {
   return (
     <div className="min-h-[100dvh] bg-[#f7f6f3] lg:h-[100dvh] lg:overflow-hidden">
       <div className="flex min-h-[100dvh] flex-col overflow-hidden border border-neutral-200 bg-white lg:h-[100dvh] lg:rounded-[18px]">
-        <main className="grid min-h-0 flex-1 lg:grid-cols-2">
+        <main className="relative grid min-h-0 flex-1 lg:grid-cols-2">
+          <Link
+            to="/contato"
+            search={searchParams.perfil ? { perfil: searchParams.perfil } : {}}
+            className="absolute right-5 top-5 z-20 inline-flex h-12 items-center gap-3 rounded-xl border border-neutral-200 bg-white px-5 text-sm font-medium text-neutral-800 shadow-sm transition-colors hover:border-yellow-400 hover:bg-yellow-50 sm:right-8 sm:top-8 lg:right-[72px] lg:top-10"
+          >
+            <Headphones size={19} strokeWidth={1.7} />
+            Precisa de ajuda?
+          </Link>
+
           <Link
             to="/"
             aria-label="Voltar para a página inicial"
-            className="relative block aspect-square overflow-hidden bg-[#fff9ec] lg:aspect-auto"
+            className="relative mt-[68px] block aspect-[1586/992] overflow-hidden bg-[#fff9ec] sm:mt-20 lg:mt-0 lg:aspect-auto"
           >
-            <img
-              src="/brand/nox-login-hero.png"
-              alt="NOX Fiança: gestão segura, ágil e com suporte dedicado"
-              className="h-full w-full object-cover"
-            />
+            <picture className="block h-full w-full">
+              <source media="(max-width: 1023px)" srcSet="/brand/nox-login-mobile-hero.png" />
+              <img
+                src="/brand/nox-login-hero.png"
+                alt="NOX Fiança: acesso seguro e ágil à plataforma"
+                className="h-full w-full object-cover"
+              />
+            </picture>
           </Link>
 
-          <section className="relative flex min-h-0 items-center justify-center bg-[radial-gradient(circle_at_85%_15%,rgba(250,204,21,0.06),transparent_26%),#fff] px-5 pb-12 pt-24 sm:px-8 lg:overflow-y-auto lg:px-12 lg:py-20 xl:px-16">
-            <Link
-              to="/contato"
-              search={searchParams.perfil ? { perfil: searchParams.perfil } : {}}
-              className="absolute right-5 top-5 inline-flex h-12 items-center gap-3 rounded-xl border border-neutral-200 bg-white px-5 text-sm font-medium text-neutral-800 shadow-sm transition-colors hover:border-yellow-400 hover:bg-yellow-50 sm:right-8 sm:top-8 lg:right-[72px] lg:top-10"
-            >
-              <Headphones size={19} strokeWidth={1.7} />
-              Precisa de ajuda?
-            </Link>
-
-            <div className="my-auto w-full max-w-[640px] rounded-[28px] border border-neutral-200 bg-white px-6 py-9 shadow-[0_20px_60px_rgba(15,15,15,0.06)] sm:px-10 lg:translate-y-8 lg:px-12 xl:px-16 xl:py-14">
-              <header className="text-center">
+          <section className="relative flex min-h-0 items-center justify-center bg-[radial-gradient(circle_at_85%_15%,rgba(250,204,21,0.06),transparent_26%),#fff] px-5 pb-10 sm:px-8 lg:overflow-y-auto lg:px-12 lg:py-20 xl:px-16">
+            <div className="relative z-10 w-full max-w-[640px] rounded-[28px] border border-neutral-200 bg-white px-6 py-8 shadow-[0_20px_60px_rgba(15,15,15,0.06)] sm:px-10 lg:my-auto lg:translate-y-8 lg:px-12 lg:py-9 xl:px-16 xl:py-14">
+              <header className="hidden text-center lg:block">
                 <h1 className="text-[28px] font-extrabold tracking-[-0.04em] text-neutral-950 sm:text-[30px]">
                   Bem-vindo de volta!
                 </h1>
@@ -273,7 +276,7 @@ function LoginComponent() {
                 </p>
               </header>
 
-              <form onSubmit={handleSubmit} className="mt-9 space-y-5">
+              <form onSubmit={handleSubmit} className="space-y-5 lg:mt-9">
                 {vindoDaSimulacao && (
                   <div className="flex items-start gap-2 rounded-xl border border-yellow-200 bg-yellow-50 p-3 text-left">
                     <Info
@@ -418,9 +421,12 @@ function LoginComponent() {
           </section>
         </main>
 
-        <footer className="flex min-h-16 items-center justify-center border-t border-neutral-200 bg-white px-5 py-4 text-center text-xs font-medium text-neutral-500 sm:text-sm lg:min-h-[72px]">
-          © {new Date().getFullYear()} NOX FIANÇA&nbsp; · &nbsp;Plataforma Institucional de Seguro
-          Fiança Locatícia
+        <footer className="flex min-h-16 flex-col items-center justify-center border-t border-neutral-200 bg-white px-5 py-4 text-center text-xs font-medium text-neutral-500 sm:text-sm lg:min-h-[72px] lg:flex-row">
+          <span>© {new Date().getFullYear()} NOX FIANÇA</span>
+          <span className="mt-1 lg:mt-0">
+            <span className="hidden lg:inline">&nbsp; · &nbsp;</span>
+            Plataforma Institucional de Seguro Fiança Locatícia
+          </span>
         </footer>
       </div>
     </div>
