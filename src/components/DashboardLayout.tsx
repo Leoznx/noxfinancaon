@@ -272,7 +272,8 @@ const proprietarioItems = [
 ];
 
 const inquilinoItems = [
-  { icon: LayoutDashboard, label: "Meu Seguro", href: "/inquilino/painel" },
+  { icon: LayoutDashboard, label: "Dashboard", href: "/inquilino/dashboard" },
+  { icon: ShieldCheck, label: "Meu Seguro", href: "/inquilino/painel" },
   { icon: Search, label: "Contratar Seguro", href: "/consultas/nova", highlight: true },
   { icon: History, label: "Minhas Consultas", href: "/consultas" },
   { icon: FileText, label: "Documentos", href: "/inquilino/documentos" },
@@ -658,7 +659,7 @@ export function DashboardLayout({
                 to={item.href}
                 className={`flex items-center gap-3 pl-3 pr-4 py-3 rounded-xl border-l-4 transition-all ${
                   isActive
-                    ? cargoInterno === "juridico" || isImobiliaria
+                    ? cargoInterno === "juridico" || isImobiliaria || isInquilino
                       ? "bg-yellow-400 border-yellow-400 text-neutral-950 font-bold shadow-sm shadow-yellow-400/20"
                       : "bg-white/10 border-yellow-400 text-white font-semibold"
                     : isHighlight && !isImobiliaria

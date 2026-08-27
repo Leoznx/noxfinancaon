@@ -11,7 +11,7 @@ export type DemoProfile = {
   description: string;
   email: string;
   password: string;
-  startPath: "/dashboard" | "/inquilino/painel";
+  startPath: "/dashboard" | "/inquilino/dashboard";
 };
 
 export const DEMO_PROFILES: Record<DemoProfileKey, DemoProfile> = {
@@ -45,7 +45,7 @@ export const DEMO_PROFILES: Record<DemoProfileKey, DemoProfile> = {
     description: "A mesma conta e as mesmas telas usadas por um inquilino real.",
     email: "inquilino@nox.com",
     password: "nox12345",
-    startPath: "/inquilino/painel",
+    startPath: "/inquilino/dashboard",
   },
 };
 

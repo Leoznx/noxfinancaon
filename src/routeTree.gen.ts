@@ -82,6 +82,7 @@ import { Route as InquilinoPerfilRouteImport } from './routes/inquilino.perfil'
 import { Route as InquilinoPainelRouteImport } from './routes/inquilino.painel'
 import { Route as InquilinoFaturasRouteImport } from './routes/inquilino.faturas'
 import { Route as InquilinoDocumentosRouteImport } from './routes/inquilino.documentos'
+import { Route as InquilinoDashboardRouteImport } from './routes/inquilino.dashboard'
 import { Route as FaturasInquilinosIdRouteImport } from './routes/faturas-inquilinos.$id'
 import { Route as DemoPerfilRouteImport } from './routes/demo.$perfil'
 import { Route as ConsultasNovaRouteImport } from './routes/consultas.nova'
@@ -493,6 +494,11 @@ const InquilinoDocumentosRoute = InquilinoDocumentosRouteImport.update({
   path: '/inquilino/documentos',
   getParentRoute: () => rootRouteImport,
 } as any)
+const InquilinoDashboardRoute = InquilinoDashboardRouteImport.update({
+  id: '/inquilino/dashboard',
+  path: '/inquilino/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const FaturasInquilinosIdRoute = FaturasInquilinosIdRouteImport.update({
   id: '/faturas-inquilinos/$id',
   path: '/faturas-inquilinos/$id',
@@ -766,6 +772,7 @@ export interface FileRoutesByFullPath {
   '/consultas/nova': typeof ConsultasNovaRoute
   '/demo/$perfil': typeof DemoPerfilRoute
   '/faturas-inquilinos/$id': typeof FaturasInquilinosIdRoute
+  '/inquilino/dashboard': typeof InquilinoDashboardRoute
   '/inquilino/documentos': typeof InquilinoDocumentosRoute
   '/inquilino/faturas': typeof InquilinoFaturasRoute
   '/inquilino/painel': typeof InquilinoPainelRoute
@@ -873,6 +880,7 @@ export interface FileRoutesByTo {
   '/consultas/nova': typeof ConsultasNovaRoute
   '/demo/$perfil': typeof DemoPerfilRoute
   '/faturas-inquilinos/$id': typeof FaturasInquilinosIdRoute
+  '/inquilino/dashboard': typeof InquilinoDashboardRoute
   '/inquilino/documentos': typeof InquilinoDocumentosRoute
   '/inquilino/faturas': typeof InquilinoFaturasRoute
   '/inquilino/painel': typeof InquilinoPainelRoute
@@ -985,6 +993,7 @@ export interface FileRoutesById {
   '/consultas/nova': typeof ConsultasNovaRoute
   '/demo/$perfil': typeof DemoPerfilRoute
   '/faturas-inquilinos/$id': typeof FaturasInquilinosIdRoute
+  '/inquilino/dashboard': typeof InquilinoDashboardRoute
   '/inquilino/documentos': typeof InquilinoDocumentosRoute
   '/inquilino/faturas': typeof InquilinoFaturasRoute
   '/inquilino/painel': typeof InquilinoPainelRoute
@@ -1098,6 +1107,7 @@ export interface FileRouteTypes {
     | '/consultas/nova'
     | '/demo/$perfil'
     | '/faturas-inquilinos/$id'
+    | '/inquilino/dashboard'
     | '/inquilino/documentos'
     | '/inquilino/faturas'
     | '/inquilino/painel'
@@ -1205,6 +1215,7 @@ export interface FileRouteTypes {
     | '/consultas/nova'
     | '/demo/$perfil'
     | '/faturas-inquilinos/$id'
+    | '/inquilino/dashboard'
     | '/inquilino/documentos'
     | '/inquilino/faturas'
     | '/inquilino/painel'
@@ -1316,6 +1327,7 @@ export interface FileRouteTypes {
     | '/consultas/nova'
     | '/demo/$perfil'
     | '/faturas-inquilinos/$id'
+    | '/inquilino/dashboard'
     | '/inquilino/documentos'
     | '/inquilino/faturas'
     | '/inquilino/painel'
@@ -1425,6 +1437,7 @@ export interface RootRouteChildren {
   BlogSlugRoute: typeof BlogSlugRoute
   DemoPerfilRoute: typeof DemoPerfilRoute
   FaturasInquilinosIdRoute: typeof FaturasInquilinosIdRoute
+  InquilinoDashboardRoute: typeof InquilinoDashboardRoute
   InquilinoDocumentosRoute: typeof InquilinoDocumentosRoute
   InquilinoFaturasRoute: typeof InquilinoFaturasRoute
   InquilinoPainelRoute: typeof InquilinoPainelRoute
@@ -1952,6 +1965,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InquilinoDocumentosRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/inquilino/dashboard': {
+      id: '/inquilino/dashboard'
+      path: '/inquilino/dashboard'
+      fullPath: '/inquilino/dashboard'
+      preLoaderRoute: typeof InquilinoDashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/faturas-inquilinos/$id': {
       id: '/faturas-inquilinos/$id'
       path: '/faturas-inquilinos/$id'
@@ -2377,6 +2397,7 @@ const rootRouteChildren: RootRouteChildren = {
   BlogSlugRoute: BlogSlugRoute,
   DemoPerfilRoute: DemoPerfilRoute,
   FaturasInquilinosIdRoute: FaturasInquilinosIdRoute,
+  InquilinoDashboardRoute: InquilinoDashboardRoute,
   InquilinoDocumentosRoute: InquilinoDocumentosRoute,
   InquilinoFaturasRoute: InquilinoFaturasRoute,
   InquilinoPainelRoute: InquilinoPainelRoute,
