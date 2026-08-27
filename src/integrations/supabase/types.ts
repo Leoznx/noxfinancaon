@@ -1337,10 +1337,15 @@ export type Database = {
           logradouro: string | null
           numero: string | null
           proprietario_id: string | null
+          tem_condominio: boolean
+          tem_iptu: boolean
           tipo: string
           updated_at: string
           valor_aluguel: number
           valor_condominio: number | null
+          valor_fundo_reserva: number
+          valor_iptu: number
+          valor_taxa_lixo: number
           valor_taxas: number | null
         }
         Insert: {
@@ -1357,10 +1362,15 @@ export type Database = {
           logradouro?: string | null
           numero?: string | null
           proprietario_id?: string | null
+          tem_condominio?: boolean
+          tem_iptu?: boolean
           tipo: string
           updated_at?: string
           valor_aluguel: number
           valor_condominio?: number | null
+          valor_fundo_reserva?: number
+          valor_iptu?: number
+          valor_taxa_lixo?: number
           valor_taxas?: number | null
         }
         Update: {
@@ -1377,10 +1387,15 @@ export type Database = {
           logradouro?: string | null
           numero?: string | null
           proprietario_id?: string | null
+          tem_condominio?: boolean
+          tem_iptu?: boolean
           tipo?: string
           updated_at?: string
           valor_aluguel?: number
           valor_condominio?: number | null
+          valor_fundo_reserva?: number
+          valor_iptu?: number
+          valor_taxa_lixo?: number
           valor_taxas?: number | null
         }
         Relationships: [

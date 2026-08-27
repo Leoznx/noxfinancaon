@@ -122,7 +122,7 @@ function PropertiesPage() {
             </p>
           </div>
           <Button asChild className="rounded-xl bg-neutral-950 text-white hover:bg-neutral-800">
-            <Link to="/consultas/nova">
+            <Link to="/cadastrar-imovel">
               <Plus size={16} /> Cadastrar imóvel
             </Link>
           </Button>
@@ -162,13 +162,13 @@ function PropertiesPage() {
               Você ainda não possui imóveis cadastrados.
             </h2>
             <p className="mt-2 max-w-md text-sm text-neutral-500">
-              Cadastre o primeiro imóvel iniciando uma nova consulta.
+              Cadastre seu primeiro imóvel para acompanhar seu patrimônio e iniciar contratos.
             </p>
             <Button
               asChild
               className="mt-6 rounded-xl bg-yellow-400 font-bold text-neutral-950 hover:bg-yellow-500"
             >
-              <Link to="/consultas/nova">
+              <Link to="/cadastrar-imovel">
                 Cadastrar imóvel <ArrowRight size={15} />
               </Link>
             </Button>

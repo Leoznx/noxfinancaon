@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AcessoInquilinoRouteImport } from './routes/acesso-inquilino'
 import { Route as AplicativoRouteImport } from './routes/aplicativo'
 import { Route as ApolicesRouteImport } from './routes/apolices'
+import { Route as CadastrarImovelRouteImport } from './routes/cadastrar-imovel'
 import { Route as CadastroRouteImport } from './routes/cadastro'
 import { Route as CadastroConcluidoRouteImport } from './routes/cadastro-concluido'
 import { Route as CadastroCorretorRouteImport } from './routes/cadastro-corretor'
@@ -140,6 +141,11 @@ const AplicativoRoute = AplicativoRouteImport.update({
 const ApolicesRoute = ApolicesRouteImport.update({
   id: '/apolices',
   path: '/apolices',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CadastrarImovelRoute = CadastrarImovelRouteImport.update({
+  id: '/cadastrar-imovel',
+  path: '/cadastrar-imovel',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CadastroRoute = CadastroRouteImport.update({
@@ -712,6 +718,7 @@ export interface FileRoutesByFullPath {
   '/acesso-inquilino': typeof AcessoInquilinoRoute
   '/aplicativo': typeof AplicativoRoute
   '/apolices': typeof ApolicesRouteWithChildren
+  '/cadastrar-imovel': typeof CadastrarImovelRoute
   '/cadastro': typeof CadastroRoute
   '/cadastro-concluido': typeof CadastroConcluidoRoute
   '/cadastro-corretor': typeof CadastroCorretorRoute
@@ -825,6 +832,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/acesso-inquilino': typeof AcessoInquilinoRoute
   '/aplicativo': typeof AplicativoRoute
+  '/cadastrar-imovel': typeof CadastrarImovelRoute
   '/cadastro': typeof CadastroRoute
   '/cadastro-concluido': typeof CadastroConcluidoRoute
   '/cadastro-corretor': typeof CadastroCorretorRoute
@@ -937,6 +945,7 @@ export interface FileRoutesById {
   '/acesso-inquilino': typeof AcessoInquilinoRoute
   '/aplicativo': typeof AplicativoRoute
   '/apolices': typeof ApolicesRouteWithChildren
+  '/cadastrar-imovel': typeof CadastrarImovelRoute
   '/cadastro': typeof CadastroRoute
   '/cadastro-concluido': typeof CadastroConcluidoRoute
   '/cadastro-corretor': typeof CadastroCorretorRoute
@@ -1053,6 +1062,7 @@ export interface FileRouteTypes {
     | '/acesso-inquilino'
     | '/aplicativo'
     | '/apolices'
+    | '/cadastrar-imovel'
     | '/cadastro'
     | '/cadastro-concluido'
     | '/cadastro-corretor'
@@ -1166,6 +1176,7 @@ export interface FileRouteTypes {
     | '/'
     | '/acesso-inquilino'
     | '/aplicativo'
+    | '/cadastrar-imovel'
     | '/cadastro'
     | '/cadastro-concluido'
     | '/cadastro-corretor'
@@ -1277,6 +1288,7 @@ export interface FileRouteTypes {
     | '/acesso-inquilino'
     | '/aplicativo'
     | '/apolices'
+    | '/cadastrar-imovel'
     | '/cadastro'
     | '/cadastro-concluido'
     | '/cadastro-corretor'
@@ -1392,6 +1404,7 @@ export interface RootRouteChildren {
   AcessoInquilinoRoute: typeof AcessoInquilinoRoute
   AplicativoRoute: typeof AplicativoRoute
   ApolicesRoute: typeof ApolicesRouteWithChildren
+  CadastrarImovelRoute: typeof CadastrarImovelRoute
   CadastroRoute: typeof CadastroRoute
   CadastroConcluidoRoute: typeof CadastroConcluidoRoute
   CadastroCorretorRoute: typeof CadastroCorretorRoute
@@ -1506,6 +1519,13 @@ declare module '@tanstack/react-router' {
       path: '/apolices'
       fullPath: '/apolices'
       preLoaderRoute: typeof ApolicesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cadastrar-imovel': {
+      id: '/cadastrar-imovel'
+      path: '/cadastrar-imovel'
+      fullPath: '/cadastrar-imovel'
+      preLoaderRoute: typeof CadastrarImovelRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/cadastro': {
@@ -2369,6 +2389,7 @@ const rootRouteChildren: RootRouteChildren = {
   AcessoInquilinoRoute: AcessoInquilinoRoute,
   AplicativoRoute: AplicativoRoute,
   ApolicesRoute: ApolicesRouteWithChildren,
+  CadastrarImovelRoute: CadastrarImovelRoute,
   CadastroRoute: CadastroRoute,
   CadastroConcluidoRoute: CadastroConcluidoRoute,
   CadastroCorretorRoute: CadastroCorretorRoute,
