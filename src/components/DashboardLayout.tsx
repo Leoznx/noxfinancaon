@@ -260,6 +260,8 @@ const imobiliariaItems = [
 
 const proprietarioItems = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
+  { icon: Search, label: "Nova Consulta", href: "/consultas/nova", highlight: true },
+  { icon: History, label: "Minhas Consultas", href: "/consultas" },
   { icon: Home, label: "Meus Imóveis", href: "/imoveis" },
   { icon: FileCheck2, label: "Contratos Ativos", href: "/apolices" },
   { icon: DollarSign, label: "Recebimentos", href: "/carteira-cobrancas" },
