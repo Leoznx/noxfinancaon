@@ -249,7 +249,7 @@ function LoginComponent() {
             <img
               src="/brand/nox-login-hero.png"
               alt="NOX Fiança: gestão segura, ágil e com suporte dedicado"
-              className="h-full w-full object-contain"
+              className="h-full w-full object-cover"
             />
           </Link>
 
