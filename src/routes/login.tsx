@@ -2,9 +2,8 @@ import { createFileRoute, useNavigate, Link, useSearch } from "@tanstack/react-r
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Lock, Mail, Info, Settings, Eye, EyeOff } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, Headphones, Info, Lock, Settings, UserRound } from "lucide-react";
 import { useAuth, type InternalRole } from "@/components/AuthProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -164,8 +163,7 @@ function LoginComponent() {
    * `cadastro_concluido_em` só é nulo no primeiro acesso.
    */
   const irPara = (destino: string, userId: string, profile: any) => {
-    const primeiroAcesso =
-      profile?.cadastro_concluido_em == null && !jaMarcadoLocalmente(userId);
+    const primeiroAcesso = profile?.cadastro_concluido_em == null && !jaMarcadoLocalmente(userId);
 
     if (primeiroAcesso) {
       navigate({
@@ -240,148 +238,191 @@ function LoginComponent() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-neutral-50 p-6">
-      <div
-        className="mb-10 flex items-center gap-3 cursor-pointer"
-        onClick={() => navigate({ to: "/" })}
-      >
-        <LogoNox variant="claro" size="xl" />
-      </div>
+    <div className="min-h-[100dvh] bg-[#f7f6f3] lg:h-[100dvh] lg:overflow-hidden">
+      <div className="flex min-h-[100dvh] flex-col overflow-hidden border border-neutral-200 bg-white lg:h-[100dvh] lg:rounded-[18px]">
+        <main className="grid min-h-0 flex-1 lg:grid-cols-2">
+          <Link
+            to="/"
+            aria-label="Voltar para a página inicial"
+            className="relative block aspect-square overflow-hidden bg-[#fff9ec] lg:aspect-auto"
+          >
+            <img
+              src="/brand/nox-login-hero.png"
+              alt="NOX Fiança: gestão segura, ágil e com suporte dedicado"
+              className="h-full w-full object-contain"
+            />
+          </Link>
 
-      <Card className="w-full max-w-md bg-white shadow-2xl border border-neutral-100 rounded-xl overflow-hidden">
-        <CardHeader className="text-center pt-10 px-8">
-          {vindoDaSimulacao && (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4 flex items-start gap-2 text-left">
-              <Info className="w-4 h-4 text-yellow-700 flex-shrink-0 mt-0.5" strokeWidth={1.5} />
-              <p className="text-sm text-neutral-700">
-                <strong>Quase lá!</strong> Entre na sua conta para ver o resultado da simulação.
-              </p>
-            </div>
-          )}
-          {searchParams.perfil && (
-            <div className="inline-flex items-center gap-2 bg-yellow-50 border border-yellow-200 rounded-full px-4 py-1.5 mb-6 self-center mx-auto">
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-yellow-800">
-                Acesso do{" "}
-                {searchParams.perfil === "imobiliaria"
-                  ? "Imobiliária"
-                  : searchParams.perfil === "corretor"
-                    ? "Corretor"
-                    : "Proprietário"}
-              </span>
-            </div>
-          )}
-          <CardTitle className="text-2xl font-bold text-neutral-900 tracking-tight">
-            Portal Institucional
-          </CardTitle>
-          <CardDescription className="text-neutral-500 font-medium mt-2">
-            Acesse as ferramentas de gestão de seguro fiança.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-8 pb-10">
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-sm font-semibold text-neutral-700">
-                  Identificação (E-mail)
-                </label>
-                <div className="relative">
-                  <Mail
-                    className="absolute left-3 top-3.5 text-neutral-400"
-                    size={18}
-                    strokeWidth={1.5}
-                  />
-                  <Input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="corporativo@empresa.com.br"
-                    className="h-12 pl-10 rounded-lg border-neutral-300 focus:ring-neutral-900"
-                    required
-                  />
+          <section className="relative flex min-h-0 items-center justify-center bg-[radial-gradient(circle_at_85%_15%,rgba(250,204,21,0.06),transparent_26%),#fff] px-5 pb-12 pt-24 sm:px-8 lg:overflow-y-auto lg:px-12 lg:py-20 xl:px-16">
+            <Link
+              to="/contato"
+              search={searchParams.perfil ? { perfil: searchParams.perfil } : {}}
+              className="absolute right-5 top-5 inline-flex h-12 items-center gap-3 rounded-xl border border-neutral-200 bg-white px-5 text-sm font-medium text-neutral-800 shadow-sm transition-colors hover:border-yellow-400 hover:bg-yellow-50 sm:right-8 sm:top-8 lg:right-[72px] lg:top-10"
+            >
+              <Headphones size={19} strokeWidth={1.7} />
+              Precisa de ajuda?
+            </Link>
+
+            <div className="my-auto w-full max-w-[640px] rounded-[28px] border border-neutral-200 bg-white px-6 py-9 shadow-[0_20px_60px_rgba(15,15,15,0.06)] sm:px-10 lg:translate-y-8 lg:px-12 xl:px-16 xl:py-14">
+              <header className="text-center">
+                <h1 className="text-[28px] font-extrabold tracking-[-0.04em] text-neutral-950 sm:text-[30px]">
+                  Bem-vindo de volta!
+                </h1>
+                <p className="mt-2 text-sm font-medium text-neutral-500 sm:text-[15px]">
+                  Faça login para continuar acessando sua conta.
+                </p>
+              </header>
+
+              <form onSubmit={handleSubmit} className="mt-9 space-y-5">
+                {vindoDaSimulacao && (
+                  <div className="flex items-start gap-2 rounded-xl border border-yellow-200 bg-yellow-50 p-3 text-left">
+                    <Info
+                      className="mt-0.5 h-4 w-4 flex-shrink-0 text-yellow-700"
+                      strokeWidth={1.5}
+                    />
+                    <p className="text-sm text-neutral-700">
+                      <strong>Quase lá!</strong> Entre na sua conta para ver o resultado da
+                      simulação.
+                    </p>
+                  </div>
+                )}
+
+                {searchParams.perfil && (
+                  <div className="mx-auto w-fit rounded-full border border-yellow-200 bg-yellow-50 px-4 py-1.5">
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-yellow-800">
+                      Acesso do{" "}
+                      {searchParams.perfil === "imobiliaria"
+                        ? "Imobiliária"
+                        : searchParams.perfil === "corretor"
+                          ? "Corretor"
+                          : searchParams.perfil === "inquilino"
+                            ? "Inquilino"
+                            : "Proprietário"}
+                    </span>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <label htmlFor="login-email" className="text-sm font-medium text-neutral-800">
+                    E-mail ou usuário
+                  </label>
+                  <div className="relative">
+                    <UserRound
+                      className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500"
+                      size={20}
+                      strokeWidth={1.5}
+                    />
+                    <Input
+                      id="login-email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="Digite seu e-mail ou usuário"
+                      autoComplete="email"
+                      className="h-14 rounded-xl border-neutral-300 bg-white pl-12 text-[15px] shadow-none placeholder:text-neutral-400 focus-visible:border-yellow-500 focus-visible:ring-yellow-400/30"
+                      required
+                    />
+                  </div>
                 </div>
-              </div>
-              <div className="space-y-1.5">
-                <div className="flex justify-between items-center">
-                  <label className="text-sm font-semibold text-neutral-700">Senha de acesso</label>
+
+                <div className="space-y-2">
+                  <label htmlFor="login-password" className="text-sm font-medium text-neutral-800">
+                    Senha
+                  </label>
+                  <div className="relative">
+                    <Lock
+                      className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500"
+                      size={20}
+                      strokeWidth={1.5}
+                    />
+                    <Input
+                      id="login-password"
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Digite sua senha"
+                      autoComplete="current-password"
+                      className="h-14 rounded-xl border-neutral-300 bg-white pl-12 pr-12 text-[15px] shadow-none placeholder:text-neutral-400 focus-visible:border-yellow-500 focus-visible:ring-yellow-400/30"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((current) => !current)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-500 transition-colors hover:text-neutral-900"
+                      aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                    >
+                      {showPassword ? (
+                        <EyeOff size={20} strokeWidth={1.5} />
+                      ) : (
+                        <Eye size={20} strokeWidth={1.5} />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-2.5">
+                    <Checkbox
+                      id="lembrar-me"
+                      checked={lembrar}
+                      onCheckedChange={(checked) => setLembrar(checked === true)}
+                      className="h-6 w-6 rounded-md border-neutral-300 data-[state=checked]:border-yellow-400 data-[state=checked]:bg-yellow-400 data-[state=checked]:text-neutral-950"
+                    />
+                    <label
+                      htmlFor="lembrar-me"
+                      className="cursor-pointer select-none text-sm font-medium text-neutral-600"
+                    >
+                      Lembrar de mim
+                    </label>
+                  </div>
                   <Link
                     to="/recuperar-acesso"
                     search={{ email: email || undefined }}
-                    className="text-xs font-bold text-yellow-600 hover:text-yellow-700"
+                    className="text-right text-xs font-bold text-[#d9a900] transition-colors hover:text-yellow-700 sm:text-sm"
                   >
-                    Recuperar acesso
+                    Esqueci minha senha
                   </Link>
                 </div>
-                <div className="relative">
-                  <Lock
-                    className="absolute left-3 top-3.5 text-neutral-400"
-                    size={18}
-                    strokeWidth={1.5}
-                  />
-                  <Input
-                    type={showPassword ? "text" : "password"}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••••••"
-                    className="h-12 pl-10 pr-10 rounded-lg border-neutral-300 focus:ring-neutral-900"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((current) => !current)}
-                    className="absolute right-3 top-3.5 text-neutral-400 hover:text-neutral-700"
-                    aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
-                    tabIndex={-1}
-                  >
-                    {showPassword ? (
-                      <EyeOff size={18} strokeWidth={1.5} />
-                    ) : (
-                      <Eye size={18} strokeWidth={1.5} />
-                    )}
-                  </button>
-                </div>
-              </div>
-            </div>
 
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="lembrar-me"
-                checked={lembrar}
-                onCheckedChange={(checked) => setLembrar(checked === true)}
-              />
-              <label
-                htmlFor="lembrar-me"
-                className="text-sm font-medium text-neutral-600 cursor-pointer select-none"
-              >
-                Manter-se conectado
-              </label>
-            </div>
-
-            <Button
-              disabled={isLoading}
-              className="w-full h-14 bg-neutral-900 text-white hover:bg-neutral-800 rounded-lg font-bold text-lg mt-4 shadow-lg shadow-neutral-100 transition-all"
-            >
-              {isLoading ? "Processando..." : "Entrar no sistema"}
-            </Button>
-
-            <div className="text-center pt-4">
-              <p className="text-sm text-neutral-500 font-medium">
-                Ainda não tem conta?{" "}
-                <Link
-                  to={searchParams.perfil ? cadastroRouteByPerfil[searchParams.perfil] : "/cadastro"}
-                  search={returnTo && returnTo !== "/dashboard" ? { returnTo } : {}}
-                  className="text-yellow-600 font-bold hover:underline"
+                <Button
+                  disabled={isLoading}
+                  className="relative h-14 w-full rounded-xl bg-gradient-to-r from-[#ffc400] to-[#ffd20a] text-base font-extrabold text-neutral-950 shadow-[0_8px_20px_rgba(245,190,0,0.18)] transition-all hover:from-[#f4bb00] hover:to-[#f7c900]"
                 >
-                  Criar acesso
-                </Link>
-              </p>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
+                  {isLoading ? "Processando..." : "Entrar"}
+                  {!isLoading && (
+                    <ArrowRight className="absolute right-5" size={21} strokeWidth={2.2} />
+                  )}
+                </Button>
 
-      <p className="mt-10 text-[10px] text-neutral-400 font-medium uppercase tracking-[0.2em]">
-        © {new Date().getFullYear()} NOX FIANÇA - Todos os direitos reservados.
-      </p>
+                <div className="flex items-center gap-5 py-1" aria-hidden="true">
+                  <span className="h-px flex-1 bg-neutral-200" />
+                  <span className="text-xs font-medium text-neutral-500">ou</span>
+                  <span className="h-px flex-1 bg-neutral-200" />
+                </div>
+
+                <Link
+                  to={
+                    searchParams.perfil ? cadastroRouteByPerfil[searchParams.perfil] : "/cadastro"
+                  }
+                  search={returnTo && returnTo !== "/dashboard" ? { returnTo } : {}}
+                  className="flex min-h-16 items-center gap-4 rounded-xl border border-neutral-200 bg-white px-5 text-sm font-semibold text-neutral-900 transition-colors hover:border-yellow-300 hover:bg-yellow-50"
+                >
+                  <UserRound size={22} strokeWidth={1.6} />
+                  <span className="flex-1">
+                    Primeiro acesso? <strong className="text-[#d9a900]">Solicitar conta</strong>
+                  </span>
+                  <ArrowRight size={19} strokeWidth={2} />
+                </Link>
+              </form>
+            </div>
+          </section>
+        </main>
+
+        <footer className="flex min-h-16 items-center justify-center border-t border-neutral-200 bg-white px-5 py-4 text-center text-xs font-medium text-neutral-500 sm:text-sm lg:min-h-[72px]">
+          © {new Date().getFullYear()} NOX FIANÇA&nbsp; · &nbsp;Plataforma Institucional de Seguro
+          Fiança Locatícia
+        </footer>
+      </div>
     </div>
   );
 }
