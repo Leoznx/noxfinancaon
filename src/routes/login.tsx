@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ArrowRight, Eye, EyeOff, Headphones, Info, Lock, Settings, UserRound } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, Info, Lock, Settings, UserRound } from "lucide-react";
 import { useAuth, type InternalRole } from "@/components/AuthProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -240,20 +240,11 @@ function LoginComponent() {
   return (
     <div className="min-h-[100dvh] bg-[#f7f6f3] lg:h-[100dvh] lg:overflow-hidden">
       <div className="flex min-h-[100dvh] flex-col overflow-hidden border border-neutral-200 bg-white lg:h-[100dvh] lg:rounded-[18px]">
-        <main className="relative grid min-h-0 flex-1 lg:grid-cols-2">
-          <Link
-            to="/contato"
-            search={searchParams.perfil ? { perfil: searchParams.perfil } : {}}
-            className="absolute right-5 top-5 z-20 inline-flex h-12 items-center gap-3 rounded-xl border border-neutral-200 bg-white px-5 text-sm font-medium text-neutral-800 shadow-sm transition-colors hover:border-yellow-400 hover:bg-yellow-50 sm:right-8 sm:top-8 lg:right-[72px] lg:top-10"
-          >
-            <Headphones size={19} strokeWidth={1.7} />
-            Precisa de ajuda?
-          </Link>
-
+        <main className="grid min-h-0 flex-1 lg:grid-cols-2">
           <Link
             to="/"
             aria-label="Voltar para a página inicial"
-            className="relative mt-[68px] block aspect-[1586/992] overflow-hidden bg-[#fff9ec] sm:mt-20 lg:mt-0 lg:aspect-auto"
+            className="relative block aspect-[13/10] overflow-hidden bg-[#fff9ec] lg:aspect-auto"
           >
             <picture className="block h-full w-full">
               <source media="(max-width: 1023px)" srcSet="/brand/nox-login-mobile-hero.png" />
