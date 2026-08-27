@@ -179,13 +179,6 @@ function HeroBanner({
           alt="Quanto mais contratos, maior sua comissão. Acompanhe sua performance, contratos e ganhos com mais praticidade."
           className="w-full max-w-[520px] select-none object-contain"
         />
-        <Link
-          to="/consultas/nova"
-          className="-mt-4 inline-flex h-9 w-fit items-center gap-3 rounded-xl bg-[#FFC400] px-5 text-[11px] font-black text-neutral-950 shadow-[0_8px_20px_rgba(255,196,0,0.24)] transition hover:-translate-y-0.5 hover:bg-[#FFD633]"
-        >
-          Nova Consulta
-          <ArrowRight size={15} strokeWidth={2.4} />
-        </Link>
       </div>
 
       <div className="relative z-20 mt-[235px] grid gap-2 p-4 sm:absolute sm:bottom-3 sm:right-3 sm:mt-0 sm:w-[210px] sm:p-0 xl:w-[202px]">
