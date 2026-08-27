@@ -265,8 +265,8 @@ function LoginComponent() {
             </picture>
           </Link>
 
-          <section className="relative flex min-h-0 items-center justify-center bg-[radial-gradient(circle_at_85%_15%,rgba(250,204,21,0.06),transparent_26%),#fff] px-5 pb-10 sm:px-8 lg:overflow-y-auto lg:px-12 lg:py-20 xl:px-16">
-            <div className="relative z-10 w-full max-w-[640px] rounded-[28px] border border-neutral-200 bg-white px-6 py-8 shadow-[0_20px_60px_rgba(15,15,15,0.06)] sm:px-10 lg:my-auto lg:translate-y-8 lg:px-12 lg:py-9 xl:px-16 xl:py-14">
+          <section className="relative flex min-h-0 items-center justify-center bg-[radial-gradient(circle_at_85%_15%,rgba(250,204,21,0.06),transparent_26%),#fff] px-5 pb-6 sm:px-8 lg:overflow-y-auto lg:px-12 lg:py-20 xl:px-16">
+            <div className="relative z-10 w-full max-w-[640px] rounded-[28px] border border-neutral-200 bg-white px-6 py-6 shadow-[0_20px_60px_rgba(15,15,15,0.06)] sm:px-10 lg:my-auto lg:translate-y-8 lg:px-12 lg:py-9 xl:px-16 xl:py-14">
               <header className="hidden text-center lg:block">
                 <h1 className="text-[28px] font-extrabold tracking-[-0.04em] text-neutral-950 sm:text-[30px]">
                   Bem-vindo de volta!
@@ -276,7 +276,7 @@ function LoginComponent() {
                 </p>
               </header>
 
-              <form onSubmit={handleSubmit} className="space-y-5 lg:mt-9">
+              <form onSubmit={handleSubmit} className="space-y-4 lg:mt-9 lg:space-y-5">
                 {vindoDaSimulacao && (
                   <div className="flex items-start gap-2 rounded-xl border border-yellow-200 bg-yellow-50 p-3 text-left">
                     <Info
@@ -322,7 +322,7 @@ function LoginComponent() {
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="Digite seu e-mail ou usuário"
                       autoComplete="email"
-                      className="h-14 rounded-xl border-neutral-300 bg-white pl-12 text-[15px] shadow-none placeholder:text-neutral-400 focus-visible:border-yellow-500 focus-visible:ring-yellow-400/30"
+                      className="h-12 rounded-xl border-neutral-300 bg-white pl-12 text-[15px] shadow-none placeholder:text-neutral-400 focus-visible:border-yellow-500 focus-visible:ring-yellow-400/30 lg:h-14"
                       required
                     />
                   </div>
@@ -345,7 +345,7 @@ function LoginComponent() {
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="Digite sua senha"
                       autoComplete="current-password"
-                      className="h-14 rounded-xl border-neutral-300 bg-white pl-12 pr-12 text-[15px] shadow-none placeholder:text-neutral-400 focus-visible:border-yellow-500 focus-visible:ring-yellow-400/30"
+                      className="h-12 rounded-xl border-neutral-300 bg-white pl-12 pr-12 text-[15px] shadow-none placeholder:text-neutral-400 focus-visible:border-yellow-500 focus-visible:ring-yellow-400/30 lg:h-14"
                       required
                     />
                     <button
@@ -389,7 +389,7 @@ function LoginComponent() {
 
                 <Button
                   disabled={isLoading}
-                  className="relative h-14 w-full rounded-xl bg-gradient-to-r from-[#ffc400] to-[#ffd20a] text-base font-extrabold text-neutral-950 shadow-[0_8px_20px_rgba(245,190,0,0.18)] transition-all hover:from-[#f4bb00] hover:to-[#f7c900]"
+                  className="relative h-[52px] w-full rounded-xl bg-gradient-to-r from-[#ffc400] to-[#ffd20a] text-base font-extrabold text-neutral-950 shadow-[0_8px_20px_rgba(245,190,0,0.18)] transition-all hover:from-[#f4bb00] hover:to-[#f7c900] lg:h-14"
                 >
                   {isLoading ? "Processando..." : "Entrar"}
                   {!isLoading && (
@@ -408,7 +408,7 @@ function LoginComponent() {
                     searchParams.perfil ? cadastroRouteByPerfil[searchParams.perfil] : "/cadastro"
                   }
                   search={returnTo && returnTo !== "/dashboard" ? { returnTo } : {}}
-                  className="flex min-h-16 items-center gap-4 rounded-xl border border-neutral-200 bg-white px-5 text-sm font-semibold text-neutral-900 transition-colors hover:border-yellow-300 hover:bg-yellow-50"
+                  className="flex min-h-14 items-center gap-4 rounded-xl border border-neutral-200 bg-white px-5 text-sm font-semibold text-neutral-900 transition-colors hover:border-yellow-300 hover:bg-yellow-50 lg:min-h-16"
                 >
                   <UserRound size={22} strokeWidth={1.6} />
                   <span className="flex-1">
