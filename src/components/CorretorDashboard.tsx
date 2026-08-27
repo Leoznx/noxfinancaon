@@ -169,18 +169,23 @@ function HeroBanner({
         src="/dashboard/broker-performance-hero.png"
         alt=""
         aria-hidden="true"
-        className="pointer-events-none absolute left-[-10%] top-[31%] h-auto w-[118%] max-w-none select-none sm:left-[27%] sm:top-[2%] sm:w-[48%] xl:left-[30%] xl:top-[-15%] xl:h-[290px] xl:w-auto 2xl:left-[31%]"
+        className="pointer-events-none absolute left-[-10%] top-[31%] h-auto w-[118%] max-w-none select-none sm:left-[31%] sm:top-[2%] sm:w-[48%] xl:left-[41%] xl:top-[-15%] xl:h-[290px] xl:w-auto 2xl:left-[49%]"
       />
       <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,253,248,1)_0%,rgba(255,253,248,0.98)_27%,rgba(255,253,248,0.72)_34%,rgba(255,253,248,0.04)_47%,rgba(255,253,248,0)_66%,rgba(255,253,248,0.88)_88%,rgba(255,253,248,1)_100%)]" />
 
-      <div className="relative z-10 flex h-full max-w-[470px] flex-col justify-center px-6 py-7 sm:px-9 xl:px-10 xl:py-5">
-        <h1 className="text-3xl font-black leading-[0.98] tracking-[-0.045em] text-neutral-950 sm:text-[34px] xl:text-[32px]">
-          Quanto mais contratos,
-          <span className="block text-[#ECAE00]">maior sua comissão.</span>
-        </h1>
-        <p className="mt-3 max-w-[350px] text-[11px] font-medium leading-4 text-neutral-600 xl:mt-2.5">
-          Acompanhe sua performance, contratos e ganhos com mais praticidade.
-        </p>
+      <div className="relative z-10 flex h-full max-w-[560px] flex-col justify-center px-6 py-4 sm:px-9 xl:px-10">
+        <img
+          src="/dashboard/broker-performance-copy.png"
+          alt="Quanto mais contratos, maior sua comissão. Acompanhe sua performance, contratos e ganhos com mais praticidade."
+          className="w-full max-w-[520px] select-none object-contain"
+        />
+        <Link
+          to="/consultas/nova"
+          className="-mt-4 inline-flex h-9 w-fit items-center gap-3 rounded-xl bg-[#FFC400] px-5 text-[11px] font-black text-neutral-950 shadow-[0_8px_20px_rgba(255,196,0,0.24)] transition hover:-translate-y-0.5 hover:bg-[#FFD633]"
+        >
+          Nova Consulta
+          <ArrowRight size={15} strokeWidth={2.4} />
+        </Link>
       </div>
 
       <div className="relative z-20 mt-[235px] grid gap-2 p-4 sm:absolute sm:bottom-3 sm:right-3 sm:mt-0 sm:w-[210px] sm:p-0 xl:w-[202px]">
