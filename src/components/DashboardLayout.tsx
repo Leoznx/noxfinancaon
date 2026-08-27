@@ -326,9 +326,11 @@ const INTERNAL_ROLES_WITH_DASHBOARD = new Set<string>(["juridico", "financeiro",
 export function DashboardLayout({
   children,
   lockDesktopViewport = false,
+  lockViewport = false,
 }: {
   children: React.ReactNode;
   lockDesktopViewport?: boolean;
+  lockViewport?: boolean;
 }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -508,9 +510,7 @@ export function DashboardLayout({
     ];
   } else if (cargoInterno) {
     menuItems = [
-      ...(INTERNAL_ROLES_WITH_DASHBOARD.has(cargoInterno)
-        ? [INTERNAL_ROLE_DASHBOARD_ITEM]
-        : []),
+      ...(INTERNAL_ROLES_WITH_DASHBOARD.has(cargoInterno) ? [INTERNAL_ROLE_DASHBOARD_ITEM] : []),
       ...ADMIN_CATALOG.filter(
         (item) =>
           podeVerModulo(permissoesCargo, item.module) &&
@@ -592,8 +592,8 @@ export function DashboardLayout({
 
   return (
     <div
-      className={`min-h-screen bg-neutral-50 flex ${
-        lockDesktopViewport ? "xl:h-screen xl:min-h-0 xl:overflow-hidden" : ""
+      className={`${lockViewport ? "h-screen min-h-0 overflow-hidden" : "min-h-screen"} bg-neutral-50 flex ${
+        !lockViewport && lockDesktopViewport ? "xl:h-screen xl:min-h-0 xl:overflow-hidden" : ""
       }`}
     >
       {/* Overlay mobile */}
@@ -717,10 +717,17 @@ export function DashboardLayout({
                     <div className="pt-1 text-[9px] leading-relaxed text-neutral-400">
                       <p>
                         Próximo nível:{" "}
-                        <span className="font-bold text-white">{nivelInfo.proximoNivel.nome_nivel}</span>
+                        <span className="font-bold text-white">
+                          {nivelInfo.proximoNivel.nome_nivel}
+                        </span>
                       </p>
                       <p>
-                        Faltam {Math.max(0, nivelInfo.proximoNivel.min_contratos - nivelInfo.contratosAtivos)} contratos
+                        Faltam{" "}
+                        {Math.max(
+                          0,
+                          nivelInfo.proximoNivel.min_contratos - nivelInfo.contratosAtivos,
+                        )}{" "}
+                        contratos
                       </p>
                     </div>
                   )}
@@ -741,10 +748,10 @@ export function DashboardLayout({
 
       {/* Main Content */}
       <main
-        className={`flex-1 lg:ml-64 min-h-screen flex flex-col min-w-0 ${
+        className={`flex-1 lg:ml-64 ${lockViewport ? "h-screen min-h-0 overflow-hidden" : "min-h-screen"} flex flex-col min-w-0 ${
           isImobiliaria ? "w-full lg:w-[calc(100%-16rem)]" : "w-full"
         } ${
-          lockDesktopViewport ? "xl:h-screen xl:min-h-0 xl:overflow-hidden" : ""
+          !lockViewport && lockDesktopViewport ? "xl:h-screen xl:min-h-0 xl:overflow-hidden" : ""
         }`}
       >
         <header className="h-16 shrink-0 border-b border-neutral-200 flex items-center justify-between gap-3 px-4 sm:px-6 lg:px-10 bg-white/80 backdrop-blur-md sticky top-0 z-40">
@@ -822,7 +829,11 @@ export function DashboardLayout({
 
         <div
           className={`p-4 sm:p-6 lg:p-10 flex-1 overflow-x-hidden ${
-            lockDesktopViewport ? "xl:min-h-0 xl:overflow-hidden xl:p-6" : ""
+            lockViewport
+              ? "min-h-0 overflow-hidden p-3 sm:p-4 lg:p-5"
+              : lockDesktopViewport
+                ? "xl:min-h-0 xl:overflow-hidden xl:p-6"
+                : ""
           }`}
         >
           {children}
@@ -830,7 +841,7 @@ export function DashboardLayout({
 
         <footer
           className={`p-6 sm:p-8 text-center text-xs text-neutral-400 border-t border-neutral-100 font-medium bg-white ${
-            lockDesktopViewport ? "xl:hidden" : ""
+            lockViewport ? "hidden" : lockDesktopViewport ? "xl:hidden" : ""
           }`}
         >
           © {new Date().getFullYear()} NOX FIANÇA - Plataforma Institucional de Seguro Fiança

@@ -133,8 +133,8 @@ export function OwnerDashboard() {
   }, [data, period]);
 
   return (
-    <DashboardLayout>
-      <div className="mx-auto w-full max-w-[1480px] space-y-4 sm:space-y-5">
+    <DashboardLayout lockViewport>
+      <div className="mx-auto flex h-full min-h-0 w-full max-w-[1480px] flex-col gap-2 lg:grid lg:grid-cols-[minmax(0,1.12fr)_minmax(280px,0.88fr)] lg:grid-rows-[clamp(118px,15vh,150px)_clamp(76px,9vh,94px)_minmax(190px,1.15fr)_minmax(170px,0.95fr)] lg:gap-3">
         <OwnerDashboardHero />
 
         {loading ? (
@@ -145,14 +145,22 @@ export function OwnerDashboard() {
           <>
             <OwnerSummaryGrid data={data} />
 
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.12fr)_minmax(390px,0.88fr)]">
-              <OwnerRevenueChart rows={chartRows} period={period} onPeriodChange={setPeriod} />
-              <OwnerPropertyRevenue data={data} />
-            </div>
-
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.28fr)_minmax(360px,0.72fr)]">
-              <OwnerActiveContracts contracts={data.contracts} />
-              <OwnerRecentActivity activities={data.activities} />
+            <div
+              className="flex min-h-0 flex-1 snap-x snap-mandatory gap-2 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:contents"
+              aria-label="Detalhes do dashboard. Deslize horizontalmente em telas menores."
+            >
+              <div className="h-full w-full shrink-0 snap-center lg:h-auto lg:min-h-0 lg:w-auto">
+                <OwnerRevenueChart rows={chartRows} period={period} onPeriodChange={setPeriod} />
+              </div>
+              <div className="h-full w-full shrink-0 snap-center lg:h-auto lg:min-h-0 lg:w-auto">
+                <OwnerPropertyRevenue data={data} />
+              </div>
+              <div className="h-full w-full shrink-0 snap-center lg:h-auto lg:min-h-0 lg:w-auto">
+                <OwnerActiveContracts contracts={data.contracts} />
+              </div>
+              <div className="h-full w-full shrink-0 snap-center lg:h-auto lg:min-h-0 lg:w-auto">
+                <OwnerRecentActivity activities={data.activities} />
+              </div>
             </div>
           </>
         )}
@@ -163,7 +171,7 @@ export function OwnerDashboard() {
 
 function OwnerDashboardHero() {
   return (
-    <section className="relative isolate min-h-[220px] overflow-hidden rounded-[22px] border border-amber-100 bg-[#fffaf0] shadow-[0_10px_35px_rgba(82,65,0,0.05)] sm:min-h-[230px]">
+    <section className="relative isolate h-[108px] shrink-0 overflow-hidden rounded-2xl border border-amber-100 bg-[#fffaf0] shadow-[0_10px_35px_rgba(82,65,0,0.05)] lg:col-span-2 lg:h-full">
       <img
         src="/assets/nox-hero-casa-chaves-banner.webp"
         alt="Casa moderna protegida pela NOX Fiança"
@@ -172,19 +180,19 @@ function OwnerDashboardHero() {
       <div className="absolute inset-0 -z-10 bg-[linear-gradient(90deg,#fffaf0_0%,#fffaf0_43%,rgba(255,250,240,0.92)_52%,rgba(255,250,240,0.08)_85%)]" />
       <div className="absolute -bottom-24 -left-10 -z-10 h-56 w-80 rounded-full bg-yellow-300/25 blur-3xl" />
 
-      <div className="flex min-h-[220px] max-w-2xl flex-col items-start justify-center px-6 py-8 sm:min-h-[230px] sm:px-10 lg:px-12">
-        <div className="mb-4 flex items-center gap-2 text-[10px] font-semibold text-neutral-500 sm:text-xs">
+      <div className="flex h-full max-w-2xl flex-col items-start justify-center px-4 py-2 sm:px-6 xl:px-8">
+        <div className="mb-1.5 hidden items-center gap-2 text-[9px] font-semibold text-neutral-500 sm:flex xl:text-[10px]">
           <ShieldCheck size={14} className="text-[#e9ad00]" strokeWidth={1.8} />
           Segurança e tranquilidade para seus imóveis
         </div>
-        <h1 className="max-w-xl text-[28px] font-black leading-[1.02] tracking-[-0.035em] text-neutral-950 sm:text-4xl lg:text-[42px]">
+        <h1 className="max-w-xl text-lg font-black leading-[1.02] tracking-[-0.035em] text-neutral-950 sm:text-xl xl:text-[28px]">
           Acompanhe seus imóveis
           <br />e recebimentos <span className="text-[#f0b400]">em um só lugar.</span>
         </h1>
         <Button
           asChild
           variant="outline"
-          className="mt-6 h-11 rounded-xl border-neutral-200 bg-white px-5 text-xs font-bold text-neutral-900 shadow-sm hover:border-yellow-300 hover:bg-yellow-50"
+          className="mt-2 h-7 rounded-lg border-neutral-200 bg-white px-3 text-[10px] font-bold text-neutral-900 shadow-sm hover:border-yellow-300 hover:bg-yellow-50 xl:h-8"
         >
           <Link to="/imoveis">
             Ver meus imóveis <ArrowRight size={15} />
@@ -192,14 +200,14 @@ function OwnerDashboardHero() {
         </Button>
       </div>
 
-      <div className="absolute bottom-5 right-[24%] hidden h-16 w-16 items-center justify-center rounded-[20px] border border-white/80 bg-gradient-to-br from-yellow-300 to-amber-500 text-white shadow-xl shadow-amber-500/20 lg:flex">
-        <ShieldCheck size={34} strokeWidth={2.4} />
+      <div className="absolute bottom-3 right-[24%] hidden h-11 w-11 items-center justify-center rounded-xl border border-white/80 bg-gradient-to-br from-yellow-300 to-amber-500 text-white shadow-xl shadow-amber-500/20 lg:flex">
+        <ShieldCheck size={24} strokeWidth={2.4} />
       </div>
-      <div className="absolute right-8 top-1/2 hidden w-36 -translate-y-1/2 rounded-2xl border border-white/80 bg-white/90 p-4 shadow-xl shadow-amber-950/10 backdrop-blur-sm lg:block">
-        <div className="mb-3 flex items-center gap-2 text-[9px] font-bold uppercase tracking-wider text-neutral-400">
+      <div className="absolute right-6 top-1/2 hidden w-28 -translate-y-1/2 rounded-xl border border-white/80 bg-white/90 p-3 shadow-xl shadow-amber-950/10 backdrop-blur-sm lg:block">
+        <div className="mb-2 flex items-center gap-2 text-[8px] font-bold uppercase tracking-wider text-neutral-400">
           <TrendingUp size={13} className="text-amber-500" /> Evolução
         </div>
-        <div className="flex h-14 items-end gap-2">
+        <div className="flex h-8 items-end gap-1.5">
           {[28, 38, 32, 50, 68].map((height, index) => (
             <span
               key={height + index}
@@ -223,19 +231,19 @@ type SummaryCardProps = {
 
 function SummaryCard({ label, value, helper, icon: Icon, tone = "default" }: SummaryCardProps) {
   return (
-    <article className="flex min-h-[116px] items-center gap-4 rounded-2xl border border-neutral-200/80 bg-white p-4 shadow-[0_8px_28px_rgba(18,18,18,0.035)] sm:p-5">
-      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#fff6cf] text-[#efb500]">
-        <Icon size={23} strokeWidth={2} />
+    <article className="flex h-full min-h-0 items-center gap-2 rounded-xl border border-neutral-200/80 bg-white p-1.5 shadow-[0_8px_28px_rgba(18,18,18,0.035)] sm:p-2.5 xl:gap-3">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#fff6cf] text-[#efb500] xl:h-9 xl:w-9">
+        <Icon size={18} strokeWidth={2} />
       </div>
       <div className="min-w-0">
-        <p className="truncate text-[9px] font-bold uppercase tracking-[0.12em] text-neutral-400">
+        <p className="truncate text-[7px] font-bold uppercase tracking-[0.08em] text-neutral-400 xl:text-[8px]">
           {label}
         </p>
-        <p className="mt-1 text-[25px] font-black leading-none tracking-tight text-neutral-950 tabular-nums">
+        <p className="mt-0.5 truncate text-[15px] font-black leading-none tracking-tight text-neutral-950 tabular-nums sm:text-base xl:text-lg">
           {value}
         </p>
         <div
-          className={`mt-2 text-[11px] font-semibold ${
+          className={`mt-1 truncate text-[8px] font-semibold xl:text-[9px] ${
             tone === "success"
               ? "text-emerald-600"
               : tone === "warning"
@@ -254,7 +262,7 @@ function OwnerSummaryGrid({ data }: { data: OwnerDashboardData }) {
   const { summary } = data;
   const change = summary.monthChangePercent;
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid h-[116px] shrink-0 grid-cols-2 gap-2 lg:col-span-2 lg:h-full lg:grid-cols-4 lg:gap-3">
       <SummaryCard
         label="Imóveis cadastrados"
         value={String(summary.propertyCount)}
@@ -319,7 +327,7 @@ function DashboardCard({
 }) {
   return (
     <section
-      className={`rounded-2xl border border-neutral-200/80 bg-white p-4 shadow-[0_8px_28px_rgba(18,18,18,0.035)] sm:p-5 ${className}`}
+      className={`h-full min-h-0 overflow-hidden rounded-xl border border-neutral-200/80 bg-white p-3 shadow-[0_8px_28px_rgba(18,18,18,0.035)] xl:p-4 ${className}`}
     >
       {children}
     </section>
@@ -337,13 +345,15 @@ function OwnerRevenueChart({
 }) {
   const hasRevenue = rows.some((row) => row.amount > 0);
   return (
-    <DashboardCard className="min-h-[340px]">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+    <DashboardCard>
+      <div className="mb-2 flex items-center justify-between gap-2">
         <div>
           <h2 className="text-sm font-extrabold text-neutral-950">
             Recebimentos nos últimos meses
           </h2>
-          <p className="mt-1 text-[11px] text-neutral-400">Somente valores com baixa efetiva.</p>
+          <p className="mt-0.5 hidden text-[10px] text-neutral-400 sm:block">
+            Somente valores com baixa efetiva.
+          </p>
         </div>
         <label className="sr-only" htmlFor="owner-revenue-period">
           Período do gráfico
@@ -352,7 +362,7 @@ function OwnerRevenueChart({
           id="owner-revenue-period"
           value={period}
           onChange={(event) => onPeriodChange(event.target.value as OwnerDashboardPeriod)}
-          className="h-9 rounded-lg border border-neutral-200 bg-white px-3 text-[11px] font-semibold text-neutral-700 outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-400/20"
+          className="h-7 max-w-[138px] rounded-lg border border-neutral-200 bg-white px-2 text-[9px] font-semibold text-neutral-700 outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-400/20 sm:max-w-none"
         >
           <option value="3">Últimos 3 meses</option>
           <option value="6">Últimos 6 meses</option>
@@ -362,7 +372,7 @@ function OwnerRevenueChart({
       </div>
 
       {hasRevenue ? (
-        <div className="h-[255px] w-full">
+        <div className="h-[calc(100%-42px)] min-h-[120px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={rows} margin={{ top: 16, right: 12, bottom: 0, left: 2 }}>
               <CartesianGrid vertical={false} stroke="#eeeeee" strokeDasharray="0" />
@@ -421,22 +431,22 @@ function OwnerPropertyRevenue({ data }: { data: OwnerDashboardData }) {
   const items = data.propertyRevenue.slice(0, 5);
   const total = data.summary.currentMonthReceived;
   return (
-    <DashboardCard className="min-h-[340px]">
+    <DashboardCard>
       <h2 className="text-sm font-extrabold text-neutral-950">Recebimentos por imóvel</h2>
       <p className="mt-1 text-[11px] text-neutral-400">Participação no mês atual.</p>
 
       {items.length > 0 && total > 0 ? (
         <>
-          <div className="mt-5 grid items-center gap-5 sm:grid-cols-[185px_minmax(0,1fr)]">
-            <div className="relative mx-auto h-[176px] w-[176px]">
+          <div className="mt-2 grid grid-cols-[112px_minmax(0,1fr)] items-center gap-3 xl:grid-cols-[132px_minmax(0,1fr)]">
+            <div className="relative mx-auto h-[112px] w-[112px] xl:h-[132px] xl:w-[132px]">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
                     data={items}
                     dataKey="amount"
                     nameKey="propertyName"
-                    innerRadius={55}
-                    outerRadius={77}
+                    innerRadius="53%"
+                    outerRadius="74%"
                     paddingAngle={1.5}
                     stroke="none"
                   >
@@ -451,21 +461,21 @@ function OwnerPropertyRevenue({ data }: { data: OwnerDashboardData }) {
                 </PieChart>
               </ResponsiveContainer>
               <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-                <span className="text-base font-black tracking-tight text-neutral-950">
+                <span className="max-w-[88px] truncate text-[11px] font-black tracking-tight text-neutral-950 xl:text-xs">
                   {BRL.format(total)}
                 </span>
                 <span className="mt-0.5 text-[9px] font-medium text-neutral-400">Total do mês</span>
               </div>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-1.5">
               {items.map((item, index) => (
                 <div
                   key={item.propertyId || item.propertyName}
-                  className="grid grid-cols-[8px_minmax(0,1fr)_auto] items-center gap-2 text-[11px]"
+                  className="grid grid-cols-[7px_minmax(0,1fr)_auto] items-center gap-1.5 text-[9px] xl:text-[10px]"
                 >
                   <span
-                    className="h-2 w-2 rounded-full"
+                    className="h-1.5 w-1.5 rounded-full"
                     style={{ backgroundColor: DONUT_COLORS[index % DONUT_COLORS.length] }}
                   />
                   <span
@@ -476,7 +486,7 @@ function OwnerPropertyRevenue({ data }: { data: OwnerDashboardData }) {
                   </span>
                   <span className="whitespace-nowrap text-right font-bold text-neutral-900">
                     {BRL.format(item.amount)}{" "}
-                    <small className="ml-2 font-medium text-neutral-400">
+                    <small className="ml-1 font-medium text-neutral-400">
                       {item.percentage.toLocaleString("pt-BR")}%
                     </small>
                   </span>
@@ -484,7 +494,7 @@ function OwnerPropertyRevenue({ data }: { data: OwnerDashboardData }) {
               ))}
             </div>
           </div>
-          <div className="mt-4 flex justify-end border-t border-neutral-100 pt-3">
+          <div className="mt-2 flex justify-end border-t border-neutral-100 pt-2">
             <Link
               to="/carteira-cobrancas"
               className="inline-flex items-center gap-2 text-[11px] font-bold text-neutral-700 hover:text-neutral-950"
@@ -505,8 +515,9 @@ function OwnerPropertyRevenue({ data }: { data: OwnerDashboardData }) {
 }
 
 function OwnerActiveContracts({ contracts }: { contracts: OwnerDashboardContract[] }) {
+  const visibleContracts = contracts.slice(0, 3);
   return (
-    <DashboardCard className="min-h-[310px]">
+    <DashboardCard>
       <div className="flex items-center justify-between gap-4">
         <div>
           <h2 className="text-sm font-extrabold text-neutral-950">Meus contratos ativos</h2>
@@ -520,7 +531,7 @@ function OwnerActiveContracts({ contracts }: { contracts: OwnerDashboardContract
         </Link>
       </div>
 
-      {contracts.length === 0 ? (
+      {visibleContracts.length === 0 ? (
         <EmptyState
           icon={FileCheck2}
           title="Nenhum contrato ativo no momento."
@@ -528,30 +539,30 @@ function OwnerActiveContracts({ contracts }: { contracts: OwnerDashboardContract
         />
       ) : (
         <>
-          <div className="mt-5 hidden overflow-hidden md:block">
+          <div className="mt-2 hidden overflow-hidden md:block">
             <table className="w-full table-fixed">
               <thead>
                 <tr className="text-left text-[9px] font-bold uppercase tracking-[0.1em] text-neutral-400">
-                  <th className="w-[28%] pb-3">Imóvel</th>
-                  <th className="w-[22%] pb-3">Inquilino</th>
-                  <th className="w-[17%] pb-3">Aluguel</th>
-                  <th className="w-[18%] pb-3">Vencimento</th>
-                  <th className="w-[15%] pb-3 text-right">Status</th>
+                  <th className="w-[28%] pb-1.5">Imóvel</th>
+                  <th className="w-[22%] pb-1.5">Inquilino</th>
+                  <th className="w-[17%] pb-1.5">Aluguel</th>
+                  <th className="w-[18%] pb-1.5">Vencimento</th>
+                  <th className="w-[15%] pb-1.5 text-right">Status</th>
                 </tr>
               </thead>
               <tbody>
-                {contracts.map((contract) => (
+                {visibleContracts.map((contract) => (
                   <ContractTableRow key={contract.id} contract={contract} />
                 ))}
               </tbody>
             </table>
           </div>
-          <div className="mt-4 space-y-3 md:hidden">
-            {contracts.map((contract) => (
+          <div className="mt-2 space-y-1.5 md:hidden">
+            {visibleContracts.map((contract) => (
               <ContractMobileCard key={contract.id} contract={contract} />
             ))}
           </div>
-          <div className="mt-4 flex justify-end border-t border-neutral-100 pt-3 sm:hidden">
+          <div className="mt-2 flex justify-end border-t border-neutral-100 pt-2 sm:hidden">
             <Link
               to="/apolices"
               className="inline-flex items-center gap-2 text-[11px] font-bold text-neutral-700"
@@ -567,25 +578,25 @@ function OwnerActiveContracts({ contracts }: { contracts: OwnerDashboardContract
 
 function ContractTableRow({ contract }: { contract: OwnerDashboardContract }) {
   return (
-    <tr className="border-t border-neutral-100 text-[11px] text-neutral-600 first:border-t-0">
-      <td className="py-3.5 pr-4 align-top">
+    <tr className="border-t border-neutral-100 text-[10px] text-neutral-600 first:border-t-0">
+      <td className="py-2 pr-3 align-top">
         <p className="truncate font-bold text-neutral-900" title={contract.propertyName}>
           {contract.propertyName}
         </p>
-        <p className="mt-1 truncate text-[10px] text-neutral-400" title={contract.location}>
+        <p className="mt-0.5 truncate text-[9px] text-neutral-400" title={contract.location}>
           {contract.location || `Contrato ${contract.number || "—"}`}
         </p>
       </td>
-      <td className="py-3.5 pr-4 align-top font-semibold text-neutral-700">
+      <td className="py-2 pr-3 align-top font-semibold text-neutral-700">
         <p className="truncate" title={contract.tenantName}>
           {contract.tenantName}
         </p>
       </td>
-      <td className="py-3.5 pr-4 align-top font-semibold tabular-nums text-neutral-900">
+      <td className="py-2 pr-3 align-top font-semibold tabular-nums text-neutral-900">
         {BRL.format(contract.rentValue)}
       </td>
-      <td className="py-3.5 pr-4 align-top">{formatDate(contract.nextDueDate)}</td>
-      <td className="py-3.5 text-right align-top">
+      <td className="py-2 pr-3 align-top">{formatDate(contract.nextDueDate)}</td>
+      <td className="py-2 text-right align-top">
         <StatusPill status={contract.status} />
       </td>
     </tr>
@@ -594,23 +605,23 @@ function ContractTableRow({ contract }: { contract: OwnerDashboardContract }) {
 
 function ContractMobileCard({ contract }: { contract: OwnerDashboardContract }) {
   return (
-    <article className="rounded-xl border border-neutral-100 bg-neutral-50/70 p-3.5">
+    <article className="rounded-lg border border-neutral-100 bg-neutral-50/70 p-2">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate text-xs font-bold text-neutral-900">{contract.propertyName}</p>
-          <p className="mt-1 truncate text-[10px] text-neutral-500">{contract.tenantName}</p>
+          <p className="truncate text-[10px] font-bold text-neutral-900">{contract.propertyName}</p>
+          <p className="mt-0.5 truncate text-[9px] text-neutral-500">{contract.tenantName}</p>
         </div>
         <StatusPill status={contract.status} />
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-3 border-t border-neutral-200/70 pt-3 text-[10px] text-neutral-500">
+      <div className="mt-1.5 grid grid-cols-2 gap-2 border-t border-neutral-200/70 pt-1.5 text-[8px] text-neutral-500">
         <span>
-          <strong className="block text-xs text-neutral-900">
+          <strong className="block text-[10px] text-neutral-900">
             {BRL.format(contract.rentValue)}
           </strong>
           Aluguel
         </span>
         <span>
-          <strong className="block text-xs text-neutral-900">
+          <strong className="block text-[10px] text-neutral-900">
             {formatDate(contract.nextDueDate)}
           </strong>
           Próximo vencimento
@@ -642,8 +653,9 @@ const ACTIVITY_STYLE: Record<
 };
 
 function OwnerRecentActivity({ activities }: { activities: OwnerDashboardActivity[] }) {
+  const visibleActivities = activities.slice(0, 4);
   return (
-    <DashboardCard className="min-h-[310px]">
+    <DashboardCard>
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-sm font-extrabold text-neutral-950">Atividades recentes</h2>
@@ -652,23 +664,23 @@ function OwnerRecentActivity({ activities }: { activities: OwnerDashboardActivit
         <CalendarDays size={18} className="text-neutral-300" />
       </div>
 
-      {activities.length === 0 ? (
+      {visibleActivities.length === 0 ? (
         <EmptyState
           icon={CalendarDays}
           title="Nenhuma atividade recente."
           description="As próximas movimentações aparecerão aqui."
         />
       ) : (
-        <div className="mt-4 divide-y divide-neutral-100">
-          {activities.map((activity) => {
+        <div className="mt-2 divide-y divide-neutral-100">
+          {visibleActivities.map((activity) => {
             const style = ACTIVITY_STYLE[activity.type] || ACTIVITY_STYLE.contract;
             const Icon = style.icon;
             return (
-              <article key={activity.id} className="flex gap-3 py-3 first:pt-1">
+              <article key={activity.id} className="flex gap-2 py-1.5 first:pt-0">
                 <div
-                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${style.background} ${style.color}`}
+                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${style.background} ${style.color}`}
                 >
-                  <Icon size={16} strokeWidth={2} />
+                  <Icon size={13} strokeWidth={2} />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-start justify-between gap-3">
@@ -679,7 +691,7 @@ function OwnerRecentActivity({ activities }: { activities: OwnerDashboardActivit
                       {formatRelativeDate(activity.occurredAt)}
                     </time>
                   </div>
-                  <p className="mt-1 line-clamp-2 text-[10px] leading-relaxed text-neutral-500">
+                  <p className="mt-0.5 line-clamp-1 text-[9px] leading-relaxed text-neutral-500">
                     {activity.description}
                   </p>
                 </div>
@@ -702,7 +714,7 @@ function EmptyState({
   description: string;
 }) {
   return (
-    <div className="flex min-h-[220px] flex-col items-center justify-center px-5 text-center">
+    <div className="flex h-[calc(100%-36px)] min-h-0 flex-col items-center justify-center px-5 text-center">
       <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-neutral-50 text-neutral-300">
         <Icon size={22} strokeWidth={1.7} />
       </div>
@@ -720,7 +732,7 @@ function OwnerDashboardError({
   onRetry: () => void;
 }) {
   return (
-    <div className="rounded-2xl border border-red-100 bg-white px-6 py-14 text-center shadow-sm">
+    <div className="flex min-h-0 flex-1 flex-col items-center justify-center rounded-2xl border border-red-100 bg-white px-6 py-6 text-center shadow-sm lg:col-span-2 lg:row-span-3">
       <AlertTriangle className="mx-auto text-red-500" size={30} />
       <h2 className="mt-4 text-base font-bold text-neutral-900">
         Não foi possível carregar o dashboard.
@@ -740,12 +752,15 @@ function OwnerDashboardError({
 
 function OwnerDashboardSkeleton() {
   return (
-    <div className="space-y-4" aria-label="Carregando dashboard">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <div
+      className="grid min-h-0 flex-1 grid-rows-[116px_minmax(0,1fr)] gap-2 lg:col-span-2 lg:row-span-3 lg:grid-cols-2 lg:grid-rows-[94px_minmax(0,1fr)_minmax(0,0.9fr)] lg:gap-3"
+      aria-label="Carregando dashboard"
+    >
+      <div className="grid grid-cols-2 gap-2 lg:col-span-2 lg:grid-cols-4 lg:gap-3">
         {Array.from({ length: 4 }).map((_, index) => (
           <div
             key={index}
-            className="h-[116px] animate-pulse rounded-2xl border border-neutral-200 bg-white p-5"
+            className="h-full animate-pulse rounded-xl border border-neutral-200 bg-white p-3"
           >
             <div className="h-10 w-10 rounded-xl bg-neutral-100" />
             <div className="ml-14 -mt-9 h-3 w-28 rounded bg-neutral-100" />
@@ -753,14 +768,12 @@ function OwnerDashboardSkeleton() {
           </div>
         ))}
       </div>
-      <div className="grid gap-4 xl:grid-cols-[1.12fr_0.88fr]">
-        <div className="h-[340px] animate-pulse rounded-2xl border border-neutral-200 bg-white" />
-        <div className="h-[340px] animate-pulse rounded-2xl border border-neutral-200 bg-white" />
+      <div className="grid min-h-0 gap-2 lg:contents">
+        <div className="h-full animate-pulse rounded-xl border border-neutral-200 bg-white" />
+        <div className="hidden h-full animate-pulse rounded-xl border border-neutral-200 bg-white lg:block" />
       </div>
-      <div className="grid gap-4 xl:grid-cols-[1.28fr_0.72fr]">
-        <div className="h-[310px] animate-pulse rounded-2xl border border-neutral-200 bg-white" />
-        <div className="h-[310px] animate-pulse rounded-2xl border border-neutral-200 bg-white" />
-      </div>
+      <div className="hidden h-full animate-pulse rounded-xl border border-neutral-200 bg-white lg:block" />
+      <div className="hidden h-full animate-pulse rounded-xl border border-neutral-200 bg-white lg:block" />
     </div>
   );
 }
