@@ -235,7 +235,7 @@ function TenantDashboardPage() {
           <>
             <TenantDashboardHero data={data} />
             <TenantDashboardSummary data={data} />
-            <div className="grid gap-4 xl:grid-cols-[1.04fr_1.5fr]">
+            <div className="grid gap-4 xl:grid-cols-[0.88fr_1.66fr]">
               <TenantInvoicesPanel
                 invoices={data.invoices}
                 actions={{
@@ -251,10 +251,7 @@ function TenantDashboardPage() {
                   uploading,
                 }}
               />
-              <TenantScoreCard
-                name={data.tenantName}
-                invoices={data.invoices}
-              />
+              <TenantScoreCard name={data.tenantName} invoices={data.invoices} />
             </div>
           </>
         )}

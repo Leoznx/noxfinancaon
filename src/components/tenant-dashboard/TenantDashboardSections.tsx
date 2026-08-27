@@ -2,11 +2,9 @@ import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import {
   ArrowRight,
-  BadgeCheck,
   CalendarDays,
   Check,
   ChevronRight,
-  CircleUserRound,
   CircleDollarSign,
   Clock3,
   Download,
@@ -16,8 +14,6 @@ import {
   ReceiptText,
   ShieldCheck,
   Sparkles,
-  TrendingDown,
-  TrendingUp,
   UploadCloud,
 } from "lucide-react";
 
@@ -355,130 +351,97 @@ export function TenantScoreCard({
 }) {
   const result = calculateTenantScore(invoices);
   const level = tenantScoreLevel(result.score);
-  const progress = Math.round((result.score / result.maxScore) * 100);
-  const lastMovement = result.lastEvent;
+  const progress = Math.max(0, Math.min(1, result.score / result.maxScore));
+  const gaugeLength = Math.PI * 130;
+  const markerAngle = Math.PI * (1 - progress);
+  const markerX = 180 + 130 * Math.cos(markerAngle);
+  const markerY = 170 - 130 * Math.sin(markerAngle);
 
   return (
-    <section className="grid min-h-[374px] overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.05)] lg:grid-cols-[0.82fr_1.18fr]">
-      <div className="relative flex flex-col items-center justify-center overflow-hidden bg-neutral-950 px-5 py-6 text-center text-white">
-        <span className="pointer-events-none absolute -left-16 -top-16 h-52 w-52 rounded-full bg-[#ffc400]/15 blur-3xl" />
-        <span className="pointer-events-none absolute -bottom-24 -right-20 h-60 w-60 rounded-full bg-[#ffc400]/10 blur-3xl" />
-        <span className="relative inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.22em] text-[#ffd633]">
+    <section className="relative flex min-h-[374px] items-center justify-center overflow-hidden rounded-2xl border border-neutral-200 bg-white px-5 py-6 shadow-[0_8px_24px_rgba(15,23,42,0.05)] sm:px-8">
+      <span className="pointer-events-none absolute -left-28 -top-32 h-72 w-72 rounded-full bg-red-50/70 blur-3xl" />
+      <span className="pointer-events-none absolute -bottom-40 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-yellow-50 blur-3xl" />
+      <span className="pointer-events-none absolute -right-28 -top-32 h-72 w-72 rounded-full bg-emerald-50/70 blur-3xl" />
+
+      <div className="relative flex w-full max-w-[680px] flex-col items-center text-center">
+        <span className="inline-flex items-center gap-2 rounded-full border border-[#f0d781] bg-[#fffaf0] px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.22em] text-[#9d6900]">
           <Sparkles size={13} /> Score NOX
         </span>
-        <p className="relative mt-4 max-w-[260px] truncate text-sm font-extrabold text-white">
+        <p className="mt-3 max-w-full truncate text-base font-black text-neutral-950 sm:text-lg">
           {name}
         </p>
-        <div
-          className="relative mt-3 flex h-44 w-44 items-center justify-center rounded-full p-[10px] shadow-[0_0_42px_rgba(255,196,0,0.16)]"
-          style={{
-            background: `conic-gradient(from -90deg, #ffc400 0deg ${progress * 3.6}deg, #303030 ${progress * 3.6}deg 360deg)`,
-          }}
+        <svg
+          viewBox="0 0 360 205"
+          role="img"
+          aria-label={`Score NOX de ${result.score} pontos, classificação ${level.label}`}
+          className="mt-1 w-full max-w-[600px] overflow-visible"
         >
-          <div className="flex h-full w-full flex-col items-center justify-center rounded-full border border-white/10 bg-[#111111]">
-            <CircleUserRound size={32} strokeWidth={1.55} className="text-[#ffd11a]" />
-            <strong className="mt-1 text-[2.65rem] font-black leading-none tracking-[-0.06em]">
-              {result.score}
-            </strong>
-            <small className="mt-1 text-[9px] font-bold uppercase tracking-[0.16em] text-neutral-400">
-              de {result.maxScore} pontos
-            </small>
-          </div>
-        </div>
-        <span
-          className="relative mt-3 rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em]"
-          style={{ color: level.color }}
-        >
-          {level.label}
-        </span>
-      </div>
-
-      <div className="flex flex-col p-5 sm:p-6">
-        <div className="flex items-start gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#fff3bd] text-[#c98b00]">
-            <BadgeCheck size={21} />
-          </span>
-          <div>
-            <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[#b87900]">
-              Pontuação de relacionamento
-            </p>
-            <h2 className="mt-1 text-xl font-black tracking-tight text-neutral-950">
-              Pontualidade que constrói confiança.
-            </h2>
-            <p className="mt-1 text-[11px] leading-4 text-neutral-500">
-              Seu cadastro começa em 824. Cada parcela movimenta o total, que nunca ultrapassa 950.
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-4">
-          <div className="flex items-center justify-between text-[10px] font-bold text-neutral-500">
-            <span>Evolução do seu Score NOX</span>
-            <span>{progress}% do limite</span>
-          </div>
-          <div className="mt-2 h-2 overflow-hidden rounded-full bg-neutral-100">
-            <div
-              className="h-full rounded-full bg-[linear-gradient(90deg,#f0ac00,#ffd633)] transition-[width] duration-700"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <div className="flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2">
-              <TrendingUp size={16} className="text-emerald-600" />
-              <span>
-                <small className="block text-[9px] font-bold uppercase text-emerald-700">Ganhos</small>
-                <b className="text-sm text-emerald-800">+{result.earnedPoints}</b>
-              </span>
-            </div>
-            <div className="flex items-center gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2">
-              <TrendingDown size={16} className="text-red-500" />
-              <span>
-                <small className="block text-[9px] font-bold uppercase text-red-600">Reduções</small>
-                <b className="text-sm text-red-700">
-                  {result.lostPoints > 0 ? `-${result.lostPoints}` : "0"}
-                </b>
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-4 grid grid-cols-2 gap-1.5 text-[9px] sm:grid-cols-3">
-          <ScoreRule label="Antecipado" points="+15 a +22" positive />
-          <ScoreRule label="No vencimento" points="+7 a +22" positive />
-          <ScoreRule label="1 a 3 dias" points="−15 a −21" />
-          <ScoreRule label="4 a 5 dias" points="−21 a −56" />
-          <ScoreRule label="6 a 30 dias" points="−56 a −123" />
-          <ScoreRule label="Acima de 30" points="−123 a −342" />
-        </div>
-
-        <div className="mt-auto flex items-center gap-2 rounded-xl border border-[#efd88c] bg-[#fffaf0] px-3 py-2.5 text-[10px] leading-4 text-neutral-600">
-          <ShieldCheck size={17} className="shrink-0 text-[#d99500]" />
-          <span>
-            {lastMovement
-              ? `Último movimento: ${lastMovement.points > 0 ? "+" : ""}${lastMovement.points} pontos. `
-              : "Você começa com 824 pontos. "}
-            Pague até o vencimento e mantenha seu score forte.
-          </span>
-        </div>
+          <defs>
+            <linearGradient id="tenant-score-gauge" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="#e84444" />
+              <stop offset="48%" stopColor="#f3c720" />
+              <stop offset="100%" stopColor="#25a96b" />
+            </linearGradient>
+          </defs>
+          <path
+            d="M 50 170 A 130 130 0 0 1 310 170"
+            fill="none"
+            stroke="#edf0f2"
+            strokeWidth="26"
+            strokeLinecap="round"
+          />
+          <path
+            d="M 50 170 A 130 130 0 0 1 310 170"
+            fill="none"
+            stroke="url(#tenant-score-gauge)"
+            strokeWidth="26"
+            strokeLinecap="round"
+            strokeDasharray={`${gaugeLength * progress} ${gaugeLength}`}
+          />
+          <circle
+            cx={markerX}
+            cy={markerY}
+            r="8"
+            fill="#ffffff"
+            stroke={level.color}
+            strokeWidth="5"
+          />
+          <text
+            x="180"
+            y="126"
+            textAnchor="middle"
+            fill="#111111"
+            fontSize="60"
+            fontWeight="900"
+            letterSpacing="-3"
+          >
+            {result.score}
+          </text>
+          <text
+            x="180"
+            y="151"
+            textAnchor="middle"
+            fill={level.color}
+            fontSize="12"
+            fontWeight="900"
+            letterSpacing="1.6"
+          >
+            {level.label.toUpperCase()}
+          </text>
+          <text
+            x="180"
+            y="190"
+            textAnchor="middle"
+            fill="#8b8b8b"
+            fontSize="9"
+            fontWeight="800"
+            letterSpacing="1.4"
+          >
+            DE {result.maxScore} PONTOS
+          </text>
+        </svg>
       </div>
     </section>
-  );
-}
-
-function ScoreRule({
-  label,
-  points,
-  positive = false,
-}: {
-  label: string;
-  points: string;
-  positive?: boolean;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-2 rounded-lg border border-neutral-100 bg-neutral-50 px-2.5 py-2">
-      <span className="font-semibold text-neutral-500">{label}</span>
-      <b className={positive ? "text-emerald-700" : "text-red-600"}>{points}</b>
-    </div>
   );
 }
 
