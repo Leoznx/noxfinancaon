@@ -21,7 +21,6 @@ import {
   Search,
   ShieldCheck,
   TrendingUp,
-  Trophy,
   Users,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type ComponentType } from "react";
@@ -34,6 +33,18 @@ import {
 import { fetchNivelInfo, type NivelInfo } from "@/lib/niveis-parceria";
 
 type Icon = ComponentType<{ className?: string; size?: number; strokeWidth?: number }>;
+
+const LEVEL_BADGE_ASSETS: Record<string, string> = {
+  BRONZE: "/assets/nox-icon-nivel-bronze.webp",
+  PRATA: "/assets/nox-icon-nivel-prata.webp",
+  OURO: "/assets/nox-icon-nivel-ouro.webp",
+  DIAMANTE: "/assets/nox-icon-nivel-diamante.webp",
+};
+
+function levelBadge(level: string) {
+  const normalized = level.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toUpperCase();
+  return LEVEL_BADGE_ASSETS[normalized] ?? LEVEL_BADGE_ASSETS.BRONZE;
+}
 
 export function CorretorDashboard({ profileId }: { profileId: string }) {
   const [data, setData] = useState<ImobiliariaDashboardData | null>(null);
@@ -158,24 +169,21 @@ function HeroBanner({
         src="/dashboard/broker-performance-hero.png"
         alt=""
         aria-hidden="true"
-        className="pointer-events-none absolute -right-[2%] -top-[32%] h-auto w-[84%] max-w-none select-none sm:-top-[43%] xl:-top-[62%] xl:w-[82%] 2xl:-top-[75%]"
+        className="pointer-events-none absolute left-[-10%] top-[24%] h-auto w-[120%] max-w-none select-none sm:left-[20%] sm:top-[-5%] sm:w-[60%] xl:left-[21%] xl:top-[-11%] xl:w-[58%] 2xl:left-[22%]"
       />
-      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,253,248,1)_0%,rgba(255,253,248,0.98)_31%,rgba(255,253,248,0.35)_53%,rgba(255,253,248,0.02)_100%)]" />
+      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,253,248,1)_0%,rgba(255,253,248,0.98)_27%,rgba(255,253,248,0.72)_34%,rgba(255,253,248,0.04)_49%,rgba(255,253,248,0)_100%)]" />
 
-      <div className="relative z-10 flex h-full max-w-[520px] flex-col justify-center px-6 py-7 sm:px-9 xl:px-10 xl:py-5">
-        <span className="mb-2 inline-flex w-fit items-center gap-2 rounded-full border border-amber-200 bg-white/90 px-3 py-1 text-[9px] font-black uppercase tracking-[0.18em] text-amber-700 shadow-sm">
-          <TrendingUp size={12} /> Performance do corretor
-        </span>
-        <h1 className="text-3xl font-black leading-[0.98] tracking-[-0.045em] text-neutral-950 sm:text-4xl xl:text-[38px]">
+      <div className="relative z-10 flex h-full max-w-[470px] flex-col justify-center px-6 py-7 sm:px-9 xl:px-10 xl:py-5">
+        <h1 className="text-3xl font-black leading-[0.98] tracking-[-0.045em] text-neutral-950 sm:text-[34px] xl:text-[32px]">
           Quanto mais contratos,
           <span className="block text-[#ECAE00]">maior sua comissão.</span>
         </h1>
-        <p className="mt-3 max-w-[390px] text-xs font-medium leading-5 text-neutral-600 xl:mt-2.5">
+        <p className="mt-3 max-w-[350px] text-[11px] font-medium leading-4 text-neutral-600 xl:mt-2.5">
           Acompanhe sua performance, contratos e ganhos com mais praticidade.
         </p>
       </div>
 
-      <div className="relative z-20 mt-[235px] grid gap-2 p-4 sm:absolute sm:bottom-3 sm:right-3 sm:mt-0 sm:w-[238px] xl:bottom-3 xl:right-3">
+      <div className="relative z-20 mt-[235px] grid gap-2 p-4 sm:absolute sm:bottom-3 sm:right-3 sm:mt-0 sm:w-[210px] sm:p-0 xl:w-[202px]">
         <HeroMetric icon={Crown} label="Comissão do mês" value={formatCurrency(overview.commission)} trend={data.trends.comissoes} />
         <HeroMetric icon={Users} label="Contratos fechados" value={String(overview.contracts)} trend={data.trends.apolices} />
         <HeroMetric icon={CalendarDays} label="Ticket médio" value={formatCurrency(overview.ticket)} trend={data.trends.comissoes} />
@@ -186,13 +194,13 @@ function HeroBanner({
 
 function HeroMetric({ icon: Icon, label, value, trend }: { icon: Icon; label: string; value: string; trend: number }) {
   return (
-    <article className="flex items-center gap-2.5 rounded-xl border border-white/80 bg-white/92 px-3 py-2 shadow-[0_8px_24px_rgba(45,34,0,0.1)] backdrop-blur-md">
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-[#ECAE00]">
-        <Icon size={18} strokeWidth={1.9} />
+    <article className="flex min-h-[58px] items-center gap-2 rounded-xl border border-white/90 bg-white/94 px-2.5 py-1.5 shadow-[0_8px_24px_rgba(45,34,0,0.1)] backdrop-blur-md">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-[#ECAE00]">
+        <Icon size={16} strokeWidth={1.9} />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[9px] font-semibold text-neutral-500">{label}</p>
-        <p className="truncate text-sm font-black tabular-nums text-neutral-950">{value}</p>
+        <p className="truncate text-[8px] font-semibold text-neutral-500">{label}</p>
+        <p className="truncate text-[13px] font-black tabular-nums text-neutral-950">{value}</p>
         <Trend value={trend} compact />
       </div>
     </article>
@@ -323,7 +331,11 @@ function CareerProgress({ nivel }: { nivel: NivelInfo | null }) {
 
   return (
     <Link to="/plano-carreira" className="group flex min-h-[70px] items-center gap-4 rounded-2xl border border-neutral-200/80 bg-white px-5 shadow-[0_5px_22px_rgba(0,0,0,0.035)] transition hover:border-amber-200 xl:h-full xl:min-h-0">
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-[#E7B300]"><Trophy size={20} /></div>
+      <img
+        src={levelBadge(currentName)}
+        alt={`Placa do nível ${currentName}`}
+        className="h-12 w-12 shrink-0 object-contain drop-shadow-[0_5px_7px_rgba(0,0,0,0.16)] transition-transform group-hover:scale-105"
+      />
       <div className="w-[210px] shrink-0 border-r border-neutral-200 pr-4">
         <p className="text-xs font-black text-neutral-950">Plano de Carreira</p>
         <p className="mt-0.5 text-[9px] text-neutral-500">Acompanhe seu progresso e desbloqueie benefícios.</p>
