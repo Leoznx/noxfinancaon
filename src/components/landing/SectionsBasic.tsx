@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 
 export const InstitutionalHero = () => (
   <section className="w-full overflow-hidden bg-white pt-28 sm:pt-32 lg:pt-[126px]">
-    <div className="mx-auto grid w-full max-w-[1536px] items-center gap-12 px-5 pb-16 sm:px-8 sm:pb-20 lg:min-h-[600px] lg:grid-cols-[minmax(0,0.49fr)_minmax(0,0.51fr)] lg:gap-8 lg:px-12 lg:pb-16 xl:grid-cols-[minmax(0,0.46fr)_minmax(0,0.54fr)] xl:gap-12 xl:px-16 2xl:px-20">
+    <div className="mx-auto grid w-full max-w-[1536px] items-center gap-12 px-5 pb-8 sm:px-8 sm:pb-12 lg:min-h-[600px] lg:grid-cols-[minmax(0,0.49fr)_minmax(0,0.51fr)] lg:gap-8 lg:px-12 lg:pb-12 xl:grid-cols-[minmax(0,0.46fr)_minmax(0,0.54fr)] xl:gap-12 xl:px-16 2xl:px-20">
       <div className="max-w-[600px] lg:py-10 xl:max-w-[620px]">
         <span className="mb-6 inline-block rounded-full bg-neutral-100 px-3 py-1 text-sm font-bold tracking-wider text-neutral-700">
           SEGURO FIANÇA LOCATÍCIA
@@ -27,10 +27,7 @@ export const InstitutionalHero = () => (
             </svg>
           </span>
         </h1>
-        <p className="mb-8 max-w-[520px] text-base leading-relaxed text-neutral-600 sm:mb-8 sm:text-lg md:text-xl">
-          A NOX FIANÇA é a plataforma de seguro fiança 100% digital que elimina a burocracia do aluguel e oferece segurança total ao proprietário.
-        </p>
-        <div className="mb-10 flex flex-col gap-3 sm:mb-9 sm:flex-row sm:gap-4">
+        <div className="mb-8 mt-2 flex flex-col gap-3 sm:mb-8 sm:flex-row sm:gap-4">
           <Link to="/consultas/nova" className="w-full sm:w-auto">
             <Button className="h-12 min-h-[44px] w-full rounded-lg bg-neutral-900 px-6 text-sm font-bold text-white shadow-xl shadow-neutral-100 transition-all hover:bg-neutral-800 active:scale-95 sm:w-auto sm:px-7 sm:text-base">
               Solicitar análise gratuita
@@ -71,7 +68,7 @@ export const InstitutionalHero = () => (
 );
 
 export const SolutionPresentation = () => (
-  <section className="bg-white px-4 py-16 sm:px-6 sm:py-24">
+  <section className="bg-white px-4 pb-16 pt-8 sm:px-6 sm:pb-24 sm:pt-12">
     <div className="container mx-auto grid max-w-7xl items-center gap-10 lg:grid-cols-2 lg:gap-16">
       <div className="aspect-[3/2] overflow-hidden rounded-2xl border border-neutral-100 shadow-sm lg:-translate-x-4">
         <img

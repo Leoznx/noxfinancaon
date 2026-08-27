@@ -1,4 +1,3 @@
-import { TrendingUp } from "lucide-react";
 import { MARCOS_BONUS_VENDEDOR, type NivelComissaoVendedor } from "@/lib/comissao-vendedor";
 import { formatMoney } from "@/lib/vendedor-portal";
 
@@ -18,9 +17,9 @@ export function CommissionProgressCard({
   const progress = target > 0 ? Math.min((contracts / target) * 100, 100) : 0;
 
   return (
-    <section className="overflow-hidden rounded-[18px] border border-[#F1C900] bg-gradient-to-br from-[#FFFDF2] via-white to-[#FFFCEF] shadow-[0_8px_28px_rgba(30,30,30,0.06)]">
-      <div className="grid gap-6 p-5 sm:p-6 xl:grid-cols-[minmax(0,1fr)_385px] xl:items-center">
-        <div className="flex min-w-0 flex-col justify-center py-1">
+    <section className="rounded-[18px] border border-[#F1C900] bg-gradient-to-br from-[#FFFDF2] via-white to-[#FFFCEF] p-4 shadow-[0_8px_28px_rgba(30,30,30,0.06)] sm:p-5">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_330px] lg:items-start">
+        <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2.5">
             <span className="rounded-full bg-[#FFD91A] px-4 py-2 text-sm font-extrabold text-[#080808] shadow-[0_3px_8px_rgba(216,174,0,0.18)]">
               Nível {level.nome}
@@ -30,14 +29,32 @@ export function CommissionProgressCard({
             </span>
           </div>
 
-          <h2 className="mt-4 text-lg font-black leading-snug tracking-[-0.015em] text-[#101010] sm:text-[20px]">
+          <h2 className="mt-3 text-base font-black leading-snug tracking-[-0.015em] text-[#101010] sm:text-lg">
             {level.mensagem}
           </h2>
-          <p className="mt-1.5 text-sm font-medium text-[#6B6B6B]">
+          <p className="mt-1 text-xs font-medium text-[#6B6B6B] sm:text-sm">
             Seu próximo contrato vale {formatMoney(level.valorPorProximoContrato)} de comissão.
           </p>
 
-          <div className="mt-4">
+        </div>
+
+        <div className="grid grid-cols-2 gap-2.5" aria-label="Estimativa do mês">
+          <div className="rounded-xl border border-[#E8E1B9] bg-white px-3 py-3">
+            <p className="text-[10px] font-black uppercase tracking-[0.1em] text-[#777]">Próximo contrato</p>
+            <p className="mt-1 text-lg font-black text-[#111]">{formatMoney(level.valorPorProximoContrato)}</p>
+          </div>
+          <div className="rounded-xl border border-[#E8E1B9] bg-white px-3 py-3">
+            <p className="text-[10px] font-black uppercase tracking-[0.1em] text-[#777]">Estimativa do mês</p>
+            <p className="mt-1 text-lg font-black text-[#B28E00]">{formatMoney(monthlyGain.total)}</p>
+            <p className="mt-0.5 text-[10px] text-[#777]">
+              {formatMoney(monthlyGain.comissao)} + {formatMoney(monthlyGain.bonus)} bônus
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-3 border-t border-[#EEE6B9] pt-3">
+          <div>
             <div className="mb-2.5 flex items-center justify-between gap-4 text-sm text-[#4F4F4F]">
               <span>{contracts} {contracts === 1 ? "contrato" : "contratos"}</span>
               <span>
@@ -64,7 +81,7 @@ export function CommissionProgressCard({
             </div>
           </div>
 
-          <div className="relative mt-3 grid grid-cols-3 gap-2 pt-2">
+          <div className="relative mt-2 grid grid-cols-3 gap-2 pt-2">
             <div className="pointer-events-none absolute left-[11%] right-[11%] top-[23px] border-t border-dashed border-[#CFCFCF]" aria-hidden="true" />
             {MARCOS_BONUS_VENDEDOR.map((milestone) => {
               const reached = contracts >= milestone.contratos;
@@ -79,30 +96,13 @@ export function CommissionProgressCard({
                   >
                     {milestone.rotulo}
                   </span>
-                  <span className="mt-1.5 rounded-full border border-[#DEDEDE] bg-white px-3 py-1 text-[11px] font-bold text-[#333] shadow-sm sm:text-xs">
+                  <span className="mt-1 rounded-full border border-[#DEDEDE] bg-white px-2 py-1 text-[10px] font-bold text-[#333] shadow-sm sm:text-xs">
                     {formatMoney(milestone.bonus)} bônus
                   </span>
                 </div>
               );
             })}
           </div>
-        </div>
-
-        <div className="relative flex min-h-[218px] flex-col justify-center overflow-hidden rounded-[22px] bg-[#090A0A] px-7 py-6 text-white shadow-[0_10px_24px_rgba(0,0,0,0.12)] sm:px-9 xl:h-[232px] xl:min-h-0">
-          <div className="absolute -bottom-28 -right-20 h-64 w-64 rounded-full border border-[#FFD400]/15" aria-hidden="true" />
-          <div className="absolute -bottom-20 -right-14 h-48 w-48 rounded-full border border-dashed border-[#FFD400]/15" aria-hidden="true" />
-          <div className="absolute bottom-0 right-0 h-28 w-52 bg-[radial-gradient(circle,_rgba(255,212,0,0.24)_1px,_transparent_1px)] [background-size:7px_7px] opacity-25" aria-hidden="true" />
-          <TrendingUp className="relative h-7 w-7 text-[#FFD400]" strokeWidth={2.6} aria-hidden="true" />
-          <p className="relative mt-5 text-[13px] font-black uppercase tracking-[0.16em] text-[#BEBEBE]">
-            Produção estimada do mês
-          </p>
-          <p className="relative mt-2 text-[38px] font-black leading-none tracking-[-0.035em] text-[#FFD400] sm:text-[42px]">
-            {formatMoney(monthlyGain.total)}
-          </p>
-          <p className="relative mt-4 text-sm font-medium text-[#E0E0E0]">
-            Comissão {formatMoney(monthlyGain.comissao)} + bônus {formatMoney(monthlyGain.bonus)}
-          </p>
-        </div>
       </div>
     </section>
   );

@@ -9,251 +9,208 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as VendedorRouteImport } from './routes/vendedor'
-import { Route as TrabalheConoscoRouteImport } from './routes/trabalhe-conosco'
-import { Route as TermosRouteImport } from './routes/termos'
-import { Route as SuporteRouteImport } from './routes/suporte'
-import { Route as SobreRouteImport } from './routes/sobre'
-import { Route as SinistrosRouteImport } from './routes/sinistros'
-import { Route as SimularRouteImport } from './routes/simular'
-import { Route as SejaParceiroRouteImport } from './routes/seja-parceiro'
-import { Route as SeguroFiancaRouteImport } from './routes/seguro-fianca'
-import { Route as RelatoriosRouteImport } from './routes/relatorios'
-import { Route as RedefinirSenhaRouteImport } from './routes/redefinir-senha'
-import { Route as RecuperarAcessoRouteImport } from './routes/recuperar-acesso'
-import { Route as ProprietarioRouteImport } from './routes/proprietario'
-import { Route as PrivacidadeRouteImport } from './routes/privacidade'
-import { Route as PlanosRouteImport } from './routes/planos'
-import { Route as PlanoCarreiraRouteImport } from './routes/plano-carreira'
-import { Route as MinhasComissoesRouteImport } from './routes/minhas-comissoes'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as InquilinosAdminRouteImport } from './routes/inquilinos-admin'
-import { Route as IndicacaoRouteImport } from './routes/indicacao'
-import { Route as ImoveisRouteImport } from './routes/imoveis'
-import { Route as ImobiliariasAdminRouteImport } from './routes/imobiliarias-admin'
-import { Route as ImobiliariaRouteImport } from './routes/imobiliaria'
-import { Route as FinanceiroRouteImport } from './routes/financeiro'
-import { Route as EmailVerificadoRouteImport } from './routes/email-verificado'
-import { Route as DicasPerformanceRouteImport } from './routes/dicas-performance'
-import { Route as DashboardRouteImport } from './routes/dashboard'
-import { Route as CorretoresAdminRouteImport } from './routes/corretores-admin'
-import { Route as CorretorRouteImport } from './routes/corretor'
-import { Route as ContatoRouteImport } from './routes/contato'
-import { Route as ConsultasRouteImport } from './routes/consultas'
-import { Route as ConsultaRapidaRouteImport } from './routes/consulta-rapida'
-import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
-import { Route as CompletarAcessoInquilinoRouteImport } from './routes/completar-acesso-inquilino'
-import { Route as CarteiraCobrancasRouteImport } from './routes/carteira-cobrancas'
-import { Route as CarreirasRouteImport } from './routes/carreiras'
-import { Route as CadastroProprietarioRouteImport } from './routes/cadastro-proprietario'
-import { Route as CadastroInquilinoRouteImport } from './routes/cadastro-inquilino'
-import { Route as CadastroImobiliariaRouteImport } from './routes/cadastro-imobiliaria'
-import { Route as CadastroCorretorRouteImport } from './routes/cadastro-corretor'
-import { Route as CadastroConcluidoRouteImport } from './routes/cadastro-concluido'
-import { Route as CadastroRouteImport } from './routes/cadastro'
-import { Route as ApolicesRouteImport } from './routes/apolices'
-import { Route as AplicativoRouteImport } from './routes/aplicativo'
-import { Route as AcessoInquilinoRouteImport } from './routes/acesso-inquilino'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as VendedorIndexRouteImport } from './routes/vendedor.index'
-import { Route as SimularIndexRouteImport } from './routes/simular.index'
-import { Route as InquilinoIndexRouteImport } from './routes/inquilino.index'
-import { Route as FaturasInquilinosIndexRouteImport } from './routes/faturas-inquilinos.index'
-import { Route as ConsultasIndexRouteImport } from './routes/consultas.index'
-import { Route as BlogIndexRouteImport } from './routes/blog.index'
-import { Route as ApolicesIndexRouteImport } from './routes/apolices.index'
-import { Route as VendedorRankingRouteImport } from './routes/vendedor.ranking'
-import { Route as VendedorPipelineRouteImport } from './routes/vendedor.pipeline'
-import { Route as VendedorPerfilRouteImport } from './routes/vendedor.perfil'
-import { Route as VendedorMetasRouteImport } from './routes/vendedor.metas'
-import { Route as VendedorMateriaisRouteImport } from './routes/vendedor.materiais'
-import { Route as VendedorLeadsRouteImport } from './routes/vendedor.leads'
-import { Route as VendedorContasDemoRouteImport } from './routes/vendedor.contas-demo'
-import { Route as VendedorComissoesRouteImport } from './routes/vendedor.comissoes'
-import { Route as VendedorClientesRouteImport } from './routes/vendedor.clientes'
-import { Route as VendedorAgendaRouteImport } from './routes/vendedor.agenda'
-import { Route as SimularResultadoRouteImport } from './routes/simular.resultado'
-import { Route as PainelNotificacoesRouteImport } from './routes/painel/notificacoes'
-import { Route as LoginVendedornoxRouteImport } from './routes/login_.vendedornox'
-import { Route as LoginMarketingnoxRouteImport } from './routes/login_.marketingnox'
-import { Route as LoginJuridiconoxRouteImport } from './routes/login_.juridiconox'
-import { Route as LoginFinanceironoxRouteImport } from './routes/login_.financeironox'
-import { Route as InquilinoPerfilRouteImport } from './routes/inquilino.perfil'
-import { Route as InquilinoPainelRouteImport } from './routes/inquilino.painel'
-import { Route as InquilinoFaturasRouteImport } from './routes/inquilino.faturas'
-import { Route as InquilinoDocumentosRouteImport } from './routes/inquilino.documentos'
-import { Route as FaturasInquilinosIdRouteImport } from './routes/faturas-inquilinos.$id'
-import { Route as DemoPerfilRouteImport } from './routes/demo.$perfil'
-import { Route as ConsultasNovaRouteImport } from './routes/consultas.nova'
-import { Route as ConfiguracoesNiveisComissaoRouteImport } from './routes/configuracoes.niveis-comissao'
-import { Route as BlogSlugRouteImport } from './routes/blog.$slug'
-import { Route as AtivarFiancaTokenRouteImport } from './routes/ativar-fianca.$token'
-import { Route as ApolicesIdRouteImport } from './routes/apolices.$id'
-import { Route as AdminVerificacoesRouteImport } from './routes/admin.verificacoes'
-import { Route as AdminVagasRouteImport } from './routes/admin.vagas'
-import { Route as AdminUsuariosRouteImport } from './routes/admin.usuarios'
-import { Route as AdminSaquesRouteImport } from './routes/admin.saques'
-import { Route as AdminPermissoesInternasRouteImport } from './routes/admin.permissoes-internas'
-import { Route as AdminPermissoesRouteImport } from './routes/admin.permissoes'
-import { Route as AdminMateriaisVendaRouteImport } from './routes/admin.materiais-venda'
-import { Route as AdminLeadsRouteImport } from './routes/admin.leads'
-import { Route as AdminIndicacoesRouteImport } from './routes/admin.indicacoes'
-import { Route as AdminFinanceiroRouteImport } from './routes/admin.financeiro'
-import { Route as AdminFaturamentoRouteImport } from './routes/admin.faturamento'
-import { Route as AdminEquipePermissoesRouteImport } from './routes/admin.equipe-permissoes'
-import { Route as AdminEquipeNoxRouteImport } from './routes/admin.equipe-nox'
-import { Route as AdminEquipeComercialRouteImport } from './routes/admin.equipe-comercial'
-import { Route as AdminEquipeRouteImport } from './routes/admin.equipe'
-import { Route as AdminDistribuicaoLeadsRouteImport } from './routes/admin.distribuicao-leads'
-import { Route as AdminContratosRouteImport } from './routes/admin.contratos'
-import { Route as AdminContaNoxRouteImport } from './routes/admin.conta-nox'
-import { Route as AdminConsultasRouteImport } from './routes/admin.consultas'
-import { Route as AdminColaboradoresRouteImport } from './routes/admin.colaboradores'
-import { Route as AdminAprovacoesRouteImport } from './routes/admin.aprovacoes'
-import { Route as AdminAfiliadosRouteImport } from './routes/admin.afiliados'
-import { Route as AdminAdicionarUsuariosRouteImport } from './routes/admin.adicionar-usuarios'
+import { Route as AcessoInquilinoRouteImport } from './routes/acesso-inquilino'
+import { Route as AplicativoRouteImport } from './routes/aplicativo'
+import { Route as ApolicesRouteImport } from './routes/apolices'
+import { Route as CadastroRouteImport } from './routes/cadastro'
+import { Route as CadastroConcluidoRouteImport } from './routes/cadastro-concluido'
+import { Route as CadastroCorretorRouteImport } from './routes/cadastro-corretor'
+import { Route as CadastroImobiliariaRouteImport } from './routes/cadastro-imobiliaria'
+import { Route as CadastroInquilinoRouteImport } from './routes/cadastro-inquilino'
+import { Route as CadastroProprietarioRouteImport } from './routes/cadastro-proprietario'
+import { Route as CarreirasRouteImport } from './routes/carreiras'
+import { Route as CarteiraCobrancasRouteImport } from './routes/carteira-cobrancas'
+import { Route as CompletarAcessoInquilinoRouteImport } from './routes/completar-acesso-inquilino'
+import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
+import { Route as ConsultaRapidaRouteImport } from './routes/consulta-rapida'
+import { Route as ConsultasRouteImport } from './routes/consultas'
+import { Route as ContatoRouteImport } from './routes/contato'
+import { Route as CorretorRouteImport } from './routes/corretor'
+import { Route as CorretoresAdminRouteImport } from './routes/corretores-admin'
+import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as DicasPerformanceRouteImport } from './routes/dicas-performance'
+import { Route as DocumentosRouteImport } from './routes/documentos'
+import { Route as EmailVerificadoRouteImport } from './routes/email-verificado'
+import { Route as FinanceiroRouteImport } from './routes/financeiro'
+import { Route as ImobiliariaRouteImport } from './routes/imobiliaria'
+import { Route as ImobiliariasAdminRouteImport } from './routes/imobiliarias-admin'
+import { Route as ImoveisRouteImport } from './routes/imoveis'
+import { Route as IndicacaoRouteImport } from './routes/indicacao'
+import { Route as InquilinosAdminRouteImport } from './routes/inquilinos-admin'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as MinhasComissoesRouteImport } from './routes/minhas-comissoes'
+import { Route as PlanoCarreiraRouteImport } from './routes/plano-carreira'
+import { Route as PlanosRouteImport } from './routes/planos'
+import { Route as PrivacidadeRouteImport } from './routes/privacidade'
+import { Route as ProprietarioRouteImport } from './routes/proprietario'
+import { Route as RecuperarAcessoRouteImport } from './routes/recuperar-acesso'
+import { Route as RedefinirSenhaRouteImport } from './routes/redefinir-senha'
+import { Route as RelatoriosRouteImport } from './routes/relatorios'
+import { Route as SeguroFiancaRouteImport } from './routes/seguro-fianca'
+import { Route as SejaParceiroRouteImport } from './routes/seja-parceiro'
+import { Route as SimularRouteImport } from './routes/simular'
+import { Route as SinistrosRouteImport } from './routes/sinistros'
+import { Route as SobreRouteImport } from './routes/sobre'
+import { Route as SuporteRouteImport } from './routes/suporte'
+import { Route as TermosRouteImport } from './routes/termos'
+import { Route as TrabalheConoscoRouteImport } from './routes/trabalhe-conosco'
+import { Route as VendedorRouteImport } from './routes/vendedor'
 import { Route as AbrirAppDocumentosRouteImport } from './routes/abrir-app.documentos'
-import { Route as ConsultasIdStatusRouteImport } from './routes/consultas.$id.status'
-import { Route as ConsultasIdResultadoRouteImport } from './routes/consultas.$id.resultado'
-import { Route as ConsultasIdFinalizarRouteImport } from './routes/consultas.$id.finalizar'
-import { Route as ConsultasIdDocumentosRouteImport } from './routes/consultas.$id.documentos'
+import { Route as AdminAdicionarUsuariosRouteImport } from './routes/admin.adicionar-usuarios'
+import { Route as AdminAfiliadosRouteImport } from './routes/admin.afiliados'
+import { Route as AdminAprovacoesRouteImport } from './routes/admin.aprovacoes'
+import { Route as AdminColaboradoresRouteImport } from './routes/admin.colaboradores'
+import { Route as AdminConsultasRouteImport } from './routes/admin.consultas'
+import { Route as AdminContaNoxRouteImport } from './routes/admin.conta-nox'
+import { Route as AdminContratosRouteImport } from './routes/admin.contratos'
+import { Route as AdminDistribuicaoLeadsRouteImport } from './routes/admin.distribuicao-leads'
+import { Route as AdminEquipeRouteImport } from './routes/admin.equipe'
+import { Route as AdminEquipeComercialRouteImport } from './routes/admin.equipe-comercial'
+import { Route as AdminEquipeNoxRouteImport } from './routes/admin.equipe-nox'
+import { Route as AdminEquipePermissoesRouteImport } from './routes/admin.equipe-permissoes'
+import { Route as AdminFaturamentoRouteImport } from './routes/admin.faturamento'
+import { Route as AdminFinanceiroRouteImport } from './routes/admin.financeiro'
+import { Route as AdminIndicacoesRouteImport } from './routes/admin.indicacoes'
+import { Route as AdminLeadsRouteImport } from './routes/admin.leads'
+import { Route as AdminMateriaisVendaRouteImport } from './routes/admin.materiais-venda'
+import { Route as AdminPermissoesRouteImport } from './routes/admin.permissoes'
+import { Route as AdminPermissoesInternasRouteImport } from './routes/admin.permissoes-internas'
+import { Route as AdminSaquesRouteImport } from './routes/admin.saques'
+import { Route as AdminUsuariosRouteImport } from './routes/admin.usuarios'
+import { Route as AdminVagasRouteImport } from './routes/admin.vagas'
+import { Route as AdminVerificacoesRouteImport } from './routes/admin.verificacoes'
+import { Route as ApolicesIndexRouteImport } from './routes/apolices.index'
+import { Route as ApolicesIdRouteImport } from './routes/apolices.$id'
+import { Route as AtivarFiancaTokenRouteImport } from './routes/ativar-fianca.$token'
+import { Route as BlogIndexRouteImport } from './routes/blog.index'
+import { Route as BlogSlugRouteImport } from './routes/blog.$slug'
+import { Route as ConfiguracoesNiveisComissaoRouteImport } from './routes/configuracoes.niveis-comissao'
+import { Route as ConsultasIndexRouteImport } from './routes/consultas.index'
+import { Route as ConsultasNovaRouteImport } from './routes/consultas.nova'
+import { Route as DemoPerfilRouteImport } from './routes/demo.$perfil'
+import { Route as FaturasInquilinosIndexRouteImport } from './routes/faturas-inquilinos.index'
+import { Route as FaturasInquilinosIdRouteImport } from './routes/faturas-inquilinos.$id'
+import { Route as InquilinoIndexRouteImport } from './routes/inquilino.index'
+import { Route as InquilinoDashboardRouteImport } from './routes/inquilino.dashboard'
+import { Route as InquilinoDocumentosRouteImport } from './routes/inquilino.documentos'
+import { Route as InquilinoFaturasRouteImport } from './routes/inquilino.faturas'
+import { Route as InquilinoPainelRouteImport } from './routes/inquilino.painel'
+import { Route as InquilinoPerfilRouteImport } from './routes/inquilino.perfil'
+import { Route as LoginFinanceironoxRouteImport } from './routes/login_.financeironox'
+import { Route as LoginJuridiconoxRouteImport } from './routes/login_.juridiconox'
+import { Route as LoginMarketingnoxRouteImport } from './routes/login_.marketingnox'
+import { Route as LoginVendedornoxRouteImport } from './routes/login_.vendedornox'
+import { Route as PainelNotificacoesRouteImport } from './routes/painel/notificacoes'
+import { Route as SimularIndexRouteImport } from './routes/simular.index'
+import { Route as SimularResultadoRouteImport } from './routes/simular.resultado'
+import { Route as VendedorIndexRouteImport } from './routes/vendedor.index'
+import { Route as VendedorAgendaRouteImport } from './routes/vendedor.agenda'
+import { Route as VendedorClientesRouteImport } from './routes/vendedor.clientes'
+import { Route as VendedorComissoesRouteImport } from './routes/vendedor.comissoes'
+import { Route as VendedorContasDemoRouteImport } from './routes/vendedor.contas-demo'
+import { Route as VendedorHistoricoComissoesRouteImport } from './routes/vendedor.historico-comissoes'
+import { Route as VendedorLeadsRouteImport } from './routes/vendedor.leads'
+import { Route as VendedorMateriaisRouteImport } from './routes/vendedor.materiais'
+import { Route as VendedorMetasRouteImport } from './routes/vendedor.metas'
+import { Route as VendedorPerfilRouteImport } from './routes/vendedor.perfil'
+import { Route as VendedorPipelineRouteImport } from './routes/vendedor.pipeline'
+import { Route as VendedorRankingRouteImport } from './routes/vendedor.ranking'
 import { Route as ConsultasIdDadosComplementaresRouteImport } from './routes/consultas.$id.dados-complementares'
+import { Route as ConsultasIdDocumentosRouteImport } from './routes/consultas.$id.documentos'
+import { Route as ConsultasIdFinalizarRouteImport } from './routes/consultas.$id.finalizar'
+import { Route as ConsultasIdResultadoRouteImport } from './routes/consultas.$id.resultado'
+import { Route as ConsultasIdStatusRouteImport } from './routes/consultas.$id.status'
 
-const VendedorRoute = VendedorRouteImport.update({
-  id: '/vendedor',
-  path: '/vendedor',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const TrabalheConoscoRoute = TrabalheConoscoRouteImport.update({
-  id: '/trabalhe-conosco',
-  path: '/trabalhe-conosco',
+const AcessoInquilinoRoute = AcessoInquilinoRouteImport.update({
+  id: '/acesso-inquilino',
+  path: '/acesso-inquilino',
   getParentRoute: () => rootRouteImport,
 } as any)
-const TermosRoute = TermosRouteImport.update({
-  id: '/termos',
-  path: '/termos',
+const AplicativoRoute = AplicativoRouteImport.update({
+  id: '/aplicativo',
+  path: '/aplicativo',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SuporteRoute = SuporteRouteImport.update({
-  id: '/suporte',
-  path: '/suporte',
+const ApolicesRoute = ApolicesRouteImport.update({
+  id: '/apolices',
+  path: '/apolices',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SobreRoute = SobreRouteImport.update({
-  id: '/sobre',
-  path: '/sobre',
+const CadastroRoute = CadastroRouteImport.update({
+  id: '/cadastro',
+  path: '/cadastro',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SinistrosRoute = SinistrosRouteImport.update({
-  id: '/sinistros',
-  path: '/sinistros',
-  getParentRoute: () => rootRouteImport,
-} as any).lazy(() => import('./routes/sinistros.lazy').then((d) => d.Route))
-const SimularRoute = SimularRouteImport.update({
-  id: '/simular',
-  path: '/simular',
+const CadastroConcluidoRoute = CadastroConcluidoRouteImport.update({
+  id: '/cadastro-concluido',
+  path: '/cadastro-concluido',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SejaParceiroRoute = SejaParceiroRouteImport.update({
-  id: '/seja-parceiro',
-  path: '/seja-parceiro',
+const CadastroCorretorRoute = CadastroCorretorRouteImport.update({
+  id: '/cadastro-corretor',
+  path: '/cadastro-corretor',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SeguroFiancaRoute = SeguroFiancaRouteImport.update({
-  id: '/seguro-fianca',
-  path: '/seguro-fianca',
+const CadastroImobiliariaRoute = CadastroImobiliariaRouteImport.update({
+  id: '/cadastro-imobiliaria',
+  path: '/cadastro-imobiliaria',
   getParentRoute: () => rootRouteImport,
 } as any)
-const RelatoriosRoute = RelatoriosRouteImport.update({
-  id: '/relatorios',
-  path: '/relatorios',
+const CadastroInquilinoRoute = CadastroInquilinoRouteImport.update({
+  id: '/cadastro-inquilino',
+  path: '/cadastro-inquilino',
   getParentRoute: () => rootRouteImport,
 } as any)
-const RedefinirSenhaRoute = RedefinirSenhaRouteImport.update({
-  id: '/redefinir-senha',
-  path: '/redefinir-senha',
+const CadastroProprietarioRoute = CadastroProprietarioRouteImport.update({
+  id: '/cadastro-proprietario',
+  path: '/cadastro-proprietario',
   getParentRoute: () => rootRouteImport,
 } as any)
-const RecuperarAcessoRoute = RecuperarAcessoRouteImport.update({
-  id: '/recuperar-acesso',
-  path: '/recuperar-acesso',
+const CarreirasRoute = CarreirasRouteImport.update({
+  id: '/carreiras',
+  path: '/carreiras',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ProprietarioRoute = ProprietarioRouteImport.update({
-  id: '/proprietario',
-  path: '/proprietario',
+const CarteiraCobrancasRoute = CarteiraCobrancasRouteImport.update({
+  id: '/carteira-cobrancas',
+  path: '/carteira-cobrancas',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PrivacidadeRoute = PrivacidadeRouteImport.update({
-  id: '/privacidade',
-  path: '/privacidade',
+const CompletarAcessoInquilinoRoute =
+  CompletarAcessoInquilinoRouteImport.update({
+    id: '/completar-acesso-inquilino',
+    path: '/completar-acesso-inquilino',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ConfiguracoesRoute = ConfiguracoesRouteImport.update({
+  id: '/configuracoes',
+  path: '/configuracoes',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() => import('./routes/configuracoes.lazy').then((d) => d.Route))
+const ConsultaRapidaRoute = ConsultaRapidaRouteImport.update({
+  id: '/consulta-rapida',
+  path: '/consulta-rapida',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PlanosRoute = PlanosRouteImport.update({
-  id: '/planos',
-  path: '/planos',
+const ConsultasRoute = ConsultasRouteImport.update({
+  id: '/consultas',
+  path: '/consultas',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PlanoCarreiraRoute = PlanoCarreiraRouteImport.update({
-  id: '/plano-carreira',
-  path: '/plano-carreira',
+const ContatoRoute = ContatoRouteImport.update({
+  id: '/contato',
+  path: '/contato',
   getParentRoute: () => rootRouteImport,
 } as any)
-const MinhasComissoesRoute = MinhasComissoesRouteImport.update({
-  id: '/minhas-comissoes',
-  path: '/minhas-comissoes',
-  getParentRoute: () => rootRouteImport,
-} as any).lazy(() =>
-  import('./routes/minhas-comissoes.lazy').then((d) => d.Route),
-)
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const InquilinosAdminRoute = InquilinosAdminRouteImport.update({
-  id: '/inquilinos-admin',
-  path: '/inquilinos-admin',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const IndicacaoRoute = IndicacaoRouteImport.update({
-  id: '/indicacao',
-  path: '/indicacao',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ImoveisRoute = ImoveisRouteImport.update({
-  id: '/imoveis',
-  path: '/imoveis',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ImobiliariasAdminRoute = ImobiliariasAdminRouteImport.update({
-  id: '/imobiliarias-admin',
-  path: '/imobiliarias-admin',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ImobiliariaRoute = ImobiliariaRouteImport.update({
-  id: '/imobiliaria',
-  path: '/imobiliaria',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const FinanceiroRoute = FinanceiroRouteImport.update({
-  id: '/financeiro',
-  path: '/financeiro',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const EmailVerificadoRoute = EmailVerificadoRouteImport.update({
-  id: '/email-verificado',
-  path: '/email-verificado',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DicasPerformanceRoute = DicasPerformanceRouteImport.update({
-  id: '/dicas-performance',
-  path: '/dicas-performance',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DashboardRoute = DashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
+const CorretorRoute = CorretorRouteImport.update({
+  id: '/corretor',
+  path: '/corretor',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CorretoresAdminRoute = CorretoresAdminRouteImport.update({
@@ -263,324 +220,211 @@ const CorretoresAdminRoute = CorretoresAdminRouteImport.update({
 } as any).lazy(() =>
   import('./routes/corretores-admin.lazy').then((d) => d.Route),
 )
-const CorretorRoute = CorretorRouteImport.update({
-  id: '/corretor',
-  path: '/corretor',
+const DashboardRoute = DashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ContatoRoute = ContatoRouteImport.update({
-  id: '/contato',
-  path: '/contato',
+const DicasPerformanceRoute = DicasPerformanceRouteImport.update({
+  id: '/dicas-performance',
+  path: '/dicas-performance',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ConsultasRoute = ConsultasRouteImport.update({
-  id: '/consultas',
-  path: '/consultas',
+const DocumentosRoute = DocumentosRouteImport.update({
+  id: '/documentos',
+  path: '/documentos',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ConsultaRapidaRoute = ConsultaRapidaRouteImport.update({
-  id: '/consulta-rapida',
-  path: '/consulta-rapida',
+const EmailVerificadoRoute = EmailVerificadoRouteImport.update({
+  id: '/email-verificado',
+  path: '/email-verificado',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ConfiguracoesRoute = ConfiguracoesRouteImport.update({
-  id: '/configuracoes',
-  path: '/configuracoes',
-  getParentRoute: () => rootRouteImport,
-} as any).lazy(() => import('./routes/configuracoes.lazy').then((d) => d.Route))
-const CompletarAcessoInquilinoRoute =
-  CompletarAcessoInquilinoRouteImport.update({
-    id: '/completar-acesso-inquilino',
-    path: '/completar-acesso-inquilino',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const CarteiraCobrancasRoute = CarteiraCobrancasRouteImport.update({
-  id: '/carteira-cobrancas',
-  path: '/carteira-cobrancas',
+const FinanceiroRoute = FinanceiroRouteImport.update({
+  id: '/financeiro',
+  path: '/financeiro',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CarreirasRoute = CarreirasRouteImport.update({
-  id: '/carreiras',
-  path: '/carreiras',
+const ImobiliariaRoute = ImobiliariaRouteImport.update({
+  id: '/imobiliaria',
+  path: '/imobiliaria',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CadastroProprietarioRoute = CadastroProprietarioRouteImport.update({
-  id: '/cadastro-proprietario',
-  path: '/cadastro-proprietario',
+const ImobiliariasAdminRoute = ImobiliariasAdminRouteImport.update({
+  id: '/imobiliarias-admin',
+  path: '/imobiliarias-admin',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CadastroInquilinoRoute = CadastroInquilinoRouteImport.update({
-  id: '/cadastro-inquilino',
-  path: '/cadastro-inquilino',
+const ImoveisRoute = ImoveisRouteImport.update({
+  id: '/imoveis',
+  path: '/imoveis',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CadastroImobiliariaRoute = CadastroImobiliariaRouteImport.update({
-  id: '/cadastro-imobiliaria',
-  path: '/cadastro-imobiliaria',
+const IndicacaoRoute = IndicacaoRouteImport.update({
+  id: '/indicacao',
+  path: '/indicacao',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CadastroCorretorRoute = CadastroCorretorRouteImport.update({
-  id: '/cadastro-corretor',
-  path: '/cadastro-corretor',
+const InquilinosAdminRoute = InquilinosAdminRouteImport.update({
+  id: '/inquilinos-admin',
+  path: '/inquilinos-admin',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CadastroConcluidoRoute = CadastroConcluidoRouteImport.update({
-  id: '/cadastro-concluido',
-  path: '/cadastro-concluido',
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CadastroRoute = CadastroRouteImport.update({
-  id: '/cadastro',
-  path: '/cadastro',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApolicesRoute = ApolicesRouteImport.update({
-  id: '/apolices',
-  path: '/apolices',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AplicativoRoute = AplicativoRouteImport.update({
-  id: '/aplicativo',
-  path: '/aplicativo',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AcessoInquilinoRoute = AcessoInquilinoRouteImport.update({
-  id: '/acesso-inquilino',
-  path: '/acesso-inquilino',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const VendedorIndexRoute = VendedorIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => VendedorRoute,
-} as any)
-const SimularIndexRoute = SimularIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => SimularRoute,
-} as any)
-const InquilinoIndexRoute = InquilinoIndexRouteImport.update({
-  id: '/inquilino/',
-  path: '/inquilino/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const FaturasInquilinosIndexRoute = FaturasInquilinosIndexRouteImport.update({
-  id: '/faturas-inquilinos/',
-  path: '/faturas-inquilinos/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ConsultasIndexRoute = ConsultasIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => ConsultasRoute,
-} as any).lazy(() =>
-  import('./routes/consultas.index.lazy').then((d) => d.Route),
-)
-const BlogIndexRoute = BlogIndexRouteImport.update({
-  id: '/blog/',
-  path: '/blog/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApolicesIndexRoute = ApolicesIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => ApolicesRoute,
-} as any)
-const VendedorRankingRoute = VendedorRankingRouteImport.update({
-  id: '/ranking',
-  path: '/ranking',
-  getParentRoute: () => VendedorRoute,
-} as any)
-const VendedorPipelineRoute = VendedorPipelineRouteImport.update({
-  id: '/pipeline',
-  path: '/pipeline',
-  getParentRoute: () => VendedorRoute,
-} as any)
-const VendedorPerfilRoute = VendedorPerfilRouteImport.update({
-  id: '/perfil',
-  path: '/perfil',
-  getParentRoute: () => VendedorRoute,
-} as any)
-const VendedorMetasRoute = VendedorMetasRouteImport.update({
-  id: '/metas',
-  path: '/metas',
-  getParentRoute: () => VendedorRoute,
-} as any)
-const VendedorMateriaisRoute = VendedorMateriaisRouteImport.update({
-  id: '/materiais',
-  path: '/materiais',
-  getParentRoute: () => VendedorRoute,
-} as any)
-const VendedorLeadsRoute = VendedorLeadsRouteImport.update({
-  id: '/leads',
-  path: '/leads',
-  getParentRoute: () => VendedorRoute,
-} as any)
-const VendedorContasDemoRoute = VendedorContasDemoRouteImport.update({
-  id: '/contas-demo',
-  path: '/contas-demo',
-  getParentRoute: () => VendedorRoute,
-} as any)
-const VendedorComissoesRoute = VendedorComissoesRouteImport.update({
-  id: '/comissoes',
-  path: '/comissoes',
-  getParentRoute: () => VendedorRoute,
-} as any)
-const VendedorClientesRoute = VendedorClientesRouteImport.update({
-  id: '/clientes',
-  path: '/clientes',
-  getParentRoute: () => VendedorRoute,
-} as any)
-const VendedorAgendaRoute = VendedorAgendaRouteImport.update({
-  id: '/agenda',
-  path: '/agenda',
-  getParentRoute: () => VendedorRoute,
-} as any).lazy(() =>
-  import('./routes/vendedor.agenda.lazy').then((d) => d.Route),
-)
-const SimularResultadoRoute = SimularResultadoRouteImport.update({
-  id: '/resultado',
-  path: '/resultado',
-  getParentRoute: () => SimularRoute,
-} as any)
-const PainelNotificacoesRoute = PainelNotificacoesRouteImport.update({
-  id: '/painel/notificacoes',
-  path: '/painel/notificacoes',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LoginVendedornoxRoute = LoginVendedornoxRouteImport.update({
-  id: '/login_/vendedornox',
-  path: '/login/vendedornox',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LoginMarketingnoxRoute = LoginMarketingnoxRouteImport.update({
-  id: '/login_/marketingnox',
-  path: '/login/marketingnox',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LoginJuridiconoxRoute = LoginJuridiconoxRouteImport.update({
-  id: '/login_/juridiconox',
-  path: '/login/juridiconox',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LoginFinanceironoxRoute = LoginFinanceironoxRouteImport.update({
-  id: '/login_/financeironox',
-  path: '/login/financeironox',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const InquilinoPerfilRoute = InquilinoPerfilRouteImport.update({
-  id: '/inquilino/perfil',
-  path: '/inquilino/perfil',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const InquilinoPainelRoute = InquilinoPainelRouteImport.update({
-  id: '/inquilino/painel',
-  path: '/inquilino/painel',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const InquilinoFaturasRoute = InquilinoFaturasRouteImport.update({
-  id: '/inquilino/faturas',
-  path: '/inquilino/faturas',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const InquilinoDocumentosRoute = InquilinoDocumentosRouteImport.update({
-  id: '/inquilino/documentos',
-  path: '/inquilino/documentos',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const FaturasInquilinosIdRoute = FaturasInquilinosIdRouteImport.update({
-  id: '/faturas-inquilinos/$id',
-  path: '/faturas-inquilinos/$id',
+const MinhasComissoesRoute = MinhasComissoesRouteImport.update({
+  id: '/minhas-comissoes',
+  path: '/minhas-comissoes',
   getParentRoute: () => rootRouteImport,
 } as any).lazy(() =>
-  import('./routes/faturas-inquilinos.$id.lazy').then((d) => d.Route),
+  import('./routes/minhas-comissoes.lazy').then((d) => d.Route),
 )
-const DemoPerfilRoute = DemoPerfilRouteImport.update({
-  id: '/demo/$perfil',
-  path: '/demo/$perfil',
+const PlanoCarreiraRoute = PlanoCarreiraRouteImport.update({
+  id: '/plano-carreira',
+  path: '/plano-carreira',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ConsultasNovaRoute = ConsultasNovaRouteImport.update({
-  id: '/nova',
-  path: '/nova',
-  getParentRoute: () => ConsultasRoute,
-} as any)
-const ConfiguracoesNiveisComissaoRoute =
-  ConfiguracoesNiveisComissaoRouteImport.update({
-    id: '/niveis-comissao',
-    path: '/niveis-comissao',
-    getParentRoute: () => ConfiguracoesRoute,
-  } as any)
-const BlogSlugRoute = BlogSlugRouteImport.update({
-  id: '/blog/$slug',
-  path: '/blog/$slug',
+const PlanosRoute = PlanosRouteImport.update({
+  id: '/planos',
+  path: '/planos',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AtivarFiancaTokenRoute = AtivarFiancaTokenRouteImport.update({
-  id: '/ativar-fianca/$token',
-  path: '/ativar-fianca/$token',
-  getParentRoute: () => rootRouteImport,
-} as any).lazy(() =>
-  import('./routes/ativar-fianca.$token.lazy').then((d) => d.Route),
-)
-const ApolicesIdRoute = ApolicesIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => ApolicesRoute,
-} as any).lazy(() => import('./routes/apolices.$id.lazy').then((d) => d.Route))
-const AdminVerificacoesRoute = AdminVerificacoesRouteImport.update({
-  id: '/admin/verificacoes',
-  path: '/admin/verificacoes',
+const PrivacidadeRoute = PrivacidadeRouteImport.update({
+  id: '/privacidade',
+  path: '/privacidade',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminVagasRoute = AdminVagasRouteImport.update({
-  id: '/admin/vagas',
-  path: '/admin/vagas',
-  getParentRoute: () => rootRouteImport,
-} as any).lazy(() => import('./routes/admin.vagas.lazy').then((d) => d.Route))
-const AdminUsuariosRoute = AdminUsuariosRouteImport.update({
-  id: '/admin/usuarios',
-  path: '/admin/usuarios',
+const ProprietarioRoute = ProprietarioRouteImport.update({
+  id: '/proprietario',
+  path: '/proprietario',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminSaquesRoute = AdminSaquesRouteImport.update({
-  id: '/admin/saques',
-  path: '/admin/saques',
-  getParentRoute: () => rootRouteImport,
-} as any).lazy(() => import('./routes/admin.saques.lazy').then((d) => d.Route))
-const AdminPermissoesInternasRoute = AdminPermissoesInternasRouteImport.update({
-  id: '/admin/permissoes-internas',
-  path: '/admin/permissoes-internas',
+const RecuperarAcessoRoute = RecuperarAcessoRouteImport.update({
+  id: '/recuperar-acesso',
+  path: '/recuperar-acesso',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminPermissoesRoute = AdminPermissoesRouteImport.update({
-  id: '/admin/permissoes',
-  path: '/admin/permissoes',
+const RedefinirSenhaRoute = RedefinirSenhaRouteImport.update({
+  id: '/redefinir-senha',
+  path: '/redefinir-senha',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminMateriaisVendaRoute = AdminMateriaisVendaRouteImport.update({
-  id: '/admin/materiais-venda',
-  path: '/admin/materiais-venda',
+const RelatoriosRoute = RelatoriosRouteImport.update({
+  id: '/relatorios',
+  path: '/relatorios',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminLeadsRoute = AdminLeadsRouteImport.update({
-  id: '/admin/leads',
-  path: '/admin/leads',
+const SeguroFiancaRoute = SeguroFiancaRouteImport.update({
+  id: '/seguro-fianca',
+  path: '/seguro-fianca',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminIndicacoesRoute = AdminIndicacoesRouteImport.update({
-  id: '/admin/indicacoes',
-  path: '/admin/indicacoes',
+const SejaParceiroRoute = SejaParceiroRouteImport.update({
+  id: '/seja-parceiro',
+  path: '/seja-parceiro',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminFinanceiroRoute = AdminFinanceiroRouteImport.update({
-  id: '/admin/financeiro',
-  path: '/admin/financeiro',
+const SimularRoute = SimularRouteImport.update({
+  id: '/simular',
+  path: '/simular',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SinistrosRoute = SinistrosRouteImport.update({
+  id: '/sinistros',
+  path: '/sinistros',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() => import('./routes/sinistros.lazy').then((d) => d.Route))
+const SobreRoute = SobreRouteImport.update({
+  id: '/sobre',
+  path: '/sobre',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SuporteRoute = SuporteRouteImport.update({
+  id: '/suporte',
+  path: '/suporte',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TermosRoute = TermosRouteImport.update({
+  id: '/termos',
+  path: '/termos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TrabalheConoscoRoute = TrabalheConoscoRouteImport.update({
+  id: '/trabalhe-conosco',
+  path: '/trabalhe-conosco',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VendedorRoute = VendedorRouteImport.update({
+  id: '/vendedor',
+  path: '/vendedor',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AbrirAppDocumentosRoute = AbrirAppDocumentosRouteImport.update({
+  id: '/abrir-app/documentos',
+  path: '/abrir-app/documentos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminAdicionarUsuariosRoute = AdminAdicionarUsuariosRouteImport.update({
+  id: '/admin/adicionar-usuarios',
+  path: '/admin/adicionar-usuarios',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminAfiliadosRoute = AdminAfiliadosRouteImport.update({
+  id: '/admin/afiliados',
+  path: '/admin/afiliados',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminAprovacoesRoute = AdminAprovacoesRouteImport.update({
+  id: '/admin/aprovacoes',
+  path: '/admin/aprovacoes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminColaboradoresRoute = AdminColaboradoresRouteImport.update({
+  id: '/admin/colaboradores',
+  path: '/admin/colaboradores',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminConsultasRoute = AdminConsultasRouteImport.update({
+  id: '/admin/consultas',
+  path: '/admin/consultas',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminContaNoxRoute = AdminContaNoxRouteImport.update({
+  id: '/admin/conta-nox',
+  path: '/admin/conta-nox',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminContratosRoute = AdminContratosRouteImport.update({
+  id: '/admin/contratos',
+  path: '/admin/contratos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminDistribuicaoLeadsRoute = AdminDistribuicaoLeadsRouteImport.update({
+  id: '/admin/distribuicao-leads',
+  path: '/admin/distribuicao-leads',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminEquipeRoute = AdminEquipeRouteImport.update({
+  id: '/admin/equipe',
+  path: '/admin/equipe',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() => import('./routes/admin.equipe.lazy').then((d) => d.Route))
+const AdminEquipeComercialRoute = AdminEquipeComercialRouteImport.update({
+  id: '/admin/equipe-comercial',
+  path: '/admin/equipe-comercial',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminEquipeNoxRoute = AdminEquipeNoxRouteImport.update({
+  id: '/admin/equipe-nox',
+  path: '/admin/equipe-nox',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminEquipePermissoesRoute = AdminEquipePermissoesRouteImport.update({
+  id: '/admin/equipe-permissoes',
+  path: '/admin/equipe-permissoes',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminFaturamentoRoute = AdminFaturamentoRouteImport.update({
@@ -590,92 +434,245 @@ const AdminFaturamentoRoute = AdminFaturamentoRouteImport.update({
 } as any).lazy(() =>
   import('./routes/admin.faturamento.lazy').then((d) => d.Route),
 )
-const AdminEquipePermissoesRoute = AdminEquipePermissoesRouteImport.update({
-  id: '/admin/equipe-permissoes',
-  path: '/admin/equipe-permissoes',
+const AdminFinanceiroRoute = AdminFinanceiroRouteImport.update({
+  id: '/admin/financeiro',
+  path: '/admin/financeiro',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminEquipeNoxRoute = AdminEquipeNoxRouteImport.update({
-  id: '/admin/equipe-nox',
-  path: '/admin/equipe-nox',
+const AdminIndicacoesRoute = AdminIndicacoesRouteImport.update({
+  id: '/admin/indicacoes',
+  path: '/admin/indicacoes',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminEquipeComercialRoute = AdminEquipeComercialRouteImport.update({
-  id: '/admin/equipe-comercial',
-  path: '/admin/equipe-comercial',
+const AdminLeadsRoute = AdminLeadsRouteImport.update({
+  id: '/admin/leads',
+  path: '/admin/leads',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminEquipeRoute = AdminEquipeRouteImport.update({
-  id: '/admin/equipe',
-  path: '/admin/equipe',
-  getParentRoute: () => rootRouteImport,
-} as any).lazy(() => import('./routes/admin.equipe.lazy').then((d) => d.Route))
-const AdminDistribuicaoLeadsRoute = AdminDistribuicaoLeadsRouteImport.update({
-  id: '/admin/distribuicao-leads',
-  path: '/admin/distribuicao-leads',
+const AdminMateriaisVendaRoute = AdminMateriaisVendaRouteImport.update({
+  id: '/admin/materiais-venda',
+  path: '/admin/materiais-venda',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminContratosRoute = AdminContratosRouteImport.update({
-  id: '/admin/contratos',
-  path: '/admin/contratos',
+const AdminPermissoesRoute = AdminPermissoesRouteImport.update({
+  id: '/admin/permissoes',
+  path: '/admin/permissoes',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminContaNoxRoute = AdminContaNoxRouteImport.update({
-  id: '/admin/conta-nox',
-  path: '/admin/conta-nox',
+const AdminPermissoesInternasRoute = AdminPermissoesInternasRouteImport.update({
+  id: '/admin/permissoes-internas',
+  path: '/admin/permissoes-internas',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminConsultasRoute = AdminConsultasRouteImport.update({
-  id: '/admin/consultas',
-  path: '/admin/consultas',
+const AdminSaquesRoute = AdminSaquesRouteImport.update({
+  id: '/admin/saques',
+  path: '/admin/saques',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() => import('./routes/admin.saques.lazy').then((d) => d.Route))
+const AdminUsuariosRoute = AdminUsuariosRouteImport.update({
+  id: '/admin/usuarios',
+  path: '/admin/usuarios',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminColaboradoresRoute = AdminColaboradoresRouteImport.update({
-  id: '/admin/colaboradores',
-  path: '/admin/colaboradores',
+const AdminVagasRoute = AdminVagasRouteImport.update({
+  id: '/admin/vagas',
+  path: '/admin/vagas',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() => import('./routes/admin.vagas.lazy').then((d) => d.Route))
+const AdminVerificacoesRoute = AdminVerificacoesRouteImport.update({
+  id: '/admin/verificacoes',
+  path: '/admin/verificacoes',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminAprovacoesRoute = AdminAprovacoesRouteImport.update({
-  id: '/admin/aprovacoes',
-  path: '/admin/aprovacoes',
+const ApolicesIndexRoute = ApolicesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => ApolicesRoute,
+} as any)
+const ApolicesIdRoute = ApolicesIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => ApolicesRoute,
+} as any).lazy(() => import('./routes/apolices.$id.lazy').then((d) => d.Route))
+const AtivarFiancaTokenRoute = AtivarFiancaTokenRouteImport.update({
+  id: '/ativar-fianca/$token',
+  path: '/ativar-fianca/$token',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() =>
+  import('./routes/ativar-fianca.$token.lazy').then((d) => d.Route),
+)
+const BlogIndexRoute = BlogIndexRouteImport.update({
+  id: '/blog/',
+  path: '/blog/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminAfiliadosRoute = AdminAfiliadosRouteImport.update({
-  id: '/admin/afiliados',
-  path: '/admin/afiliados',
+const BlogSlugRoute = BlogSlugRouteImport.update({
+  id: '/blog/$slug',
+  path: '/blog/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminAdicionarUsuariosRoute = AdminAdicionarUsuariosRouteImport.update({
-  id: '/admin/adicionar-usuarios',
-  path: '/admin/adicionar-usuarios',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AbrirAppDocumentosRoute = AbrirAppDocumentosRouteImport.update({
-  id: '/abrir-app/documentos',
-  path: '/abrir-app/documentos',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ConsultasIdStatusRoute = ConsultasIdStatusRouteImport.update({
-  id: '/$id/status',
-  path: '/$id/status',
-  getParentRoute: () => ConsultasRoute,
-} as any)
-const ConsultasIdResultadoRoute = ConsultasIdResultadoRouteImport.update({
-  id: '/$id/resultado',
-  path: '/$id/resultado',
-  getParentRoute: () => ConsultasRoute,
-} as any)
-const ConsultasIdFinalizarRoute = ConsultasIdFinalizarRouteImport.update({
-  id: '/$id/finalizar',
-  path: '/$id/finalizar',
+const ConfiguracoesNiveisComissaoRoute =
+  ConfiguracoesNiveisComissaoRouteImport.update({
+    id: '/niveis-comissao',
+    path: '/niveis-comissao',
+    getParentRoute: () => ConfiguracoesRoute,
+  } as any)
+const ConsultasIndexRoute = ConsultasIndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => ConsultasRoute,
 } as any).lazy(() =>
-  import('./routes/consultas.$id.finalizar.lazy').then((d) => d.Route),
+  import('./routes/consultas.index.lazy').then((d) => d.Route),
 )
-const ConsultasIdDocumentosRoute = ConsultasIdDocumentosRouteImport.update({
-  id: '/$id/documentos',
-  path: '/$id/documentos',
+const ConsultasNovaRoute = ConsultasNovaRouteImport.update({
+  id: '/nova',
+  path: '/nova',
   getParentRoute: () => ConsultasRoute,
+} as any)
+const DemoPerfilRoute = DemoPerfilRouteImport.update({
+  id: '/demo/$perfil',
+  path: '/demo/$perfil',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FaturasInquilinosIndexRoute = FaturasInquilinosIndexRouteImport.update({
+  id: '/faturas-inquilinos/',
+  path: '/faturas-inquilinos/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FaturasInquilinosIdRoute = FaturasInquilinosIdRouteImport.update({
+  id: '/faturas-inquilinos/$id',
+  path: '/faturas-inquilinos/$id',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() =>
+  import('./routes/faturas-inquilinos.$id.lazy').then((d) => d.Route),
+)
+const InquilinoIndexRoute = InquilinoIndexRouteImport.update({
+  id: '/inquilino/',
+  path: '/inquilino/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InquilinoDashboardRoute = InquilinoDashboardRouteImport.update({
+  id: '/inquilino/dashboard',
+  path: '/inquilino/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InquilinoDocumentosRoute = InquilinoDocumentosRouteImport.update({
+  id: '/inquilino/documentos',
+  path: '/inquilino/documentos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InquilinoFaturasRoute = InquilinoFaturasRouteImport.update({
+  id: '/inquilino/faturas',
+  path: '/inquilino/faturas',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InquilinoPainelRoute = InquilinoPainelRouteImport.update({
+  id: '/inquilino/painel',
+  path: '/inquilino/painel',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InquilinoPerfilRoute = InquilinoPerfilRouteImport.update({
+  id: '/inquilino/perfil',
+  path: '/inquilino/perfil',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginFinanceironoxRoute = LoginFinanceironoxRouteImport.update({
+  id: '/login_/financeironox',
+  path: '/login/financeironox',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginJuridiconoxRoute = LoginJuridiconoxRouteImport.update({
+  id: '/login_/juridiconox',
+  path: '/login/juridiconox',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginMarketingnoxRoute = LoginMarketingnoxRouteImport.update({
+  id: '/login_/marketingnox',
+  path: '/login/marketingnox',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginVendedornoxRoute = LoginVendedornoxRouteImport.update({
+  id: '/login_/vendedornox',
+  path: '/login/vendedornox',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PainelNotificacoesRoute = PainelNotificacoesRouteImport.update({
+  id: '/painel/notificacoes',
+  path: '/painel/notificacoes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SimularIndexRoute = SimularIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => SimularRoute,
+} as any)
+const SimularResultadoRoute = SimularResultadoRouteImport.update({
+  id: '/resultado',
+  path: '/resultado',
+  getParentRoute: () => SimularRoute,
+} as any)
+const VendedorIndexRoute = VendedorIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => VendedorRoute,
+} as any)
+const VendedorAgendaRoute = VendedorAgendaRouteImport.update({
+  id: '/agenda',
+  path: '/agenda',
+  getParentRoute: () => VendedorRoute,
+} as any).lazy(() =>
+  import('./routes/vendedor.agenda.lazy').then((d) => d.Route),
+)
+const VendedorClientesRoute = VendedorClientesRouteImport.update({
+  id: '/clientes',
+  path: '/clientes',
+  getParentRoute: () => VendedorRoute,
+} as any)
+const VendedorComissoesRoute = VendedorComissoesRouteImport.update({
+  id: '/comissoes',
+  path: '/comissoes',
+  getParentRoute: () => VendedorRoute,
+} as any)
+const VendedorContasDemoRoute = VendedorContasDemoRouteImport.update({
+  id: '/contas-demo',
+  path: '/contas-demo',
+  getParentRoute: () => VendedorRoute,
+} as any)
+const VendedorHistoricoComissoesRoute =
+  VendedorHistoricoComissoesRouteImport.update({
+    id: '/historico-comissoes',
+    path: '/historico-comissoes',
+    getParentRoute: () => VendedorRoute,
+  } as any)
+const VendedorLeadsRoute = VendedorLeadsRouteImport.update({
+  id: '/leads',
+  path: '/leads',
+  getParentRoute: () => VendedorRoute,
+} as any)
+const VendedorMateriaisRoute = VendedorMateriaisRouteImport.update({
+  id: '/materiais',
+  path: '/materiais',
+  getParentRoute: () => VendedorRoute,
+} as any)
+const VendedorMetasRoute = VendedorMetasRouteImport.update({
+  id: '/metas',
+  path: '/metas',
+  getParentRoute: () => VendedorRoute,
+} as any)
+const VendedorPerfilRoute = VendedorPerfilRouteImport.update({
+  id: '/perfil',
+  path: '/perfil',
+  getParentRoute: () => VendedorRoute,
+} as any)
+const VendedorPipelineRoute = VendedorPipelineRouteImport.update({
+  id: '/pipeline',
+  path: '/pipeline',
+  getParentRoute: () => VendedorRoute,
+} as any)
+const VendedorRankingRoute = VendedorRankingRouteImport.update({
+  id: '/ranking',
+  path: '/ranking',
+  getParentRoute: () => VendedorRoute,
 } as any)
 const ConsultasIdDadosComplementaresRoute =
   ConsultasIdDadosComplementaresRouteImport.update({
@@ -687,6 +684,28 @@ const ConsultasIdDadosComplementaresRoute =
       (d) => d.Route,
     ),
   )
+const ConsultasIdDocumentosRoute = ConsultasIdDocumentosRouteImport.update({
+  id: '/$id/documentos',
+  path: '/$id/documentos',
+  getParentRoute: () => ConsultasRoute,
+} as any)
+const ConsultasIdFinalizarRoute = ConsultasIdFinalizarRouteImport.update({
+  id: '/$id/finalizar',
+  path: '/$id/finalizar',
+  getParentRoute: () => ConsultasRoute,
+} as any).lazy(() =>
+  import('./routes/consultas.$id.finalizar.lazy').then((d) => d.Route),
+)
+const ConsultasIdResultadoRoute = ConsultasIdResultadoRouteImport.update({
+  id: '/$id/resultado',
+  path: '/$id/resultado',
+  getParentRoute: () => ConsultasRoute,
+} as any)
+const ConsultasIdStatusRoute = ConsultasIdStatusRouteImport.update({
+  id: '/$id/status',
+  path: '/$id/status',
+  getParentRoute: () => ConsultasRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -710,6 +729,7 @@ export interface FileRoutesByFullPath {
   '/corretores-admin': typeof CorretoresAdminRoute
   '/dashboard': typeof DashboardRoute
   '/dicas-performance': typeof DicasPerformanceRoute
+  '/documentos': typeof DocumentosRoute
   '/email-verificado': typeof EmailVerificadoRoute
   '/financeiro': typeof FinanceiroRoute
   '/imobiliaria': typeof ImobiliariaRoute
@@ -766,6 +786,7 @@ export interface FileRoutesByFullPath {
   '/consultas/nova': typeof ConsultasNovaRoute
   '/demo/$perfil': typeof DemoPerfilRoute
   '/faturas-inquilinos/$id': typeof FaturasInquilinosIdRoute
+  '/inquilino/dashboard': typeof InquilinoDashboardRoute
   '/inquilino/documentos': typeof InquilinoDocumentosRoute
   '/inquilino/faturas': typeof InquilinoFaturasRoute
   '/inquilino/painel': typeof InquilinoPainelRoute
@@ -780,6 +801,7 @@ export interface FileRoutesByFullPath {
   '/vendedor/clientes': typeof VendedorClientesRoute
   '/vendedor/comissoes': typeof VendedorComissoesRoute
   '/vendedor/contas-demo': typeof VendedorContasDemoRoute
+  '/vendedor/historico-comissoes': typeof VendedorHistoricoComissoesRoute
   '/vendedor/leads': typeof VendedorLeadsRoute
   '/vendedor/materiais': typeof VendedorMateriaisRoute
   '/vendedor/metas': typeof VendedorMetasRoute
@@ -819,6 +841,7 @@ export interface FileRoutesByTo {
   '/corretores-admin': typeof CorretoresAdminRoute
   '/dashboard': typeof DashboardRoute
   '/dicas-performance': typeof DicasPerformanceRoute
+  '/documentos': typeof DocumentosRoute
   '/email-verificado': typeof EmailVerificadoRoute
   '/financeiro': typeof FinanceiroRoute
   '/imobiliaria': typeof ImobiliariaRoute
@@ -873,6 +896,7 @@ export interface FileRoutesByTo {
   '/consultas/nova': typeof ConsultasNovaRoute
   '/demo/$perfil': typeof DemoPerfilRoute
   '/faturas-inquilinos/$id': typeof FaturasInquilinosIdRoute
+  '/inquilino/dashboard': typeof InquilinoDashboardRoute
   '/inquilino/documentos': typeof InquilinoDocumentosRoute
   '/inquilino/faturas': typeof InquilinoFaturasRoute
   '/inquilino/painel': typeof InquilinoPainelRoute
@@ -887,6 +911,7 @@ export interface FileRoutesByTo {
   '/vendedor/clientes': typeof VendedorClientesRoute
   '/vendedor/comissoes': typeof VendedorComissoesRoute
   '/vendedor/contas-demo': typeof VendedorContasDemoRoute
+  '/vendedor/historico-comissoes': typeof VendedorHistoricoComissoesRoute
   '/vendedor/leads': typeof VendedorLeadsRoute
   '/vendedor/materiais': typeof VendedorMateriaisRoute
   '/vendedor/metas': typeof VendedorMetasRoute
@@ -929,6 +954,7 @@ export interface FileRoutesById {
   '/corretores-admin': typeof CorretoresAdminRoute
   '/dashboard': typeof DashboardRoute
   '/dicas-performance': typeof DicasPerformanceRoute
+  '/documentos': typeof DocumentosRoute
   '/email-verificado': typeof EmailVerificadoRoute
   '/financeiro': typeof FinanceiroRoute
   '/imobiliaria': typeof ImobiliariaRoute
@@ -985,6 +1011,7 @@ export interface FileRoutesById {
   '/consultas/nova': typeof ConsultasNovaRoute
   '/demo/$perfil': typeof DemoPerfilRoute
   '/faturas-inquilinos/$id': typeof FaturasInquilinosIdRoute
+  '/inquilino/dashboard': typeof InquilinoDashboardRoute
   '/inquilino/documentos': typeof InquilinoDocumentosRoute
   '/inquilino/faturas': typeof InquilinoFaturasRoute
   '/inquilino/painel': typeof InquilinoPainelRoute
@@ -999,6 +1026,7 @@ export interface FileRoutesById {
   '/vendedor/clientes': typeof VendedorClientesRoute
   '/vendedor/comissoes': typeof VendedorComissoesRoute
   '/vendedor/contas-demo': typeof VendedorContasDemoRoute
+  '/vendedor/historico-comissoes': typeof VendedorHistoricoComissoesRoute
   '/vendedor/leads': typeof VendedorLeadsRoute
   '/vendedor/materiais': typeof VendedorMateriaisRoute
   '/vendedor/metas': typeof VendedorMetasRoute
@@ -1042,6 +1070,7 @@ export interface FileRouteTypes {
     | '/corretores-admin'
     | '/dashboard'
     | '/dicas-performance'
+    | '/documentos'
     | '/email-verificado'
     | '/financeiro'
     | '/imobiliaria'
@@ -1098,6 +1127,7 @@ export interface FileRouteTypes {
     | '/consultas/nova'
     | '/demo/$perfil'
     | '/faturas-inquilinos/$id'
+    | '/inquilino/dashboard'
     | '/inquilino/documentos'
     | '/inquilino/faturas'
     | '/inquilino/painel'
@@ -1112,6 +1142,7 @@ export interface FileRouteTypes {
     | '/vendedor/clientes'
     | '/vendedor/comissoes'
     | '/vendedor/contas-demo'
+    | '/vendedor/historico-comissoes'
     | '/vendedor/leads'
     | '/vendedor/materiais'
     | '/vendedor/metas'
@@ -1151,6 +1182,7 @@ export interface FileRouteTypes {
     | '/corretores-admin'
     | '/dashboard'
     | '/dicas-performance'
+    | '/documentos'
     | '/email-verificado'
     | '/financeiro'
     | '/imobiliaria'
@@ -1205,6 +1237,7 @@ export interface FileRouteTypes {
     | '/consultas/nova'
     | '/demo/$perfil'
     | '/faturas-inquilinos/$id'
+    | '/inquilino/dashboard'
     | '/inquilino/documentos'
     | '/inquilino/faturas'
     | '/inquilino/painel'
@@ -1219,6 +1252,7 @@ export interface FileRouteTypes {
     | '/vendedor/clientes'
     | '/vendedor/comissoes'
     | '/vendedor/contas-demo'
+    | '/vendedor/historico-comissoes'
     | '/vendedor/leads'
     | '/vendedor/materiais'
     | '/vendedor/metas'
@@ -1260,6 +1294,7 @@ export interface FileRouteTypes {
     | '/corretores-admin'
     | '/dashboard'
     | '/dicas-performance'
+    | '/documentos'
     | '/email-verificado'
     | '/financeiro'
     | '/imobiliaria'
@@ -1316,6 +1351,7 @@ export interface FileRouteTypes {
     | '/consultas/nova'
     | '/demo/$perfil'
     | '/faturas-inquilinos/$id'
+    | '/inquilino/dashboard'
     | '/inquilino/documentos'
     | '/inquilino/faturas'
     | '/inquilino/painel'
@@ -1330,6 +1366,7 @@ export interface FileRouteTypes {
     | '/vendedor/clientes'
     | '/vendedor/comissoes'
     | '/vendedor/contas-demo'
+    | '/vendedor/historico-comissoes'
     | '/vendedor/leads'
     | '/vendedor/materiais'
     | '/vendedor/metas'
@@ -1372,6 +1409,7 @@ export interface RootRouteChildren {
   CorretoresAdminRoute: typeof CorretoresAdminRoute
   DashboardRoute: typeof DashboardRoute
   DicasPerformanceRoute: typeof DicasPerformanceRoute
+  DocumentosRoute: typeof DocumentosRoute
   EmailVerificadoRoute: typeof EmailVerificadoRoute
   FinanceiroRoute: typeof FinanceiroRoute
   ImobiliariaRoute: typeof ImobiliariaRoute
@@ -1425,6 +1463,7 @@ export interface RootRouteChildren {
   BlogSlugRoute: typeof BlogSlugRoute
   DemoPerfilRoute: typeof DemoPerfilRoute
   FaturasInquilinosIdRoute: typeof FaturasInquilinosIdRoute
+  InquilinoDashboardRoute: typeof InquilinoDashboardRoute
   InquilinoDocumentosRoute: typeof InquilinoDocumentosRoute
   InquilinoFaturasRoute: typeof InquilinoFaturasRoute
   InquilinoPainelRoute: typeof InquilinoPainelRoute
@@ -1441,312 +1480,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/vendedor': {
-      id: '/vendedor'
-      path: '/vendedor'
-      fullPath: '/vendedor'
-      preLoaderRoute: typeof VendedorRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/trabalhe-conosco': {
-      id: '/trabalhe-conosco'
-      path: '/trabalhe-conosco'
-      fullPath: '/trabalhe-conosco'
-      preLoaderRoute: typeof TrabalheConoscoRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/termos': {
-      id: '/termos'
-      path: '/termos'
-      fullPath: '/termos'
-      preLoaderRoute: typeof TermosRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/suporte': {
-      id: '/suporte'
-      path: '/suporte'
-      fullPath: '/suporte'
-      preLoaderRoute: typeof SuporteRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/sobre': {
-      id: '/sobre'
-      path: '/sobre'
-      fullPath: '/sobre'
-      preLoaderRoute: typeof SobreRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/sinistros': {
-      id: '/sinistros'
-      path: '/sinistros'
-      fullPath: '/sinistros'
-      preLoaderRoute: typeof SinistrosRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/simular': {
-      id: '/simular'
-      path: '/simular'
-      fullPath: '/simular'
-      preLoaderRoute: typeof SimularRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/seja-parceiro': {
-      id: '/seja-parceiro'
-      path: '/seja-parceiro'
-      fullPath: '/seja-parceiro'
-      preLoaderRoute: typeof SejaParceiroRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/seguro-fianca': {
-      id: '/seguro-fianca'
-      path: '/seguro-fianca'
-      fullPath: '/seguro-fianca'
-      preLoaderRoute: typeof SeguroFiancaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/relatorios': {
-      id: '/relatorios'
-      path: '/relatorios'
-      fullPath: '/relatorios'
-      preLoaderRoute: typeof RelatoriosRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/redefinir-senha': {
-      id: '/redefinir-senha'
-      path: '/redefinir-senha'
-      fullPath: '/redefinir-senha'
-      preLoaderRoute: typeof RedefinirSenhaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/recuperar-acesso': {
-      id: '/recuperar-acesso'
-      path: '/recuperar-acesso'
-      fullPath: '/recuperar-acesso'
-      preLoaderRoute: typeof RecuperarAcessoRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/proprietario': {
-      id: '/proprietario'
-      path: '/proprietario'
-      fullPath: '/proprietario'
-      preLoaderRoute: typeof ProprietarioRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/privacidade': {
-      id: '/privacidade'
-      path: '/privacidade'
-      fullPath: '/privacidade'
-      preLoaderRoute: typeof PrivacidadeRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/planos': {
-      id: '/planos'
-      path: '/planos'
-      fullPath: '/planos'
-      preLoaderRoute: typeof PlanosRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/plano-carreira': {
-      id: '/plano-carreira'
-      path: '/plano-carreira'
-      fullPath: '/plano-carreira'
-      preLoaderRoute: typeof PlanoCarreiraRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/minhas-comissoes': {
-      id: '/minhas-comissoes'
-      path: '/minhas-comissoes'
-      fullPath: '/minhas-comissoes'
-      preLoaderRoute: typeof MinhasComissoesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/inquilinos-admin': {
-      id: '/inquilinos-admin'
-      path: '/inquilinos-admin'
-      fullPath: '/inquilinos-admin'
-      preLoaderRoute: typeof InquilinosAdminRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/indicacao': {
-      id: '/indicacao'
-      path: '/indicacao'
-      fullPath: '/indicacao'
-      preLoaderRoute: typeof IndicacaoRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/imoveis': {
-      id: '/imoveis'
-      path: '/imoveis'
-      fullPath: '/imoveis'
-      preLoaderRoute: typeof ImoveisRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/imobiliarias-admin': {
-      id: '/imobiliarias-admin'
-      path: '/imobiliarias-admin'
-      fullPath: '/imobiliarias-admin'
-      preLoaderRoute: typeof ImobiliariasAdminRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/imobiliaria': {
-      id: '/imobiliaria'
-      path: '/imobiliaria'
-      fullPath: '/imobiliaria'
-      preLoaderRoute: typeof ImobiliariaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/financeiro': {
-      id: '/financeiro'
-      path: '/financeiro'
-      fullPath: '/financeiro'
-      preLoaderRoute: typeof FinanceiroRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/email-verificado': {
-      id: '/email-verificado'
-      path: '/email-verificado'
-      fullPath: '/email-verificado'
-      preLoaderRoute: typeof EmailVerificadoRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/dicas-performance': {
-      id: '/dicas-performance'
-      path: '/dicas-performance'
-      fullPath: '/dicas-performance'
-      preLoaderRoute: typeof DicasPerformanceRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/dashboard': {
-      id: '/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof DashboardRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/corretores-admin': {
-      id: '/corretores-admin'
-      path: '/corretores-admin'
-      fullPath: '/corretores-admin'
-      preLoaderRoute: typeof CorretoresAdminRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/corretor': {
-      id: '/corretor'
-      path: '/corretor'
-      fullPath: '/corretor'
-      preLoaderRoute: typeof CorretorRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/contato': {
-      id: '/contato'
-      path: '/contato'
-      fullPath: '/contato'
-      preLoaderRoute: typeof ContatoRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/consultas': {
-      id: '/consultas'
-      path: '/consultas'
-      fullPath: '/consultas'
-      preLoaderRoute: typeof ConsultasRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/consulta-rapida': {
-      id: '/consulta-rapida'
-      path: '/consulta-rapida'
-      fullPath: '/consulta-rapida'
-      preLoaderRoute: typeof ConsultaRapidaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/configuracoes': {
-      id: '/configuracoes'
-      path: '/configuracoes'
-      fullPath: '/configuracoes'
-      preLoaderRoute: typeof ConfiguracoesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/completar-acesso-inquilino': {
-      id: '/completar-acesso-inquilino'
-      path: '/completar-acesso-inquilino'
-      fullPath: '/completar-acesso-inquilino'
-      preLoaderRoute: typeof CompletarAcessoInquilinoRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/carteira-cobrancas': {
-      id: '/carteira-cobrancas'
-      path: '/carteira-cobrancas'
-      fullPath: '/carteira-cobrancas'
-      preLoaderRoute: typeof CarteiraCobrancasRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/carreiras': {
-      id: '/carreiras'
-      path: '/carreiras'
-      fullPath: '/carreiras'
-      preLoaderRoute: typeof CarreirasRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/cadastro-proprietario': {
-      id: '/cadastro-proprietario'
-      path: '/cadastro-proprietario'
-      fullPath: '/cadastro-proprietario'
-      preLoaderRoute: typeof CadastroProprietarioRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/cadastro-inquilino': {
-      id: '/cadastro-inquilino'
-      path: '/cadastro-inquilino'
-      fullPath: '/cadastro-inquilino'
-      preLoaderRoute: typeof CadastroInquilinoRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/cadastro-imobiliaria': {
-      id: '/cadastro-imobiliaria'
-      path: '/cadastro-imobiliaria'
-      fullPath: '/cadastro-imobiliaria'
-      preLoaderRoute: typeof CadastroImobiliariaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/cadastro-corretor': {
-      id: '/cadastro-corretor'
-      path: '/cadastro-corretor'
-      fullPath: '/cadastro-corretor'
-      preLoaderRoute: typeof CadastroCorretorRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/cadastro-concluido': {
-      id: '/cadastro-concluido'
-      path: '/cadastro-concluido'
-      fullPath: '/cadastro-concluido'
-      preLoaderRoute: typeof CadastroConcluidoRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/cadastro': {
-      id: '/cadastro'
-      path: '/cadastro'
-      fullPath: '/cadastro'
-      preLoaderRoute: typeof CadastroRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/apolices': {
-      id: '/apolices'
-      path: '/apolices'
-      fullPath: '/apolices'
-      preLoaderRoute: typeof ApolicesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/aplicativo': {
-      id: '/aplicativo'
-      path: '/aplicativo'
-      fullPath: '/aplicativo'
-      preLoaderRoute: typeof AplicativoRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/acesso-inquilino': {
@@ -1756,410 +1494,319 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AcessoInquilinoRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/aplicativo': {
+      id: '/aplicativo'
+      path: '/aplicativo'
+      fullPath: '/aplicativo'
+      preLoaderRoute: typeof AplicativoRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/vendedor/': {
-      id: '/vendedor/'
-      path: '/'
-      fullPath: '/vendedor/'
-      preLoaderRoute: typeof VendedorIndexRouteImport
-      parentRoute: typeof VendedorRoute
-    }
-    '/simular/': {
-      id: '/simular/'
-      path: '/'
-      fullPath: '/simular/'
-      preLoaderRoute: typeof SimularIndexRouteImport
-      parentRoute: typeof SimularRoute
-    }
-    '/inquilino/': {
-      id: '/inquilino/'
-      path: '/inquilino'
-      fullPath: '/inquilino/'
-      preLoaderRoute: typeof InquilinoIndexRouteImport
+    '/apolices': {
+      id: '/apolices'
+      path: '/apolices'
+      fullPath: '/apolices'
+      preLoaderRoute: typeof ApolicesRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/faturas-inquilinos/': {
-      id: '/faturas-inquilinos/'
-      path: '/faturas-inquilinos'
-      fullPath: '/faturas-inquilinos/'
-      preLoaderRoute: typeof FaturasInquilinosIndexRouteImport
+    '/cadastro': {
+      id: '/cadastro'
+      path: '/cadastro'
+      fullPath: '/cadastro'
+      preLoaderRoute: typeof CadastroRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/consultas/': {
-      id: '/consultas/'
-      path: '/'
-      fullPath: '/consultas/'
-      preLoaderRoute: typeof ConsultasIndexRouteImport
-      parentRoute: typeof ConsultasRoute
-    }
-    '/blog/': {
-      id: '/blog/'
-      path: '/blog'
-      fullPath: '/blog/'
-      preLoaderRoute: typeof BlogIndexRouteImport
+    '/cadastro-concluido': {
+      id: '/cadastro-concluido'
+      path: '/cadastro-concluido'
+      fullPath: '/cadastro-concluido'
+      preLoaderRoute: typeof CadastroConcluidoRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/apolices/': {
-      id: '/apolices/'
-      path: '/'
-      fullPath: '/apolices/'
-      preLoaderRoute: typeof ApolicesIndexRouteImport
-      parentRoute: typeof ApolicesRoute
-    }
-    '/vendedor/ranking': {
-      id: '/vendedor/ranking'
-      path: '/ranking'
-      fullPath: '/vendedor/ranking'
-      preLoaderRoute: typeof VendedorRankingRouteImport
-      parentRoute: typeof VendedorRoute
-    }
-    '/vendedor/pipeline': {
-      id: '/vendedor/pipeline'
-      path: '/pipeline'
-      fullPath: '/vendedor/pipeline'
-      preLoaderRoute: typeof VendedorPipelineRouteImport
-      parentRoute: typeof VendedorRoute
-    }
-    '/vendedor/perfil': {
-      id: '/vendedor/perfil'
-      path: '/perfil'
-      fullPath: '/vendedor/perfil'
-      preLoaderRoute: typeof VendedorPerfilRouteImport
-      parentRoute: typeof VendedorRoute
-    }
-    '/vendedor/metas': {
-      id: '/vendedor/metas'
-      path: '/metas'
-      fullPath: '/vendedor/metas'
-      preLoaderRoute: typeof VendedorMetasRouteImport
-      parentRoute: typeof VendedorRoute
-    }
-    '/vendedor/materiais': {
-      id: '/vendedor/materiais'
-      path: '/materiais'
-      fullPath: '/vendedor/materiais'
-      preLoaderRoute: typeof VendedorMateriaisRouteImport
-      parentRoute: typeof VendedorRoute
-    }
-    '/vendedor/leads': {
-      id: '/vendedor/leads'
-      path: '/leads'
-      fullPath: '/vendedor/leads'
-      preLoaderRoute: typeof VendedorLeadsRouteImport
-      parentRoute: typeof VendedorRoute
-    }
-    '/vendedor/contas-demo': {
-      id: '/vendedor/contas-demo'
-      path: '/contas-demo'
-      fullPath: '/vendedor/contas-demo'
-      preLoaderRoute: typeof VendedorContasDemoRouteImport
-      parentRoute: typeof VendedorRoute
-    }
-    '/vendedor/comissoes': {
-      id: '/vendedor/comissoes'
-      path: '/comissoes'
-      fullPath: '/vendedor/comissoes'
-      preLoaderRoute: typeof VendedorComissoesRouteImport
-      parentRoute: typeof VendedorRoute
-    }
-    '/vendedor/clientes': {
-      id: '/vendedor/clientes'
-      path: '/clientes'
-      fullPath: '/vendedor/clientes'
-      preLoaderRoute: typeof VendedorClientesRouteImport
-      parentRoute: typeof VendedorRoute
-    }
-    '/vendedor/agenda': {
-      id: '/vendedor/agenda'
-      path: '/agenda'
-      fullPath: '/vendedor/agenda'
-      preLoaderRoute: typeof VendedorAgendaRouteImport
-      parentRoute: typeof VendedorRoute
-    }
-    '/simular/resultado': {
-      id: '/simular/resultado'
-      path: '/resultado'
-      fullPath: '/simular/resultado'
-      preLoaderRoute: typeof SimularResultadoRouteImport
-      parentRoute: typeof SimularRoute
-    }
-    '/painel/notificacoes': {
-      id: '/painel/notificacoes'
-      path: '/painel/notificacoes'
-      fullPath: '/painel/notificacoes'
-      preLoaderRoute: typeof PainelNotificacoesRouteImport
+    '/cadastro-corretor': {
+      id: '/cadastro-corretor'
+      path: '/cadastro-corretor'
+      fullPath: '/cadastro-corretor'
+      preLoaderRoute: typeof CadastroCorretorRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/login_/vendedornox': {
-      id: '/login_/vendedornox'
-      path: '/login/vendedornox'
-      fullPath: '/login/vendedornox'
-      preLoaderRoute: typeof LoginVendedornoxRouteImport
+    '/cadastro-imobiliaria': {
+      id: '/cadastro-imobiliaria'
+      path: '/cadastro-imobiliaria'
+      fullPath: '/cadastro-imobiliaria'
+      preLoaderRoute: typeof CadastroImobiliariaRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/login_/marketingnox': {
-      id: '/login_/marketingnox'
-      path: '/login/marketingnox'
-      fullPath: '/login/marketingnox'
-      preLoaderRoute: typeof LoginMarketingnoxRouteImport
+    '/cadastro-inquilino': {
+      id: '/cadastro-inquilino'
+      path: '/cadastro-inquilino'
+      fullPath: '/cadastro-inquilino'
+      preLoaderRoute: typeof CadastroInquilinoRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/login_/juridiconox': {
-      id: '/login_/juridiconox'
-      path: '/login/juridiconox'
-      fullPath: '/login/juridiconox'
-      preLoaderRoute: typeof LoginJuridiconoxRouteImport
+    '/cadastro-proprietario': {
+      id: '/cadastro-proprietario'
+      path: '/cadastro-proprietario'
+      fullPath: '/cadastro-proprietario'
+      preLoaderRoute: typeof CadastroProprietarioRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/login_/financeironox': {
-      id: '/login_/financeironox'
-      path: '/login/financeironox'
-      fullPath: '/login/financeironox'
-      preLoaderRoute: typeof LoginFinanceironoxRouteImport
+    '/carreiras': {
+      id: '/carreiras'
+      path: '/carreiras'
+      fullPath: '/carreiras'
+      preLoaderRoute: typeof CarreirasRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/inquilino/perfil': {
-      id: '/inquilino/perfil'
-      path: '/inquilino/perfil'
-      fullPath: '/inquilino/perfil'
-      preLoaderRoute: typeof InquilinoPerfilRouteImport
+    '/carteira-cobrancas': {
+      id: '/carteira-cobrancas'
+      path: '/carteira-cobrancas'
+      fullPath: '/carteira-cobrancas'
+      preLoaderRoute: typeof CarteiraCobrancasRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/inquilino/painel': {
-      id: '/inquilino/painel'
-      path: '/inquilino/painel'
-      fullPath: '/inquilino/painel'
-      preLoaderRoute: typeof InquilinoPainelRouteImport
+    '/completar-acesso-inquilino': {
+      id: '/completar-acesso-inquilino'
+      path: '/completar-acesso-inquilino'
+      fullPath: '/completar-acesso-inquilino'
+      preLoaderRoute: typeof CompletarAcessoInquilinoRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/inquilino/faturas': {
-      id: '/inquilino/faturas'
-      path: '/inquilino/faturas'
-      fullPath: '/inquilino/faturas'
-      preLoaderRoute: typeof InquilinoFaturasRouteImport
+    '/configuracoes': {
+      id: '/configuracoes'
+      path: '/configuracoes'
+      fullPath: '/configuracoes'
+      preLoaderRoute: typeof ConfiguracoesRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/inquilino/documentos': {
-      id: '/inquilino/documentos'
-      path: '/inquilino/documentos'
-      fullPath: '/inquilino/documentos'
-      preLoaderRoute: typeof InquilinoDocumentosRouteImport
+    '/consulta-rapida': {
+      id: '/consulta-rapida'
+      path: '/consulta-rapida'
+      fullPath: '/consulta-rapida'
+      preLoaderRoute: typeof ConsultaRapidaRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/faturas-inquilinos/$id': {
-      id: '/faturas-inquilinos/$id'
-      path: '/faturas-inquilinos/$id'
-      fullPath: '/faturas-inquilinos/$id'
-      preLoaderRoute: typeof FaturasInquilinosIdRouteImport
+    '/consultas': {
+      id: '/consultas'
+      path: '/consultas'
+      fullPath: '/consultas'
+      preLoaderRoute: typeof ConsultasRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/demo/$perfil': {
-      id: '/demo/$perfil'
-      path: '/demo/$perfil'
-      fullPath: '/demo/$perfil'
-      preLoaderRoute: typeof DemoPerfilRouteImport
+    '/contato': {
+      id: '/contato'
+      path: '/contato'
+      fullPath: '/contato'
+      preLoaderRoute: typeof ContatoRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/consultas/nova': {
-      id: '/consultas/nova'
-      path: '/nova'
-      fullPath: '/consultas/nova'
-      preLoaderRoute: typeof ConsultasNovaRouteImport
-      parentRoute: typeof ConsultasRoute
-    }
-    '/configuracoes/niveis-comissao': {
-      id: '/configuracoes/niveis-comissao'
-      path: '/niveis-comissao'
-      fullPath: '/configuracoes/niveis-comissao'
-      preLoaderRoute: typeof ConfiguracoesNiveisComissaoRouteImport
-      parentRoute: typeof ConfiguracoesRoute
-    }
-    '/blog/$slug': {
-      id: '/blog/$slug'
-      path: '/blog/$slug'
-      fullPath: '/blog/$slug'
-      preLoaderRoute: typeof BlogSlugRouteImport
+    '/corretor': {
+      id: '/corretor'
+      path: '/corretor'
+      fullPath: '/corretor'
+      preLoaderRoute: typeof CorretorRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/ativar-fianca/$token': {
-      id: '/ativar-fianca/$token'
-      path: '/ativar-fianca/$token'
-      fullPath: '/ativar-fianca/$token'
-      preLoaderRoute: typeof AtivarFiancaTokenRouteImport
+    '/corretores-admin': {
+      id: '/corretores-admin'
+      path: '/corretores-admin'
+      fullPath: '/corretores-admin'
+      preLoaderRoute: typeof CorretoresAdminRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/apolices/$id': {
-      id: '/apolices/$id'
-      path: '/$id'
-      fullPath: '/apolices/$id'
-      preLoaderRoute: typeof ApolicesIdRouteImport
-      parentRoute: typeof ApolicesRoute
-    }
-    '/admin/verificacoes': {
-      id: '/admin/verificacoes'
-      path: '/admin/verificacoes'
-      fullPath: '/admin/verificacoes'
-      preLoaderRoute: typeof AdminVerificacoesRouteImport
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/vagas': {
-      id: '/admin/vagas'
-      path: '/admin/vagas'
-      fullPath: '/admin/vagas'
-      preLoaderRoute: typeof AdminVagasRouteImport
+    '/dicas-performance': {
+      id: '/dicas-performance'
+      path: '/dicas-performance'
+      fullPath: '/dicas-performance'
+      preLoaderRoute: typeof DicasPerformanceRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/usuarios': {
-      id: '/admin/usuarios'
-      path: '/admin/usuarios'
-      fullPath: '/admin/usuarios'
-      preLoaderRoute: typeof AdminUsuariosRouteImport
+    '/documentos': {
+      id: '/documentos'
+      path: '/documentos'
+      fullPath: '/documentos'
+      preLoaderRoute: typeof DocumentosRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/saques': {
-      id: '/admin/saques'
-      path: '/admin/saques'
-      fullPath: '/admin/saques'
-      preLoaderRoute: typeof AdminSaquesRouteImport
+    '/email-verificado': {
+      id: '/email-verificado'
+      path: '/email-verificado'
+      fullPath: '/email-verificado'
+      preLoaderRoute: typeof EmailVerificadoRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/permissoes-internas': {
-      id: '/admin/permissoes-internas'
-      path: '/admin/permissoes-internas'
-      fullPath: '/admin/permissoes-internas'
-      preLoaderRoute: typeof AdminPermissoesInternasRouteImport
+    '/financeiro': {
+      id: '/financeiro'
+      path: '/financeiro'
+      fullPath: '/financeiro'
+      preLoaderRoute: typeof FinanceiroRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/permissoes': {
-      id: '/admin/permissoes'
-      path: '/admin/permissoes'
-      fullPath: '/admin/permissoes'
-      preLoaderRoute: typeof AdminPermissoesRouteImport
+    '/imobiliaria': {
+      id: '/imobiliaria'
+      path: '/imobiliaria'
+      fullPath: '/imobiliaria'
+      preLoaderRoute: typeof ImobiliariaRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/materiais-venda': {
-      id: '/admin/materiais-venda'
-      path: '/admin/materiais-venda'
-      fullPath: '/admin/materiais-venda'
-      preLoaderRoute: typeof AdminMateriaisVendaRouteImport
+    '/imobiliarias-admin': {
+      id: '/imobiliarias-admin'
+      path: '/imobiliarias-admin'
+      fullPath: '/imobiliarias-admin'
+      preLoaderRoute: typeof ImobiliariasAdminRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/leads': {
-      id: '/admin/leads'
-      path: '/admin/leads'
-      fullPath: '/admin/leads'
-      preLoaderRoute: typeof AdminLeadsRouteImport
+    '/imoveis': {
+      id: '/imoveis'
+      path: '/imoveis'
+      fullPath: '/imoveis'
+      preLoaderRoute: typeof ImoveisRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/indicacoes': {
-      id: '/admin/indicacoes'
-      path: '/admin/indicacoes'
-      fullPath: '/admin/indicacoes'
-      preLoaderRoute: typeof AdminIndicacoesRouteImport
+    '/indicacao': {
+      id: '/indicacao'
+      path: '/indicacao'
+      fullPath: '/indicacao'
+      preLoaderRoute: typeof IndicacaoRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/financeiro': {
-      id: '/admin/financeiro'
-      path: '/admin/financeiro'
-      fullPath: '/admin/financeiro'
-      preLoaderRoute: typeof AdminFinanceiroRouteImport
+    '/inquilinos-admin': {
+      id: '/inquilinos-admin'
+      path: '/inquilinos-admin'
+      fullPath: '/inquilinos-admin'
+      preLoaderRoute: typeof InquilinosAdminRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/faturamento': {
-      id: '/admin/faturamento'
-      path: '/admin/faturamento'
-      fullPath: '/admin/faturamento'
-      preLoaderRoute: typeof AdminFaturamentoRouteImport
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/equipe-permissoes': {
-      id: '/admin/equipe-permissoes'
-      path: '/admin/equipe-permissoes'
-      fullPath: '/admin/equipe-permissoes'
-      preLoaderRoute: typeof AdminEquipePermissoesRouteImport
+    '/minhas-comissoes': {
+      id: '/minhas-comissoes'
+      path: '/minhas-comissoes'
+      fullPath: '/minhas-comissoes'
+      preLoaderRoute: typeof MinhasComissoesRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/equipe-nox': {
-      id: '/admin/equipe-nox'
-      path: '/admin/equipe-nox'
-      fullPath: '/admin/equipe-nox'
-      preLoaderRoute: typeof AdminEquipeNoxRouteImport
+    '/plano-carreira': {
+      id: '/plano-carreira'
+      path: '/plano-carreira'
+      fullPath: '/plano-carreira'
+      preLoaderRoute: typeof PlanoCarreiraRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/equipe-comercial': {
-      id: '/admin/equipe-comercial'
-      path: '/admin/equipe-comercial'
-      fullPath: '/admin/equipe-comercial'
-      preLoaderRoute: typeof AdminEquipeComercialRouteImport
+    '/planos': {
+      id: '/planos'
+      path: '/planos'
+      fullPath: '/planos'
+      preLoaderRoute: typeof PlanosRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/equipe': {
-      id: '/admin/equipe'
-      path: '/admin/equipe'
-      fullPath: '/admin/equipe'
-      preLoaderRoute: typeof AdminEquipeRouteImport
+    '/privacidade': {
+      id: '/privacidade'
+      path: '/privacidade'
+      fullPath: '/privacidade'
+      preLoaderRoute: typeof PrivacidadeRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/distribuicao-leads': {
-      id: '/admin/distribuicao-leads'
-      path: '/admin/distribuicao-leads'
-      fullPath: '/admin/distribuicao-leads'
-      preLoaderRoute: typeof AdminDistribuicaoLeadsRouteImport
+    '/proprietario': {
+      id: '/proprietario'
+      path: '/proprietario'
+      fullPath: '/proprietario'
+      preLoaderRoute: typeof ProprietarioRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/contratos': {
-      id: '/admin/contratos'
-      path: '/admin/contratos'
-      fullPath: '/admin/contratos'
-      preLoaderRoute: typeof AdminContratosRouteImport
+    '/recuperar-acesso': {
+      id: '/recuperar-acesso'
+      path: '/recuperar-acesso'
+      fullPath: '/recuperar-acesso'
+      preLoaderRoute: typeof RecuperarAcessoRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/conta-nox': {
-      id: '/admin/conta-nox'
-      path: '/admin/conta-nox'
-      fullPath: '/admin/conta-nox'
-      preLoaderRoute: typeof AdminContaNoxRouteImport
+    '/redefinir-senha': {
+      id: '/redefinir-senha'
+      path: '/redefinir-senha'
+      fullPath: '/redefinir-senha'
+      preLoaderRoute: typeof RedefinirSenhaRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/consultas': {
-      id: '/admin/consultas'
-      path: '/admin/consultas'
-      fullPath: '/admin/consultas'
-      preLoaderRoute: typeof AdminConsultasRouteImport
+    '/relatorios': {
+      id: '/relatorios'
+      path: '/relatorios'
+      fullPath: '/relatorios'
+      preLoaderRoute: typeof RelatoriosRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/colaboradores': {
-      id: '/admin/colaboradores'
-      path: '/admin/colaboradores'
-      fullPath: '/admin/colaboradores'
-      preLoaderRoute: typeof AdminColaboradoresRouteImport
+    '/seguro-fianca': {
+      id: '/seguro-fianca'
+      path: '/seguro-fianca'
+      fullPath: '/seguro-fianca'
+      preLoaderRoute: typeof SeguroFiancaRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/aprovacoes': {
-      id: '/admin/aprovacoes'
-      path: '/admin/aprovacoes'
-      fullPath: '/admin/aprovacoes'
-      preLoaderRoute: typeof AdminAprovacoesRouteImport
+    '/seja-parceiro': {
+      id: '/seja-parceiro'
+      path: '/seja-parceiro'
+      fullPath: '/seja-parceiro'
+      preLoaderRoute: typeof SejaParceiroRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/afiliados': {
-      id: '/admin/afiliados'
-      path: '/admin/afiliados'
-      fullPath: '/admin/afiliados'
-      preLoaderRoute: typeof AdminAfiliadosRouteImport
+    '/simular': {
+      id: '/simular'
+      path: '/simular'
+      fullPath: '/simular'
+      preLoaderRoute: typeof SimularRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/adicionar-usuarios': {
-      id: '/admin/adicionar-usuarios'
-      path: '/admin/adicionar-usuarios'
-      fullPath: '/admin/adicionar-usuarios'
-      preLoaderRoute: typeof AdminAdicionarUsuariosRouteImport
+    '/sinistros': {
+      id: '/sinistros'
+      path: '/sinistros'
+      fullPath: '/sinistros'
+      preLoaderRoute: typeof SinistrosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sobre': {
+      id: '/sobre'
+      path: '/sobre'
+      fullPath: '/sobre'
+      preLoaderRoute: typeof SobreRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/suporte': {
+      id: '/suporte'
+      path: '/suporte'
+      fullPath: '/suporte'
+      preLoaderRoute: typeof SuporteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/termos': {
+      id: '/termos'
+      path: '/termos'
+      fullPath: '/termos'
+      preLoaderRoute: typeof TermosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/trabalhe-conosco': {
+      id: '/trabalhe-conosco'
+      path: '/trabalhe-conosco'
+      fullPath: '/trabalhe-conosco'
+      preLoaderRoute: typeof TrabalheConoscoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/vendedor': {
+      id: '/vendedor'
+      path: '/vendedor'
+      fullPath: '/vendedor'
+      preLoaderRoute: typeof VendedorRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/abrir-app/documentos': {
@@ -2169,25 +1816,424 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AbrirAppDocumentosRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/consultas/$id/status': {
-      id: '/consultas/$id/status'
-      path: '/$id/status'
-      fullPath: '/consultas/$id/status'
-      preLoaderRoute: typeof ConsultasIdStatusRouteImport
+    '/admin/adicionar-usuarios': {
+      id: '/admin/adicionar-usuarios'
+      path: '/admin/adicionar-usuarios'
+      fullPath: '/admin/adicionar-usuarios'
+      preLoaderRoute: typeof AdminAdicionarUsuariosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/afiliados': {
+      id: '/admin/afiliados'
+      path: '/admin/afiliados'
+      fullPath: '/admin/afiliados'
+      preLoaderRoute: typeof AdminAfiliadosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/aprovacoes': {
+      id: '/admin/aprovacoes'
+      path: '/admin/aprovacoes'
+      fullPath: '/admin/aprovacoes'
+      preLoaderRoute: typeof AdminAprovacoesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/colaboradores': {
+      id: '/admin/colaboradores'
+      path: '/admin/colaboradores'
+      fullPath: '/admin/colaboradores'
+      preLoaderRoute: typeof AdminColaboradoresRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/consultas': {
+      id: '/admin/consultas'
+      path: '/admin/consultas'
+      fullPath: '/admin/consultas'
+      preLoaderRoute: typeof AdminConsultasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/conta-nox': {
+      id: '/admin/conta-nox'
+      path: '/admin/conta-nox'
+      fullPath: '/admin/conta-nox'
+      preLoaderRoute: typeof AdminContaNoxRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/contratos': {
+      id: '/admin/contratos'
+      path: '/admin/contratos'
+      fullPath: '/admin/contratos'
+      preLoaderRoute: typeof AdminContratosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/distribuicao-leads': {
+      id: '/admin/distribuicao-leads'
+      path: '/admin/distribuicao-leads'
+      fullPath: '/admin/distribuicao-leads'
+      preLoaderRoute: typeof AdminDistribuicaoLeadsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/equipe': {
+      id: '/admin/equipe'
+      path: '/admin/equipe'
+      fullPath: '/admin/equipe'
+      preLoaderRoute: typeof AdminEquipeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/equipe-comercial': {
+      id: '/admin/equipe-comercial'
+      path: '/admin/equipe-comercial'
+      fullPath: '/admin/equipe-comercial'
+      preLoaderRoute: typeof AdminEquipeComercialRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/equipe-nox': {
+      id: '/admin/equipe-nox'
+      path: '/admin/equipe-nox'
+      fullPath: '/admin/equipe-nox'
+      preLoaderRoute: typeof AdminEquipeNoxRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/equipe-permissoes': {
+      id: '/admin/equipe-permissoes'
+      path: '/admin/equipe-permissoes'
+      fullPath: '/admin/equipe-permissoes'
+      preLoaderRoute: typeof AdminEquipePermissoesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/faturamento': {
+      id: '/admin/faturamento'
+      path: '/admin/faturamento'
+      fullPath: '/admin/faturamento'
+      preLoaderRoute: typeof AdminFaturamentoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/financeiro': {
+      id: '/admin/financeiro'
+      path: '/admin/financeiro'
+      fullPath: '/admin/financeiro'
+      preLoaderRoute: typeof AdminFinanceiroRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/indicacoes': {
+      id: '/admin/indicacoes'
+      path: '/admin/indicacoes'
+      fullPath: '/admin/indicacoes'
+      preLoaderRoute: typeof AdminIndicacoesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/leads': {
+      id: '/admin/leads'
+      path: '/admin/leads'
+      fullPath: '/admin/leads'
+      preLoaderRoute: typeof AdminLeadsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/materiais-venda': {
+      id: '/admin/materiais-venda'
+      path: '/admin/materiais-venda'
+      fullPath: '/admin/materiais-venda'
+      preLoaderRoute: typeof AdminMateriaisVendaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/permissoes': {
+      id: '/admin/permissoes'
+      path: '/admin/permissoes'
+      fullPath: '/admin/permissoes'
+      preLoaderRoute: typeof AdminPermissoesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/permissoes-internas': {
+      id: '/admin/permissoes-internas'
+      path: '/admin/permissoes-internas'
+      fullPath: '/admin/permissoes-internas'
+      preLoaderRoute: typeof AdminPermissoesInternasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/saques': {
+      id: '/admin/saques'
+      path: '/admin/saques'
+      fullPath: '/admin/saques'
+      preLoaderRoute: typeof AdminSaquesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/usuarios': {
+      id: '/admin/usuarios'
+      path: '/admin/usuarios'
+      fullPath: '/admin/usuarios'
+      preLoaderRoute: typeof AdminUsuariosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/vagas': {
+      id: '/admin/vagas'
+      path: '/admin/vagas'
+      fullPath: '/admin/vagas'
+      preLoaderRoute: typeof AdminVagasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/verificacoes': {
+      id: '/admin/verificacoes'
+      path: '/admin/verificacoes'
+      fullPath: '/admin/verificacoes'
+      preLoaderRoute: typeof AdminVerificacoesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/apolices/': {
+      id: '/apolices/'
+      path: '/'
+      fullPath: '/apolices/'
+      preLoaderRoute: typeof ApolicesIndexRouteImport
+      parentRoute: typeof ApolicesRoute
+    }
+    '/apolices/$id': {
+      id: '/apolices/$id'
+      path: '/$id'
+      fullPath: '/apolices/$id'
+      preLoaderRoute: typeof ApolicesIdRouteImport
+      parentRoute: typeof ApolicesRoute
+    }
+    '/ativar-fianca/$token': {
+      id: '/ativar-fianca/$token'
+      path: '/ativar-fianca/$token'
+      fullPath: '/ativar-fianca/$token'
+      preLoaderRoute: typeof AtivarFiancaTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/blog/': {
+      id: '/blog/'
+      path: '/blog'
+      fullPath: '/blog/'
+      preLoaderRoute: typeof BlogIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/blog/$slug': {
+      id: '/blog/$slug'
+      path: '/blog/$slug'
+      fullPath: '/blog/$slug'
+      preLoaderRoute: typeof BlogSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/configuracoes/niveis-comissao': {
+      id: '/configuracoes/niveis-comissao'
+      path: '/niveis-comissao'
+      fullPath: '/configuracoes/niveis-comissao'
+      preLoaderRoute: typeof ConfiguracoesNiveisComissaoRouteImport
+      parentRoute: typeof ConfiguracoesRoute
+    }
+    '/consultas/': {
+      id: '/consultas/'
+      path: '/'
+      fullPath: '/consultas/'
+      preLoaderRoute: typeof ConsultasIndexRouteImport
       parentRoute: typeof ConsultasRoute
     }
-    '/consultas/$id/resultado': {
-      id: '/consultas/$id/resultado'
-      path: '/$id/resultado'
-      fullPath: '/consultas/$id/resultado'
-      preLoaderRoute: typeof ConsultasIdResultadoRouteImport
+    '/consultas/nova': {
+      id: '/consultas/nova'
+      path: '/nova'
+      fullPath: '/consultas/nova'
+      preLoaderRoute: typeof ConsultasNovaRouteImport
       parentRoute: typeof ConsultasRoute
     }
-    '/consultas/$id/finalizar': {
-      id: '/consultas/$id/finalizar'
-      path: '/$id/finalizar'
-      fullPath: '/consultas/$id/finalizar'
-      preLoaderRoute: typeof ConsultasIdFinalizarRouteImport
+    '/demo/$perfil': {
+      id: '/demo/$perfil'
+      path: '/demo/$perfil'
+      fullPath: '/demo/$perfil'
+      preLoaderRoute: typeof DemoPerfilRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/faturas-inquilinos/': {
+      id: '/faturas-inquilinos/'
+      path: '/faturas-inquilinos'
+      fullPath: '/faturas-inquilinos/'
+      preLoaderRoute: typeof FaturasInquilinosIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/faturas-inquilinos/$id': {
+      id: '/faturas-inquilinos/$id'
+      path: '/faturas-inquilinos/$id'
+      fullPath: '/faturas-inquilinos/$id'
+      preLoaderRoute: typeof FaturasInquilinosIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/inquilino/': {
+      id: '/inquilino/'
+      path: '/inquilino'
+      fullPath: '/inquilino/'
+      preLoaderRoute: typeof InquilinoIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/inquilino/dashboard': {
+      id: '/inquilino/dashboard'
+      path: '/inquilino/dashboard'
+      fullPath: '/inquilino/dashboard'
+      preLoaderRoute: typeof InquilinoDashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/inquilino/documentos': {
+      id: '/inquilino/documentos'
+      path: '/inquilino/documentos'
+      fullPath: '/inquilino/documentos'
+      preLoaderRoute: typeof InquilinoDocumentosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/inquilino/faturas': {
+      id: '/inquilino/faturas'
+      path: '/inquilino/faturas'
+      fullPath: '/inquilino/faturas'
+      preLoaderRoute: typeof InquilinoFaturasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/inquilino/painel': {
+      id: '/inquilino/painel'
+      path: '/inquilino/painel'
+      fullPath: '/inquilino/painel'
+      preLoaderRoute: typeof InquilinoPainelRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/inquilino/perfil': {
+      id: '/inquilino/perfil'
+      path: '/inquilino/perfil'
+      fullPath: '/inquilino/perfil'
+      preLoaderRoute: typeof InquilinoPerfilRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login_/financeironox': {
+      id: '/login_/financeironox'
+      path: '/login/financeironox'
+      fullPath: '/login/financeironox'
+      preLoaderRoute: typeof LoginFinanceironoxRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login_/juridiconox': {
+      id: '/login_/juridiconox'
+      path: '/login/juridiconox'
+      fullPath: '/login/juridiconox'
+      preLoaderRoute: typeof LoginJuridiconoxRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login_/marketingnox': {
+      id: '/login_/marketingnox'
+      path: '/login/marketingnox'
+      fullPath: '/login/marketingnox'
+      preLoaderRoute: typeof LoginMarketingnoxRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login_/vendedornox': {
+      id: '/login_/vendedornox'
+      path: '/login/vendedornox'
+      fullPath: '/login/vendedornox'
+      preLoaderRoute: typeof LoginVendedornoxRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/painel/notificacoes': {
+      id: '/painel/notificacoes'
+      path: '/painel/notificacoes'
+      fullPath: '/painel/notificacoes'
+      preLoaderRoute: typeof PainelNotificacoesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/simular/': {
+      id: '/simular/'
+      path: '/'
+      fullPath: '/simular/'
+      preLoaderRoute: typeof SimularIndexRouteImport
+      parentRoute: typeof SimularRoute
+    }
+    '/simular/resultado': {
+      id: '/simular/resultado'
+      path: '/resultado'
+      fullPath: '/simular/resultado'
+      preLoaderRoute: typeof SimularResultadoRouteImport
+      parentRoute: typeof SimularRoute
+    }
+    '/vendedor/': {
+      id: '/vendedor/'
+      path: '/'
+      fullPath: '/vendedor/'
+      preLoaderRoute: typeof VendedorIndexRouteImport
+      parentRoute: typeof VendedorRoute
+    }
+    '/vendedor/agenda': {
+      id: '/vendedor/agenda'
+      path: '/agenda'
+      fullPath: '/vendedor/agenda'
+      preLoaderRoute: typeof VendedorAgendaRouteImport
+      parentRoute: typeof VendedorRoute
+    }
+    '/vendedor/clientes': {
+      id: '/vendedor/clientes'
+      path: '/clientes'
+      fullPath: '/vendedor/clientes'
+      preLoaderRoute: typeof VendedorClientesRouteImport
+      parentRoute: typeof VendedorRoute
+    }
+    '/vendedor/comissoes': {
+      id: '/vendedor/comissoes'
+      path: '/comissoes'
+      fullPath: '/vendedor/comissoes'
+      preLoaderRoute: typeof VendedorComissoesRouteImport
+      parentRoute: typeof VendedorRoute
+    }
+    '/vendedor/contas-demo': {
+      id: '/vendedor/contas-demo'
+      path: '/contas-demo'
+      fullPath: '/vendedor/contas-demo'
+      preLoaderRoute: typeof VendedorContasDemoRouteImport
+      parentRoute: typeof VendedorRoute
+    }
+    '/vendedor/historico-comissoes': {
+      id: '/vendedor/historico-comissoes'
+      path: '/historico-comissoes'
+      fullPath: '/vendedor/historico-comissoes'
+      preLoaderRoute: typeof VendedorHistoricoComissoesRouteImport
+      parentRoute: typeof VendedorRoute
+    }
+    '/vendedor/leads': {
+      id: '/vendedor/leads'
+      path: '/leads'
+      fullPath: '/vendedor/leads'
+      preLoaderRoute: typeof VendedorLeadsRouteImport
+      parentRoute: typeof VendedorRoute
+    }
+    '/vendedor/materiais': {
+      id: '/vendedor/materiais'
+      path: '/materiais'
+      fullPath: '/vendedor/materiais'
+      preLoaderRoute: typeof VendedorMateriaisRouteImport
+      parentRoute: typeof VendedorRoute
+    }
+    '/vendedor/metas': {
+      id: '/vendedor/metas'
+      path: '/metas'
+      fullPath: '/vendedor/metas'
+      preLoaderRoute: typeof VendedorMetasRouteImport
+      parentRoute: typeof VendedorRoute
+    }
+    '/vendedor/perfil': {
+      id: '/vendedor/perfil'
+      path: '/perfil'
+      fullPath: '/vendedor/perfil'
+      preLoaderRoute: typeof VendedorPerfilRouteImport
+      parentRoute: typeof VendedorRoute
+    }
+    '/vendedor/pipeline': {
+      id: '/vendedor/pipeline'
+      path: '/pipeline'
+      fullPath: '/vendedor/pipeline'
+      preLoaderRoute: typeof VendedorPipelineRouteImport
+      parentRoute: typeof VendedorRoute
+    }
+    '/vendedor/ranking': {
+      id: '/vendedor/ranking'
+      path: '/ranking'
+      fullPath: '/vendedor/ranking'
+      preLoaderRoute: typeof VendedorRankingRouteImport
+      parentRoute: typeof VendedorRoute
+    }
+    '/consultas/$id/dados-complementares': {
+      id: '/consultas/$id/dados-complementares'
+      path: '/$id/dados-complementares'
+      fullPath: '/consultas/$id/dados-complementares'
+      preLoaderRoute: typeof ConsultasIdDadosComplementaresRouteImport
       parentRoute: typeof ConsultasRoute
     }
     '/consultas/$id/documentos': {
@@ -2197,11 +2243,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ConsultasIdDocumentosRouteImport
       parentRoute: typeof ConsultasRoute
     }
-    '/consultas/$id/dados-complementares': {
-      id: '/consultas/$id/dados-complementares'
-      path: '/$id/dados-complementares'
-      fullPath: '/consultas/$id/dados-complementares'
-      preLoaderRoute: typeof ConsultasIdDadosComplementaresRouteImport
+    '/consultas/$id/finalizar': {
+      id: '/consultas/$id/finalizar'
+      path: '/$id/finalizar'
+      fullPath: '/consultas/$id/finalizar'
+      preLoaderRoute: typeof ConsultasIdFinalizarRouteImport
+      parentRoute: typeof ConsultasRoute
+    }
+    '/consultas/$id/resultado': {
+      id: '/consultas/$id/resultado'
+      path: '/$id/resultado'
+      fullPath: '/consultas/$id/resultado'
+      preLoaderRoute: typeof ConsultasIdResultadoRouteImport
+      parentRoute: typeof ConsultasRoute
+    }
+    '/consultas/$id/status': {
+      id: '/consultas/$id/status'
+      path: '/$id/status'
+      fullPath: '/consultas/$id/status'
+      preLoaderRoute: typeof ConsultasIdStatusRouteImport
       parentRoute: typeof ConsultasRoute
     }
   }
@@ -2275,6 +2335,7 @@ interface VendedorRouteChildren {
   VendedorClientesRoute: typeof VendedorClientesRoute
   VendedorComissoesRoute: typeof VendedorComissoesRoute
   VendedorContasDemoRoute: typeof VendedorContasDemoRoute
+  VendedorHistoricoComissoesRoute: typeof VendedorHistoricoComissoesRoute
   VendedorLeadsRoute: typeof VendedorLeadsRoute
   VendedorMateriaisRoute: typeof VendedorMateriaisRoute
   VendedorMetasRoute: typeof VendedorMetasRoute
@@ -2289,6 +2350,7 @@ const VendedorRouteChildren: VendedorRouteChildren = {
   VendedorClientesRoute: VendedorClientesRoute,
   VendedorComissoesRoute: VendedorComissoesRoute,
   VendedorContasDemoRoute: VendedorContasDemoRoute,
+  VendedorHistoricoComissoesRoute: VendedorHistoricoComissoesRoute,
   VendedorLeadsRoute: VendedorLeadsRoute,
   VendedorMateriaisRoute: VendedorMateriaisRoute,
   VendedorMetasRoute: VendedorMetasRoute,
@@ -2324,6 +2386,7 @@ const rootRouteChildren: RootRouteChildren = {
   CorretoresAdminRoute: CorretoresAdminRoute,
   DashboardRoute: DashboardRoute,
   DicasPerformanceRoute: DicasPerformanceRoute,
+  DocumentosRoute: DocumentosRoute,
   EmailVerificadoRoute: EmailVerificadoRoute,
   FinanceiroRoute: FinanceiroRoute,
   ImobiliariaRoute: ImobiliariaRoute,
@@ -2377,6 +2440,7 @@ const rootRouteChildren: RootRouteChildren = {
   BlogSlugRoute: BlogSlugRoute,
   DemoPerfilRoute: DemoPerfilRoute,
   FaturasInquilinosIdRoute: FaturasInquilinosIdRoute,
+  InquilinoDashboardRoute: InquilinoDashboardRoute,
   InquilinoDocumentosRoute: InquilinoDocumentosRoute,
   InquilinoFaturasRoute: InquilinoFaturasRoute,
   InquilinoPainelRoute: InquilinoPainelRoute,

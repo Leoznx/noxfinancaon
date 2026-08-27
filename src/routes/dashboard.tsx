@@ -1,4 +1,4 @@
-import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
+import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { NivelCorretorCard } from "@/components/NivelCorretorCard";
@@ -7,14 +7,14 @@ import { JuridicoDashboard } from "@/components/JuridicoDashboard";
 import { FinanceiroDashboard } from "@/components/FinanceiroDashboard";
 import { MarketingDashboard } from "@/components/MarketingDashboard";
 import { ImobiliariaDashboard } from "@/components/ImobiliariaDashboard";
-import { Trophy, Search, FileText, Users, DollarSign, ArrowUpRight, TrendingUp, Home, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Trophy, Search, FileText, Users, DollarSign, TrendingUp } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
-import { Card } from "@/components/ui/card";
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchNivelInfo, type NivelInfo } from "@/lib/niveis-parceria";
 import { fetchDashboardStats, type DashboardStats } from "@/lib/dashboard-stats";
 import { redirectPathForRole } from "@/lib/authRedirect";
+import { OwnerDashboard } from "@/components/owner-dashboard/OwnerDashboard";
 
 const formatarBRL = (v: number) => (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -37,6 +37,10 @@ function Dashboard() {
     return <Navigate to={dashboardPath as any} replace />;
   }
 
+  if (user?.role === "proprietario") {
+    return <OwnerDashboard />;
+  }
+
   return <DashboardForRole />;
 }
 
@@ -47,7 +51,6 @@ function DashboardForRole() {
   const isMarketing = user?.internalRole === "marketing" || user?.role === "marketing";
   const isCorretor = user?.role === "corretor" && !isJuridico && !isFinanceiro && !isMarketing;
   const isImobiliaria = user?.role === "imobiliaria";
-  const isProprietario = user?.role === "proprietario";
   const isAdmin = (user?.role === "admin" || user?.role === "analista") && !isJuridico && !isFinanceiro && !isMarketing;
 
   const [consultasRecentes, setConsultasRecentes] = useState<any[]>([]);
@@ -195,29 +198,11 @@ function DashboardForRole() {
         {(isCorretor || isImobiliaria) && nivelCardInfo && <NivelCorretorCard info={nivelCardInfo} />}
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
-          {isProprietario ? (
-            <>
-              <CardStats title="Imóveis Cadastrados" value="3" icon={Home} />
-              <CardStats title="Renda Mensal Total" value="R$ 14.500" icon={FileText} isCurrency />
-              <CardStats title="Recebimentos no Mês" value="R$ 12.850" icon={Users} isCurrency />
-              <CardStats title="Sinistros Ativos" value="0" icon={AlertCircle} />
-            </>
-          ) : (
-            <>
-              <CardStats title="Consultas Pendentes" value={loadingConsultas ? "…" : String(stats?.consultasPendentes ?? 0)} icon={Search} />
-              <CardStats title="Apólices Ativas" value={loadingConsultas ? "…" : String(stats?.apolicesAtivas ?? 0)} icon={FileText} />
-              <CardStats title="Inquilinos sob Gestão" value={loadingConsultas ? "…" : String(stats?.inquilinosGestao ?? 0)} icon={Users} />
-              <CardStats title="Comissões Acumuladas" value={loadingConsultas ? "…" : formatarBRL(stats?.comissoesAcumuladas ?? 0)} icon={DollarSign} isCurrency />
-            </>
-          )}
+          <CardStats title="Consultas Pendentes" value={loadingConsultas ? "…" : String(stats?.consultasPendentes ?? 0)} icon={Search} />
+          <CardStats title="Apólices Ativas" value={loadingConsultas ? "…" : String(stats?.apolicesAtivas ?? 0)} icon={FileText} />
+          <CardStats title="Inquilinos sob Gestão" value={loadingConsultas ? "…" : String(stats?.inquilinosGestao ?? 0)} icon={Users} />
+          <CardStats title="Comissões Acumuladas" value={loadingConsultas ? "…" : formatarBRL(stats?.comissoesAcumuladas ?? 0)} icon={DollarSign} isCurrency />
         </div>
-
-        {isProprietario && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-4 sm:p-6">
-            <h3 className="font-bold text-yellow-900 text-base sm:text-lg mb-1 sm:mb-2">Tranquilidade NOX</h3>
-            <p className="text-xs sm:text-sm text-yellow-800">Seus imóveis estão protegidos pela NOX FIANÇA. Em caso de inadimplência, o aluguel é garantido pela cobertura contratada.</p>
-          </div>
-        )}
 
       </div>
     </DashboardLayout>

@@ -32,6 +32,7 @@ type Notificacao = {
 
 const ICONES_NOTIFICACAO: Record<string, LucideIcon> = {
   comissao_nova: DollarSign,
+  nova_comissao: DollarSign,
   comissao_liberada: CheckCircle,
   saque_solicitado: DollarSign,
   saque_aprovado: Wallet,

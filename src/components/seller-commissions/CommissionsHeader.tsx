@@ -10,7 +10,7 @@ export function CommissionsHeader({ refreshing, onRefresh }: CommissionsHeaderPr
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex items-center gap-4">
-        <div className="flex h-[58px] w-[58px] shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#FFE873] to-[#FFD400] shadow-[0_8px_20px_rgba(255,212,0,0.18)]">
+        <div className="flex h-[48px] w-9 shrink-0 items-center justify-center">
           <DollarSign className="h-8 w-8 text-[#0A0A0A]" strokeWidth={2.25} aria-hidden="true" />
         </div>
         <div>

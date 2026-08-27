@@ -45,6 +45,7 @@ export const Route = createFileRoute("/painel/notificacoes")({
 
 const ICONES_NOTIFICACAO: Record<string, any> = {
   comissao_nova: DollarSign,
+  nova_comissao: DollarSign,
   comissao_liberada: CheckCircle,
   saque_aprovado: Wallet,
   saque_pago: CheckCircle,

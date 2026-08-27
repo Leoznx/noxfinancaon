@@ -3,6 +3,7 @@ import {
   LayoutDashboard,
   Search,
   FileText,
+  FileCheck2,
   Users,
   Building2,
   UserCog,
@@ -259,20 +260,18 @@ const imobiliariaItems = [
 
 const proprietarioItems = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
-  { icon: Search, label: "Nova Consulta", href: "/consultas/nova", highlight: true },
-  { icon: History, label: "Minhas Consultas", href: "/consultas" },
-  { icon: Award, label: "Plano de Fidelidade", href: "/plano-carreira" },
-  { icon: DollarSign, label: "Plano de Comissão", href: "/minhas-comissoes" },
-  { icon: FileText, label: "Contratos Ativos", href: "/apolices" },
-  { icon: Receipt, label: "Faturas Inquilinos", href: "/faturas-inquilinos" },
-  { icon: Wallet, label: "Carteira de Cobranças", href: "/carteira-cobrancas" },
-  { icon: AlertCircle, label: "Abrir Sinistro", href: "/sinistros" },
-
+  { icon: Home, label: "Meus Imóveis", href: "/imoveis" },
+  { icon: FileCheck2, label: "Contratos Ativos", href: "/apolices" },
+  { icon: DollarSign, label: "Recebimentos", href: "/carteira-cobrancas" },
+  { icon: Receipt, label: "Faturas e Taxas", href: "/faturas-inquilinos" },
+  { icon: AlertCircle, label: "Sinistros", href: "/sinistros" },
+  { icon: FileText, label: "Documentos", href: "/documentos" },
   { icon: User, label: "Meu Perfil", href: "/configuracoes" },
 ];
 
 const inquilinoItems = [
-  { icon: LayoutDashboard, label: "Meu Seguro", href: "/inquilino/painel" },
+  { icon: LayoutDashboard, label: "Dashboard", href: "/inquilino/dashboard" },
+  { icon: ShieldCheck, label: "Meu Seguro", href: "/inquilino/painel" },
   { icon: Search, label: "Contratar Seguro", href: "/consultas/nova", highlight: true },
   { icon: History, label: "Minhas Consultas", href: "/consultas" },
   { icon: FileText, label: "Documentos", href: "/inquilino/documentos" },
@@ -304,6 +303,12 @@ const vendedorItems = [
     icon: DollarSign,
     label: "Minhas Comissões",
     href: "/vendedor/comissoes",
+    module: "comissoes_proprias",
+  },
+  {
+    icon: History,
+    label: "Histórico de Comissões",
+    href: "/vendedor/historico-comissoes",
     module: "comissoes_proprias",
   },
   { icon: Trophy, label: "Ranking", href: "/vendedor/ranking", module: "ranking" },
@@ -658,7 +663,7 @@ export function DashboardLayout({
                 to={item.href}
                 className={`flex items-center gap-3 pl-3 pr-4 py-3 rounded-xl border-l-4 transition-all ${
                   isActive
-                    ? cargoInterno === "juridico" || isImobiliaria
+                    ? cargoInterno === "juridico" || isImobiliaria || isProprietario || isInquilino
                       ? "bg-yellow-400 border-yellow-400 text-neutral-950 font-bold shadow-sm shadow-yellow-400/20"
                       : "bg-white/10 border-yellow-400 text-white font-semibold"
                     : isHighlight && !isImobiliaria
@@ -762,7 +767,7 @@ export function DashboardLayout({
                 <Building2 className="w-4 h-4 text-neutral-400 ml-1 shrink-0" />
               )}
               {user?.role === "proprietario" && (
-                <Home className="w-4 h-4 text-neutral-400 ml-1 shrink-0" />
+                <Home className="w-4 h-4 text-yellow-400 ml-1 shrink-0" />
               )}
             </div>
             <div className="sm:hidden text-sm font-bold text-neutral-900 truncate">{nomeTopo}</div>

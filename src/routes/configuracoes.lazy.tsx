@@ -1456,8 +1456,8 @@ function TabNotificacoes() {
     >
       <div className="space-y-4">
         <SwitchOpcao
-          titulo="Nova comissão registrada"
-          descricao="Aviso instantâneo quando um contrato vincula uma comissão"
+          titulo="Contrato fechado"
+          descricao="Push com o valor da sua comissão quando um contrato for fechado"
           ativo={prefs.nova_comissao}
           onToggle={() => toggle("nova_comissao")}
         />

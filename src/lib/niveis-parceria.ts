@@ -48,10 +48,44 @@ export async function fetchNivelInfo(profileId: string, role: string): Promise<N
     }
   }
 
-  const [niveisRes, consultasRes] = await Promise.all([
-    supabase.from("niveis_perfil" as any).select("*").eq("tipo_perfil", role).eq("ativo", true).order("ordem", { ascending: true }),
-    supabase.from("consultas_credito").select("id").in("profile_id_solicitante", profileIds),
-  ]);
+  const niveisPromise = supabase
+    .from("niveis_perfil" as any)
+    .select("*")
+    .eq("tipo_perfil", role)
+    .eq("ativo", true)
+    .order("ordem", { ascending: true });
+
+  let consultasPromise = supabase
+    .from("consultas_credito")
+    .select("id")
+    .in("profile_id_solicitante", profileIds);
+
+  // Para proprietario, o contrato pode ter sido solicitado por um corretor ou
+  // imobiliaria. O vinculo real e o imovel, nao o solicitante da consulta.
+  if (role === "proprietario") {
+    const { data: ownerRows, error: ownerError } = await supabase
+      .from("proprietarios")
+      .select("id")
+      .eq("profile_id", profileId);
+    if (ownerError) throw ownerError;
+
+    const ownerIds = (ownerRows ?? []).map((owner) => owner.id);
+    if (ownerIds.length === 0) {
+      consultasPromise = Promise.resolve({ data: [], error: null } as any) as any;
+    } else {
+      const { data: propertyRows, error: propertyError } = await supabase
+        .from("imoveis")
+        .select("id")
+        .in("proprietario_id", ownerIds);
+      if (propertyError) throw propertyError;
+      const propertyIds = (propertyRows ?? []).map((property) => property.id);
+      consultasPromise = propertyIds.length
+        ? supabase.from("consultas_credito").select("id").in("imovel_id", propertyIds)
+        : (Promise.resolve({ data: [], error: null } as any) as any);
+    }
+  }
+
+  const [niveisRes, consultasRes] = await Promise.all([niveisPromise, consultasPromise]);
   if (niveisRes.error) throw niveisRes.error;
   if (consultasRes.error) throw consultasRes.error;
 

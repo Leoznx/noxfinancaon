@@ -3,14 +3,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertCircle } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { CommissionHistory } from "@/components/seller-commissions/CommissionHistory";
 import { CommissionIncentives } from "@/components/seller-commissions/CommissionIncentives";
-import { CommissionProgressCard } from "@/components/seller-commissions/CommissionProgressCard";
 import { CommissionStatsGrid } from "@/components/seller-commissions/CommissionStatsGrid";
 import { CommissionsHeader } from "@/components/seller-commissions/CommissionsHeader";
 import { CommissionsSkeleton } from "@/components/seller-commissions/CommissionsSkeleton";
 import { supabase } from "@/integrations/supabase/client";
-import { calcularGanhoTotal, getNivelComissaoVendedor } from "@/lib/comissao-vendedor";
 import { summarizeCommissions, type SellerCommissionRow } from "@/lib/seller-commissions-view";
 import { fetchMySellerMonthlyProgress, type SellerMonthlyProgress } from "@/lib/seller-progress";
 import { fetchSellerRewards, type SellerReward } from "@/lib/seller-rewards";
@@ -126,9 +123,6 @@ function CommissionsPage() {
   }, [load]);
 
   const summary = useMemo(() => summarizeCommissions(rows), [rows]);
-  const contracts = progress?.contracts_closed ?? 0;
-  const monthlyGain = useMemo(() => calcularGanhoTotal(contracts), [contracts]);
-  const level = useMemo(() => getNivelComissaoVendedor(contracts), [contracts]);
   const hasFinancialData = progress !== null;
 
   return (
@@ -155,12 +149,10 @@ function CommissionsPage() {
           <CommissionsSkeleton />
         ) : (
           <>
-            <CommissionProgressCard contracts={contracts} level={level} monthlyGain={monthlyGain} />
             <CommissionStatsGrid summary={summary} />
             {progress ? (
               <CommissionIncentives rewards={rewards} progress={progress} rows={rows} />
             ) : null}
-            <CommissionHistory rows={rows} />
           </>
         )}
       </main>

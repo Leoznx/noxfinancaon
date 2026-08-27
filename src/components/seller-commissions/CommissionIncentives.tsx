@@ -1,8 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowDownToLine,
   ArrowUpRight,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Gift,
   ImageIcon,
   Sparkles,
@@ -32,21 +34,33 @@ type CommissionIncentivesProps = {
   rows: SellerCommissionRow[];
 };
 
+const ENTRIES_PER_PAGE = 3;
+
 export function CommissionIncentives({ rewards, progress, rows }: CommissionIncentivesProps) {
+  const [entriesPage, setEntriesPage] = useState(1);
   const contracts = progress.contracts_closed;
   const entries = useMemo(() => filterCommissionHistory(rows, "paid", "current"), [rows]);
   const entriesTotal = useMemo(
     () => entries.reduce((total, row) => total + getCommissionEntryAmount(row), 0),
     [entries],
   );
+  const entriesPages = Math.max(1, Math.ceil(entries.length / ENTRIES_PER_PAGE));
+  const visibleEntries = useMemo(
+    () => entries.slice((entriesPage - 1) * ENTRIES_PER_PAGE, entriesPage * ENTRIES_PER_PAGE),
+    [entries, entriesPage],
+  );
+
+  useEffect(() => {
+    setEntriesPage((page) => Math.min(page, entriesPages));
+  }, [entriesPages]);
 
   return (
     <section
-      className="grid items-stretch gap-4 xl:grid-cols-3"
+      className="grid items-stretch gap-4 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]"
       aria-label="Recompensas, bonificações e entradas do mês"
     >
-      <Card className="flex h-full min-h-[390px] flex-col overflow-hidden border-emerald-200 shadow-[0_5px_20px_rgba(0,0,0,0.045)]">
-        <CardHeader className="min-h-[112px] border-b border-emerald-100 bg-[linear-gradient(135deg,#f0fdf4,#ffffff)] p-4">
+      <Card className="order-1 flex h-full flex-col overflow-hidden border-emerald-200 shadow-[0_5px_20px_rgba(0,0,0,0.045)] lg:row-span-2">
+        <CardHeader className="border-b border-emerald-100 bg-[linear-gradient(135deg,#f0fdf4,#ffffff)] p-4">
           <div className="flex items-start justify-between gap-3">
             <div>
               <CardTitle className="flex items-center gap-2 text-base text-neutral-950">
@@ -65,7 +79,7 @@ export function CommissionIncentives({ rewards, progress, rows }: CommissionInce
           </div>
         </CardHeader>
         <CardContent className="flex flex-1 flex-col p-4">
-          <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 px-3.5 py-3">
+          <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 px-3.5 py-2.5">
             <p className="text-[10px] font-black uppercase tracking-[0.12em] text-emerald-700">
               Total recebido no mês
             </p>
@@ -74,10 +88,35 @@ export function CommissionIncentives({ rewards, progress, rows }: CommissionInce
             </p>
           </div>
           {entries.length > 0 ? (
-            <div className="mt-3 max-h-[430px] space-y-2.5 overflow-y-auto pr-1">
-              {entries.map((row) => (
+            <div className="mt-3 space-y-2">
+              {visibleEntries.map((row) => (
                 <CommissionEntry key={row.id} row={row} />
               ))}
+              {entriesPages > 1 ? (
+                <div className="flex items-center justify-between border-t border-emerald-100 pt-2" aria-label="Paginação das entradas">
+                  <button
+                    type="button"
+                    onClick={() => setEntriesPage((page) => Math.max(1, page - 1))}
+                    disabled={entriesPage === 1}
+                    className="grid h-8 w-8 place-items-center rounded-lg border border-emerald-200 bg-white text-emerald-800 disabled:cursor-not-allowed disabled:opacity-35"
+                    aria-label="Página anterior"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  <span className="text-[11px] font-black text-emerald-800">
+                    Página {entriesPage} de {entriesPages}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setEntriesPage((page) => Math.min(entriesPages, page + 1))}
+                    disabled={entriesPage === entriesPages}
+                    className="grid h-8 w-8 place-items-center rounded-lg border border-emerald-200 bg-white text-emerald-800 disabled:cursor-not-allowed disabled:opacity-35"
+                    aria-label="Próxima página"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : null}
             </div>
           ) : (
             <EmptyColumn
@@ -90,8 +129,8 @@ export function CommissionIncentives({ rewards, progress, rows }: CommissionInce
         </CardContent>
       </Card>
 
-      <Card className="flex h-full min-h-[390px] flex-col overflow-hidden border-yellow-200 shadow-[0_5px_20px_rgba(0,0,0,0.045)]">
-        <CardHeader className="min-h-[112px] border-b border-yellow-100 bg-[linear-gradient(135deg,#fffbea,#ffffff)] p-4">
+      <Card className="order-3 flex h-full flex-col overflow-hidden border-yellow-200 shadow-[0_5px_20px_rgba(0,0,0,0.045)]">
+        <CardHeader className="border-b border-yellow-100 bg-[linear-gradient(135deg,#fffbea,#ffffff)] p-4">
           <CardTitle className="flex items-center gap-2 text-base text-neutral-950">
             <span className="grid h-9 w-9 place-items-center rounded-xl bg-yellow-100 text-yellow-700">
               <Sparkles className="h-[18px] w-[18px]" />
@@ -102,7 +141,7 @@ export function CommissionIncentives({ rewards, progress, rows }: CommissionInce
             Faixas cumulativas que avançam com seus contratos do mês.
           </p>
         </CardHeader>
-        <CardContent className="flex-1 space-y-3 p-4">
+        <CardContent className="flex-1 space-y-2 p-4">
           <Tier
             title="1º ao 15º contrato"
             value="R$ 35 cada"
@@ -124,8 +163,8 @@ export function CommissionIncentives({ rewards, progress, rows }: CommissionInce
         </CardContent>
       </Card>
 
-      <Card className="flex h-full min-h-[390px] flex-col overflow-hidden border-violet-200 shadow-[0_5px_20px_rgba(0,0,0,0.045)]">
-        <CardHeader className="min-h-[112px] border-b border-violet-100 bg-[linear-gradient(135deg,#f7f5ff,#ffffff)] p-4">
+      <Card className="order-2 flex h-full flex-col overflow-hidden border-violet-200 shadow-[0_5px_20px_rgba(0,0,0,0.045)]">
+        <CardHeader className="border-b border-violet-100 bg-[linear-gradient(135deg,#f7f5ff,#ffffff)] p-4">
           <div className="flex items-start justify-between gap-3">
             <div>
               <CardTitle className="flex items-center gap-2 text-base text-neutral-950">
@@ -262,12 +301,12 @@ function Tier({
 }) {
   return (
     <div
-      className={`relative overflow-hidden rounded-xl border p-3.5 ${active ? "border-yellow-400 bg-yellow-50 ring-2 ring-yellow-100" : "border-neutral-200 bg-white"}`}
+      className={`relative overflow-hidden rounded-xl border px-3 py-2.5 ${active ? "border-yellow-400 bg-yellow-50 ring-2 ring-yellow-100" : "border-neutral-200 bg-white"}`}
     >
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className="text-sm font-black text-neutral-950">{title}</p>
-          <p className="mt-2 text-lg font-black text-yellow-700">{value}</p>
+          <p className="mt-1 text-base font-black text-yellow-700">{value}</p>
           <p className="mt-0.5 text-xs text-neutral-500">{bonus}</p>
         </div>
         {active ? (
