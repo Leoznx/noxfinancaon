@@ -2,9 +2,11 @@ import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import {
   ArrowRight,
+  BadgeCheck,
   CalendarDays,
   Check,
   ChevronRight,
+  CircleUserRound,
   CircleDollarSign,
   Clock3,
   Download,
@@ -13,12 +15,16 @@ import {
   FolderOpen,
   ReceiptText,
   ShieldCheck,
+  Sparkles,
+  TrendingDown,
+  TrendingUp,
   UploadCloud,
 } from "lucide-react";
 
 import type { TenantDashboardData, TenantDashboardDocument } from "@/lib/tenant-dashboard";
 import { isTenantInvoiceOpen, isTenantInvoicePaid } from "@/lib/tenant-dashboard";
 import type { TenantBillingItem } from "@/lib/tenant-billing";
+import { calculateTenantScore, tenantScoreLevel } from "@/lib/tenant-score";
 
 const BRL = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -126,7 +132,7 @@ export function TenantDashboardHero({ data }: { data: TenantDashboardData }) {
           Meu seguro-fiança
         </h1>
         <p className="mt-2 text-sm font-medium text-neutral-600 sm:text-base">
-          Contrato, documentos e cobranças em um só lugar.
+          Parcelas, proteção e seu Score NOX em um só lugar.
         </p>
         <Link
           to="/inquilino/painel"
@@ -337,6 +343,142 @@ export function TenantInvoicesPanel({
         </div>
       </div>
     </section>
+  );
+}
+
+export function TenantScoreCard({
+  name,
+  invoices,
+}: {
+  name: string;
+  invoices: TenantBillingItem[];
+}) {
+  const result = calculateTenantScore(invoices);
+  const level = tenantScoreLevel(result.score);
+  const progress = Math.round((result.score / result.maxScore) * 100);
+  const lastMovement = result.lastEvent;
+
+  return (
+    <section className="grid min-h-[374px] overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.05)] lg:grid-cols-[0.82fr_1.18fr]">
+      <div className="relative flex flex-col items-center justify-center overflow-hidden bg-neutral-950 px-5 py-6 text-center text-white">
+        <span className="pointer-events-none absolute -left-16 -top-16 h-52 w-52 rounded-full bg-[#ffc400]/15 blur-3xl" />
+        <span className="pointer-events-none absolute -bottom-24 -right-20 h-60 w-60 rounded-full bg-[#ffc400]/10 blur-3xl" />
+        <span className="relative inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.22em] text-[#ffd633]">
+          <Sparkles size={13} /> Score NOX
+        </span>
+        <p className="relative mt-4 max-w-[260px] truncate text-sm font-extrabold text-white">
+          {name}
+        </p>
+        <div
+          className="relative mt-3 flex h-44 w-44 items-center justify-center rounded-full p-[10px] shadow-[0_0_42px_rgba(255,196,0,0.16)]"
+          style={{
+            background: `conic-gradient(from -90deg, #ffc400 0deg ${progress * 3.6}deg, #303030 ${progress * 3.6}deg 360deg)`,
+          }}
+        >
+          <div className="flex h-full w-full flex-col items-center justify-center rounded-full border border-white/10 bg-[#111111]">
+            <CircleUserRound size={32} strokeWidth={1.55} className="text-[#ffd11a]" />
+            <strong className="mt-1 text-[2.65rem] font-black leading-none tracking-[-0.06em]">
+              {result.score}
+            </strong>
+            <small className="mt-1 text-[9px] font-bold uppercase tracking-[0.16em] text-neutral-400">
+              de {result.maxScore} pontos
+            </small>
+          </div>
+        </div>
+        <span
+          className="relative mt-3 rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em]"
+          style={{ color: level.color }}
+        >
+          {level.label}
+        </span>
+      </div>
+
+      <div className="flex flex-col p-5 sm:p-6">
+        <div className="flex items-start gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#fff3bd] text-[#c98b00]">
+            <BadgeCheck size={21} />
+          </span>
+          <div>
+            <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[#b87900]">
+              Pontuação de relacionamento
+            </p>
+            <h2 className="mt-1 text-xl font-black tracking-tight text-neutral-950">
+              Pontualidade que constrói confiança.
+            </h2>
+            <p className="mt-1 text-[11px] leading-4 text-neutral-500">
+              Seu cadastro começa em 824. Cada parcela movimenta o total, que nunca ultrapassa 950.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <div className="flex items-center justify-between text-[10px] font-bold text-neutral-500">
+            <span>Evolução do seu Score NOX</span>
+            <span>{progress}% do limite</span>
+          </div>
+          <div className="mt-2 h-2 overflow-hidden rounded-full bg-neutral-100">
+            <div
+              className="h-full rounded-full bg-[linear-gradient(90deg,#f0ac00,#ffd633)] transition-[width] duration-700"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <div className="flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2">
+              <TrendingUp size={16} className="text-emerald-600" />
+              <span>
+                <small className="block text-[9px] font-bold uppercase text-emerald-700">Ganhos</small>
+                <b className="text-sm text-emerald-800">+{result.earnedPoints}</b>
+              </span>
+            </div>
+            <div className="flex items-center gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2">
+              <TrendingDown size={16} className="text-red-500" />
+              <span>
+                <small className="block text-[9px] font-bold uppercase text-red-600">Reduções</small>
+                <b className="text-sm text-red-700">
+                  {result.lostPoints > 0 ? `-${result.lostPoints}` : "0"}
+                </b>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-1.5 text-[9px] sm:grid-cols-3">
+          <ScoreRule label="Antecipado" points="+15 a +22" positive />
+          <ScoreRule label="No vencimento" points="+7 a +22" positive />
+          <ScoreRule label="1 a 3 dias" points="−15 a −21" />
+          <ScoreRule label="4 a 5 dias" points="−21 a −56" />
+          <ScoreRule label="6 a 30 dias" points="−56 a −123" />
+          <ScoreRule label="Acima de 30" points="−123 a −342" />
+        </div>
+
+        <div className="mt-auto flex items-center gap-2 rounded-xl border border-[#efd88c] bg-[#fffaf0] px-3 py-2.5 text-[10px] leading-4 text-neutral-600">
+          <ShieldCheck size={17} className="shrink-0 text-[#d99500]" />
+          <span>
+            {lastMovement
+              ? `Último movimento: ${lastMovement.points > 0 ? "+" : ""}${lastMovement.points} pontos. `
+              : "Você começa com 824 pontos. "}
+            Pague até o vencimento e mantenha seu score forte.
+          </span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ScoreRule({
+  label,
+  points,
+  positive = false,
+}: {
+  label: string;
+  points: string;
+  positive?: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2 rounded-lg border border-neutral-100 bg-neutral-50 px-2.5 py-2">
+      <span className="font-semibold text-neutral-500">{label}</span>
+      <b className={positive ? "text-emerald-700" : "text-red-600"}>{points}</b>
+    </div>
   );
 }
 

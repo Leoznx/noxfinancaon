@@ -8,10 +8,9 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import {
   TenantDashboardHero,
+  TenantScoreCard,
   TenantDashboardSummary,
-  TenantDocumentsPanel,
   TenantInvoicesPanel,
-  TenantTimelinePanel,
 } from "@/components/tenant-dashboard/TenantDashboardSections";
 import { supabase } from "@/integrations/supabase/client";
 import { reissuePayment } from "@/lib/automated-billing";
@@ -236,7 +235,7 @@ function TenantDashboardPage() {
           <>
             <TenantDashboardHero data={data} />
             <TenantDashboardSummary data={data} />
-            <div className="grid gap-4 xl:grid-cols-[1.28fr_1fr_1fr]">
+            <div className="grid gap-4 xl:grid-cols-[1.04fr_1.5fr]">
               <TenantInvoicesPanel
                 invoices={data.invoices}
                 actions={{
@@ -252,11 +251,10 @@ function TenantDashboardPage() {
                   uploading,
                 }}
               />
-              <TenantDocumentsPanel
-                documents={data.documents}
-                onOpen={(document) => void openDocument(document)}
+              <TenantScoreCard
+                name={data.tenantName}
+                invoices={data.invoices}
               />
-              <TenantTimelinePanel data={data} />
             </div>
           </>
         )}
@@ -270,7 +268,7 @@ function DashboardLoading() {
     <div className="flex min-h-[620px] items-center justify-center rounded-3xl border border-neutral-200 bg-white">
       <div className="flex items-center gap-3 text-sm font-semibold text-neutral-500">
         <Loader2 className="animate-spin text-[#e6aa00]" size={20} />
-        Carregando seu contrato...
+        Carregando seu dashboard...
       </div>
     </div>
   );
