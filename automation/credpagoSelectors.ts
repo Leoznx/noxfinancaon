@@ -21,12 +21,31 @@ function tempoRestante(deadline: number): number {
   return Math.max(1, deadline - Date.now());
 }
 
+/** Só aceita candidato que realmente dá pra preencher — ver comentário em locateField. */
+async function isFillable(locator: Locator): Promise<boolean> {
+  return locator
+    .evaluate((el) => {
+      const tag = el.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+      return (el as HTMLElement).isContentEditable === true;
+    })
+    .catch(() => false);
+}
+
 /**
- * Tenta localizar um campo por várias estratégias, na ordem: label, placeholder,
- * role+name. Necessário porque o site da CredPago pode alterar atributos
+ * Tenta localizar um campo por várias estratégias, na ordem: role+name, label,
+ * placeholder. Necessário porque o site da CredPago pode alterar atributos
  * técnicos (id/name) sem aviso — preferimos o texto visível ao usuário. Faz
  * polling até FIND_TIMEOUT_MS em vez de checar uma única vez (ver comentário
  * acima de FIND_TIMEOUT_MS).
+ *
+ * role+name vem primeiro e cada candidato passa por isFillable() porque em
+ * produção um link de navegação com aria-label="Ir para Fiança Aluguel" no
+ * topo da página passou a bater com getByLabel(/aluguel/i) antes do campo
+ * "Aluguel" de verdade — a automação tentava preencher o link e falhava. Como
+ * getByRole("textbox", ...) só enxerga input/textarea, e isFillable() rejeita
+ * qualquer candidato (de qualquer estratégia) que não seja um campo de
+ * verdade, um link/botão com aria-label parecido nunca mais é aceito.
  */
 async function locateField(
   page: Page,
@@ -37,9 +56,9 @@ async function locateField(
   },
 ): Promise<Locator> {
   const candidates: Locator[] = [];
+  if (opts.role) candidates.push(page.getByRole("textbox", { name: opts.role.name }));
   if (opts.label) candidates.push(page.getByLabel(opts.label));
   if (opts.placeholder) candidates.push(page.getByPlaceholder(opts.placeholder));
-  if (opts.role) candidates.push(page.getByRole("textbox", { name: opts.role.name }));
 
   const inicio = Date.now();
   do {
@@ -47,7 +66,9 @@ async function locateField(
       const count = await candidate.count().catch(() => 0);
       if (count > 0) {
         const first = candidate.first();
-        if (await first.isVisible().catch(() => false)) return first;
+        if ((await first.isVisible().catch(() => false)) && (await isFillable(first))) {
+          return first;
+        }
       }
     }
     await page.waitForTimeout(FIND_POLL_MS);
