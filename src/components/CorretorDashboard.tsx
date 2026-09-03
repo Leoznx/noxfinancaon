@@ -103,7 +103,7 @@ export function CorretorDashboard({ profileId }: { profileId: string }) {
     <div className="mx-auto w-full max-w-[1600px] space-y-3.5 animate-in fade-in duration-300 xl:grid xl:h-full xl:min-h-0 xl:grid-rows-[220px_84px_minmax(330px,1fr)_70px] xl:gap-2.5 xl:space-y-0 xl:overflow-hidden">
       <HeroBanner data={data} overview={overview} />
 
-      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:h-full xl:grid-cols-4 xl:gap-2.5">
+      <section className="grid grid-cols-2 gap-3 xl:h-full xl:grid-cols-4 xl:gap-2.5">
         <MetricCard to="/consultas" icon={Search} label="Consultas pendentes" value={String(data.stats.consultasPendentes)} trend={data.trends.consultas} />
         <MetricCard to="/apolices" icon={FileCheck2} label="Apólices ativas" value={String(data.stats.apolicesAtivas)} trend={data.trends.apolices} />
         <MetricCard to="/apolices" icon={Users} label="Inquilinos sob gestão" value={String(data.stats.inquilinosGestao)} trend={data.trends.inquilinos} />
@@ -111,7 +111,7 @@ export function CorretorDashboard({ profileId }: { profileId: string }) {
       </section>
 
       <section className="grid gap-3 xl:min-h-0 xl:grid-cols-[1.22fr_0.78fr_0.98fr] xl:gap-2.5">
-        <Panel className="min-h-[430px] xl:flex xl:h-full xl:min-h-0 xl:flex-col xl:overflow-hidden">
+        <Panel className="min-h-[360px] sm:min-h-[410px] xl:flex xl:h-full xl:min-h-0 xl:flex-col xl:overflow-hidden">
           <PanelHeader title="Consultas e contratos por mês">
             <div className="flex rounded-lg border border-neutral-200 bg-neutral-50 p-0.5" role="radiogroup" aria-label="Período do gráfico">
               {[6, 12].map((period) => (
@@ -128,7 +128,7 @@ export function CorretorDashboard({ profileId }: { profileId: string }) {
               ))}
             </div>
           </PanelHeader>
-          <div className="mt-2 h-[350px] min-h-0 xl:flex-1">
+          <div className="mt-2 h-[285px] min-h-0 sm:h-[330px] xl:flex-1">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={months} margin={{ top: 20, right: 12, left: -20, bottom: 6 }}>
                 <CartesianGrid stroke="#EEEEEE" strokeDasharray="3 3" vertical={false} />
@@ -143,7 +143,7 @@ export function CorretorDashboard({ profileId }: { profileId: string }) {
           </div>
         </Panel>
 
-        <Panel className="min-h-[430px] xl:flex xl:h-full xl:min-h-0 xl:flex-col xl:overflow-hidden">
+        <Panel className="min-h-[360px] sm:min-h-[410px] xl:flex xl:h-full xl:min-h-0 xl:flex-col xl:overflow-hidden">
           <PanelHeader title="Status das apólices" />
           <PolicyStatus data={data.policyStatus} />
         </Panel>
@@ -164,16 +164,16 @@ function HeroBanner({
   overview: { commission: number; contracts: number; ticket: number };
 }) {
   return (
-    <section className="relative min-h-[390px] overflow-hidden rounded-[24px] border border-amber-100 bg-[#fffdf8] shadow-[0_10px_34px_rgba(58,44,4,0.06)] xl:h-full xl:min-h-0">
+    <section className="relative min-h-[348px] overflow-hidden rounded-[24px] border border-amber-100 bg-[#fffdf8] shadow-[0_10px_34px_rgba(58,44,4,0.06)] sm:min-h-[390px] xl:h-full xl:min-h-0">
       <img
         src="/dashboard/broker-performance-hero.png"
         alt=""
         aria-hidden="true"
-        className="pointer-events-none absolute left-[-10%] top-[31%] h-auto w-[118%] max-w-none select-none sm:left-[31%] sm:top-[2%] sm:w-[48%] xl:left-[41%] xl:top-[-15%] xl:h-[290px] xl:w-auto 2xl:left-[49%]"
+        className="pointer-events-none absolute left-1/2 top-[27%] h-auto w-[104%] max-w-none -translate-x-1/2 select-none sm:left-[31%] sm:top-[2%] sm:w-[48%] sm:translate-x-0 xl:left-[41%] xl:top-[-15%] xl:h-[290px] xl:w-auto 2xl:left-[49%]"
       />
       <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,253,248,1)_0%,rgba(255,253,248,0.98)_27%,rgba(255,253,248,0.72)_34%,rgba(255,253,248,0.04)_47%,rgba(255,253,248,0)_66%,rgba(255,253,248,0.88)_88%,rgba(255,253,248,1)_100%)]" />
 
-      <div className="relative z-10 flex h-full max-w-[560px] flex-col justify-center px-6 py-4 sm:px-9 xl:px-10">
+      <div className="relative z-10 flex h-full max-w-[560px] flex-col justify-start px-4 py-4 sm:justify-center sm:px-9 xl:px-10">
         <img
           src="/dashboard/broker-performance-copy.png"
           alt="Quanto mais contratos, maior sua comissão. Acompanhe sua performance, contratos e ganhos com mais praticidade."
@@ -181,7 +181,7 @@ function HeroBanner({
         />
       </div>
 
-      <div className="relative z-20 mt-[235px] grid gap-2 p-4 sm:absolute sm:bottom-3 sm:right-3 sm:mt-0 sm:w-[210px] sm:p-0 xl:w-[202px]">
+      <div className="relative z-20 mt-[190px] grid grid-cols-2 gap-2 p-3 [&>*:last-child]:col-span-2 sm:absolute sm:bottom-3 sm:right-3 sm:mt-0 sm:w-[210px] sm:grid-cols-1 sm:p-0 sm:[&>*:last-child]:col-span-1 xl:w-[202px]">
         <HeroMetric icon={Crown} label="Comissão do mês" value={formatCurrency(overview.commission)} trend={data.trends.comissoes} />
         <HeroMetric icon={Users} label="Contratos fechados" value={String(overview.contracts)} trend={data.trends.apolices} />
         <HeroMetric icon={CalendarDays} label="Ticket médio" value={formatCurrency(overview.ticket)} trend={data.trends.comissoes} />
@@ -192,7 +192,7 @@ function HeroBanner({
 
 function HeroMetric({ icon: Icon, label, value, trend }: { icon: Icon; label: string; value: string; trend: number }) {
   return (
-    <article className="flex min-h-[58px] items-center gap-2 rounded-xl border border-white/90 bg-white/94 px-2.5 py-1.5 shadow-[0_8px_24px_rgba(45,34,0,0.1)] backdrop-blur-md">
+    <article className="flex min-h-[58px] min-w-0 items-center gap-2 rounded-xl border border-white/90 bg-white/94 px-2.5 py-1.5 shadow-[0_8px_24px_rgba(45,34,0,0.1)] backdrop-blur-md">
       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-[#ECAE00]">
         <Icon size={16} strokeWidth={1.9} />
       </div>
@@ -211,12 +211,12 @@ function MetricCard({ to, icon: Icon, label, value, trend }: { to: string; icon:
       to={to as never}
       className="group flex items-center gap-3 rounded-2xl border border-neutral-200/80 bg-white p-4 shadow-[0_5px_22px_rgba(0,0,0,0.035)] transition hover:-translate-y-0.5 hover:border-amber-200 hover:shadow-[0_10px_28px_rgba(0,0,0,0.06)] xl:h-full xl:p-2.5"
     >
-      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-[#E7B300] transition group-hover:bg-[#FFC400] group-hover:text-neutral-950 xl:h-10 xl:w-10">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-[#E7B300] transition group-hover:bg-[#FFC400] group-hover:text-neutral-950 sm:h-12 sm:w-12 sm:rounded-2xl xl:h-10 xl:w-10">
         <Icon size={21} strokeWidth={1.8} />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[11px] font-medium text-neutral-500">{label}</p>
-        <p className="truncate text-xl font-black tracking-tight tabular-nums text-neutral-950">{value}</p>
+        <p className="line-clamp-2 text-xs font-medium leading-tight text-neutral-500">{label}</p>
+        <p className="truncate text-[clamp(17px,4.8vw,20px)] font-black tracking-tight tabular-nums text-neutral-950">{value}</p>
         <Trend value={trend} />
       </div>
       <ArrowRight size={16} className="shrink-0 text-neutral-400 transition group-hover:translate-x-0.5 group-hover:text-neutral-950" />

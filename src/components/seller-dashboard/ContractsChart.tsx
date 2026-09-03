@@ -41,17 +41,17 @@ export function ContractsChart({
   const hasContracts = visibleHistory.some((item) => item.contracts > 0);
 
   return (
-    <section className="flex h-full min-h-0 min-w-0 flex-col rounded-2xl border border-neutral-200 bg-white p-4 shadow-[0_1px_4px_rgba(0,0,0,0.03)] sm:p-5 xl:p-3">
+    <section className="flex h-full min-h-0 min-w-0 flex-col rounded-2xl border border-neutral-200 bg-white p-3 shadow-[0_1px_4px_rgba(0,0,0,0.03)] sm:p-5 xl:p-3">
       <div className="mb-2 flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-[17px] font-bold text-neutral-950">Contratos fechados</h2>
+            <h2 className="text-base font-bold text-neutral-950 sm:text-[17px]">Contratos fechados</h2>
             <Info
               className="h-4 w-4 text-neutral-400"
               aria-label="Contratos fechados por período"
             />
           </div>
-          <div className="mt-2 flex flex-wrap items-center gap-4 text-[11px] font-medium text-neutral-500">
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-xs font-medium text-neutral-500 sm:gap-4">
             <span className="flex items-center gap-2">
               <span className="h-2.5 w-2.5 rounded-full bg-[#ffc400]" />
               Contratos (qtd)
@@ -63,9 +63,9 @@ export function ContractsChart({
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex w-full items-center gap-1.5 sm:w-auto">
           <Select value={range} onValueChange={(value) => onRangeChange(value as ChartRange)}>
-            <SelectTrigger className="h-9 w-[156px] rounded-lg border-neutral-200 bg-white text-[11px] font-semibold shadow-none">
+            <SelectTrigger className="h-10 min-w-0 flex-1 rounded-lg border-neutral-200 bg-white text-xs font-semibold shadow-none sm:h-9 sm:w-[156px] sm:flex-none">
               <CalendarDays className="mr-1 h-4 w-4" />
               <SelectValue />
             </SelectTrigger>
@@ -80,14 +80,14 @@ export function ContractsChart({
             type="button"
             aria-label="Mais opções do gráfico"
             title="Mais opções do gráfico"
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-neutral-200 text-neutral-700 transition hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400"
+            className="flex h-10 w-10 items-center justify-center rounded-lg border border-neutral-200 text-neutral-700 transition hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400 sm:h-9 sm:w-9"
           >
             <MoreVertical className="h-4 w-4" />
           </button>
         </div>
       </div>
 
-      <div className="h-[205px] min-w-0 xl:h-auto xl:min-h-[128px] xl:flex-1">
+      <div className="h-[185px] min-w-0 sm:h-[205px] xl:h-auto xl:min-h-[128px] xl:flex-1">
         {!hasContracts ? (
           <div className="flex h-full flex-col items-center justify-center text-center">
             <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-yellow-50 text-yellow-600">

@@ -30,6 +30,14 @@ const INTERNAL_ROLES: InternalRole[] = [
   "vendedor",
 ];
 
+const PERMISSION_GATED_INTERNAL_ROLES = new Set<InternalRole>([
+  "juridico",
+  "financeiro",
+  "marketing",
+  "suporte",
+  "vendedor",
+]);
+
 interface User {
   id: string;
   email: string;
@@ -107,12 +115,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (savedUser) {
         const parsed = JSON.parse(savedUser);
         if (parsed && typeof parsed === "object" && parsed.id && parsed.email && parsed.role) {
-          setUser({
+          const cachedUser: User = {
             id: parsed.id,
             email: parsed.email,
             role: parsed.role,
             internalRole: parsed.internalRole ?? null,
-          });
+          };
+          // Começa a buscar as permissões junto com a restauração da sessão. Na
+          // prática, o menu já está pronto quando a rota protegida é liberada.
+          if (
+            cachedUser.internalRole &&
+            PERMISSION_GATED_INTERNAL_ROLES.has(cachedUser.internalRole)
+          ) {
+            void import("@/lib/permissoes-cache").then(({ loadPermissoesCargo }) =>
+              loadPermissoesCargo(cachedUser.internalRole!),
+            );
+          }
+          setUser(cachedUser);
         }
       }
     } catch (e) {
@@ -177,6 +196,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             : INTERNAL_ROLES.includes(role as InternalRole)
               ? (role as InternalRole)
               : null;
+
+          if (internalRole && PERMISSION_GATED_INTERNAL_ROLES.has(internalRole)) {
+            const { loadPermissoesCargo } = await import("@/lib/permissoes-cache");
+            await loadPermissoesCargo(internalRole);
+            if (!active || isLoggingOutRef.current || syncVersion !== authVersionRef.current) {
+              return false;
+            }
+          }
           setCachedHeaderProfile({
             email,
             nome:

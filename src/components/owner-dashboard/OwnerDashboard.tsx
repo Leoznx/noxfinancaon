@@ -133,8 +133,8 @@ export function OwnerDashboard() {
   }, [data, period]);
 
   return (
-    <DashboardLayout lockViewport>
-      <div className="mx-auto flex h-full min-h-0 w-full max-w-[1480px] flex-col gap-2 lg:grid lg:grid-cols-[minmax(0,1.12fr)_minmax(280px,0.88fr)] lg:grid-rows-[clamp(118px,15vh,150px)_clamp(76px,9vh,94px)_minmax(190px,1.15fr)_minmax(170px,0.95fr)] lg:gap-3">
+    <DashboardLayout lockDesktopViewport>
+      <div className="mx-auto flex w-full max-w-[1480px] flex-col gap-3 xl:grid xl:h-full xl:min-h-0 xl:grid-cols-[minmax(0,1.12fr)_minmax(280px,0.88fr)] xl:grid-rows-[clamp(118px,15vh,150px)_clamp(76px,9vh,94px)_minmax(190px,1.15fr)_minmax(170px,0.95fr)] xl:gap-3">
         <OwnerDashboardHero />
 
         {loading ? (
@@ -145,20 +145,17 @@ export function OwnerDashboard() {
           <>
             <OwnerSummaryGrid data={data} />
 
-            <div
-              className="flex min-h-0 flex-1 snap-x snap-mandatory gap-2 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:contents"
-              aria-label="Detalhes do dashboard. Deslize horizontalmente em telas menores."
-            >
-              <div className="h-full w-full shrink-0 snap-center lg:h-auto lg:min-h-0 lg:w-auto">
+            <div className="grid gap-3 xl:contents" aria-label="Detalhes do dashboard">
+              <div className="min-h-[300px] xl:h-auto xl:min-h-0">
                 <OwnerRevenueChart rows={chartRows} period={period} onPeriodChange={setPeriod} />
               </div>
-              <div className="h-full w-full shrink-0 snap-center lg:h-auto lg:min-h-0 lg:w-auto">
+              <div className="min-h-[300px] xl:h-auto xl:min-h-0">
                 <OwnerPropertyRevenue data={data} />
               </div>
-              <div className="h-full w-full shrink-0 snap-center lg:h-auto lg:min-h-0 lg:w-auto">
+              <div className="min-h-[280px] xl:h-auto xl:min-h-0">
                 <OwnerActiveContracts contracts={data.contracts} />
               </div>
-              <div className="h-full w-full shrink-0 snap-center lg:h-auto lg:min-h-0 lg:w-auto">
+              <div className="min-h-[260px] xl:h-auto xl:min-h-0">
                 <OwnerRecentActivity activities={data.activities} />
               </div>
             </div>
@@ -171,21 +168,21 @@ export function OwnerDashboard() {
 
 function OwnerDashboardHero() {
   return (
-    <section className="relative isolate h-[108px] shrink-0 overflow-hidden rounded-2xl border border-amber-100 bg-[#fffaf0] shadow-[0_10px_35px_rgba(82,65,0,0.05)] lg:col-span-2 lg:h-full">
+    <section className="relative isolate min-h-[148px] shrink-0 overflow-hidden rounded-2xl border border-amber-100 bg-[#fffaf0] shadow-[0_10px_35px_rgba(82,65,0,0.05)] sm:min-h-[132px] xl:col-span-2 xl:h-full xl:min-h-0">
       <img
         src="/assets/nox-hero-casa-chaves-banner.webp"
         alt="Casa moderna protegida pela NOX Fiança"
-        className="absolute inset-y-0 right-0 -z-20 hidden h-full w-[58%] object-cover object-[72%_center] sm:block"
+        className="absolute inset-y-0 right-0 -z-20 h-full w-[46%] object-cover object-[68%_center] opacity-55 sm:w-[58%] sm:opacity-100"
       />
       <div className="absolute inset-0 -z-10 bg-[linear-gradient(90deg,#fffaf0_0%,#fffaf0_43%,rgba(255,250,240,0.92)_52%,rgba(255,250,240,0.08)_85%)]" />
       <div className="absolute -bottom-24 -left-10 -z-10 h-56 w-80 rounded-full bg-yellow-300/25 blur-3xl" />
 
-      <div className="flex h-full max-w-2xl flex-col items-start justify-center px-4 py-2 sm:px-6 xl:px-8">
+      <div className="flex h-full min-h-[148px] max-w-[78%] flex-col items-start justify-center px-4 py-3 sm:min-h-[132px] sm:max-w-2xl sm:px-6 xl:h-full xl:min-h-0 xl:px-8">
         <div className="mb-1.5 hidden items-center gap-2 text-[9px] font-semibold text-neutral-500 sm:flex xl:text-[10px]">
           <ShieldCheck size={14} className="text-[#e9ad00]" strokeWidth={1.8} />
           Segurança e tranquilidade para seus imóveis
         </div>
-        <h1 className="max-w-xl text-lg font-black leading-[1.02] tracking-[-0.035em] text-neutral-950 sm:text-xl xl:text-[28px]">
+        <h1 className="max-w-xl text-[19px] font-black leading-[1.05] tracking-[-0.035em] text-neutral-950 sm:text-xl xl:text-[28px]">
           Acompanhe seus imóveis
           <br />e recebimentos <span className="text-[#f0b400]">em um só lugar.</span>
         </h1>
@@ -231,19 +228,19 @@ type SummaryCardProps = {
 
 function SummaryCard({ label, value, helper, icon: Icon, tone = "default" }: SummaryCardProps) {
   return (
-    <article className="flex h-full min-h-0 items-center gap-2 rounded-xl border border-neutral-200/80 bg-white p-1.5 shadow-[0_8px_28px_rgba(18,18,18,0.035)] sm:p-2.5 xl:gap-3">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#fff6cf] text-[#efb500] xl:h-9 xl:w-9">
+    <article className="flex min-h-[104px] items-start gap-2 rounded-xl border border-neutral-200/80 bg-white p-3 shadow-[0_8px_28px_rgba(18,18,18,0.035)] sm:min-h-[96px] xl:h-full xl:min-h-0 xl:items-center xl:gap-3">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#fff6cf] text-[#efb500]">
         <Icon size={18} strokeWidth={2} />
       </div>
-      <div className="min-w-0">
-        <p className="truncate text-[7px] font-bold uppercase tracking-[0.08em] text-neutral-400 xl:text-[8px]">
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] font-bold uppercase leading-tight tracking-[0.06em] text-neutral-500">
           {label}
         </p>
-        <p className="mt-0.5 truncate text-[15px] font-black leading-none tracking-tight text-neutral-950 tabular-nums sm:text-base xl:text-lg">
+        <p className="mt-1 break-words text-base font-black leading-tight tracking-tight text-neutral-950 tabular-nums xl:text-lg">
           {value}
         </p>
         <div
-          className={`mt-1 truncate text-[8px] font-semibold xl:text-[9px] ${
+          className={`mt-1 line-clamp-2 text-[11px] font-semibold leading-snug ${
             tone === "success"
               ? "text-emerald-600"
               : tone === "warning"
@@ -262,7 +259,7 @@ function OwnerSummaryGrid({ data }: { data: OwnerDashboardData }) {
   const { summary } = data;
   const change = summary.monthChangePercent;
   return (
-    <div className="grid h-[116px] shrink-0 grid-cols-2 gap-2 lg:col-span-2 lg:h-full lg:grid-cols-4 lg:gap-3">
+    <div className="grid shrink-0 grid-cols-2 gap-2 xl:col-span-2 xl:h-full xl:grid-cols-4 xl:gap-3">
       <SummaryCard
         label="Imóveis cadastrados"
         value={String(summary.propertyCount)}
@@ -753,14 +750,14 @@ function OwnerDashboardError({
 function OwnerDashboardSkeleton() {
   return (
     <div
-      className="grid min-h-0 flex-1 grid-rows-[116px_minmax(0,1fr)] gap-2 lg:col-span-2 lg:row-span-3 lg:grid-cols-2 lg:grid-rows-[94px_minmax(0,1fr)_minmax(0,0.9fr)] lg:gap-3"
+      className="grid gap-3 xl:col-span-2 xl:row-span-3 xl:min-h-0 xl:grid-cols-2 xl:grid-rows-[94px_minmax(0,1fr)_minmax(0,0.9fr)]"
       aria-label="Carregando dashboard"
     >
-      <div className="grid grid-cols-2 gap-2 lg:col-span-2 lg:grid-cols-4 lg:gap-3">
+      <div className="grid grid-cols-2 gap-2 xl:col-span-2 xl:grid-cols-4 xl:gap-3">
         {Array.from({ length: 4 }).map((_, index) => (
           <div
             key={index}
-            className="h-full animate-pulse rounded-xl border border-neutral-200 bg-white p-3"
+            className="min-h-[104px] animate-pulse rounded-xl border border-neutral-200 bg-white p-3 xl:h-full xl:min-h-0"
           >
             <div className="h-10 w-10 rounded-xl bg-neutral-100" />
             <div className="ml-14 -mt-9 h-3 w-28 rounded bg-neutral-100" />
@@ -768,12 +765,12 @@ function OwnerDashboardSkeleton() {
           </div>
         ))}
       </div>
-      <div className="grid min-h-0 gap-2 lg:contents">
-        <div className="h-full animate-pulse rounded-xl border border-neutral-200 bg-white" />
-        <div className="hidden h-full animate-pulse rounded-xl border border-neutral-200 bg-white lg:block" />
+      <div className="grid gap-3 xl:contents">
+        <div className="h-[300px] animate-pulse rounded-xl border border-neutral-200 bg-white xl:h-full" />
+        <div className="h-[300px] animate-pulse rounded-xl border border-neutral-200 bg-white xl:h-full" />
       </div>
-      <div className="hidden h-full animate-pulse rounded-xl border border-neutral-200 bg-white lg:block" />
-      <div className="hidden h-full animate-pulse rounded-xl border border-neutral-200 bg-white lg:block" />
+      <div className="h-[280px] animate-pulse rounded-xl border border-neutral-200 bg-white xl:h-full" />
+      <div className="h-[260px] animate-pulse rounded-xl border border-neutral-200 bg-white xl:h-full" />
     </div>
   );
 }

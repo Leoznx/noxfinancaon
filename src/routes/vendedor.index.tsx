@@ -132,19 +132,19 @@ function VendedorDashboard() {
 
   return (
     <DashboardLayout lockDesktopViewport>
-      <div className="relative mx-auto w-full max-w-[1440px] space-y-4 xl:grid xl:h-full xl:min-h-0 xl:grid-rows-[auto_120px_minmax(0,1.05fr)_minmax(0,0.95fr)] xl:gap-3 xl:space-y-0">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-[27px] font-bold tracking-[-0.035em] text-neutral-950">
+      <div className="relative mx-auto w-full max-w-[1440px] space-y-3 sm:space-y-4 xl:grid xl:h-full xl:min-h-0 xl:grid-rows-[auto_120px_minmax(0,1.05fr)_minmax(0,0.95fr)] xl:gap-3 xl:space-y-0">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-[26px] font-bold tracking-[-0.035em] text-neutral-950 sm:text-[27px]">
               Dashboard
             </h1>
-            <p className="mt-0.5 text-[13px] font-medium text-neutral-500">
+            <p className="mt-0.5 text-sm font-medium text-neutral-500">
               Resumo real da sua operação comercial.
             </p>
           </div>
           <Button
             variant="outline"
-            className="h-9 gap-2 self-start rounded-lg border-neutral-200 bg-white px-4 text-xs shadow-sm sm:self-auto"
+            className="h-11 shrink-0 gap-2 rounded-xl border-neutral-200 bg-white px-3 text-xs shadow-sm sm:h-10 sm:px-4"
             onClick={load}
             disabled={loading}
           >
@@ -172,7 +172,7 @@ function VendedorDashboard() {
                 onRangeChange={setChartRange}
               />
 
-              <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 xl:h-full xl:min-h-0 xl:gap-3">
+              <div className="grid min-w-0 grid-cols-2 gap-3 sm:gap-4 xl:h-full xl:min-h-0 xl:gap-3">
                 <SellerKpiCard
                   icon={Users}
                   title="Leads pendentes"
@@ -266,7 +266,7 @@ function DashboardSkeleton() {
       <div className="h-[150px] rounded-2xl bg-neutral-200/70" />
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.18fr)_minmax(480px,0.98fr)]">
         <div className="h-[310px] rounded-2xl bg-neutral-200/70" />
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4">
           {Array.from({ length: 4 }).map((_, index) => (
             <div key={index} className="h-[147px] rounded-2xl bg-neutral-200/70" />
           ))}

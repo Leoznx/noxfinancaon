@@ -88,7 +88,7 @@ export function ImobiliariaDashboard({ profileId, email }: { profileId: string; 
     <div className="mx-auto w-full max-w-[1580px] space-y-3.5 animate-in fade-in duration-300 xl:grid xl:h-full xl:min-h-0 xl:grid-rows-[320px_84px_minmax(360px,1fr)] xl:gap-2.5 xl:space-y-0 xl:overflow-y-auto xl:pr-1 [scrollbar-color:#d4d4d4_transparent] [scrollbar-width:thin]">
       <HeroBanner />
 
-      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:h-full xl:grid-cols-4 xl:gap-2.5">
+      <section className="grid grid-cols-2 gap-3 xl:h-full xl:grid-cols-4 xl:gap-2.5">
         <MetricCard icon={Search} label="Consultas pendentes" value={String(data.stats.consultasPendentes)} trend={data.trends.consultas} />
         <MetricCard icon={FileText} label="Apólices ativas" value={String(data.stats.apolicesAtivas)} trend={data.trends.apolices} />
         <MetricCard icon={Users} label="Inquilinos sob gestão" value={String(data.stats.inquilinosGestao)} trend={data.trends.inquilinos} />
@@ -96,11 +96,11 @@ export function ImobiliariaDashboard({ profileId, email }: { profileId: string; 
       </section>
 
       <section className="grid gap-3 xl:min-h-0 xl:grid-cols-[1.18fr_0.9fr_1fr] xl:gap-2.5">
-        <DashboardPanel className="min-h-[480px] xl:flex xl:h-full xl:min-h-0 xl:flex-col xl:overflow-hidden">
+        <DashboardPanel className="min-h-[360px] sm:min-h-[420px] xl:flex xl:h-full xl:min-h-0 xl:flex-col xl:overflow-hidden">
           <PanelHeader title="Consultas e contratos por mês">
             <CompactSelect value={chartPeriod} onValueChange={setChartPeriod} items={[{ value: "6", label: "Últimos 6 meses" }, { value: "12", label: "Últimos 12 meses" }]} />
           </PanelHeader>
-          <div className="mt-3 h-[410px] min-h-0 xl:mt-2 xl:h-auto xl:flex-1">
+          <div className="mt-3 h-[290px] min-h-0 sm:h-[350px] xl:mt-2 xl:h-auto xl:flex-1">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={displayedMonths} margin={{ top: 20, right: 14, left: -18, bottom: 12 }}>
                 <CartesianGrid stroke="#EEEEEE" strokeDasharray="3 3" vertical={false} />
@@ -115,7 +115,7 @@ export function ImobiliariaDashboard({ profileId, email }: { profileId: string; 
           </div>
         </DashboardPanel>
 
-        <DashboardPanel className="min-h-[520px] xl:flex xl:h-full xl:min-h-0 xl:flex-col xl:overflow-hidden">
+        <DashboardPanel className="min-h-[390px] sm:min-h-[460px] xl:flex xl:h-full xl:min-h-0 xl:flex-col xl:overflow-hidden">
           <PanelHeader title="Status das apólices" />
           <PolicyStatusChart data={data.policyStatus} />
         </DashboardPanel>
@@ -128,17 +128,17 @@ export function ImobiliariaDashboard({ profileId, email }: { profileId: string; 
 
 function HeroBanner() {
   return (
-    <section className="relative min-h-[420px] overflow-hidden rounded-[24px] border border-amber-100 bg-[radial-gradient(circle_at_88%_85%,rgba(255,196,0,0.2),transparent_34%),linear-gradient(112deg,#fffdf8_0%,#ffffff_54%,#fff7d8_100%)] shadow-[0_8px_30px_rgba(0,0,0,0.035)] sm:min-h-[350px] xl:h-full xl:min-h-0">
+    <section className="relative min-h-[330px] overflow-hidden rounded-[24px] border border-amber-100 bg-[radial-gradient(circle_at_88%_85%,rgba(255,196,0,0.2),transparent_34%),linear-gradient(112deg,#fffdf8_0%,#ffffff_54%,#fff7d8_100%)] shadow-[0_8px_30px_rgba(0,0,0,0.035)] sm:min-h-[350px] xl:h-full xl:min-h-0">
       <div aria-hidden="true" className="pointer-events-none absolute -bottom-[28%] -left-[6%] z-0 h-[125%] w-[58%] rounded-full bg-[radial-gradient(ellipse_at_center,rgba(255,196,0,0.52)_0%,rgba(255,211,61,0.28)_42%,rgba(255,233,151,0.12)_62%,transparent_78%)] blur-2xl" />
       <img
         src="/dashboard/agency-panel-art.png"
         alt="Equipe da imobiliária NOX diante de um empreendimento"
-        className="pointer-events-none absolute -bottom-[15%] -left-[5%] z-10 w-[114%] max-w-[444px] select-none object-contain sm:-bottom-[12%] sm:left-[3%] sm:h-[98%] sm:w-[54%] sm:max-w-none xl:-bottom-[24%] xl:-left-[1%] xl:h-[110%] xl:w-auto 2xl:-bottom-[30%] 2xl:left-0 2xl:h-[145%]"
+        className="pointer-events-none absolute -bottom-[6%] left-1/2 z-10 w-[102%] max-w-[390px] -translate-x-1/2 select-none object-contain sm:-bottom-[12%] sm:left-[3%] sm:h-[98%] sm:w-[54%] sm:max-w-none sm:translate-x-0 xl:-bottom-[24%] xl:-left-[1%] xl:h-[110%] xl:w-auto 2xl:-bottom-[30%] 2xl:left-0 2xl:h-[145%]"
       />
       <img
         src="/dashboard/agency-panel-copy.png"
         alt="Sua imobiliária mais ágil, mais profissional"
-        className="pointer-events-none absolute right-1/2 top-4 z-20 w-[90%] max-w-[360px] translate-x-1/2 select-none object-contain sm:right-[3%] sm:top-1/2 sm:w-[52%] sm:max-w-[560px] sm:translate-x-0 sm:-translate-y-1/2 xl:right-[4%] xl:w-[46%] xl:max-w-[650px]"
+        className="pointer-events-none absolute right-1/2 top-3 z-20 w-[88%] max-w-[350px] translate-x-1/2 select-none object-contain sm:right-[3%] sm:top-1/2 sm:w-[52%] sm:max-w-[560px] sm:translate-x-0 sm:-translate-y-1/2 xl:right-[4%] xl:w-[46%] xl:max-w-[650px]"
       />
     </section>
   );
@@ -147,14 +147,14 @@ function HeroBanner() {
 function MetricCard({ icon: Icon, label, value, trend: trendValue }: { icon: Icon; label: string; value: string; trend: number }) {
   const positive = trendValue >= 0;
   return (
-    <article className="group rounded-2xl border border-neutral-200/80 bg-white p-4 shadow-[0_5px_22px_rgba(0,0,0,0.035)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_28px_rgba(0,0,0,0.06)] xl:h-full xl:overflow-hidden xl:p-2.5">
-      <div className="flex items-center gap-4 xl:h-full xl:gap-2.5">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-[#E7B300] transition-colors group-hover:bg-[#FFC400] group-hover:text-neutral-950 xl:h-9 xl:w-9">
+    <article className="group min-w-0 rounded-2xl border border-neutral-200/80 bg-white p-3 shadow-[0_5px_22px_rgba(0,0,0,0.035)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_28px_rgba(0,0,0,0.06)] sm:p-4 xl:h-full xl:overflow-hidden xl:p-2.5">
+      <div className="flex min-w-0 items-start gap-2 sm:items-center sm:gap-4 xl:h-full xl:gap-2.5">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-[#E7B300] transition-colors group-hover:bg-[#FFC400] group-hover:text-neutral-950 sm:h-12 sm:w-12 xl:h-9 xl:w-9">
           <Icon size={22} strokeWidth={1.8} />
         </div>
         <div className="min-w-0">
-          <p className="truncate text-xs font-medium text-neutral-500">{label}</p>
-          <p className="mt-0.5 truncate text-2xl font-black tracking-tight tabular-nums text-neutral-950 xl:text-xl">{value}</p>
+          <p className="line-clamp-2 text-xs font-medium leading-tight text-neutral-500">{label}</p>
+          <p className="mt-1 truncate text-[clamp(17px,4.8vw,24px)] font-black tracking-tight tabular-nums text-neutral-950 xl:text-xl">{value}</p>
           <p className={`mt-1 flex items-center gap-1 text-[10px] font-semibold xl:mt-0.5 xl:text-[9px] ${positive ? "text-emerald-600" : "text-red-500"}`}>
             <TrendingUp size={11} className={positive ? "" : "rotate-180"} />
             {positive ? "+" : ""}{trendValue}% <span className="font-normal text-neutral-400">vs mês anterior</span>
@@ -198,11 +198,11 @@ function PolicyStatusChart({ data }: { data: ImobiliariaDashboardData["policySta
     : [{ key: "empty", label: "Sem apólices", value: 1, color: "#E8E8E8" }];
   return (
     <div
-      className="mt-3 flex min-h-[440px] flex-1 flex-col xl:mt-2 xl:min-h-0"
+      className="mt-3 flex min-h-[330px] flex-1 flex-col sm:min-h-[390px] xl:mt-2 xl:min-h-0"
       role="img"
       aria-label={`Status das apólices: ${data.map((item) => `${item.label} ${item.value}`).join(", ")}`}
     >
-      <div className="relative h-[300px] shrink-0 xl:h-auto xl:min-h-[210px] xl:flex-1">
+      <div className="relative h-[220px] shrink-0 sm:h-[270px] xl:h-auto xl:min-h-[210px] xl:flex-1">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie data={chartData} dataKey="value" nameKey="label" innerRadius="55%" outerRadius="78%" paddingAngle={total > 0 ? 1 : 0} stroke="#FFFFFF" strokeWidth={2} animationDuration={650}>
@@ -233,7 +233,7 @@ function PolicyStatusChart({ data }: { data: ImobiliariaDashboardData["policySta
 
 function InvoicePanel({ invoices }: { invoices: ImobiliariaDashboardData["invoices"] }) {
   return (
-    <DashboardPanel className="flex min-h-[520px] flex-col overflow-hidden xl:h-full xl:min-h-0">
+    <DashboardPanel className="flex min-h-[390px] flex-col overflow-hidden sm:min-h-[460px] xl:h-full xl:min-h-0">
       <PanelHeader title="Próximos vencimentos">
         <Button asChild variant="ghost" size="sm" className="h-7 rounded-lg px-2 text-[10px] text-neutral-500">
           <Link to="/faturas-inquilinos">Ver todos</Link>

@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { LogoNox } from "@/components/LogoNox";
 import { z } from "zod";
 import { redirectPathForRole } from "@/lib/authRedirect";
+import { loadPermissoesCargo } from "@/lib/permissoes-cache";
 import { ROTA_CADASTRO_CONCLUIDO, jaMarcadoLocalmente } from "@/lib/primeiroAcesso";
 import { setCachedHeaderProfile } from "@/lib/profile-cache";
 import { getRememberMe, setRememberMe } from "@/lib/authStorage";
@@ -142,6 +143,9 @@ function LoginComponent() {
       }
     }
     if (internalRole) effectiveRole = internalRole;
+    if (internalRole && internalRole !== "admin_master") {
+      await loadPermissoesCargo(internalRole);
+    }
     login(user.email, profile.role, user.id, internalRole);
 
     if (returnTo === "/simular/resultado") {

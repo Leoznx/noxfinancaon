@@ -29,21 +29,21 @@ export function SellerKpiCard({
   const chartData = (sparkline ?? []).map((item, index) => ({ index, value: item }));
 
   return (
-    <article className="relative h-full min-h-[137px] overflow-hidden rounded-2xl border border-neutral-200 bg-white p-4 shadow-[0_1px_4px_rgba(0,0,0,0.03)] transition duration-150 hover:border-neutral-300 hover:shadow-[0_3px_12px_rgba(0,0,0,0.045)] xl:min-h-0 xl:p-3">
-      <div className="flex items-start gap-3">
+    <article className="relative h-full min-h-[148px] overflow-hidden rounded-2xl border border-neutral-200 bg-white p-3 shadow-[0_1px_4px_rgba(0,0,0,0.03)] transition duration-150 hover:border-neutral-300 hover:shadow-[0_3px_12px_rgba(0,0,0,0.045)] sm:min-h-[137px] sm:p-4 xl:min-h-0 xl:p-3">
+      <div className="flex items-start gap-2 sm:gap-3">
         <span
-          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl sm:h-12 sm:w-12"
           style={{ backgroundColor: palette.iconBg, color: palette.icon }}
         >
-          <Icon className="h-6 w-6" strokeWidth={1.8} />
+          <Icon className="h-5 w-5 sm:h-6 sm:w-6" strokeWidth={1.8} />
         </span>
         <div className="min-w-0 pt-0.5">
-          <p className="text-[12px] font-semibold leading-tight text-neutral-700">{title}</p>
-          <p className="mt-1 truncate text-[23px] font-black leading-none tracking-[-0.03em] text-neutral-950">
+          <p className="text-[13px] font-semibold leading-tight text-neutral-700">{title}</p>
+          <p className="mt-1 truncate text-[clamp(17px,4.8vw,23px)] font-black leading-none tracking-[-0.03em] text-neutral-950 sm:text-[23px]">
             {value}
           </p>
           <p
-            className={`mt-2 text-[10px] font-semibold ${subtitle.startsWith("+") ? "text-green-600" : "text-neutral-500"}`}
+            className={`mt-2 line-clamp-2 text-[11px] font-semibold leading-snug sm:text-xs ${subtitle.startsWith("+") ? "text-green-600" : "text-neutral-500"}`}
           >
             {subtitle}
           </p>
@@ -51,7 +51,7 @@ export function SellerKpiCard({
       </div>
 
       {progress !== undefined ? (
-        <div className="absolute inset-x-4 bottom-4 xl:inset-x-3 xl:bottom-3">
+        <div className="absolute inset-x-3 bottom-3 sm:inset-x-4 sm:bottom-4 xl:inset-x-3 xl:bottom-3">
           <div className="h-2 overflow-hidden rounded-full bg-neutral-100">
             <div
               className="h-full rounded-full bg-[#ffc400] transition-[width] duration-500"

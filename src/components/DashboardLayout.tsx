@@ -478,11 +478,21 @@ export function DashboardLayout({
       return;
     }
     const cached = getCachedPermissoesCargo(cargoInterno);
-    if (cached !== undefined) setPermissoesCargo(cached);
+    setPermissoesCargo(cached);
+    let ativo = true;
     loadPermissoesCargo(cargoInterno)
-      .then(setPermissoesCargo)
-      .catch(() => setPermissoesCargo({}));
+      .then((permissoes) => {
+        if (ativo) setPermissoesCargo(permissoes);
+      })
+      .catch(() => {
+        if (ativo) setPermissoesCargo({});
+      });
+    return () => {
+      ativo = false;
+    };
   }, [cargoInterno]);
+
+  const menuPermissionsLoading = !!cargoInterno && permissoesCargo === undefined;
 
   let menuItems = adminItems;
   if (isCorretor) menuItems = corretorItems;
@@ -523,6 +533,10 @@ export function DashboardLayout({
       CARGO_GATEADO_MENU_ITEM,
     ];
   }
+
+  // Nunca mostra um menu parcial. Enquanto as permissões são resolvidas, o
+  // espaço das abas fica reservado e todas aparecem juntas no resultado final.
+  if (menuPermissionsLoading) menuItems = [];
 
   const nomeTopo = nomeUsuario || user?.email?.split("@")[0] || "Usuário";
   const canSearchAdminMenu =
@@ -594,7 +608,7 @@ export function DashboardLayout({
 
   return (
     <div
-      className={`${lockViewport ? "h-screen min-h-0 overflow-hidden" : "min-h-screen"} bg-neutral-50 flex ${
+      className={`${lockViewport ? "h-dvh min-h-0 overflow-hidden" : "min-h-dvh"} bg-neutral-50 flex ${
         !lockViewport && lockDesktopViewport ? "xl:h-screen xl:min-h-0 xl:overflow-hidden" : ""
       }`}
     >
@@ -608,7 +622,7 @@ export function DashboardLayout({
 
       {/* Sidebar */}
       <aside
-        className={`w-64 flex flex-col fixed inset-y-0 z-50 bg-neutral-950 shadow-2xl shadow-black/30 transition-transform duration-200 lg:translate-x-0 ${
+        className={`fixed inset-y-0 z-50 flex w-[min(19rem,calc(100vw-1.25rem))] flex-col bg-neutral-950 shadow-2xl shadow-black/30 transition-transform duration-200 lg:w-64 lg:translate-x-0 ${
           mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         }`}
       >
@@ -653,8 +667,21 @@ export function DashboardLayout({
           </div>
         )}
 
-        <nav className="flex-1 overflow-y-auto sidebar-scrollbar p-4 py-6 space-y-1.5">
-          {visibleMenuItems.map((item) => {
+        <nav
+          className="sidebar-scrollbar flex-1 space-y-1.5 overflow-y-auto p-4 py-6"
+          aria-busy={menuPermissionsLoading}
+        >
+          {menuPermissionsLoading && (
+            <div className="space-y-2" aria-label="Carregando acessos do menu">
+              {Array.from({ length: 7 }, (_, index) => (
+                <div
+                  key={index}
+                  className="h-11 animate-pulse rounded-xl bg-white/[0.07]"
+                />
+              ))}
+            </div>
+          )}
+          {!menuPermissionsLoading && visibleMenuItems.map((item) => {
             const isActive = location.pathname === item.href.split("?")[0];
             const isHighlight = item.highlight;
             return (
@@ -756,10 +783,10 @@ export function DashboardLayout({
           !lockViewport && lockDesktopViewport ? "xl:h-screen xl:min-h-0 xl:overflow-hidden" : ""
         }`}
       >
-        <header className="h-16 shrink-0 border-b border-neutral-200 flex items-center justify-between gap-3 px-4 sm:px-6 lg:px-10 bg-white/80 backdrop-blur-md sticky top-0 z-40">
+        <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center justify-between gap-2 border-b border-neutral-200 bg-white/90 px-3 backdrop-blur-md sm:gap-3 sm:px-6 lg:px-10">
           <div className="flex items-center gap-3 min-w-0">
             <button
-              className="lg:hidden p-2 -ml-2 text-neutral-700 hover:text-neutral-900 shrink-0"
+              className="-ml-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-neutral-700 hover:bg-neutral-100 hover:text-neutral-900 lg:hidden"
               onClick={() => setMobileOpen(true)}
               aria-label="Abrir menu"
             >
@@ -830,7 +857,7 @@ export function DashboardLayout({
         </header>
 
         <div
-          className={`p-4 sm:p-6 lg:p-10 flex-1 overflow-x-hidden ${
+          className={`flex-1 overflow-x-hidden p-3 sm:p-6 lg:p-8 xl:p-10 ${
             lockViewport
               ? "min-h-0 overflow-hidden p-3 sm:p-4 lg:p-5"
               : lockDesktopViewport
@@ -842,7 +869,7 @@ export function DashboardLayout({
         </div>
 
         <footer
-          className={`p-6 sm:p-8 text-center text-xs text-neutral-400 border-t border-neutral-100 font-medium bg-white ${
+          className={`border-t border-neutral-100 bg-white px-4 py-5 text-center text-xs font-medium text-neutral-400 sm:p-8 ${
             lockViewport ? "hidden" : lockDesktopViewport ? "xl:hidden" : ""
           }`}
         >

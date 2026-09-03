@@ -227,15 +227,15 @@ function DashboardSection({
   children: React.ReactNode;
 }) {
   return (
-    <section className="flex h-full min-h-[286px] min-w-0 flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white p-4 shadow-[0_1px_4px_rgba(0,0,0,0.03)] xl:min-h-0 xl:p-3">
+    <section className="flex h-full min-h-[230px] min-w-0 flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white p-4 shadow-[0_1px_4px_rgba(0,0,0,0.03)] sm:min-h-[260px] xl:min-h-0 xl:p-3">
       <div className="mb-4 flex items-center gap-2 xl:mb-1.5">
-        <h2 className="text-[14px] font-bold text-neutral-950">{title}</h2>
+        <h2 className="text-sm font-bold text-neutral-950">{title}</h2>
         {info && <Info className="h-3.5 w-3.5 text-neutral-400" aria-label={info} />}
       </div>
       <div className="min-h-0 flex-1">{children}</div>
       <Link
         to={href}
-        className="mt-4 flex h-8 items-center justify-center gap-3 rounded-lg border border-neutral-200 bg-white text-[10px] font-semibold text-neutral-700 transition hover:border-yellow-300 hover:bg-yellow-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400 xl:mt-1.5 xl:h-7"
+        className="mt-4 flex min-h-10 items-center justify-center gap-3 rounded-lg border border-neutral-200 bg-white text-xs font-semibold text-neutral-700 transition hover:border-yellow-300 hover:bg-yellow-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400 xl:mt-1.5 xl:min-h-7"
       >
         {footer}
         <ArrowRight className="h-3.5 w-3.5" />
