@@ -4,10 +4,12 @@ import { Check } from 'lucide-react';
 import noxAboutHome from '@/assets/nox-about-home.png';
 import noxHomeBuilding from '@/assets/nox-home-building.png';
 import { Button } from '@/components/ui/button';
+import { FloatingPathsBackground } from '@/components/ui/floating-paths';
 
 export const InstitutionalHero = () => (
-  <section className="w-full overflow-hidden bg-white pt-28 sm:pt-32 lg:pt-[126px]">
-    <div className="mx-auto grid w-full max-w-[1536px] items-center gap-12 px-5 pb-8 sm:px-8 sm:pb-12 lg:min-h-[600px] lg:grid-cols-[minmax(0,0.49fr)_minmax(0,0.51fr)] lg:gap-8 lg:px-12 lg:pb-12 xl:grid-cols-[minmax(0,0.46fr)_minmax(0,0.54fr)] xl:gap-12 xl:px-16 2xl:px-20">
+  <section className="relative w-full overflow-hidden bg-white pt-28 sm:pt-32 lg:pt-[126px]">
+    <FloatingPathsBackground position={1} className="absolute inset-0" />
+    <div className="relative z-10 mx-auto grid w-full max-w-[1536px] items-center gap-12 px-5 pb-8 sm:px-8 sm:pb-12 lg:min-h-[600px] lg:grid-cols-[minmax(0,0.49fr)_minmax(0,0.51fr)] lg:gap-8 lg:px-12 lg:pb-12 xl:grid-cols-[minmax(0,0.46fr)_minmax(0,0.54fr)] xl:gap-12 xl:px-16 2xl:px-20">
       <div className="max-w-[600px] lg:py-10 xl:max-w-[620px]">
         <span className="mb-6 inline-block rounded-full bg-neutral-100 px-3 py-1 text-sm font-bold tracking-wider text-neutral-700">
           SEGURO FIANÇA LOCATÍCIA
