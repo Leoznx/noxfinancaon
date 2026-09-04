@@ -28,8 +28,10 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import {
   appointmentMatchesFilter,
+  buildShortNameValueMap,
   deleteSellerAppointment,
   fetchSellerAgenda,
+  getSharedMeetingMetadata,
   saveSellerAppointment,
   setSellerAppointmentStatus,
   type AgendaClientOption,
@@ -55,6 +57,7 @@ type ListScope = "month" | "week";
 
 function AgendaPage() {
   const [sellerId, setSellerId] = useState<string | null>(null);
+  const [sellerName, setSellerName] = useState<string | null>(null);
   const [sellerType, setSellerType] = useState<"sdr" | "closer" | null>(null);
   const [appointments, setAppointments] = useState<SellerAppointment[]>([]);
   const [leads, setLeads] = useState<AgendaLeadOption[]>([]);
@@ -82,6 +85,7 @@ function AgendaPage() {
       const context = await getSellerContext();
       if (!context.isSeller || !context.sellerId) throw new Error("Não encontramos um vendedor ativo para este usuário.");
       setSellerId(context.sellerId);
+      setSellerName(context.sellerName);
       setSellerType(context.sellerType);
       const data = await fetchSellerAgenda(context.sellerId, month);
       setAppointments(data.appointments);
@@ -129,6 +133,10 @@ function AgendaPage() {
       : isSameMonth(new Date(item.scheduled_at), month))
     .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime()), [filtered, listScope, month, weekInterval]);
   const overdueCount = useMemo(() => appointments.filter((item) => new Date(item.scheduled_at) < new Date() && !["concluido", "cancelado"].includes(item.status)).length, [appointments]);
+  const sdrNames = useMemo(
+    () => buildShortNameValueMap(appointments.map((item) => getSharedMeetingMetadata(item.notes).sdrName)),
+    [appointments],
+  );
 
   function openNew(date = selectedDate) {
     setSelectedDate(date);
@@ -213,8 +221,8 @@ function AgendaPage() {
   }
 
   return (
-    <DashboardLayout lockDesktopViewport={view === "calendario"}>
-      <main className="space-y-3 pb-4 xl:h-full xl:min-h-0 xl:pb-0">
+    <DashboardLayout>
+      <main className="space-y-3 pb-4">
         <header className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div className="flex items-start gap-3">
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-yellow-100 text-yellow-800"><CalendarClock className="h-5 w-5" /></span>
@@ -232,6 +240,7 @@ function AgendaPage() {
         <SharedSalesAgenda
           sellerType={sellerType}
           sellerId={sellerId}
+          sellerName={sellerName}
           appointments={appointments}
           onRefresh={() => load(true)}
         />
@@ -245,7 +254,7 @@ function AgendaPage() {
         {error ? <ErrorState message={error} onRetry={() => load()} /> : loading ? <AgendaSkeleton /> : view === "calendario" ? (
           <div className="grid items-start gap-3 xl:min-h-0 xl:grid-cols-[minmax(0,1fr)_340px]">
             <AgendaCalendar month={month} selectedDate={selectedDate} items={filtered} onMonthChange={changeMonth} onDateSelect={selectDate} onEventOpen={setViewing} />
-            <AgendaDayPanel date={selectedDate} items={selectedItems} onNew={() => openNew(selectedDate)} onView={setViewing} onEdit={openEdit} onComplete={complete} onDelete={setDeleteTarget} />
+            <AgendaDayPanel date={selectedDate} items={selectedItems} sdrNames={sdrNames} onNew={() => openNew(selectedDate)} onView={setViewing} onEdit={openEdit} onComplete={complete} onDelete={setDeleteTarget} />
           </div>
         ) : (
           <section className="rounded-2xl border border-neutral-200 bg-white p-3 shadow-[0_2px_8px_rgba(0,0,0,0.03)] sm:p-4">
@@ -256,13 +265,13 @@ function AgendaPage() {
             {listItems.length === 0 ? (
               <div className="grid min-h-52 place-items-center rounded-xl border border-dashed border-neutral-200 bg-neutral-50/50 p-6 text-center"><div><p className="font-black text-neutral-950">Nenhum compromisso encontrado</p><p className="mt-1 text-sm text-neutral-500">Ajuste o filtro ou crie um novo compromisso para este período.</p><Button className="mt-4 bg-yellow-400 font-bold text-black hover:bg-yellow-500" onClick={() => openNew()}><Plus className="mr-1.5 h-4 w-4" /> Novo compromisso</Button></div></div>
             ) : (
-              <div className="grid gap-3 lg:grid-cols-2">{listItems.map((item) => <AppointmentCard key={item.id} item={item} onView={setViewing} onEdit={openEdit} onComplete={complete} onDelete={setDeleteTarget} />)}</div>
+              <div className="grid gap-3 lg:grid-cols-2">{listItems.map((item) => <AppointmentCard key={item.id} item={item} sdrNames={sdrNames} onView={setViewing} onEdit={openEdit} onComplete={complete} onDelete={setDeleteTarget} />)}</div>
             )}
           </section>
         )}
 
         <AppointmentModal open={modalOpen} initial={editing} defaultDate={selectedDate} leads={leads} clients={clients} onOpenChange={(open) => { setModalOpen(open); if (!open) setEditing(null); }} onSave={handleSave} onDelete={(item) => { setDeleteTarget(item); setModalOpen(false); }} />
-        <AppointmentDetailsDialog item={viewing} onClose={() => setViewing(null)} onEdit={openEdit} onComplete={complete} onDelete={setDeleteTarget} />
+        <AppointmentDetailsDialog item={viewing} sdrNames={sdrNames} onClose={() => setViewing(null)} onEdit={openEdit} onComplete={complete} onDelete={setDeleteTarget} />
         <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
           <AlertDialogContent>
             <AlertDialogHeader><AlertDialogTitle>Excluir compromisso?</AlertDialogTitle><AlertDialogDescription>“{deleteTarget?.title}” será removido da agenda. Se for um follow-up sincronizado, o próximo retorno do lead também será cancelado.</AlertDialogDescription></AlertDialogHeader>

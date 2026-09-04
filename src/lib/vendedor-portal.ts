@@ -6,6 +6,7 @@ export type SellerContext = {
   authUserId: string;
   email: string | null;
   sellerId: string | null;
+  sellerName: string | null;
   isSeller: boolean;
   sellerType: SellerType | null;
   excludedFromMetrics: boolean;
@@ -39,7 +40,7 @@ export async function getSellerContext(): Promise<SellerContext> {
 
   const { data, error } = await supabase
     .from("internal_users" as any)
-    .select("id, role, status, email, seller_type, exclude_from_commercial_metrics")
+    .select("id, full_name, role, status, email, seller_type, exclude_from_commercial_metrics")
     .eq("auth_user_id", user.id)
     .maybeSingle();
 
@@ -52,6 +53,7 @@ export async function getSellerContext(): Promise<SellerContext> {
     authUserId: user.id,
     email: user.email ?? null,
     sellerId: internal?.id ?? null,
+    sellerName: internal?.full_name ?? null,
     isSeller,
     sellerType: ["sdr", "closer"].includes(internal?.seller_type)
       ? internal.seller_type

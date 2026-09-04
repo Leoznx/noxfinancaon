@@ -4,16 +4,18 @@ import { Bell, Building2, CalendarDays, Check, Clock3, Edit3, Trash2, UserRound 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { AGENDA_REMINDERS, agendaStatusLabel, agendaTypeLabel, type SellerAppointment } from "@/lib/seller-agenda";
+import { AGENDA_REMINDERS, agendaStatusLabel, agendaTypeLabel, getSharedMeetingMetadata, getVisibleAppointmentNotes, type SellerAppointment } from "@/lib/seller-agenda";
 
 export function AppointmentDetailsDialog({
   item,
+  sdrNames,
   onClose,
   onEdit,
   onComplete,
   onDelete,
 }: {
   item: SellerAppointment | null;
+  sdrNames?: ReadonlyMap<string, string>;
   onClose: () => void;
   onEdit: (item: SellerAppointment) => void;
   onComplete: (item: SellerAppointment) => void;
@@ -22,6 +24,11 @@ export function AppointmentDetailsDialog({
   if (!item) return null;
   const related = item.client_name || item.lead_name;
   const reminder = AGENDA_REMINDERS.find((option) => option.value === item.reminder_minutes)?.label ?? "Sem lembrete";
+  const metadata = getSharedMeetingMetadata(item.notes);
+  const visibleNotes = getVisibleAppointmentNotes(item);
+  const sdrName = metadata.sdrName
+    ? sdrNames?.get(metadata.sdrName) ?? metadata.sdrName.trim().split(/\s+/)[0]
+    : null;
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-lg">
@@ -45,7 +52,8 @@ export function AppointmentDetailsDialog({
               {related}
             </div>
           )}
-          {item.notes && <p className="rounded-xl border border-neutral-200 p-3 leading-relaxed text-neutral-600">{item.notes}</p>}
+          {item.source === "sdr_handoff" && (metadata.clientType || sdrName) && <div className="grid gap-2 rounded-xl border border-yellow-200 bg-yellow-50 p-3 text-xs font-semibold text-neutral-700 sm:grid-cols-2">{metadata.clientType && <p><span className="text-neutral-500">Tipo:</span> {metadata.clientType}</p>}{sdrName && <p><span className="text-neutral-500">SDR:</span> {sdrName}</p>}</div>}
+          {visibleNotes && <p className="rounded-xl border border-neutral-200 p-3 leading-relaxed text-neutral-600">{visibleNotes}</p>}
         </div>
         <DialogFooter className="flex-wrap">
           <Button variant="ghost" className="mr-auto text-red-600 hover:bg-red-50" onClick={() => onDelete(item)}><Trash2 className="mr-1.5 h-4 w-4" /> Excluir</Button>

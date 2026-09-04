@@ -288,6 +288,7 @@ const adminMasterItems = adminItems;
 // separados. Dashboard e Meu Perfil sem module = sempre visíveis (todo mundo
 // precisa de um ponto de entrada e acesso ao próprio perfil).
 const vendedorItems: MenuItem[] = [
+  { icon: Bell, label: "Minha Agenda", href: "/vendedor/agenda", module: "agenda", highlight: true, sellerTypes: ["sdr", "closer"] },
   {
     icon: ContactRound,
     label: "Cadastrar Cliente",
@@ -298,7 +299,6 @@ const vendedorItems: MenuItem[] = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/vendedor", sellerTypes: ["sdr", "closer"] },
   { icon: MonitorPlay, label: "Contas demo", href: "/vendedor/contas-demo", sellerTypes: ["closer"] },
   { icon: Users, label: "Leads e Atendimento", href: "/vendedor/leads", module: "leads_proprios", sellerTypes: ["sdr"] },
-  { icon: Bell, label: "Minha Agenda", href: "/vendedor/agenda", module: "agenda", highlight: true, sellerTypes: ["sdr", "closer"] },
   { icon: Target, label: "Minhas Metas", href: "/vendedor/metas", module: "metas", sellerTypes: ["sdr", "closer"] },
   {
     icon: DollarSign,

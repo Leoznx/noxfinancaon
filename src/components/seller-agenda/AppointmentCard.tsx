@@ -7,6 +7,8 @@ import {
   agendaStatusLabel,
   agendaTypeKey,
   agendaTypeLabel,
+  getSharedMeetingMetadata,
+  getVisibleAppointmentNotes,
   type SellerAppointment,
 } from "@/lib/seller-agenda";
 
@@ -27,6 +29,7 @@ const STATUS_STYLE: Record<string, string> = {
 export function AppointmentCard({
   item,
   compact = false,
+  sdrNames,
   onView,
   onEdit,
   onComplete,
@@ -34,6 +37,7 @@ export function AppointmentCard({
 }: {
   item: SellerAppointment;
   compact?: boolean;
+  sdrNames?: ReadonlyMap<string, string>;
   onView: (item: SellerAppointment) => void;
   onEdit: (item: SellerAppointment) => void;
   onComplete: (item: SellerAppointment) => void;
@@ -41,6 +45,11 @@ export function AppointmentCard({
 }) {
   const finished = ["concluido", "cancelado"].includes(item.status);
   const relatedName = item.client_name || item.lead_name;
+  const sharedMetadata = getSharedMeetingMetadata(item.notes);
+  const visibleNotes = getVisibleAppointmentNotes(item);
+  const sdrName = sharedMetadata.sdrName
+    ? sdrNames?.get(sharedMetadata.sdrName) ?? sharedMetadata.sdrName.trim().split(/\s+/)[0]
+    : null;
 
   return (
     <article
@@ -68,13 +77,14 @@ export function AppointmentCard({
             </Badge>
           </div>
           <h3 className={`mt-1.5 truncate font-extrabold text-neutral-950 ${compact ? "text-sm" : "text-base"}`}>{item.title}</h3>
+          {item.source === "sdr_handoff" && (sharedMetadata.clientType || sdrName) && <p className="mt-0.5 truncate text-[10px] font-bold text-yellow-700">{sharedMetadata.clientType ?? "Cliente"}{sdrName ? ` · SDR ${sdrName}` : ""}</p>}
           {relatedName && (
             <p className="mt-0.5 flex items-center gap-1 truncate text-[11px] font-medium text-neutral-500">
               {item.client_name ? <Building2 className="h-3 w-3" /> : <UserRound className="h-3 w-3" />}
               {relatedName}
             </p>
           )}
-          {!compact && item.notes && <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-neutral-500">{item.notes}</p>}
+          {!compact && visibleNotes && <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-neutral-500">{visibleNotes}</p>}
           {!compact && (
             <p className="mt-2 text-[10px] font-semibold capitalize text-neutral-400">
               {format(new Date(item.scheduled_at), "EEEE, d 'de' MMMM", { locale: ptBR })}

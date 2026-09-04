@@ -8,6 +8,7 @@ import type { SellerAppointment } from "@/lib/seller-agenda";
 export function AgendaDayPanel({
   date,
   items,
+  sdrNames,
   onNew,
   onView,
   onEdit,
@@ -16,6 +17,7 @@ export function AgendaDayPanel({
 }: {
   date: Date;
   items: SellerAppointment[];
+  sdrNames?: ReadonlyMap<string, string>;
   onNew: () => void;
   onView: (item: SellerAppointment) => void;
   onEdit: (item: SellerAppointment) => void;
@@ -62,6 +64,7 @@ export function AgendaDayPanel({
                 key={item.id}
                 item={item}
                 compact
+                sdrNames={sdrNames}
                 onView={onView}
                 onEdit={onEdit}
                 onComplete={onComplete}

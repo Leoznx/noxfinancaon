@@ -67,6 +67,62 @@ export type SellerAppointment = {
   client_name: string | null;
 };
 
+export type SharedMeetingMetadata = {
+  clientType: string | null;
+  sdrName: string | null;
+  observation: string | null;
+};
+
+export function getSharedMeetingMetadata(notes?: string | null): SharedMeetingMetadata {
+  const lines = String(notes ?? "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const valueAfter = (prefix: string) =>
+    lines
+      .find((line) => line.toLocaleLowerCase("pt-BR").startsWith(prefix.toLocaleLowerCase("pt-BR")))
+      ?.slice(prefix.length)
+      .trim() || null;
+  const observationIndex = lines.findIndex((line) =>
+    line.toLocaleLowerCase("pt-BR").startsWith("observação:"),
+  );
+  return {
+    clientType: valueAfter("Tipo de cliente:"),
+    sdrName: valueAfter("SDR responsável:"),
+    observation: observationIndex >= 0
+      ? [lines[observationIndex].slice("Observação:".length).trim(), ...lines.slice(observationIndex + 1)].filter(Boolean).join("\n") || null
+      : null,
+  };
+}
+
+export function getVisibleAppointmentNotes(item: Pick<SellerAppointment, "source" | "notes">) {
+  if (item.source !== "sdr_handoff") return item.notes;
+  const metadata = getSharedMeetingMetadata(item.notes);
+  return metadata.clientType || metadata.sdrName || metadata.observation ? metadata.observation : item.notes;
+}
+
+export function buildShortNameValueMap(names: Array<string | null>) {
+  const normalizedNames = [...new Set(names.filter(Boolean).map((name) => normalizePersonName(name!)))];
+  const firstNameCounts = new Map<string, number>();
+  for (const name of normalizedNames) {
+    const key = firstNameOnly(name).toLocaleLowerCase("pt-BR");
+    firstNameCounts.set(key, (firstNameCounts.get(key) ?? 0) + 1);
+  }
+  return new Map(normalizedNames.map((name) => {
+    const pieces = name.split(" ");
+    const duplicated = (firstNameCounts.get(pieces[0].toLocaleLowerCase("pt-BR")) ?? 0) > 1;
+    return [name, duplicated ? pieces.slice(0, 2).join(" ") : pieces[0]];
+  }));
+}
+
+export function firstNameOnly(value: string) {
+  return normalizePersonName(value).split(" ")[0];
+}
+
+function normalizePersonName(value: string) {
+  return value.trim().replace(/\s+/g, " ") || "Vendedor";
+}
+
 export type AppointmentDraft = {
   id?: string;
   title: string;
@@ -293,7 +349,7 @@ export type CloserAvailabilitySlot = {
 };
 
 export async function fetchCloserAvailability(fromDate: Date, days = 14) {
-  const date = fromDate.toISOString().slice(0, 10);
+  const date = formatLocalDate(fromDate);
   const { data, error } = await supabase.rpc("get_available_closer_slots" as any, {
     p_from_date: date,
     p_days: days,
@@ -301,6 +357,13 @@ export async function fetchCloserAvailability(fromDate: Date, days = 14) {
   });
   if (error) throw error;
   return ((data as any[]) ?? []) as CloserAvailabilitySlot[];
+}
+
+function formatLocalDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 export async function scheduleSdrCloserMeeting(input: {
