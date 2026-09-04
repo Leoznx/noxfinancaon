@@ -29,7 +29,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Scale, DollarSign, Megaphone, Briefcase, KeyRound, Copy, Check, ExternalLink, RefreshCw, Ban, UserCheck } from "lucide-react";
+import { Scale, DollarSign, Megaphone, Briefcase, KeyRound, Copy, Check, ExternalLink, RefreshCw, Ban, UserCheck, Clock3 } from "lucide-react";
 import {
   noxInternalAccounts,
   buildRegistrationLink,
@@ -41,6 +41,7 @@ import {
   updateNoxEmployeeRole,
   updateNoxEmployeeStatus,
 } from "@/lib/nox-employees.functions";
+import { setSellerTimeClockEnabled } from "@/lib/time-clock";
 
 export const Route = createFileRoute("/admin/conta-nox")({
   component: () => (
@@ -90,6 +91,8 @@ function ContaNoxPage() {
   const [pendingRoleChange, setPendingRoleChange] = useState<{ id: string; nome: string; accountType: NoxInternalAccountType } | null>(
     null,
   );
+  const [clockEmployee, setClockEmployee] = useState<{ id: string; nome: string; enabled: boolean; status: string } | null>(null);
+  const [savingClock, setSavingClock] = useState(false);
 
   const carregar = useCallback(async () => {
     setLoading(true);
@@ -143,6 +146,25 @@ function ContaNoxPage() {
       carregar();
     } catch (e: any) {
       toast.error(e?.message || "Não foi possível atualizar o cargo.");
+    }
+  };
+
+  const salvarControlePonto = async (enabled: boolean) => {
+    if (!clockEmployee) return;
+    setSavingClock(true);
+    try {
+      await setSellerTimeClockEnabled(clockEmployee.id, enabled);
+      setEmployees((current) =>
+        current.map((employee) =>
+          employee.id === clockEmployee.id ? { ...employee, timeClockEnabled: enabled } : employee,
+        ),
+      );
+      toast.success(enabled ? "Controle de ponto ativado." : "Controle de ponto desativado.");
+      setClockEmployee(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível alterar o controle de ponto.");
+    } finally {
+      setSavingClock(false);
     }
   };
 
@@ -287,7 +309,26 @@ function ContaNoxPage() {
                     <div key={emp.id} className="p-4">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="font-medium truncate">{emp.nome}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium truncate">{emp.nome}</p>
+                            {emp.cargo === "vendedor" && (
+                              <button
+                                type="button"
+                                title={`Controle de ponto: ${emp.timeClockEnabled ? "Sim" : "Não"}`}
+                                aria-label={`Configurar controle de ponto de ${emp.nome}`}
+                                onClick={() =>
+                                  setClockEmployee({ id: emp.id, nome: emp.nome, enabled: !!emp.timeClockEnabled, status: emp.status })
+                                }
+                                className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition-colors ${
+                                  emp.timeClockEnabled
+                                    ? "border-yellow-300 bg-yellow-100 text-neutral-900"
+                                    : "border-neutral-200 bg-neutral-50 text-neutral-500 hover:bg-yellow-50 hover:text-neutral-900"
+                                }`}
+                              >
+                                <Clock3 size={14} />
+                              </button>
+                            )}
+                          </div>
                           <p className="text-xs text-neutral-500 truncate">{emp.email}</p>
                           <p className="text-xs text-neutral-500">{emp.telefone || "—"}</p>
                         </div>
@@ -377,7 +418,28 @@ function ContaNoxPage() {
                     const badge = STATUS_BADGE[emp.status];
                     return (
                       <TableRow key={emp.id}>
-                        <TableCell className="font-medium">{emp.nome}</TableCell>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-2">
+                            <span>{emp.nome}</span>
+                            {emp.cargo === "vendedor" && (
+                              <button
+                                type="button"
+                                title={`Controle de ponto: ${emp.timeClockEnabled ? "Sim" : "Não"}`}
+                                aria-label={`Configurar controle de ponto de ${emp.nome}`}
+                                onClick={() =>
+                                  setClockEmployee({ id: emp.id, nome: emp.nome, enabled: !!emp.timeClockEnabled, status: emp.status })
+                                }
+                                className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition-colors ${
+                                  emp.timeClockEnabled
+                                    ? "border-yellow-300 bg-yellow-100 text-neutral-900"
+                                    : "border-neutral-200 bg-neutral-50 text-neutral-500 hover:bg-yellow-50 hover:text-neutral-900"
+                                }`}
+                              >
+                                <Clock3 size={14} />
+                              </button>
+                            )}
+                          </div>
+                        </TableCell>
                         <TableCell className="text-xs">{emp.email}</TableCell>
                         <TableCell className="text-xs">{emp.telefone || "—"}</TableCell>
                         <TableCell>
@@ -455,6 +517,48 @@ function ContaNoxPage() {
             </Button>
             <Button type="button" onClick={confirmarAlteracaoCargo} className="bg-neutral-900 hover:bg-neutral-800 text-white">
               Confirmar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!clockEmployee} onOpenChange={(open) => !open && !savingClock && setClockEmployee(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogTitle className="flex items-center gap-2">
+            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-yellow-100 text-neutral-900">
+              <Clock3 size={18} />
+            </span>
+            Controle de ponto
+          </DialogTitle>
+          <DialogDescription>
+            Permitir que <strong>{clockEmployee?.nome}</strong> registre o ponto?
+          </DialogDescription>
+          <div className="grid grid-cols-2 gap-3 py-2" role="group" aria-label="Ativar controle de ponto">
+            <Button
+              type="button"
+              variant={!clockEmployee?.enabled ? "default" : "outline"}
+              disabled={savingClock}
+              onClick={() => void salvarControlePonto(false)}
+              className={!clockEmployee?.enabled ? "bg-neutral-900 text-white hover:bg-neutral-800" : ""}
+            >
+              Não
+            </Button>
+            <Button
+              type="button"
+              variant={clockEmployee?.enabled ? "default" : "outline"}
+              disabled={savingClock || clockEmployee?.status === "bloqueado"}
+              onClick={() => void salvarControlePonto(true)}
+              className={clockEmployee?.enabled ? "bg-yellow-400 text-neutral-900 hover:bg-yellow-300" : ""}
+            >
+              Sim
+            </Button>
+          </div>
+          {clockEmployee?.status === "bloqueado" && (
+            <p className="text-xs text-amber-700">Reative a conta antes de habilitar novas marcações.</p>
+          )}
+          <DialogFooter>
+            <Button type="button" variant="ghost" disabled={savingClock} onClick={() => setClockEmployee(null)}>
+              Cancelar
             </Button>
           </DialogFooter>
         </DialogContent>

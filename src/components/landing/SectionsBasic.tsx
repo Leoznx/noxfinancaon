@@ -10,8 +10,6 @@ export const InstitutionalHero = () => (
     <div aria-hidden="true" className="pointer-events-none absolute inset-0">
       <div className="absolute -left-24 top-40 h-72 w-72 rounded-full bg-[#FEF9C3]/45 blur-3xl" />
       <div className="absolute bottom-10 left-[6%] h-36 w-36 rounded-full bg-[#FDE68A]/20 blur-3xl" />
-      <div className="absolute left-[41%] top-28 hidden h-28 w-28 rounded-full border border-[#FACC15]/25 lg:block" />
-      <div className="absolute left-[43%] top-[33%] hidden h-2.5 w-2.5 rounded-full bg-[#FACC15]/75 shadow-[0_0_0_10px_rgba(250,204,21,0.10)] lg:block" />
       <div className="absolute bottom-12 left-[8%] h-px w-[30%] bg-gradient-to-r from-transparent via-[#FACC15]/35 to-transparent" />
     </div>
     <div className="relative z-10 mx-auto grid w-full max-w-none items-center gap-12 px-5 pb-10 sm:px-8 sm:pb-14 lg:min-h-[700px] lg:grid-cols-[minmax(0,0.45fr)_minmax(0,0.55fr)] lg:gap-6 lg:pb-16 lg:pl-16 lg:pr-0 xl:grid-cols-[minmax(0,0.44fr)_minmax(0,0.56fr)] xl:gap-8 xl:pl-24 2xl:pl-28">

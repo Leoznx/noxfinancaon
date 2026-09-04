@@ -167,7 +167,7 @@ export const listNoxEmployees = createServerFn({ method: "POST" })
 
     const { data: rows, error } = await supabaseAdmin
       .from("internal_users" as any)
-      .select("id, auth_user_id, full_name, email, phone, role, seller_type, status, created_at")
+      .select("id, auth_user_id, full_name, email, phone, role, seller_type, status, time_clock_enabled, created_at")
       .order("created_at", { ascending: false });
     if (error) throw new Error("Não foi possível carregar os funcionários.");
 
@@ -195,6 +195,7 @@ export const listNoxEmployees = createServerFn({ method: "POST" })
         cargo: r.role,
         sellerType: r.seller_type ?? null,
         accountType: r.role === "vendedor" ? (r.seller_type ?? "sdr") : r.role,
+        timeClockEnabled: !!r.time_clock_enabled,
         criadoEm: r.created_at,
         status,
         ultimoAcesso: authUser?.last_sign_in_at || null,
