@@ -50,7 +50,7 @@ export const InstitutionalHero = () => (
       </div>
 
       <div className="hidden w-full items-center justify-center sm:flex lg:justify-start">
-        <div className="flex aspect-[3/2] w-full shrink-0 items-center justify-center">
+        <div className="flex aspect-[3/2] w-full shrink-0 items-center justify-end lg:w-[calc(100%_+_5rem)] xl:w-[calc(100%_+_7rem)] 2xl:w-[calc(100%_+_max(0px,50vw_-_768px)_+_8rem)]">
           <img
             src={noxHomeBuilding}
             alt="Edifício residencial moderno iluminado à noite"
@@ -59,7 +59,7 @@ export const InstitutionalHero = () => (
             loading="eager"
             decoding="async"
             fetchPriority="high"
-            className="h-auto w-[94%] max-w-[720px] rounded-[1.75rem] object-contain shadow-[0_24px_70px_rgba(0,0,0,0.16)]"
+            className="h-auto w-full max-w-none object-contain object-right"
           />
         </div>
       </div>
