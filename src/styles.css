@@ -131,6 +131,70 @@
 }
 
 @layer components {
+  .aurora-background {
+    overflow: hidden;
+    background-color: #ffffff;
+    background-image:
+      radial-gradient(
+        ellipse 72% 62% at 16% 22%,
+        rgba(254, 240, 138, 0.62) 0%,
+        rgba(254, 249, 195, 0.3) 38%,
+        rgba(255, 255, 255, 0) 72%
+      ),
+      radial-gradient(
+        ellipse 68% 58% at 86% 30%,
+        rgba(253, 224, 71, 0.26) 0%,
+        rgba(254, 249, 195, 0.24) 42%,
+        rgba(255, 255, 255, 0) 74%
+      ),
+      linear-gradient(135deg, #ffffff 8%, #fffdf2 50%, #ffffff 92%);
+    background-position:
+      0% 10%,
+      100% 0%,
+      center;
+    background-size:
+      145% 145%,
+      150% 150%,
+      100% 100%;
+    animation: nox-aurora-drift 18s ease-in-out infinite alternate;
+  }
+
+  .aurora-background::before {
+    position: absolute;
+    inset: -32%;
+    content: "";
+    background:
+      radial-gradient(
+        ellipse at 32% 58%,
+        rgba(254, 240, 138, 0.42) 0%,
+        rgba(255, 249, 214, 0.18) 34%,
+        rgba(255, 255, 255, 0) 68%
+      ),
+      radial-gradient(
+        ellipse at 72% 38%,
+        rgba(250, 204, 21, 0.18) 0%,
+        rgba(255, 252, 231, 0.2) 38%,
+        rgba(255, 255, 255, 0) 70%
+      );
+    filter: blur(48px);
+    opacity: 0.9;
+    transform-origin: center;
+    will-change: transform, opacity;
+    animation: nox-aurora-float 22s ease-in-out infinite;
+  }
+
+  .aurora-background::after {
+    position: absolute;
+    inset: 0;
+    content: "";
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.5) 0%,
+      rgba(255, 255, 255, 0.1) 46%,
+      rgba(255, 255, 255, 0.42) 100%
+    );
+  }
+
   .perfil-hero-section {
     display: flex;
     align-items: center;
@@ -243,6 +307,46 @@
       max-height: none;
       object-position: right bottom;
     }
+  }
+}
+
+@keyframes nox-aurora-drift {
+  0% {
+    background-position:
+      0% 12%,
+      100% 0%,
+      center;
+  }
+  50% {
+    background-position:
+      24% 42%,
+      72% 34%,
+      center;
+  }
+  100% {
+    background-position:
+      10% 72%,
+      92% 62%,
+      center;
+  }
+}
+
+@keyframes nox-aurora-float {
+  0%,
+  100% {
+    opacity: 0.72;
+    transform: translate3d(-2%, -2%, 0) rotate(-3deg) scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: translate3d(4%, 3%, 0) rotate(4deg) scale(1.08);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aurora-background,
+  .aurora-background::before {
+    animation: none;
   }
 }
 

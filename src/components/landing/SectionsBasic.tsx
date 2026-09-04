@@ -3,11 +3,13 @@ import { Check } from 'lucide-react';
 
 import noxAboutHome from '@/assets/nox-about-home.png';
 import noxHomeBuilding from '@/assets/nox-home-building.png';
+import AnimatedAuroraBackground from '@/components/ui/animated-aurora-background';
 import { Button } from '@/components/ui/button';
 
 export const InstitutionalHero = () => (
-  <section className="w-full overflow-hidden bg-white pt-28 sm:pt-32 lg:pt-[126px]">
-    <div className="mx-auto grid w-full max-w-[1536px] items-center gap-12 px-5 pb-8 sm:px-8 sm:pb-12 lg:min-h-[600px] lg:grid-cols-[minmax(0,0.49fr)_minmax(0,0.51fr)] lg:gap-8 lg:px-12 lg:pb-12 xl:grid-cols-[minmax(0,0.46fr)_minmax(0,0.54fr)] xl:gap-12 xl:px-16 2xl:px-20">
+  <section className="relative isolate w-full overflow-hidden bg-white pt-28 sm:pt-32 lg:pt-[126px]">
+    <AnimatedAuroraBackground />
+    <div className="relative z-10 mx-auto grid w-full max-w-[1536px] items-center gap-12 px-5 pb-8 sm:px-8 sm:pb-12 lg:min-h-[600px] lg:grid-cols-[minmax(0,0.49fr)_minmax(0,0.51fr)] lg:gap-8 lg:px-12 lg:pb-12 xl:grid-cols-[minmax(0,0.46fr)_minmax(0,0.54fr)] xl:gap-12 xl:px-16 2xl:px-20">
       <div className="max-w-[600px] lg:py-10 xl:max-w-[620px]">
         <span className="mb-6 inline-block rounded-full bg-neutral-100 px-3 py-1 text-sm font-bold tracking-wider text-neutral-700">
           SEGURO FIANÇA LOCATÍCIA
@@ -49,13 +51,13 @@ export const InstitutionalHero = () => (
         </div>
       </div>
 
-      <div className="hidden w-full items-center justify-center sm:flex lg:justify-start">
-        <div className="flex aspect-[3/2] w-full shrink-0 items-center justify-end lg:w-[calc(100%_+_5rem)] xl:w-[calc(100%_+_7rem)] 2xl:w-[calc(100%_+_max(0px,50vw_-_768px)_+_8rem)]">
+      <div className="flex w-full items-center justify-center lg:justify-start">
+        <div className="flex aspect-[16/9] w-[108%] shrink-0 items-center justify-end sm:w-full lg:w-full xl:w-[106%] 2xl:w-[110%]">
           <img
             src={noxHomeBuilding}
-            alt="Edifício residencial moderno iluminado à noite"
-            width={1536}
-            height={1024}
+            alt="Plataforma digital da NOX Fiança apresentada por dois especialistas"
+            width={1672}
+            height={941}
             loading="eager"
             decoding="async"
             fetchPriority="high"
