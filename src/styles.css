@@ -350,6 +350,15 @@
   }
 }
 
+.home-aurora-content > section {
+  background-color: rgba(255, 255, 255, 0.62);
+  backdrop-filter: blur(1px);
+}
+
+.home-aurora-content > section:nth-of-type(even) {
+  background-color: rgba(255, 252, 235, 0.5);
+}
+
 @keyframes marquee {
   from {
     transform: translateX(0);

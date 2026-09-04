@@ -3,15 +3,13 @@ import { Check } from 'lucide-react';
 
 import noxAboutHome from '@/assets/nox-about-home.png';
 import noxHomeBuilding from '@/assets/nox-home-building.png';
-import AnimatedAuroraBackground from '@/components/ui/animated-aurora-background';
 import { Button } from '@/components/ui/button';
 
 export const InstitutionalHero = () => (
-  <section className="relative isolate w-full overflow-hidden bg-white pt-28 sm:pt-32 lg:pt-[126px]">
-    <AnimatedAuroraBackground />
+  <section className="relative w-full overflow-hidden bg-transparent pt-28 sm:pt-32 lg:pt-[126px]">
     <div className="relative z-10 mx-auto grid w-full max-w-[1536px] items-center gap-12 px-5 pb-8 sm:px-8 sm:pb-12 lg:min-h-[600px] lg:grid-cols-[minmax(0,0.49fr)_minmax(0,0.51fr)] lg:gap-8 lg:px-12 lg:pb-12 xl:grid-cols-[minmax(0,0.46fr)_minmax(0,0.54fr)] xl:gap-12 xl:px-16 2xl:px-20">
       <div className="max-w-[600px] lg:py-10 xl:max-w-[620px]">
-        <span className="mb-6 inline-block rounded-full bg-neutral-100 px-3 py-1 text-sm font-bold tracking-wider text-neutral-700">
+        <span className="mb-6 inline-block rounded-full bg-white px-3 py-1 text-sm font-bold tracking-wider text-neutral-700 shadow-[0_8px_24px_rgba(17,17,17,0.06)] ring-1 ring-black/[0.04]">
           SEGURO FIANÇA LOCATÍCIA
         </span>
         <h1 className="mb-6 text-3xl font-bold leading-[1.08] tracking-tight text-neutral-900 sm:mb-7 sm:text-4xl md:text-[2.7rem] lg:text-[3.35rem] xl:text-[3.65rem]">
@@ -51,17 +49,17 @@ export const InstitutionalHero = () => (
         </div>
       </div>
 
-      <div className="flex w-full items-center justify-center lg:justify-start">
-        <div className="flex aspect-[16/9] w-[108%] shrink-0 items-center justify-end sm:w-full lg:w-full xl:w-[106%] 2xl:w-[110%]">
+      <div className="flex w-full items-center justify-center lg:justify-end">
+        <div className="flex h-[430px] w-full shrink-0 items-center justify-center sm:h-[520px] lg:h-[620px] lg:justify-end">
           <img
             src={noxHomeBuilding}
-            alt="Plataforma digital da NOX Fiança apresentada por dois especialistas"
-            width={1672}
-            height={941}
+            alt="Casa moderna protegida pela NOX Fiança com análise rápida e aprovação digital"
+            width={1122}
+            height={1402}
             loading="eager"
             decoding="async"
             fetchPriority="high"
-            className="h-auto w-full max-w-none object-contain object-right"
+            className="h-full w-full max-w-[570px] object-contain object-center lg:object-right"
           />
         </div>
       </div>
@@ -70,7 +68,7 @@ export const InstitutionalHero = () => (
 );
 
 export const SolutionPresentation = () => (
-  <section className="bg-white px-4 pb-16 pt-8 sm:px-6 sm:pb-24 sm:pt-12">
+  <section className="bg-transparent px-4 pb-16 pt-8 sm:px-6 sm:pb-24 sm:pt-12">
     <div className="container mx-auto grid max-w-7xl items-center gap-10 lg:grid-cols-2 lg:gap-16">
       <div className="aspect-[3/2] overflow-hidden rounded-2xl border border-neutral-100 shadow-sm lg:-translate-x-4">
         <img

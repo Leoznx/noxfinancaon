@@ -6,6 +6,7 @@ import { InstitutionalNumbers } from "@/components/landing/PlansAndNumbers";
 import { CareerProgramSection } from "@/components/landing/CareerProgramSection";
 import { InstitutionalFaq, InstitutionalFooter } from "@/components/landing/FaqAndFooterInstitutional";
 import { HomeSectionDivider } from "@/components/landing/HomeSectionDivider";
+import AnimatedAuroraBackground from "@/components/ui/animated-aurora-background";
 import { ArrowUp } from "lucide-react";
 import { useState, useEffect } from "react";
 
@@ -49,18 +50,21 @@ function Index() {
     <div className="min-h-screen bg-white text-neutral-900 font-sans selection:bg-[#FACC15] selection:text-neutral-900">
       <InstitutionalHeader />
       
-      <main>
-        <InstitutionalHero />
-        <HomeSectionDivider />
-        <SolutionPresentation />
-        <HomeSectionDivider />
-        <CareerProgramSection />
-        <HomeSectionDivider />
-        <ComparativeSection />
-        <HomeSectionDivider />
-        <InstitutionalNumbers />
-        <HomeSectionDivider />
-        <InstitutionalFaq />
+      <main className="home-aurora-canvas relative isolate overflow-hidden">
+        <AnimatedAuroraBackground />
+        <div className="home-aurora-content relative z-10">
+          <InstitutionalHero />
+          <HomeSectionDivider />
+          <SolutionPresentation />
+          <HomeSectionDivider />
+          <CareerProgramSection />
+          <HomeSectionDivider />
+          <ComparativeSection />
+          <HomeSectionDivider />
+          <InstitutionalNumbers />
+          <HomeSectionDivider />
+          <InstitutionalFaq />
+        </div>
       </main>
 
       <InstitutionalFooter hideCta />
