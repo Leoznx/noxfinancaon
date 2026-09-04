@@ -98,10 +98,12 @@ function SdrScheduler({ onRefresh }: { onRefresh: () => Promise<void> }) {
   }, [loadingSlots, slotsByDay, selectedDate]);
 
   // Se o horário escolhido acabou de ser ocupado por outro SDR, limpa a
-  // seleção para não deixar confirmar algo que já não existe mais.
+  // seleção para não deixar confirmar algo que já não existe mais — e
+  // avisa, para o SDR não ficar sem entender por que o botão desativou.
   useEffect(() => {
     if (selected && !slots.some((slot) => slot.slot_start === selected.slot_start && slot.closer_id === selected.closer_id)) {
       setSelected(null);
+      toast.warning("Esse horário acabou de ser ocupado por outro SDR. Escolha outro horário na agenda.");
     }
   }, [slots, selected]);
 
@@ -130,13 +132,17 @@ function SdrScheduler({ onRefresh }: { onRefresh: () => Promise<void> }) {
     }
     setSaving(true);
     try {
-      await scheduleSdrCloserMeeting({
+      // O backend reconfirma a disputa pelo horário no momento exato da
+      // gravação e pode escolher um Closer diferente do último que o
+      // navegador tinha em cache — por isso o toast usa o retorno da RPC,
+      // nunca o `selected` local.
+      const result = await scheduleSdrCloserMeeting({
         slotStart: selected.slot_start,
         title: `Apresentação NOX — ${contactName.trim()}`,
         contactName: contactName.trim(),
         contactPhone,
       });
-      toast.success(`Reunião distribuída para ${selected.closer_name}.`);
+      toast.success(`Reunião distribuída para ${result.closerName}.`);
       setSelected(null);
       setContactName("");
       setContactPhone("");

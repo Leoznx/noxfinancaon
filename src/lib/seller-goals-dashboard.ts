@@ -80,6 +80,18 @@ export function sellerGoalTargetField(metric: SellerGoalMetric, period: SellerGo
   return `${GOAL_METRIC_TARGET_PREFIX[metric]}_${period}`;
 }
 
+// A meta mensal de cadastros mora, no banco, na coluna legada
+// "target_clients" (sem sufixo — criada antes das metas diárias/semanais
+// existirem). sellerGoalTargetField() acima descreve o campo "lógico"
+// (usado para ler o resultado já normalizado pelas RPCs, que expõem
+// "target_clients_monthly" como alias de leitura). Para GRAVAR direto na
+// tabela seller_goals — como faz o editor do admin — é preciso usar o
+// nome real da coluna, que só diverge nesse único caso.
+export function sellerGoalColumnField(metric: SellerGoalMetric, period: SellerGoalPeriod): string {
+  if (metric === "clients" && period === "monthly") return "target_clients";
+  return sellerGoalTargetField(metric, period);
+}
+
 export function sellerGoalCountField(metric: SellerGoalMetric, period: SellerGoalPeriod): string {
   return `${GOAL_METRIC_COUNT_PREFIX[metric]}_${period}`;
 }

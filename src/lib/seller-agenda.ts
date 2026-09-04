@@ -314,13 +314,19 @@ export async function fetchCloserAvailability(fromDate: Date, days = 14) {
   return ((data as any[]) ?? []) as CloserAvailabilitySlot[];
 }
 
+export type SdrCloserMeetingResult = {
+  id: string;
+  closerId: string;
+  closerName: string;
+};
+
 export async function scheduleSdrCloserMeeting(input: {
   slotStart: string;
   title: string;
   contactName: string;
   contactPhone?: string;
   notes?: string;
-}) {
+}): Promise<SdrCloserMeetingResult> {
   const { data, error } = await supabase.rpc("schedule_sdr_closer_meeting" as any, {
     p_slot_start: input.slotStart,
     p_title: input.title,
@@ -330,7 +336,15 @@ export async function scheduleSdrCloserMeeting(input: {
     p_duration_minutes: SHARED_AGENDA_DURATION_MINUTES,
   });
   if (error) throw error;
-  return data as string;
+  // A função devolve uma linha (id, closer_id, closer_name) — é o Closer
+  // que o backend realmente escolheu, que pode diferir do último horário
+  // consultado pelo navegador se outro SDR agendou entre a consulta e a
+  // confirmação.
+  const row = (Array.isArray(data) ? data[0] : data) as
+    | { id: string; closer_id: string; closer_name: string }
+    | undefined;
+  if (!row) throw new Error("Não foi possível confirmar o agendamento.");
+  return { id: String(row.id), closerId: String(row.closer_id), closerName: String(row.closer_name) };
 }
 
 export async function rescheduleSharedMeeting(appointmentId: string, slotStart: string) {

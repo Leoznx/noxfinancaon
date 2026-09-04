@@ -61,6 +61,7 @@ import {
 import {
   SELLER_GOAL_METRICS,
   SELLER_GOAL_PERIODS,
+  sellerGoalColumnField,
   sellerGoalMetricsForType,
   sellerGoalProgressValue,
   sellerGoalTargetField,
@@ -272,10 +273,13 @@ function TabMetas() {
     const payload: Record<string, unknown> = { seller_id: linha.seller_id, month, year };
     for (const metric of metrics) {
       for (const periodOption of SELLER_GOAL_PERIODS) {
-        const field = sellerGoalTargetField(metric, periodOption.value);
+        // fieldValue() lê pelo nome "lógico" (o mesmo que a RPC devolve),
+        // mas a gravação é direto na tabela — precisa do nome real da
+        // coluna, que só diverge para cadastros/mensal.
+        const column = sellerGoalColumnField(metric, periodOption.value);
         const raw = fieldValue(linha, metric, periodOption.value);
         if (raw.trim() === "") {
-          payload[field] = null;
+          payload[column] = null;
           continue;
         }
         const parsed = Number(raw);
@@ -285,7 +289,7 @@ function TabMetas() {
           );
           return;
         }
-        payload[field] = parsed;
+        payload[column] = parsed;
       }
     }
     setSalvandoId(linha.seller_id);
