@@ -47,10 +47,16 @@ function Ranking() {
         (supabase as any).rpc("ranking_vendedores", { p_month: period.month, p_year: period.year }),
       ]);
       if (response.error) throw response.error;
+      // admin/admin_master/financeiro podem abrir esta aba sem ter um vínculo
+      // de vendedor ativo: nesse caso a RPC não filtra por tipo no servidor e
+      // devolve SDR e Closer juntos. Filtramos aqui também para o pódio nunca
+      // misturar as duas equipes, seja qual for o perfil de quem está vendo.
+      const effectiveType: SellerType = context.sellerType ?? "sdr";
       setSellerId(context.sellerId);
-      setSellerType(context.sellerType ?? "sdr");
+      setSellerType(effectiveType);
       setRows(
         ((response.data as Record<string, unknown>[] | null) ?? [])
+          .filter((row) => String(row.seller_type ?? "sdr") === effectiveType)
           .map((row) => ({
             id: String(row.vendedor_id),
             name: String(row.nome || "Vendedor"),
