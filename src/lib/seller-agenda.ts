@@ -257,7 +257,7 @@ export async function fetchSellerAgenda(
     completed_at: row.completed_at ?? null,
     sdr_id: row.sdr_id ?? null,
     assigned_closer_id: row.assigned_closer_id ?? null,
-    duration_minutes: Number(row.duration_minutes ?? 45),
+    duration_minutes: Number(row.duration_minutes ?? SHARED_MEETING_DURATION_MINUTES),
     contact_name: row.contact_name ?? null,
     contact_email: row.contact_email ?? null,
     contact_phone: row.contact_phone ?? null,
@@ -348,14 +348,22 @@ export type CloserAvailabilitySlot = {
   closer_email: string;
 };
 
+export type ScheduledSharedMeeting = {
+  id: string;
+  closer_id: string;
+  closer_name: string;
+};
+
+export const SHARED_MEETING_DURATION_MINUTES = 60;
+
 export async function fetchCloserAvailability(fromDate: Date, days = 14) {
   const date = formatLocalDate(fromDate);
   const { data, error } = await supabase.rpc("get_available_closer_slots" as any, {
     p_from_date: date,
     p_days: days,
-    p_duration_minutes: 45,
+    p_duration_minutes: SHARED_MEETING_DURATION_MINUTES,
   });
-  if (error) throw error;
+  if (error) throw new Error(error.message || "Não foi possível consultar os horários disponíveis.");
   return ((data as any[]) ?? []) as CloserAvailabilitySlot[];
 }
 
@@ -381,10 +389,12 @@ export async function scheduleSdrCloserMeeting(input: {
     p_contact_email: input.contactEmail || null,
     p_contact_phone: input.contactPhone || null,
     p_notes: input.notes || null,
-    p_duration_minutes: 45,
+    p_duration_minutes: SHARED_MEETING_DURATION_MINUTES,
   });
-  if (error) throw error;
-  return data as string;
+  if (error) throw new Error(error.message || "Não foi possível agendar a reunião.");
+  const meeting = (Array.isArray(data) ? data[0] : data) as ScheduledSharedMeeting | null;
+  if (!meeting?.id || !meeting.closer_id) throw new Error("O agendamento não retornou a reunião criada.");
+  return meeting;
 }
 
 export async function rescheduleSharedMeeting(appointmentId: string, slotStart: string) {
@@ -392,5 +402,5 @@ export async function rescheduleSharedMeeting(appointmentId: string, slotStart: 
     p_appointment_id: appointmentId,
     p_slot_start: slotStart,
   });
-  if (error) throw error;
+  if (error) throw new Error(error.message || "Não foi possível remarcar a reunião.");
 }
