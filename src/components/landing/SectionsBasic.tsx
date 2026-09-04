@@ -2,7 +2,7 @@ import { Link } from '@tanstack/react-router';
 import { Check } from 'lucide-react';
 
 import noxAboutHome from '@/assets/nox-about-home.png';
-import noxHomeHeroBanner from '@/assets/nox-home-hero-banner.png';
+import noxHomeBuilding from '@/assets/nox-home-building.png';
 import { Button } from '@/components/ui/button';
 
 export const InstitutionalHero = () => (
@@ -50,16 +50,16 @@ export const InstitutionalHero = () => (
       </div>
 
       <div className="hidden w-full items-center justify-center sm:flex lg:justify-start">
-        <div className="flex aspect-[3/2] w-full shrink-0 items-center justify-end lg:w-[calc(100%_+_3rem)] xl:w-[calc(100%_+_4rem)] 2xl:w-[calc(100%_+_max(0px,50vw_-_768px)_+_5rem)]">
+        <div className="flex aspect-[3/2] w-full shrink-0 items-center justify-center">
           <img
-            src={noxHomeHeroBanner}
-            alt="Casa moderna com aprovação digital em até 1 minuto, mais de 15 mil imóveis protegidos e avaliação cinco estrelas"
+            src={noxHomeBuilding}
+            alt="Edifício residencial moderno iluminado à noite"
             width={1536}
             height={1024}
             loading="eager"
             decoding="async"
             fetchPriority="high"
-            className="h-full w-full object-contain object-right"
+            className="h-auto w-[94%] max-w-[720px] rounded-[1.75rem] object-contain shadow-[0_24px_70px_rgba(0,0,0,0.16)]"
           />
         </div>
       </div>
