@@ -50,16 +50,16 @@ export const InstitutionalHero = () => (
       </div>
 
       <div className="flex w-full items-center justify-center lg:justify-end">
-        <div className="flex h-[430px] w-full shrink-0 items-center justify-center sm:h-[520px] lg:h-[620px] lg:justify-end">
+        <div className="flex aspect-[3/2] w-full shrink-0 items-center justify-center lg:justify-end">
           <img
-            src={noxHomeBuilding}
-            alt="Casa moderna protegida pela NOX Fiança com análise rápida e aprovação digital"
-            width={1122}
-            height={1402}
+            src={noxAboutHome}
+            alt="Casa moderna com destaques sobre análise instantânea, processo digital, agilidade e segurança"
+            width={1536}
+            height={1024}
             loading="eager"
             decoding="async"
             fetchPriority="high"
-            className="h-full w-full max-w-[570px] object-contain object-center lg:object-right"
+            className="h-full w-full max-w-[780px] object-contain object-center lg:object-right"
           />
         </div>
       </div>
@@ -72,13 +72,13 @@ export const SolutionPresentation = () => (
     <div className="container mx-auto grid max-w-7xl items-center gap-10 lg:grid-cols-2 lg:gap-16">
       <div className="aspect-[3/2] overflow-hidden rounded-2xl border border-neutral-100 shadow-sm lg:-translate-x-4">
         <img
-          src={noxAboutHome}
-          alt="Casa moderna com destaques sobre análise instantânea, processo digital, agilidade e segurança"
+          src={noxHomeBuilding}
+          alt="Casa moderna protegida pela NOX Fiança, com simulação, análise rápida e aprovação digital"
           loading="lazy"
           decoding="async"
-          width={1536}
-          height={1024}
-          className="h-full w-full object-cover"
+          width={1122}
+          height={1402}
+          className="h-full w-full object-contain p-2 sm:p-3"
         />
       </div>
       <div>
