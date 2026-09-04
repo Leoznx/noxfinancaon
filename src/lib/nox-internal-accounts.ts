@@ -1,21 +1,35 @@
-// Fonte única de verdade pros 4 cargos internos com link fixo de cadastro
-// (/login/<cargo>nox) — usada tanto pela aba admin "Conta NOX" quanto pelas
-// próprias páginas de cadastro e por qualquer redirecionamento futuro, pra
-// nunca ter a rota/label/descrição escritas em mais de um lugar.
+export type NoxInternalRole = "vendedor" | "financeiro" | "juridico" | "marketing";
+export type SellerType = "sdr" | "closer";
+
 export const noxInternalAccounts = {
-  vendedor: {
-    label: "Vendedor",
-    route: "/login/vendedornox",
+  sdr: {
+    label: "Vendedor SDR",
+    route: "/login/sdrnox",
     dashboardRoute: "/vendedor",
-    cardDescription: "Cadastro destinado aos colaboradores do setor de vendas da NOX Fiança.",
-    formTitle: "Criar conta de Vendedor NOX",
-    formDescription: "Preencha seus dados para acessar o ambiente comercial da NOX Fiança.",
-    badge: "Equipe interna NOX — Vendedor",
+    internalRole: "vendedor",
+    sellerType: "sdr",
+    cardDescription: "Prospecção, pré-atendimento, qualificação e agendamento para Closers.",
+    formTitle: "Criar conta de Vendedor SDR",
+    formDescription: "Cadastre-se para prospectar parceiros e distribuir reuniões para a equipe de fechamento.",
+    badge: "Equipe comercial NOX — SDR",
+  },
+  closer: {
+    label: "Vendedor Closer",
+    route: "/login/closernox",
+    dashboardRoute: "/vendedor",
+    internalRole: "vendedor",
+    sellerType: "closer",
+    cardDescription: "Apresentação da plataforma, cadastro do parceiro e fechamento comercial.",
+    formTitle: "Criar conta de Vendedor Closer",
+    formDescription: "Cadastre-se para receber reuniões qualificadas e conduzir os fechamentos.",
+    badge: "Equipe comercial NOX — Closer",
   },
   financeiro: {
     label: "Financeiro",
     route: "/login/financeironox",
     dashboardRoute: "/dashboard",
+    internalRole: "financeiro",
+    sellerType: null,
     cardDescription: "Cadastro destinado aos colaboradores do setor financeiro da NOX Fiança.",
     formTitle: "Criar conta do Financeiro NOX",
     formDescription: "Preencha seus dados para acessar o ambiente financeiro da NOX Fiança.",
@@ -25,6 +39,8 @@ export const noxInternalAccounts = {
     label: "Jurídico",
     route: "/login/juridiconox",
     dashboardRoute: "/dashboard",
+    internalRole: "juridico",
+    sellerType: null,
     cardDescription: "Cadastro destinado aos colaboradores do setor jurídico da NOX Fiança.",
     formTitle: "Criar conta do Jurídico NOX",
     formDescription: "Preencha seus dados para acessar o ambiente jurídico da NOX Fiança.",
@@ -34,6 +50,8 @@ export const noxInternalAccounts = {
     label: "Marketing",
     route: "/login/marketingnox",
     dashboardRoute: "/dashboard",
+    internalRole: "marketing",
+    sellerType: null,
     cardDescription: "Cadastro destinado aos colaboradores do setor de marketing da NOX Fiança.",
     formTitle: "Criar conta de Marketing NOX",
     formDescription: "Preencha seus dados para acessar o ambiente de marketing da NOX Fiança.",
@@ -41,18 +59,20 @@ export const noxInternalAccounts = {
   },
 } as const;
 
-export type NoxInternalRole = keyof typeof noxInternalAccounts;
-export const NOX_INTERNAL_ROLES = Object.keys(noxInternalAccounts) as NoxInternalRole[];
+export type NoxInternalAccountType = keyof typeof noxInternalAccounts;
+export const NOX_INTERNAL_ACCOUNT_TYPES = Object.keys(
+  noxInternalAccounts,
+) as NoxInternalAccountType[];
+export const NOX_INTERNAL_ROLES: NoxInternalRole[] = [
+  "vendedor",
+  "financeiro",
+  "juridico",
+  "marketing",
+];
 
-// Fallback sempre é o domínio oficial de produção — nunca localhost nem a URL
-// de preview da Vercel — pra um link copiado/aberto nunca apontar pro lugar
-// errado mesmo que VITE_PUBLIC_SITE_URL não esteja configurada no ambiente.
-// Páginas server-side que precisam do link (nenhuma hoje) devem montar a
-// partir de process.env.APP_URL.
 const PRODUCTION_APP_URL = "https://noxfianca.com";
 
-export function buildRegistrationLink(role: NoxInternalRole) {
+export function buildRegistrationLink(accountType: NoxInternalAccountType) {
   const publicSiteUrl = (import.meta as any).env?.VITE_PUBLIC_SITE_URL || PRODUCTION_APP_URL;
-  const base = String(publicSiteUrl).replace(/\/$/, "");
-  return `${base}${noxInternalAccounts[role].route}`;
+  return `${String(publicSiteUrl).replace(/\/$/, "")}${noxInternalAccounts[accountType].route}`;
 }

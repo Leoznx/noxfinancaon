@@ -1,4 +1,4 @@
-import { CircleDollarSign, ShieldCheck, type LucideIcon } from "lucide-react";
+import { CircleDollarSign, WalletCards, type LucideIcon } from "lucide-react";
 import { formatMoney } from "@/lib/vendedor-portal";
 
 type CommissionStatsGridProps = {
@@ -11,7 +11,7 @@ const STATS: Array<{
   icon: LucideIcon;
 }> = [
   { key: "comissao", label: "Comissão", icon: CircleDollarSign },
-  { key: "bonus", label: "Bônus", icon: ShieldCheck },
+  { key: "liberado", label: "Valor liberado", icon: WalletCards },
 ];
 
 export function CommissionStatsGrid({ summary }: CommissionStatsGridProps) {

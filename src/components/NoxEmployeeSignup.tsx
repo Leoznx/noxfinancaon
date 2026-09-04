@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { Eye, EyeOff, Mail, ShieldCheck, ArrowRight } from "lucide-react";
 import { maskPhone } from "@/utils/validators";
 import { signUpNoxEmployee } from "@/lib/nox-employees.functions";
-import { noxInternalAccounts, type NoxInternalRole } from "@/lib/nox-internal-accounts";
+import { noxInternalAccounts, type NoxInternalAccountType } from "@/lib/nox-internal-accounts";
 
 const ERRO_MENSAGEM: Record<string, string> = {
   invalido: "Verifique os dados informados e tente novamente.",
@@ -17,9 +17,9 @@ const ERRO_MENSAGEM: Record<string, string> = {
   erro: "Não foi possível criar sua conta. Tente novamente.",
 };
 
-export function NoxEmployeeSignup({ role }: { role: NoxInternalRole }) {
+export function NoxEmployeeSignup({ accountType }: { accountType: NoxInternalAccountType }) {
   const signUpFn = useServerFn(signUpNoxEmployee);
-  const conta = noxInternalAccounts[role];
+  const conta = noxInternalAccounts[accountType];
 
   const [sucesso, setSucesso] = useState<string | null>(null);
   const [nome, setNome] = useState("");
@@ -63,7 +63,7 @@ export function NoxEmployeeSignup({ role }: { role: NoxInternalRole }) {
       const nomeNormalizado = nome.trim().replace(/\s+/g, " ");
       const emailLower = email.toLowerCase().trim();
       const result = await signUpFn({
-        data: { role, nome: nomeNormalizado, email: emailLower, telefone, senha },
+        data: { accountType, nome: nomeNormalizado, email: emailLower, telefone, senha },
       });
       if (!result.ok) {
         toast.error(ERRO_MENSAGEM[result.error] || ERRO_MENSAGEM.erro);

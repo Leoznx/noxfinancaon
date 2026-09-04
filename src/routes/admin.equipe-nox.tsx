@@ -196,9 +196,7 @@ function TabMetas() {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
   const [linhas, setLinhas] = useState<SellerTeamMonthlyProgress[]>([]);
-  const [edits, setEdits] = useState<
-    Record<string, { meetings: string; clients: string; contracts: string }>
-  >({});
+  const [edits, setEdits] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [salvandoId, setSalvandoId] = useState<string | null>(null);
 
@@ -240,30 +238,22 @@ function TabMetas() {
   }, [carregar]);
 
   const salvar = async (linha: SellerTeamMonthlyProgress) => {
-    const edit = edits[linha.seller_id] ?? {
-      meetings: linha.target_meetings == null ? "" : String(linha.target_meetings),
-      clients: linha.target_clients == null ? "" : String(linha.target_clients),
-      contracts: linha.target_contracts == null ? "" : String(linha.target_contracts),
-    };
-    const rawValues = [edit.meetings, edit.clients, edit.contracts];
-    const values = rawValues.map(Number);
-    if (
-      rawValues.some((value) => value.trim() === "") ||
-      values.some((value) => !Number.isInteger(value) || value < 0)
-    ) {
-      toast.error("Preencha as três metas com números inteiros iguais ou maiores que zero.");
+    const edit = edits[linha.seller_id] ??
+      (linha.target_clients == null ? "" : String(linha.target_clients));
+    const targetClients = Number(edit);
+    if (edit.trim() === "" || !Number.isInteger(targetClients) || targetClients < 0) {
+      toast.error("Preencha a meta de cadastros com um número inteiro igual ou maior que zero.");
       return;
     }
-    const [targetMeetings, targetClients, targetContracts] = values;
     setSalvandoId(linha.seller_id);
     const { error } = await supabase.from("seller_goals" as any).upsert(
       {
         seller_id: linha.seller_id,
         month,
         year,
-        target_meetings: targetMeetings,
+        target_meetings: 0,
         target_clients: targetClients,
-        target_contracts: targetContracts,
+        target_contracts: 0,
       },
       { onConflict: "seller_id,month,year" },
     );
@@ -272,7 +262,7 @@ function TabMetas() {
       toast.error(error.message);
       return;
     }
-    toast.success(`Metas de ${linha.seller_name} atualizadas.`);
+    toast.success(`Meta de cadastros de ${linha.seller_name} atualizada.`);
     registrarAuditoria({
       actorUserId: user?.id,
       actorRole: user?.internalRole || user?.role,
@@ -287,9 +277,9 @@ function TabMetas() {
         year,
       },
       after: {
-        target_meetings: targetMeetings,
+        target_meetings: 0,
         target_clients: targetClients,
-        target_contracts: targetContracts,
+        target_contracts: 0,
         month,
         year,
       },
@@ -297,36 +287,17 @@ function TabMetas() {
     void carregar();
   };
 
-  const updateEdit = (
-    linha: SellerTeamMonthlyProgress,
-    key: "meetings" | "clients" | "contracts",
-    value: string,
-  ) => {
-    setEdits((current) => ({
-      ...current,
-      [linha.seller_id]: {
-        meetings:
-          current[linha.seller_id]?.meetings ??
-          (linha.target_meetings == null ? "" : String(linha.target_meetings)),
-        clients:
-          current[linha.seller_id]?.clients ??
-          (linha.target_clients == null ? "" : String(linha.target_clients)),
-        contracts:
-          current[linha.seller_id]?.contracts ??
-          (linha.target_contracts == null ? "" : String(linha.target_contracts)),
-        [key]: value,
-      },
-    }));
+  const updateEdit = (linha: SellerTeamMonthlyProgress, value: string) => {
+    setEdits((current) => ({ ...current, [linha.seller_id]: value }));
   };
 
   return (
     <Card>
       <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
         <div>
-          <CardTitle>Metas mensais por vendedor</CardTitle>
+          <CardTitle>Meta mensal de cadastros por vendedor</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Defina reuniões realizadas, clientes cadastrados e contratos fechados. O progresso é
-            automático e atualizado em tempo real.
+            Defina a prioridade de novos parceiros cadastrados. O progresso é automático e atualizado em tempo real.
           </p>
         </div>
         <SeletorMes
@@ -360,39 +331,19 @@ function TabMetas() {
                     disabled={salvandoId === linha.seller_id}
                     onClick={() => salvar(linha)}
                   >
-                    {salvandoId === linha.seller_id ? "Salvando…" : "Salvar metas"}
+                    {salvandoId === linha.seller_id ? "Salvando…" : "Salvar meta"}
                   </Button>
                 </div>
-                <div className="grid gap-3 lg:grid-cols-3">
+                <div className="grid gap-3 lg:grid-cols-1">
                   <MetaEditor
-                    label="Reuniões realizadas"
-                    current={linha.meetings_completed}
-                    target={linha.target_meetings}
-                    value={
-                      edit?.meetings ??
-                      (linha.target_meetings == null ? "" : String(linha.target_meetings))
-                    }
-                    onChange={(value) => updateEdit(linha, "meetings", value)}
-                  />
-                  <MetaEditor
-                    label="Clientes cadastrados"
+                    label="Cadastros realizados"
                     current={linha.clients_registered}
                     target={linha.target_clients}
                     value={
-                      edit?.clients ??
+                      edit ??
                       (linha.target_clients == null ? "" : String(linha.target_clients))
                     }
-                    onChange={(value) => updateEdit(linha, "clients", value)}
-                  />
-                  <MetaEditor
-                    label="Contratos fechados"
-                    current={linha.contracts_closed}
-                    target={linha.target_contracts}
-                    value={
-                      edit?.contracts ??
-                      (linha.target_contracts == null ? "" : String(linha.target_contracts))
-                    }
-                    onChange={(value) => updateEdit(linha, "contracts", value)}
+                    onChange={(value) => updateEdit(linha, value)}
                   />
                 </div>
               </div>

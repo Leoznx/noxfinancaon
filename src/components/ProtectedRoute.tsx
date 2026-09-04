@@ -10,10 +10,12 @@ export function ProtectedRoute({
   children,
   roles,
   moduleKey,
+  sellerTypes,
 }: {
   children: React.ReactNode;
   roles?: string[];
   moduleKey?: string;
+  sellerTypes?: Array<"sdr" | "closer">;
 }) {
   const { user, isLoading } = useAuth();
   const location = useLocation();
@@ -24,6 +26,9 @@ export function ProtectedRoute({
     if (u.internalRole && roles.includes(u.internalRole)) return true;
     return false;
   };
+  const isSellerAccount = user?.role === "vendedor" || user?.internalRole === "vendedor";
+  const isSellerTypeAllowed =
+    !sellerTypes || !isSellerAccount || (!!user?.sellerType && sellerTypes.includes(user.sellerType));
 
   // Não basta esconder a aba do menu — a rota também precisa recusar acesso
   // direto (digitando a URL) pra quem não tem a permissão real do cargo.
@@ -72,11 +77,11 @@ export function ProtectedRoute({
       window.location.replace(`/login?returnTo=${encodeURIComponent(location.pathname)}`);
       return;
     }
-    if (user && (!isAllowed(user) || !temPermissaoModulo)) {
-      window.location.replace("/dashboard");
+    if (user && (!isAllowed(user) || !temPermissaoModulo || !isSellerTypeAllowed)) {
+      window.location.replace(isSellerAccount ? "/vendedor" : "/dashboard");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoading, permissoesCarregando, location.pathname, roles, user, temPermissaoModulo]);
+  }, [isLoading, permissoesCarregando, location.pathname, roles, user, temPermissaoModulo, isSellerTypeAllowed]);
 
   if (isLoading || permissoesCarregando) {
     return (
@@ -90,7 +95,7 @@ export function ProtectedRoute({
     return null;
   }
 
-  if (!isAllowed(user) || !temPermissaoModulo) {
+  if (!isAllowed(user) || !temPermissaoModulo || !isSellerTypeAllowed) {
     return null;
   }
 

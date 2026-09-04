@@ -2,7 +2,10 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { sendVerificationEmail } from "@/lib/resend.service";
-import { NOX_INTERNAL_ROLES } from "@/lib/nox-internal-accounts";
+import {
+  NOX_INTERNAL_ACCOUNT_TYPES,
+  noxInternalAccounts,
+} from "@/lib/nox-internal-accounts";
 import { defaultAvatarForName } from "@/lib/gender-avatar";
 import { buildAuthEmailCallbackUrl } from "@/lib/auth-email-links";
 
@@ -46,7 +49,7 @@ async function assertIsAdmin(supabase: any, userId: string) {
 // ============================================================================
 
 const signUpSchema = z.object({
-  role: z.enum(NOX_INTERNAL_ROLES as [string, ...string[]]),
+  accountType: z.enum(NOX_INTERNAL_ACCOUNT_TYPES as [string, ...string[]]),
   nome: z.string().trim().min(3).max(200),
   email: z.string().email().max(255),
   telefone: z.string().min(8).max(30),
@@ -63,12 +66,13 @@ export const signUpNoxEmployee = createServerFn({ method: "POST" })
     // z.enum ja rejeita qualquer valor fora da lista fixa (incluindo "admin"/
     // "admin_master") antes de chegar aqui, mas o if abaixo fica como reforço
     // explícito - essa rota NUNCA pode criar uma conta de administrador.
-    if (!(NOX_INTERNAL_ROLES as readonly string[]).includes(data.role)) {
+    if (!(NOX_INTERNAL_ACCOUNT_TYPES as readonly string[]).includes(data.accountType)) {
       return { ok: false as const, error: "invalido" as const };
     }
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const emailLower = data.email.toLowerCase().trim();
+    const account = noxInternalAccounts[data.accountType as keyof typeof noxInternalAccounts];
 
     const { data: existingProfile } = await supabaseAdmin
       .from("profiles")
@@ -82,7 +86,11 @@ export const signUpNoxEmployee = createServerFn({ method: "POST" })
       email: emailLower,
       password: data.senha,
       options: {
-        data: { nome: data.nome, role: data.role },
+        data: {
+          nome: data.nome,
+          role: account.internalRole,
+          seller_type: account.sellerType,
+        },
       },
     });
 
@@ -117,7 +125,8 @@ export const signUpNoxEmployee = createServerFn({ method: "POST" })
         full_name: data.nome,
         email: emailLower,
         phone: data.telefone,
-        role: data.role,
+        role: account.internalRole,
+        seller_type: account.sellerType,
         status: "ativo",
       } as any,
       { onConflict: "auth_user_id" },
@@ -125,11 +134,15 @@ export const signUpNoxEmployee = createServerFn({ method: "POST" })
 
     await supabaseAdmin.from("internal_audit_logs" as any).insert({
       actor_user_id: userId,
-      actor_role: data.role,
+      actor_role: account.internalRole,
       action: "cadastro_equipe_nox",
       table_name: "internal_users",
       record_id: userId,
-      after: { role: data.role, email: emailLower },
+      after: {
+        role: account.internalRole,
+        seller_type: account.sellerType,
+        email: emailLower,
+      },
     } as any);
 
     const emailResult = await sendVerificationEmail({
@@ -154,7 +167,7 @@ export const listNoxEmployees = createServerFn({ method: "POST" })
 
     const { data: rows, error } = await supabaseAdmin
       .from("internal_users" as any)
-      .select("id, auth_user_id, full_name, email, phone, role, status, created_at")
+      .select("id, auth_user_id, full_name, email, phone, role, seller_type, status, created_at")
       .order("created_at", { ascending: false });
     if (error) throw new Error("Não foi possível carregar os funcionários.");
 
@@ -180,6 +193,8 @@ export const listNoxEmployees = createServerFn({ method: "POST" })
         email: r.email,
         telefone: r.phone,
         cargo: r.role,
+        sellerType: r.seller_type ?? null,
+        accountType: r.role === "vendedor" ? (r.seller_type ?? "sdr") : r.role,
         criadoEm: r.created_at,
         status,
         ultimoAcesso: authUser?.last_sign_in_at || null,
@@ -236,7 +251,7 @@ export const updateNoxEmployeeStatus = createServerFn({ method: "POST" })
 
 const updateRoleSchema = z.object({
   employeeId: z.string().uuid(),
-  role: z.enum(NOX_INTERNAL_ROLES as [string, ...string[]]),
+  accountType: z.enum(NOX_INTERNAL_ACCOUNT_TYPES as [string, ...string[]]),
 });
 
 export const updateNoxEmployeeRole = createServerFn({ method: "POST" })
@@ -244,21 +259,22 @@ export const updateNoxEmployeeRole = createServerFn({ method: "POST" })
   .validator((data: unknown) => updateRoleSchema.parse(data))
   .handler(async ({ data, context }) => {
     await assertIsAdmin(context.supabase, context.userId);
-    if (!(NOX_INTERNAL_ROLES as readonly string[]).includes(data.role)) {
+    if (!(NOX_INTERNAL_ACCOUNT_TYPES as readonly string[]).includes(data.accountType)) {
       throw new Error("Cargo inválido.");
     }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const account = noxInternalAccounts[data.accountType as keyof typeof noxInternalAccounts];
 
     const { data: employee } = await supabaseAdmin
       .from("internal_users" as any)
-      .select("role, auth_user_id")
+      .select("role, seller_type, auth_user_id")
       .eq("id", data.employeeId)
       .maybeSingle();
     if (!employee) throw new Error("Funcionário não encontrado.");
 
     const { error } = await supabaseAdmin
       .from("internal_users" as any)
-      .update({ role: data.role } as any)
+      .update({ role: account.internalRole, seller_type: account.sellerType } as any)
       .eq("id", data.employeeId);
     if (error) throw new Error("Não foi possível atualizar o cargo do funcionário.");
 
@@ -267,7 +283,7 @@ export const updateNoxEmployeeRole = createServerFn({ method: "POST" })
     // internal_users.role e' a fonte editável de verdade depois disso).
     await supabaseAdmin
       .from("profiles")
-      .update({ role: data.role } as any)
+      .update({ role: account.internalRole } as any)
       .eq("id", (employee as any).auth_user_id);
 
     await supabaseAdmin.from("internal_audit_logs" as any).insert({
@@ -276,8 +292,8 @@ export const updateNoxEmployeeRole = createServerFn({ method: "POST" })
       action: "alterar_cargo_funcionario_nox",
       table_name: "internal_users",
       record_id: data.employeeId,
-      before: { role: (employee as any).role },
-      after: { role: data.role },
+      before: { role: (employee as any).role, seller_type: (employee as any).seller_type },
+      after: { role: account.internalRole, seller_type: account.sellerType },
     } as any);
 
     return { ok: true as const };

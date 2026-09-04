@@ -30,8 +30,7 @@ export type SellerDashboardRanking = {
   sellerId: string;
   name: string;
   avatarUrl: string | null;
-  contracts: number;
-  commissions: number;
+  registrations: number;
   position: number;
   isCurrent: boolean;
 };
@@ -49,6 +48,7 @@ export type SellerDashboardData = {
     commissionsPrevious: number;
     goalTarget: number | null;
     rankingPosition: number | null;
+    registrationsCurrent: number;
   };
   monthlyHistory: SellerDashboardMonth[];
   leadTrend: number[];
@@ -90,11 +90,22 @@ export async function fetchSellerDashboard(): Promise<SellerDashboardData> {
   const payload = data as Record<string, any>;
   const metrics = (payload.metrics ?? {}) as Record<string, unknown>;
   const seller = (payload.seller ?? {}) as Record<string, unknown>;
+  const sellerId = String(seller.id ?? "");
+  const now = new Date();
+  const month = now.getMonth() + 1;
+  const year = now.getFullYear();
+  const start = new Date(year, month - 1, 1).toISOString();
+  const end = new Date(year, month, 1).toISOString();
+  const [registrationResponse, goalResponse, rankingResponse] = await Promise.all([
+    (supabase as any).from("seller_client_partnerships").select("id", { count: "exact", head: true }).eq("seller_id", sellerId).gte("created_at", start).lt("created_at", end),
+    (supabase as any).from("seller_goals").select("target_clients").eq("seller_id", sellerId).eq("month", month).eq("year", year).maybeSingle(),
+    (supabase as any).rpc("ranking_vendedores", { p_month: month, p_year: year }),
+  ]);
 
   return {
     generatedAt: String(payload.generated_at ?? new Date().toISOString()),
     seller: {
-      id: String(seller.id ?? ""),
+      id: sellerId,
       name: String(seller.name ?? "Vendedor"),
       avatarUrl: seller.avatar_url ? String(seller.avatar_url) : null,
     },
@@ -106,8 +117,9 @@ export async function fetchSellerDashboard(): Promise<SellerDashboardData> {
       commissionsAccumulated: numberValue(metrics.commissions_accumulated),
       commissionsCurrent: numberValue(metrics.commissions_current),
       commissionsPrevious: numberValue(metrics.commissions_previous),
-      goalTarget: nullableNumber(metrics.goal_target),
+      goalTarget: nullableNumber(goalResponse.data?.target_clients),
       rankingPosition: nullableNumber(metrics.ranking_position),
+      registrationsCurrent: numberValue(registrationResponse.count),
     },
     monthlyHistory: ((payload.monthly_history ?? []) as Record<string, unknown>[]).map((row) => {
       const month = numberValue(row.month);
@@ -142,14 +154,13 @@ export async function fetchSellerDashboard(): Promise<SellerDashboardData> {
       scheduledAt: String(row.scheduled_at ?? new Date().toISOString()),
       leadName: row.lead_name ? String(row.lead_name) : null,
     })),
-    ranking: ((payload.ranking ?? []) as Record<string, unknown>[]).map((row) => ({
-      sellerId: String(row.seller_id ?? ""),
-      name: String(row.name ?? "Vendedor"),
+    ranking: (((rankingResponse.data ?? []) as Record<string, unknown>[])).map((row) => ({
+      sellerId: String(row.vendedor_id ?? ""),
+      name: String(row.nome ?? "Vendedor"),
       avatarUrl: row.avatar_url ? String(row.avatar_url) : null,
-      contracts: numberValue(row.contracts),
-      commissions: numberValue(row.commissions),
-      position: numberValue(row.position),
-      isCurrent: Boolean(row.is_current),
+      registrations: numberValue(row.contratos_fechados),
+      position: numberValue(row.posicao),
+      isCurrent: String(row.vendedor_id ?? "") === sellerId,
     })),
   };
 }

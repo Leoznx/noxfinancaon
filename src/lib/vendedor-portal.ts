@@ -1,10 +1,14 @@
 import { supabase } from "@/integrations/supabase/client";
 
+export type SellerType = "sdr" | "closer";
+
 export type SellerContext = {
   authUserId: string;
   email: string | null;
   sellerId: string | null;
   isSeller: boolean;
+  sellerType: SellerType | null;
+  excludedFromMetrics: boolean;
 };
 
 export const LEAD_STATUS = [
@@ -35,7 +39,7 @@ export async function getSellerContext(): Promise<SellerContext> {
 
   const { data, error } = await supabase
     .from("internal_users" as any)
-    .select("id, role, status, email")
+    .select("id, role, status, email, seller_type, exclude_from_commercial_metrics")
     .eq("auth_user_id", user.id)
     .maybeSingle();
 
@@ -49,6 +53,10 @@ export async function getSellerContext(): Promise<SellerContext> {
     email: user.email ?? null,
     sellerId: internal?.id ?? null,
     isSeller,
+    sellerType: ["sdr", "closer"].includes(internal?.seller_type)
+      ? internal.seller_type
+      : null,
+    excludedFromMetrics: Boolean(internal?.exclude_from_commercial_metrics),
   };
 }
 

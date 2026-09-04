@@ -51,7 +51,13 @@ export type SellerAppointment = {
   scheduled_at: string;
   reminder_minutes: number | null;
   notes: string | null;
-  source: "manual" | "admin" | "lead_follow_up";
+  source: "manual" | "admin" | "lead_follow_up" | "sdr_handoff";
+  sdr_id: string | null;
+  assigned_closer_id: string | null;
+  duration_minutes: number;
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
   completed_at: string | null;
   created_at: string;
   updated_at: string;
@@ -141,21 +147,6 @@ export function sellerAgendaRange(month: Date) {
   return { start, end };
 }
 
-function numberValue(value: unknown) {
-  const parsed = Number(value ?? 0);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function normalizeSummary(value: unknown): AgendaSummary {
-  const row = (value && typeof value === "object" ? value : {}) as Record<string, unknown>;
-  return {
-    today: numberValue(row.today),
-    thisWeek: numberValue(row.this_week),
-    pendingFollowups: numberValue(row.pending_followups),
-    scheduledMeetings: numberValue(row.scheduled_meetings),
-  };
-}
-
 function clientsToOptions(clients: SellerClient[]): AgendaClientOption[] {
   return clients.map((client) => ({
     id: client.partnership_id,
@@ -180,17 +171,16 @@ export async function fetchSellerAgenda(
   clients: AgendaClientOption[];
 }> {
   const { start, end } = sellerAgendaRange(month);
-  const [appointmentsResult, summaryResult, leadsResult, sellerClients] = await Promise.all([
+  const [appointmentsResult, leadsResult, sellerClients] = await Promise.all([
     supabase
       .from("seller_appointments" as any)
       .select(
-        "id, seller_id, lead_id, partnership_id, title, type, status, priority, scheduled_at, reminder_minutes, notes, source, completed_at, created_at, updated_at, sales_leads(full_name, email, phone)",
+        "id, seller_id, sdr_id, assigned_closer_id, lead_id, partnership_id, title, type, status, priority, scheduled_at, reminder_minutes, notes, source, completed_at, duration_minutes, contact_name, contact_email, contact_phone, created_at, updated_at, sales_leads(full_name, email, phone)",
       )
-      .eq("seller_id", sellerId)
+      .or(`seller_id.eq.${sellerId},sdr_id.eq.${sellerId},assigned_closer_id.eq.${sellerId}`)
       .gte("scheduled_at", start.toISOString())
       .lt("scheduled_at", end.toISOString())
       .order("scheduled_at", { ascending: true }),
-    supabase.rpc("get_my_seller_agenda_summary" as never),
     supabase
       .from("sales_leads" as any)
       .select("id, full_name, email, phone, next_action_at, status")
@@ -200,7 +190,6 @@ export async function fetchSellerAgenda(
   ]);
 
   if (appointmentsResult.error) throw appointmentsResult.error;
-  if (summaryResult.error) throw summaryResult.error;
   if (leadsResult.error) throw leadsResult.error;
 
   const clients = clientsToOptions(sellerClients);
@@ -210,15 +199,43 @@ export async function fetchSellerAgenda(
     partnership_id: row.partnership_id ?? null,
     source: row.source ?? "manual",
     completed_at: row.completed_at ?? null,
+    sdr_id: row.sdr_id ?? null,
+    assigned_closer_id: row.assigned_closer_id ?? null,
+    duration_minutes: Number(row.duration_minutes ?? 45),
+    contact_name: row.contact_name ?? null,
+    contact_email: row.contact_email ?? null,
+    contact_phone: row.contact_phone ?? null,
     lead_name: row.sales_leads?.full_name ?? null,
     lead_email: row.sales_leads?.email ?? null,
     lead_phone: row.sales_leads?.phone ?? null,
     client_name: row.partnership_id ? clientsById.get(row.partnership_id)?.name ?? null : null,
   }));
 
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const todayEnd = addDays(todayStart, 1);
+  const weekStart = startOfWeek(now, { weekStartsOn: 1 });
+  const weekEnd = addDays(weekStart, 7);
+  const active = appointments.filter((item) => item.status !== "cancelado");
+
   return {
     appointments,
-    summary: normalizeSummary(summaryResult.data),
+    summary: {
+      today: active.filter((item) => {
+        const date = new Date(item.scheduled_at);
+        return date >= todayStart && date < todayEnd;
+      }).length,
+      thisWeek: active.filter((item) => {
+        const date = new Date(item.scheduled_at);
+        return date >= weekStart && date < weekEnd;
+      }).length,
+      pendingFollowups: active.filter(
+        (item) => item.type === "follow_up" && !["concluido", "cancelado"].includes(item.status),
+      ).length,
+      scheduledMeetings: active.filter(
+        (item) => item.type === "reuniao" && !["concluido", "cancelado"].includes(item.status),
+      ).length,
+    },
     leads: ((leadsResult.data as any[]) ?? []) as AgendaLeadOption[],
     clients,
   };
@@ -254,7 +271,7 @@ export async function setSellerAppointmentStatus(sellerId: string, id: string, s
     .from("seller_appointments" as any)
     .update({ status })
     .eq("id", id)
-    .eq("seller_id", sellerId);
+    .or(`seller_id.eq.${sellerId},sdr_id.eq.${sellerId},assigned_closer_id.eq.${sellerId}`);
   if (error) throw error;
 }
 
@@ -263,6 +280,54 @@ export async function deleteSellerAppointment(sellerId: string, id: string) {
     .from("seller_appointments" as any)
     .delete()
     .eq("id", id)
-    .eq("seller_id", sellerId);
+    .or(`seller_id.eq.${sellerId},sdr_id.eq.${sellerId},assigned_closer_id.eq.${sellerId}`);
+  if (error) throw error;
+}
+
+export type CloserAvailabilitySlot = {
+  slot_start: string;
+  slot_end: string;
+  closer_id: string;
+  closer_name: string;
+  closer_email: string;
+};
+
+export async function fetchCloserAvailability(fromDate: Date, days = 14) {
+  const date = fromDate.toISOString().slice(0, 10);
+  const { data, error } = await supabase.rpc("get_available_closer_slots" as any, {
+    p_from_date: date,
+    p_days: days,
+    p_duration_minutes: 45,
+  });
+  if (error) throw error;
+  return ((data as any[]) ?? []) as CloserAvailabilitySlot[];
+}
+
+export async function scheduleSdrCloserMeeting(input: {
+  slotStart: string;
+  title: string;
+  contactName: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  notes?: string;
+}) {
+  const { data, error } = await supabase.rpc("schedule_sdr_closer_meeting" as any, {
+    p_slot_start: input.slotStart,
+    p_title: input.title,
+    p_contact_name: input.contactName,
+    p_contact_email: input.contactEmail || null,
+    p_contact_phone: input.contactPhone || null,
+    p_notes: input.notes || null,
+    p_duration_minutes: 45,
+  });
+  if (error) throw error;
+  return data as string;
+}
+
+export async function rescheduleSharedMeeting(appointmentId: string, slotStart: string) {
+  const { error } = await supabase.rpc("reschedule_shared_sales_meeting" as any, {
+    p_appointment_id: appointmentId,
+    p_slot_start: slotStart,
+  });
   if (error) throw error;
 }

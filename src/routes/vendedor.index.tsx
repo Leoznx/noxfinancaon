@@ -21,6 +21,7 @@ import {
   type SellerDashboardData,
 } from "@/lib/seller-dashboard";
 import { formatMoney } from "@/lib/vendedor-portal";
+import { useAuth } from "@/components/AuthProvider";
 
 export const Route = createFileRoute("/vendedor/")({
   component: () => (
@@ -31,6 +32,8 @@ export const Route = createFileRoute("/vendedor/")({
 });
 
 function VendedorDashboard() {
+  const { user } = useAuth();
+  const isCloser = user?.sellerType === "closer";
   const [data, setData] = useState<SellerDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -123,7 +126,7 @@ function VendedorDashboard() {
         data.metrics.commissionsCurrent,
         data.metrics.commissionsPrevious,
       ),
-      goalPercentage: goalProgress(data.metrics.contractsCurrent, data.metrics.goalTarget),
+      goalPercentage: goalProgress(data.metrics.registrationsCurrent, data.metrics.goalTarget),
       contractsDelta: data.metrics.contractsCurrent - data.metrics.contractsPrevious,
       contractTrend: data.monthlyHistory.slice(-8).map((month) => month.contracts),
       commissionTrend: data.monthlyHistory.slice(-8).map((month) => month.commissions),
@@ -173,18 +176,22 @@ function VendedorDashboard() {
               />
 
               <div className="grid min-w-0 grid-cols-2 gap-3 sm:gap-4 xl:h-full xl:min-h-0 xl:gap-3">
-                <SellerKpiCard
+                {!isCloser && <SellerKpiCard
                   icon={Users}
-                  title="Leads pendentes"
+                  title="Leads e atendimentos pendentes"
                   value={String(data.metrics.leadsPending)}
-                  subtitle={
-                    data.metrics.leadsNewThisWeek > 0
-                      ? `+${data.metrics.leadsNewThisWeek} novos esta semana ↑`
-                      : "Nenhum novo esta semana"
-                  }
+                  subtitle={data.metrics.leadsNewThisWeek > 0 ? `+${data.metrics.leadsNewThisWeek} novos esta semana ↑` : "Nenhum novo esta semana"}
                   variant="yellow"
                   sparkline={data.leadTrend}
-                />
+                />}
+                {isCloser && <SellerKpiCard
+                  icon={Users}
+                  title="Reuniões de hoje"
+                  value={String(data.agenda.length)}
+                  subtitle="Agenda compartilhada dos SDRs"
+                  variant="yellow"
+                  sparkline={[]}
+                />}
                 <SellerKpiCard
                   icon={FileCheck2}
                   title="Contratos fechados no mês"
@@ -217,7 +224,7 @@ function VendedorDashboard() {
                   }
                   subtitle={
                     data.metrics.goalTarget
-                      ? `${data.metrics.contractsCurrent} / ${data.metrics.goalTarget} contratos`
+                      ? `${data.metrics.registrationsCurrent} / ${data.metrics.goalTarget} cadastros`
                       : "Meta ainda não definida"
                   }
                   variant="blue"
@@ -226,9 +233,9 @@ function VendedorDashboard() {
               </div>
             </div>
 
-            <div className="grid min-w-0 gap-4 md:grid-cols-2 xl:h-full xl:min-h-0 xl:grid-cols-4 xl:gap-3">
-              <PipelineSummary stages={data.pipeline} />
-              <RecentActivities activities={data.activities} />
+            <div className={`grid min-w-0 gap-4 md:grid-cols-2 xl:h-full xl:min-h-0 xl:gap-3 ${isCloser ? "xl:grid-cols-2" : "xl:grid-cols-4"}`}>
+              {!isCloser && <PipelineSummary stages={data.pipeline} />}
+              {!isCloser && <RecentActivities activities={data.activities} />}
               <TodayAgenda appointments={data.agenda} />
               <SellerRanking ranking={data.ranking} />
             </div>

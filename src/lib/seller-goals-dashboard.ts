@@ -18,19 +18,7 @@ export function sellerGoalPercentage(current: number, target: number | null): nu
 }
 
 export function sellerOverallProgress(progress: SellerMonthlyProgress): number {
-  const goals = [
-    [progress.meetings_completed, progress.target_meetings],
-    [progress.clients_registered, progress.target_clients],
-    [progress.contracts_closed, progress.target_contracts],
-  ] as const;
-  const configured = goals.filter(([, target]) => target != null);
-  if (configured.length === 0) return 0;
-  return Math.round(
-    configured.reduce(
-      (total, [current, target]) => total + sellerGoalPercentage(current, target),
-      0,
-    ) / configured.length,
-  );
+  return sellerGoalPercentage(progress.clients_registered, progress.target_clients);
 }
 
 export function sellerRewardCurrent(

@@ -3,14 +3,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertCircle } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { CommissionIncentives } from "@/components/seller-commissions/CommissionIncentives";
+import { CommissionHistory } from "@/components/seller-commissions/CommissionHistory";
 import { CommissionStatsGrid } from "@/components/seller-commissions/CommissionStatsGrid";
 import { CommissionsHeader } from "@/components/seller-commissions/CommissionsHeader";
 import { CommissionsSkeleton } from "@/components/seller-commissions/CommissionsSkeleton";
 import { supabase } from "@/integrations/supabase/client";
 import { summarizeCommissions, type SellerCommissionRow } from "@/lib/seller-commissions-view";
-import { fetchMySellerMonthlyProgress, type SellerMonthlyProgress } from "@/lib/seller-progress";
-import { fetchSellerRewards, type SellerReward } from "@/lib/seller-rewards";
 import { getSellerContext } from "@/lib/vendedor-portal";
 
 export const Route = createFileRoute("/vendedor/comissoes")({
@@ -26,14 +24,9 @@ export const Route = createFileRoute("/vendedor/comissoes")({
 
 function CommissionsPage() {
   const [rows, setRows] = useState<SellerCommissionRow[]>([]);
-  const [progress, setProgress] = useState<SellerMonthlyProgress | null>(null);
-  const [rewards, setRewards] = useState<SellerReward[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  const now = useMemo(() => new Date(), []);
-  const month = now.getMonth() + 1;
-  const year = now.getFullYear();
 
   const load = useCallback(
     async (showRefreshState = false) => {
@@ -45,8 +38,7 @@ function CommissionsPage() {
         if (!context.sellerId)
           throw new Error("Não encontramos um vendedor ativo para este usuário.");
 
-        const [commissionResult, monthlyProgress, activeRewards] = await Promise.all([
-          supabase
+        const commissionResult = await supabase
             .from("seller_commissions" as any)
             .select(
               `
@@ -64,15 +56,10 @@ function CommissionsPage() {
             .eq("seller_id", context.sellerId)
             .order("year", { ascending: false })
             .order("month", { ascending: false })
-            .order("created_at", { ascending: false }),
-          fetchMySellerMonthlyProgress(month, year),
-          fetchSellerRewards(month, year),
-        ]);
+            .order("created_at", { ascending: false });
 
         if (commissionResult.error) throw commissionResult.error;
         setRows((commissionResult.data as unknown as SellerCommissionRow[]) ?? []);
-        setProgress(monthlyProgress);
-        setRewards(activeRewards);
       } catch (error) {
         setErrorMessage(
           error instanceof Error ? error.message : "Não foi possível carregar suas comissões.",
@@ -82,7 +69,7 @@ function CommissionsPage() {
         setRefreshing(false);
       }
     },
-    [month, year],
+    [],
   );
 
   useEffect(() => {
@@ -93,11 +80,6 @@ function CommissionsPage() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "seller_commissions" },
-        refreshSilently,
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "seller_rewards" },
         refreshSilently,
       )
       .on(
@@ -123,7 +105,6 @@ function CommissionsPage() {
   }, [load]);
 
   const summary = useMemo(() => summarizeCommissions(rows), [rows]);
-  const hasFinancialData = progress !== null;
 
   return (
     <DashboardLayout>
@@ -145,14 +126,12 @@ function CommissionsPage() {
           </div>
         )}
 
-        {!loaded || (!hasFinancialData && errorMessage) ? (
+        {!loaded && !rows.length ? (
           <CommissionsSkeleton />
         ) : (
           <>
             <CommissionStatsGrid summary={summary} />
-            {progress ? (
-              <CommissionIncentives rewards={rewards} progress={progress} rows={rows} />
-            ) : null}
+            <CommissionHistory rows={rows} />
           </>
         )}
       </main>

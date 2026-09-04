@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useEffect, useMemo, useState } from "react";
@@ -36,6 +36,9 @@ type PipelineLead = {
 };
 
 export const Route = createFileRoute("/vendedor/pipeline")({
+  beforeLoad: () => {
+    throw redirect({ to: "/vendedor/leads" });
+  },
   component: () => (
     <ProtectedRoute roles={["vendedor", "admin_master", "admin"]} moduleKey="pipeline">
       <Pipeline />

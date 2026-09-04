@@ -3,5 +3,5 @@ import { NoxEmployeeSignup } from "@/components/NoxEmployeeSignup";
 
 export const Route = createFileRoute("/login_/marketingnox")({
   head: () => ({ meta: [{ name: "robots", content: "noindex, nofollow" }] }),
-  component: () => <NoxEmployeeSignup role="marketing" />,
+  component: () => <NoxEmployeeSignup accountType="marketing" />,
 });

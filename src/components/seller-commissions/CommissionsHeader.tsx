@@ -18,7 +18,7 @@ export function CommissionsHeader({ refreshing, onRefresh }: CommissionsHeaderPr
             Minhas Comissões
           </h1>
           <p className="mt-0.5 text-sm font-medium text-[#6B6B6B]">
-            Somente comissão por contrato e bônus cumulativos — sem valor fixo.
+            Resumo, valores liberados e histórico completo em uma única página.
           </p>
         </div>
       </div>

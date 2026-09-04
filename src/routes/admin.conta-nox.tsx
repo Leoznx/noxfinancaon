@@ -33,8 +33,8 @@ import { Scale, DollarSign, Megaphone, Briefcase, KeyRound, Copy, Check, Externa
 import {
   noxInternalAccounts,
   buildRegistrationLink,
-  NOX_INTERNAL_ROLES,
-  type NoxInternalRole,
+  NOX_INTERNAL_ACCOUNT_TYPES,
+  type NoxInternalAccountType,
 } from "@/lib/nox-internal-accounts";
 import {
   listNoxEmployees,
@@ -50,8 +50,9 @@ export const Route = createFileRoute("/admin/conta-nox")({
   ),
 });
 
-const CARGO_ICON: Record<NoxInternalRole, any> = {
-  vendedor: Briefcase,
+const CARGO_ICON: Record<NoxInternalAccountType, any> = {
+  sdr: Briefcase,
+  closer: UserCheck,
   financeiro: DollarSign,
   juridico: Scale,
   marketing: Megaphone,
@@ -80,13 +81,13 @@ function ContaNoxPage() {
   const updateStatusFn = useServerFn(updateNoxEmployeeStatus);
   const updateRoleFn = useServerFn(updateNoxEmployeeRole);
 
-  const [copiadoRole, setCopiadoRole] = useState<NoxInternalRole | null>(null);
+  const [copiadoRole, setCopiadoRole] = useState<NoxInternalAccountType | null>(null);
   const [employees, setEmployees] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [filtroCargo, setFiltroCargo] = useState("todos");
   const [filtroStatus, setFiltroStatus] = useState("todos");
-  const [pendingRoleChange, setPendingRoleChange] = useState<{ id: string; nome: string; role: NoxInternalRole } | null>(
+  const [pendingRoleChange, setPendingRoleChange] = useState<{ id: string; nome: string; accountType: NoxInternalAccountType } | null>(
     null,
   );
 
@@ -106,7 +107,7 @@ function ContaNoxPage() {
     carregar();
   }, [carregar]);
 
-  const copiarLink = async (role: NoxInternalRole) => {
+  const copiarLink = async (role: NoxInternalAccountType) => {
     try {
       await navigator.clipboard.writeText(buildRegistrationLink(role));
       setCopiadoRole(role);
@@ -118,7 +119,7 @@ function ContaNoxPage() {
     }
   };
 
-  const abrirCadastro = (role: NoxInternalRole) => {
+  const abrirCadastro = (role: NoxInternalAccountType) => {
     window.open(buildRegistrationLink(role), "_blank", "noopener,noreferrer");
   };
 
@@ -136,7 +137,7 @@ function ContaNoxPage() {
   const confirmarAlteracaoCargo = async () => {
     if (!pendingRoleChange) return;
     try {
-      await updateRoleFn({ data: { employeeId: pendingRoleChange.id, role: pendingRoleChange.role } });
+      await updateRoleFn({ data: { employeeId: pendingRoleChange.id, accountType: pendingRoleChange.accountType } });
       toast.success("Cargo atualizado.");
       setPendingRoleChange(null);
       carregar();
@@ -148,14 +149,14 @@ function ContaNoxPage() {
   const employeesFiltrados = useMemo(() => {
     const termo = normalizeText(searchTerm);
     return employees.filter((emp) => {
-      if (filtroCargo !== "todos" && emp.cargo !== filtroCargo) return false;
+      if (filtroCargo !== "todos" && emp.accountType !== filtroCargo) return false;
       if (filtroStatus !== "todos" && emp.status !== filtroStatus) return false;
       if (!termo) return true;
       return (
         normalizeText(emp.nome).includes(termo) ||
         normalizeText(emp.email).includes(termo) ||
         normalizeText(emp.telefone).includes(termo) ||
-        normalizeText(emp.cargo).includes(termo)
+        normalizeText(emp.accountType).includes(termo)
       );
     });
   }, [employees, searchTerm, filtroCargo, filtroStatus]);
@@ -176,7 +177,7 @@ function ContaNoxPage() {
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {NOX_INTERNAL_ROLES.map((role) => {
+          {NOX_INTERNAL_ACCOUNT_TYPES.map((role) => {
             const conta = noxInternalAccounts[role];
             const Icon = CARGO_ICON[role];
             const link = buildRegistrationLink(role);
@@ -252,7 +253,7 @@ function ContaNoxPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos os cargos</SelectItem>
-                {NOX_INTERNAL_ROLES.map((role) => (
+                {NOX_INTERNAL_ACCOUNT_TYPES.map((role) => (
                   <SelectItem key={role} value={role}>
                     {noxInternalAccounts[role].label}
                   </SelectItem>
@@ -293,18 +294,18 @@ function ContaNoxPage() {
                         <Badge className={`${badge.cls} border shrink-0`}>{badge.label}</Badge>
                       </div>
                       <div className="mt-3">
-                        {(NOX_INTERNAL_ROLES as readonly string[]).includes(emp.cargo) ? (
+                        {(NOX_INTERNAL_ACCOUNT_TYPES as readonly string[]).includes(emp.accountType) ? (
                           <Select
-                            value={emp.cargo}
+                            value={emp.accountType}
                             onValueChange={(novoValor) =>
-                              setPendingRoleChange({ id: emp.id, nome: emp.nome, role: novoValor as NoxInternalRole })
+                              setPendingRoleChange({ id: emp.id, nome: emp.nome, accountType: novoValor as NoxInternalAccountType })
                             }
                           >
                             <SelectTrigger className="h-8 w-full">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              {NOX_INTERNAL_ROLES.map((role) => (
+                              {NOX_INTERNAL_ACCOUNT_TYPES.map((role) => (
                                 <SelectItem key={role} value={role}>
                                   {noxInternalAccounts[role].label}
                                 </SelectItem>
@@ -380,18 +381,18 @@ function ContaNoxPage() {
                         <TableCell className="text-xs">{emp.email}</TableCell>
                         <TableCell className="text-xs">{emp.telefone || "—"}</TableCell>
                         <TableCell>
-                          {(NOX_INTERNAL_ROLES as readonly string[]).includes(emp.cargo) ? (
+                          {(NOX_INTERNAL_ACCOUNT_TYPES as readonly string[]).includes(emp.accountType) ? (
                             <Select
-                              value={emp.cargo}
+                              value={emp.accountType}
                               onValueChange={(novoValor) =>
-                                setPendingRoleChange({ id: emp.id, nome: emp.nome, role: novoValor as NoxInternalRole })
+                                setPendingRoleChange({ id: emp.id, nome: emp.nome, accountType: novoValor as NoxInternalAccountType })
                               }
                             >
                               <SelectTrigger className="h-8 w-36">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                {NOX_INTERNAL_ROLES.map((role) => (
+                                {NOX_INTERNAL_ACCOUNT_TYPES.map((role) => (
                                   <SelectItem key={role} value={role}>
                                     {noxInternalAccounts[role].label}
                                   </SelectItem>
@@ -444,7 +445,7 @@ function ContaNoxPage() {
             {pendingRoleChange && (
               <>
                 Alterar o cargo de <strong>{pendingRoleChange.nome}</strong> para{" "}
-                <strong>{noxInternalAccounts[pendingRoleChange.role].label}</strong>?
+                <strong>{noxInternalAccounts[pendingRoleChange.accountType].label}</strong>?
               </>
             )}
           </DialogDescription>

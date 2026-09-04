@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { AlertCircle, History, RefreshCw } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
@@ -10,6 +10,9 @@ import type { SellerCommissionRow } from "@/lib/seller-commissions-view";
 import { getSellerContext } from "@/lib/vendedor-portal";
 
 export const Route = createFileRoute("/vendedor/historico-comissoes")({
+  beforeLoad: () => {
+    throw redirect({ to: "/vendedor/comissoes" });
+  },
   component: () => (
     <ProtectedRoute
       roles={["vendedor", "admin_master", "admin", "financeiro"]}

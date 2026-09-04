@@ -92,8 +92,7 @@ export function summarizeCommissions(rows: SellerCommissionRow[]) {
 export function getCommissionEntryAmount(row: SellerCommissionRow) {
   const released = Number(row.released_amount ?? 0);
   const commission = Number(row.commission_amount ?? 0);
-  const bonus = Number(row.bonus_amount ?? 0);
-  return (released > 0 ? released : commission) + bonus;
+  return released > 0 ? released : commission;
 }
 
 export function getCommissionCustomerName(row: SellerCommissionRow) {
@@ -110,6 +109,6 @@ export function getCommissionContractNumber(row: SellerCommissionRow) {
   return row.apolices?.numero || row.apolice_id || row.contract_id || "—";
 }
 
-export function getCommissionType(row: SellerCommissionRow) {
-  return Number(row.bonus_amount ?? 0) > 0 ? "Comissão + bônus" : "Comissão";
+export function getCommissionType(_row: SellerCommissionRow) {
+  return "Comissão";
 }

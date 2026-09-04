@@ -20,6 +20,7 @@ export type Role =
 
 export type InternalRole =
   "admin_master" | "juridico" | "financeiro" | "marketing" | "suporte" | "vendedor";
+export type SellerType = "sdr" | "closer";
 
 const INTERNAL_ROLES: InternalRole[] = [
   "admin_master",
@@ -43,6 +44,7 @@ interface User {
   email: string;
   role: Role;
   internalRole?: InternalRole | null;
+  sellerType?: SellerType | null;
 }
 
 interface AuthContextType {
@@ -52,6 +54,7 @@ interface AuthContextType {
     role: Role,
     id: string,
     internalRoleHint?: InternalRole | null,
+    sellerTypeHint?: SellerType | null,
   ) => void;
   logout: () => Promise<void>;
   isLoading: boolean;
@@ -120,6 +123,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             email: parsed.email,
             role: parsed.role,
             internalRole: parsed.internalRole ?? null,
+            sellerType: parsed.sellerType ?? null,
           };
           // Começa a buscar as permissões junto com a restauração da sessão. Na
           // prática, o menu já está pronto quando a rota protegida é liberada.
@@ -175,7 +179,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               .maybeSingle(),
             supabase
               .from("internal_users" as any)
-              .select("role,status")
+              .select("role,status,seller_type")
               .eq("auth_user_id", userId)
               .maybeSingle(),
           ]);
@@ -186,7 +190,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const role = (profile as any)?.role as Role | undefined;
           if (!role) return; // profile ainda não existe (ex.: trigger em voo) — não força estado incompleto
           const internalUser = internalUserResult.data as
-            | { role?: string | null; status?: string | null }
+            | { role?: string | null; status?: string | null; seller_type?: string | null }
             | null;
           const internalRole = internalUser
             ? internalUser.status === "ativo" &&
@@ -216,7 +220,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // A rota protegida só é liberada depois que o cargo interno já está
           // resolvido. Assim /dashboard nunca monta o painel genérico antes do
           // painel específico de Jurídico, Financeiro, Marketing ou Vendedor.
-          login(email, role, userId, internalRole);
+          const sellerType = ["sdr", "closer"].includes(internalUser?.seller_type || "")
+            ? (internalUser!.seller_type as SellerType)
+            : null;
+          login(email, role, userId, internalRole, sellerType);
 
           // Só na hora do SIGNED_IN de verdade (ex.: acabou de confirmar o e-mail do
           // cadastro) — não no getSession() passivo de todo carregamento de página —
@@ -285,10 +292,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const resolveInternalRole = async (
+  const resolveInternalIdentity = async (
     role: Role,
     userId: string,
-  ): Promise<InternalRole | null> => {
+  ): Promise<{ internalRole: InternalRole | null; sellerType: SellerType | null }> => {
     // Antes, quando profiles.role já era um nome de cargo interno (ex.: 'suporte'),
     // isso retornava direto sem nunca consultar internal_users — trocar o cargo ou
     // bloquear alguém pela aba Colaboradores não tinha efeito nenhum na prática,
@@ -300,16 +307,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { supabase } = await import("@/integrations/supabase/client");
       const { data } = await supabase
         .from("internal_users" as any)
-        .select("role,status")
+        .select("role,status,seller_type")
         .eq("auth_user_id", userId)
         .maybeSingle();
       if (data) {
-        return (data as any).status === "ativo" ? ((data as any).role as InternalRole) : null;
+        return {
+          internalRole:
+            (data as any).status === "ativo" ? ((data as any).role as InternalRole) : null,
+          sellerType:
+            (data as any).status === "ativo" && ["sdr", "closer"].includes((data as any).seller_type)
+              ? ((data as any).seller_type as SellerType)
+              : null,
+        };
       }
-      return INTERNAL_ROLES.includes(role as InternalRole) ? (role as InternalRole) : null;
+      return {
+        internalRole: INTERNAL_ROLES.includes(role as InternalRole) ? (role as InternalRole) : null,
+        sellerType: null,
+      };
     } catch (e) {
       console.warn("[Auth] resolveInternalRole failed", e);
-      return INTERNAL_ROLES.includes(role as InternalRole) ? (role as InternalRole) : null;
+      return {
+        internalRole: INTERNAL_ROLES.includes(role as InternalRole) ? (role as InternalRole) : null,
+        sellerType: null,
+      };
     }
   };
 
@@ -318,6 +338,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     role: Role,
     id: string,
     internalRoleHint?: InternalRole | null,
+    sellerTypeHint?: SellerType | null,
   ) => {
     isLoggingOutRef.current = false;
     authVersionRef.current += 1;
@@ -330,18 +351,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         : INTERNAL_ROLES.includes(role as InternalRole)
           ? (role as InternalRole)
           : null;
-    const baseUser: User = { id, email, role, internalRole: immediateInternalRole };
+    const baseUser: User = {
+      id,
+      email,
+      role,
+      internalRole: immediateInternalRole,
+      sellerType: sellerTypeHint ?? null,
+    };
     setUser(baseUser);
     try {
       getPreferredStorage().setItem("nox_user", JSON.stringify(baseUser));
     } catch {}
     // Quando o chamador já consultou internal_users, o estado acima é definitivo
     // e não precisa de um segundo roundtrip. Chamadas legadas ainda são enriquecidas.
-    if (internalRoleHint !== undefined) return;
-    resolveInternalRole(role, id)
-      .then((internalRole) => {
+    if (internalRoleHint !== undefined && sellerTypeHint !== undefined) return;
+    resolveInternalIdentity(role, id)
+      .then(({ internalRole, sellerType }) => {
         if (isLoggingOutRef.current || loginVersion !== authVersionRef.current) return;
-        const enriched: User = { id, email, role, internalRole };
+        const enriched: User = { id, email, role, internalRole, sellerType };
         setUser(enriched);
         try {
           getPreferredStorage().setItem("nox_user", JSON.stringify(enriched));

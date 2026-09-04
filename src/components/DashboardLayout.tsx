@@ -33,7 +33,6 @@ import {
   Trophy,
   Target,
   BookOpen,
-  ListChecks,
   Menu,
   X,
   Users2,
@@ -42,6 +41,7 @@ import {
   ContactRound,
   MonitorPlay,
   ArrowRight,
+  Gift,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { SinoNotificacoes } from "./SinoNotificacoes";
@@ -78,6 +78,7 @@ type MenuItem = {
   highlight?: boolean;
   keywords?: string[];
   children?: MenuSubItem[];
+  sellerTypes?: Array<"sdr" | "closer">;
 };
 
 type MenuSubItem = {
@@ -286,33 +287,34 @@ const adminMasterItems = adminItems;
 // Vendedor tem portal próprio (não é subset do admin) - catálogo e módulos
 // separados. Dashboard e Meu Perfil sem module = sempre visíveis (todo mundo
 // precisa de um ponto de entrada e acesso ao próprio perfil).
-const vendedorItems = [
+const vendedorItems: MenuItem[] = [
   {
     icon: ContactRound,
     label: "Cadastrar Cliente",
     href: "/vendedor/clientes",
     highlight: true,
+    sellerTypes: ["sdr", "closer"],
   },
-  { icon: LayoutDashboard, label: "Dashboard", href: "/vendedor" },
-  { icon: MonitorPlay, label: "Contas demo", href: "/vendedor/contas-demo" },
-  { icon: Users, label: "Meus Leads", href: "/vendedor/leads", module: "leads_proprios" },
-  { icon: ListChecks, label: "Atendimento", href: "/vendedor/pipeline", module: "pipeline" },
-  { icon: Bell, label: "Minha Agenda", href: "/vendedor/agenda", module: "agenda" },
-  { icon: Target, label: "Minhas Metas", href: "/vendedor/metas", module: "metas" },
+  { icon: LayoutDashboard, label: "Dashboard", href: "/vendedor", sellerTypes: ["sdr", "closer"] },
+  { icon: MonitorPlay, label: "Contas demo", href: "/vendedor/contas-demo", sellerTypes: ["closer"] },
+  { icon: Users, label: "Leads e Atendimento", href: "/vendedor/leads", module: "leads_proprios", sellerTypes: ["sdr"] },
+  { icon: Bell, label: "Minha Agenda", href: "/vendedor/agenda", module: "agenda", highlight: true, sellerTypes: ["sdr", "closer"] },
+  { icon: Target, label: "Minhas Metas", href: "/vendedor/metas", module: "metas", sellerTypes: ["sdr", "closer"] },
   {
     icon: DollarSign,
     label: "Minhas Comissões",
     href: "/vendedor/comissoes",
     module: "comissoes_proprias",
+    sellerTypes: ["sdr", "closer"],
   },
   {
-    icon: History,
-    label: "Histórico de Comissões",
-    href: "/vendedor/historico-comissoes",
-    module: "comissoes_proprias",
+    icon: Gift,
+    label: "Plano de Indicação",
+    href: "/vendedor/indicacoes",
+    sellerTypes: ["sdr"],
   },
-  { icon: Trophy, label: "Ranking", href: "/vendedor/ranking", module: "ranking" },
-  { icon: User, label: "Meu Perfil", href: "/configuracoes" },
+  { icon: Trophy, label: "Ranking", href: "/vendedor/ranking", module: "ranking", sellerTypes: ["sdr", "closer"] },
+  { icon: User, label: "Meu Perfil", href: "/configuracoes", sellerTypes: ["sdr", "closer"] },
 ];
 
 // Cargos internos gateados por role_permissions (ver DashboardLayout abaixo) -
@@ -512,14 +514,11 @@ export function DashboardLayout({
   // cargos internos abaixo são filtrados por role_permissions.can_view real -
   // é isso que faz "remover a permissão Financeiro" sumir a aba do menu.
   if (cargoInterno === "vendedor") {
-    menuItems = [
-      vendedorItems[0], // Cadastrar Cliente - primeira aba destacada e sempre visível
-      vendedorItems[1], // Dashboard - sempre visível
-      ...vendedorItems
-        .slice(2, -1)
-        .filter((item) => !item.module || podeVerModulo(permissoesCargo, item.module)),
-      vendedorItems[vendedorItems.length - 1], // Meu Perfil - sempre visível
-    ];
+    menuItems = vendedorItems.filter(
+      (item) =>
+        (!item.sellerTypes || (!!user?.sellerType && item.sellerTypes.includes(user.sellerType))) &&
+        (!item.module || podeVerModulo(permissoesCargo, item.module)),
+    );
   } else if (cargoInterno) {
     menuItems = [
       ...(INTERNAL_ROLES_WITH_DASHBOARD.has(cargoInterno) ? [INTERNAL_ROLE_DASHBOARD_ITEM] : []),

@@ -13,6 +13,7 @@ import { AgendaSummaryCards } from "@/components/seller-agenda/AgendaSummaryCard
 import { AppointmentCard } from "@/components/seller-agenda/AppointmentCard";
 import { AppointmentDetailsDialog } from "@/components/seller-agenda/AppointmentDetailsDialog";
 import { AppointmentModal } from "@/components/seller-agenda/AppointmentModal";
+import { SharedSalesAgenda } from "@/components/seller-agenda/SharedSalesAgenda";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -54,6 +55,7 @@ type ListScope = "month" | "week";
 
 function AgendaPage() {
   const [sellerId, setSellerId] = useState<string | null>(null);
+  const [sellerType, setSellerType] = useState<"sdr" | "closer" | null>(null);
   const [appointments, setAppointments] = useState<SellerAppointment[]>([]);
   const [leads, setLeads] = useState<AgendaLeadOption[]>([]);
   const [clients, setClients] = useState<AgendaClientOption[]>([]);
@@ -80,6 +82,7 @@ function AgendaPage() {
       const context = await getSellerContext();
       if (!context.isSeller || !context.sellerId) throw new Error("Não encontramos um vendedor ativo para este usuário.");
       setSellerId(context.sellerId);
+      setSellerType(context.sellerType);
       const data = await fetchSellerAgenda(context.sellerId, month);
       setAppointments(data.appointments);
       setSummary(data.summary);
@@ -108,6 +111,7 @@ function AgendaPage() {
     const channel = supabase
       .channel(`seller-agenda-${sellerId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "seller_appointments", filter: `seller_id=eq.${sellerId}` }, scheduleRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "seller_appointments", filter: `sdr_id=eq.${sellerId}` }, scheduleRefresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "sales_leads", filter: `assigned_seller_id=eq.${sellerId}` }, scheduleRefresh)
       .subscribe();
     return () => {
@@ -224,6 +228,13 @@ function AgendaPage() {
             <Button type="button" className="h-9 gap-2 bg-yellow-400 font-extrabold text-black hover:bg-yellow-500" onClick={() => openNew()}><Plus className="h-4 w-4" /> Novo compromisso</Button>
           </div>
         </header>
+
+        <SharedSalesAgenda
+          sellerType={sellerType}
+          sellerId={sellerId}
+          appointments={appointments}
+          onRefresh={() => load(true)}
+        />
 
         <AgendaSummaryCards summary={summary} loading={loading} onSelect={handleSummaryAction} />
         {overdueCount > 0 && !loading && (

@@ -13,7 +13,6 @@ import type {
   SellerDashboardAppointment,
   SellerDashboardRanking,
 } from "@/lib/seller-dashboard";
-import { formatMoney } from "@/lib/vendedor-portal";
 
 const PIPELINE_COLORS: Record<string, string> = {
   novo: "#4978f5",
@@ -174,7 +173,7 @@ export function SellerRanking({ ranking }: { ranking: SellerDashboardRanking[] }
   return (
     <DashboardSection
       title="Ranking"
-      info="Posição calculada pelas comissões e contratos do mês"
+      info="Posição calculada pelos cadastros realizados no mês"
       footer="Ver ranking completo"
       href="/vendedor/ranking"
     >
@@ -203,7 +202,7 @@ export function SellerRanking({ ranking }: { ranking: SellerDashboardRanking[] }
                 {seller.isCurrent ? "Você" : seller.name}
               </span>
               <span className="shrink-0 text-[10px] font-bold text-neutral-950">
-                {formatMoney(seller.commissions)}
+                {seller.registrations} cadastros
               </span>
             </div>
           ))}

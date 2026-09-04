@@ -1,27 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useState } from "react";
-import {
-  AlertCircle,
-  Award,
-  CalendarDays,
-  ChartNoAxesCombined,
-  CheckCircle2,
-  RefreshCw,
-  Target,
-  Trophy,
-  Users,
-  Video,
-} from "lucide-react";
-import {
-  Bar,
-  CartesianGrid,
-  ComposedChart,
-  LabelList,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { AlertCircle, Award, CalendarDays, CheckCircle2, RefreshCw, Target, Trophy, Users } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -30,282 +9,94 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { defaultAvatarForName } from "@/lib/gender-avatar";
-import { sellerGoalPercentage, sellerOverallProgress } from "@/lib/seller-goals-dashboard";
+import { sellerGoalPercentage } from "@/lib/seller-goals-dashboard";
 import { fetchMySellerMonthlyProgress, type SellerMonthlyProgress } from "@/lib/seller-progress";
 
 export const Route = createFileRoute("/vendedor/metas")({
   component: () => (
     <ProtectedRoute roles={["vendedor", "admin_master", "admin"]} moduleKey="metas">
-      <Metas />
+      <Goals />
     </ProtectedRoute>
   ),
 });
 
-const MONTHS = [
-  "Janeiro",
-  "Fevereiro",
-  "Março",
-  "Abril",
-  "Maio",
-  "Junho",
-  "Julho",
-  "Agosto",
-  "Setembro",
-  "Outubro",
-  "Novembro",
-  "Dezembro",
-];
+type RankingRow = { id: string; name: string; avatarUrl: string | null; registrations: number; position: number };
+const MONTHS = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
-type RankingRow = {
-  id: string;
-  name: string;
-  avatarUrl: string | null;
-  contracts: number;
-  leads: number;
-  position: number;
-};
-
-function Metas() {
+function Goals() {
   const now = new Date();
   const month = now.getMonth() + 1;
   const year = now.getFullYear();
   const [progress, setProgress] = useState<SellerMonthlyProgress | null>(null);
   const [ranking, setRanking] = useState<RankingRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [erro, setErro] = useState("");
+  const [error, setError] = useState("");
 
-  const carregar = useCallback(async () => {
+  const load = useCallback(async () => {
     setLoading(true);
-    setErro("");
+    setError("");
     try {
-      const [progressData, rankingResponse] = await Promise.all([
+      const [progressData, response] = await Promise.all([
         fetchMySellerMonthlyProgress(month, year),
         (supabase as any).rpc("ranking_vendedores", { p_month: month, p_year: year }),
       ]);
-      if (rankingResponse.error) throw rankingResponse.error;
+      if (response.error) throw response.error;
       setProgress(progressData);
-      setRanking(
-        ((rankingResponse.data as Record<string, unknown>[] | null) ?? [])
-          .map((row) => ({
-            id: String(row.vendedor_id),
-            name: String(row.nome || "Vendedor"),
-            avatarUrl: row.avatar_url ? String(row.avatar_url) : null,
-            contracts: Number(row.contratos_fechados ?? 0),
-            leads: Number(row.total_leads ?? 0),
-            position: Number(row.posicao ?? 0),
-          }))
-          .sort((a, b) => a.position - b.position),
-      );
-    } catch (error) {
-      setErro(error instanceof Error ? error.message : "Não foi possível carregar suas metas.");
+      setRanking(((response.data as Record<string, unknown>[] | null) ?? []).map((row) => ({
+        id: String(row.vendedor_id),
+        name: String(row.nome || "Vendedor"),
+        avatarUrl: row.avatar_url ? String(row.avatar_url) : null,
+        registrations: Number(row.contratos_fechados ?? 0),
+        position: Number(row.posicao ?? 0),
+      })).sort((a, b) => a.position - b.position));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível carregar sua meta.");
     } finally {
       setLoading(false);
     }
   }, [month, year]);
 
   useEffect(() => {
-    void carregar();
-    const refresh = () => void carregar();
-    const channel = supabase
-      .channel("seller-monthly-goals")
-      .on("postgres_changes", { event: "*", schema: "public", table: "seller_goals" }, refresh)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "seller_appointments" },
-        refresh,
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "seller_client_partnerships" },
-        refresh,
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "seller_commissions" },
-        refresh,
-      )
+    void load();
+    const channel = supabase.channel("seller-registration-goal")
+      .on("postgres_changes", { event: "*", schema: "public", table: "seller_goals" }, () => void load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "seller_client_partnerships" }, () => void load())
       .subscribe();
-    window.addEventListener("focus", refresh);
-    return () => {
-      window.removeEventListener("focus", refresh);
-      void supabase.removeChannel(channel);
-    };
-  }, [carregar]);
+    return () => void supabase.removeChannel(channel);
+  }, [load]);
 
-  const contracts = progress?.contracts_closed ?? 0;
-  const overallProgress = progress ? sellerOverallProgress(progress) : 0;
-  const hasGoals =
-    progress?.target_meetings != null &&
-    progress?.target_clients != null &&
-    progress?.target_contracts != null;
-  const currentPosition = ranking.find((seller) => seller.id === progress?.seller_id)?.position;
-  const completedGoals = progress
-    ? [
-        [progress.meetings_completed, progress.target_meetings],
-        [progress.clients_registered, progress.target_clients],
-        [progress.contracts_closed, progress.target_contracts],
-      ]
-        .filter(([, target]) => target != null)
-        .filter(([current, target]) => Number(current) >= Number(target)).length
-    : 0;
+  const percentage = progress ? sellerGoalPercentage(progress.clients_registered, progress.target_clients) : 0;
+  const remaining = progress?.target_clients == null ? null : Math.max(0, progress.target_clients - progress.clients_registered);
+  const position = ranking.find((row) => row.id === progress?.seller_id)?.position;
+  const teamTotal = useMemo(() => ranking.reduce((sum, row) => sum + row.registrations, 0), [ranking]);
 
   return (
     <DashboardLayout lockDesktopViewport>
-      <main className="flex min-h-0 flex-col gap-3 overflow-visible text-neutral-950 xl:h-full xl:overflow-hidden">
-        <section className="relative shrink-0 overflow-hidden rounded-[22px] border border-yellow-300 bg-[radial-gradient(circle_at_92%_20%,rgba(250,204,21,0.25),transparent_24%),linear-gradient(115deg,#ffffff_0%,#fffef8_60%,#fff4b3_100%)] px-4 py-4 shadow-sm sm:px-6">
-          <div className="pointer-events-none absolute -right-10 -top-24 h-48 w-48 rounded-full border-[24px] border-yellow-400/15" />
-          <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-            <div className="min-w-0">
-              <span className="inline-flex items-center gap-2 rounded-full border border-yellow-400 bg-white/80 px-3 py-1 text-[9px] font-black uppercase tracking-[0.18em] text-yellow-700 shadow-sm">
-                <CalendarDays className="h-3 w-3" /> {MONTHS[month - 1]} de {year}
-              </span>
-              <h1 className="mt-2 text-2xl font-black tracking-[-0.045em] sm:text-3xl">
-                Minhas <span className="text-yellow-400">Metas</span>
-              </h1>
-              <p className="mt-1 max-w-2xl text-xs font-medium leading-5 text-neutral-600 sm:text-sm">
-                Seu desempenho individual do mês, com metas e resultados exclusivos da sua conta.
-              </p>
-            </div>
-            <div className="flex w-full shrink-0 items-center justify-between gap-2 sm:w-auto sm:justify-end">
-              {currentPosition && (
-                <div className="rounded-xl border border-yellow-300 bg-white/85 px-3 py-2 text-right shadow-sm">
-                  <p className="text-[8px] font-black uppercase tracking-[0.14em] text-neutral-400">
-                    Ranking
-                  </p>
-                  <p className="text-base font-black text-neutral-950">{currentPosition}º lugar</p>
-                </div>
-              )}
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-10 w-10 rounded-xl border-yellow-300 bg-white/90"
-                onClick={carregar}
-                disabled={loading}
-                aria-label="Atualizar metas"
-              >
-                <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-              </Button>
-            </div>
+      <main className="flex min-h-0 flex-col gap-3 text-neutral-950 xl:h-full">
+        <section className="relative overflow-hidden rounded-[22px] border border-yellow-300 bg-[radial-gradient(circle_at_92%_20%,rgba(250,204,21,0.25),transparent_24%),linear-gradient(115deg,#fff_0%,#fffef8_60%,#fff4b3_100%)] px-4 py-4 shadow-sm sm:px-6">
+          <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div><span className="inline-flex items-center gap-2 rounded-full border border-yellow-400 bg-white/80 px-3 py-1 text-[9px] font-black uppercase tracking-[0.18em] text-yellow-700"><CalendarDays className="h-3 w-3" />{MONTHS[month - 1]} de {year}</span><h1 className="mt-2 text-2xl font-black sm:text-3xl">Minha meta de <span className="text-yellow-500">cadastros</span></h1><p className="mt-1 text-xs font-medium text-neutral-600 sm:text-sm">Sua prioridade comercial é cadastrar novas imobiliárias e corretores parceiros.</p></div>
+            <div className="flex items-center gap-2">{position && <Badge className="border border-yellow-300 bg-white px-3 py-2 text-neutral-950">{position}º no ranking</Badge>}<Button variant="outline" size="icon" className="rounded-xl border-yellow-300" onClick={load} disabled={loading} aria-label="Atualizar meta"><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /></Button></div>
           </div>
         </section>
 
-        {erro && <Estado titulo="Não foi possível carregar suas metas" descricao={erro} erro />}
+        {error ? <State title="Não foi possível carregar sua meta" description={error} error /> : loading ? <div className="h-64 animate-pulse rounded-[22px] bg-neutral-100" /> : progress ? (
+          <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[1.2fr_0.8fr]">
+            <Card className="overflow-hidden border-yellow-300 shadow-sm">
+              <CardHeader className="border-b border-yellow-100 bg-yellow-50"><CardTitle className="flex items-center gap-2 text-base"><Target className="h-5 w-5 text-yellow-600" /> Cadastros realizados no mês</CardTitle></CardHeader>
+              <CardContent className="flex h-full min-h-64 flex-col justify-center p-5 sm:p-8">
+                {progress.target_clients == null ? <State title="Meta ainda não definida" description="O administrador precisa definir sua meta individual de cadastros deste mês." /> : <>
+                  <div className="flex items-end justify-between gap-4"><div><strong className="text-5xl font-black text-neutral-950">{progress.clients_registered}</strong><span className="ml-2 text-lg font-bold text-neutral-400">/ {progress.target_clients}</span><p className="mt-1 text-sm font-semibold text-neutral-500">novos parceiros cadastrados</p></div><strong className="text-3xl font-black text-yellow-600">{percentage}%</strong></div>
+                  <div className="mt-6 h-4 overflow-hidden rounded-full bg-neutral-100"><div className="h-full rounded-full bg-gradient-to-r from-yellow-500 to-yellow-300 transition-all" style={{ width: `${percentage}%` }} /></div>
+                  <div className="mt-5 flex items-center gap-3 rounded-2xl border border-neutral-200 bg-neutral-50 p-4">{remaining === 0 ? <CheckCircle2 className="h-7 w-7 text-emerald-600" /> : <Target className="h-7 w-7 text-yellow-600" />}<div><p className="font-black">{remaining === 0 ? "Meta concluída!" : `Faltam ${remaining} cadastro${remaining === 1 ? "" : "s"}`}</p><p className="text-xs text-neutral-500">Cada novo cadastro válido entra automaticamente nesta contagem.</p></div></div>
+                </>}
+              </CardContent>
+            </Card>
 
-        {loading ? (
-          <MetasSkeleton />
-        ) : !erro && progress ? (
-          <div className="flex min-h-0 flex-1 flex-col gap-3">
-            {!hasGoals && (
-              <Estado
-                titulo="Metas ainda não definidas"
-                descricao="O administrador precisa definir as três metas individuais deste mês."
-              />
-            )}
-
-            <section
-              className="grid shrink-0 grid-cols-1 gap-3 sm:grid-cols-3"
-              aria-label="Metas individuais do mês"
-            >
-              <GoalCard
-                icon={Video}
-                label="Reuniões realizadas"
-                current={progress.meetings_completed}
-                target={progress.target_meetings}
-              />
-              <GoalCard
-                icon={Users}
-                label="Clientes cadastrados"
-                current={progress.clients_registered}
-                target={progress.target_clients}
-              />
-              <GoalCard
-                icon={Trophy}
-                label="Contratos fechados"
-                current={progress.contracts_closed}
-                target={progress.target_contracts}
-              />
-            </section>
-
-            <section className="grid min-h-0 flex-1 items-stretch gap-3 xl:grid-cols-[0.82fr_1.18fr_1fr]">
-              <Card className="flex min-h-[300px] flex-col overflow-hidden border-neutral-200 shadow-sm xl:min-h-0">
-                <CardHeader className="shrink-0 border-b border-neutral-100 px-4 py-3">
-                  <CardTitle className="flex items-center gap-2 text-sm">
-                    <Target className="h-4 w-4 text-yellow-500" /> Progresso individual
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="flex min-h-0 flex-1 flex-col items-center justify-center p-4 text-center">
-                  <CircularProgress value={overallProgress} />
-                  <p className="mt-3 text-sm font-black text-neutral-950">
-                    {overallProgress >= 100
-                      ? "Objetivo do mês concluído!"
-                      : overallProgress >= 60
-                        ? "Você está no caminho certo."
-                        : "Cada resultado faz a diferença."}
-                  </p>
-                  <div className="mt-3 grid w-full grid-cols-2 gap-2 rounded-xl bg-neutral-50 p-2">
-                    <MiniStat label="Seus contratos" value={contracts} />
-                    <MiniStat label="Metas concluídas" value={`${completedGoals}/3`} />
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="flex min-h-[330px] flex-col overflow-hidden border-neutral-200 shadow-sm xl:min-h-0">
-                <CardHeader className="shrink-0 border-b border-neutral-100 bg-[linear-gradient(120deg,#fffdf2,#ffffff)] px-4 py-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <CardTitle className="flex items-center gap-2 text-sm">
-                      <ChartNoAxesCombined className="h-4 w-4 text-yellow-600" /> Evolução das metas
-                    </CardTitle>
-                    <Badge
-                      variant="outline"
-                      className="border-yellow-300 bg-white text-[8px] font-black uppercase tracking-wider text-yellow-700"
-                    >
-                      Somente seus dados
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="flex min-h-0 flex-1 p-2 sm:p-3">
-                  <IndividualGoalTrend progress={progress} />
-                </CardContent>
-              </Card>
-
-              <Card className="flex min-h-[280px] flex-col overflow-hidden border-yellow-200 shadow-sm xl:min-h-0">
-                <CardHeader className="shrink-0 border-b border-yellow-100 bg-yellow-50/50 px-4 py-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <CardTitle className="flex items-center gap-2 text-sm">
-                      <Award className="h-4 w-4 text-yellow-600" /> Destaques da equipe
-                    </CardTitle>
-                    <Badge
-                      variant="outline"
-                      className="border-yellow-300 bg-white text-[8px] font-black uppercase tracking-wider text-yellow-700"
-                    >
-                      Ranking mensal
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="min-h-0 flex-1 overflow-visible p-0 xl:overflow-hidden">
-                  {ranking.length === 0 ? (
-                    <div className="p-3">
-                      <EmptyBlock
-                        icon={Trophy}
-                        text="O ranking aparecerá quando a equipe registrar resultados."
-                      />
-                    </div>
-                  ) : (
-                    <div className="min-h-0 overflow-visible xl:h-full xl:overflow-y-auto xl:overscroll-contain">
-                      <ol className="divide-y divide-neutral-100">
-                        {ranking.map((seller) => (
-                          <TeamHighlight
-                            key={seller.id}
-                            seller={seller}
-                            current={seller.id === progress.seller_id}
-                          />
-                        ))}
-                      </ol>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </section>
+            <Card className="min-h-0 overflow-hidden border-neutral-200 shadow-sm">
+              <CardHeader className="border-b border-neutral-100"><CardTitle className="flex items-center justify-between gap-2 text-base"><span className="flex items-center gap-2"><Award className="h-5 w-5 text-yellow-600" /> Sua equipe</span><Badge variant="outline">{teamTotal} cadastros</Badge></CardTitle></CardHeader>
+              <CardContent className="max-h-[460px] overflow-y-auto p-0">{ranking.length === 0 ? <div className="p-4"><State title="Sem resultados ainda" description="O ranking aparecerá após o primeiro cadastro." /></div> : <ol className="divide-y divide-neutral-100">{ranking.map((row) => <TeamRow key={row.id} row={row} current={row.id === progress.seller_id} />)}</ol>}</CardContent>
+            </Card>
           </div>
         ) : null}
       </main>
@@ -313,273 +104,10 @@ function Metas() {
   );
 }
 
-function GoalCard({
-  icon: Icon,
-  label,
-  current,
-  target,
-}: {
-  icon: typeof Target;
-  label: string;
-  current: number;
-  target: number | null;
-}) {
-  const percentage = sellerGoalPercentage(current, target);
-  const remaining = target == null ? null : Math.max(0, target - current);
-  return (
-    <Card className="group overflow-hidden border-neutral-200 shadow-sm transition hover:-translate-y-0.5 hover:border-yellow-300 hover:shadow-md">
-      <CardContent className="p-3 sm:p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-yellow-300 bg-yellow-50 text-yellow-700">
-            <Icon className="h-4 w-4" />
-          </div>
-          <span className="rounded-full bg-neutral-100 px-2 py-1 text-[9px] font-black text-neutral-500">
-            {percentage}%
-          </span>
-        </div>
-        <p className="mt-2 text-xs font-black leading-5 text-neutral-700 sm:text-sm">{label}</p>
-        <p className="mt-0.5 text-2xl font-black tracking-tight text-neutral-950">
-          {current} <span className="text-sm text-neutral-400">/ {target ?? 0}</span>
-        </p>
-        <div className="mt-2 h-2 overflow-hidden rounded-full bg-neutral-100">
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-yellow-500 to-yellow-300 transition-all duration-500"
-            style={{ width: `${percentage}%` }}
-          />
-        </div>
-        <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px] font-semibold">
-          <span className="text-neutral-500">
-            {remaining == null
-              ? "Aguardando definição"
-              : remaining > 0
-                ? `Faltam ${remaining}`
-                : "Meta concluída"}
-          </span>
-          {remaining === 0 && <CheckCircle2 className="h-4 w-4 text-emerald-600" />}
-        </div>
-      </CardContent>
-    </Card>
-  );
+function TeamRow({ row, current }: { row: RankingRow; current: boolean }) {
+  return <li className={`grid grid-cols-[28px_auto_minmax(0,1fr)_auto] items-center gap-2.5 px-4 py-3 ${current ? "bg-yellow-50" : "bg-white"}`}><span className="text-right text-sm font-black text-neutral-400">{row.position}.</span><Avatar className="h-9 w-9"><AvatarImage src={row.avatarUrl || defaultAvatarForName(row.name)} /><AvatarFallback>{row.name.slice(0, 2).toUpperCase()}</AvatarFallback></Avatar><div className="min-w-0"><p className="truncate text-xs font-black">{row.name}{current && <span className="ml-2 text-[8px] uppercase text-yellow-600">Você</span>}</p><p className="text-[9px] text-neutral-400">cadastros realizados</p></div><strong className="text-lg font-black text-yellow-600">{row.registrations}</strong></li>;
 }
 
-function IndividualGoalTrend({ progress }: { progress: SellerMonthlyProgress }) {
-  const metrics = [
-    {
-      label: "Reuniões",
-      value: progress.meetings_completed,
-      target: progress.target_meetings,
-    },
-    {
-      label: "Clientes",
-      value: progress.clients_registered,
-      target: progress.target_clients,
-    },
-    {
-      label: "Contratos",
-      value: progress.contracts_closed,
-      target: progress.target_contracts,
-    },
-  ];
-
-  return (
-    <div
-      className="flex h-full min-h-[250px] w-full min-w-0 flex-col"
-      aria-label="Gráfico das suas metas individuais"
-    >
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-2 pb-1 pt-0.5 text-[10px] font-semibold text-neutral-500">
-        <span className="flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-sm bg-[#ffc400]" /> Realizado (qtd)
-        </span>
-      </div>
-      <div className="min-h-[210px] min-w-0 flex-1">
-        <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={metrics} margin={{ top: 30, right: 10, bottom: 2, left: -18 }}>
-            <CartesianGrid vertical={false} stroke="#ededed" strokeDasharray="3 3" />
-            <XAxis
-              dataKey="label"
-              tickLine={false}
-              axisLine={false}
-              tick={{ fill: "#6b7280", fontSize: 10, fontWeight: 600 }}
-              dy={8}
-            />
-            <YAxis
-              yAxisId="quantity"
-              allowDecimals={false}
-              tickLine={false}
-              axisLine={false}
-              tick={{ fill: "#6b7280", fontSize: 9 }}
-              domain={[0, (dataMax: number) => Math.max(1, Math.ceil(dataMax * 1.15))]}
-            />
-            <Tooltip
-              cursor={{ fill: "#fff8d6", opacity: 0.65 }}
-              contentStyle={{
-                borderRadius: 10,
-                border: "1px solid #e8e8e8",
-                boxShadow: "0 8px 30px rgba(0,0,0,.08)",
-                fontSize: 11,
-              }}
-              formatter={(value) => [Number(value), "Realizado"]}
-              labelFormatter={(_, payload) => {
-                const item = payload[0]?.payload as (typeof metrics)[number] | undefined;
-                return item
-                  ? `${item.label}: ${item.value} de ${item.target ?? 0}`
-                  : "Meta individual";
-              }}
-            />
-            <Bar
-              yAxisId="quantity"
-              dataKey="value"
-              fill="#ffc400"
-              radius={[5, 5, 0, 0]}
-              maxBarSize={48}
-            >
-              <LabelList
-                dataKey="value"
-                position="top"
-                fill="#5f4a00"
-                fontSize={10}
-                fontWeight={800}
-                offset={7}
-              />
-            </Bar>
-          </ComposedChart>
-        </ResponsiveContainer>
-      </div>
-    </div>
-  );
-}
-
-function CircularProgress({ value }: { value: number }) {
-  return (
-    <div
-      className="flex h-28 w-28 items-center justify-center rounded-full p-2.5 shadow-[0_10px_28px_rgba(234,179,8,0.16)]"
-      style={{ background: `conic-gradient(#facc15 ${value * 3.6}deg, #eeeeee 0deg)` }}
-      role="img"
-      aria-label={`${value}% do objetivo mensal concluído`}
-    >
-      <div className="flex h-full w-full flex-col items-center justify-center rounded-full bg-white shadow-inner">
-        <strong className="text-2xl font-black text-neutral-950">{value}%</strong>
-        <span className="mt-1 text-[8px] font-black uppercase tracking-[0.16em] text-neutral-400">
-          objetivo mensal
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function MiniStat({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="rounded-lg bg-white px-2 py-2 shadow-sm">
-      <b className="block text-base text-neutral-950">{value}</b>
-      <span className="mt-1 block text-[9px] font-bold uppercase tracking-wide text-neutral-400">
-        {label}
-      </span>
-    </div>
-  );
-}
-
-function TeamHighlight({ seller, current }: { seller: RankingRow; current: boolean }) {
-  return (
-    <li
-      className={`grid min-h-12 grid-cols-[24px_auto_minmax(0,1fr)_auto] items-center gap-2.5 px-3 py-2 transition-colors ${
-        seller.position === 1
-          ? "bg-yellow-50/80"
-          : current
-            ? "bg-yellow-50/40"
-            : "bg-white hover:bg-neutral-50"
-      }`}
-    >
-      <span
-        className={`text-right text-sm font-black ${seller.position === 1 ? "text-yellow-600" : "text-neutral-400"}`}
-      >
-        {seller.position}.
-      </span>
-      <Avatar className="h-8 w-8 border border-neutral-200">
-        <AvatarImage
-          src={seller.avatarUrl || defaultAvatarForName(seller.name)}
-          alt={`Foto de ${seller.name}`}
-          className="object-cover"
-        />
-        <AvatarFallback>{initials(seller.name)}</AvatarFallback>
-      </Avatar>
-      <div className="min-w-0">
-        <p className={`truncate text-xs text-neutral-950 ${current ? "font-black" : "font-bold"}`}>
-          {seller.name}{" "}
-          {current && <span className="text-[8px] uppercase text-yellow-600">Você</span>}
-        </p>
-        <p className="mt-0.5 truncate text-[8px] text-neutral-400">
-          {seller.contracts} {seller.contracts === 1 ? "contrato" : "contratos"} · {seller.leads}{" "}
-          leads
-        </p>
-      </div>
-      <div className="text-right">
-        <p className="text-sm font-black text-neutral-800">{seller.contracts}</p>
-        <p className="text-[6px] font-black uppercase tracking-wide text-neutral-400">contratos</p>
-      </div>
-    </li>
-  );
-}
-
-function EmptyBlock({ icon: Icon, text }: { icon: typeof Trophy; text: string }) {
-  return (
-    <div className="flex min-h-36 flex-col items-center justify-center rounded-xl border border-dashed border-neutral-300 bg-neutral-50 p-4 text-center">
-      <Icon className="h-6 w-6 text-yellow-500" />
-      <p className="mt-2 max-w-xs text-xs font-semibold leading-5 text-neutral-500">{text}</p>
-    </div>
-  );
-}
-
-function MetasSkeleton() {
-  return (
-    <div className="min-h-0 flex-1 animate-pulse space-y-3">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        {[1, 2, 3].map((item) => (
-          <div key={item} className="h-36 rounded-2xl bg-neutral-100" />
-        ))}
-      </div>
-      <div className="grid gap-3 xl:h-[calc(100%-9.75rem)] xl:grid-cols-3">
-        {[1, 2, 3].map((item) => (
-          <div key={item} className="rounded-2xl bg-neutral-100" />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function Estado({
-  titulo,
-  descricao,
-  erro = false,
-}: {
-  titulo: string;
-  descricao: string;
-  erro?: boolean;
-}) {
-  return (
-    <div
-      className={`rounded-2xl border p-6 text-center ${
-        erro
-          ? "border-red-200 bg-red-50 text-red-800"
-          : "border-dashed border-yellow-300 bg-yellow-50 text-neutral-700"
-      }`}
-    >
-      <AlertCircle
-        className={`mx-auto mb-2 h-5 w-5 ${erro ? "text-red-600" : "text-yellow-600"}`}
-      />
-      <p className="font-bold">{titulo}</p>
-      <p className="mt-1 text-sm">{descricao}</p>
-    </div>
-  );
-}
-
-function initials(name: string) {
-  return (
-    name
-      .split(" ")
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((part) => part[0])
-      .join("")
-      .toUpperCase() || "V"
-  );
+function State({ title, description, error = false }: { title: string; description: string; error?: boolean }) {
+  return <div className={`rounded-2xl border p-6 text-center ${error ? "border-red-200 bg-red-50" : "border-dashed border-neutral-300 bg-neutral-50"}`}>{error ? <AlertCircle className="mx-auto mb-2 h-5 w-5 text-red-500" /> : <Trophy className="mx-auto mb-2 h-5 w-5 text-yellow-500" />}<p className="font-black">{title}</p><p className="mt-1 text-xs text-neutral-500">{description}</p></div>;
 }

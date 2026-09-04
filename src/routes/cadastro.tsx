@@ -22,11 +22,13 @@ import {
   signUpProfissional,
   resendVerificationEmail,
 } from "@/lib/auth-signup.functions";
+import { claimSellerReferralAfterSignup } from "@/lib/seller-referrals.functions";
 
 const cadastroSearchSchema = z.object({
   returnTo: z.string().optional(),
   perfil: z.enum(['imobiliaria', 'corretor', 'proprietario', 'inquilino']).optional(),
   ref: z.string().optional(),
+  sr: z.string().regex(/^[a-f0-9]{48}$/i).optional(),
 });
 
 
@@ -146,6 +148,7 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
   const checkInquilinoFn = useServerFn(checkInquilinoExists);
   const signUpInquilinoFn = useServerFn(signUpInquilino);
   const signUpProfissionalFn = useServerFn(signUpProfissional);
+  const claimSellerReferralFn = useServerFn(claimSellerReferralAfterSignup);
   const resendFn = useServerFn(resendVerificationEmail);
   const [resendCooldown, setResendCooldown] = useState(0);
 
@@ -155,11 +158,12 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
       to: (perfilInicial ? CADASTRO_ROUTES[perfilInicial] : "/cadastro") as any,
       search: {
         ref: search.ref,
+        sr: search.sr,
         ...(!perfilInicial && search.perfil ? { perfil: search.perfil } : {}),
       } as any,
       replace: true,
     });
-  }, [navigate, perfilInicial, search.perfil, search.ref, search.returnTo]);
+  }, [navigate, perfilInicial, search.perfil, search.ref, search.returnTo, search.sr]);
 
   useEffect(() => {
     if (resendCooldown <= 0) return;
@@ -188,7 +192,7 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
   const handleTypeSelect = (type: CadastroPerfil) => {
     navigate({
       to: CADASTRO_ROUTES[type] as any,
-      search: { returnTo: search.returnTo, ref: search.ref } as any,
+      search: { returnTo: search.returnTo, ref: search.ref, sr: search.sr } as any,
     });
   };
 
@@ -296,6 +300,11 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
         if (result.linkedConsultas > 0) {
           toast.success(`Vinculamos ${result.linkedConsultas} contrato(s) ao seu CPF.`);
         }
+        if (search.sr) {
+          await claimSellerReferralFn({
+            data: { token: search.sr, profileId: result.userId, email: emailLower },
+          }).catch(() => undefined);
+        }
         // A conta só fica utilizável depois de confirmar o e-mail (mailer_autoconfirm
         // está desligado no projeto) — navegar direto pra /inquilino/documentos aqui
         // só resultaria num redirect silencioso pro /login, já que ainda não há sessão
@@ -347,6 +356,12 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
         return;
       }
       const userId = result.userId;
+
+      if (search.sr) {
+        await claimSellerReferralFn({
+          data: { token: search.sr, profileId: userId, email: emailLower },
+        }).catch(() => undefined);
+      }
 
       // Vínculo de indicação (?ref=CODIGO) — extra, não pode derrubar o cadastro (a
       // conta já foi criada com sucesso acima independente do que acontece aqui).
@@ -1040,4 +1055,3 @@ function InquilinoForm({
     </form>
   );
 }
-

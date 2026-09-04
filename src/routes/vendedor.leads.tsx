@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useEffect, useMemo, useState } from "react";
@@ -18,7 +18,6 @@ import {
   Eye,
   Mail,
   MessageCircle,
-  MoveRight,
   Phone,
   RefreshCw,
   Search,
@@ -43,7 +42,7 @@ import {
 
 export const Route = createFileRoute("/vendedor/leads")({
   component: () => (
-    <ProtectedRoute roles={["vendedor", "admin_master", "admin"]} moduleKey="leads_proprios">
+    <ProtectedRoute roles={["vendedor", "admin_master", "admin"]} moduleKey="leads_proprios" sellerTypes={["sdr"]}>
       <MeusLeads />
     </ProtectedRoute>
   ),
@@ -225,8 +224,8 @@ function MeusLeads() {
           <div className="flex items-start gap-3">
             <Users className="mt-1 h-7 w-7 shrink-0 text-yellow-700" />
             <div>
-              <h1 className="text-2xl font-black tracking-tight text-neutral-950 sm:text-3xl">Meus Leads</h1>
-              <p className="text-sm font-medium text-neutral-500">Atenda sua carteira e mantenha o histórico sincronizado com o admin.</p>
+              <h1 className="text-2xl font-black tracking-tight text-neutral-950 sm:text-3xl">Leads e Atendimento</h1>
+              <p className="text-sm font-medium text-neutral-500">Faça o pré-atendimento, qualifique cada oportunidade e prepare a reunião para o Closer.</p>
             </div>
           </div>
           <Button variant="outline" className="gap-2" onClick={carregar} disabled={loading}>
@@ -429,12 +428,6 @@ function MeusLeads() {
                     >
                       <CheckCircle2 className="h-3 w-3" />
                       Convertido
-                    </Button>
-                    <Button asChild size="sm" variant="outline" className="h-7 gap-1 px-2 text-[11px]" onClick={() => alterarStatus(lead, "em_atendimento")}>
-                      <Link to="/vendedor/pipeline">
-                        <MoveRight className="h-3 w-3" />
-                        Atendimento
-                      </Link>
                     </Button>
                   </div>
                 </article>
