@@ -7,12 +7,19 @@ import { Button } from '@/components/ui/button';
 
 export const InstitutionalHero = () => (
   <section className="relative w-full overflow-hidden bg-white pt-28 sm:pt-32 lg:pt-[126px]">
-    <div className="relative z-10 mx-auto grid w-full max-w-none items-center gap-12 px-5 pb-10 sm:px-8 sm:pb-14 lg:min-h-[700px] lg:grid-cols-[minmax(0,0.45fr)_minmax(0,0.55fr)] lg:gap-6 lg:pb-16 lg:pl-12 lg:pr-0 xl:grid-cols-[minmax(0,0.44fr)_minmax(0,0.56fr)] xl:gap-8 xl:pl-16 2xl:pl-20">
-      <div className="max-w-[690px] lg:py-14 xl:max-w-[760px]">
-        <span className="mb-7 inline-block rounded-full bg-white px-4 py-2 text-sm font-bold tracking-wider text-neutral-700 shadow-[0_10px_30px_rgba(17,17,17,0.07)] ring-1 ring-black/[0.05] sm:text-base">
+    <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+      <div className="absolute -left-24 top-40 h-72 w-72 rounded-full bg-[#FEF9C3]/45 blur-3xl" />
+      <div className="absolute bottom-10 left-[6%] h-36 w-36 rounded-full bg-[#FDE68A]/20 blur-3xl" />
+      <div className="absolute left-[41%] top-28 hidden h-28 w-28 rounded-full border border-[#FACC15]/25 lg:block" />
+      <div className="absolute left-[43%] top-[33%] hidden h-2.5 w-2.5 rounded-full bg-[#FACC15]/75 shadow-[0_0_0_10px_rgba(250,204,21,0.10)] lg:block" />
+      <div className="absolute bottom-12 left-[8%] h-px w-[30%] bg-gradient-to-r from-transparent via-[#FACC15]/35 to-transparent" />
+    </div>
+    <div className="relative z-10 mx-auto grid w-full max-w-none items-center gap-12 px-5 pb-10 sm:px-8 sm:pb-14 lg:min-h-[700px] lg:grid-cols-[minmax(0,0.45fr)_minmax(0,0.55fr)] lg:gap-6 lg:pb-16 lg:pl-16 lg:pr-0 xl:grid-cols-[minmax(0,0.44fr)_minmax(0,0.56fr)] xl:gap-8 xl:pl-24 2xl:pl-28">
+      <div className="max-w-[600px] lg:py-10 xl:max-w-[620px]">
+        <span className="mb-6 inline-block rounded-full bg-white px-3 py-1 text-sm font-bold tracking-wider text-neutral-700 shadow-[0_8px_24px_rgba(17,17,17,0.06)] ring-1 ring-black/[0.04]">
           SEGURO FIANÇA LOCATÍCIA
         </span>
-        <h1 className="mb-8 text-[2.45rem] font-bold leading-[1.04] tracking-[-0.035em] text-neutral-900 sm:text-[2.85rem] md:text-[3.2rem] lg:text-[3.6rem] xl:text-[4.25rem] 2xl:text-[4.65rem]">
+        <h1 className="mb-6 text-3xl font-bold leading-[1.08] tracking-tight text-neutral-900 sm:mb-7 sm:text-4xl md:text-[2.7rem] lg:text-[3.35rem] xl:text-[3.65rem]">
           Aluguel sem fiador, sem caução, com aprovação em até{' '}
           <span className="relative inline-block">
             <span className="text-[#FACC15]">1 minuto.</span>
@@ -27,22 +34,22 @@ export const InstitutionalHero = () => (
             </svg>
           </span>
         </h1>
-        <div className="mb-10 mt-3 flex flex-col gap-3 sm:flex-row sm:gap-4">
+        <div className="mb-8 mt-2 flex flex-col gap-3 sm:flex-row sm:gap-4">
           <Link to="/consultas/nova" className="w-full sm:w-auto">
-            <Button className="h-14 min-h-[52px] w-full rounded-xl bg-neutral-900 px-7 text-base font-bold text-white shadow-xl shadow-neutral-100 transition-all hover:bg-neutral-800 active:scale-95 sm:w-auto sm:px-8 lg:h-[58px] lg:text-[1.05rem]">
+            <Button className="h-12 min-h-[44px] w-full rounded-lg bg-neutral-900 px-6 text-sm font-bold text-white shadow-xl shadow-neutral-100 transition-all hover:bg-neutral-800 active:scale-95 sm:w-auto sm:px-7 sm:text-base">
               Solicitar análise gratuita
             </Button>
           </Link>
           <Link to="/cadastro" className="w-full sm:w-auto">
-            <Button variant="outline" className="h-14 min-h-[52px] w-full rounded-xl border-neutral-300 px-7 text-base font-medium text-neutral-900 shadow-sm hover:bg-neutral-50 sm:w-auto sm:px-8 lg:h-[58px] lg:text-[1.05rem]">
+            <Button variant="outline" className="h-12 min-h-[44px] w-full rounded-lg border-neutral-300 px-6 text-sm font-medium text-neutral-900 hover:bg-neutral-50 sm:w-auto sm:px-7 sm:text-base">
               Sou imobiliária ou corretor
             </Button>
           </Link>
         </div>
-        <div className="flex flex-wrap gap-x-7 gap-y-4 xl:flex-nowrap xl:gap-x-5">
+        <div className="flex flex-wrap gap-4 sm:gap-8">
           {['Sem fiador', 'Sem caução', 'Aprovação em 1 minuto', '100% digital'].map((item) => (
-            <div key={item} className="flex items-center gap-2.5 text-[15px] font-medium text-neutral-500 sm:text-base">
-              <Check size={20} className="text-[#FACC15]" strokeWidth={2.5} />
+            <div key={item} className="flex items-center gap-2 text-sm font-medium text-neutral-500">
+              <Check size={18} className="text-[#FACC15]" strokeWidth={2.5} />
               {item}
             </div>
           ))}
