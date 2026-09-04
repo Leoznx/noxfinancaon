@@ -6,7 +6,7 @@ import noxHomeBuilding from '@/assets/nox-home-building.png';
 import { Button } from '@/components/ui/button';
 
 export const InstitutionalHero = () => (
-  <section className="relative w-full overflow-hidden bg-transparent pt-28 sm:pt-32 lg:pt-[126px]">
+  <section className="relative w-full overflow-hidden bg-white pt-28 sm:pt-32 lg:pt-[126px]">
     <div className="relative z-10 mx-auto grid w-full max-w-[1536px] items-center gap-12 px-5 pb-8 sm:px-8 sm:pb-12 lg:min-h-[600px] lg:grid-cols-[minmax(0,0.49fr)_minmax(0,0.51fr)] lg:gap-8 lg:px-12 lg:pb-12 xl:grid-cols-[minmax(0,0.46fr)_minmax(0,0.54fr)] xl:gap-12 xl:px-16 2xl:px-20">
       <div className="max-w-[600px] lg:py-10 xl:max-w-[620px]">
         <span className="mb-6 inline-block rounded-full bg-white px-3 py-1 text-sm font-bold tracking-wider text-neutral-700 shadow-[0_8px_24px_rgba(17,17,17,0.06)] ring-1 ring-black/[0.04]">
@@ -68,7 +68,7 @@ export const InstitutionalHero = () => (
 );
 
 export const SolutionPresentation = () => (
-  <section className="bg-transparent px-4 pb-16 pt-8 sm:px-6 sm:pb-24 sm:pt-12">
+  <section className="bg-white px-4 pb-16 pt-8 sm:px-6 sm:pb-24 sm:pt-12">
     <div className="container mx-auto grid max-w-7xl items-center gap-10 lg:grid-cols-2 lg:gap-16">
       <div className="aspect-[3/2] overflow-hidden rounded-2xl border border-neutral-100 shadow-sm lg:-translate-x-4">
         <img
