@@ -292,12 +292,23 @@ export type CloserAvailabilitySlot = {
   closer_email: string;
 };
 
+// Agenda comercial compartilhada: seg-sex, 08:30-17:30, com pausa de
+// almoço das 12:00 às 13:30. Cada reunião dura 30 minutos.
+export const SHARED_AGENDA_DURATION_MINUTES = 30;
+export const SHARED_AGENDA_BUSINESS_HOURS = { start: "08:30", end: "17:30" } as const;
+export const SHARED_AGENDA_LUNCH_BREAK = { start: "12:00", end: "13:30" } as const;
+
+export function isSharedAgendaBusinessDay(date: Date) {
+  const day = date.getDay();
+  return day >= 1 && day <= 5;
+}
+
 export async function fetchCloserAvailability(fromDate: Date, days = 14) {
   const date = fromDate.toISOString().slice(0, 10);
   const { data, error } = await supabase.rpc("get_available_closer_slots" as any, {
     p_from_date: date,
     p_days: days,
-    p_duration_minutes: 45,
+    p_duration_minutes: SHARED_AGENDA_DURATION_MINUTES,
   });
   if (error) throw error;
   return ((data as any[]) ?? []) as CloserAvailabilitySlot[];
@@ -307,7 +318,6 @@ export async function scheduleSdrCloserMeeting(input: {
   slotStart: string;
   title: string;
   contactName: string;
-  contactEmail?: string;
   contactPhone?: string;
   notes?: string;
 }) {
@@ -315,10 +325,9 @@ export async function scheduleSdrCloserMeeting(input: {
     p_slot_start: input.slotStart,
     p_title: input.title,
     p_contact_name: input.contactName,
-    p_contact_email: input.contactEmail || null,
     p_contact_phone: input.contactPhone || null,
     p_notes: input.notes || null,
-    p_duration_minutes: 45,
+    p_duration_minutes: SHARED_AGENDA_DURATION_MINUTES,
   });
   if (error) throw error;
   return data as string;

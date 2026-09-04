@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
 import {
   Select,
   SelectContent,
@@ -54,9 +53,18 @@ import { useAuth } from "@/components/AuthProvider";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { formatMoney, formatDateTime, toDatetimeLocal } from "@/lib/vendedor-portal";
 import {
-  fetchSellerTeamMonthlyProgress,
-  type SellerTeamMonthlyProgress,
+  fetchSellerTeamGoalProgress,
+  type SellerGoalMetric,
+  type SellerGoalPeriod,
+  type SellerTeamGoalProgress,
 } from "@/lib/seller-progress";
+import {
+  SELLER_GOAL_METRICS,
+  SELLER_GOAL_PERIODS,
+  sellerGoalMetricsForType,
+  sellerGoalProgressValue,
+  sellerGoalTargetField,
+} from "@/lib/seller-goals-dashboard";
 import { TabAuditoria, TabColaboradores, TabEquipeComercial } from "./admin.equipe-permissoes";
 import { SellerRewardsTab } from "@/components/admin/SellerRewardsTab";
 
@@ -190,20 +198,22 @@ function SeletorMes({
 }
 
 /* ===================== METAS ===================== */
+type SellerGoalEdits = Record<string, Record<string, string>>;
+
 function TabMetas() {
   const { user } = useAuth();
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
-  const [linhas, setLinhas] = useState<SellerTeamMonthlyProgress[]>([]);
-  const [edits, setEdits] = useState<Record<string, string>>({});
+  const [linhas, setLinhas] = useState<SellerTeamGoalProgress[]>([]);
+  const [edits, setEdits] = useState<SellerGoalEdits>({});
   const [loading, setLoading] = useState(true);
   const [salvandoId, setSalvandoId] = useState<string | null>(null);
 
   const carregar = useCallback(async () => {
     setLoading(true);
     try {
-      setLinhas(await fetchSellerTeamMonthlyProgress(month, year));
+      setLinhas(await fetchSellerTeamGoalProgress(month, year));
       setEdits({});
     } catch (error: any) {
       toast.error(error.message || "Não foi possível carregar as metas da equipe.");
@@ -230,74 +240,83 @@ function TabMetas() {
         { event: "*", schema: "public", table: "seller_client_partnerships" },
         refresh,
       )
-      .on("postgres_changes", { event: "*", schema: "public", table: "apolices" }, refresh)
       .subscribe();
     return () => {
       void supabase.removeChannel(channel);
     };
   }, [carregar]);
 
-  const salvar = async (linha: SellerTeamMonthlyProgress) => {
-    const edit = edits[linha.seller_id] ??
-      (linha.target_clients == null ? "" : String(linha.target_clients));
-    const targetClients = Number(edit);
-    if (edit.trim() === "" || !Number.isInteger(targetClients) || targetClients < 0) {
-      toast.error("Preencha a meta de cadastros com um número inteiro igual ou maior que zero.");
-      return;
+  const fieldValue = (linha: SellerTeamGoalProgress, metric: SellerGoalMetric, period: SellerGoalPeriod) => {
+    const field = sellerGoalTargetField(metric, period);
+    const edited = edits[linha.seller_id]?.[field];
+    if (edited !== undefined) return edited;
+    const raw = (linha as unknown as Record<string, number | null>)[field];
+    return raw == null ? "" : String(raw);
+  };
+
+  const updateEdit = (
+    linha: SellerTeamGoalProgress,
+    metric: SellerGoalMetric,
+    period: SellerGoalPeriod,
+    value: string,
+  ) => {
+    const field = sellerGoalTargetField(metric, period);
+    setEdits((current) => ({
+      ...current,
+      [linha.seller_id]: { ...current[linha.seller_id], [field]: value },
+    }));
+  };
+
+  const salvar = async (linha: SellerTeamGoalProgress) => {
+    const metrics = sellerGoalMetricsForType(linha.seller_type);
+    const payload: Record<string, unknown> = { seller_id: linha.seller_id, month, year };
+    for (const metric of metrics) {
+      for (const periodOption of SELLER_GOAL_PERIODS) {
+        const field = sellerGoalTargetField(metric, periodOption.value);
+        const raw = fieldValue(linha, metric, periodOption.value);
+        if (raw.trim() === "") {
+          payload[field] = null;
+          continue;
+        }
+        const parsed = Number(raw);
+        if (!Number.isInteger(parsed) || parsed < 0) {
+          toast.error(
+            `Meta de "${SELLER_GOAL_METRICS[metric].label}" (${periodOption.label.toLocaleLowerCase("pt-BR")}) precisa ser um número inteiro igual ou maior que zero.`,
+          );
+          return;
+        }
+        payload[field] = parsed;
+      }
     }
     setSalvandoId(linha.seller_id);
-    const { error } = await supabase.from("seller_goals" as any).upsert(
-      {
-        seller_id: linha.seller_id,
-        month,
-        year,
-        target_meetings: 0,
-        target_clients: targetClients,
-        target_contracts: 0,
-      },
-      { onConflict: "seller_id,month,year" },
-    );
+    const { error } = await supabase
+      .from("seller_goals" as any)
+      .upsert(payload, { onConflict: "seller_id,month,year" });
     setSalvandoId(null);
     if (error) {
       toast.error(error.message);
       return;
     }
-    toast.success(`Meta de cadastros de ${linha.seller_name} atualizada.`);
+    toast.success(`Metas de ${linha.seller_name} atualizadas.`);
     registrarAuditoria({
       actorUserId: user?.id,
       actorRole: user?.internalRole || user?.role,
-      action: "definir_metas_mensais",
+      action: "definir_metas_periodicas",
       tableName: "seller_goals",
       recordId: linha.seller_id,
-      before: {
-        target_meetings: linha.target_meetings,
-        target_clients: linha.target_clients,
-        target_contracts: linha.target_contracts,
-        month,
-        year,
-      },
-      after: {
-        target_meetings: 0,
-        target_clients: targetClients,
-        target_contracts: 0,
-        month,
-        year,
-      },
+      after: payload,
     });
     void carregar();
-  };
-
-  const updateEdit = (linha: SellerTeamMonthlyProgress, value: string) => {
-    setEdits((current) => ({ ...current, [linha.seller_id]: value }));
   };
 
   return (
     <Card>
       <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
         <div>
-          <CardTitle>Meta mensal de cadastros por vendedor</CardTitle>
+          <CardTitle>Metas diárias, semanais e mensais por vendedor</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Defina a prioridade de novos parceiros cadastrados. O progresso é automático e atualizado em tempo real.
+            Cadastros valem para SDR e Closer. Reuniões agendadas só aparecem para SDR e reuniões
+            realizadas só para Closer. O progresso é automático e atualizado em tempo real.
           </p>
         </div>
         <SeletorMes
@@ -317,73 +336,79 @@ function TabMetas() {
             Nenhum vendedor ativo cadastrado.
           </p>
         ) : (
-          linhas.map((linha) => {
-            const edit = edits[linha.seller_id];
-            return (
-              <div
-                key={linha.seller_id}
-                className="space-y-4 rounded-xl border border-neutral-100 p-4"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-3">
+          linhas.map((linha) => (
+            <div key={linha.seller_id} className="space-y-4 rounded-xl border border-neutral-100 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
                   <p className="font-bold text-neutral-950">{linha.seller_name}</p>
-                  <Button
-                    size="sm"
-                    disabled={salvandoId === linha.seller_id}
-                    onClick={() => salvar(linha)}
-                  >
-                    {salvandoId === linha.seller_id ? "Salvando…" : "Salvar meta"}
-                  </Button>
+                  <Badge variant="outline" className="uppercase">
+                    {linha.seller_type === "closer" ? "Closer" : "SDR"}
+                  </Badge>
                 </div>
-                <div className="grid gap-3 lg:grid-cols-1">
-                  <MetaEditor
-                    label="Cadastros realizados"
-                    current={linha.clients_registered}
-                    target={linha.target_clients}
-                    value={
-                      edit ??
-                      (linha.target_clients == null ? "" : String(linha.target_clients))
-                    }
-                    onChange={(value) => updateEdit(linha, value)}
-                  />
-                </div>
+                <Button size="sm" disabled={salvandoId === linha.seller_id} onClick={() => salvar(linha)}>
+                  {salvandoId === linha.seller_id ? "Salvando…" : "Salvar metas"}
+                </Button>
               </div>
-            );
-          })
+              <SellerGoalGrid linha={linha} fieldValue={fieldValue} onChange={updateEdit} />
+            </div>
+          ))
         )}
       </CardContent>
     </Card>
   );
 }
 
-function MetaEditor({
-  label,
-  current,
-  target,
-  value,
+function SellerGoalGrid({
+  linha,
+  fieldValue,
   onChange,
 }: {
-  label: string;
-  current: number;
-  target: number | null;
-  value: string;
-  onChange: (value: string) => void;
+  linha: SellerTeamGoalProgress;
+  fieldValue: (linha: SellerTeamGoalProgress, metric: SellerGoalMetric, period: SellerGoalPeriod) => string;
+  onChange: (linha: SellerTeamGoalProgress, metric: SellerGoalMetric, period: SellerGoalPeriod, value: string) => void;
 }) {
-  const pct = target && target > 0 ? Math.min(100, Math.round((current / target) * 100)) : 0;
+  const metrics = sellerGoalMetricsForType(linha.seller_type);
   return (
-    <div className="rounded-xl bg-neutral-50 p-3">
-      <Label className="text-xs font-bold">{label}</Label>
-      <div className="mt-2 flex items-center gap-2">
-        <Input
-          type="number"
-          min={0}
-          step={1}
-          value={value}
-          placeholder="Definir"
-          onChange={(event) => onChange(event.target.value)}
-        />
-        <span className="shrink-0 text-xs font-bold text-neutral-500">{current} feitos</span>
-      </div>
-      <Progress value={pct} className="mt-2 h-2" />
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[560px] border-separate border-spacing-y-2 text-sm">
+        <thead>
+          <tr className="text-left text-[10px] font-black uppercase tracking-wider text-neutral-400">
+            <th className="w-44 pb-1">Métrica</th>
+            {SELLER_GOAL_PERIODS.map((option) => (
+              <th key={option.value} className="px-2 pb-1">{option.label}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {metrics.map((metric) => (
+            <tr key={metric}>
+              <td className="pr-2 align-top">
+                <Label className="text-xs font-bold text-neutral-800">{SELLER_GOAL_METRICS[metric].label}</Label>
+                <p className="mt-0.5 text-[10px] leading-4 text-neutral-400">{SELLER_GOAL_METRICS[metric].description}</p>
+              </td>
+              {SELLER_GOAL_PERIODS.map((option) => {
+                const { current } = sellerGoalProgressValue(linha, metric, option.value);
+                return (
+                  <td key={option.value} className="px-2 align-top">
+                    <div className="rounded-xl bg-neutral-50 p-2.5">
+                      <Input
+                        type="number"
+                        min={0}
+                        step={1}
+                        value={fieldValue(linha, metric, option.value)}
+                        placeholder="Definir"
+                        className="h-9"
+                        onChange={(event) => onChange(linha, metric, option.value, event.target.value)}
+                      />
+                      <span className="mt-1.5 block text-[10px] font-bold text-neutral-500">{current} feito(s)</span>
+                    </div>
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

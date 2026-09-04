@@ -1,16 +1,22 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircle, Award, CalendarDays, CheckCircle2, RefreshCw, Target, Trophy, Users } from "lucide-react";
+import { AlertCircle, Award, CalendarClock, CheckCircle2, RefreshCw, Target, Trophy, UsersRound } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { defaultAvatarForName } from "@/lib/gender-avatar";
-import { sellerGoalPercentage } from "@/lib/seller-goals-dashboard";
-import { fetchMySellerMonthlyProgress, type SellerMonthlyProgress } from "@/lib/seller-progress";
+import {
+  SELLER_GOAL_METRICS,
+  SELLER_GOAL_PERIODS,
+  sellerGoalMetricsForType,
+  sellerGoalProgressValue,
+} from "@/lib/seller-goals-dashboard";
+import { fetchMySellerGoalProgress, type SellerGoalMetric, type SellerGoalPeriod, type SellerGoalProgress } from "@/lib/seller-progress";
 
 export const Route = createFileRoute("/vendedor/metas")({
   component: () => (
@@ -22,13 +28,22 @@ export const Route = createFileRoute("/vendedor/metas")({
 
 type RankingRow = { id: string; name: string; avatarUrl: string | null; registrations: number; position: number };
 const MONTHS = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+const PERIOD_HINT: Record<SellerGoalPeriod, string> = {
+  daily: "Conta o que aconteceu hoje.",
+  weekly: "Conta a semana atual (segunda a domingo).",
+  monthly: "Conta o mês inteiro.",
+};
+const METRIC_ICON: Record<SellerGoalMetric, typeof Target> = {
+  clients: UsersRound,
+  meetings_scheduled: CalendarClock,
+  meetings_completed: CheckCircle2,
+};
 
 function Goals() {
   const now = new Date();
-  const month = now.getMonth() + 1;
-  const year = now.getFullYear();
-  const [progress, setProgress] = useState<SellerMonthlyProgress | null>(null);
+  const [progress, setProgress] = useState<SellerGoalProgress | null>(null);
   const [ranking, setRanking] = useState<RankingRow[]>([]);
+  const [period, setPeriod] = useState<SellerGoalPeriod>("monthly");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -36,10 +51,11 @@ function Goals() {
     setLoading(true);
     setError("");
     try {
-      const [progressData, response] = await Promise.all([
-        fetchMySellerMonthlyProgress(month, year),
-        (supabase as any).rpc("ranking_vendedores", { p_month: month, p_year: year }),
-      ]);
+      const progressData = await fetchMySellerGoalProgress();
+      const response = await (supabase as any).rpc("ranking_vendedores", {
+        p_month: progressData.month,
+        p_year: progressData.year,
+      });
       if (response.error) throw response.error;
       setProgress(progressData);
       setRanking(((response.data as Record<string, unknown>[] | null) ?? []).map((row) => ({
@@ -50,23 +66,23 @@ function Goals() {
         position: Number(row.posicao ?? 0),
       })).sort((a, b) => a.position - b.position));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Não foi possível carregar sua meta.");
+      setError(cause instanceof Error ? cause.message : "Não foi possível carregar suas metas.");
     } finally {
       setLoading(false);
     }
-  }, [month, year]);
+  }, []);
 
   useEffect(() => {
     void load();
-    const channel = supabase.channel("seller-registration-goal")
+    const channel = supabase.channel("seller-goal-progress")
       .on("postgres_changes", { event: "*", schema: "public", table: "seller_goals" }, () => void load())
       .on("postgres_changes", { event: "*", schema: "public", table: "seller_client_partnerships" }, () => void load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "seller_appointments" }, () => void load())
       .subscribe();
     return () => void supabase.removeChannel(channel);
   }, [load]);
 
-  const percentage = progress ? sellerGoalPercentage(progress.clients_registered, progress.target_clients) : 0;
-  const remaining = progress?.target_clients == null ? null : Math.max(0, progress.target_clients - progress.clients_registered);
+  const metrics = useMemo(() => (progress ? sellerGoalMetricsForType(progress.seller_type) : []), [progress]);
   const position = ranking.find((row) => row.id === progress?.seller_id)?.position;
   const teamTotal = useMemo(() => ranking.reduce((sum, row) => sum + row.registrations, 0), [ranking]);
 
@@ -75,21 +91,41 @@ function Goals() {
       <main className="flex min-h-0 flex-col gap-3 text-neutral-950 xl:h-full">
         <section className="relative overflow-hidden rounded-[22px] border border-yellow-300 bg-[radial-gradient(circle_at_92%_20%,rgba(250,204,21,0.25),transparent_24%),linear-gradient(115deg,#fff_0%,#fffef8_60%,#fff4b3_100%)] px-4 py-4 shadow-sm sm:px-6">
           <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div><span className="inline-flex items-center gap-2 rounded-full border border-yellow-400 bg-white/80 px-3 py-1 text-[9px] font-black uppercase tracking-[0.18em] text-yellow-700"><CalendarDays className="h-3 w-3" />{MONTHS[month - 1]} de {year}</span><h1 className="mt-2 text-2xl font-black sm:text-3xl">Minha meta de <span className="text-yellow-500">cadastros</span></h1><p className="mt-1 text-xs font-medium text-neutral-600 sm:text-sm">Sua prioridade comercial é cadastrar novas imobiliárias e corretores parceiros.</p></div>
-            <div className="flex items-center gap-2">{position && <Badge className="border border-yellow-300 bg-white px-3 py-2 text-neutral-950">{position}º no ranking</Badge>}<Button variant="outline" size="icon" className="rounded-xl border-yellow-300" onClick={load} disabled={loading} aria-label="Atualizar meta"><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /></Button></div>
+            <div>
+              <span className="inline-flex items-center gap-2 rounded-full border border-yellow-400 bg-white/80 px-3 py-1 text-[9px] font-black uppercase tracking-[0.18em] text-yellow-700">
+                <CalendarClock className="h-3 w-3" />{MONTHS[now.getMonth()]} de {now.getFullYear()}
+              </span>
+              <h1 className="mt-2 text-2xl font-black sm:text-3xl">Minhas <span className="text-yellow-500">metas</span></h1>
+              <p className="mt-1 text-xs font-medium text-neutral-600 sm:text-sm">
+                {progress?.seller_type === "closer"
+                  ? "Acompanhe cadastros e reuniões realizadas por dia, semana e mês."
+                  : "Acompanhe cadastros e reuniões agendadas com um Closer por dia, semana e mês."}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {position && <Badge className="border border-yellow-300 bg-white px-3 py-2 text-neutral-950">{position}º no ranking</Badge>}
+              <Button variant="outline" size="icon" className="rounded-xl border-yellow-300" onClick={load} disabled={loading} aria-label="Atualizar metas"><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /></Button>
+            </div>
           </div>
         </section>
 
-        {error ? <State title="Não foi possível carregar sua meta" description={error} error /> : loading ? <div className="h-64 animate-pulse rounded-[22px] bg-neutral-100" /> : progress ? (
+        {error ? <State title="Não foi possível carregar suas metas" description={error} error /> : loading ? <div className="h-64 animate-pulse rounded-[22px] bg-neutral-100" /> : progress ? (
           <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[1.2fr_0.8fr]">
             <Card className="overflow-hidden border-yellow-300 shadow-sm">
-              <CardHeader className="border-b border-yellow-100 bg-yellow-50"><CardTitle className="flex items-center gap-2 text-base"><Target className="h-5 w-5 text-yellow-600" /> Cadastros realizados no mês</CardTitle></CardHeader>
-              <CardContent className="flex h-full min-h-64 flex-col justify-center p-5 sm:p-8">
-                {progress.target_clients == null ? <State title="Meta ainda não definida" description="O administrador precisa definir sua meta individual de cadastros deste mês." /> : <>
-                  <div className="flex items-end justify-between gap-4"><div><strong className="text-5xl font-black text-neutral-950">{progress.clients_registered}</strong><span className="ml-2 text-lg font-bold text-neutral-400">/ {progress.target_clients}</span><p className="mt-1 text-sm font-semibold text-neutral-500">novos parceiros cadastrados</p></div><strong className="text-3xl font-black text-yellow-600">{percentage}%</strong></div>
-                  <div className="mt-6 h-4 overflow-hidden rounded-full bg-neutral-100"><div className="h-full rounded-full bg-gradient-to-r from-yellow-500 to-yellow-300 transition-all" style={{ width: `${percentage}%` }} /></div>
-                  <div className="mt-5 flex items-center gap-3 rounded-2xl border border-neutral-200 bg-neutral-50 p-4">{remaining === 0 ? <CheckCircle2 className="h-7 w-7 text-emerald-600" /> : <Target className="h-7 w-7 text-yellow-600" />}<div><p className="font-black">{remaining === 0 ? "Meta concluída!" : `Faltam ${remaining} cadastro${remaining === 1 ? "" : "s"}`}</p><p className="text-xs text-neutral-500">Cada novo cadastro válido entra automaticamente nesta contagem.</p></div></div>
-                </>}
+              <CardHeader className="border-b border-yellow-100 bg-yellow-50 pb-0">
+                <Tabs value={period} onValueChange={(value) => setPeriod(value as SellerGoalPeriod)}>
+                  <TabsList className="grid w-full grid-cols-3 bg-yellow-100/70">
+                    {SELLER_GOAL_PERIODS.map((option) => (
+                      <TabsTrigger key={option.value} value={option.value} className="font-bold">{option.label}</TabsTrigger>
+                    ))}
+                  </TabsList>
+                </Tabs>
+              </CardHeader>
+              <CardContent className="flex h-full min-h-64 flex-col justify-center gap-4 p-5 sm:p-6">
+                <p className="text-xs font-semibold text-neutral-500">{PERIOD_HINT[period]}</p>
+                {metrics.map((metric) => (
+                  <MetricProgress key={metric} progress={progress} metric={metric} period={period} />
+                ))}
               </CardContent>
             </Card>
 
@@ -101,6 +137,38 @@ function Goals() {
         ) : null}
       </main>
     </DashboardLayout>
+  );
+}
+
+function MetricProgress({ progress, metric, period }: { progress: SellerGoalProgress; metric: SellerGoalMetric; period: SellerGoalPeriod }) {
+  const copy = SELLER_GOAL_METRICS[metric];
+  const Icon = METRIC_ICON[metric];
+  const { current, target, percentage } = sellerGoalProgressValue(progress, metric, period);
+  const remaining = target == null ? null : Math.max(0, target - current);
+
+  if (target == null) {
+    return (
+      <div className="rounded-2xl border border-dashed border-neutral-300 bg-neutral-50 p-4">
+        <p className="flex items-center gap-2 text-sm font-black text-neutral-700"><Icon className="h-4 w-4 text-neutral-400" />{copy.label}</p>
+        <p className="mt-1 text-xs text-neutral-500">Meta ainda não definida pelo administrador para este período.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-neutral-200 bg-white p-4">
+      <div className="flex items-end justify-between gap-4">
+        <div>
+          <p className="flex items-center gap-2 text-sm font-black text-neutral-800"><Icon className="h-4 w-4 text-yellow-600" />{copy.label}</p>
+          <p className="mt-1"><strong className="text-3xl font-black text-neutral-950">{current}</strong><span className="ml-2 text-base font-bold text-neutral-400">/ {target}</span></p>
+        </div>
+        <strong className="shrink-0 text-2xl font-black text-yellow-600">{percentage}%</strong>
+      </div>
+      <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-neutral-100"><div className="h-full rounded-full bg-gradient-to-r from-yellow-500 to-yellow-300 transition-all" style={{ width: `${percentage}%` }} /></div>
+      <p className="mt-2 text-xs font-semibold text-neutral-500">
+        {remaining === 0 ? "Meta concluída! 🎉" : `Faltam ${remaining} ${remaining === 1 ? copy.singular : `${copy.label.toLocaleLowerCase("pt-BR")}`}`}
+      </p>
+    </div>
   );
 }
 

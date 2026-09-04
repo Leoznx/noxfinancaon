@@ -1,17 +1,26 @@
 import { useEffect, useMemo, useState } from "react";
-import { CalendarClock, Clock3, Mail, Phone, RefreshCw, UserRoundCheck, X } from "lucide-react";
+import { addDays, format, startOfDay } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { CalendarCheck2, CalendarClock, Clock3, Mail, Phone, RefreshCw, UserRound, UserRoundCheck, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import {
   deleteSellerAppointment,
   fetchCloserAvailability,
+  isSharedAgendaBusinessDay,
   rescheduleSharedMeeting,
   scheduleSdrCloserMeeting,
+  SHARED_AGENDA_DURATION_MINUTES,
   type CloserAvailabilitySlot,
   type SellerAppointment,
 } from "@/lib/seller-agenda";
+import { formatBrazilianPhoneInput, isValidBrazilianPhone } from "@/lib/seller-clients";
+
+const AVAILABILITY_WINDOW_DAYS = 30;
+const AUTO_REFRESH_MS = 30_000;
 
 type Props = {
   sellerType: "sdr" | "closer" | null;
@@ -36,32 +45,87 @@ export function SharedSalesAgenda({ sellerType, sellerId, appointments, onRefres
 
 function SdrScheduler({ onRefresh }: { onRefresh: () => Promise<void> }) {
   const [slots, setSlots] = useState<CloserAvailabilitySlot[]>([]);
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [selected, setSelected] = useState<CloserAvailabilitySlot | null>(null);
   const [loadingSlots, setLoadingSlots] = useState(true);
   const [saving, setSaving] = useState(false);
   const [contactName, setContactName] = useState("");
-  const [contactEmail, setContactEmail] = useState("");
   const [contactPhone, setContactPhone] = useState("");
-  const [notes, setNotes] = useState("");
 
-  async function loadSlots() {
-    setLoadingSlots(true);
+  async function loadSlots(silent = false) {
+    if (!silent) setLoadingSlots(true);
     try {
-      setSlots(await fetchCloserAvailability(new Date(), 14));
+      setSlots(await fetchCloserAvailability(new Date(), AVAILABILITY_WINDOW_DAYS));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Não foi possível consultar a agenda dos Closers.");
+      if (!silent) toast.error(error instanceof Error ? error.message : "Não foi possível consultar a agenda dos Closers.");
     } finally {
-      setLoadingSlots(false);
+      if (!silent) setLoadingSlots(false);
     }
   }
 
+  // Carrega uma vez e depois mantém a disponibilidade sempre atualizada com
+  // o que os outros SDRs estão agendando (evita horários fantasmas).
   useEffect(() => {
     void loadSlots();
+    const timer = window.setInterval(() => void loadSlots(true), AUTO_REFRESH_MS);
+    const onFocus = () => void loadSlots(true);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
+    };
   }, []);
 
+  const slotsByDay = useMemo(() => {
+    const grouped = new Map<string, CloserAvailabilitySlot[]>();
+    for (const slot of slots) {
+      const key = format(new Date(slot.slot_start), "yyyy-MM-dd");
+      grouped.set(key, [...(grouped.get(key) ?? []), slot]);
+    }
+    return grouped;
+  }, [slots]);
+
+  const today = useMemo(() => startOfDay(new Date()), []);
+  const maxSelectableDate = useMemo(() => addDays(today, AVAILABILITY_WINDOW_DAYS - 1), [today]);
+
+  // Escolhe automaticamente o primeiro dia com vaga assim que os horários
+  // carregam, para o SDR já ver as opções sem precisar navegar no calendário.
+  useEffect(() => {
+    if (loadingSlots) return;
+    if (selectedDate && slotsByDay.has(format(selectedDate, "yyyy-MM-dd"))) return;
+    const firstAvailable = [...slotsByDay.keys()].sort()[0];
+    setSelectedDate(firstAvailable ? new Date(`${firstAvailable}T00:00:00`) : undefined);
+  }, [loadingSlots, slotsByDay, selectedDate]);
+
+  // Se o horário escolhido acabou de ser ocupado por outro SDR, limpa a
+  // seleção para não deixar confirmar algo que já não existe mais.
+  useEffect(() => {
+    if (selected && !slots.some((slot) => slot.slot_start === selected.slot_start && slot.closer_id === selected.closer_id)) {
+      setSelected(null);
+    }
+  }, [slots, selected]);
+
+  const daySlots = selectedDate ? (slotsByDay.get(format(selectedDate, "yyyy-MM-dd")) ?? []) : [];
+
+  function isDayDisabled(date: Date) {
+    const day = startOfDay(date);
+    if (day < today || day > maxSelectableDate) return true;
+    if (!isSharedAgendaBusinessDay(date)) return true;
+    if (!loadingSlots && !slotsByDay.has(format(day, "yyyy-MM-dd"))) return true;
+    return false;
+  }
+
   async function schedule() {
-    if (!selected || contactName.trim().length < 3) {
-      toast.error("Informe o contato e escolha um horário disponível.");
+    if (!selected) {
+      toast.error("Escolha um horário disponível no calendário.");
+      return;
+    }
+    if (contactName.trim().length < 3) {
+      toast.error("Informe o nome completo do lead.");
+      return;
+    }
+    if (!isValidBrazilianPhone(contactPhone)) {
+      toast.error("Informe um telefone válido com DDD.");
       return;
     }
     setSaving(true);
@@ -70,16 +134,12 @@ function SdrScheduler({ onRefresh }: { onRefresh: () => Promise<void> }) {
         slotStart: selected.slot_start,
         title: `Apresentação NOX — ${contactName.trim()}`,
         contactName: contactName.trim(),
-        contactEmail,
         contactPhone,
-        notes,
       });
       toast.success(`Reunião distribuída para ${selected.closer_name}.`);
       setSelected(null);
       setContactName("");
-      setContactEmail("");
       setContactPhone("");
-      setNotes("");
       await Promise.all([loadSlots(), onRefresh()]);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Não foi possível agendar a reunião.");
@@ -89,73 +149,110 @@ function SdrScheduler({ onRefresh }: { onRefresh: () => Promise<void> }) {
     }
   }
 
-  const days = useMemo(() => {
-    const grouped = new Map<string, CloserAvailabilitySlot[]>();
-    for (const slot of slots.slice(0, 48)) {
-      const key = new Date(slot.slot_start).toLocaleDateString("pt-BR", {
-        weekday: "short",
-        day: "2-digit",
-        month: "2-digit",
-      });
-      grouped.set(key, [...(grouped.get(key) ?? []), slot]);
-    }
-    return [...grouped.entries()];
-  }, [slots]);
-
   return (
     <section className="overflow-hidden rounded-2xl border border-yellow-300 bg-[linear-gradient(120deg,#fffbea,#fff)] shadow-sm">
       <header className="flex flex-col gap-3 border-b border-yellow-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.16em] text-yellow-700">Agenda compartilhada SDR → Closer</p>
           <h2 className="mt-1 text-lg font-black text-neutral-950">Agende no primeiro horário disponível</h2>
-          <p className="mt-1 text-xs font-medium text-neutral-600">O sistema equilibra automaticamente as reuniões entre todos os Closers ativos.</p>
+          <p className="mt-1 text-xs font-medium text-neutral-600">
+            Seg. a sex., 08:30–17:30 (pausa 12:00–13:30) · reuniões de {SHARED_AGENDA_DURATION_MINUTES} min · o sistema equilibra automaticamente entre os Closers ativos.
+          </p>
         </div>
         <Button type="button" variant="outline" size="sm" onClick={() => void loadSlots()} disabled={loadingSlots}>
           <RefreshCw className={`mr-2 h-4 w-4 ${loadingSlots ? "animate-spin" : ""}`} /> Atualizar horários
         </Button>
       </header>
-      <div className="grid gap-4 p-4 xl:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.2fr)]">
-        <div className="space-y-3 rounded-xl border border-neutral-200 bg-white p-3">
-          <label className="block text-xs font-bold text-neutral-700">Contato qualificado</label>
-          <Input value={contactName} onChange={(event) => setContactName(event.target.value)} placeholder="Nome do corretor ou responsável" />
-          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
-            <Input type="email" value={contactEmail} onChange={(event) => setContactEmail(event.target.value)} placeholder="E-mail" />
-            <Input value={contactPhone} onChange={(event) => setContactPhone(event.target.value)} placeholder="Telefone / WhatsApp" />
+      <div className="grid gap-4 p-4 xl:grid-cols-[minmax(260px,0.85fr)_minmax(0,1.15fr)]">
+        <div className="space-y-4 rounded-xl border border-neutral-200 bg-white p-4">
+          <div>
+            <Label htmlFor="sdr-lead-name" className="text-xs font-black uppercase tracking-widest text-neutral-600">Nome completo do lead</Label>
+            <div className="relative mt-1.5">
+              <UserRound className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-neutral-400" />
+              <Input id="sdr-lead-name" value={contactName} onChange={(event) => setContactName(event.target.value)} placeholder="Nome completo" className="h-11 pl-9" disabled={saving} />
+            </div>
           </div>
-          <Textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Resumo da qualificação, dores e contexto da imobiliária..." className="min-h-20" />
-          <div className="rounded-lg bg-neutral-50 px-3 py-2 text-xs text-neutral-600">
+          <div>
+            <Label htmlFor="sdr-lead-phone" className="text-xs font-black uppercase tracking-widest text-neutral-600">Telefone / WhatsApp</Label>
+            <div className="relative mt-1.5">
+              <Phone className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-neutral-400" />
+              <Input
+                id="sdr-lead-phone"
+                type="tel"
+                inputMode="tel"
+                maxLength={15}
+                value={contactPhone}
+                onChange={(event) => setContactPhone(formatBrazilianPhoneInput(event.target.value))}
+                placeholder="(47) 99999-9999"
+                className="h-11 pl-9"
+                disabled={saving}
+              />
+            </div>
+          </div>
+
+          <div className={`flex items-start gap-2.5 rounded-lg border px-3 py-2.5 text-xs ${selected ? "border-yellow-300 bg-yellow-50 text-neutral-800" : "border-neutral-200 bg-neutral-50 text-neutral-600"}`}>
+            <CalendarCheck2 className={`mt-0.5 h-4 w-4 shrink-0 ${selected ? "text-yellow-700" : "text-neutral-400"}`} />
             {selected ? (
-              <><strong>{formatSlot(selected.slot_start)}</strong><br />Closer responsável: {selected.closer_name}</>
-            ) : "Selecione ao lado um horário livre da equipe de Closers."}
+              <span><strong className="capitalize">{formatSlot(selected.slot_start)}</strong><br />Closer responsável: {selected.closer_name}</span>
+            ) : "Selecione ao lado uma data e um horário livre da equipe de Closers."}
           </div>
+
           <Button className="w-full bg-yellow-400 font-black text-neutral-950 hover:bg-yellow-500" onClick={() => void schedule()} disabled={saving || !selected}>
             <CalendarClock className="mr-2 h-4 w-4" /> {saving ? "Distribuindo..." : "Confirmar e distribuir reunião"}
           </Button>
         </div>
 
         <div className="min-w-0 space-y-3">
-          {loadingSlots ? (
-            <div className="h-44 animate-pulse rounded-xl bg-white" />
-          ) : days.length === 0 ? (
-            <div className="grid min-h-44 place-items-center rounded-xl border border-dashed border-yellow-300 bg-white p-6 text-center text-sm font-semibold text-neutral-600">Nenhum Closer possui horário livre nos próximos 14 dias.</div>
-          ) : (
-            days.map(([day, daySlots]) => (
-              <div key={day} className="rounded-xl border border-neutral-200 bg-white p-3">
-                <p className="mb-2 text-xs font-black capitalize text-neutral-800">{day}</p>
-                <div className="flex flex-wrap gap-2">
-                  {daySlots.map((slot) => {
-                    const active = selected?.slot_start === slot.slot_start;
-                    return (
-                      <button key={`${slot.slot_start}-${slot.closer_id}`} type="button" onClick={() => setSelected(slot)} className={`min-h-11 rounded-xl border px-3 py-2 text-left text-xs transition ${active ? "border-neutral-950 bg-neutral-950 text-white" : "border-neutral-200 bg-white hover:border-yellow-400 hover:bg-yellow-50"}`}>
-                        <strong className="block text-sm">{new Date(slot.slot_start).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</strong>
-                        <span className={active ? "text-neutral-300" : "text-neutral-500"}>{slot.closer_name}</span>
-                      </button>
-                    );
-                  })}
-                </div>
+          <div className="rounded-xl border border-neutral-200 bg-white p-2 sm:p-3">
+            {loadingSlots && slots.length === 0 ? (
+              <div className="h-72 animate-pulse rounded-lg bg-neutral-50" />
+            ) : (
+              <Calendar
+                mode="single"
+                locale={ptBR}
+                selected={selectedDate}
+                onSelect={(date) => {
+                  setSelectedDate(date);
+                  setSelected(null);
+                }}
+                disabled={isDayDisabled}
+                defaultMonth={selectedDate ?? today}
+                modifiers={{ available: (date) => !isDayDisabled(date) }}
+                modifiersClassNames={{ available: "font-black text-neutral-950 after:absolute after:bottom-1 after:left-1/2 after:h-1 after:w-1 after:-translate-x-1/2 after:rounded-full after:bg-yellow-500" }}
+                className="mx-auto w-full max-w-none [--cell-size:2.5rem]"
+              />
+            )}
+          </div>
+
+          <div className="rounded-xl border border-neutral-200 bg-white p-3">
+            <p className="mb-2 text-xs font-black capitalize text-neutral-800">
+              {selectedDate ? format(selectedDate, "EEEE, dd 'de' MMMM", { locale: ptBR }) : "Selecione uma data"}
+            </p>
+            {!loadingSlots && selectedDate && daySlots.length === 0 ? (
+              <div className="grid min-h-20 place-items-center rounded-lg border border-dashed border-neutral-200 bg-neutral-50/60 p-4 text-center text-xs font-semibold text-neutral-500">Nenhum horário livre neste dia.</div>
+            ) : !selectedDate ? (
+              <div className="grid min-h-20 place-items-center rounded-lg border border-dashed border-yellow-300 bg-neutral-50/60 p-4 text-center text-xs font-semibold text-neutral-600">
+                {loadingSlots ? "Consultando a agenda dos Closers..." : "Nenhum Closer possui horário livre nos próximos dias."}
               </div>
-            ))
-          )}
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {daySlots.map((slot) => {
+                  const active = selected?.slot_start === slot.slot_start && selected.closer_id === slot.closer_id;
+                  return (
+                    <button
+                      key={`${slot.slot_start}-${slot.closer_id}`}
+                      type="button"
+                      onClick={() => setSelected(slot)}
+                      className={`min-h-11 rounded-xl border px-3 py-2 text-left text-xs transition ${active ? "border-neutral-950 bg-neutral-950 text-white" : "border-neutral-200 bg-white hover:border-yellow-400 hover:bg-yellow-50"}`}
+                    >
+                      <strong className="block text-sm tabular-nums">{format(new Date(slot.slot_start), "HH:mm")}</strong>
+                      <span className={active ? "text-neutral-300" : "text-neutral-500"}>{slot.closer_name.split(" ")[0]}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </section>
