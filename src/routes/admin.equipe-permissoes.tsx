@@ -24,11 +24,12 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Users, ShieldCheck, Briefcase, History, UserX, UserCheck, Trash2 } from "lucide-react";
+import { Users, ShieldCheck, Briefcase, History, UserX, UserCheck, Trash2, Clock3 } from "lucide-react";
 import { z } from "zod";
 import { useAuth } from "@/components/AuthProvider";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { deleteNoxEmployee } from "@/lib/delete-nox-employee";
+import { setSellerTimeClockEnabled } from "@/lib/time-clock";
 
 const VALID_TABS = ["colaboradores", "permissoes", "equipe-comercial", "auditoria"] as const;
 type TabKey = (typeof VALID_TABS)[number];
@@ -575,14 +576,17 @@ export function TabPermissoes() {
 
 /* ===================== EQUIPE COMERCIAL ===================== */
 export function TabEquipeComercial() {
+  const { user } = useAuth();
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [savingClockId, setSavingClockId] = useState<string | null>(null);
+  const canManageClock = user?.role === "admin" || user?.role === "admin_master" || user?.internalRole === "admin_master";
 
   const carregar = async () => {
     setLoading(true);
     const { data: vendedores } = await supabase
       .from("internal_users" as any)
-      .select("id, full_name, email, status")
+      .select("id, full_name, email, status, seller_type, time_clock_enabled")
       .eq("role", "vendedor");
     const now = new Date();
     const m = now.getMonth() + 1,
@@ -631,6 +635,18 @@ export function TabEquipeComercial() {
       toast.success("Comissões materializadas");
       carregar();
     }
+  };
+
+  const toggleTimeClock = async (seller: any, enabled: boolean) => {
+    setSavingClockId(seller.id);
+    setRows((current) => current.map((row) => row.id === seller.id ? { ...row, time_clock_enabled: enabled } : row));
+    try {
+      await setSellerTimeClockEnabled(seller.id, enabled);
+      toast.success(enabled ? "Controle de ponto ativado" : "Controle de ponto desativado");
+    } catch (cause) {
+      setRows((current) => current.map((row) => row.id === seller.id ? { ...row, time_clock_enabled: !enabled } : row));
+      toast.error(cause instanceof Error ? cause.message : "Não foi possível alterar o controle de ponto.");
+    } finally { setSavingClockId(null); }
   };
 
   const sorted = useMemo(
@@ -725,6 +741,10 @@ export function TabEquipeComercial() {
                     ) : null}
                   </div>
                 </div>
+                <div className="flex items-center justify-between rounded-xl border border-yellow-200 bg-yellow-50 px-3 py-2">
+                  <div className="flex items-center gap-2"><Clock3 className="h-4 w-4 text-yellow-700" /><div><p className="text-xs font-bold">Registrar ponto</p><p className="text-[10px] text-muted-foreground">Libera marcações e histórico</p></div></div>
+                  <Switch checked={!!v.time_clock_enabled} disabled={!canManageClock || savingClockId === v.id || v.status !== "ativo"} onCheckedChange={(checked) => void toggleTimeClock(v, checked)} aria-label={`Controle de ponto de ${v.full_name}`} />
+                </div>
               </div>
             ))
           )}
@@ -737,6 +757,7 @@ export function TabEquipeComercial() {
                 <TableHead>#</TableHead>
                 <TableHead>Vendedor</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Registrar ponto</TableHead>
                 <TableHead>Leads</TableHead>
                 <TableHead>Fechados</TableHead>
                 <TableHead>Ativados</TableHead>
@@ -751,14 +772,14 @@ export function TabEquipeComercial() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={12} className="text-center py-6 text-sm">
+                  <TableCell colSpan={13} className="text-center py-6 text-sm">
                     Carregando…
                   </TableCell>
                 </TableRow>
               ) : sorted.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={12}
+                    colSpan={13}
                     className="text-center py-6 text-sm text-muted-foreground"
                   >
                     Sem vendedores cadastrados.
@@ -774,6 +795,7 @@ export function TabEquipeComercial() {
                         {v.status}
                       </Badge>
                     </TableCell>
+                    <TableCell><div className="flex items-center gap-2"><Switch checked={!!v.time_clock_enabled} disabled={!canManageClock || savingClockId === v.id || v.status !== "ativo"} onCheckedChange={(checked) => void toggleTimeClock(v, checked)} aria-label={`Controle de ponto de ${v.full_name}`} /><span className="text-[10px] font-bold text-muted-foreground">{v.time_clock_enabled ? "Ativo" : "Inativo"}</span></div></TableCell>
                     <TableCell>{v.leadsCount}</TableCell>
                     <TableCell>{v.perf?.contracts_closed ?? 0}</TableCell>
                     <TableCell>{v.perf?.contracts_activated ?? 0}</TableCell>

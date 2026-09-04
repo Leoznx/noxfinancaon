@@ -90,3 +90,6 @@ verify_jwt = true
 
 [functions.delete-nox-employee]
 verify_jwt = true
+
+[functions.notify-time-clock]
+verify_jwt = true

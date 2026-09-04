@@ -65,6 +65,7 @@ import { Route as ConsultasIndexRouteImport } from './routes/consultas.index'
 import { Route as BlogIndexRouteImport } from './routes/blog.index'
 import { Route as ApolicesIndexRouteImport } from './routes/apolices.index'
 import { Route as VendedorRankingRouteImport } from './routes/vendedor.ranking'
+import { Route as VendedorPontoRouteImport } from './routes/vendedor.ponto'
 import { Route as VendedorPipelineRouteImport } from './routes/vendedor.pipeline'
 import { Route as VendedorPerfilRouteImport } from './routes/vendedor.perfil'
 import { Route as VendedorMetasRouteImport } from './routes/vendedor.metas'
@@ -411,6 +412,11 @@ const ApolicesIndexRoute = ApolicesIndexRouteImport.update({
 const VendedorRankingRoute = VendedorRankingRouteImport.update({
   id: '/ranking',
   path: '/ranking',
+  getParentRoute: () => VendedorRoute,
+} as any)
+const VendedorPontoRoute = VendedorPontoRouteImport.update({
+  id: '/ponto',
+  path: '/ponto',
   getParentRoute: () => VendedorRoute,
 } as any)
 const VendedorPipelineRoute = VendedorPipelineRouteImport.update({
@@ -835,6 +841,7 @@ export interface FileRoutesByFullPath {
   '/vendedor/metas': typeof VendedorMetasRoute
   '/vendedor/perfil': typeof VendedorPerfilRoute
   '/vendedor/pipeline': typeof VendedorPipelineRoute
+  '/vendedor/ponto': typeof VendedorPontoRoute
   '/vendedor/ranking': typeof VendedorRankingRoute
   '/apolices/': typeof ApolicesIndexRoute
   '/blog/': typeof BlogIndexRoute
@@ -949,6 +956,7 @@ export interface FileRoutesByTo {
   '/vendedor/metas': typeof VendedorMetasRoute
   '/vendedor/perfil': typeof VendedorPerfilRoute
   '/vendedor/pipeline': typeof VendedorPipelineRoute
+  '/vendedor/ponto': typeof VendedorPontoRoute
   '/vendedor/ranking': typeof VendedorRankingRoute
   '/apolices': typeof ApolicesIndexRoute
   '/blog': typeof BlogIndexRoute
@@ -1068,6 +1076,7 @@ export interface FileRoutesById {
   '/vendedor/metas': typeof VendedorMetasRoute
   '/vendedor/perfil': typeof VendedorPerfilRoute
   '/vendedor/pipeline': typeof VendedorPipelineRoute
+  '/vendedor/ponto': typeof VendedorPontoRoute
   '/vendedor/ranking': typeof VendedorRankingRoute
   '/apolices/': typeof ApolicesIndexRoute
   '/blog/': typeof BlogIndexRoute
@@ -1188,6 +1197,7 @@ export interface FileRouteTypes {
     | '/vendedor/metas'
     | '/vendedor/perfil'
     | '/vendedor/pipeline'
+    | '/vendedor/ponto'
     | '/vendedor/ranking'
     | '/apolices/'
     | '/blog/'
@@ -1302,6 +1312,7 @@ export interface FileRouteTypes {
     | '/vendedor/metas'
     | '/vendedor/perfil'
     | '/vendedor/pipeline'
+    | '/vendedor/ponto'
     | '/vendedor/ranking'
     | '/apolices'
     | '/blog'
@@ -1420,6 +1431,7 @@ export interface FileRouteTypes {
     | '/vendedor/metas'
     | '/vendedor/perfil'
     | '/vendedor/pipeline'
+    | '/vendedor/ponto'
     | '/vendedor/ranking'
     | '/apolices/'
     | '/blog/'
@@ -1923,6 +1935,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof VendedorRankingRouteImport
       parentRoute: typeof VendedorRoute
     }
+    '/vendedor/ponto': {
+      id: '/vendedor/ponto'
+      path: '/ponto'
+      fullPath: '/vendedor/ponto'
+      preLoaderRoute: typeof VendedorPontoRouteImport
+      parentRoute: typeof VendedorRoute
+    }
     '/vendedor/pipeline': {
       id: '/vendedor/pipeline'
       path: '/pipeline'
@@ -2421,6 +2440,7 @@ interface VendedorRouteChildren {
   VendedorMetasRoute: typeof VendedorMetasRoute
   VendedorPerfilRoute: typeof VendedorPerfilRoute
   VendedorPipelineRoute: typeof VendedorPipelineRoute
+  VendedorPontoRoute: typeof VendedorPontoRoute
   VendedorRankingRoute: typeof VendedorRankingRoute
   VendedorIndexRoute: typeof VendedorIndexRoute
 }
@@ -2437,6 +2457,7 @@ const VendedorRouteChildren: VendedorRouteChildren = {
   VendedorMetasRoute: VendedorMetasRoute,
   VendedorPerfilRoute: VendedorPerfilRoute,
   VendedorPipelineRoute: VendedorPipelineRoute,
+  VendedorPontoRoute: VendedorPontoRoute,
   VendedorRankingRoute: VendedorRankingRoute,
   VendedorIndexRoute: VendedorIndexRoute,
 }

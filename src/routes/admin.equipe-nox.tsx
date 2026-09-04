@@ -46,6 +46,7 @@ import {
   Briefcase,
   Gift,
   History,
+  Clock3,
 } from "lucide-react";
 import { z } from "zod";
 import { addMonths, format } from "date-fns";
@@ -59,6 +60,7 @@ import {
 } from "@/lib/seller-progress";
 import { TabAuditoria, TabColaboradores, TabEquipeComercial } from "./admin.equipe-permissoes";
 import { SellerRewardsTab } from "@/components/admin/SellerRewardsTab";
+import { TimeClockHistoryTab } from "@/components/admin/TimeClockHistoryTab";
 
 const VALID_TABS = [
   "metas",
@@ -67,6 +69,7 @@ const VALID_TABS = [
   "comissoes",
   "colaboradores",
   "equipe-comercial",
+  "historico-ponto",
   "auditoria",
 ] as const;
 type TabKey = (typeof VALID_TABS)[number];
@@ -83,11 +86,13 @@ export const Route = createFileRoute("/admin/equipe-nox")({
 });
 
 function EquipeNoxPage() {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const search = useSearch({ from: "/admin/equipe-nox" });
   const activeTab: TabKey = (search.tab as TabKey) ?? "metas";
   const setTab = (t: TabKey) =>
     navigate({ to: "/admin/equipe-nox", search: { tab: t } as any, replace: true });
+  const canManageTimeClock = user?.role === "admin" || user?.role === "admin_master" || user?.internalRole === "admin_master";
 
   return (
     <DashboardLayout>
@@ -99,7 +104,7 @@ function EquipeNoxPage() {
           <div>
             <h1 className="text-2xl font-bold text-neutral-950">Equipe NOX</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Metas, recompensas, agenda, comissões, colaboradores e auditoria em um só lugar.
+              Metas, jornada, agenda, comissões, colaboradores e auditoria em um só lugar.
             </p>
           </div>
         </div>
@@ -130,6 +135,10 @@ function EquipeNoxPage() {
               <Briefcase className="mr-2 h-4 w-4" />
               Equipe Comercial
             </TabsTrigger>
+            {canManageTimeClock && <TabsTrigger value="historico-ponto">
+              <Clock3 className="mr-2 h-4 w-4" />
+              Histórico de ponto
+            </TabsTrigger>}
             <TabsTrigger value="auditoria">
               <History className="mr-2 h-4 w-4" />
               Auditoria
@@ -153,6 +162,9 @@ function EquipeNoxPage() {
           <TabsContent value="equipe-comercial" className="mt-4">
             <TabEquipeComercial />
           </TabsContent>
+          {canManageTimeClock && <TabsContent value="historico-ponto" className="mt-4">
+            <TimeClockHistoryTab />
+          </TabsContent>}
           <TabsContent value="auditoria" className="mt-4">
             <TabAuditoria />
           </TabsContent>

@@ -42,6 +42,7 @@ import {
   MonitorPlay,
   ArrowRight,
   Gift,
+  Clock3,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { SinoNotificacoes } from "./SinoNotificacoes";
@@ -201,6 +202,7 @@ const adminItems: MenuItem[] = [
       { label: "Comissões", href: "/admin/equipe-nox?tab=comissoes" },
       { label: "Colaboradores", href: "/admin/equipe-nox?tab=colaboradores" },
       { label: "Equipe Comercial", href: "/admin/equipe-nox?tab=equipe-comercial" },
+      { label: "Histórico de ponto", href: "/admin/equipe-nox?tab=historico-ponto" },
       { label: "Auditoria", href: "/admin/equipe-nox?tab=auditoria" },
     ],
   },
@@ -297,6 +299,7 @@ const vendedorItems: MenuItem[] = [
     sellerTypes: ["sdr", "closer"],
   },
   { icon: LayoutDashboard, label: "Dashboard", href: "/vendedor", sellerTypes: ["sdr", "closer"] },
+  { icon: Clock3, label: "Registrar ponto", href: "/vendedor/ponto", sellerTypes: ["sdr", "closer"] },
   { icon: MonitorPlay, label: "Contas demo", href: "/vendedor/contas-demo", sellerTypes: ["closer"] },
   { icon: Users, label: "Leads e Atendimento", href: "/vendedor/leads", module: "leads_proprios", sellerTypes: ["sdr"] },
   { icon: Target, label: "Minhas Metas", href: "/vendedor/metas", module: "metas", sellerTypes: ["sdr", "closer"] },
