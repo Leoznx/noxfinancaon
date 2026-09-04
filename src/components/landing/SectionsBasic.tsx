@@ -7,12 +7,12 @@ import { Button } from '@/components/ui/button';
 
 export const InstitutionalHero = () => (
   <section className="relative w-full overflow-hidden bg-white pt-28 sm:pt-32 lg:pt-[126px]">
-    <div className="relative z-10 mx-auto grid w-full max-w-[1536px] items-center gap-12 px-5 pb-8 sm:px-8 sm:pb-12 lg:min-h-[600px] lg:grid-cols-[minmax(0,0.49fr)_minmax(0,0.51fr)] lg:gap-8 lg:px-12 lg:pb-12 xl:grid-cols-[minmax(0,0.46fr)_minmax(0,0.54fr)] xl:gap-12 xl:px-16 2xl:px-20">
-      <div className="max-w-[600px] lg:py-10 xl:max-w-[620px]">
-        <span className="mb-6 inline-block rounded-full bg-white px-3 py-1 text-sm font-bold tracking-wider text-neutral-700 shadow-[0_8px_24px_rgba(17,17,17,0.06)] ring-1 ring-black/[0.04]">
+    <div className="relative z-10 mx-auto grid w-full max-w-none items-center gap-12 px-5 pb-10 sm:px-8 sm:pb-14 lg:min-h-[700px] lg:grid-cols-[minmax(0,0.45fr)_minmax(0,0.55fr)] lg:gap-6 lg:pb-16 lg:pl-12 lg:pr-0 xl:grid-cols-[minmax(0,0.44fr)_minmax(0,0.56fr)] xl:gap-8 xl:pl-16 2xl:pl-20">
+      <div className="max-w-[690px] lg:py-14 xl:max-w-[760px]">
+        <span className="mb-7 inline-block rounded-full bg-white px-4 py-2 text-sm font-bold tracking-wider text-neutral-700 shadow-[0_10px_30px_rgba(17,17,17,0.07)] ring-1 ring-black/[0.05] sm:text-base">
           SEGURO FIANÇA LOCATÍCIA
         </span>
-        <h1 className="mb-6 text-3xl font-bold leading-[1.08] tracking-tight text-neutral-900 sm:mb-7 sm:text-4xl md:text-[2.7rem] lg:text-[3.35rem] xl:text-[3.65rem]">
+        <h1 className="mb-8 text-[2.45rem] font-bold leading-[1.04] tracking-[-0.035em] text-neutral-900 sm:text-[2.85rem] md:text-[3.2rem] lg:text-[3.6rem] xl:text-[4.25rem] 2xl:text-[4.65rem]">
           Aluguel sem fiador, sem caução, com aprovação em até{' '}
           <span className="relative inline-block">
             <span className="text-[#FACC15]">1 minuto.</span>
@@ -27,39 +27,39 @@ export const InstitutionalHero = () => (
             </svg>
           </span>
         </h1>
-        <div className="mb-8 mt-2 flex flex-col gap-3 sm:mb-8 sm:flex-row sm:gap-4">
+        <div className="mb-10 mt-3 flex flex-col gap-3 sm:flex-row sm:gap-4">
           <Link to="/consultas/nova" className="w-full sm:w-auto">
-            <Button className="h-12 min-h-[44px] w-full rounded-lg bg-neutral-900 px-6 text-sm font-bold text-white shadow-xl shadow-neutral-100 transition-all hover:bg-neutral-800 active:scale-95 sm:w-auto sm:px-7 sm:text-base">
+            <Button className="h-14 min-h-[52px] w-full rounded-xl bg-neutral-900 px-7 text-base font-bold text-white shadow-xl shadow-neutral-100 transition-all hover:bg-neutral-800 active:scale-95 sm:w-auto sm:px-8 lg:h-[58px] lg:text-[1.05rem]">
               Solicitar análise gratuita
             </Button>
           </Link>
           <Link to="/cadastro" className="w-full sm:w-auto">
-            <Button variant="outline" className="h-12 min-h-[44px] w-full rounded-lg border-neutral-300 px-6 text-sm font-medium text-neutral-900 hover:bg-neutral-50 sm:w-auto sm:px-7 sm:text-base">
+            <Button variant="outline" className="h-14 min-h-[52px] w-full rounded-xl border-neutral-300 px-7 text-base font-medium text-neutral-900 shadow-sm hover:bg-neutral-50 sm:w-auto sm:px-8 lg:h-[58px] lg:text-[1.05rem]">
               Sou imobiliária ou corretor
             </Button>
           </Link>
         </div>
-        <div className="flex flex-wrap gap-4 sm:gap-8">
+        <div className="flex flex-wrap gap-x-7 gap-y-4 xl:flex-nowrap xl:gap-x-5">
           {['Sem fiador', 'Sem caução', 'Aprovação em 1 minuto', '100% digital'].map((item) => (
-            <div key={item} className="flex items-center gap-2 text-sm font-medium text-neutral-500">
-              <Check size={18} className="text-[#FACC15]" strokeWidth={2.5} />
+            <div key={item} className="flex items-center gap-2.5 text-[15px] font-medium text-neutral-500 sm:text-base">
+              <Check size={20} className="text-[#FACC15]" strokeWidth={2.5} />
               {item}
             </div>
           ))}
         </div>
       </div>
 
-      <div className="flex w-full items-center justify-center lg:justify-end">
-        <div className="flex aspect-[3/2] w-full shrink-0 items-center justify-center lg:justify-end">
+      <div className="flex w-full items-center justify-center lg:h-full lg:justify-end">
+        <div className="flex aspect-[3/2] w-full shrink-0 items-center justify-center lg:max-w-[1040px] lg:justify-end">
           <img
             src={noxAboutHome}
-            alt="Casa moderna com destaques sobre análise instantânea, processo digital, agilidade e segurança"
+            alt="Casa moderna da NOX Fiança com aprovação em 1 minuto, imóveis protegidos e avaliação máxima"
             width={1536}
             height={1024}
             loading="eager"
             decoding="async"
             fetchPriority="high"
-            className="h-full w-full max-w-[780px] object-contain object-center lg:object-right"
+            className="h-full w-full object-cover object-center lg:rounded-l-[32px] lg:object-right"
           />
         </div>
       </div>
