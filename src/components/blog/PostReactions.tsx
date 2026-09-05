@@ -10,11 +10,15 @@ const STORAGE_KEY = "nox_blog_session_id";
 function getSessionId(): string {
   if (typeof window === "undefined") return "ssr";
   let id = localStorage.getItem(STORAGE_KEY);
-  if (!id) {
-    id = (crypto?.randomUUID?.() ?? `s-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  if (!id || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
+    id = crypto.randomUUID();
     localStorage.setItem(STORAGE_KEY, id);
   }
   return id;
+}
+
+function firstState(data: unknown) {
+  return Array.isArray(data) ? data[0] : data;
 }
 
 interface Props {
@@ -32,14 +36,15 @@ export function PostReactions({ slug, variant = "card" }: Props) {
     let alive = true;
     (async () => {
       const session = getSessionId();
-      const [{ data: r }, { data: v }] = await Promise.all([
-        supabase.from("blog_post_reactions" as never).select("like_count,dislike_count").eq("post_slug", slug).maybeSingle(),
-        supabase.from("blog_post_votes" as never).select("vote_type").eq("post_slug", slug).eq("session_id", session).maybeSingle(),
-      ]);
+      const { data } = await supabase.rpc("get_blog_reaction_state" as never, {
+        p_post_slug: slug,
+        p_session_id: session,
+      } as never);
       if (!alive) return;
-      setLikes((r as any)?.like_count ?? 0);
-      setDislikes((r as any)?.dislike_count ?? 0);
-      setMyVote(((v as any)?.vote_type as Vote) ?? null);
+      const state = firstState(data) as any;
+      setLikes(state?.like_count ?? 0);
+      setDislikes(state?.dislike_count ?? 0);
+      setMyVote((state?.my_vote as Vote) ?? null);
     })();
     return () => { alive = false; };
   }, [slug]);
@@ -66,28 +71,17 @@ export function PostReactions({ slug, variant = "card" }: Props) {
     setMyVote(nVote);
 
     try {
-      // Atualiza voto (upsert ou delete)
-      if (nVote === null) {
-        await supabase.from("blog_post_votes" as never).delete().eq("post_slug", slug).eq("session_id", session);
-      } else {
-        await supabase.from("blog_post_votes" as never).upsert(
-          { post_slug: slug, session_id: session, vote_type: nVote, updated_at: new Date().toISOString() } as never,
-          { onConflict: "post_slug,session_id" } as never,
-        );
-      }
-      // Atualiza contadores: lê os atuais e grava
-      const { data: cur } = await supabase.from("blog_post_reactions" as never).select("like_count,dislike_count").eq("post_slug", slug).maybeSingle();
-      const baseL = (cur as any)?.like_count ?? 0;
-      const baseD = (cur as any)?.dislike_count ?? 0;
-      let dl = 0, dd = 0;
-      if (prev === "like") dl--;
-      if (prev === "dislike") dd--;
-      if (nVote === "like") dl++;
-      if (nVote === "dislike") dd++;
-      await supabase.from("blog_post_reactions" as never).upsert(
-        { post_slug: slug, like_count: Math.max(0, baseL + dl), dislike_count: Math.max(0, baseD + dd), updated_at: new Date().toISOString() } as never,
-        { onConflict: "post_slug" } as never,
-      );
+      const { data, error } = await supabase.rpc("cast_blog_vote" as never, {
+        p_post_slug: slug,
+        p_session_id: session,
+        p_vote_type: nVote,
+      } as never);
+      if (error) throw error;
+      const state = firstState(data) as any;
+      if (!state?.accepted) throw new Error("rate_limited");
+      setLikes(state.like_count ?? 0);
+      setDislikes(state.dislike_count ?? 0);
+      setMyVote((state.my_vote as Vote) ?? null);
     } catch {
       toast.error("Não foi possível registrar seu voto.");
       // Rollback
