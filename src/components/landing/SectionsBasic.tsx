@@ -2,7 +2,7 @@ import { Link } from '@tanstack/react-router';
 import { Check } from 'lucide-react';
 
 import noxAboutHome from '@/assets/nox-about-home.png';
-import noxHomeBuilding from '@/assets/nox-home-building.png';
+import { AboutNoxSection } from './AboutNoxSection';
 import { Button } from '@/components/ui/button';
 
 export const InstitutionalHero = () => (
@@ -72,41 +72,4 @@ export const InstitutionalHero = () => (
   </section>
 );
 
-export const SolutionPresentation = () => (
-  <section className="bg-white px-4 pb-16 pt-8 sm:px-6 sm:pb-24 sm:pt-12">
-    <div className="container mx-auto grid max-w-7xl items-center gap-10 lg:grid-cols-2 lg:gap-16">
-      <div className="aspect-[3/2] overflow-hidden rounded-2xl border border-neutral-100 shadow-sm lg:-translate-x-4">
-        <img
-          src={noxHomeBuilding}
-          alt="Casa moderna protegida pela NOX Fiança, com simulação, análise rápida e aprovação digital"
-          loading="lazy"
-          decoding="async"
-          width={1122}
-          height={1402}
-          className="h-full w-full object-contain p-2 sm:p-3"
-        />
-      </div>
-      <div>
-        <span className="mb-6 inline-block rounded-full bg-neutral-100 px-3 py-1 text-xs font-bold tracking-widest text-neutral-700">
-          SOBRE A NOX FIANÇA
-        </span>
-        <h2 className="mb-6 text-3xl font-bold leading-tight tracking-tight text-neutral-900 sm:mb-8 sm:text-4xl lg:text-5xl">
-          Uma nova forma de garantir o aluguel.
-        </h2>
-        <div className="space-y-5 text-base leading-relaxed text-neutral-600 sm:space-y-6 sm:text-lg">
-          <p>
-            O seguro fiança da NOX foi desenvolvido para simplificar a jornada de locação, eliminando a necessidade de garantias tradicionais e burocráticas que travam o mercado imobiliário.
-          </p>
-          <p>
-            Nossa plataforma utiliza tecnologia proprietária para realizar análises de crédito precisas e instantâneas, proporcionando agilidade para o inquilino e segurança para o proprietário do imóvel.
-          </p>
-        </div>
-        <Link to="/seguro-fianca">
-          <Button variant="outline" className="mt-8 h-12 min-h-[44px] rounded-lg border-neutral-300 px-6 font-medium text-neutral-900 hover:bg-neutral-50 sm:mt-10 sm:px-8">
-            Conhecer o seguro fiança
-          </Button>
-        </Link>
-      </div>
-    </div>
-  </section>
-);
+export const SolutionPresentation = AboutNoxSection;
