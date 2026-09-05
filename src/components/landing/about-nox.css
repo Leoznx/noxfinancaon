@@ -158,9 +158,9 @@
   padding: 12px 23px;
   border: 1px solid var(--brand-yellow);
   border-radius: 12px;
-  background: #111214;
-  box-shadow: 0 9px 28px color-mix(in srgb, var(--brand-yellow) 17%, transparent), inset 0 0 9px color-mix(in srgb, var(--brand-yellow) 8%, transparent);
-  color: #fff;
+  background: #fff;
+  box-shadow: 0 9px 28px color-mix(in srgb, var(--brand-yellow) 12%, transparent);
+  color: #111214;
   font-size: 14px;
   font-weight: 600;
   line-height: 1.4;
@@ -169,7 +169,7 @@
 }
 
 .nox-about__button svg { flex-shrink: 0; color: var(--brand-yellow); transition: transform 240ms ease; }
-.nox-about__button:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--brand-yellow) 80%, #fff); box-shadow: 0 12px 30px color-mix(in srgb, var(--brand-yellow) 24%, transparent); }
+.nox-about__button:hover { transform: translateY(-2px); background: color-mix(in srgb, var(--brand-yellow) 7%, #fff); border-color: var(--brand-yellow); box-shadow: 0 12px 30px color-mix(in srgb, var(--brand-yellow) 20%, transparent); }
 .nox-about__button:hover svg { transform: translateX(3px); }
 .nox-about__button:focus-visible { outline: 2px solid #171719; outline-offset: 5px; }
 
