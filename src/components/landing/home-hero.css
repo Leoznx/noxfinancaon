@@ -259,6 +259,7 @@
   .nox-home-hero__metrics dt { font-size: 10px; }
   .nox-home-hero__metrics dd { font-size: 22px; }
   .nox-home-hero__metrics svg { width: 18px; }
+  .nox-home-hero__visual { margin: 24px 8px 0; overflow: hidden; border-radius: 16px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
