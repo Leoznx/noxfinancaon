@@ -16,6 +16,7 @@ import {
   saoPauloClock,
 } from "../_shared/billing-automation.ts";
 import { getZApiConnectionStatus } from "../_shared/zapi.ts";
+import { hasOversizedBody, safeEqualSecret } from "../_shared/http-security.ts";
 
 type RunBody = {
   dryRun?: boolean;
@@ -46,26 +47,27 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders(req) });
   }
   if (req.method !== "POST") {
-    return jsonResponse(
-      req,
-      { ok: false, error: "Método não permitido." },
-      405,
-    );
+    return jsonResponse(req, { ok: false, error: "Método não permitido." }, 405);
   }
+  if (hasOversizedBody(req, 16_384))
+    return jsonResponse(req, { ok: false, error: "Payload muito grande." }, 413);
 
   const expectedSecret = Deno.env.get("CRON_NOTIFICATIONS_SECRET") || "";
-  if (!expectedSecret || req.headers.get("x-cron-secret") !== expectedSecret) {
+  if (!expectedSecret || !safeEqualSecret(req.headers.get("x-cron-secret") || "", expectedSecret)) {
     return jsonResponse(req, { ok: false, error: "Não autorizado." }, 401);
   }
 
   const body = (await req.json().catch(() => ({}))) as RunBody;
-  const simulationAllowed =
-    Deno.env.get("BILLING_SIMULATION_ENABLED") === "true";
+  const simulationAllowed = Deno.env.get("BILLING_SIMULATION_ENABLED") === "true";
   if (body.simulationNow && !simulationAllowed) {
-    return jsonResponse(req, {
-      ok: false,
-      error: "Relógio de simulação desabilitado.",
-    }, 400);
+    return jsonResponse(
+      req,
+      {
+        ok: false,
+        error: "Relógio de simulação desabilitado.",
+      },
+      400,
+    );
   }
   const now = body.simulationNow ? new Date(body.simulationNow) : new Date();
   if (Number.isNaN(now.getTime())) {
@@ -95,27 +97,28 @@ serve(async (req) => {
   if (clock.hour === 9) {
     const [targetYear, targetMonth] = clock.date.split("-").map(Number);
     const targetDueDate = monthlyDueDate(targetYear, targetMonth);
-    const [{ data: agencyInvoices }, { data: activeBatches }] = await Promise
-      .all([
-        admin
-          .from("faturas_inquilino")
-          .select("recipient_user_id")
-          .eq("payment_responsible", "agency")
-          .eq("vencimento", targetDueDate)
-          .in("status", ["pending", "overdue", "risk_analysis", "approved"])
-          .not("recipient_user_id", "is", null),
-        admin
-          .from("consolidated_invoice_batches")
-          .select("agency_user_id")
-          .eq("reference_month", targetMonth)
-          .eq("reference_year", targetYear)
-          .eq("status", "active"),
-      ]);
+    const [{ data: agencyInvoices }, { data: activeBatches }] = await Promise.all([
+      admin
+        .from("faturas_inquilino")
+        .select("recipient_user_id")
+        .eq("payment_responsible", "agency")
+        .eq("vencimento", targetDueDate)
+        .in("status", ["pending", "overdue", "risk_analysis", "approved"])
+        .not("recipient_user_id", "is", null),
+      admin
+        .from("consolidated_invoice_batches")
+        .select("agency_user_id")
+        .eq("reference_month", targetMonth)
+        .eq("reference_year", targetYear)
+        .eq("status", "active"),
+    ]);
     const responsibleIds = [
-      ...new Set([
-        ...(agencyInvoices ?? []).map((row: any) => row.recipient_user_id),
-        ...(activeBatches ?? []).map((row: any) => row.agency_user_id),
-      ].filter(Boolean)),
+      ...new Set(
+        [
+          ...(agencyInvoices ?? []).map((row: any) => row.recipient_user_id),
+          ...(activeBatches ?? []).map((row: any) => row.agency_user_id),
+        ].filter(Boolean),
+      ),
     ];
     consolidation.planned = responsibleIds.length;
     if (!dryRun) {
@@ -148,38 +151,40 @@ serve(async (req) => {
     }
   }
 
-  const [
-    { data: invoices, error: invoiceError },
-    { data: batches, error: batchError },
-  ] = await Promise.all([
-    admin
-      .from("faturas_inquilino")
-      .select(
-        "id, valor, vencimento, status, boleto_url, consolidated_item_id, recipient_user_id, tenant_user_id, asaas_payment:asaas_payments(recipient_type, recipient_user_id, recipient_tenant_id, recipient_name, recipient_email, recipient_phone, boleto_url)",
-      )
-      .gte("vencimento", fromDate)
-      .lte("vencimento", toDate)
-      .in("status", ["pending", "overdue", "risk_analysis", "approved"])
-      .is("consolidated_item_id", null),
-    admin
-      .from("consolidated_invoice_batches")
-      .select(
-        "id, agency_user_id, total_value, due_date, status, invoice_count, invoice_url, bank_slip_url, profile:profiles!consolidated_invoice_batches_agency_user_id_fkey(nome, email, telefone)",
-      )
-      .gte("due_date", fromDate)
-      .lte("due_date", toDate)
-      .eq("status", "active"),
-  ]);
+  const [{ data: invoices, error: invoiceError }, { data: batches, error: batchError }] =
+    await Promise.all([
+      admin
+        .from("faturas_inquilino")
+        .select(
+          "id, valor, vencimento, status, boleto_url, consolidated_item_id, recipient_user_id, tenant_user_id, asaas_payment:asaas_payments(recipient_type, recipient_user_id, recipient_tenant_id, recipient_name, recipient_email, recipient_phone, boleto_url)",
+        )
+        .gte("vencimento", fromDate)
+        .lte("vencimento", toDate)
+        .in("status", ["pending", "overdue", "risk_analysis", "approved"])
+        .is("consolidated_item_id", null),
+      admin
+        .from("consolidated_invoice_batches")
+        .select(
+          "id, agency_user_id, total_value, due_date, status, invoice_count, invoice_url, bank_slip_url, profile:profiles!consolidated_invoice_batches_agency_user_id_fkey(nome, email, telefone)",
+        )
+        .gte("due_date", fromDate)
+        .lte("due_date", toDate)
+        .eq("status", "active"),
+    ]);
 
   if (invoiceError || batchError) {
     console.error("[billing-automation] falha ao carregar alvos", {
       invoices: invoiceError?.message || null,
       batches: batchError?.message || null,
     });
-    return jsonResponse(req, {
-      ok: false,
-      error: "Falha ao carregar cobranças.",
-    }, 500);
+    return jsonResponse(
+      req,
+      {
+        ok: false,
+        error: "Falha ao carregar cobranças.",
+      },
+      500,
+    );
   }
 
   const targets: DispatchTarget[] = [];
@@ -204,9 +209,7 @@ serve(async (req) => {
     });
   }
   for (const batch of batches ?? []) {
-    const profile = Array.isArray(batch.profile)
-      ? batch.profile[0]
-      : batch.profile;
+    const profile = Array.isArray(batch.profile) ? batch.profile[0] : batch.profile;
     targets.push({
       batchId: batch.id,
       amount: Number(batch.total_value || 0),
@@ -235,9 +238,7 @@ serve(async (req) => {
     skippedDuplicate: 0,
     failures: 0,
     consolidation,
-    plans: [] as Array<
-      { scope: string; cadence: string; slot: number; channels: string[] }
-    >,
+    plans: [] as Array<{ scope: string; cadence: string; slot: number; channels: string[] }>,
   };
 
   for (const target of targets) {
@@ -245,9 +246,7 @@ serve(async (req) => {
     if (!cadence) continue;
     report.planned += 1;
     const type = notificationKey(cadence, clock.date);
-    const scope = target.invoiceId
-      ? `invoice:${target.invoiceId}`
-      : `batch:${target.batchId}`;
+    const scope = target.invoiceId ? `invoice:${target.invoiceId}` : `batch:${target.batchId}`;
     const channels = [
       target.recipient.email ? "email" : null,
       target.recipient.phone ? "whatsapp" : null,
@@ -283,9 +282,10 @@ serve(async (req) => {
         const result = await sendCollectionEmail({
           to: target.recipient.email,
           name: target.recipient.name,
-          subject: cadence.kind === "pre_due"
-            ? "Sua cobrança vence amanhã — NOX Fiança"
-            : "Cobrança em aberto — NOX Fiança",
+          subject:
+            cadence.kind === "pre_due"
+              ? "Sua cobrança vence amanhã — NOX Fiança"
+              : "Cobrança em aberto — NOX Fiança",
           message,
           paymentUrl: target.paymentUrl,
         });
@@ -328,10 +328,12 @@ serve(async (req) => {
     }
   }
 
-  const zapi = dryRun ? { checked: false } : {
-    checked: true,
-    ...(await getZApiConnectionStatus().catch(() => ({ connected: false }))),
-  };
+  const zapi = dryRun
+    ? { checked: false }
+    : {
+        checked: true,
+        ...(await getZApiConnectionStatus().catch(() => ({ connected: false }))),
+      };
   return jsonResponse(req, { ok: true, report, zapi });
 });
 

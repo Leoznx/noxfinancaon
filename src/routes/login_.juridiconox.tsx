@@ -2,6 +2,14 @@ import { createFileRoute } from "@tanstack/react-router";
 import { NoxEmployeeSignup } from "@/components/NoxEmployeeSignup";
 
 export const Route = createFileRoute("/login_/juridiconox")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    invite: typeof search.invite === "string" ? search.invite : undefined,
+  }),
   head: () => ({ meta: [{ name: "robots", content: "noindex, nofollow" }] }),
-  component: () => <NoxEmployeeSignup accountType="juridico" />,
+  component: Page,
 });
+
+function Page() {
+  const { invite } = Route.useSearch();
+  return <NoxEmployeeSignup accountType="juridico" inviteToken={invite} />;
+}

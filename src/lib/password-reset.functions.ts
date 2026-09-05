@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { sendPasswordResetEmail } from "@/lib/resend.service";
 import { buildAuthEmailCallbackUrl } from "@/lib/auth-email-links";
+import { enforceSecurityRateLimit } from "@/lib/security-rate-limit.server";
 
 function buildResetLink(properties: { hashed_token: string; verification_type: string }) {
   const appUrl =
@@ -34,6 +35,13 @@ export const requestPasswordReset = createServerFn({ method: "POST" })
     const emailLower = data.email.toLowerCase().trim();
 
     try {
+      await enforceSecurityRateLimit({
+        scope: "password-reset",
+        identifier: emailLower,
+        limit: 5,
+        windowSeconds: 3600,
+        blockSeconds: 3600,
+      });
       const { data: profile } = await supabaseAdmin
         .from("profiles")
         .select("id, nome")
@@ -46,7 +54,9 @@ export const requestPasswordReset = createServerFn({ method: "POST" })
         email: emailLower,
       });
       if (linkError || !linkData?.properties?.hashed_token) {
-        console.error("[requestPasswordReset] falha ao gerar link de recuperação:", linkError);
+        console.error("[requestPasswordReset] falha ao gerar link de recuperação", {
+          code: (linkError as any)?.code || "unknown",
+        });
         return { ok: true as const };
       }
 
@@ -56,7 +66,9 @@ export const requestPasswordReset = createServerFn({ method: "POST" })
         resetLink: buildResetLink(linkData.properties),
       });
     } catch (e) {
-      console.error("[requestPasswordReset] erro inesperado:", e);
+      console.error("[requestPasswordReset] operação não concluída", {
+        name: e instanceof Error ? e.name : "unknown",
+      });
     }
 
     return { ok: true as const };

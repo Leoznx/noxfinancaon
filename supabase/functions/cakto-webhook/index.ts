@@ -1,10 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { hasOversizedBody, safeEqualSecret } from "../_shared/http-security.ts";
 
 /**
  * Recebe atualizações de pagamento da Cakto (pix/boleto/credit_card) e atualiza
@@ -21,7 +17,13 @@ const corsHeaders = {
  */
 
 type StatusMapeado =
-  "pago" | "aguardando_pagamento" | "recusado" | "cancelado" | "estornado" | "chargeback" | "desconhecido";
+  | "pago"
+  | "aguardando_pagamento"
+  | "recusado"
+  | "cancelado"
+  | "estornado"
+  | "chargeback"
+  | "desconhecido";
 
 function mapearStatus(statusBruto: string | undefined | null): StatusMapeado {
   const s = (statusBruto || "").toLowerCase();
@@ -35,13 +37,16 @@ function mapearStatus(statusBruto: string | undefined | null): StatusMapeado {
 }
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-
   const jsonResponse = (body: Record<string, unknown>, status = 200) =>
     new Response(JSON.stringify(body), {
       status,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json" },
     });
+
+  if (req.method !== "POST")
+    return jsonResponse({ ok: false, error: "Método não permitido." }, 405);
+  if (hasOversizedBody(req))
+    return jsonResponse({ ok: false, error: "Payload muito grande." }, 413);
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -61,7 +66,9 @@ serve(async (req) => {
   //    aceitamos como alternativa (não documentado publicamente, mas inofensivo checar).
   const secretHeader = req.headers.get("x-webhook-secret") || req.headers.get("x-cakto-secret");
 
-  const autenticado = secretParam === webhookSecret || secretHeader === webhookSecret;
+  const autenticado =
+    (!!secretParam && safeEqualSecret(secretParam, webhookSecret)) ||
+    (!!secretHeader && safeEqualSecret(secretHeader, webhookSecret));
   if (!autenticado) {
     console.error("[cakto-webhook] Tentativa com segredo inválido ou ausente.");
     return jsonResponse({ ok: false, error: "Não autorizado." }, 401);

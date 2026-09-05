@@ -10,7 +10,8 @@ export const noxInternalAccounts = {
     sellerType: "sdr",
     cardDescription: "Prospecção, pré-atendimento, qualificação e agendamento para Closers.",
     formTitle: "Criar conta de Vendedor SDR",
-    formDescription: "Cadastre-se para prospectar parceiros e distribuir reuniões para a equipe de fechamento.",
+    formDescription:
+      "Cadastre-se para prospectar parceiros e distribuir reuniões para a equipe de fechamento.",
     badge: "Equipe comercial NOX — SDR",
   },
   closer: {
@@ -72,7 +73,8 @@ export const NOX_INTERNAL_ROLES: NoxInternalRole[] = [
 
 const PRODUCTION_APP_URL = "https://noxfianca.com";
 
-export function buildRegistrationLink(accountType: NoxInternalAccountType) {
+export function buildRegistrationLink(accountType: NoxInternalAccountType, inviteToken?: string) {
   const publicSiteUrl = (import.meta as any).env?.VITE_PUBLIC_SITE_URL || PRODUCTION_APP_URL;
-  return `${String(publicSiteUrl).replace(/\/$/, "")}${noxInternalAccounts[accountType].route}`;
+  const base = `${String(publicSiteUrl).replace(/\/$/, "")}${noxInternalAccounts[accountType].route}`;
+  return inviteToken ? `${base}?invite=${encodeURIComponent(inviteToken)}` : base;
 }

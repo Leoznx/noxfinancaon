@@ -81,14 +81,21 @@ function CompletarAcessoInquilinoPage() {
   }, [returnTo]);
 
   const senhaValida = useMemo(
-    () => senha.length >= 8 && /[A-Za-z]/.test(senha) && /\d/.test(senha),
+    () =>
+      senha.length >= 12 &&
+      senha.length <= 128 &&
+      /[a-z]/.test(senha) &&
+      /[A-Z]/.test(senha) &&
+      /\d/.test(senha),
     [senha],
   );
 
   async function criarAcesso() {
     setErro("");
     if (!senhaValida) {
-      setErro("A senha deve ter pelo menos 8 caracteres, uma letra e um número.");
+      setErro(
+        "A senha deve ter de 12 a 128 caracteres, com letras maiúsculas, minúsculas e número.",
+      );
       return;
     }
     if (senha !== confirmarSenha) {
@@ -138,8 +145,8 @@ function CompletarAcessoInquilinoPage() {
               Crie seu acesso de inquilino
             </h1>
             <p className="mt-2 text-sm leading-6 text-neutral-500">
-              Seus dados vieram do contrato assinado. Defina apenas sua senha para
-              acessar documentos e faturas.
+              Seus dados vieram do contrato assinado. Defina apenas sua senha para acessar
+              documentos e faturas.
             </p>
           </div>
 

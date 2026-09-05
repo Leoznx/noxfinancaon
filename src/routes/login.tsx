@@ -17,6 +17,7 @@ import { getRememberMe, setRememberMe } from "@/lib/authStorage";
 import { useServerFn } from "@tanstack/react-start";
 import { resendVerificationEmail } from "@/lib/auth-signup.functions";
 import { isEmailNotConfirmedError } from "@/lib/auth-errors";
+import { safeInternalRedirect } from "@/lib/safe-redirect";
 
 const loginSearchSchema = z.object({
   returnTo: z.string().optional(),
@@ -46,7 +47,7 @@ function LoginComponent() {
   const { login } = useAuth();
   const resendVerificationFn = useServerFn(resendVerificationEmail);
   const searchParams = useSearch({ from: "/login" });
-  const returnTo = searchParams.returnTo;
+  const returnTo = safeInternalRedirect(searchParams.returnTo, "/dashboard");
   const vindoDaSimulacao = returnTo?.includes("resultado");
 
   useEffect(() => {
@@ -154,7 +155,7 @@ function LoginComponent() {
     }
 
     irPara(
-      returnTo && returnTo !== "/login" ? returnTo : redirectPathForRole(effectiveRole),
+      safeInternalRedirect(searchParams.returnTo, redirectPathForRole(effectiveRole)),
       user.id,
       profile,
     );
@@ -402,7 +403,7 @@ function LoginComponent() {
                   to={
                     searchParams.perfil ? cadastroRouteByPerfil[searchParams.perfil] : "/cadastro"
                   }
-                  search={returnTo && returnTo !== "/dashboard" ? { returnTo } : {}}
+                  search={returnTo !== "/dashboard" ? { returnTo } : {}}
                   className="flex min-h-14 items-center gap-4 rounded-xl border border-neutral-200 bg-white px-5 text-sm font-semibold text-neutral-900 transition-colors hover:border-yellow-300 hover:bg-yellow-50 lg:min-h-16"
                 >
                   <UserRound size={22} strokeWidth={1.6} />
@@ -415,7 +416,6 @@ function LoginComponent() {
             </div>
           </section>
         </main>
-
       </div>
     </div>
   );

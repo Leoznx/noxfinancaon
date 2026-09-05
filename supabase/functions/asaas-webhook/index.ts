@@ -15,15 +15,18 @@ import {
   wasNotificationSent,
 } from "../_shared/asaas.ts";
 import { dispatchD4SignContract } from "../_shared/d4sign.ts";
+import { hasOversizedBody, safeEqualSecret } from "../_shared/http-security.ts";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders(req) });
   if (req.method !== "POST")
     return jsonResponse(req, { ok: false, error: "Metodo nao permitido." }, 405);
+  if (hasOversizedBody(req))
+    return jsonResponse(req, { ok: false, error: "Payload muito grande." }, 413);
 
   const expectedToken = Deno.env.get("ASAAS_WEBHOOK_TOKEN") || "";
   const token = req.headers.get("asaas-access-token") || "";
-  if (!expectedToken || token !== expectedToken) {
+  if (!expectedToken || !safeEqualSecret(token, expectedToken)) {
     return jsonResponse(req, { ok: false, error: "Nao autorizado." }, 401);
   }
 
@@ -438,7 +441,7 @@ async function handleConsolidatedBatchEvent(
         });
       }
     }
-    if (batchRecipient?.telefone && await isBillingWhatsappDispatchEnabled(supabase)) {
+    if (batchRecipient?.telefone && (await isBillingWhatsappDispatchEnabled(supabase))) {
       const alreadySent = await wasNotificationSent(supabase, {
         batchId: batch.id,
         channel: "whatsapp",

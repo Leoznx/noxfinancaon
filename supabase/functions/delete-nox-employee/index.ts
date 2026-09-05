@@ -1,21 +1,19 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.110.0";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
-
-function response(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
+import { corsHeaders, hasOversizedBody, rejectDisallowedOrigin } from "../_shared/http-security.ts";
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders(req) });
+  const response = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+    });
+  const rejected = rejectDisallowedOrigin(req);
+  if (rejected) return rejected;
   if (req.method !== "POST") return response({ ok: false, error: "Método não permitido." }, 405);
+  if (hasOversizedBody(req, 16_384))
+    return response({ ok: false, error: "Payload muito grande." }, 413);
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -34,11 +32,12 @@ serve(async (req) => {
     return response({ ok: false, error: "Sessão inválida ou expirada." }, 401);
 
   const [{ data: callerProfile }, { data: callerInternal }] = await Promise.all([
-    admin.from("profiles").select("role").eq("id", callerId).maybeSingle(),
+    admin.from("profiles").select("role, status").eq("id", callerId).maybeSingle(),
     admin.from("internal_users").select("role, status").eq("auth_user_id", callerId).maybeSingle(),
   ]);
   const isAdmin =
-    ["admin", "admin_master"].includes(String(callerProfile?.role ?? "")) ||
+    (["admin", "admin_master"].includes(String(callerProfile?.role ?? "")) &&
+      !["bloqueado", "excluido"].includes(String(callerProfile?.status ?? ""))) ||
     (callerInternal?.role === "admin_master" && callerInternal?.status === "ativo");
   if (!isAdmin)
     return response(

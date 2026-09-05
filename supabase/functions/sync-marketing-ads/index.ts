@@ -1,10 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { corsHeaders, hasOversizedBody, rejectDisallowedOrigin } from "../_shared/http-security.ts";
 
 type Integration = {
   id: string;
@@ -23,13 +19,18 @@ type Campaign = {
 };
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders(req) });
 
   const json = (body: Record<string, unknown>, status = 200) =>
     new Response(JSON.stringify(body), {
       status,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...corsHeaders(req), "Content-Type": "application/json" },
     });
+  const rejected = rejectDisallowedOrigin(req);
+  if (rejected) return rejected;
+  if (req.method !== "POST") return json({ ok: false, error: "Método não permitido." }, 405);
+  if (hasOversizedBody(req, 16_384))
+    return json({ ok: false, error: "Payload muito grande." }, 413);
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -39,6 +40,22 @@ serve(async (req) => {
   const admin = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+
+  const token = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
+  const { data: callerData } = await admin.auth.getUser(token);
+  const callerId = callerData?.user?.id;
+  if (!callerId) return json({ ok: false, error: "Não autenticado." }, 401);
+  const [{ data: profile }, { data: internal }] = await Promise.all([
+    admin.from("profiles").select("role, status").eq("id", callerId).maybeSingle(),
+    admin.from("internal_users").select("role, status").eq("auth_user_id", callerId).maybeSingle(),
+  ]);
+  const authorized =
+    (["admin", "admin_master"].includes(String(profile?.role || "")) &&
+      !["bloqueado", "excluido"].includes(String(profile?.status || ""))) ||
+    (["marketing", "admin_master"].includes(String(internal?.role || "")) &&
+      internal?.status === "ativo");
+  if (!authorized)
+    return json({ ok: false, error: "Sem permissão para sincronizar campanhas." }, 403);
 
   const body = await safeJson(req);
   const date = String(body.date || new Date().toISOString().slice(0, 10));

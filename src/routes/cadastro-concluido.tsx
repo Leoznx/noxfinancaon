@@ -6,6 +6,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { redirectPathForRole } from "@/lib/authRedirect";
 import { marcarCadastroConcluido, precisaMostrarCadastroConcluido } from "@/lib/primeiroAcesso";
 import { trackCadastroConcluido } from "@/lib/tracking";
+import { safeInternalRedirect } from "@/lib/safe-redirect";
 
 /**
  * URL de conversão do cadastro.
@@ -30,30 +31,6 @@ export const Route = createFileRoute("/cadastro-concluido")({
   component: CadastroConcluidoPage,
 });
 
-/**
- * Telas de entrada/autenticação nunca servem como destino: mandar o usuário de
- * volta para `/login` logo depois de entrar o deixaria em looping.
- */
-const DESTINOS_INVALIDOS = [
-  "/cadastro-concluido",
-  "/login",
-  "/cadastro",
-  "/email-verificado",
-  "/acesso-inquilino",
-  "/completar-acesso-inquilino",
-  "/redefinir-senha",
-  "/recuperar-acesso",
-];
-
-/** Só aceita caminho interno — impede que `?destino=` vire redirecionamento para fora do site. */
-function destinoSeguro(destino: string | undefined, fallback: string): string {
-  if (!destino) return fallback;
-  if (!destino.startsWith("/") || destino.startsWith("//")) return fallback;
-  if (DESTINOS_INVALIDOS.some((rota) => destino === rota || destino.startsWith(`${rota}/`) || destino.startsWith(`${rota}?`)))
-    return fallback;
-  return destino;
-}
-
 function CadastroConcluidoPage() {
   const navigate = useNavigate();
   const { destino } = Route.useSearch();
@@ -72,7 +49,10 @@ function CadastroConcluidoPage() {
     }
 
     jaProcessouRef.current = true;
-    const proximaTela = destinoSeguro(destino, redirectPathForRole(user.internalRole || user.role));
+    const proximaTela = safeInternalRedirect(
+      destino,
+      redirectPathForRole(user.internalRole || user.role),
+    );
 
     (async () => {
       // Recarregar a página ou digitar a URL na mão não pode contar a conversão

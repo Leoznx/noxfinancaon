@@ -16,6 +16,7 @@ import {
   monthlyDueDate,
   saoPauloClock,
 } from "../_shared/billing-automation.ts";
+import { hasOversizedBody, safeEqualSecret } from "../_shared/http-security.ts";
 
 type Body = {
   invoiceIds?: string[];
@@ -38,18 +39,16 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders(req) });
   }
   if (req.method !== "POST") {
-    return jsonResponse(
-      req,
-      { ok: false, error: "Método não permitido." },
-      405,
-    );
+    return jsonResponse(req, { ok: false, error: "Método não permitido." }, 405);
   }
+  if (hasOversizedBody(req, 64_000))
+    return jsonResponse(req, { ok: false, error: "Payload muito grande." }, 413);
 
   try {
     const body = (await req.json().catch(() => ({}))) as Body;
     const cronSecret = Deno.env.get("CRON_NOTIFICATIONS_SECRET") || "";
-    const internal = !!cronSecret &&
-      req.headers.get("x-cron-secret") === cronSecret;
+    const receivedCronSecret = req.headers.get("x-cron-secret") || "";
+    const internal = !!cronSecret && safeEqualSecret(receivedCronSecret, cronSecret);
     let actorId: string | null = null;
     let agencyUserId = body.agencyUserId || null;
     if (!internal) {
@@ -58,10 +57,14 @@ serve(async (req) => {
       agencyUserId = user.id;
     }
     if (!agencyUserId) {
-      return jsonResponse(req, {
-        ok: false,
-        error: "Responsável não informado.",
-      }, 400);
+      return jsonResponse(
+        req,
+        {
+          ok: false,
+          error: "Responsável não informado.",
+        },
+        400,
+      );
     }
 
     const admin = supabaseAdmin();
@@ -69,14 +72,15 @@ serve(async (req) => {
     const [currentYear, currentMonth] = clock.date.split("-").map(Number);
     const referenceMonth = body.referenceMonth || currentMonth;
     const referenceYear = body.referenceYear || currentYear;
-    if (
-      referenceMonth < 1 || referenceMonth > 12 || referenceYear < 2020 ||
-      referenceYear > 2200
-    ) {
-      return jsonResponse(req, {
-        ok: false,
-        error: "Mês de referência inválido.",
-      }, 400);
+    if (referenceMonth < 1 || referenceMonth > 12 || referenceYear < 2020 || referenceYear > 2200) {
+      return jsonResponse(
+        req,
+        {
+          ok: false,
+          error: "Mês de referência inválido.",
+        },
+        400,
+      );
     }
 
     let candidateQuery = admin
@@ -109,22 +113,28 @@ serve(async (req) => {
       .maybeSingle();
 
     if (!eligible.length) {
-      if (
-        existingBatch?.asaas_payment_id && existingBatch.status === "active"
-      ) {
+      if (existingBatch?.asaas_payment_id && existingBatch.status === "active") {
         await cancelAsaasPayment(existingBatch.asaas_payment_id);
         await releaseBatch(admin, existingBatch.id);
       }
-      return jsonResponse(req, {
-        ok: false,
-        error: "Nenhuma fatura elegível para este mês.",
-      }, 400);
+      return jsonResponse(
+        req,
+        {
+          ok: false,
+          error: "Nenhuma fatura elegível para este mês.",
+        },
+        400,
+      );
     }
     if (existingBatch?.status === "partial") {
-      return jsonResponse(req, {
-        ok: false,
-        error: "O lote possui pagamento parcial e requer revisão financeira.",
-      }, 409);
+      return jsonResponse(
+        req,
+        {
+          ok: false,
+          error: "O lote possui pagamento parcial e requer revisão financeira.",
+        },
+        409,
+      );
     }
 
     const { data: profile } = await admin
@@ -133,36 +143,35 @@ serve(async (req) => {
       .eq("id", agencyUserId)
       .maybeSingle();
     if (!profile?.email || !profile?.telefone) {
-      return jsonResponse(req, {
-        ok: false,
-        error:
-          "Complete e-mail e telefone do responsável antes de gerar a cobrança.",
-      }, 400);
+      return jsonResponse(
+        req,
+        {
+          ok: false,
+          error: "Complete e-mail e telefone do responsável antes de gerar a cobrança.",
+        },
+        400,
+      );
     }
     const cpfCnpj = await resolveProfileDocument(admin, profile);
     if (!cpfCnpj) {
-      return jsonResponse(req, {
-        ok: false,
-        error:
-          "Cadastre o CPF ou CNPJ do responsável antes de gerar a cobrança.",
-      }, 400);
+      return jsonResponse(
+        req,
+        {
+          ok: false,
+          error: "Cadastre o CPF ou CNPJ do responsável antes de gerar a cobrança.",
+        },
+        400,
+      );
     }
 
     const totalValue = toMoney(
-      eligible.reduce(
-        (sum: number, invoice: any) => sum + Number(invoice.valor || 0),
-        0,
-      ),
+      eligible.reduce((sum: number, invoice: any) => sum + Number(invoice.valor || 0), 0),
     );
     const dueDate = monthlyDueDate(referenceYear, referenceMonth);
     let customerId = existingBatch?.asaas_customer_id || null;
     if (!customerId) {
-      const found = await asaasFetch(
-        `/customers?cpfCnpj=${encodeURIComponent(cpfCnpj)}`,
-      );
-      customerId = Array.isArray(found?.data) && found.data.length
-        ? found.data[0].id
-        : null;
+      const found = await asaasFetch(`/customers?cpfCnpj=${encodeURIComponent(cpfCnpj)}`);
+      customerId = Array.isArray(found?.data) && found.data.length ? found.data[0].id : null;
     }
     if (!customerId) {
       const created = await asaasFetch("/customers", {
@@ -179,18 +188,18 @@ serve(async (req) => {
     }
     if (!customerId) throw new Error("asaas_customer_missing");
 
-    const externalReference = existingBatch?.external_reference ||
-      `nox:lote:${agencyUserId}:${referenceYear}:${
-        String(referenceMonth).padStart(2, "0")
-      }`;
+    const externalReference =
+      existingBatch?.external_reference ||
+      `nox:lote:${agencyUserId}:${referenceYear}:${String(referenceMonth).padStart(2, "0")}`;
     const paymentPayload = {
       customer: customerId,
       billingType: "BOLETO",
       value: totalValue,
       dueDate,
-      description: `NOX Fiança — cobrança mensal consolidada ${
-        String(referenceMonth).padStart(2, "0")
-      }/${referenceYear} (${eligible.length} contratos)`,
+      description: `NOX Fiança — cobrança mensal consolidada ${String(referenceMonth).padStart(
+        2,
+        "0",
+      )}/${referenceYear} (${eligible.length} contratos)`,
       externalReference,
       ...asaasLateFeePayload(),
     };
@@ -199,21 +208,25 @@ serve(async (req) => {
     try {
       raw = existingBatch?.asaas_payment_id
         ? await asaasFetch(`/payments/${existingBatch.asaas_payment_id}`, {
-          method: "PUT",
-          body: JSON.stringify(paymentPayload),
-        })
+            method: "PUT",
+            body: JSON.stringify(paymentPayload),
+          })
         : await asaasFetch("/payments", {
-          method: "POST",
-          body: JSON.stringify(paymentPayload),
-        });
+            method: "POST",
+            body: JSON.stringify(paymentPayload),
+          });
     } catch (error) {
       console.error("[asaas-create-consolidated-invoice] provider_error", {
         status: error instanceof AsaasApiError ? error.status : "unknown",
       });
-      return jsonResponse(req, {
-        ok: false,
-        error: "Não foi possível gerar a cobrança consolidada agora.",
-      }, 502);
+      return jsonResponse(
+        req,
+        {
+          ok: false,
+          error: "Não foi possível gerar a cobrança consolidada agora.",
+        },
+        502,
+      );
     }
 
     let batch = existingBatch;
@@ -229,8 +242,7 @@ serve(async (req) => {
           asaas_payment_id: raw?.id || batch.asaas_payment_id,
           invoice_url: raw?.invoiceUrl || null,
           bank_slip_url: raw?.bankSlipUrl || raw?.invoiceUrl || null,
-          identification_field: raw?.identificationField || raw?.nossoNumero ||
-            null,
+          identification_field: raw?.identificationField || raw?.nossoNumero || null,
           last_synced_at: new Date().toISOString(),
         })
         .eq("id", batch.id)
@@ -256,8 +268,7 @@ serve(async (req) => {
           external_reference: externalReference,
           invoice_url: raw?.invoiceUrl || null,
           bank_slip_url: raw?.bankSlipUrl || raw?.invoiceUrl || null,
-          identification_field: raw?.identificationField || raw?.nossoNumero ||
-            null,
+          identification_field: raw?.identificationField || raw?.nossoNumero || null,
           last_synced_at: new Date().toISOString(),
         })
         .select()
@@ -272,15 +283,16 @@ serve(async (req) => {
       .eq("batch_id", batch.id)
       .eq("status", "active");
     const eligibleIds = new Set(eligible.map((invoice: any) => invoice.id));
-    const itemByInvoice = new Map(
-      (currentItems ?? []).map((item: any) => [item.fatura_id, item]),
-    );
+    const itemByInvoice = new Map((currentItems ?? []).map((item: any) => [item.fatura_id, item]));
 
     for (const item of currentItems ?? []) {
       if (eligibleIds.has(item.fatura_id)) continue;
-      await admin.from("faturas_inquilino").update({
-        consolidated_item_id: null,
-      }).eq("id", item.fatura_id);
+      await admin
+        .from("faturas_inquilino")
+        .update({
+          consolidated_item_id: null,
+        })
+        .eq("id", item.fatura_id);
       await admin
         .from("consolidated_invoice_items")
         .update({
@@ -328,10 +340,7 @@ serve(async (req) => {
         .select("id, asaas_payment_id, status")
         .eq("id", invoice.asaas_payment_id)
         .maybeSingle();
-      if (
-        !payment?.asaas_payment_id ||
-        !OPEN_STATUSES.includes(String(payment.status))
-      ) continue;
+      if (!payment?.asaas_payment_id || !OPEN_STATUSES.includes(String(payment.status))) continue;
       const cancelled = await cancelAsaasPayment(payment.asaas_payment_id);
       if (!cancelled.cancelled) {
         await cancelAsaasPayment(batch.asaas_payment_id);
@@ -340,16 +349,12 @@ serve(async (req) => {
           req,
           {
             ok: false,
-            error:
-              "A consolidação foi interrompida para evitar uma cobrança duplicada.",
+            error: "A consolidação foi interrompida para evitar uma cobrança duplicada.",
           },
           502,
         );
       }
-      await admin.from("asaas_payments").update({ status: "cancelled" }).eq(
-        "id",
-        payment.id,
-      );
+      await admin.from("asaas_payments").update({ status: "cancelled" }).eq("id", payment.id);
     }
 
     return jsonResponse(req, {
@@ -367,10 +372,14 @@ serve(async (req) => {
     console.error("[asaas-create-consolidated-invoice] unexpected_error", {
       message: error instanceof Error ? error.message : String(error),
     });
-    return jsonResponse(req, {
-      ok: false,
-      error: "Não foi possível sincronizar a cobrança consolidada.",
-    }, 500);
+    return jsonResponse(
+      req,
+      {
+        ok: false,
+        error: "Não foi possível sincronizar a cobrança consolidada.",
+      },
+      500,
+    );
   }
 });
 
@@ -378,24 +387,27 @@ async function resolveProfileDocument(admin: any, profile: any) {
   if (normalizeDocumento(profile.cnpj)) return normalizeDocumento(profile.cnpj);
   const role = String(profile.role || "");
   if (role === "corretor") {
-    const { data } = await admin.from("corretores").select("cpf").eq(
-      "profile_id",
-      profile.id,
-    ).maybeSingle();
+    const { data } = await admin
+      .from("corretores")
+      .select("cpf")
+      .eq("profile_id", profile.id)
+      .maybeSingle();
     return normalizeDocumento(data?.cpf);
   }
   if (role === "proprietario") {
-    const { data } = await admin.from("proprietarios").select("cpf_cnpj").eq(
-      "profile_id",
-      profile.id,
-    ).maybeSingle();
+    const { data } = await admin
+      .from("proprietarios")
+      .select("cpf_cnpj")
+      .eq("profile_id", profile.id)
+      .maybeSingle();
     return normalizeDocumento(data?.cpf_cnpj);
   }
   if (role === "inquilino") {
-    const { data } = await admin.from("inquilinos").select("cpf, cnpj").eq(
-      "profile_id",
-      profile.id,
-    ).maybeSingle();
+    const { data } = await admin
+      .from("inquilinos")
+      .select("cpf, cnpj")
+      .eq("profile_id", profile.id)
+      .maybeSingle();
     return normalizeDocumento(data?.cpf || data?.cnpj);
   }
   return "";
@@ -408,7 +420,9 @@ async function releaseBatch(admin: any, batchId: string) {
     .eq("batch_id", batchId)
     .eq("status", "active");
   for (const item of items ?? []) {
-    await admin.from("faturas_inquilino").update({ consolidated_item_id: null })
+    await admin
+      .from("faturas_inquilino")
+      .update({ consolidated_item_id: null })
       .eq("id", item.fatura_id);
     await admin
       .from("consolidated_invoice_items")

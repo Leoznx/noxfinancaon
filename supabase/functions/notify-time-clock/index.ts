@@ -3,18 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.110.0";
 import { Resend } from "https://esm.sh/resend@3.2.0";
 import { escapeEmailHtml, renderNoxEmail } from "../_shared/email-branding.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
-
-function response(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
+import { corsHeaders, hasOversizedBody, rejectDisallowedOrigin } from "../_shared/http-security.ts";
 
 const punchLabels: Record<string, string> = {
   entrada: "Entrada",
@@ -47,8 +36,17 @@ const classificationCopy: Record<string, { subject: string; title: string; color
 };
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders(req) });
+  const response = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+    });
+  const rejected = rejectDisallowedOrigin(req);
+  if (rejected) return rejected;
   if (req.method !== "POST") return response({ ok: false, error: "Método não permitido." }, 405);
+  if (hasOversizedBody(req, 16_384))
+    return response({ ok: false, error: "Payload muito grande." }, 413);
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -75,15 +73,20 @@ serve(async (req) => {
   });
   const { data: authData, error: authError } = await admin.auth.getUser(token);
   const userId = authData?.user?.id;
-  if (authError || !userId) return response({ ok: false, error: "Sessão inválida ou expirada." }, 401);
+  if (authError || !userId)
+    return response({ ok: false, error: "Sessão inválida ou expirada." }, 401);
 
   const { data: punch, error: punchError } = await admin
     .from("time_clock_punches")
-    .select("id, auth_user_id, employee_id, work_date, punch_type, punched_at, expected_at, deviation_minutes, classification")
+    .select(
+      "id, auth_user_id, employee_id, work_date, punch_type, punched_at, expected_at, deviation_minutes, classification",
+    )
     .eq("id", punchId)
     .maybeSingle();
-  if (punchError || !punch) return response({ ok: false, error: "Registro de ponto não encontrado." }, 404);
-  if (punch.auth_user_id !== userId) return response({ ok: false, error: "Sem acesso a este registro." }, 403);
+  if (punchError || !punch)
+    return response({ ok: false, error: "Registro de ponto não encontrado." }, 404);
+  if (punch.auth_user_id !== userId)
+    return response({ ok: false, error: "Sem acesso a este registro." }, 403);
 
   const copy = classificationCopy[punch.classification];
   if (!copy) return response({ ok: true, skipped: true, reason: "Registro dentro da tolerância." });
@@ -102,7 +105,8 @@ serve(async (req) => {
     .select("full_name, email")
     .eq("id", punch.employee_id)
     .maybeSingle();
-  if (!employee?.email) return response({ ok: false, error: "E-mail do colaborador não cadastrado." }, 422);
+  if (!employee?.email)
+    return response({ ok: false, error: "E-mail do colaborador não cadastrado." }, 422);
 
   const timezone = "America/Sao_Paulo";
   const actual = new Intl.DateTimeFormat("pt-BR", {
@@ -115,18 +119,20 @@ serve(async (req) => {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(punch.expected_at));
-  const workDate = new Intl.DateTimeFormat("pt-BR", { timeZone: timezone, dateStyle: "full" }).format(
-    new Date(`${punch.work_date}T12:00:00-03:00`),
-  );
+  const workDate = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: timezone,
+    dateStyle: "full",
+  }).format(new Date(`${punch.work_date}T12:00:00-03:00`));
   const minutes = Math.abs(Number(punch.deviation_minutes || 0));
   const name = employee.full_name || "Colaborador(a)";
-  const detail = punch.classification === "adiantado"
-    ? `Você registrou ${minutes} minuto(s) antes do horário previsto. Parabéns pelo empenho!`
-    : punch.classification === "atrasado"
-      ? `A marcação ocorreu ${minutes} minuto(s) após o horário previsto.`
-      : punch.classification === "saida_antecipada"
-        ? `A marcação ocorreu ${minutes} minuto(s) antes do horário previsto.`
-        : `A marcação ocorreu ${minutes} minuto(s) após o horário previsto. O banco de horas será apurado ao completar as quatro marcações do dia.`;
+  const detail =
+    punch.classification === "adiantado"
+      ? `Você registrou ${minutes} minuto(s) antes do horário previsto. Parabéns pelo empenho!`
+      : punch.classification === "atrasado"
+        ? `A marcação ocorreu ${minutes} minuto(s) após o horário previsto.`
+        : punch.classification === "saida_antecipada"
+          ? `A marcação ocorreu ${minutes} minuto(s) antes do horário previsto.`
+          : `A marcação ocorreu ${minutes} minuto(s) após o horário previsto. O banco de horas será apurado ao completar as quatro marcações do dia.`;
 
   const html = renderNoxEmail(
     `
@@ -148,7 +154,8 @@ serve(async (req) => {
 
   const recipients = [employee.email];
   const adminEmail = (Deno.env.get("TIME_CLOCK_ADMIN_EMAIL") ?? "").trim();
-  if (adminEmail && adminEmail.toLowerCase() !== employee.email.toLowerCase()) recipients.push(adminEmail);
+  if (adminEmail && adminEmail.toLowerCase() !== employee.email.toLowerCase())
+    recipients.push(adminEmail);
 
   const resend = new Resend(resendKey);
   const { data, error } = await resend.emails.send({
@@ -171,8 +178,10 @@ serve(async (req) => {
 
   if (error) {
     console.error("[notify-time-clock] Resend", { punchId, error });
-    return response({ ok: false, error: "O ponto foi salvo, mas o e-mail não pôde ser enviado." }, 502);
+    return response(
+      { ok: false, error: "O ponto foi salvo, mas o e-mail não pôde ser enviado." },
+      502,
+    );
   }
   return response({ ok: true, id: data?.id });
 });
-

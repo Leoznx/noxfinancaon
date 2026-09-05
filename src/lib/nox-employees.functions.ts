@@ -2,12 +2,10 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { sendVerificationEmail } from "@/lib/resend.service";
-import {
-  NOX_INTERNAL_ACCOUNT_TYPES,
-  noxInternalAccounts,
-} from "@/lib/nox-internal-accounts";
+import { NOX_INTERNAL_ACCOUNT_TYPES, noxInternalAccounts } from "@/lib/nox-internal-accounts";
 import { defaultAvatarForName } from "@/lib/gender-avatar";
 import { buildAuthEmailCallbackUrl } from "@/lib/auth-email-links";
+import { enforceSecurityRateLimit } from "@/lib/security-rate-limit.server";
 
 function buildVerificationLink(properties: { hashed_token: string; verification_type: string }) {
   const appUrl =
@@ -30,35 +28,61 @@ function buildVerificationLink(properties: { hashed_token: string; verification_
 async function assertIsAdmin(supabase: any, userId: string) {
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role")
+    .select("role, status")
     .eq("id", userId)
     .maybeSingle();
   const role = (profile as any)?.role;
-  if (role !== "admin" && role !== "admin_master") {
+  const status = (profile as any)?.status;
+  if ((role !== "admin" && role !== "admin_master") || ["bloqueado", "excluido"].includes(status)) {
     throw new Error("Apenas administradores podem gerenciar contas da equipe NOX.");
   }
 }
 
 // ============================================================================
-// Público: cadastro pelo link fixo (/login/<cargo>nox) - sem convite, sem
-// token. O cargo vem da ROTA (fixo por arquivo, ver login_.vendedornox.tsx e
-// os outros 3), nunca de um campo livre do formulário - mas mesmo assim o
-// backend valida de novo contra a MESMA lista fixa de 4 cargos, porque nao da
-// pra confiar que o valor que chegou aqui realmente veio da rota certa (podia
-// ter vindo de um fetch direto pelo DevTools).
+// Público somente com convite aleatório, descartável e ainda válido.
 // ============================================================================
 
 const signUpSchema = z.object({
   accountType: z.enum(NOX_INTERNAL_ACCOUNT_TYPES as [string, ...string[]]),
+  inviteToken: z.string().regex(/^[0-9a-f]{64}$/i),
   nome: z.string().trim().min(3).max(200),
   email: z.string().email().max(255),
   telefone: z.string().min(8).max(30),
-  senha: z
-    .string()
-    .min(8)
-    .regex(/[a-zA-Z]/)
-    .regex(/[0-9]/),
+  senha: z.string().min(12).max(128).regex(/[a-z]/).regex(/[A-Z]/).regex(/[0-9]/),
 });
+
+export const createNoxEmployeeInvite = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((data: unknown) =>
+    z
+      .object({ accountType: z.enum(NOX_INTERNAL_ACCOUNT_TYPES as [string, ...string[]]) })
+      .parse(data),
+  )
+  .handler(async ({ data, context }) => {
+    await assertIsAdmin(context.supabase, context.userId);
+    await enforceSecurityRateLimit({
+      scope: "nox-invite-create",
+      identifier: context.userId,
+      limit: 30,
+      windowSeconds: 3600,
+      blockSeconds: 3600,
+    });
+    const { data: rows, error } = await (context.supabase.rpc as any)(
+      "create_nox_employee_invite",
+      {
+        p_account_type: data.accountType,
+        p_ttl_minutes: 1440,
+      },
+    );
+    const invite = Array.isArray(rows) ? rows[0] : rows;
+    if (error || !invite?.invite_token)
+      throw new Error("Não foi possível criar o convite protegido.");
+    return {
+      ok: true as const,
+      token: String(invite.invite_token),
+      expiresAt: String(invite.expires_at),
+    };
+  });
 
 export const signUpNoxEmployee = createServerFn({ method: "POST" })
   .validator((data: unknown) => signUpSchema.parse(data))
@@ -74,12 +98,41 @@ export const signUpNoxEmployee = createServerFn({ method: "POST" })
     const emailLower = data.email.toLowerCase().trim();
     const account = noxInternalAccounts[data.accountType as keyof typeof noxInternalAccounts];
 
+    await enforceSecurityRateLimit({
+      scope: "nox-employee-signup",
+      identifier: emailLower,
+      limit: 5,
+      windowSeconds: 3600,
+      blockSeconds: 3600,
+    });
+
+    const tokenHash = Array.from(
+      new Uint8Array(
+        await crypto.subtle.digest(
+          "SHA-256",
+          new TextEncoder().encode(data.inviteToken.toLowerCase()),
+        ),
+      ),
+    )
+      .map((byte) => byte.toString(16).padStart(2, "0"))
+      .join("");
+    const { data: invite } = await supabaseAdmin
+      .from("nox_employee_invites" as any)
+      .select("id, created_by")
+      .eq("token_hash", tokenHash)
+      .eq("account_type", data.accountType)
+      .is("used_at", null)
+      .is("revoked_at", null)
+      .gt("expires_at", new Date().toISOString())
+      .maybeSingle();
+    if (!invite) return { ok: false as const, error: "convite_invalido" as const };
+
     const { data: existingProfile } = await supabaseAdmin
       .from("profiles")
       .select("id")
       .ilike("email", emailLower)
       .maybeSingle();
-    if (existingProfile) return { ok: false as const, error: "email_cadastrado" as const };
+    if (existingProfile) return { ok: false as const, error: "erro" as const };
 
     const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
       type: "signup",
@@ -98,14 +151,14 @@ export const signUpNoxEmployee = createServerFn({ method: "POST" })
       return {
         ok: false as const,
         error: /already.*registered/i.test(linkError?.message || "")
-          ? ("email_cadastrado" as const)
+          ? ("erro" as const)
           : ("erro" as const),
       };
     }
 
     const userId = linkData.user.id;
 
-    await supabaseAdmin
+    const { error: profileError } = await supabaseAdmin
       .from("profiles")
       .update({ status: "ativo", nome: data.nome, telefone: data.telefone } as any)
       .eq("id", userId);
@@ -113,13 +166,13 @@ export const signUpNoxEmployee = createServerFn({ method: "POST" })
     // Foto de perfil padrão por gênero detectado no primeiro nome (mesmo padrão de
     // signUpInquilino/signUpProfissional em auth-signup.functions.ts) — sem isso, as
     // contas da equipe NOX ficavam sempre com as iniciais em vez de uma foto fixa.
-    await supabaseAdmin
+    const { error: avatarError } = await supabaseAdmin
       .from("profiles")
       .update({ avatar_url: defaultAvatarForName(data.nome) } as any)
       .eq("id", userId)
       .is("avatar_url", null);
 
-    await supabaseAdmin.from("internal_users" as any).upsert(
+    const { error: internalError } = await supabaseAdmin.from("internal_users" as any).upsert(
       {
         auth_user_id: userId,
         full_name: data.nome,
@@ -132,9 +185,28 @@ export const signUpNoxEmployee = createServerFn({ method: "POST" })
       { onConflict: "auth_user_id" },
     );
 
+    if (profileError || avatarError || internalError) {
+      await supabaseAdmin.auth.admin.deleteUser(userId);
+      return { ok: false as const, error: "erro" as const };
+    }
+
+    const { data: claimedInvite, error: claimError } = await supabaseAdmin
+      .from("nox_employee_invites" as any)
+      .update({ used_at: new Date().toISOString(), used_by: userId } as any)
+      .eq("id", (invite as any).id)
+      .is("used_at", null)
+      .is("revoked_at", null)
+      .gt("expires_at", new Date().toISOString())
+      .select("id")
+      .maybeSingle();
+    if (claimError || !claimedInvite) {
+      await supabaseAdmin.auth.admin.deleteUser(userId);
+      return { ok: false as const, error: "convite_invalido" as const };
+    }
+
     await supabaseAdmin.from("internal_audit_logs" as any).insert({
-      actor_user_id: userId,
-      actor_role: account.internalRole,
+      actor_user_id: (invite as any).created_by,
+      actor_role: "admin",
       action: "cadastro_equipe_nox",
       table_name: "internal_users",
       record_id: userId,
@@ -167,7 +239,9 @@ export const listNoxEmployees = createServerFn({ method: "POST" })
 
     const { data: rows, error } = await supabaseAdmin
       .from("internal_users" as any)
-      .select("id, auth_user_id, full_name, email, phone, role, seller_type, status, time_clock_enabled, created_at")
+      .select(
+        "id, auth_user_id, full_name, email, phone, role, seller_type, status, time_clock_enabled, created_at",
+      )
       .order("created_at", { ascending: false });
     if (error) throw new Error("Não foi possível carregar os funcionários.");
 

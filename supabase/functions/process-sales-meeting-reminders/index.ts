@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { escapeEmailHtml, renderNoxEmail } from "../_shared/email-branding.ts";
+import { hasOversizedBody, safeEqualSecret } from "../_shared/http-security.ts";
 
 type Appointment = {
   id: string;
@@ -25,9 +26,14 @@ serve(async (request) => {
   if (request.method !== "POST") {
     return Response.json({ ok: false, error: "Método não permitido." }, { status: 405 });
   }
+  if (hasOversizedBody(request, 16_384))
+    return Response.json({ ok: false, error: "Payload muito grande." }, { status: 413 });
 
   const expectedSecret = Deno.env.get("CRON_NOTIFICATIONS_SECRET") || "";
-  if (!expectedSecret || request.headers.get("x-cron-secret") !== expectedSecret) {
+  if (
+    !expectedSecret ||
+    !safeEqualSecret(request.headers.get("x-cron-secret") || "", expectedSecret)
+  ) {
     return Response.json({ ok: false, error: "Não autorizado." }, { status: 401 });
   }
 
@@ -36,7 +42,10 @@ serve(async (request) => {
   const resendKey = Deno.env.get("RESEND_API_KEY") || "";
   const from = Deno.env.get("RESEND_FROM_EMAIL") || "NOX Fiança <noreply@noxfianca.com>";
   if (!supabaseUrl || !serviceRoleKey || !resendKey) {
-    return Response.json({ ok: false, error: "Configuração de envio incompleta." }, { status: 500 });
+    return Response.json(
+      { ok: false, error: "Configuração de envio incompleta." },
+      { status: 500 },
+    );
   }
 
   const admin = createClient(supabaseUrl, serviceRoleKey, {
@@ -47,7 +56,9 @@ serve(async (request) => {
 
   const { data, error } = await admin
     .from("seller_appointments")
-    .select("id,title,scheduled_at,duration_minutes,contact_name,contact_email,contact_phone,sdr_id,assigned_closer_id")
+    .select(
+      "id,title,scheduled_at,duration_minutes,contact_name,contact_email,contact_phone,sdr_id,assigned_closer_id",
+    )
     .eq("source", "sdr_handoff")
     .in("status", ["agendado", "confirmado", "remarcado"])
     .gt("scheduled_at", now.toISOString())
@@ -60,9 +71,14 @@ serve(async (request) => {
   }
 
   const appointments = (data || []) as Appointment[];
-  const sellerIds = [...new Set(appointments.flatMap((item) => [item.sdr_id, item.assigned_closer_id]))];
+  const sellerIds = [
+    ...new Set(appointments.flatMap((item) => [item.sdr_id, item.assigned_closer_id])),
+  ];
   const { data: sellersData } = sellerIds.length
-    ? await admin.from("internal_users").select("id,auth_user_id,full_name,email").in("id", sellerIds)
+    ? await admin
+        .from("internal_users")
+        .select("id,auth_user_id,full_name,email")
+        .in("id", sellerIds)
     : { data: [] as Seller[] };
   const sellers = new Map(((sellersData || []) as Seller[]).map((seller) => [seller.id, seller]));
 
@@ -70,11 +86,15 @@ serve(async (request) => {
 
   for (const appointment of appointments) {
     const minutesUntil = (new Date(appointment.scheduled_at).getTime() - now.getTime()) / 60_000;
-    const reminder = [30, 5].find((minutes) => minutesUntil <= minutes && minutesUntil > minutes - 2);
+    const reminder = [30, 5].find(
+      (minutes) => minutesUntil <= minutes && minutesUntil > minutes - 2,
+    );
     if (!reminder) continue;
 
-    const recipients = [sellers.get(appointment.sdr_id), sellers.get(appointment.assigned_closer_id)]
-      .filter((seller): seller is Seller => Boolean(seller?.email && seller.auth_user_id));
+    const recipients = [
+      sellers.get(appointment.sdr_id),
+      sellers.get(appointment.assigned_closer_id),
+    ].filter((seller): seller is Seller => Boolean(seller?.email && seller.auth_user_id));
 
     for (const recipient of recipients) {
       const delivery = {
@@ -100,9 +120,14 @@ serve(async (request) => {
         continue;
       }
       if (claimed) {
-        await admin.from("seller_meeting_reminder_deliveries").update({
-          status: "pendente", last_error: null, updated_at: new Date().toISOString(),
-        }).eq("id", claimed.id);
+        await admin
+          .from("seller_meeting_reminder_deliveries")
+          .update({
+            status: "pendente",
+            last_error: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", claimed.id);
       } else {
         const { data: inserted, error: claimError } = await admin
           .from("seller_meeting_reminder_deliveries")
@@ -145,19 +170,26 @@ serve(async (request) => {
           body: JSON.stringify({ from, to: [recipient.email], subject, html }),
         });
         if (!response.ok) throw new Error(`Resend ${response.status}: ${await response.text()}`);
-        await admin.from("seller_meeting_reminder_deliveries").update({
-          status: "enviado",
-          sent_at: new Date().toISOString(),
-          last_error: null,
-          updated_at: new Date().toISOString(),
-        }).eq("id", claimed.id);
+        await admin
+          .from("seller_meeting_reminder_deliveries")
+          .update({
+            status: "enviado",
+            sent_at: new Date().toISOString(),
+            last_error: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", claimed.id);
         report.sent += 1;
       } catch (sendError) {
-        await admin.from("seller_meeting_reminder_deliveries").update({
-          status: "erro",
-          last_error: sendError instanceof Error ? sendError.message.slice(0, 1000) : "Falha desconhecida",
-          updated_at: new Date().toISOString(),
-        }).eq("id", claimed.id);
+        await admin
+          .from("seller_meeting_reminder_deliveries")
+          .update({
+            status: "erro",
+            last_error:
+              sendError instanceof Error ? sendError.message.slice(0, 1000) : "Falha desconhecida",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", claimed.id);
         report.errors += 1;
       }
     }

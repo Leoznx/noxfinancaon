@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { useNavigate } from "@tanstack/react-router";
 import { UserRound, Building2, Users } from "lucide-react";
 import { buildAppUrl } from "@/lib/app-url";
+import { senhaAtendeRequisitos } from "@/lib/senha";
 
 interface IdentificacaoModalProps {
   open: boolean;
@@ -63,6 +64,10 @@ export function IdentificacaoModal({ open, onOpenChange, onSuccess }: Identifica
     e.preventDefault();
     if (!regTermos) {
       toast.error("Você deve aceitar os termos");
+      return;
+    }
+    if (!senhaAtendeRequisitos(regSenha)) {
+      toast.error("Use de 12 a 128 caracteres, com letras maiúsculas, minúsculas e número.");
       return;
     }
     setLoading(true);
@@ -243,7 +248,7 @@ export function IdentificacaoModal({ open, onOpenChange, onSuccess }: Identifica
 
                 <div className="space-y-2">
                   <Label className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">
-                    Senha (mínimo 8 caracteres)
+                    Senha (mínimo 12 caracteres)
                   </Label>
                   <Input
                     type="password"

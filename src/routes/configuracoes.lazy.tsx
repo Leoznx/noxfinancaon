@@ -639,10 +639,7 @@ function TabConta() {
 
   return (
     <div className="space-y-6">
-      <CardSecao
-        titulo="Dados da Conta"
-        descricao="Acesso à plataforma e identificação."
-      >
+      <CardSecao titulo="Dados da Conta" descricao="Acesso à plataforma e identificação.">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-1.5">
             <label className="text-xs font-black uppercase tracking-widest text-neutral-500 ml-1">
@@ -1181,8 +1178,14 @@ function TabSeguranca() {
       toast.error("Sessão expirada. Faça login novamente.");
       return;
     }
-    if (novaSenha.length < 8) {
-      toast.error("A nova senha deve ter no mínimo 8 caracteres.");
+    if (
+      novaSenha.length < 12 ||
+      novaSenha.length > 128 ||
+      !/[a-z]/.test(novaSenha) ||
+      !/[A-Z]/.test(novaSenha) ||
+      !/[0-9]/.test(novaSenha)
+    ) {
+      toast.error("Use de 12 a 128 caracteres, com letras maiúsculas, minúsculas e número.");
       return;
     }
     if (novaSenha !== confirmarSenha) {
@@ -1254,7 +1257,7 @@ function TabSeguranca() {
             </label>
             <Input
               type="password"
-              placeholder="Mínimo 8 caracteres"
+              placeholder="Mínimo 12 caracteres"
               className="h-12 rounded-xl"
               value={novaSenha}
               onChange={(e) => setNovaSenha(e.target.value)}

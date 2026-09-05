@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 import { renderNoxEmail } from "./email-branding.ts";
 import { sendZApiText } from "./zapi.ts";
+import { corsHeaders as secureCorsHeaders } from "./http-security.ts";
 
 export type PaymentMethod = "pix" | "boleto" | "credit_card";
 export type FireMode = "avista" | "embutido";
@@ -14,29 +15,7 @@ export function env(name: string) {
 }
 
 export function corsHeaders(req: Request) {
-  // Reflete a origem de quem chamou em vez de comparar contra uma lista fixa de
-  // domínios (ALLOWED_ORIGINS/FRONTEND_URL). Essa lista ficava dessincronizada
-  // toda vez que o site passava a responder em um domínio que não estava nela
-  // (preview da Vercel, domínio customizado ainda não propagado, etc.): a
-  // função respondia normalmente, mas devolvia Access-Control-Allow-Origin com
-  // OUTRO domínio (o allowed[0]) — o navegador então bloqueia a resposta por não
-  // bater com a página de origem, e isso chega no usuário como "Failed to send
-  // a request to the Edge Function", mesmo com a function funcionando
-  // perfeitamente no servidor (o pagamento às vezes chegava a ser criado no
-  // Asaas, só a resposta nunca voltava pra tela).
-  // Nenhuma dessas funções confia em cookie/sessão implícita — todas exigem um
-  // Bearer token válido (requireUser) ou o token de webhook próprio — então
-  // refletir a origem não abre brecha nenhuma: quem não tiver credencial válida
-  // continua barrado dentro da função: só a resposta deixa de ser descartada
-  // pelo navegador antes mesmo de chegar no código.
-  const origin = req.headers.get("origin");
-  return {
-    "Access-Control-Allow-Origin": origin || "*",
-    "Access-Control-Allow-Headers":
-      "authorization, x-client-info, apikey, content-type, asaas-access-token",
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    Vary: "Origin",
-  };
+  return secureCorsHeaders(req, ", asaas-access-token");
 }
 
 export function jsonResponse(req: Request, body: JsonBody, status = 200) {
@@ -108,7 +87,11 @@ export function describePaymentError(error: unknown, fallback: string): string {
 
   // Erros de validacao que a propria aplicacao levanta (ex.: ensureAsaasCustomer
   // pedindo nome/e-mail/telefone/CPF) ja vem com texto pronto pro usuario.
-  if (error instanceof Error && error.message.trim() && !/^Missing environment variable/.test(error.message)) {
+  if (
+    error instanceof Error &&
+    error.message.trim() &&
+    !/^Missing environment variable/.test(error.message)
+  ) {
     return error.message.trim();
   }
   return fallback;
@@ -329,7 +312,9 @@ export type PaymentRecipient = {
 };
 
 export function resolvePaymentRecipient(consulta: any): PaymentRecipient {
-  const isAgency = consulta?.payment_type === "imobiliaria" || consulta?.billing_responsible_role === "imobiliaria";
+  const isAgency =
+    consulta?.payment_type === "imobiliaria" ||
+    consulta?.billing_responsible_role === "imobiliaria";
 
   if (isAgency) {
     const responsavel = consulta?.responsavel_profile;
@@ -371,11 +356,22 @@ export async function refetchPixQrCode(supabase: any, localPayment: any) {
 
     const { data: atualizado } = await supabase
       .from("asaas_payments")
-      .update({ pix_qr_code: pixQrCode, pix_copy_paste: pixCopyPaste, pix_expires_at: pixExpiresAt })
+      .update({
+        pix_qr_code: pixQrCode,
+        pix_copy_paste: pixCopyPaste,
+        pix_expires_at: pixExpiresAt,
+      })
       .eq("id", localPayment.id)
       .select()
       .maybeSingle();
-    return atualizado || { ...localPayment, pix_qr_code: pixQrCode, pix_copy_paste: pixCopyPaste, pix_expires_at: pixExpiresAt };
+    return (
+      atualizado || {
+        ...localPayment,
+        pix_qr_code: pixQrCode,
+        pix_copy_paste: pixCopyPaste,
+        pix_expires_at: pixExpiresAt,
+      }
+    );
   } catch (error) {
     console.error("[asaas] retry QR Pix falhou", {
       paymentId: localPayment.asaas_payment_id,
@@ -414,7 +410,9 @@ export async function sendPaymentEmail(params: {
     params.metodo === "pix" ? "Pix" : params.metodo === "boleto" ? "Boleto" : "Cartão de crédito";
 
   const assunto =
-    params.tipo === "criado" ? "Pagamento gerado — NOX Fiança" : "Pagamento confirmado — NOX Fiança";
+    params.tipo === "criado"
+      ? "Pagamento gerado — NOX Fiança"
+      : "Pagamento confirmado — NOX Fiança";
 
   const conteudo =
     params.tipo === "criado"
@@ -463,7 +461,10 @@ export async function sendPaymentEmail(params: {
     });
     if (!res.ok) {
       const text = await res.text();
-      console.error("[asaas] falha ao enviar e-mail de pagamento", { status: res.status, text: text.slice(0, 300) });
+      console.error("[asaas] falha ao enviar e-mail de pagamento", {
+        status: res.status,
+        text: text.slice(0, 300),
+      });
       return { sent: false, reason: "provider_error" };
     }
     return { sent: true };
@@ -532,14 +533,12 @@ export async function sendPaymentSms(params: { to: string; mensagem: string }) {
   const apiKey = Deno.env.get("SMS_API_KEY");
   const providerUrl = Deno.env.get("SMS_PROVIDER_URL");
   const digits = String(params.to || "").replace(/\D/g, "");
-  const normalizedPhone = digits
-    ? digits.startsWith("55")
-      ? `+${digits}`
-      : `+55${digits}`
-    : "";
+  const normalizedPhone = digits ? (digits.startsWith("55") ? `+${digits}` : `+55${digits}`) : "";
 
   if (!apiKey || !providerUrl) {
-    console.error("[asaas] SMS nao enviado: provedor de SMS nao configurado (SMS_API_KEY/SMS_PROVIDER_URL ausentes)");
+    console.error(
+      "[asaas] SMS nao enviado: provedor de SMS nao configurado (SMS_API_KEY/SMS_PROVIDER_URL ausentes)",
+    );
     return { sent: false, reason: "not_configured" };
   }
   if (!normalizedPhone || digits.length < 10) {
@@ -583,8 +582,18 @@ function maskPhone(phone?: string | null) {
 }
 
 export const MESES_PT = [
-  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+  "Janeiro",
+  "Fevereiro",
+  "Março",
+  "Abril",
+  "Maio",
+  "Junho",
+  "Julho",
+  "Agosto",
+  "Setembro",
+  "Outubro",
+  "Novembro",
+  "Dezembro",
 ];
 
 // "2026-07-15" -> "Julho de 2026" - usado em e-mails de confirmacao de
@@ -722,7 +731,10 @@ export async function sendInstallmentScheduleEmail(params: {
     });
     if (!res.ok) {
       const text = await res.text();
-      console.error("[asaas] falha ao enviar e-mail de cronograma", { status: res.status, text: text.slice(0, 300) });
+      console.error("[asaas] falha ao enviar e-mail de cronograma", {
+        status: res.status,
+        text: text.slice(0, 300),
+      });
       return { sent: false, reason: "provider_error" };
     }
     return { sent: true };
@@ -760,7 +772,12 @@ export async function sendPaymentWhatsapp(params: { to: string; mensagem: string
 // sobre a mesma janela ja processada.
 export async function wasNotificationSent(
   supabase: any,
-  params: { invoiceId?: string | null; batchId?: string | null; channel: "email" | "sms" | "whatsapp"; notificationType: string },
+  params: {
+    invoiceId?: string | null;
+    batchId?: string | null;
+    channel: "email" | "sms" | "whatsapp";
+    notificationType: string;
+  },
 ) {
   let query = supabase
     .from("financial_notifications")
@@ -768,7 +785,9 @@ export async function wasNotificationSent(
     .eq("channel", params.channel)
     .eq("notification_type", params.notificationType)
     .eq("status", "sent");
-  query = params.invoiceId ? query.eq("invoice_id", params.invoiceId) : query.eq("batch_id", params.batchId);
+  query = params.invoiceId
+    ? query.eq("invoice_id", params.invoiceId)
+    : query.eq("batch_id", params.batchId);
   const { data } = await query.maybeSingle();
   return !!data;
 }
@@ -795,7 +814,11 @@ export async function logFinancialNotification(
     : existingQuery.eq("batch_id", params.batchId);
   const { data: existing } = await existingQuery.maybeSingle();
 
-  const status = params.result.sent ? "sent" : params.result.reason === "not_configured" ? "not_configured" : "failed";
+  const status = params.result.sent
+    ? "sent"
+    : params.result.reason === "not_configured"
+      ? "not_configured"
+      : "failed";
   const { error } = await supabase.from("financial_notifications").upsert(
     {
       invoice_id: params.invoiceId || null,
@@ -810,16 +833,23 @@ export async function logFinancialNotification(
       provider_message_id: params.result.providerMessageId || null,
       sent_at: params.result.sent ? new Date().toISOString() : null,
     },
-    { onConflict: params.invoiceId ? "invoice_id,channel,notification_type" : "batch_id,channel,notification_type" },
+    {
+      onConflict: params.invoiceId
+        ? "invoice_id,channel,notification_type"
+        : "batch_id,channel,notification_type",
+    },
   );
   if (error) {
-    console.error("[asaas] falha ao registrar financial_notifications (idempotencia pode nao ter sido salva)", {
-      invoiceId: params.invoiceId,
-      batchId: params.batchId,
-      channel: params.channel,
-      notificationType: params.notificationType,
-      error: error.message,
-    });
+    console.error(
+      "[asaas] falha ao registrar financial_notifications (idempotencia pode nao ter sido salva)",
+      {
+        invoiceId: params.invoiceId,
+        batchId: params.batchId,
+        channel: params.channel,
+        notificationType: params.notificationType,
+        error: error.message,
+      },
+    );
   }
 }
 

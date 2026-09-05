@@ -13,11 +13,19 @@ import { noxInternalAccounts, type NoxInternalAccountType } from "@/lib/nox-inte
 
 const ERRO_MENSAGEM: Record<string, string> = {
   invalido: "Verifique os dados informados e tente novamente.",
+  convite_invalido:
+    "Este convite é inválido, expirou ou já foi utilizado. Solicite um novo link ao administrador.",
   email_cadastrado: "Já existe uma conta cadastrada com este e-mail.",
   erro: "Não foi possível criar sua conta. Tente novamente.",
 };
 
-export function NoxEmployeeSignup({ accountType }: { accountType: NoxInternalAccountType }) {
+export function NoxEmployeeSignup({
+  accountType,
+  inviteToken,
+}: {
+  accountType: NoxInternalAccountType;
+  inviteToken?: string;
+}) {
   const signUpFn = useServerFn(signUpNoxEmployee);
   const conta = noxInternalAccounts[accountType];
 
@@ -33,6 +41,9 @@ export function NoxEmployeeSignup({ accountType }: { accountType: NoxInternalAcc
 
   const validar = () => {
     const novos: Record<string, string> = {};
+    if (!inviteToken || !/^[0-9a-f]{64}$/i.test(inviteToken)) {
+      novos.convite = ERRO_MENSAGEM.convite_invalido;
+    }
     const nomeNormalizado = nome.trim().replace(/\s+/g, " ");
     if (nomeNormalizado.length < 3) {
       novos.nome = "Informe seu nome completo.";
@@ -43,8 +54,14 @@ export function NoxEmployeeSignup({ accountType }: { accountType: NoxInternalAcc
     if (telefone.replace(/\D/g, "").length < 10) {
       novos.telefone = "Telefone inválido.";
     }
-    if (senha.length < 8 || !/[a-zA-Z]/.test(senha) || !/[0-9]/.test(senha)) {
-      novos.senha = "Mínimo 8 caracteres, com pelo menos 1 letra e 1 número.";
+    if (
+      senha.length < 12 ||
+      senha.length > 128 ||
+      !/[a-z]/.test(senha) ||
+      !/[A-Z]/.test(senha) ||
+      !/[0-9]/.test(senha)
+    ) {
+      novos.senha = "Use 12 caracteres ou mais, com letras maiúsculas, minúsculas e número.";
     }
     if (confirmarSenha !== senha) {
       novos.confirmarSenha = "As senhas informadas não são iguais.";
@@ -63,7 +80,14 @@ export function NoxEmployeeSignup({ accountType }: { accountType: NoxInternalAcc
       const nomeNormalizado = nome.trim().replace(/\s+/g, " ");
       const emailLower = email.toLowerCase().trim();
       const result = await signUpFn({
-        data: { accountType, nome: nomeNormalizado, email: emailLower, telefone, senha },
+        data: {
+          accountType,
+          inviteToken: inviteToken!,
+          nome: nomeNormalizado,
+          email: emailLower,
+          telefone,
+          senha,
+        },
       });
       if (!result.ok) {
         toast.error(ERRO_MENSAGEM[result.error] || ERRO_MENSAGEM.erro);
@@ -87,10 +111,13 @@ export function NoxEmployeeSignup({ accountType }: { accountType: NoxInternalAcc
         <h1 className="text-3xl font-bold text-neutral-900 mb-4">Confirme seu e-mail</h1>
         <div className="max-w-md text-neutral-600 space-y-4 mb-10">
           <p>
-            Sua conta foi criada. Verifique seu e-mail para confirmar o cadastro e acessar a plataforma — enviamos um
-            link de confirmação para <strong className="text-neutral-900">{sucesso}</strong>.
+            Sua conta foi criada. Verifique seu e-mail para confirmar o cadastro e acessar a
+            plataforma — enviamos um link de confirmação para{" "}
+            <strong className="text-neutral-900">{sucesso}</strong>.
           </p>
-          <p className="text-sm italic">Não recebeu? Confira a caixa de spam ou tente novamente em alguns minutos.</p>
+          <p className="text-sm italic">
+            Não recebeu? Confira a caixa de spam ou tente novamente em alguns minutos.
+          </p>
         </div>
         <Link to="/login">
           <Button variant="outline">Ir para o login</Button>
@@ -105,7 +132,10 @@ export function NoxEmployeeSignup({ accountType }: { accountType: NoxInternalAcc
         <Link to="/" className="flex items-center gap-3">
           <LogoNox variant="claro" size="sm" />
         </Link>
-        <Link to="/login" className="text-sm font-black text-neutral-900 hover:text-yellow-600 transition-colors">
+        <Link
+          to="/login"
+          className="text-sm font-black text-neutral-900 hover:text-yellow-600 transition-colors"
+        >
           Já tenho conta
         </Link>
       </header>
@@ -115,22 +145,38 @@ export function NoxEmployeeSignup({ accountType }: { accountType: NoxInternalAcc
           <div className="p-6 pb-0">
             <div className="inline-flex items-center gap-2 bg-neutral-900 text-yellow-400 rounded-full px-3 py-1 mb-4">
               <ShieldCheck size={14} />
-              <span className="text-[10px] font-black uppercase tracking-widest">{conta.badge}</span>
+              <span className="text-[10px] font-black uppercase tracking-widest">
+                {conta.badge}
+              </span>
             </div>
             <h1 className="text-xl font-bold text-neutral-900">{conta.formTitle}</h1>
             <p className="text-sm text-neutral-500 mt-1">{conta.formDescription}</p>
           </div>
 
           <form onSubmit={onSubmit} className="p-6 space-y-4">
+            {(!inviteToken || erros.convite) && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                {erros.convite || ERRO_MENSAGEM.convite_invalido}
+              </div>
+            )}
             <div className="space-y-1">
               <Label className="text-xs font-medium text-neutral-700">Nome completo</Label>
-              <Input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Seu nome completo" />
+              <Input
+                value={nome}
+                onChange={(e) => setNome(e.target.value)}
+                placeholder="Seu nome completo"
+              />
               {erros.nome && <p className="text-[10px] text-red-500">{erros.nome}</p>}
             </div>
 
             <div className="space-y-1">
               <Label className="text-xs font-medium text-neutral-700">E-mail</Label>
-              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="seuemail@email.com" />
+              <Input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="seuemail@email.com"
+              />
               {erros.email && <p className="text-[10px] text-red-500">{erros.email}</p>}
             </div>
 
@@ -173,14 +219,18 @@ export function NoxEmployeeSignup({ accountType }: { accountType: NoxInternalAcc
                 onChange={(e) => setConfirmarSenha(e.target.value)}
                 placeholder="••••••••"
               />
-              {erros.confirmarSenha && <p className="text-[10px] text-red-500">{erros.confirmarSenha}</p>}
+              {erros.confirmarSenha && (
+                <p className="text-[10px] text-red-500">{erros.confirmarSenha}</p>
+              )}
             </div>
 
-            <p className="text-[10px] text-neutral-500">Mínimo 8 caracteres, com pelo menos 1 letra e 1 número.</p>
+            <p className="text-[10px] text-neutral-500">
+              Use 12 caracteres ou mais, com letras maiúsculas, minúsculas e número.
+            </p>
 
             <Button
               type="submit"
-              disabled={enviando}
+              disabled={enviando || !inviteToken}
               className="w-full bg-neutral-900 hover:bg-neutral-800 text-white font-bold rounded-lg h-11 flex items-center justify-center gap-2"
             >
               {enviando ? "Criando conta..." : "Criar minha conta NOX"}

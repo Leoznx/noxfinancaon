@@ -1,22 +1,15 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 import { resolveProvider, MockCredPagoProvider, type ICreditoProvider } from "./provider.ts";
-import type { ResultadoSimulacaoCredito, SimulateCredPagoRequest, SimulateCredPagoResponse } from "./types.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import type {
+  ResultadoSimulacaoCredito,
+  SimulateCredPagoRequest,
+  SimulateCredPagoResponse,
+} from "./types.ts";
+import { corsHeaders, hasOversizedBody, rejectDisallowedOrigin } from "../_shared/http-security.ts";
 
 // Quem pode disparar/registrar uma simulação de crédito.
 const ALLOWED_ROLES = ["corretor", "imobiliaria", "admin", "analista"];
-
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
 
 async function persistirResultado(
   supabaseAdmin: ReturnType<typeof createClient>,
@@ -40,7 +33,13 @@ async function persistirResultado(
     ? consultaAtual.external_history
     : [];
   const novoHistorico = consultaAtual?.automacao_credpago_resultado
-    ? [...historicoAnterior, { substituidoEm: new Date().toISOString(), resultado: consultaAtual.automacao_credpago_resultado }]
+    ? [
+        ...historicoAnterior,
+        {
+          substituidoEm: new Date().toISOString(),
+          resultado: consultaAtual.automacao_credpago_resultado,
+        },
+      ]
     : historicoAnterior;
 
   const { error } = await supabaseAdmin
@@ -89,8 +88,18 @@ async function registrarAuditoria(
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: corsHeaders(req) });
   }
+  const json = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+    });
+  const rejected = rejectDisallowedOrigin(req);
+  if (rejected) return rejected;
+  if (req.method !== "POST") return json({ ok: false, error: "Método não permitido." }, 405);
+  if (hasOversizedBody(req, 256_000))
+    return json({ ok: false, error: "Payload muito grande." }, 413);
 
   try {
     const authHeader = req.headers.get("Authorization") ?? "";
@@ -107,7 +116,10 @@ serve(async (req) => {
     } = await supabaseUser.auth.getUser();
 
     if (!authUser) {
-      return json({ ok: false, error: "Não autenticado." } satisfies Partial<SimulateCredPagoResponse>, 401);
+      return json(
+        { ok: false, error: "Não autenticado." } satisfies Partial<SimulateCredPagoResponse>,
+        401,
+      );
     }
 
     // Cliente com service role — usado só depois de confirmar quem é o usuário acima.
@@ -146,7 +158,8 @@ serve(async (req) => {
       return json({ ok: false, error: "Consulta não encontrada." }, 404);
     }
 
-    const provider: ICreditoProvider = action === "mock" ? new MockCredPagoProvider() : resolveProvider();
+    const provider: ICreditoProvider =
+      action === "mock" ? new MockCredPagoProvider() : resolveProvider();
 
     if (action === "iniciar" || action === "mock") {
       if (!body.input) {
@@ -160,50 +173,87 @@ serve(async (req) => {
         .update({
           external_provider: "credpago",
           sent_to_provider_at: new Date().toISOString(),
-          automacao_credpago_status: action === "mock" ? "mock_iniciado" : "aguardando_registro_manual",
+          automacao_credpago_status:
+            action === "mock" ? "mock_iniciado" : "aguardando_registro_manual",
         })
         .eq("id", consultaId);
 
-      await registrarAuditoria(supabaseAdmin, authUser.id, "simulacao_credpago_iniciada", consultaId, {
-        action,
-        tenantDocument: body.input.tenantDocument,
-      });
+      await registrarAuditoria(
+        supabaseAdmin,
+        authUser.id,
+        "simulacao_credpago_iniciada",
+        consultaId,
+        {
+          action,
+          tenantDocument: body.input.tenantDocument,
+        },
+      );
 
       if (action === "mock") {
         const resultado = await provider.registrarResultado({});
         await persistirResultado(supabaseAdmin, consultaId, consulta, resultado);
-        await registrarAuditoria(supabaseAdmin, authUser.id, "simulacao_credpago_resultado_mock", consultaId, {
-          status: resultado.status,
-        });
+        await registrarAuditoria(
+          supabaseAdmin,
+          authUser.id,
+          "simulacao_credpago_resultado_mock",
+          consultaId,
+          {
+            status: resultado.status,
+          },
+        );
         return json({ ok: true, modo: "mock", resultado } satisfies SimulateCredPagoResponse);
       }
 
-      return json({ ok: true, modo: "manual_assistido", portalUrl, instrucoes } satisfies SimulateCredPagoResponse);
+      return json({
+        ok: true,
+        modo: "manual_assistido",
+        portalUrl,
+        instrucoes,
+      } satisfies SimulateCredPagoResponse);
     }
 
     // action === "registrar-resultado"
     if (!body.respostaColada) {
-      return json({ ok: false, error: "Cole o retorno da CredPago para registrar o resultado." }, 400);
+      return json(
+        { ok: false, error: "Cole o retorno da CredPago para registrar o resultado." },
+        400,
+      );
     }
 
     let resultado: ResultadoSimulacaoCredito;
     try {
       resultado = await provider.registrarResultado(body.respostaColada);
     } catch (validationError: any) {
-      await registrarAuditoria(supabaseAdmin, authUser.id, "simulacao_credpago_registro_invalido", consultaId, {
-        error: validationError.message,
-      });
+      await registrarAuditoria(
+        supabaseAdmin,
+        authUser.id,
+        "simulacao_credpago_registro_invalido",
+        consultaId,
+        {
+          error: validationError.message,
+        },
+      );
       return json({ ok: false, error: validationError.message }, 422);
     }
 
     await persistirResultado(supabaseAdmin, consultaId, consulta, resultado);
 
-    await registrarAuditoria(supabaseAdmin, authUser.id, "simulacao_credpago_resultado_registrado", consultaId, {
-      status: resultado.status,
-      protocolo: resultado.protocolo,
-    });
+    await registrarAuditoria(
+      supabaseAdmin,
+      authUser.id,
+      "simulacao_credpago_resultado_registrado",
+      consultaId,
+      {
+        status: resultado.status,
+        protocolo: resultado.protocolo,
+      },
+    );
 
-    return json({ ok: true, modo: "manual_assistido", resultado } satisfies SimulateCredPagoResponse);
+    return json({
+      ok: true,
+      modo: "manual_assistido",
+      resultado,
+    } satisfies SimulateCredPagoResponse);
   } catch (error: any) {
     console.error("Erro na function simulate-credpago:", error);
     return json({ ok: false, error: error.message ?? "Erro inesperado." }, 500);

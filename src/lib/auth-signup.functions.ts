@@ -4,9 +4,14 @@ import { sendVerificationEmail } from "@/lib/resend.service";
 import { linkTenantRecordsByCpf } from "@/lib/inquilino-signup.functions";
 import { defaultAvatarForName } from "@/lib/gender-avatar";
 import { buildAuthEmailCallbackUrl } from "@/lib/auth-email-links";
+import { enforceSecurityRateLimit } from "@/lib/security-rate-limit.server";
 
 function buildVerificationLink(properties: { hashed_token: string; verification_type: string }) {
-  const appUrl = process.env.APP_URL || process.env.APP_BASE_URL || process.env.FRONTEND_URL || "https://noxfianca.com";
+  const appUrl =
+    process.env.APP_URL ||
+    process.env.APP_BASE_URL ||
+    process.env.FRONTEND_URL ||
+    "https://noxfianca.com";
   return buildAuthEmailCallbackUrl({
     appUrl,
     path: "/email-verificado",
@@ -16,13 +21,15 @@ function buildVerificationLink(properties: { hashed_token: string; verification_
 }
 
 async function emailAlreadyRegistered(supabaseAdmin: any, email: string) {
-  const { data } = await supabaseAdmin.from("profiles").select("id").ilike("email", email).maybeSingle();
+  const { data } = await supabaseAdmin
+    .from("profiles")
+    .select("id")
+    .ilike("email", email)
+    .maybeSingle();
   return !!data;
 }
 
-function isAlreadyRegisteredError(message: string | undefined) {
-  return /already.*registered/i.test(message || "");
-}
+const passwordSchema = z.string().min(12).max(128).regex(/[a-z]/).regex(/[A-Z]/).regex(/[0-9]/);
 
 // ============================================================================
 // Inquilino
@@ -33,7 +40,7 @@ const inquilinoSchema = z.object({
   cpf: z.string().min(11).max(20),
   email: z.string().email(),
   telefone: z.string().min(8),
-  senha: z.string().min(8),
+  senha: passwordSchema,
 });
 
 export const signUpInquilino = createServerFn({ method: "POST" })
@@ -42,13 +49,24 @@ export const signUpInquilino = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const cpfNorm = data.cpf.replace(/\D/g, "");
     const emailLower = data.email.toLowerCase().trim();
+    await enforceSecurityRateLimit({
+      scope: "signup-tenant",
+      identifier: emailLower,
+      limit: 5,
+      windowSeconds: 3600,
+      blockSeconds: 3600,
+    });
 
     if (await emailAlreadyRegistered(supabaseAdmin, emailLower)) {
-      return { ok: false as const, error: "ja_existe" as const };
+      return { ok: false as const, error: "erro" as const };
     }
-    const { data: byCpf } = await supabaseAdmin.from("inquilinos").select("id, profile_id").eq("cpf", cpfNorm).maybeSingle();
+    const { data: byCpf } = await supabaseAdmin
+      .from("inquilinos")
+      .select("id, profile_id")
+      .eq("cpf", cpfNorm)
+      .maybeSingle();
     if ((byCpf as any)?.profile_id) {
-      return { ok: false as const, error: "ja_existe" as const };
+      return { ok: false as const, error: "erro" as const };
     }
 
     const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
@@ -63,7 +81,7 @@ export const signUpInquilino = createServerFn({ method: "POST" })
     if (linkError || !linkData?.user) {
       return {
         ok: false as const,
-        error: isAlreadyRegisteredError(linkError?.message) ? ("ja_existe" as const) : ("erro" as const),
+        error: "erro" as const,
       };
     }
 
@@ -88,9 +106,11 @@ export const signUpInquilino = createServerFn({ method: "POST" })
       .eq("id", userId)
       .is("avatar_url", null);
 
-    await supabaseAdmin.from("inquilinos").upsert({ profile_id: userId, nome: data.nome, cpf: cpfNorm, tipo: "PF" } as any, {
-      onConflict: "cpf",
-    });
+    await supabaseAdmin
+      .from("inquilinos")
+      .upsert({ profile_id: userId, nome: data.nome, cpf: cpfNorm, tipo: "PF" } as any, {
+        onConflict: "cpf",
+      });
 
     const { linkedConsultas } = await linkTenantRecordsByCpf(supabaseAdmin, userId, cpfNorm);
 
@@ -116,7 +136,7 @@ const profissionalSchema = z
   .object({
     role: z.enum(["imobiliaria", "corretor", "proprietario"]),
     email: z.string().email(),
-    senha: z.string().min(8),
+    senha: passwordSchema,
     telefone: z.string().min(8),
     // Imobiliária
     razaoSocial: z.string().optional(),
@@ -141,7 +161,11 @@ const profissionalSchema = z
     estado: z.string().optional(),
   })
   .superRefine((data, ctx) => {
-    if (data.role === "corretor" && data.vinculadoImobiliaria && !data.imobiliariaIdentificador?.trim()) {
+    if (
+      data.role === "corretor" &&
+      data.vinculadoImobiliaria &&
+      !data.imobiliariaIdentificador?.trim()
+    ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["imobiliariaIdentificador"],
@@ -156,9 +180,16 @@ export const signUpProfissional = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const emailLower = data.email.toLowerCase().trim();
     const cpfCorretor = data.role === "corretor" ? (data.cpf || "").replace(/\D/g, "") : undefined;
+    await enforceSecurityRateLimit({
+      scope: "signup-professional",
+      identifier: emailLower,
+      limit: 5,
+      windowSeconds: 3600,
+      blockSeconds: 3600,
+    });
 
     if (await emailAlreadyRegistered(supabaseAdmin, emailLower)) {
-      return { ok: false as const, error: "ja_existe" as const };
+      return { ok: false as const, error: "erro" as const };
     }
 
     // Vinculado por CNPJ ou e-mail de contato (nunca por id vindo do cliente —
@@ -170,14 +201,18 @@ export const signUpProfissional = createServerFn({ method: "POST" })
       const isEmail = identificador.includes("@");
       const digitosIdentificador = identificador.replace(/\D/g, "");
 
-      const { data: candidatas, error: imobiliariaError } = await supabaseAdmin.from("imobiliarias").select("id, cnpj, contato_email");
+      const { data: candidatas, error: imobiliariaError } = await supabaseAdmin
+        .from("imobiliarias")
+        .select("id, cnpj, contato_email");
       if (imobiliariaError) {
         return { ok: false as const, error: "imobiliaria_nao_encontrada" as const };
       }
-      const encontrada = (candidatas ?? []).find((imob: { id: string; cnpj: string | null; contato_email: string | null }) =>
-        isEmail
-          ? String(imob.contato_email || "").toLowerCase() === identificador.toLowerCase()
-          : !!digitosIdentificador && String(imob.cnpj || "").replace(/\D/g, "") === digitosIdentificador,
+      const encontrada = (candidatas ?? []).find(
+        (imob: { id: string; cnpj: string | null; contato_email: string | null }) =>
+          isEmail
+            ? String(imob.contato_email || "").toLowerCase() === identificador.toLowerCase()
+            : !!digitosIdentificador &&
+              String(imob.cnpj || "").replace(/\D/g, "") === digitosIdentificador,
       );
       if (!encontrada) {
         return { ok: false as const, error: "imobiliaria_nao_encontrada" as const };
@@ -211,7 +246,7 @@ export const signUpProfissional = createServerFn({ method: "POST" })
     if (linkError || !linkData?.user) {
       return {
         ok: false as const,
-        error: isAlreadyRegisteredError(linkError?.message) ? ("ja_existe" as const) : ("erro" as const),
+        error: "erro" as const,
       };
     }
 
@@ -304,7 +339,18 @@ export const resendVerificationEmail = createServerFn({ method: "POST" })
     const emailLower = data.email.toLowerCase().trim();
 
     try {
-      const { data: profile } = await supabaseAdmin.from("profiles").select("id, nome").ilike("email", emailLower).maybeSingle();
+      await enforceSecurityRateLimit({
+        scope: "resend-verification",
+        identifier: emailLower,
+        limit: 5,
+        windowSeconds: 3600,
+        blockSeconds: 3600,
+      });
+      const { data: profile } = await supabaseAdmin
+        .from("profiles")
+        .select("id, nome")
+        .ilike("email", emailLower)
+        .maybeSingle();
       if (!profile) return { ok: true as const };
 
       const { data: authUser } = await supabaseAdmin.auth.admin.getUserById((profile as any).id);
@@ -318,7 +364,9 @@ export const resendVerificationEmail = createServerFn({ method: "POST" })
         .gte("sent_at", new Date(now - 60 * 60 * 1000).toISOString());
 
       const sends = (recentSends ?? []) as { sent_at: string }[];
-      const lastSentTooRecently = sends.some((s) => now - new Date(s.sent_at).getTime() < RESEND_MIN_INTERVAL_MS);
+      const lastSentTooRecently = sends.some(
+        (s) => now - new Date(s.sent_at).getTime() < RESEND_MIN_INTERVAL_MS,
+      );
       if (lastSentTooRecently || sends.length >= RESEND_MAX_PER_HOUR) {
         return { ok: true as const };
       }
@@ -337,7 +385,9 @@ export const resendVerificationEmail = createServerFn({ method: "POST" })
 
       await supabaseAdmin.from("email_verification_sends").insert({ email: emailLower } as any);
     } catch (e) {
-      console.error("[resendVerificationEmail] erro inesperado:", e);
+      console.error("[resendVerificationEmail] operação não concluída", {
+        name: e instanceof Error ? e.name : "unknown",
+      });
     }
 
     return { ok: true as const };

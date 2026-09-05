@@ -1,10 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { corsHeaders, hasOversizedBody, rejectDisallowedOrigin } from "../_shared/http-security.ts";
 
 type PaymentMethod = "pix" | "boleto" | "credit_card";
 type FireMode = "avista" | "embutido";
@@ -38,10 +34,10 @@ class CaktoApiError extends Error {
   }
 }
 
-function jsonResponse(body: Record<string, unknown>, status = 200) {
+function jsonResponse(req: Request, body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: { ...corsHeaders(req), "Content-Type": "application/json" },
   });
 }
 
@@ -52,7 +48,11 @@ function env(name: string) {
 }
 
 function caktoBaseUrl() {
-  return Deno.env.get("CAKTO_API_BASE_URL") || Deno.env.get("CAKTO_BASE_URL") || "https://api.cakto.com.br";
+  return (
+    Deno.env.get("CAKTO_API_BASE_URL") ||
+    Deno.env.get("CAKTO_BASE_URL") ||
+    "https://api.cakto.com.br"
+  );
 }
 
 function normalizeDocumento(value: string | null | undefined) {
@@ -113,7 +113,12 @@ async function getCaktoAccessToken() {
   return String(json.access_token || "");
 }
 
-function buildIdempotencyKey(params: { proposalId: string; paymentMethod: PaymentMethod; amount: number; fireMode: FireMode }) {
+function buildIdempotencyKey(params: {
+  proposalId: string;
+  paymentMethod: PaymentMethod;
+  amount: number;
+  fireMode: FireMode;
+}) {
   return `nox-fianca-${params.proposalId}-${params.paymentMethod}-${params.fireMode}-${Math.round(params.amount * 100)}`;
 }
 
@@ -127,8 +132,10 @@ function extract(raw: any, paths: string[][]) {
 }
 
 function normalizePayment(raw: any, fallback: { paymentMethod: PaymentMethod; amount: number }) {
-  const paymentMethod = (extract(raw, [["paymentMethod"], ["payment_method"], ["method"]]) || fallback.paymentMethod) as PaymentMethod;
-  const amount = Number(extract(raw, [["amount"], ["total"], ["value"]]) || fallback.amount) || fallback.amount;
+  const paymentMethod = (extract(raw, [["paymentMethod"], ["payment_method"], ["method"]]) ||
+    fallback.paymentMethod) as PaymentMethod;
+  const amount =
+    Number(extract(raw, [["amount"], ["total"], ["value"]]) || fallback.amount) || fallback.amount;
   const qrCodeBase64 = extract(raw, [
     ["pix", "qrCodeBase64"],
     ["pix", "qr_code_base64"],
@@ -168,20 +175,34 @@ function normalizePayment(raw: any, fallback: { paymentMethod: PaymentMethod; am
     paymentMethod,
     amount,
     checkoutUrl: extract(raw, [["checkoutUrl"], ["checkout_url"], ["url"]]),
-    pix: qrCode || qrCodeBase64
-      ? {
-          qrCode: qrCode || "",
-          qrCodeBase64: qrCodeBase64 || "",
-          expiresAt: extract(raw, [["pix", "expiresAt"], ["pix", "expires_at"], ["pixExpiresAt"], ["pix_expires_at"]]) || "",
-        }
-      : null,
-    boleto: boletoUrl || boletoBarcode
-      ? {
-          barcode: boletoBarcode || "",
-          pdfUrl: boletoUrl || "",
-          dueDate: extract(raw, [["boleto", "dueDate"], ["boleto", "due_date"], ["dueDate"], ["due_date"]]) || "",
-        }
-      : null,
+    pix:
+      qrCode || qrCodeBase64
+        ? {
+            qrCode: qrCode || "",
+            qrCodeBase64: qrCodeBase64 || "",
+            expiresAt:
+              extract(raw, [
+                ["pix", "expiresAt"],
+                ["pix", "expires_at"],
+                ["pixExpiresAt"],
+                ["pix_expires_at"],
+              ]) || "",
+          }
+        : null,
+    boleto:
+      boletoUrl || boletoBarcode
+        ? {
+            barcode: boletoBarcode || "",
+            pdfUrl: boletoUrl || "",
+            dueDate:
+              extract(raw, [
+                ["boleto", "dueDate"],
+                ["boleto", "due_date"],
+                ["dueDate"],
+                ["due_date"],
+              ]) || "",
+          }
+        : null,
   };
 }
 
@@ -191,7 +212,14 @@ async function createCaktoPayment(input: {
   idempotencyKey: string;
   proposalId: string;
   fireMode: FireMode;
-  customer: { name: string; email: string; phone: string; docType: "cpf" | "cnpj"; docNumber: string; fingerprint: string };
+  customer: {
+    name: string;
+    email: string;
+    phone: string;
+    docType: "cpf" | "cnpj";
+    docNumber: string;
+    fingerprint: string;
+  };
   antifraudProfilingAttemptReference: string;
 }) {
   const offerId = env("CAKTO_OFFER_ID");
@@ -248,8 +276,13 @@ async function createCaktoPayment(input: {
 }
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-  if (req.method !== "POST") return jsonResponse({ ok: false, error: "Método não permitido." }, 405);
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders(req) });
+  const rejected = rejectDisallowedOrigin(req);
+  if (rejected) return rejected;
+  if (req.method !== "POST")
+    return jsonResponse(req, { ok: false, error: "Método não permitido." }, 405);
+  if (hasOversizedBody(req, 64_000))
+    return jsonResponse(req, { ok: false, error: "Payload muito grande." }, 413);
 
   try {
     const supabaseUrl = env("SUPABASE_URL");
@@ -263,7 +296,8 @@ serve(async (req) => {
     const { data: userData, error: authError } = await supabaseAuth.auth.getUser(
       authorization.replace(/^Bearer\s+/i, ""),
     );
-    if (authError || !userData.user) return jsonResponse({ ok: false, error: "Sessão inválida." }, 401);
+    if (authError || !userData.user)
+      return jsonResponse(req, { ok: false, error: "Sessão inválida." }, 401);
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false, autoRefreshToken: false },
@@ -274,63 +308,101 @@ serve(async (req) => {
     const paymentMethod = body.paymentMethod;
     const fireMode = body.selectedFireInsuranceMode || "embutido";
 
-    if (!proposalId) return jsonResponse({ ok: false, error: "Proposta não encontrada." }, 400);
+    if (!proposalId)
+      return jsonResponse(req, { ok: false, error: "Proposta não encontrada." }, 400);
     if (!paymentMethod || !["pix", "boleto", "credit_card"].includes(paymentMethod)) {
-      return jsonResponse({ ok: false, error: "Selecione uma forma de pagamento." }, 400);
+      return jsonResponse(req, { ok: false, error: "Selecione uma forma de pagamento." }, 400);
     }
 
-    const { data: consulta, error: consultaError } = await supabaseAdmin
+    const { data: consulta, error: consultaError } = await supabaseAuth
       .from("consultas_credito")
       .select("*, inquilinos(*), imoveis(*)")
       .eq("id", proposalId)
       .maybeSingle();
     if (consultaError) throw consultaError;
-    if (!consulta) return jsonResponse({ ok: false, error: "Proposta não encontrada." }, 404);
+    if (!consulta)
+      return jsonResponse(
+        req,
+        { ok: false, error: "Proposta não encontrada ou acesso negado." },
+        404,
+      );
 
     const imovel = (consulta as any).imoveis || {};
     const inquilino = (consulta as any).inquilinos || {};
-    const docs = typeof (consulta as any).documentos === "object" && (consulta as any).documentos ? (consulta as any).documentos : {};
+    const docs =
+      typeof (consulta as any).documentos === "object" && (consulta as any).documentos
+        ? (consulta as any).documentos
+        : {};
     const extras = docs.extras || {};
     const aluguel = Number(imovel.valor_aluguel || (consulta as any).rent_value || 0);
     const premioMensal = Number((consulta as any).valor_premio_mensal || 0);
-    const taxaAtivacao = ((consulta as any).activation_fee_enabled ?? extras.activation_fee_enabled)
-      ? Number((consulta as any).activation_fee_amount ?? extras.activation_fee_amount ?? 0)
-      : 0;
-    const pinturaTotal = ((consulta as any).external_painting_enabled ?? extras.external_painting_enabled)
-      ? Number((consulta as any).external_painting_total ?? extras.external_painting_total ?? 0)
-      : 0;
-    const pinturaMensal = ((consulta as any).external_painting_enabled ?? extras.external_painting_enabled)
-      ? Number((consulta as any).external_painting_installment ?? extras.external_painting_installment ?? 0) || (pinturaTotal > 0 ? +(pinturaTotal / 3).toFixed(2) : 0)
-      : 0;
+    const taxaAtivacao =
+      ((consulta as any).activation_fee_enabled ?? extras.activation_fee_enabled)
+        ? Number((consulta as any).activation_fee_amount ?? extras.activation_fee_amount ?? 0)
+        : 0;
+    const pinturaTotal =
+      ((consulta as any).external_painting_enabled ?? extras.external_painting_enabled)
+        ? Number((consulta as any).external_painting_total ?? extras.external_painting_total ?? 0)
+        : 0;
+    const pinturaMensal =
+      ((consulta as any).external_painting_enabled ?? extras.external_painting_enabled)
+        ? Number(
+            (consulta as any).external_painting_installment ??
+              extras.external_painting_installment ??
+              0,
+          ) || (pinturaTotal > 0 ? +(pinturaTotal / 3).toFixed(2) : 0)
+        : 0;
     const subtipo = String((consulta as any).imovel_subtipo || imovel.tipo || "").toLowerCase();
-    const tipoImovel: "residencial" | "comercial" = /comercial|consult|cl[ií]nica|ind[uú]stria|servi[cç]o|armaz[eé]m/.test(subtipo)
-      ? "comercial"
-      : "residencial";
+    const tipoImovel: "residencial" | "comercial" =
+      /comercial|consult|cl[ií]nica|ind[uú]stria|servi[cç]o|armaz[eé]m/.test(subtipo)
+        ? "comercial"
+        : "residencial";
     const premioIncendioAnual = aluguel * (calcularPercentualIncendio(tipoImovel, aluguel) / 100);
     const premioIncendioMensal = premioIncendioAnual / 12;
-    const mensalidadeFinal = premioMensal + pinturaMensal + (fireMode === "embutido" ? premioIncendioMensal : 0);
-    const expectedAmount = +(mensalidadeFinal + taxaAtivacao + (fireMode === "avista" ? premioIncendioAnual : 0)).toFixed(2);
+    const mensalidadeFinal =
+      premioMensal + pinturaMensal + (fireMode === "embutido" ? premioIncendioMensal : 0);
+    const expectedAmount = +(
+      mensalidadeFinal +
+      taxaAtivacao +
+      (fireMode === "avista" ? premioIncendioAnual : 0)
+    ).toFixed(2);
     const requestedAmount = Number(body.amount || expectedAmount);
 
     if (Math.abs(requestedAmount - expectedAmount) > 0.02) {
-      return jsonResponse({
-        ok: false,
-        error: "O valor do pagamento mudou. Atualize a página e tente novamente.",
-        expectedAmount,
-      }, 409);
+      return jsonResponse(
+        req,
+        {
+          ok: false,
+          error: "O valor do pagamento mudou. Atualize a página e tente novamente.",
+          expectedAmount,
+        },
+        409,
+      );
     }
 
-    const name = body.customer?.name || (consulta as any).tenant_name || inquilino.nome || "";
-    const email = body.customer?.email || (consulta as any).tenant_email || inquilino.email || "";
-    const phone = formatarTelefoneCakto(body.customer?.phone || (consulta as any).tenant_telefone || inquilino.telefone);
-    const docNumber = normalizeDocumento(body.customer?.document || body.customer?.docNumber || (consulta as any).tenant_document || inquilino.cpf || inquilino.cnpj);
-    const docType = body.customer?.docType || ((consulta as any).tenant_type === "PJ" || docNumber.length > 11 ? "cnpj" : "cpf");
+    const name = (consulta as any).tenant_name || inquilino.nome || "";
+    const email = (consulta as any).tenant_email || inquilino.email || "";
+    const phone = formatarTelefoneCakto((consulta as any).tenant_telefone || inquilino.telefone);
+    const docNumber = normalizeDocumento(
+      (consulta as any).tenant_document || inquilino.cpf || inquilino.cnpj,
+    );
+    const docType =
+      (consulta as any).tenant_type === "PJ" || docNumber.length > 11 ? "cnpj" : "cpf";
 
     if (!name || !email || !phone || !docNumber) {
-      return jsonResponse({ ok: false, error: "Complete nome, e-mail, telefone e CPF/CNPJ antes de pagar." }, 400);
+      return jsonResponse(
+        req,
+        { ok: false, error: "Complete nome, e-mail, telefone e CPF/CNPJ antes de pagar." },
+        400,
+      );
     }
 
-    const idempotencyKey = buildIdempotencyKey({ proposalId, paymentMethod, amount: expectedAmount, fireMode });
+    const idempotencyKey = buildIdempotencyKey({
+      proposalId,
+      paymentMethod,
+      amount: expectedAmount,
+      fireMode,
+    });
     const { data: existente } = await supabaseAdmin
       .from("cakto_payments")
       .select("*")
@@ -345,10 +417,8 @@ serve(async (req) => {
         amount: (existente as any).amount,
         checkoutUrl: (existente as any).checkout_url,
       };
-      return jsonResponse(normalizePayment(raw, { paymentMethod, amount: expectedAmount }));
+      return jsonResponse(req, normalizePayment(raw, { paymentMethod, amount: expectedAmount }));
     }
-
-    console.log("Criando pagamento Cakto", { proposalId, paymentMethod, amount: expectedAmount });
 
     let raw: any;
     try {
@@ -366,14 +436,18 @@ serve(async (req) => {
           docNumber,
           fingerprint: body.fingerprint || "sem-fingerprint",
         },
-        antifraudProfilingAttemptReference: body.antifraudProfilingAttemptReference || "sem-antifraude",
+        antifraudProfilingAttemptReference:
+          body.antifraudProfilingAttemptReference || "sem-antifraude",
       });
     } catch (error) {
-      console.error("Erro Cakto:", {
+      console.error("[create-cakto-payment] provedor indisponível", {
         status: error instanceof CaktoApiError ? error.status : "unknown",
-        response: error instanceof CaktoApiError ? error.response : error instanceof Error ? error.message : String(error),
       });
-      return jsonResponse({ ok: false, error: "Não foi possível gerar o pagamento agora. Tente novamente." }, 502);
+      return jsonResponse(
+        req,
+        { ok: false, error: "Não foi possível gerar o pagamento agora. Tente novamente." },
+        502,
+      );
     }
 
     const normalized = normalizePayment(raw, { paymentMethod, amount: expectedAmount });
@@ -406,15 +480,28 @@ serve(async (req) => {
       idempotency_key: idempotencyKey,
     } as any);
 
-    const [{ error: updateError }, { error: insertError }] = await Promise.all([updateConsulta, insertPayment]);
-    if (updateError) console.error("[create-cakto-payment] Falha ao atualizar proposta", { error: updateError.message });
-    if (insertError) console.error("[create-cakto-payment] Falha ao salvar pagamento", { error: insertError.message });
+    const [{ error: updateError }, { error: insertError }] = await Promise.all([
+      updateConsulta,
+      insertPayment,
+    ]);
+    if (updateError)
+      console.error("[create-cakto-payment] Falha ao atualizar proposta", {
+        code: updateError.code || "unknown",
+      });
+    if (insertError)
+      console.error("[create-cakto-payment] Falha ao salvar pagamento", {
+        code: insertError.code || "unknown",
+      });
 
-    return jsonResponse(normalized);
+    return jsonResponse(req, normalized);
   } catch (error) {
     console.error("[create-cakto-payment] erro inesperado", {
-      error: error instanceof Error ? error.message : String(error),
+      name: error instanceof Error ? error.name : "unknown",
     });
-    return jsonResponse({ ok: false, error: "Não foi possível gerar o pagamento agora." }, 500);
+    return jsonResponse(
+      req,
+      { ok: false, error: "Não foi possível gerar o pagamento agora." },
+      500,
+    );
   }
 });

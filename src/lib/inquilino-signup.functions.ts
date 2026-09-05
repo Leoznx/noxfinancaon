@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
+import { enforceSecurityRateLimit } from "@/lib/security-rate-limit.server";
 
 const linkSchema = z.object({
   cpf: z.string().min(11).max(20),
@@ -81,33 +82,18 @@ const checkSchema = z.object({
 });
 
 /**
- * Verifica se já existe conta com este e-mail ou CPF.
- * Público (sem auth) — usado antes do signup.
+ * Resposta deliberadamente uniforme para não expor a existência de CPF/e-mail.
+ * O cadastro faz a validação real no servidor e devolve erro genérico.
  */
 export const checkInquilinoExists = createServerFn({ method: "POST" })
   .validator((data: unknown) => checkSchema.parse(data))
   .handler(async ({ data }) => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const emailLower = data.email.toLowerCase().trim();
-    const cpfNorm = data.cpf.replace(/\D/g, "");
-
-    // Profile por email
-    const { data: byEmail } = await supabaseAdmin
-      .from("profiles")
-      .select("id, role")
-      .ilike("email", emailLower)
-      .maybeSingle();
-
-    if (byEmail) return { exists: true, reason: "email" as const };
-
-    // Inquilino por cpf que já tenha profile_id
-    const { data: byCpf } = await supabaseAdmin
-      .from("inquilinos")
-      .select("id, profile_id")
-      .eq("cpf", cpfNorm)
-      .maybeSingle();
-
-    if (byCpf?.profile_id) return { exists: true, reason: "cpf" as const };
-
+    await enforceSecurityRateLimit({
+      scope: "account-precheck",
+      identifier: emailLower,
+      limit: 10,
+      windowSeconds: 3600,
+    });
     return { exists: false as const };
   });

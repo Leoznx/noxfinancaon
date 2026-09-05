@@ -5,18 +5,27 @@ enabled = false
 
 [auth]
 site_url = "https://noxfianca.com"
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
 additional_redirect_urls = [
   "https://noxfianca.com/email-verificado",
   "https://noxfianca.com/redefinir-senha",
   "noxfianca://**",
 ]
 
+[auth.rate_limit]
+sign_in_sign_ups = 10
+token_verifications = 10
+token_refresh = 120
+
 [auth.email]
-# Links de confirmação e demais tokens de e-mail do Supabase expiram em 5 dias.
+# Links de confirmação e recuperação expiram em uma hora.
 enable_confirmations = true
+secure_password_change = true
 max_frequency = "1m"
 otp_length = 8
-otp_expiry = 432000
+otp_expiry = 3600
 
 [auth.mfa.totp]
 enroll_enabled = true

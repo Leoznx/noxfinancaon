@@ -87,7 +87,7 @@ function RedefinirSenha() {
   const confirmarNovaSenha = async () => {
     if (!senhaAtendeRequisitos(novaSenha)) {
       setErro(
-        "A senha deve possuir pelo menos 8 caracteres e conter ao menos uma letra e um número.",
+        "A senha deve possuir de 12 a 128 caracteres, com letras maiúsculas, minúsculas e número.",
       );
       return;
     }
@@ -294,7 +294,14 @@ function RedefinirSenha() {
 
                 <ul className="space-y-1 text-xs font-medium" aria-live="polite">
                   <RequisitoItem ok={requisitos.minLength} texto="Pelo menos 8 caracteres" />
-                  <RequisitoItem ok={requisitos.hasLetter} texto="Pelo menos uma letra" />
+                  <RequisitoItem
+                    ok={requisitos.hasLowercase}
+                    texto="Pelo menos uma letra minúscula"
+                  />
+                  <RequisitoItem
+                    ok={requisitos.hasUppercase}
+                    texto="Pelo menos uma letra maiúscula"
+                  />
                   <RequisitoItem ok={requisitos.hasNumber} texto="Pelo menos um número" />
                 </ul>
 

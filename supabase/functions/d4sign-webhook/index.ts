@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { jsonResponse, supabaseAdmin } from "../_shared/asaas.ts";
 import { finalizeD4SignContract, hashWebhookPayload } from "../_shared/d4sign.ts";
+import { hasOversizedBody } from "../_shared/http-security.ts";
 
 function safeEqual(left: string, right: string) {
   const a = new TextEncoder().encode(left);
@@ -21,6 +22,8 @@ async function readPayload(req: Request) {
 serve(async (req) => {
   if (req.method !== "POST")
     return jsonResponse(req, { ok: false, error: "Metodo nao permitido." }, 405);
+  if (hasOversizedBody(req))
+    return jsonResponse(req, { ok: false, error: "Payload muito grande." }, 413);
   const expectedSecret = Deno.env.get("D4SIGN_WEBHOOK_SECRET") || "";
   const receivedSecret = new URL(req.url).searchParams.get("secret") || "";
   if (!expectedSecret || !safeEqual(receivedSecret, expectedSecret)) {

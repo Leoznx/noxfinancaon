@@ -7,6 +7,7 @@ import {
   selectWhatsappBillingCandidate,
   type WhatsappBillingCandidate,
 } from "../_shared/whatsapp-billing.ts";
+import { hasOversizedBody } from "../_shared/http-security.ts";
 
 const OPEN_STATUSES = [
   "pending",
@@ -37,16 +38,11 @@ function messageIds(payload: Record<string, unknown>) {
     payload.id,
     ...(Array.isArray(payload.ids) ? payload.ids : []),
   ];
-  return Array.from(
-    new Set(values.map((value) => String(value || "").trim()).filter(Boolean)),
-  );
+  return Array.from(new Set(values.map((value) => String(value || "").trim()).filter(Boolean)));
 }
 
 async function sha256(value: string) {
-  const bytes = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(value),
-  );
+  const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return Array.from(new Uint8Array(bytes))
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
@@ -61,9 +57,7 @@ function money(value: unknown) {
 
 async function sendSafeReply(phone: string, message: string) {
   const result = await sendZApiText({ to: phone, message });
-  return result.sent
-    ? { sent: true }
-    : { sent: false, reason: result.reason || "send_failed" };
+  return result.sent ? { sent: true } : { sent: false, reason: result.reason || "send_failed" };
 }
 
 async function handleBillingCommand(
@@ -102,8 +96,7 @@ async function handleBillingCommand(
   }
 
   const ids = messageIds(payload);
-  const providerMessageId = ids[0] ||
-    `payload:${await hashWebhookPayload(payload)}`;
+  const providerMessageId = ids[0] || `payload:${await hashWebhookPayload(payload)}`;
   const phoneHash = await sha256(phone);
   const { data: audit, error: auditError } = await admin
     .from("whatsapp_billing_requests")
@@ -119,11 +112,7 @@ async function handleBillingCommand(
     return jsonResponse(request, { ok: true, duplicate: true });
   }
   if (auditError || !audit?.id) {
-    return jsonResponse(
-      request,
-      { ok: false, error: "audit_unavailable" },
-      503,
-    );
+    return jsonResponse(request, { ok: false, error: "audit_unavailable" }, 503);
   }
 
   const [{ data: batches }, { data: invoices }] = await Promise.all([
@@ -144,9 +133,7 @@ async function handleBillingCommand(
 
   const candidates: WhatsappBillingCandidate[] = [];
   for (const batch of batches ?? []) {
-    const profile = Array.isArray(batch.profile)
-      ? batch.profile[0]
-      : batch.profile;
+    const profile = Array.isArray(batch.profile) ? batch.profile[0] : batch.profile;
     if (normalizeWhatsappPhone(profile?.telefone) !== phone) continue;
     candidates.push({
       actorId: batch.agency_user_id,
@@ -161,8 +148,8 @@ async function handleBillingCommand(
     if (!payment || normalizeWhatsappPhone(payment.recipient_phone) !== phone) {
       continue;
     }
-    const actorId = invoice.recipient_user_id || invoice.tenant_user_id ||
-      payment.recipient_user_id;
+    const actorId =
+      invoice.recipient_user_id || invoice.tenant_user_id || payment.recipient_user_id;
     if (!actorId) continue;
     candidates.push({
       actorId,
@@ -173,16 +160,15 @@ async function handleBillingCommand(
 
   const selection = selectWhatsappBillingCandidate(candidates);
   if (!selection.candidate) {
-    const status = selection.reason === "ambiguous_phone"
-      ? "ambiguous_phone"
-      : "not_found";
+    const status = selection.reason === "ambiguous_phone" ? "ambiguous_phone" : "not_found";
     await admin
       .from("whatsapp_billing_requests")
       .update({ status, completed_at: new Date().toISOString() })
       .eq("id", audit.id);
-    const message = selection.reason === "ambiguous_phone"
-      ? "Por segurança, este número está associado a mais de um cadastro. Acesse sua conta NOX para emitir a cobrança atualizada."
-      : "Não localizei uma cobrança em aberto para este número. Confira o telefone do cadastro ou acesse sua conta NOX.";
+    const message =
+      selection.reason === "ambiguous_phone"
+        ? "Por segurança, este número está associado a mais de um cadastro. Acesse sua conta NOX para emitir a cobrança atualizada."
+        : "Não localizei uma cobrança em aberto para este número. Confira o telefone do cadastro ou acesse sua conta NOX.";
     const reply = await sendSafeReply(phone, message);
     return jsonResponse(request, { ok: true, handled: true, status, reply });
   }
@@ -261,20 +247,23 @@ async function handleBillingCommand(
     });
   }
 
-  const responseMessage = method === "pix"
-    ? [
-      "Pix atualizado — NOX Fiança",
-      `Valor: ${money(result.amount)}`,
-      `Vencimento: ${result.dueDate}`,
-      `Pix Copia e Cola: ${result.pix?.copyPaste || "consulte no portal NOX"}`,
-    ].join("\n")
-    : [
-      "Boleto atualizado — NOX Fiança",
-      `Valor: ${money(result.amount)}`,
-      `Vencimento: ${result.dueDate}`,
-      `Linha digitável: ${result.boleto?.barcode || "consulte no portal NOX"}`,
-      result.boleto?.pdfUrl ? `Boleto: ${result.boleto.pdfUrl}` : "",
-    ].filter(Boolean).join("\n");
+  const responseMessage =
+    method === "pix"
+      ? [
+          "Pix atualizado — NOX Fiança",
+          `Valor: ${money(result.amount)}`,
+          `Vencimento: ${result.dueDate}`,
+          `Pix Copia e Cola: ${result.pix?.copyPaste || "consulte no portal NOX"}`,
+        ].join("\n")
+      : [
+          "Boleto atualizado — NOX Fiança",
+          `Valor: ${money(result.amount)}`,
+          `Vencimento: ${result.dueDate}`,
+          `Linha digitável: ${result.boleto?.barcode || "consulte no portal NOX"}`,
+          result.boleto?.pdfUrl ? `Boleto: ${result.boleto.pdfUrl}` : "",
+        ]
+          .filter(Boolean)
+          .join("\n");
   const reply = await sendSafeReply(phone, responseMessage);
   await admin
     .from("whatsapp_billing_requests")
@@ -293,11 +282,10 @@ async function handleBillingCommand(
 
 Deno.serve(async (request) => {
   if (request.method !== "POST") {
-    return jsonResponse(
-      request,
-      { ok: false, error: "method_not_allowed" },
-      405,
-    );
+    return jsonResponse(request, { ok: false, error: "method_not_allowed" }, 405);
+  }
+  if (hasOversizedBody(request)) {
+    return jsonResponse(request, { ok: false, error: "payload_too_large" }, 413);
   }
   const expectedSecret = Deno.env.get("ZAPI_WEBHOOK_SECRET")?.trim() || "";
   const receivedSecret = new URL(request.url).searchParams.get("secret") || "";
@@ -332,7 +320,7 @@ Deno.serve(async (request) => {
     .order("created_at", { ascending: false })
     .limit(200);
   const matched = (sentEvents || []).find((event) =>
-    ids.includes(String(event?.payload?.provider_message_id || ""))
+    ids.includes(String(event?.payload?.provider_message_id || "")),
   );
   if (!matched?.contract_signature_id) {
     return jsonResponse(request, {
@@ -342,7 +330,9 @@ Deno.serve(async (request) => {
     });
   }
 
-  const status = String(record.status || "").trim().toUpperCase();
+  const status = String(record.status || "")
+    .trim()
+    .toUpperCase();
   const error = String(record.error || "").trim();
   const payloadHash = await hashWebhookPayload(payload);
   await supabase.from("contract_signature_events").upsert(
@@ -350,8 +340,7 @@ Deno.serve(async (request) => {
       contract_signature_id: matched.contract_signature_id,
       event_key: `zapi:status:${ids[0]}:${status || "DELIVERY"}:${payloadHash}`,
       event_type: status ? `zapi_${status.toLowerCase()}` : "zapi_delivery",
-      message: error ||
-        (status ? `WhatsApp: ${status}` : "Retorno de envio da Z-API."),
+      message: error || (status ? `WhatsApp: ${status}` : "Retorno de envio da Z-API."),
       payload,
     },
     { onConflict: "event_key", ignoreDuplicates: true },
