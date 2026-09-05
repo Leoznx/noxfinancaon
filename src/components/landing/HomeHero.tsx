@@ -51,12 +51,6 @@ export function HomeHero() {
           </dl>
         </div>
       </div>
-      <div className="nox-home-hero__approval" aria-hidden="true">
-        <span><Zap size={24} strokeWidth={1.7} /></span>
-        <p>Aprovação em<br /><strong>1 minuto</strong></p>
-        <p>100% online e sem<br />burocracia</p>
-        <i />
-      </div>
       <div className="nox-home-hero__visual">
         <img
           src={heroImage}

@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { LogoNox } from '../LogoNox';
 import {
   UserRound, Building2, Home, KeyRound, Menu, X,
-  User, Wallet, Lock, Bell, Award, LayoutDashboard, LogOut, ArrowRight,
+  User, Wallet, Lock, Bell, Award, LayoutDashboard, LogOut,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
@@ -110,7 +110,7 @@ function useHeaderProfile(email: string | null | undefined) {
   return profile;
 }
 
-function HeaderUserMenu({ align, home = false }: { align: 'desktop' | 'mobile'; home?: boolean }) {
+function HeaderUserMenu({ align }: { align: 'desktop' | 'mobile' }) {
   const { user, logout } = useAuth();
   const profile = useHeaderProfile(user?.email);
 
@@ -121,11 +121,9 @@ function HeaderUserMenu({ align, home = false }: { align: 'desktop' | 'mobile'; 
           <Link to="/login">
             <Button variant="ghost" className="h-11 rounded-xl px-3 text-sm font-semibold text-neutral-700">Entrar</Button>
           </Link>
-          <Link to={home ? '/login' : '/cadastro'}>
-            <Button className={home ? 'h-[52px] gap-3 rounded-[15px] bg-neutral-950 px-6 text-sm font-semibold text-white shadow-none hover:bg-neutral-800' : 'h-11 rounded-[14px] bg-neutral-950 px-4 text-sm font-bold text-white shadow-none transition-colors hover:bg-neutral-800'}>
-              {home && <LayoutDashboard className="h-5 w-5" aria-hidden="true" />}
-              {home ? 'Acessar dashboard' : 'Cadastre-se'}
-              {home && <ArrowRight className="h-5 w-5" aria-hidden="true" />}
+          <Link to="/cadastro">
+            <Button className="h-11 rounded-[14px] bg-neutral-950 px-4 text-sm font-bold text-white shadow-none transition-colors hover:bg-neutral-800">
+              Cadastre-se
             </Button>
           </Link>
         </>
@@ -133,7 +131,6 @@ function HeaderUserMenu({ align, home = false }: { align: 'desktop' | 'mobile'; 
     }
     return (
       <>
-        {home && <Link to="/login"><Button className="h-12 w-full gap-2 bg-neutral-950 font-semibold text-white"><LayoutDashboard className="h-4 w-4" aria-hidden="true" /> Acessar dashboard <ArrowRight className="h-4 w-4" aria-hidden="true" /></Button></Link>}
         <Link to="/login">
           <Button variant="outline" className="w-full h-12 font-bold text-neutral-900 border-neutral-200">Entrar</Button>
         </Link>
@@ -152,7 +149,7 @@ function HeaderUserMenu({ align, home = false }: { align: 'desktop' | 'mobile'; 
       <>
         <Link to={dashboardTo as any}>
           <Button className="w-full h-12 bg-neutral-900 text-white font-bold gap-2">
-            <LayoutDashboard className="w-4 h-4" /> {home ? 'Acessar dashboard' : 'Dashboard'}
+            <LayoutDashboard className="w-4 h-4" /> Dashboard
           </Button>
         </Link>
         <div className="rounded-xl border border-neutral-200 overflow-hidden">
@@ -194,7 +191,7 @@ function HeaderUserMenu({ align, home = false }: { align: 'desktop' | 'mobile'; 
     <>
       <Link to={dashboardTo as any}>
         <Button className="h-11 gap-2 rounded-[14px] bg-neutral-950 px-5 text-sm font-bold text-white shadow-none transition-colors hover:bg-neutral-800">
-          <LayoutDashboard className="w-4 h-4" /> {home ? 'Acessar dashboard' : 'Dashboard'}
+          <LayoutDashboard className="w-4 h-4" /> Dashboard
         </Button>
       </Link>
       <DropdownMenu>
@@ -227,16 +224,7 @@ function HeaderUserMenu({ align, home = false }: { align: 'desktop' | 'mobile'; 
   );
 }
 
-const HOME_NAV_ITEMS = [
-  { to: '/inquilino', label: 'Para Inquilinos' },
-  { to: '/imobiliaria', label: 'Para Imobiliárias' },
-  { to: '/proprietario', label: 'Para Proprietários' },
-  { to: '/planos', label: 'Planos' },
-  { to: '/sobre', label: 'Sobre nós' },
-  { to: '/blog', label: 'Blog' },
-] as const;
-
-export const InstitutionalHeader = ({ home = false }: { home?: boolean }) => {
+export const InstitutionalHeader = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Sem isso, a página por trás continua rolável com o menu mobile aberto —
@@ -256,16 +244,15 @@ export const InstitutionalHeader = ({ home = false }: { home?: boolean }) => {
   }, [isMobileMenuOpen]);
 
   return (
-    <header className={home ? 'nox-home-header' : 'fixed inset-x-0 top-0 z-50 px-3 pt-3 sm:px-5 sm:pt-4'}>
-      <div className={home ? 'nox-home-header__bar' : 'mx-auto flex h-[72px] w-full max-w-[1500px] items-center justify-between gap-4 rounded-[20px] border border-black/[0.06] bg-white px-4 shadow-[0_8px_30px_rgba(0,0,0,0.04)] sm:h-20 sm:px-6 xl:gap-5 xl:px-7'}>
+    <header className="fixed inset-x-0 top-0 z-50 px-3 pt-3 sm:px-5 sm:pt-4">
+      <div className="mx-auto flex h-[72px] w-full max-w-[1500px] items-center justify-between gap-4 rounded-[20px] border border-black/[0.06] bg-white px-4 shadow-[0_8px_30px_rgba(0,0,0,0.04)] sm:h-20 sm:px-6 xl:gap-5 xl:px-7">
         {/* Esquerda: Logo */}
         <Link to="/" className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity shrink-0">
           <LogoNox variant="claro" size="md" />
         </Link>
 
         {/* Centro: Menu principal + abas de perfil (Desktop) */}
-        <nav aria-label="Navegação principal" className={home ? 'nox-home-header__nav hidden min-w-0 flex-1 items-center justify-center xl:flex' : 'hidden min-w-0 flex-1 items-center justify-center divide-x divide-neutral-200/80 xl:flex'}>
-          {home ? HOME_NAV_ITEMS.map((item) => <PerfilTab key={item.to} {...item} />) : <>
+        <nav aria-label="Navegação principal" className="hidden min-w-0 flex-1 items-center justify-center divide-x divide-neutral-200/80 xl:flex">
           <PerfilTab to="/seguro-fianca" label="Seguro Fiança" />
           <PerfilTab to="/planos" label="Planos" />
           <PerfilTab to="/contato" label="Contato" />
@@ -273,12 +260,11 @@ export const InstitutionalHeader = ({ home = false }: { home?: boolean }) => {
           <PerfilTab to="/imobiliaria" label="Imobiliária" />
           <PerfilTab to="/proprietario" label="Proprietário" />
           <PerfilTab to="/inquilino" label="Inquilino" />
-          </>}
         </nav>
 
         {/* Direita: Botões (Desktop) */}
         <div className="hidden shrink-0 items-center gap-3 border-l border-neutral-200/80 pl-4 xl:flex 2xl:gap-4 2xl:pl-5">
-          <HeaderUserMenu align="desktop" home={home} />
+          <HeaderUserMenu align="desktop" />
         </div>
 
         {/* Menu Mobile Button */}
@@ -299,9 +285,8 @@ export const InstitutionalHeader = ({ home = false }: { home?: boolean }) => {
           <div id="institutional-mobile-menu" className="mx-auto mt-2 max-h-[calc(100dvh-6.75rem)] w-full max-w-[1500px] overflow-y-auto overscroll-contain rounded-[20px] border border-black/[0.06] bg-white shadow-[0_12px_32px_rgba(0,0,0,0.06)] xl:hidden">
             <div className="space-y-6 px-6 py-6">
               <nav className="flex flex-col gap-4">
-                {home && HOME_NAV_ITEMS.map(({ to, label }) => <Link key={to} to={to} onClick={() => setIsMobileMenuOpen(false)} className="text-base font-medium text-neutral-700">{label}</Link>)}
                 <Link to="/seguro-fianca" onClick={() => setIsMobileMenuOpen(false)} className="text-base font-medium text-neutral-600">Seguro Fiança</Link>
-                {!home && <Link to="/planos" onClick={() => setIsMobileMenuOpen(false)} className="text-base font-medium text-neutral-600">Planos</Link>}
+                <Link to="/planos" onClick={() => setIsMobileMenuOpen(false)} className="text-base font-medium text-neutral-600">Planos</Link>
                 <Link to="/contato" onClick={() => setIsMobileMenuOpen(false)} className="text-base font-medium text-neutral-600">Contato</Link>
               </nav>
 
@@ -324,7 +309,7 @@ export const InstitutionalHeader = ({ home = false }: { home?: boolean }) => {
               </div>
 
               <div className="pt-4 flex flex-col gap-3" onClick={() => setIsMobileMenuOpen(false)}>
-                <HeaderUserMenu align="mobile" home={home} />
+                <HeaderUserMenu align="mobile" />
               </div>
             </div>
           </div>

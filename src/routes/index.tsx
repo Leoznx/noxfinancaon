@@ -48,7 +48,7 @@ function Index() {
 
   return (
     <div className="min-h-screen bg-white text-neutral-900 font-sans selection:bg-[#FACC15] selection:text-neutral-900">
-      <InstitutionalHeader home />
+      <InstitutionalHeader />
       
       <main>
         <HomeHero />
