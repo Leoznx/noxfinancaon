@@ -81,10 +81,13 @@ function BlogPage() {
     setEnviando(true);
     try {
       const { error } = await supabase.from("leads_contato").insert({
+        perfil: "outro",
         email: email.trim().toLowerCase(),
         nome: "Inscrito Newsletter",
+        telefone: "Não informado",
+        cidade: "Não informado",
+        uf: "BR",
         origem: "blog_newsletter",
-        tipo_perfil: "interesse",
         status: "novo",
       } as never);
       if (error) throw error;
