@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { InstitutionalHeader } from "@/components/landing/InstitutionalHeader";
-import { InstitutionalHero, SolutionPresentation } from "@/components/landing/SectionsBasic";
+import { SolutionPresentation } from "@/components/landing/SectionsBasic";
+import { HomeHero } from "@/components/landing/HomeHero";
 import { ComparativeSection } from "@/components/landing/ComparativeAndBenefits";
 import { InstitutionalNumbers } from "@/components/landing/PlansAndNumbers";
 import { CareerProgramSection } from "@/components/landing/CareerProgramSection";
@@ -47,10 +48,10 @@ function Index() {
 
   return (
     <div className="min-h-screen bg-white text-neutral-900 font-sans selection:bg-[#FACC15] selection:text-neutral-900">
-      <InstitutionalHeader />
+      <InstitutionalHeader home />
       
       <main>
-        <InstitutionalHero />
+        <HomeHero />
         <HomeSectionDivider />
         <SolutionPresentation />
         <HomeSectionDivider />
@@ -69,6 +70,7 @@ function Index() {
       {/* Scroll to Top */}
       {showScrollTop && (
           <button 
+            aria-label="Voltar ao topo"
             onClick={scrollToTop}
             className="fixed bottom-28 right-9 z-50 bg-white border border-neutral-200 p-2.5 rounded-lg text-neutral-900 hover:bg-neutral-50 shadow-lg transition-all"
           >

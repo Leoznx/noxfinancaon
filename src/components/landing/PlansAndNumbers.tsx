@@ -102,7 +102,7 @@ const AnimatedNumber = ({ value }: { value: string }) => {
 
 const StatCard = ({ icon: Icon, imageIcon, title, value, label }: { icon?: any, imageIcon?: string, title: string, value: string, label: string }) => (
   <div className="h-full min-h-[190px] sm:min-h-[230px] bg-white border border-neutral-200 rounded-xl p-5 sm:p-7 shadow-sm hover:border-neutral-900 group transition-all duration-300 flex flex-col items-start justify-between gap-5 text-left">
-    <div className="flex items-center gap-3">
+    <div className="flex flex-wrap items-center gap-3">
       {imageIcon ? (
         <div className="flex h-12 w-12 items-center justify-center">
           <img src={imageIcon} alt="" loading="lazy" className="h-12 w-12 object-contain drop-shadow-sm" />

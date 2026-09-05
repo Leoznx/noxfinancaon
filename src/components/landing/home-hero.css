@@ -1,0 +1,340 @@
+.nox-home-hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  min-height: min(100svh, 1080px);
+  padding: clamp(145px, 9.6vw, 184px) 5.9% clamp(64px, 4.8vw, 92px);
+  background: #fff;
+  color: #0c0d0e;
+}
+
+.nox-home-hero__content {
+  position: relative;
+  z-index: 2;
+  width: 49%;
+  max-width: 790px;
+}
+
+.nox-home-hero__eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin: 0 0 28px;
+  color: #6d6e73;
+  font-size: clamp(9px, .64vw, 12px);
+  font-weight: 500;
+  letter-spacing: .36em;
+  text-transform: uppercase;
+}
+
+.nox-home-hero__eyebrow::before {
+  content: '';
+  width: 50px;
+  height: 1px;
+  flex-shrink: 0;
+  background: #ffc800;
+}
+
+.nox-home-hero__title {
+  margin: 0;
+  font-size: clamp(42px, 4.02vw, 76px);
+  font-weight: 750;
+  line-height: 1.02;
+  letter-spacing: -.048em;
+}
+
+.nox-home-hero__title > span {
+  display: block;
+}
+
+.nox-home-hero__title strong {
+  display: block;
+  margin-top: 8px;
+  color: #ffc400;
+  background: linear-gradient(105deg, #ffdd78 0%, #ffc400 40%, #ffbf00 100%);
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-size: .87em;
+  font-weight: 750;
+  letter-spacing: -.048em;
+  white-space: nowrap;
+}
+
+.nox-home-hero__description {
+  margin: 19px 0 0;
+  color: #606166;
+  font-size: clamp(16px, 1.32vw, 24px);
+  line-height: 1.48;
+  letter-spacing: -.02em;
+}
+
+.nox-home-hero__actions {
+  display: flex;
+  gap: 18px;
+  margin-top: 33px;
+}
+
+.nox-home-hero__button {
+  display: inline-flex;
+  min-height: 56px;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 13px 28px;
+  border: 1px solid transparent;
+  border-radius: 13px;
+  font-size: clamp(13px, 1.04vw, 18px);
+  font-weight: 600;
+  line-height: 1.3;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background .18s ease, box-shadow .18s ease;
+}
+
+.nox-home-hero__button--primary {
+  background: #ffc800;
+  box-shadow: 0 9px 25px #efba0026;
+}
+
+.nox-home-hero__button--primary:hover {
+  background: #ffd52e;
+  box-shadow: 0 10px 28px #efba0038;
+}
+
+.nox-home-hero__button--secondary {
+  border-color: #d9dadd;
+  background: #ffffffeb;
+  box-shadow: 0 3px 12px #11111103;
+}
+
+.nox-home-hero__button--secondary:hover {
+  background: #fff9e5;
+}
+
+.nox-home-hero__button:focus-visible,
+.nox-home-header a:focus-visible,
+.nox-home-header button:focus-visible {
+  outline: 3px solid #b68100;
+  outline-offset: 4px;
+}
+
+.nox-home-hero__benefits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px 27px;
+  padding: 0;
+  margin: 35px 0 0;
+  list-style: none;
+}
+
+.nox-home-hero__benefits li {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  font-size: clamp(11px, .84vw, 15px);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.nox-home-hero__benefit-icon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ffe9a2, #fff8e2);
+}
+
+.nox-home-hero__trust {
+  max-width: 570px;
+  margin-top: 48px;
+}
+
+.nox-home-hero__trust > p {
+  margin-bottom: 23px;
+  color: #77797e;
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: .3em;
+  text-transform: uppercase;
+}
+
+.nox-home-hero__metrics {
+  display: grid;
+  grid-template-columns: .88fr 1.18fr 1fr;
+  margin: 0;
+}
+
+.nox-home-hero__metrics > div {
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.nox-home-hero__metrics > div + div {
+  border-left: 1px solid #ced0d4;
+  padding-left: clamp(20px, 2.2vw, 38px);
+}
+
+.nox-home-hero__metrics dt {
+  color: #606166;
+  font-size: clamp(11px, .83vw, 14px);
+}
+
+.nox-home-hero__metrics dd {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  font-size: clamp(23px, 1.45vw, 28px);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -.04em;
+}
+
+.nox-home-hero__metrics svg { color: #ffc400; }
+
+.nox-home-hero__visual {
+  position: absolute;
+  z-index: 0;
+  inset: 72px 0 0 41%;
+  /* The artwork's left badge is replaced by the live badge above so the
+     photograph can retain its scale without cropping its two right badges. */
+  mask-image: linear-gradient(to right, transparent 14%, #000 29%);
+}
+
+.nox-home-hero__visual img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: right center;
+}
+
+.nox-home-hero__approval {
+  position: absolute;
+  z-index: 1;
+  top: clamp(148px, 9.6vw, 184px);
+  left: 48%;
+  width: clamp(174px, 10.8vw, 194px);
+  padding: 23px 21px;
+  border: 1px solid #fff;
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: 0 16px 38px #85612305;
+}
+
+.nox-home-hero__approval > span {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  margin-bottom: 13px;
+  place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ffdf77, #ffe9a5);
+}
+
+.nox-home-hero__approval p { margin: 0; color: #606166; font-size: 14px; line-height: 1.4; }
+.nox-home-hero__approval p + p { margin-top: 4px; }
+.nox-home-hero__approval strong { color: #0c0d0e; font-size: 25px; line-height: 1.2; letter-spacing: -.05em; }
+.nox-home-hero__approval i { display: block; width: 42px; height: 2px; margin-top: 13px; background: #ffc800; }
+
+.nox-home-header {
+  position: fixed;
+  z-index: 50;
+  inset: 0 0 auto;
+  padding: 19px 5.9%;
+  background: #ffffffeb;
+  backdrop-filter: blur(16px);
+}
+
+.nox-home-header__bar {
+  display: flex;
+  width: 100%;
+  max-width: 1800px;
+  height: 54px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 22px;
+  margin: 0 auto;
+}
+
+.nox-home-header__nav {
+  gap: clamp(6px, 1vw, 20px);
+  padding-left: 4%;
+}
+
+.nox-home-header__nav a {
+  font-size: 14px;
+  font-weight: 400;
+  padding: 0 6px;
+}
+
+@media (min-width: 1920px) {
+  .nox-home-hero { padding-left: max(5.9%, calc((100vw - 1800px) / 2)); }
+}
+
+@media (max-width: 1279px) and (min-width: 1024px) {
+  .nox-home-hero { padding-left: 5%; padding-right: 5%; }
+  .nox-home-hero__content { width: 52%; }
+  .nox-home-hero__title { font-size: 4.15vw; }
+  .nox-home-hero__actions { gap: 10px; }
+  .nox-home-hero__button { padding: 12px 17px; gap: 10px; }
+  .nox-home-hero__benefits { gap: 14px; }
+  .nox-home-hero__benefits li { gap: 7px; }
+  .nox-home-hero__benefit-icon { width: 32px; height: 32px; }
+  .nox-home-hero__visual { left: 44%; }
+  .nox-home-hero__approval { left: 54%; padding: 18px; }
+}
+
+@media (max-width: 1023px) {
+  .nox-home-hero { min-height: auto; padding: 128px 0 0; }
+  .nox-home-hero__content { width: auto; max-width: 720px; margin: 0 auto; padding: 0 28px; }
+  .nox-home-hero__eyebrow { margin-bottom: 24px; font-size: 10px; letter-spacing: .23em; }
+  .nox-home-hero__title { font-size: clamp(40px, 6.7vw, 60px); }
+  .nox-home-hero__title strong { font-size: .88em; }
+  .nox-home-hero__description { max-width: 580px; font-size: 18px; }
+  .nox-home-hero__actions { margin-top: 26px; gap: 12px; }
+  .nox-home-hero__button { font-size: 15px; padding: 14px 22px; }
+  .nox-home-hero__benefits { gap: 18px 24px; margin-top: 26px; }
+  .nox-home-hero__benefits li { font-size: 12px; }
+  .nox-home-hero__trust { margin-top: 32px; }
+  .nox-home-hero__metrics dt { font-size: 12px; }
+  .nox-home-hero__visual { position: relative; inset: auto; margin-top: 24px; mask-image: none; }
+  .nox-home-hero__visual img { width: 100%; height: auto; object-fit: contain; }
+  .nox-home-hero__approval { display: none; }
+  .nox-home-header { padding: 16px 28px; }
+}
+
+@media (max-width: 599px) {
+  .nox-home-header { padding: 13px 20px; }
+  .nox-home-hero { padding-top: 116px; }
+  .nox-home-hero__content { padding: 0 22px; }
+  .nox-home-hero__eyebrow { gap: 10px; font-size: 8px; letter-spacing: .19em; }
+  .nox-home-hero__eyebrow::before { width: 25px; }
+  .nox-home-hero__title { font-size: clamp(33px, 8.7vw, 50px); }
+  .nox-home-hero__title strong { margin-top: 13px; font-size: .82em; white-space: normal; }
+  .nox-home-hero__description { margin-top: 18px; font-size: 16px; }
+  .nox-home-hero__desktop-break { display: none; }
+  .nox-home-hero__actions { flex-direction: column; gap: 12px; }
+  .nox-home-hero__button { min-height: 52px; width: 100%; font-size: 15px; }
+  .nox-home-hero__benefits { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 10px; }
+  .nox-home-hero__benefit-icon { width: 35px; height: 35px; }
+  .nox-home-hero__trust > p { font-size: 8px; margin-bottom: 20px; }
+  .nox-home-hero__metrics { grid-template-columns: 1fr 1.18fr .95fr; }
+  .nox-home-hero__metrics > div + div { padding-left: 13px; }
+  .nox-home-hero__metrics dt { font-size: 10px; }
+  .nox-home-hero__metrics dd { font-size: 22px; }
+  .nox-home-hero__metrics svg { width: 18px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nox-home-hero__button { transition: none; }
+}
+
+@media (forced-colors: active) {
+  .nox-home-hero__title strong { background: none; -webkit-text-fill-color: CanvasText; }
+}
