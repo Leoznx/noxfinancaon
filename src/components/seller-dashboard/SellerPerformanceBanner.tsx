@@ -1,6 +1,6 @@
 export function SellerPerformanceBanner() {
   return (
-    <section className="relative min-h-[132px] overflow-hidden rounded-2xl border border-neutral-200 bg-[linear-gradient(100deg,#fff7d6_0%,#ffffff_48%,#fffcef_100%)] px-3 py-3 shadow-[0_1px_4px_rgba(0,0,0,0.03)] sm:min-h-[150px] sm:px-6 sm:py-4 xl:h-full xl:min-h-0 xl:px-5 xl:py-0">
+    <section className="seller-performance-banner relative min-h-[132px] overflow-hidden rounded-2xl border border-neutral-200 bg-[linear-gradient(100deg,#fff7d6_0%,#ffffff_48%,#fffcef_100%)] px-3 py-3 shadow-[0_1px_4px_rgba(0,0,0,0.03)] sm:min-h-[150px] sm:px-6 sm:py-4 xl:h-full xl:min-h-0 xl:px-5 xl:py-0">
       <div className="relative grid min-h-[106px] grid-cols-[minmax(0,1.08fr)_minmax(128px,0.92fr)] items-center gap-2 sm:min-h-[116px] sm:grid-cols-[minmax(0,1fr)_minmax(210px,1fr)] sm:gap-5 xl:block xl:h-full xl:min-h-0">
         <div className="flex min-w-0 items-center justify-center xl:absolute xl:inset-y-0 xl:left-0 xl:w-[34%]">
           <img

@@ -223,6 +223,42 @@
   .nox-home-hero__visual { left: 44%; }
 }
 
+/* A wider visual and a shorter hero keep every information card legible on
+   common notebook viewports (1280–1600px) without leaving empty space. */
+@media (min-width: 1024px) and (max-width: 1600px) {
+  .nox-home-hero {
+    padding-top: 118px;
+    padding-bottom: 30px;
+  }
+
+  .nox-home-hero__content {
+    width: 47%;
+    max-width: 540px;
+  }
+
+  .nox-home-hero__eyebrow { margin-bottom: 16px; }
+  .nox-home-hero__title { font-size: 36px; }
+  .nox-home-hero__description { margin-top: 14px; font-size: 14px; }
+  .nox-home-hero__actions { margin-top: 20px; }
+  .nox-home-hero__button { min-height: 44px; padding: 10px 17px; font-size: 13px; }
+  .nox-home-hero__benefits { gap: 10px 15px; margin-top: 20px; }
+  .nox-home-hero__benefits li { gap: 7px; font-size: 11px; }
+  .nox-home-hero__benefit-icon { width: 29px; height: 29px; }
+  .nox-home-hero__benefit-icon svg { width: 18px; height: 18px; }
+  .nox-home-hero__trust { margin-top: 24px; }
+  .nox-home-hero__trust > p { margin-bottom: 14px; }
+  .nox-home-hero__metrics dd { font-size: 20px; }
+
+  .nox-home-hero__visual {
+    left: 40%;
+    mask-image: linear-gradient(to right, transparent, #000 9%);
+  }
+
+  .nox-home-hero__visual img {
+    object-position: 72% center;
+  }
+}
+
 @media (max-width: 1023px) {
   .nox-home-hero { min-height: auto; padding: 128px 0 0; }
   .nox-home-hero__content { width: auto; max-width: 720px; margin: 0 auto; padding: 0 28px; }

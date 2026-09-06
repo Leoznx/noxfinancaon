@@ -1,0 +1,114 @@
+/* Notebook displays have desktop width but substantially less vertical room.
+   Keep the seller overview inside the viewport while preserving the regular
+   desktop and mobile layouts. */
+@media (min-width: 1280px) and (max-height: 900px) {
+  .seller-dashboard {
+    grid-template-rows: auto 96px minmax(0, 1.15fr) minmax(0, 0.85fr) !important;
+  }
+
+  .seller-dashboard__heading h1 {
+    font-size: 24px;
+    line-height: 1.05;
+  }
+
+  .seller-dashboard__heading p {
+    font-size: 12px;
+  }
+
+  .seller-performance-banner img {
+    height: 88px !important;
+    max-height: 88px !important;
+  }
+
+  .seller-performance-banner p {
+    font-size: clamp(26px, 2.05vw, 34px) !important;
+  }
+
+  .seller-kpi-card {
+    padding: 10px !important;
+  }
+
+  .seller-kpi-card__row {
+    gap: 9px !important;
+  }
+
+  .seller-kpi-card__icon {
+    width: 36px !important;
+    height: 36px !important;
+    border-radius: 10px;
+  }
+
+  .seller-kpi-card__icon svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .seller-kpi-card__title {
+    max-width: 20ch;
+    font-size: 11px;
+    line-height: 1.18;
+  }
+
+  .seller-kpi-card__value {
+    margin-top: 3px !important;
+    font-size: clamp(18px, 1.45vw, 21px) !important;
+  }
+
+  .seller-kpi-card__subtitle {
+    margin-top: 5px !important;
+    font-size: 9px !important;
+    line-height: 1.2;
+  }
+
+  .seller-kpi-card__sparkline {
+    height: 22px !important;
+  }
+
+  .seller-kpi-card__progress {
+    right: 10px !important;
+    bottom: 9px !important;
+    left: 10px !important;
+  }
+
+  .seller-contracts-chart {
+    padding: 11px !important;
+  }
+
+  .seller-contracts-chart__header {
+    margin-bottom: 4px !important;
+  }
+
+  .seller-contracts-chart__plot {
+    min-height: 112px !important;
+  }
+
+  .seller-dashboard-section {
+    padding: 10px !important;
+  }
+
+  .seller-dashboard-section > div:first-child {
+    margin-bottom: 5px !important;
+  }
+
+  .seller-dashboard-section > a:last-child {
+    min-height: 26px !important;
+    margin-top: 5px !important;
+    font-size: 10px;
+  }
+}
+
+@media (min-width: 1280px) and (max-height: 720px) {
+  .seller-dashboard {
+    grid-template-rows: auto 82px minmax(0, 1.18fr) minmax(0, 0.82fr) !important;
+    gap: 9px !important;
+  }
+
+  .seller-performance-banner img {
+    height: 72px !important;
+    max-height: 72px !important;
+  }
+
+  .seller-performance-banner p {
+    font-size: clamp(23px, 1.8vw, 29px) !important;
+  }
+}

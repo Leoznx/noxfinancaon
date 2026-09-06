@@ -41,8 +41,8 @@ export function ContractsChart({
   const hasContracts = visibleHistory.some((item) => item.contracts > 0);
 
   return (
-    <section className="flex h-full min-h-0 min-w-0 flex-col rounded-2xl border border-neutral-200 bg-white p-3 shadow-[0_1px_4px_rgba(0,0,0,0.03)] sm:p-5 xl:p-3">
-      <div className="mb-2 flex flex-wrap items-start justify-between gap-3">
+    <section className="seller-contracts-chart flex h-full min-h-0 min-w-0 flex-col rounded-2xl border border-neutral-200 bg-white p-3 shadow-[0_1px_4px_rgba(0,0,0,0.03)] sm:p-5 xl:p-3">
+      <div className="seller-contracts-chart__header mb-2 flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-base font-bold text-neutral-950 sm:text-[17px]">Contratos fechados</h2>
@@ -87,7 +87,7 @@ export function ContractsChart({
         </div>
       </div>
 
-      <div className="h-[185px] min-w-0 sm:h-[205px] xl:h-auto xl:min-h-[128px] xl:flex-1">
+      <div className="seller-contracts-chart__plot h-[185px] min-w-0 sm:h-[205px] xl:h-auto xl:min-h-[128px] xl:flex-1">
         {!hasContracts ? (
           <div className="flex h-full flex-col items-center justify-center text-center">
             <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-yellow-50 text-yellow-600">
