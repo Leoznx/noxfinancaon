@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
   Building2,
@@ -19,11 +19,11 @@ import {
   claimSellerClientPhone,
   formatBrazilianPhoneInput,
   isValidBrazilianPhone,
+  lookupSellerClientByEmail,
   registerSellerClient,
+  type SellerClientLookup,
   type SellerClientPhoneClaim,
 } from "@/lib/seller-clients";
-
-type PartnerType = "corretor" | "imobiliaria";
 
 type SellerClientRegistrationFlowProps = {
   onPhoneClaimed: () => void;
@@ -35,13 +35,43 @@ export function SellerClientRegistrationFlow({ onPhoneClaimed, onRegistered }: S
   const [claim, setClaim] = useState<SellerClientPhoneClaim | null>(null);
   const [checkingPhone, setCheckingPhone] = useState(false);
   const [email, setEmail] = useState("");
-  const [detailsOpen, setDetailsOpen] = useState(false);
-  const [registrationPhone, setRegistrationPhone] = useState("");
-  const [partnerType, setPartnerType] = useState<PartnerType | "">("");
-  const [agencyName, setAgencyName] = useState("");
-  const [brokerName, setBrokerName] = useState("");
-  const [city, setCity] = useState("");
+  const [client, setClient] = useState<SellerClientLookup | null>(null);
+  const [lookupError, setLookupError] = useState<string | null>(null);
+  const [checkingEmail, setCheckingEmail] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [confirmedNow, setConfirmedNow] = useState(false);
+  const lookupRequest = useRef(0);
+
+  const normalizedEmail = email.trim().toLowerCase();
+  const validEmail = isLikelyEmail(normalizedEmail);
+
+  useEffect(() => {
+    const requestId = ++lookupRequest.current;
+    setClient(null);
+    setLookupError(null);
+    setConfirmedNow(false);
+
+    if (!validEmail) {
+      setCheckingEmail(false);
+      return;
+    }
+
+    setCheckingEmail(true);
+    const timer = window.setTimeout(async () => {
+      try {
+        const result = await lookupSellerClientByEmail(normalizedEmail);
+        if (lookupRequest.current === requestId) setClient(result);
+      } catch (caught) {
+        if (lookupRequest.current === requestId) {
+          setLookupError(caught instanceof Error ? caught.message : "Não foi possível localizar o cliente.");
+        }
+      } finally {
+        if (lookupRequest.current === requestId) setCheckingEmail(false);
+      }
+    }, 450);
+
+    return () => window.clearTimeout(timer);
+  }, [normalizedEmail, validEmail]);
 
   async function checkPhone() {
     if (!isValidBrazilianPhone(consultationPhone)) {
@@ -61,64 +91,17 @@ export function SellerClientRegistrationFlow({ onPhoneClaimed, onRegistered }: S
     }
   }
 
-  function openDetails() {
-    const normalizedEmail = email.trim().toLowerCase();
-    if (!normalizedEmail || !normalizedEmail.includes("@")) {
-      toast.error("Informe o e-mail usado pelo cliente no login NOX.");
-      return;
-    }
-    setEmail(normalizedEmail);
-    setDetailsOpen(true);
-  }
-
-  function resetRegistration() {
-    setEmail("");
-    setDetailsOpen(false);
-    setRegistrationPhone("");
-    setPartnerType("");
-    setAgencyName("");
-    setBrokerName("");
-    setCity("");
-  }
-
-  async function submitDetails(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!isValidBrazilianPhone(registrationPhone)) {
-      toast.error("Informe o telefone do cliente com DDD.");
-      return;
-    }
-    if (!partnerType) {
-      toast.error("Selecione Corretor ou Imobiliária.");
-      return;
-    }
-    if (!brokerName.trim()) {
-      toast.error("Informe o nome do corretor ou responsável.");
-      return;
-    }
-    if (partnerType === "imobiliaria" && !agencyName.trim()) {
-      toast.error("Informe o nome da imobiliária.");
-      return;
-    }
-    if (!city.trim()) {
-      toast.error("Informe a cidade do cliente.");
-      return;
-    }
-
+  async function confirmClient() {
+    if (!client || client.link_status !== "available") return;
     setSubmitting(true);
     try {
-      await registerSellerClient({
-        email,
-        phone: registrationPhone,
-        partnerType,
-        agencyName: agencyName.trim(),
-        brokerName: brokerName.trim(),
-        city: city.trim(),
-      });
-      toast.success("Cliente cadastrado e produção vinculada.");
-      resetRegistration();
+      await registerSellerClient(client.email);
+      setClient((current) => current ? { ...current, link_status: "already_mine", linked_seller_name: null } : current);
+      setConfirmedNow(true);
+      toast.success("Cliente confirmado e cadastro contabilizado no seu ranking.");
       onRegistered();
     } catch (caught) {
-      toast.error(caught instanceof Error ? caught.message : "Não foi possível cadastrar o cliente.");
+      toast.error(caught instanceof Error ? caught.message : "Não foi possível confirmar o cliente.");
     } finally {
       setSubmitting(false);
     }
@@ -155,63 +138,98 @@ export function SellerClientRegistrationFlow({ onPhoneClaimed, onRegistered }: S
         {claim && <PhoneClaimNotice claim={claim} />}
       </section>
 
-      <section className="rounded-2xl border border-black/10 bg-white p-5 shadow-sm">
-        <FlowHeading icon={UserRound} title="Cadastrar cliente de fato" description="Comece pelo e-mail quando o cliente decidir seguir. Esta etapa não depende da consulta ao lado." />
+      <section className="rounded-2xl border border-yellow-300 bg-yellow-50/50 p-5 shadow-sm">
+        <FlowHeading
+          icon={UserRound}
+          title="Cadastrar cliente de fato"
+          description="Digite o e-mail do login NOX. O sistema localiza a conta automaticamente para você apenas confirmar o vínculo."
+        />
         <Label htmlFor="client-email" className="mt-5 block text-xs font-black uppercase tracking-widest text-neutral-600">E-mail de login NOX</Label>
-        <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+        <div className="mt-2">
           <IconInput icon={Mail}>
             <Input
               id="client-email"
               type="email"
+              inputMode="email"
               autoComplete="email"
               value={email}
-              onChange={(event) => {
-                setEmail(event.target.value);
-                setDetailsOpen(false);
-              }}
+              onChange={(event) => setEmail(event.target.value)}
               placeholder="cliente@empresa.com.br"
-              className="h-11 border-0 bg-transparent pl-10 shadow-none focus-visible:ring-0"
+              className="h-11 border-0 bg-transparent pl-10 pr-32 shadow-none focus-visible:ring-0"
               disabled={submitting}
             />
+            <span className="pointer-events-none absolute right-3 top-3 flex items-center gap-1.5 text-[11px] font-bold text-neutral-500">
+              {checkingEmail && <RefreshCw className="h-3.5 w-3.5 animate-spin" />}
+              {checkingEmail ? "Buscando" : validEmail ? "Busca automática" : "Digite o e-mail"}
+            </span>
           </IconInput>
-          <Button type="button" variant="outline" className="h-11 font-bold" onClick={openDetails} disabled={submitting}>Continuar cadastro</Button>
         </div>
+
+        {lookupError && (
+          <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-800">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{lookupError}</span>
+          </div>
+        )}
+        {client && (
+          <ClientLookupCard
+            client={client}
+            confirmedNow={confirmedNow}
+            submitting={submitting}
+            onConfirm={() => void confirmClient()}
+          />
+        )}
       </section>
 
-      {detailsOpen && (
-        <form onSubmit={submitDetails} className="space-y-4 rounded-2xl border border-yellow-300 bg-yellow-50/80 p-5 shadow-sm lg:col-span-2">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-base font-black text-neutral-950">Complete as informações do cliente</p>
-              <p className="mt-1 text-xs text-neutral-500">O telefone será validado novamente no banco no momento exato do cadastro.</p>
-            </div>
-            <Button type="button" variant="ghost" size="sm" onClick={() => setDetailsOpen(false)}>Fechar</Button>
-          </div>
+      <div className="rounded-2xl border border-neutral-200 bg-neutral-950 px-5 py-4 text-sm text-white lg:col-span-2">
+        <strong className="text-yellow-300">Contabilização imediata:</strong> cada SDR e cada Closer pode confirmar o próprio vínculo com o mesmo cliente. A confirmação entra automaticamente no ranking da respectiva função como cadastro realizado.
+      </div>
+    </div>
+  );
+}
 
-          <fieldset>
-            <legend className="text-xs font-black uppercase tracking-widest text-neutral-600">Corretor ou imobiliária</legend>
-            <div className="mt-2 grid grid-cols-2 gap-2">
-              <TypeButton active={partnerType === "corretor"} icon={UserRound} label="Corretor" onClick={() => setPartnerType("corretor")} />
-              <TypeButton active={partnerType === "imobiliaria"} icon={Building2} label="Imobiliária" onClick={() => setPartnerType("imobiliaria")} />
-            </div>
-          </fieldset>
+function ClientLookupCard({ client, confirmedNow, submitting, onConfirm }: { client: SellerClientLookup; confirmedNow: boolean; submitting: boolean; onConfirm: () => void }) {
+  const blocked = client.link_status === "linked_to_other";
+  const mine = client.link_status === "already_mine";
+  const typeLabel = client.partner_type === "imobiliaria" ? "Imobiliária" : "Corretor autônomo";
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <ReadOnlyField label="E-mail" value={email} icon={Mail} />
-            <FormField id="registration-phone" label="Telefone com DDD" value={registrationPhone} onChange={(value) => setRegistrationPhone(formatBrazilianPhoneInput(value))} placeholder="(47) 99999-9999" icon={Phone} disabled={submitting} />
-            <FormField id="broker-name" label="Nome do corretor ou responsável" value={brokerName} onChange={setBrokerName} placeholder="Nome completo" icon={UserRound} disabled={submitting} />
-            <FormField id="agency-name" label={partnerType === "imobiliaria" ? "Nome da imobiliária" : "Imobiliária (opcional)"} value={agencyName} onChange={setAgencyName} placeholder={partnerType === "corretor" ? "Autônomo / não possui" : "Nome da empresa"} icon={Building2} disabled={submitting} />
-            <FormField id="client-city" label="Cidade do cliente" value={city} onChange={setCity} placeholder="Ex.: Blumenau" icon={MapPin} disabled={submitting} />
-          </div>
+  return (
+    <div className={`mt-4 rounded-2xl border p-4 ${blocked ? "border-red-200 bg-red-50" : mine ? "border-emerald-200 bg-emerald-50" : "border-yellow-300 bg-white"}`}>
+      <div className="flex items-start gap-3">
+        {blocked ? <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" /> : <CheckCircle2 className={`mt-0.5 h-5 w-5 shrink-0 ${mine ? "text-emerald-600" : "text-yellow-600"}`} />}
+        <div>
+          <p className="text-sm font-black text-neutral-950">{blocked ? "Cliente já vinculado nesta função" : mine ? "Cliente já confirmado" : "Cliente encontrado"}</p>
+          <p className="mt-1 text-xs leading-5 text-neutral-600">
+            {blocked
+              ? `Este cadastro já pertence a ${client.linked_seller_name ?? "outro vendedor"} nesta mesma função.`
+              : mine
+                ? confirmedNow ? "O vínculo foi confirmado e já entrou no seu ranking." : "Este vínculo já consta nos seus cadastros e no seu ranking."
+                : "Confira os dados abaixo antes de confirmar que este cliente é seu."}
+          </p>
+        </div>
+      </div>
 
-          <Button type="submit" className="h-11 w-full gap-2 bg-neutral-950 font-bold text-white hover:bg-neutral-800" disabled={submitting}>
-            {submitting ? <RefreshCw className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-            {submitting ? "Cadastrando cliente" : "Finalizar cadastro"}
-          </Button>
-        </form>
+      <div className="mt-4 grid gap-2 sm:grid-cols-2">
+        <LookupField icon={UserRound} label="Usuário" value={client.full_name} />
+        <LookupField icon={Building2} label="Tipo" value={typeLabel} />
+        <LookupField icon={Building2} label="Cliente" value={client.partner_name} />
+        <LookupField icon={Mail} label="E-mail" value={client.email} />
+        {client.phone && <LookupField icon={Phone} label="Telefone" value={client.phone} />}
+        {client.city && <LookupField icon={MapPin} label="Cidade" value={client.city} />}
+      </div>
+
+      {client.link_status === "available" && (
+        <Button type="button" className="mt-4 h-11 w-full gap-2 bg-neutral-950 font-bold text-white hover:bg-neutral-800" onClick={onConfirm} disabled={submitting}>
+          {submitting ? <RefreshCw className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+          {submitting ? "Confirmando vínculo" : "Confirmar que este cliente é meu"}
+        </Button>
       )}
     </div>
   );
+}
+
+function LookupField({ icon: Icon, label, value }: { icon: typeof Mail; label: string; value: string }) {
+  return <div className="flex min-w-0 items-center gap-2 rounded-xl border border-black/5 bg-white/80 px-3 py-2"><Icon className="h-4 w-4 shrink-0 text-neutral-400" /><div className="min-w-0"><p className="text-[9px] font-black uppercase tracking-wider text-neutral-400">{label}</p><p className="truncate text-xs font-bold text-neutral-800">{value}</p></div></div>;
 }
 
 function FlowHeading({ icon: Icon, title, description, dark = false }: { icon: typeof Search; title: string; description: string; dark?: boolean }) {
@@ -247,6 +265,10 @@ function PhoneClaimNotice({ claim }: { claim: SellerClientPhoneClaim }) {
   );
 }
 
+function isLikelyEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
 function formatTime(value: string | null) {
   if (!value) return "—";
   return new Date(value).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
@@ -254,16 +276,4 @@ function formatTime(value: string | null) {
 
 function IconInput({ icon: Icon, children }: { icon: typeof Phone; children: ReactNode }) {
   return <div className="relative flex-1 rounded-md border border-neutral-200 bg-white"><Icon className="pointer-events-none absolute left-3 top-3 h-5 w-5 text-neutral-400" />{children}</div>;
-}
-
-function TypeButton({ active, icon: Icon, label, onClick }: { active: boolean; icon: typeof UserRound; label: string; onClick: () => void }) {
-  return <button type="button" onClick={onClick} className={`flex h-11 items-center justify-center gap-2 rounded-xl border text-sm font-bold transition ${active ? "border-neutral-950 bg-neutral-950 text-yellow-300" : "border-neutral-200 bg-white text-neutral-700 hover:border-neutral-400"}`}><Icon className="h-4 w-4" />{label}</button>;
-}
-
-function ReadOnlyField({ label, value, icon: Icon }: { label: string; value: string; icon: typeof Mail }) {
-  return <div><Label className="text-[11px] font-black uppercase tracking-wider text-neutral-500">{label}</Label><div className="mt-1.5 flex h-11 items-center gap-2 rounded-xl border border-neutral-200 bg-neutral-100 px-3"><Icon className="h-4 w-4 text-neutral-400" /><span className="min-w-0 truncate text-sm font-medium text-neutral-600">{value}</span></div></div>;
-}
-
-function FormField({ id, label, value, onChange, placeholder, icon: Icon, disabled }: { id: string; label: string; value: string; onChange: (value: string) => void; placeholder: string; icon: typeof UserRound; disabled: boolean }) {
-  return <div><Label htmlFor={id} className="text-[11px] font-black uppercase tracking-wider text-neutral-500">{label}</Label><div className="relative mt-1.5"><Icon className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-neutral-400" /><Input id={id} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} disabled={disabled} className="h-11 pl-9" /></div></div>;
 }

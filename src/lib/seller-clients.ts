@@ -69,13 +69,16 @@ export type SellerClientPhoneContact = {
   expires_at: string;
 };
 
-export type RegisterSellerClientDetails = {
+export type SellerClientLookup = {
+  profile_id: string;
+  full_name: string;
   email: string;
-  phone: string;
-  partnerType: "corretor" | "imobiliaria";
-  agencyName: string;
-  brokerName: string;
-  city: string;
+  partner_type: "corretor_autonomo" | "imobiliaria";
+  partner_name: string;
+  phone: string | null;
+  city: string | null;
+  link_status: "available" | "already_mine" | "linked_to_other";
+  linked_seller_name: string | null;
 };
 
 function normalizeRows<T>(rows: unknown): T[] {
@@ -124,20 +127,25 @@ export async function fetchSellerClientPhoneHistory(): Promise<SellerClientPhone
   return normalizeRows<SellerClientPhoneContact>(data);
 }
 
-export async function registerSellerClient(details: RegisterSellerClientDetails): Promise<string> {
+export async function lookupSellerClientByEmail(email: string): Promise<SellerClientLookup> {
   const { data, error } = await supabase.rpc(
-    "register_my_seller_client_details" as never,
-    {
-      p_email: details.email,
-      p_phone: details.phone,
-      p_partner_type: details.partnerType,
-      p_agency_name: details.agencyName,
-      p_broker_name: details.brokerName,
-      p_city: details.city,
-    } as never,
+    "lookup_seller_client_by_email" as never,
+    { p_email: email.trim().toLowerCase() } as never,
   );
 
-  if (error) throw error;
+  if (error) throw new Error(error.message || "Não foi possível localizar o cliente.");
+  const result = normalizeRows<SellerClientLookup>(data)[0];
+  if (!result) throw new Error("Nenhum cliente foi encontrado para este e-mail.");
+  return result;
+}
+
+export async function registerSellerClient(email: string): Promise<string> {
+  const { data, error } = await supabase.rpc(
+    "register_my_seller_client" as never,
+    { p_email: email.trim().toLowerCase() } as never,
+  );
+
+  if (error) throw new Error(error.message || "Não foi possível confirmar o cliente.");
   return String(data);
 }
 
