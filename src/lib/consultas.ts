@@ -58,12 +58,15 @@ export async function upsertConsultaCredito({ dados, userEmail, userRole }: Upse
   let imovelId: string | null = null;
 
   if (profileId) {
-    const { data: existente } = await supabase
+    const { data: existente, error: existingConsultaError } = await supabase
       .from("consultas_credito")
-      .select("id, inquilino_id, imovel_id")
+      .select("id, inquilino_id, imovel_id, updated_at")
       .eq("profile_id_solicitante", profileId)
       .eq("tenant_document", tenantDocument)
+      .order("updated_at", { ascending: false })
+      .limit(1)
       .maybeSingle();
+    if (existingConsultaError) throw existingConsultaError;
     if (existente) {
       consultaId = existente.id;
       inquilinoId = existente.inquilino_id;
@@ -71,48 +74,22 @@ export async function upsertConsultaCredito({ dados, userEmail, userRole }: Upse
     }
   }
 
-  // 4. Upsert inquilino (por CPF/CNPJ formatado original — a tabela tem UNIQUE em cpf)
+  // 4. Resolve o inquilino sem abrir seus dados na RLS. Registros históricos podem
+  // já ter o mesmo CPF/CNPJ, mas não serem visíveis antes de a consulta criar o vínculo.
   if (!inquilinoId) {
-    const inqPayload: any =
-      tenantType === "PF"
-        ? { nome: tenantNameSafe, cpf: tenantDocument, tipo: "PF" }
-        : { nome: tenantNameSafe, razao_social: tenantNameSafe, cnpj: tenantDocument, cpf: tenantDocument, tipo: "PJ" };
-    // tentar achar inquilino existente por cpf normalizado
-    const { data: inqExist } = await supabase
-      .from("inquilinos")
-      .select("id")
-      .eq("cpf", tenantDocument)
-      .maybeSingle();
-    if (inqExist) {
-      inquilinoId = inqExist.id;
-      await supabase.from("inquilinos").update({ nome: tenantNameSafe } as any).eq("id", inqExist.id);
-    } else {
-      const { data: inqNova, error: inqErr } = await supabase
-        .from("inquilinos")
-        .insert(inqPayload)
-        .select("id")
-        .single();
-      if (inqErr) {
-        // 23505 = unique_violation: outra simulação concorrente pro MESMO CPF/CNPJ
-        // (dois corretores atendendo o mesmo inquilino, duplo clique, nova aba) inseriu
-        // entre o SELECT acima e este INSERT. Com muita gente simulando ao mesmo tempo
-        // isso deixou de ser raro — em vez de propagar o erro pro corretor, busca de
-        // novo e reaproveita a linha que a outra requisição acabou de gravar.
-        if (inqErr.code === "23505") {
-          const { data: inqRetry, error: retryErr } = await supabase
-            .from("inquilinos")
-            .select("id")
-            .eq("cpf", tenantDocument)
-            .single();
-          if (retryErr || !inqRetry) throw retryErr || inqErr;
-          inquilinoId = inqRetry.id;
-        } else {
-          throw inqErr;
-        }
-      } else {
-        inquilinoId = inqNova.id;
-      }
+    const { data: resolvedTenantId, error: resolveTenantError } = await (supabase as any).rpc(
+      "resolve_consultation_tenant",
+      {
+        p_document: tenantDocument,
+        p_tenant_type: tenantType,
+        p_name: tenantNameSafe,
+      },
+    );
+    if (resolveTenantError) throw resolveTenantError;
+    if (typeof resolvedTenantId !== "string" || !resolvedTenantId) {
+      throw new Error("Não foi possível vincular o inquilino à consulta.");
     }
+    inquilinoId = resolvedTenantId;
   } else {
     await supabase.from("inquilinos").update({ nome: tenantNameSafe } as any).eq("id", inquilinoId);
   }
