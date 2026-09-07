@@ -349,7 +349,14 @@ export async function detectAuthenticationState(
 async function anyVisible(candidates: Locator[]): Promise<boolean> {
   for (const candidate of candidates) {
     const count = await candidate.count().catch(() => 0);
-    if (count > 0 && (await candidate.first().isVisible().catch(() => false))) return true;
+    if (
+      count > 0 &&
+      (await candidate
+        .first()
+        .isVisible()
+        .catch(() => false))
+    )
+      return true;
   }
   return false;
 }
@@ -465,9 +472,13 @@ export async function loginWithCredentials(
   }
 
   if (Date.now() >= deadline) {
-    throw new Error(`Tempo limite total de ${Math.round(timeoutMs / 1000)}s excedido no Login Loft.`);
+    throw new Error(
+      `Tempo limite total de ${Math.round(timeoutMs / 1000)}s excedido no Login Loft.`,
+    );
   }
-  throw ultimoErro instanceof Error ? ultimoErro : new Error("Não foi possível concluir o Login Loft.");
+  throw ultimoErro instanceof Error
+    ? ultimoErro
+    : new Error("Não foi possível concluir o Login Loft.");
 }
 
 async function tentarLoginLoft(
@@ -526,8 +537,19 @@ async function tentarLoginLoft(
     "Campo de senha do Login Loft",
   );
 
-  await loginField.fill(login);
-  await senhaField.fill(password);
+  // O Login Loft usa um campo React controlado que interpreta `fill()` como
+  // telefone e trunca e-mails em 15 caracteres. Digitar eventos reais mantém o
+  // e-mail completo no estado do formulário e habilita corretamente o botão.
+  await loginField.click();
+  await loginField.press("Control+A");
+  await loginField.press("Backspace");
+  await loginField.pressSequentially(login, { delay: 20 });
+
+  await senhaField.click();
+  await senhaField.press("Control+A");
+  await senhaField.press("Backspace");
+  await senhaField.pressSequentially(password, { delay: 20 });
+  await senhaField.press("Tab");
 
   const entrarButton = page.getByRole("button", { name: /^\s*entrar\s*$/i });
   const submitButton =
@@ -536,6 +558,10 @@ async function tentarLoginLoft(
       : page.locator('button[type="submit"], input[type="submit"]').first();
   if ((await submitButton.count().catch(() => 0)) === 0) {
     throw new Error("O botão Entrar do Login Loft não foi encontrado.");
+  }
+  await submitButton.waitFor({ state: "visible", timeout: tempoRestante(deadline) });
+  if (await submitButton.isDisabled().catch(() => true)) {
+    throw new Error("O Login Loft não habilitou o botão Entrar após o preenchimento.");
   }
   await submitButton.click({ timeout: tempoRestante(deadline) });
 

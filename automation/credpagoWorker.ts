@@ -78,6 +78,7 @@ const runtimeState: {
 
 let proximaValidacaoAuthEm = 0;
 let ultimaRecuperacaoConsultasEm = 0;
+let ultimaSinalizacaoAuthNaFilaEm = 0;
 
 async function solicitarLoginManual(): Promise<void> {
   log("Tela de login detectada na CredPago.");
@@ -314,6 +315,29 @@ async function recuperarConsultasTravadas(): Promise<void> {
   }
 }
 
+/**
+ * Expõe aos clientes que a fila está pausada por autenticação. Sem esta etapa,
+ * uma consulta nova permanecia como "pendente" sem qualquer indicação enquanto
+ * o worker tentava recuperar a sessão do parceiro.
+ */
+async function sinalizarFilaAguardandoAutenticacao(): Promise<void> {
+  const agora = Date.now();
+  if (agora - ultimaSinalizacaoAuthNaFilaEm < env.authRetryIntervalMs) return;
+  ultimaSinalizacaoAuthNaFilaEm = agora;
+
+  const { data, error } = await supabaseAdmin
+    .from("consultas_credito")
+    .update({ automation_step: "aguardando_autenticacao" })
+    .eq("status", "pendente")
+    .eq("origem", "nox_financa")
+    .select("id");
+
+  if (error) throw error;
+  if (data?.length) {
+    log(`${data.length} consulta(s) aguardando a recuperação da autenticação.`);
+  }
+}
+
 async function validarAutenticacao(
   context: BrowserContext,
   persistirSessao: () => Promise<void>,
@@ -503,9 +527,7 @@ async function processarConsulta(
       proximaValidacaoAuthEm = Date.now() + env.authRetryIntervalMs;
       await recolocarNaFilaAguardandoAutenticacao(consulta.id)
         .then(() =>
-          log(
-            `[${cid}] Consulta preservada na fila enquanto a autenticação é recuperada.`,
-          ),
+          log(`[${cid}] Consulta preservada na fila enquanto a autenticação é recuperada.`),
         )
         .catch((e) => logErro(`[${cid}] Falha ao devolver consulta para a fila`, e));
     } else {
@@ -745,6 +767,9 @@ async function loop(once: boolean): Promise<void> {
         contextoAberto.persistirSessao,
       );
       if (!autenticacaoPronta) {
+        await sinalizarFilaAguardandoAutenticacao().catch((error) =>
+          logErro("Falha ao sinalizar fila aguardando autenticação", error),
+        );
         if (once) {
           log("Autenticação indisponível — nenhuma consulta foi retirada da fila.");
           break;

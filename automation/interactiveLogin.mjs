@@ -146,10 +146,31 @@ try {
       const passwordField = page.getByLabel(/senha|password/i);
       await loginField.first().waitFor({ state: "visible", timeout: 30_000 });
       await passwordField.first().waitFor({ state: "visible", timeout: 30_000 });
-      await loginField.first().fill(login);
-      await passwordField.first().fill(password);
+      const loginInput = loginField.first();
+      const passwordInput = passwordField.first();
+
+      // O campo controlado do SSO interpreta `fill()` como telefone e trunca
+      // e-mails. Eventos reais de teclado mantêm o valor completo no React.
+      await loginInput.click();
+      await loginInput.press("Control+A");
+      await loginInput.press("Backspace");
+      await loginInput.pressSequentially(login, { delay: 20 });
+
+      await passwordInput.click();
+      await passwordInput.press("Control+A");
+      await passwordInput.press("Backspace");
+      await passwordInput.pressSequentially(password, { delay: 20 });
+      await passwordInput.press("Tab");
 
       const enterButton = page.getByRole("button", { name: /^entrar$/i });
+      if (
+        await enterButton
+          .first()
+          .isDisabled()
+          .catch(() => true)
+      ) {
+        throw new Error("O Login Loft não habilitou o botão Entrar após o preenchimento.");
+      }
       await enterButton.first().click({ timeout: 60_000 });
 
       const captcha = page.locator(

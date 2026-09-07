@@ -18,6 +18,10 @@ import {
 import { DEMO_SIMULATION_DATA } from "@/lib/demo-accounts";
 import { isDemoSession } from "@/lib/demo-session";
 
+const TEMPO_LIMITE_ACOMPANHAMENTO_MS = 120_000;
+const MENSAGEM_SERVICO_INDISPONIVEL =
+  "O serviço de análise está se reconectando. Sua consulta ficou salva; tente novamente em instantes.";
+
 export const Route = createFileRoute("/consultas/nova")({
   component: () => (
     <ProtectedRoute>
@@ -57,6 +61,11 @@ function NovaConsulta() {
         const status = consulta.status as StatusConsulta;
         setEtapaAutomacao(consulta.automation_step);
         setProgresso(progressoConsulta(consulta.status, consulta.automation_step));
+        if (consulta.automation_step === "aguardando_autenticacao") {
+          setErroAutomacao(MENSAGEM_SERVICO_INDISPONIVEL);
+          pararEscuta();
+          return;
+        }
         if (!STATUS_FINAIS.includes(status)) return;
         if (status === "erro") {
           setErroAutomacao(
@@ -92,7 +101,7 @@ function NovaConsulta() {
         "A consulta está demorando mais que o normal. Pode ser uma instabilidade momentânea — tente reenviar em instantes.",
       );
       pararEscuta();
-    }, 150000);
+    }, TEMPO_LIMITE_ACOMPANHAMENTO_MS);
   };
 
   const handleSimular = async (dados: DadosSimulacao) => {
