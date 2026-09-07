@@ -309,6 +309,21 @@ async function isAuthenticatedCredPagoPage(page: Page): Promise<boolean> {
   return anyVisible(simulationMarkers);
 }
 
+/**
+ * Diferencia o desafio real do texto legal "usamos reCAPTCHA", presente no
+ * rodapé do Login Loft em todos os acessos. Só um widget visível ou uma
+ * instrução explícita ao usuário deve pausar a automação.
+ */
+export async function hasVisibleCaptchaChallenge(page: Page): Promise<boolean> {
+  const widgets = [
+    page.locator('iframe[title*="recaptcha challenge" i]'),
+    page.locator('iframe[src*="/recaptcha/api2/bframe" i]'),
+    page.locator('[role="dialog"] iframe[src*="recaptcha" i]'),
+    page.locator('.g-recaptcha:not([data-size="invisible"])'),
+  ];
+  return anyVisible(widgets);
+}
+
 async function authenticationChallenge(page: Page): Promise<string | null> {
   const texto = await page
     .locator("body")
@@ -316,7 +331,12 @@ async function authenticationChallenge(page: Page): Promise<string | null> {
     .then((value) => value.replace(/\s+/g, " ").trim().slice(0, 1200))
     .catch(() => "");
 
-  if (/captcha|recaptcha/i.test(texto)) {
+  if (
+    (await hasVisibleCaptchaChallenge(page)) ||
+    /n[aã]o sou um rob[oô]|confirme que voc[eê] n[aã]o [eé] um rob[oô]|selecione todas as imagens/i.test(
+      texto,
+    )
+  ) {
     return "A Loft solicitou uma verificação de segurança durante o login.";
   }
   if (
@@ -581,8 +601,5 @@ async function tentarLoginLoft(
 }
 
 export async function isCaptchaPresent(page: Page): Promise<boolean> {
-  const captcha = page.locator(
-    'iframe[src*="recaptcha"], iframe[title*="captcha" i], [class*="captcha" i]',
-  );
-  return (await captcha.count().catch(() => 0)) > 0;
+  return hasVisibleCaptchaChallenge(page);
 }

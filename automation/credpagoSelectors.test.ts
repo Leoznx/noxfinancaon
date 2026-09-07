@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { chromium, type Browser } from "playwright";
-import { detectAuthenticationState, fillValores } from "./credpagoSelectors";
+import {
+  detectAuthenticationState,
+  fillValores,
+  hasVisibleCaptchaChallenge,
+} from "./credpagoSelectors";
 
 let browser: Browser;
 
@@ -46,7 +50,7 @@ test("reconhece explicitamente a tela de Login Loft", async () => {
 test("reconhece o formulário de simulação como sessão autenticada", async () => {
   const page = await pageWithHtml(
     "https://credpago.com/imobiliaria/proposta",
-    '<main><button>Pessoa Física</button><label>CPF<input /></label><button>Simular Crédito</button></main>',
+    "<main><button>Pessoa Física</button><label>CPF<input /></label><button>Simular Crédito</button></main>",
   );
   assert.equal(await detectAuthenticationState(page, 300), "authenticated");
   await page.close();
@@ -86,7 +90,7 @@ test("reconhece explicitamente a tela de Login Loft (app.loft.com.br)", async ()
 test("reconhece o formulário de simulação como sessão autenticada (app.loft.com.br)", async () => {
   const page = await pageWithHtml(
     "https://app.loft.com.br/fianca-aluguel/imobiliaria/proposta",
-    '<main><button>Pessoa Física</button><label>CPF<input /></label><button>Simular Crédito</button></main>',
+    "<main><button>Pessoa Física</button><label>CPF<input /></label><button>Simular Crédito</button></main>",
   );
   assert.equal(await detectAuthenticationState(page, 300), "authenticated");
   await page.close();
@@ -98,6 +102,24 @@ test("reconhece a rota interna autenticada após o SSO (app.loft.com.br)", async
     "<main><h1>Painel da imobiliária</h1></main>",
   );
   assert.equal(await detectAuthenticationState(page, 300), "authenticated");
+  await page.close();
+});
+
+test("não confunde o aviso legal do reCAPTCHA com um desafio ativo", async () => {
+  const page = await pageWithHtml(
+    "https://sso.loft.com.br/realms/loft/login",
+    "<main><p>Confira a Política de Privacidade e os Termos por usarmos o reCAPTCHA.</p></main>",
+  );
+  assert.equal(await hasVisibleCaptchaChallenge(page), false);
+  await page.close();
+});
+
+test("reconhece um desafio visual real do reCAPTCHA", async () => {
+  const page = await pageWithHtml(
+    "https://sso.loft.com.br/realms/loft/login",
+    '<main><iframe title="reCAPTCHA challenge expires in two minutes"></iframe></main>',
+  );
+  assert.equal(await hasVisibleCaptchaChallenge(page), true);
   await page.close();
 });
 
