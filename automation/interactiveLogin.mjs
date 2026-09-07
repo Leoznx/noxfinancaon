@@ -17,6 +17,7 @@ const login = process.env.CREDPAGO_LOGIN;
 const password = process.env.CREDPAGO_PASSWORD;
 const otpTimeoutMs = Number(process.env.AUTH_OTP_TIMEOUT_MS) || 10 * 60 * 1000;
 const interactiveTimeoutMs = Number(process.env.AUTH_INTERACTIVE_TIMEOUT_MS) || 10 * 60 * 1000;
+const interactiveHeadless = process.env.INTERACTIVE_HEADLESS === "true";
 
 if (Boolean(login) !== Boolean(password)) {
   throw new Error("CREDPAGO_LOGIN e CREDPAGO_PASSWORD precisam ser configuradas juntas.");
@@ -25,7 +26,7 @@ if (Boolean(login) !== Boolean(password)) {
 // Este utilitário existe justamente para desafios que exigem uma pessoa (captcha/OTP).
 // O worker de produção continua headless e nunca tenta contornar essas verificações.
 const browser = await chromium.launch({
-  headless: process.env.INTERACTIVE_HEADLESS === "true",
+  headless: interactiveHeadless,
 });
 const contextOptions = { viewport: { width: 1366, height: 900 } };
 if (
@@ -41,7 +42,9 @@ const page = await context.newPage();
 
 async function isAuthenticated() {
   const url = new URL(page.url());
-  if (url.hostname !== "credpago.com" && !url.hostname.endsWith(".credpago.com")) {
+  const credPagoHost = url.hostname === "credpago.com" || url.hostname.endsWith(".credpago.com");
+  const loftAppHost = url.hostname === "app.loft.com.br";
+  if (!credPagoHost && !loftAppHost) {
     return false;
   }
   const loginButton = page.getByRole("button", { name: /login\s+loft/i });
@@ -67,6 +70,15 @@ async function isAuthenticated() {
     .first()
     .isVisible()
     .catch(() => false);
+}
+
+async function waitForManualAuthentication(timeoutMs) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    if (await isAuthenticated()) return true;
+    await page.waitForTimeout(1_000);
+  }
+  return false;
 }
 
 async function persistAndFinish() {
@@ -211,25 +223,34 @@ try {
           throw new Error("O Login Loft não avançou para a verificação esperada.");
         }
 
-        const code = await waitForOtpCode();
-        const visibleInputs = page.locator("input:visible");
-        const inputCount = await visibleInputs.count();
-        if (inputCount === 1) {
-          await visibleInputs.first().fill(code);
-        } else if (inputCount >= 6) {
-          for (let index = 0; index < 6; index += 1) {
-            await visibleInputs.nth(index).fill(code[index]);
+        if (!interactiveHeadless) {
+          console.log("OTP_MANUAL_REQUIRED");
+          console.log(
+            "Digite o código diretamente na janela e conclua o acesso. A sessão será salva automaticamente.",
+          );
+          if (!(await waitForManualAuthentication(interactiveTimeoutMs))) {
+            throw new Error("Tempo esgotado aguardando a confirmação manual do Login Loft.");
           }
         } else {
-          throw new Error(`Quantidade inesperada de campos do código: ${inputCount}.`);
-        }
+          const code = await waitForOtpCode();
+          const visibleInputs = page.locator("input:visible");
+          const inputCount = await visibleInputs.count();
+          if (inputCount === 1) {
+            await visibleInputs.first().fill(code);
+          } else if (inputCount >= 6) {
+            for (let index = 0; index < 6; index += 1) {
+              await visibleInputs.nth(index).fill(code[index]);
+            }
+          } else {
+            throw new Error(`Quantidade inesperada de campos do código: ${inputCount}.`);
+          }
 
-        const continueButton = page.getByRole("button", { name: /^continuar$/i });
-        await continueButton.first().click({ timeout: 30_000 });
-        await page.waitForURL(/credpago\.com\/imobiliaria/i, {
-          waitUntil: "domcontentloaded",
-          timeout: 60_000,
-        });
+          const continueButton = page.getByRole("button", { name: /^continuar$/i });
+          await continueButton.first().click({ timeout: 30_000 });
+          if (!(await waitForManualAuthentication(60_000))) {
+            throw new Error("O Login Loft não confirmou o código de verificação.");
+          }
+        }
       }
 
       await page.goto(credpagoUrl, { waitUntil: "domcontentloaded", timeout: 30_000 });
