@@ -3,7 +3,7 @@
    desktop and mobile layouts. */
 @media (min-width: 1280px) and (max-height: 900px) {
   .seller-dashboard {
-    grid-template-rows: auto 96px minmax(0, 1.15fr) minmax(0, 0.85fr) !important;
+    grid-template-rows: auto 96px auto auto !important;
   }
 
   .seller-dashboard__heading h1 {
@@ -83,6 +83,7 @@
   }
 
   .seller-dashboard-section {
+    min-height: 190px !important;
     padding: 10px !important;
   }
 
@@ -99,7 +100,7 @@
 
 @media (min-width: 1280px) and (max-height: 720px) {
   .seller-dashboard {
-    grid-template-rows: auto 82px minmax(0, 1.18fr) minmax(0, 0.82fr) !important;
+    grid-template-rows: auto 82px auto auto !important;
     gap: 9px !important;
   }
 

@@ -136,7 +136,7 @@ function VendedorDashboard() {
 
   return (
     <DashboardLayout lockDesktopViewport>
-      <div className="seller-dashboard relative mx-auto w-full max-w-[1440px] space-y-3 sm:space-y-4 xl:grid xl:h-full xl:min-h-0 xl:grid-rows-[auto_120px_minmax(0,1.05fr)_minmax(0,0.95fr)] xl:gap-3 xl:space-y-0">
+      <div className="seller-dashboard relative mx-auto w-full max-w-[1440px] space-y-3 sm:space-y-4 xl:grid xl:grid-rows-[auto_120px_auto_auto] xl:gap-3 xl:space-y-0">
         <div className="seller-dashboard__heading flex items-center justify-between gap-3">
           <div className="min-w-0">
             <h1 className="text-[26px] font-bold tracking-[-0.035em] text-neutral-950 sm:text-[27px]">
@@ -169,14 +169,14 @@ function VendedorDashboard() {
               </div>
             )}
 
-            <div className="seller-dashboard__primary grid min-w-0 gap-4 xl:h-full xl:min-h-0 xl:grid-cols-[minmax(0,1.18fr)_minmax(480px,0.98fr)] xl:gap-3">
+            <div className="seller-dashboard__primary grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.18fr)_minmax(480px,0.98fr)] xl:gap-3">
               <ContractsChart
                 history={data.monthlyHistory}
                 range={chartRange}
                 onRangeChange={setChartRange}
               />
 
-              <div className="seller-dashboard__kpis grid min-w-0 grid-cols-2 gap-3 sm:gap-4 xl:h-full xl:min-h-0 xl:gap-3">
+              <div className="seller-dashboard__kpis grid min-w-0 grid-cols-2 gap-3 sm:gap-4 xl:gap-3">
                 {!isCloser && <SellerKpiCard
                   icon={Users}
                   title="Leads e atendimentos pendentes"
@@ -234,7 +234,7 @@ function VendedorDashboard() {
               </div>
             </div>
 
-            <div className={`seller-dashboard__overview grid min-w-0 gap-4 md:grid-cols-2 xl:h-full xl:min-h-0 xl:gap-3 ${isCloser ? "xl:grid-cols-2" : "xl:grid-cols-4"}`}>
+            <div className={`seller-dashboard__overview grid min-w-0 items-stretch gap-4 md:grid-cols-2 xl:gap-3 ${isCloser ? "xl:grid-cols-2" : "xl:grid-cols-4"}`}>
               {!isCloser && <PipelineSummary stages={data.pipeline} />}
               {!isCloser && <RecentActivities activities={data.activities} />}
               <TodayAgenda appointments={data.agenda} />

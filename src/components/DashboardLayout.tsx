@@ -863,7 +863,7 @@ export function DashboardLayout({
             lockViewport
               ? "min-h-0 overflow-hidden p-3 sm:p-4 lg:p-5"
               : lockDesktopViewport
-                ? "xl:min-h-0 xl:overflow-hidden xl:p-6"
+                ? "xl:min-h-0 xl:overflow-y-auto xl:p-6"
                 : ""
           }`}
         >

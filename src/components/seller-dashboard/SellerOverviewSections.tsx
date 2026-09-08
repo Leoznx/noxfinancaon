@@ -39,21 +39,21 @@ export function PipelineSummary({
       footer="Ver atendimentos"
       href="/vendedor/pipeline"
     >
-      <div className="space-y-3">
+      <div className="space-y-3 xl:space-y-1.5">
         {stages.map((stage) => {
           const percentage = total > 0 ? Math.round((stage.count / total) * 100) : 0;
           const color = PIPELINE_COLORS[stage.key] ?? "#6b7280";
           return (
             <div
               key={stage.key}
-              className="grid grid-cols-[minmax(0,1fr)_28px_34px_64px] items-center gap-2 text-[11px]"
+              className="grid grid-cols-[minmax(0,1fr)_22px_28px_44px] items-center gap-1.5 text-[10px] 2xl:grid-cols-[minmax(0,1fr)_28px_34px_64px] 2xl:gap-2 2xl:text-[11px]"
             >
               <span className="flex min-w-0 items-center gap-2 font-medium text-neutral-700">
                 <span
                   className="h-2 w-2 shrink-0 rounded-full"
                   style={{ backgroundColor: color }}
                 />
-                <span className="truncate">{stage.label}</span>
+                <span className="seller-pipeline-label whitespace-nowrap">{stage.label}</span>
               </span>
               <b className="text-right text-neutral-900">{stage.count}</b>
               <span className="text-right text-neutral-500">{percentage}%</span>
@@ -66,7 +66,7 @@ export function PipelineSummary({
             </div>
           );
         })}
-        {total === 0 && <EmptyMessage>Nenhum lead pendente.</EmptyMessage>}
+        {stages.length === 0 && <EmptyMessage>Nenhum lead pendente.</EmptyMessage>}
       </div>
     </DashboardSection>
   );
@@ -170,6 +170,8 @@ export function TodayAgenda({ appointments }: { appointments: SellerDashboardApp
 }
 
 export function SellerRanking({ ranking }: { ranking: SellerDashboardRanking[] }) {
+  const preview = rankingPreview(ranking);
+
   return (
     <DashboardSection
       title="Ranking"
@@ -177,11 +179,11 @@ export function SellerRanking({ ranking }: { ranking: SellerDashboardRanking[] }
       footer="Ver ranking completo"
       href="/vendedor/ranking"
     >
-      {ranking.length === 0 ? (
+      {preview.length === 0 ? (
         <EmptyMessage>Sem dados de ranking ainda.</EmptyMessage>
       ) : (
         <div className="space-y-1 xl:space-y-0.5">
-          {ranking.map((seller) => (
+          {preview.map((seller) => (
             <div
               key={seller.sellerId}
               className={`flex items-center gap-2 rounded-lg border px-2 py-2 xl:px-1.5 xl:py-0.5 ${seller.isCurrent ? "border-yellow-200 bg-yellow-50" : "border-transparent"}`}
@@ -226,15 +228,15 @@ function DashboardSection({
   children: React.ReactNode;
 }) {
   return (
-    <section className="seller-dashboard-section flex h-full min-h-[230px] min-w-0 flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white p-4 shadow-[0_1px_4px_rgba(0,0,0,0.03)] sm:min-h-[260px] xl:min-h-0 xl:p-3">
+    <section className="seller-dashboard-section flex min-h-[230px] min-w-0 flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white p-4 shadow-[0_1px_4px_rgba(0,0,0,0.03)] sm:min-h-[260px] xl:p-3">
       <div className="mb-4 flex items-center gap-2 xl:mb-1.5">
         <h2 className="text-sm font-bold text-neutral-950">{title}</h2>
         {info && <Info className="h-3.5 w-3.5 text-neutral-400" aria-label={info} />}
       </div>
-      <div className="min-h-0 flex-1">{children}</div>
+      <div className="seller-dashboard-section__body min-w-0 flex-1">{children}</div>
       <Link
         to={href}
-        className="mt-4 flex min-h-10 items-center justify-center gap-3 rounded-lg border border-neutral-200 bg-white text-xs font-semibold text-neutral-700 transition hover:border-yellow-300 hover:bg-yellow-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400 xl:mt-1.5 xl:min-h-7"
+        className="mt-4 flex min-h-10 shrink-0 items-center justify-center gap-3 rounded-lg border border-neutral-200 bg-white text-xs font-semibold text-neutral-700 transition hover:border-yellow-300 hover:bg-yellow-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400 xl:mt-1.5 xl:min-h-7"
       >
         {footer}
         <ArrowRight className="h-3.5 w-3.5" />
@@ -275,6 +277,15 @@ function relativeTime(value: string) {
   if (seconds < 86400) return `há ${Math.floor(seconds / 3600)}h`;
   if (seconds < 172800) return "há 1 dia";
   return new Date(value).toLocaleDateString("pt-BR");
+}
+
+function rankingPreview(ranking: SellerDashboardRanking[]) {
+  if (ranking.length <= 4) return ranking;
+  const currentSeller = ranking.find((seller) => seller.isCurrent);
+  if (!currentSeller || ranking.slice(0, 4).some((seller) => seller.sellerId === currentSeller.sellerId)) {
+    return ranking.slice(0, 4);
+  }
+  return [...ranking.slice(0, 3), currentSeller];
 }
 
 function appointmentBadge(type: string) {
