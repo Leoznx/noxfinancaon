@@ -69,7 +69,7 @@ const PLANOS_POR_COMISSAO: Record<'sem' | 'com', PlanoSpec[]> = {
   sem: [
     {
       nome: "NOX Fit",
-      taxa_premio: 10,
+      taxa_premio: 9,
       cobertura_multiplicador: 30,
       tem_comissao: false,
       cobre_taxas_condominio: false,
@@ -78,7 +78,7 @@ const PLANOS_POR_COMISSAO: Record<'sem' | 'com', PlanoSpec[]> = {
     },
     {
       nome: "NOX Fit+",
-      taxa_premio: 11.5,
+      taxa_premio: 10.5,
       cobertura_multiplicador: 35,
       tem_comissao: false,
       cobre_taxas_condominio: true,
@@ -89,7 +89,7 @@ const PLANOS_POR_COMISSAO: Record<'sem' | 'com', PlanoSpec[]> = {
   com: [
     {
       nome: "NOX Smart",
-      taxa_premio: 12,
+      taxa_premio: 10.5,
       cobertura_multiplicador: 30,
       tem_comissao: true,
       cobre_taxas_condominio: false,
@@ -98,7 +98,7 @@ const PLANOS_POR_COMISSAO: Record<'sem' | 'com', PlanoSpec[]> = {
     },
     {
       nome: "NOX Smart+",
-      taxa_premio: 13.5,
+      taxa_premio: 12,
       cobertura_multiplicador: 35,
       tem_comissao: true,
       cobre_taxas_condominio: true,
@@ -107,7 +107,7 @@ const PLANOS_POR_COMISSAO: Record<'sem' | 'com', PlanoSpec[]> = {
     },
     {
       nome: "NOX Up",
-      taxa_premio: 16,
+      taxa_premio: 14,
       cobertura_multiplicador: 40,
       tem_comissao: true,
       cobre_taxas_condominio: true,

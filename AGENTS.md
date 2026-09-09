@@ -36,3 +36,10 @@ Ao validar:
 - No resumo final, liste separadamente o que mudou no site, no aplicativo e no backend compartilhado.
 
 Use `C:\Users\sixxleo\Documents\noxfinancaonmobile\docs\MOBILE_INTEGRATION_PLAN.md` como inventário de rotas e contratos já mapeados entre as duas superfícies.
+
+## Publicação automática
+
+Depois de implementar e validar cada solicitação de mudança do usuário, crie commits
+somente com os arquivos da tarefa e envie os repositórios aplicáveis ao GitHub para
+acionar os deploys configurados. Não espere que o usuário repita o pedido de upload
+e nunca inclua mudanças locais alheias no commit.
