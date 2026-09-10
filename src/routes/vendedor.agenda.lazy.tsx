@@ -116,6 +116,7 @@ function AgendaPage() {
       .channel(`seller-agenda-${sellerId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "seller_appointments", filter: `seller_id=eq.${sellerId}` }, scheduleRefresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "seller_appointments", filter: `sdr_id=eq.${sellerId}` }, scheduleRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "seller_appointments", filter: `assigned_closer_id=eq.${sellerId}` }, scheduleRefresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "sales_leads", filter: `assigned_seller_id=eq.${sellerId}` }, scheduleRefresh)
       .subscribe();
     return () => {
@@ -140,11 +141,20 @@ function AgendaPage() {
 
   function openNew(date = selectedDate) {
     setSelectedDate(date);
+    if (sellerType === "sdr") {
+      document.getElementById("sdr-shared-sales-agenda")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      toast.info("Escolha um horário livre na agenda compartilhada. O Closer será definido automaticamente.");
+      return;
+    }
     setEditing(null);
     setModalOpen(true);
   }
 
   function openEdit(item: SellerAppointment) {
+    if (sellerType === "sdr" && item.source === "sdr_handoff") {
+      toast.info("Reuniões compartilhadas devem ser remarcadas pelos horários livres da equipe.");
+      return;
+    }
     setViewing(null);
     setEditing(item);
     setModalOpen(true);
@@ -164,6 +174,9 @@ function AgendaPage() {
 
   async function handleSave(draft: AppointmentDraft) {
     if (!sellerId) throw new Error("Vendedor não identificado.");
+    if (sellerType === "sdr" && !draft.id && draft.type === "reuniao") {
+      throw new Error("Use a agenda compartilhada para que a reunião seja entregue automaticamente a um Closer.");
+    }
     await saveSellerAppointment(sellerId, draft);
     toast.success(draft.id ? "Compromisso atualizado com sucesso." : "Compromisso criado com sucesso.");
     setModalOpen(false);
@@ -233,7 +246,7 @@ function AgendaPage() {
           </div>
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="outline" className="h-9 gap-2 font-bold" onClick={() => load(true)} disabled={refreshing}><RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Atualizar</Button>
-            <Button type="button" className="h-9 gap-2 bg-yellow-400 font-extrabold text-black hover:bg-yellow-500" onClick={() => openNew()}><Plus className="h-4 w-4" /> Novo compromisso</Button>
+            <Button type="button" className="h-9 gap-2 bg-yellow-400 font-extrabold text-black hover:bg-yellow-500" onClick={() => openNew()} disabled={loading || !sellerType}><Plus className="h-4 w-4" /> {sellerType === "sdr" ? "Agendar reunião" : "Novo compromisso"}</Button>
           </div>
         </header>
 

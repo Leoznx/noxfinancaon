@@ -177,7 +177,7 @@ function SdrScheduler({ sellerName, onRefresh }: { sellerName: string | null; on
         contactPhone,
         notes,
       });
-      toast.success(`Reunião de 1 hora distribuída para ${closerNames.get(meeting.closer_id) ?? firstNameOnly(meeting.closer_name)}.`);
+      toast.success(`Reunião de 1 hora distribuída para ${closerNames.get(meeting.closer_id) ?? firstNameOnly(meeting.closer_name)}. Os e-mails de confirmação serão enviados automaticamente.`);
       resetClientForm();
       setSelected(null);
       await Promise.all([loadSlots(selectedDate), onRefresh()]);
@@ -190,7 +190,7 @@ function SdrScheduler({ sellerName, onRefresh }: { sellerName: string | null; on
   }
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-yellow-300 bg-[linear-gradient(135deg,#fffbea,#fff)] shadow-sm">
+    <section id="sdr-shared-sales-agenda" className="scroll-mt-4 overflow-hidden rounded-2xl border border-yellow-300 bg-[linear-gradient(135deg,#fffbea,#fff)] shadow-sm">
       <header className="flex flex-col gap-3 border-b border-yellow-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.16em] text-yellow-700">Agenda compartilhada SDR → Closer</p>
