@@ -8,13 +8,6 @@ import type {
   RepairRunbook,
 } from "./recoveryTypes";
 
-export class ManualInterventionRequiredError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "ManualInterventionRequiredError";
-  }
-}
-
 export class RetryableRepairError extends Error {
   constructor(message: string) {
     super(message);
@@ -33,7 +26,6 @@ export interface ValidationResult {
   ok: boolean;
   summary: string;
   details?: Record<string, unknown>;
-  manualRequired?: boolean;
 }
 
 export interface RepairEngineDependencies {
@@ -61,7 +53,7 @@ export interface RepairEngineDependencies {
   sleep?: (ms: number) => Promise<void>;
 }
 
-export type RepairExecutionResult = "success" | "retry" | "failed" | "rolled_back" | "manual";
+export type RepairExecutionResult = "success" | "retry" | "failed" | "rolled_back";
 
 const BACKOFF_MS = [5_000, 15_000, 45_000];
 
@@ -95,7 +87,14 @@ export async function executeRepairJob(
     details?: Record<string, unknown>,
   ) => {
     sequence += 1;
-    await deps.addStep({ sequence, stage, status, progress, message: redactSensitiveText(message, 4_000), details: redactObject(details ?? {}) as Record<string, unknown> });
+    await deps.addStep({
+      sequence,
+      stage,
+      status,
+      progress,
+      message: redactSensitiveText(message, 4_000),
+      details: redactObject(details ?? {}) as Record<string, unknown>,
+    });
   };
 
   try {
@@ -103,9 +102,20 @@ export async function executeRepairJob(
     await step("COLLECTING_CONTEXT", "RUNNING", 8, "Coleta tecnica iniciada.");
     const snapshot = await deps.collectDiagnostics();
     await transition("DIAGNOSING", 22, "Contexto coletado; classificando a causa.");
-    await step("COLLECTING_CONTEXT", "SUCCESS", 22, "Contexto tecnico coletado.", snapshot as unknown as Record<string, unknown>);
+    await step(
+      "COLLECTING_CONTEXT",
+      "SUCCESS",
+      22,
+      "Contexto tecnico coletado.",
+      snapshot as unknown as Record<string, unknown>,
+    );
 
-    await step("DIAGNOSING", "RUNNING", 28, `Categoria ${error.category}; selecionando runbook permitido.`);
+    await step(
+      "DIAGNOSING",
+      "RUNNING",
+      28,
+      `Categoria ${error.category}; selecionando runbook permitido.`,
+    );
     const diagnosis = error.initial_diagnosis || "Diagnostico inicial indisponivel.";
     await transition("SNAPSHOTTING", 38, "Diagnostico concluido; criando ponto de recuperacao.", {
       diagnosis,
@@ -131,12 +141,6 @@ export async function executeRepairJob(
     });
     await step("SNAPSHOTTING", "SUCCESS", 48, "Ponto de recuperacao registrado.", recoveryPoint);
 
-    if (runbook === "MANUAL_INTERVENTION") {
-      throw new ManualInterventionRequiredError(
-        "Nao existe correcao automatica segura para esta categoria. Analise humana necessaria.",
-      );
-    }
-
     const restarting = runbook === "RESTART_CREDIT_WORKER" || runbook === "VALIDATE_SESSION";
     await transition(
       restarting ? "RESTARTING" : "REPAIRING",
@@ -151,10 +155,14 @@ export async function executeRepairJob(
     });
     await step(restarting ? "RESTARTING" : "REPAIRING", "SUCCESS", 76, applied.summary);
 
-    await step("VALIDATING", "RUNNING", 82, "Validando VPS, fila, worker, navegador e formulario seguro.");
+    await step(
+      "VALIDATING",
+      "RUNNING",
+      82,
+      "Validando VPS, fila, worker, navegador e formulario seguro.",
+    );
     const validation = await deps.validate(runbook, snapshot, error);
     if (!validation.ok) {
-      if (validation.manualRequired) throw new ManualInterventionRequiredError(validation.summary);
       throw new RetryableRepairError(validation.summary);
     }
     await step("VALIDATING", "SUCCESS", 96, validation.summary, validation.details);
@@ -169,27 +177,28 @@ export async function executeRepairJob(
     const errorMessage = redactSensitiveText(caught, 4_000);
     await step("ERROR", "FAILED", Math.min(95, 60 + sequence * 4), errorMessage).catch(() => {});
 
-    if (caught instanceof ManualInterventionRequiredError) {
-      await transition("MANUAL_REQUIRED", Math.min(99, 70 + sequence * 3), caught.message, {
-        failure_reason: caught.message,
-        finished_at: new Date().toISOString(),
-        lease_expires_at: null,
-      });
-      return "manual";
-    }
-
     if (applied?.changed && applied.rollbackAvailable && applied.rollbackContext) {
       try {
-        await transition("ROLLING_BACK", 90, "A validacao falhou; revertendo a alteracao aplicada.", {
-          failure_reason: errorMessage,
-        });
+        await transition(
+          "ROLLING_BACK",
+          90,
+          "A validacao falhou; revertendo a alteracao aplicada.",
+          {
+            failure_reason: errorMessage,
+          },
+        );
         await deps.rollback(runbook, applied.rollbackContext);
         await step("ROLLING_BACK", "SUCCESS", 98, "Rollback tecnico concluido.");
-        await transition("ROLLED_BACK", 100, "Rollback realizado; intervencao humana recomendada.", {
-          rollback_reason: errorMessage,
-          finished_at: new Date().toISOString(),
-          lease_expires_at: null,
-        });
+        await transition(
+          "ROLLED_BACK",
+          100,
+          "Rollback realizado; a analise automatica preservou o estado anterior.",
+          {
+            rollback_reason: errorMessage,
+            finished_at: new Date().toISOString(),
+            lease_expires_at: null,
+          },
+        );
         return "rolled_back";
       } catch (rollbackError) {
         const rollbackMessage = redactSensitiveText(rollbackError, 2_000);
@@ -199,20 +208,30 @@ export async function executeRepairJob(
 
     if (job.attempt_count < job.max_attempts) {
       const backoff = BACKOFF_MS[Math.max(0, job.attempt_count - 1)] ?? BACKOFF_MS.at(-1)!;
-      await transition("QUEUED", 0, `Tentativa ${job.attempt_count} falhou; nova tentativa com backoff limitado.`, {
-        failure_reason: errorMessage,
-        next_attempt_at: new Date(Date.now() + backoff).toISOString(),
-        worker_id: null,
-        lease_expires_at: null,
-      });
+      await transition(
+        "QUEUED",
+        0,
+        `Tentativa ${job.attempt_count} falhou; nova tentativa com backoff limitado.`,
+        {
+          failure_reason: errorMessage,
+          next_attempt_at: new Date(Date.now() + backoff).toISOString(),
+          worker_id: null,
+          lease_expires_at: null,
+        },
+      );
       return "retry";
     }
 
-    await transition("FAILED", 100, "O reparo atingiu o limite de tres tentativas sem validacao positiva.", {
-      failure_reason: errorMessage,
-      finished_at: new Date().toISOString(),
-      lease_expires_at: null,
-    });
+    await transition(
+      "FAILED",
+      100,
+      "A analise automatica atingiu o limite de tres tentativas sem validacao positiva.",
+      {
+        failure_reason: errorMessage,
+        finished_at: new Date().toISOString(),
+        lease_expires_at: null,
+      },
+    );
     return "failed";
   }
 }

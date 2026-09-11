@@ -42,13 +42,13 @@ export type RepairJobStatus = (typeof REPAIR_JOB_STATUSES)[number];
 export type HealthStatus = "ONLINE" | "UNSTABLE" | "OFFLINE" | "UNKNOWN";
 
 export type RepairRunbook =
+  | "AI_DIAGNOSE_AND_RECOVER"
   | "VALIDATE_SESSION"
   | "RESTART_CREDIT_WORKER"
   | "WAIT_EXTERNAL_DEPENDENCY"
   | "VALIDATE_SELECTORS"
   | "CHECK_DATABASE"
-  | "CLEAN_OWN_TEMP_ARTIFACTS"
-  | "MANUAL_INTERVENTION";
+  | "CLEAN_OWN_TEMP_ARTIFACTS";
 
 export interface AutomationErrorRecord {
   id: string;

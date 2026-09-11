@@ -98,7 +98,11 @@ export interface RecoveryDashboardData {
 export async function loadRecoveryDashboard(): Promise<RecoveryDashboardData> {
   const client = supabase as any;
   const [errorsResult, jobsResult, healthResult] = await Promise.all([
-    client.from("automation_errors").select("*").order("last_seen_at", { ascending: false }).limit(250),
+    client
+      .from("automation_errors")
+      .select("*")
+      .order("last_seen_at", { ascending: false })
+      .limit(250),
     client.from("repair_jobs").select("*").order("created_at", { ascending: false }).limit(250),
     client.from("system_health").select("*").order("checked_at", { ascending: false }).limit(30),
   ]);
@@ -133,6 +137,21 @@ export async function startAutomationRepair(errorId: string): Promise<RepairJobV
   if (error) throw error;
   if (!data?.id) throw new Error("O servidor não retornou o job de reparo.");
   return data as RepairJobView;
+}
+
+export interface BulkRepairResult {
+  open_count: number;
+  queued_count: number;
+  skipped_count: number;
+}
+
+export async function startAllAutomationRepairs(): Promise<BulkRepairResult> {
+  const { data, error } = await (supabase as any).rpc("start_all_automation_repairs");
+  if (error) throw error;
+  if (!data || typeof data.queued_count !== "number") {
+    throw new Error("O servidor não retornou o resumo do reparo em lote.");
+  }
+  return data as BulkRepairResult;
 }
 
 export async function getArtifactUrl(path: string): Promise<string> {

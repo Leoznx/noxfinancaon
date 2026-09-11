@@ -17,6 +17,11 @@ export function createCorrelationId(kind: "SIM" | "SYS" = "SIM", date = new Date
   return `NOX-${kind}-${datePart(date)}-${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
 }
 
+export function createStableSystemCorrelationId(seed: string, date = new Date()): string {
+  const suffix = crypto.createHash("sha256").update(seed).digest("hex").slice(0, 8).toUpperCase();
+  return `NOX-SYS-${datePart(date)}-${suffix}`;
+}
+
 export function isValidCorrelationId(value: unknown): value is string {
   return typeof value === "string" && CORRELATION_PATTERN.test(value);
 }

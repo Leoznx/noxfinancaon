@@ -5,12 +5,12 @@ import path from "node:path";
 import { chromium } from "playwright";
 import { createCorrelationId } from "./correlation";
 import { validateSimulationFormReady } from "./credpagoSelectors";
+import { planAiRecovery } from "./aiRecoveryPlanner";
 import { env } from "./env";
 import { flushAutomationErrorSpool, reportAutomationError } from "./errorReporter";
 import { log, logErro, logStructured } from "./logger";
 import {
   executeRepairJob,
-  ManualInterventionRequiredError,
   RetryableRepairError,
   type RepairEngineDependencies,
   type RunbookResult,
@@ -47,8 +47,8 @@ const incidentCorrelations = new Map<string, string>();
 
 async function requestCreditWorkerRestart(reason: string): Promise<void> {
   if (!process.send) {
-    throw new ManualInterventionRequiredError(
-      "O repair worker nao esta sob o supervisor autorizado para reiniciar o processo de credito.",
+    throw new RetryableRepairError(
+      "O repair worker ainda nao esta sob o supervisor autorizado; nova tentativa automatica sera realizada.",
     );
   }
   const requestId = crypto.randomUUID();
@@ -117,6 +117,14 @@ async function applyRunbook(
   snapshot: DiagnosticSnapshot,
   error: AutomationErrorRecord,
 ): Promise<RunbookResult> {
+  if (runbook === "AI_DIAGNOSE_AND_RECOVER") {
+    const plan = planAiRecovery(snapshot, error);
+    const result = await applyRunbook(plan.runbook, snapshot, error);
+    return {
+      ...result,
+      summary: `Analise de IA selecionou ${plan.runbook}. ${plan.explanation} ${result.summary}`,
+    };
+  }
   switch (runbook) {
     case "VALIDATE_SESSION":
     case "RESTART_CREDIT_WORKER": {
@@ -135,12 +143,25 @@ async function applyRunbook(
     }
     case "WAIT_EXTERNAL_DEPENDENCY":
       await sleep(3_000);
-      return { summary: "Dependencias consultadas novamente com espera controlada.", changed: false, rollbackAvailable: false };
+      return {
+        summary: "Dependencias consultadas novamente com espera controlada.",
+        changed: false,
+        rollbackAvailable: false,
+      };
     case "VALIDATE_SELECTORS":
-      return { summary: "Nenhuma alteracao aplicada; seletores serao verificados em navegacao segura.", changed: false, rollbackAvailable: false };
+      return {
+        summary: "Nenhuma alteracao aplicada; seletores serao verificados em navegacao segura.",
+        changed: false,
+        rollbackAvailable: false,
+      };
     case "CHECK_DATABASE":
-      if (!snapshot.databaseReachable) throw new RetryableRepairError("O Supabase continua indisponivel.");
-      return { summary: "Conexao, autenticacao de servico e fila do Supabase responderam.", changed: false, rollbackAvailable: false };
+      if (!snapshot.databaseReachable)
+        throw new RetryableRepairError("O Supabase continua indisponivel.");
+      return {
+        summary: "Conexao, autenticacao de servico e fila do Supabase responderam.",
+        changed: false,
+        rollbackAvailable: false,
+      };
     case "CLEAN_OWN_TEMP_ARTIFACTS": {
       const removed = await cleanOwnTempArtifacts();
       return {
@@ -149,15 +170,13 @@ async function applyRunbook(
         rollbackAvailable: false,
       };
     }
-    case "MANUAL_INTERVENTION":
-      throw new ManualInterventionRequiredError("Categoria sem runbook automatico seguro.");
   }
 }
 
 async function safeBrowserValidation(): Promise<Record<string, unknown>> {
   if (!env.storageStatePath) {
-    throw new ManualInterventionRequiredError(
-      "Validacao automatica indisponivel no modo de perfil persistente em uso. Verifique a sessao manualmente.",
+    throw new RetryableRepairError(
+      "Validacao segura aguarda uma sessao exportada disponivel; a automacao tentara novamente.",
     );
   }
   const browser = await chromium.launch({ headless: true });
@@ -181,19 +200,22 @@ async function safeBrowserValidation(): Promise<Record<string, unknown>> {
 
 async function validateRepair(): Promise<ValidationResult> {
   const snapshot = await collectSystemDiagnostics();
-  if (!snapshot.databaseReachable) return { ok: false, summary: "Supabase/fila ainda indisponivel." };
-  if (!snapshot.creditWorkerReachable) return { ok: false, summary: "Worker de credito ainda sem resposta." };
+  if (!snapshot.databaseReachable)
+    return { ok: false, summary: "Supabase/fila ainda indisponivel." };
+  if (!snapshot.creditWorkerReachable)
+    return { ok: false, summary: "Worker de credito ainda sem resposta." };
   if (!snapshot.creditWorkerReady) {
     const auth = String(snapshot.creditWorkerHealth.auth ?? "");
     return {
       ok: false,
-      manualRequired: auth === "required",
-      summary: auth === "required"
-        ? "A Loft exige autenticacao humana (OTP/CAPTCHA ou credencial recusada)."
-        : "Worker ativo, mas autenticacao/fila ainda nao estao prontas.",
+      summary:
+        auth === "required"
+          ? "A sessao do portal requer renovacao; o desafio externo nao sera contornado e sera reavaliado automaticamente."
+          : "Worker ativo, mas autenticacao/fila ainda nao estao prontas.",
     };
   }
-  if (!snapshot.portalReachable) return { ok: false, summary: "Portal externo continua indisponivel." };
+  if (!snapshot.portalReachable)
+    return { ok: false, summary: "Portal externo continua indisponivel." };
   if (snapshot.memoryPercent != null && snapshot.memoryPercent >= env.highMemoryPercent) {
     return { ok: false, summary: `Memoria ainda em ${snapshot.memoryPercent}%.` };
   }
@@ -212,14 +234,16 @@ async function validateRepair(): Promise<ValidationResult> {
     const message = redactSensitiveText(error, 2_000);
     return {
       ok: false,
-      manualRequired: /captcha|otp|autentica[cç][aã]o humana|sess[aã]o expirada|login loft/i.test(message),
       summary: message,
     };
   }
 }
 
 async function persistHealth(snapshot: DiagnosticSnapshot): Promise<void> {
-  const previous = new Map<string, { consecutive_failures?: number; last_success_at?: string | null }>();
+  const previous = new Map<
+    string,
+    { consecutive_failures?: number; last_success_at?: string | null }
+  >();
   const { data } = await (supabaseAdmin as any)
     .from("system_health")
     .select("component,consecutive_failures,last_success_at")
@@ -239,7 +263,7 @@ async function persistHealth(snapshot: DiagnosticSnapshot): Promise<void> {
       metrics: redactObject(component.metrics),
       version: env.automationVersion,
       consecutive_failures: success ? 0 : (prior?.consecutive_failures ?? 0) + 1,
-      last_success_at: success ? snapshot.collectedAt : prior?.last_success_at ?? null,
+      last_success_at: success ? snapshot.collectedAt : (prior?.last_success_at ?? null),
       checked_at: snapshot.collectedAt,
     };
   });
@@ -249,30 +273,7 @@ async function persistHealth(snapshot: DiagnosticSnapshot): Promise<void> {
   if (error) throw error;
 }
 
-async function queueAutomaticRepair(errorId: string): Promise<void> {
-  if (!env.repairAutoEnabled) return;
-  const { data: active } = await (supabaseAdmin as any)
-    .from("repair_jobs")
-    .select("id")
-    .eq("error_id", errorId)
-    .in("status", ["QUEUED", "COLLECTING_CONTEXT", "DIAGNOSING", "SNAPSHOTTING", "REPAIRING", "RESTARTING", "VALIDATING", "ROLLING_BACK"])
-    .limit(1);
-  if (active?.length) return;
-  const { error } = await (supabaseAdmin as any).from("repair_jobs").insert({
-    error_id: errorId,
-    service: "credit-automation",
-    requested_by: null,
-    stage_message: "Auto-recuperacao segura acionada pelo watchdog.",
-  });
-  if (error && error.code !== "23505") throw error;
-}
-
-async function observeIncident(
-  key: string,
-  active: boolean,
-  message: string,
-  autoRepair: boolean,
-): Promise<void> {
+async function observeIncident(key: string, active: boolean, message: string): Promise<void> {
   if (!active) {
     failureCounts.delete(key);
     incidentCorrelations.delete(key);
@@ -284,7 +285,7 @@ async function observeIncident(
 
   const correlationId = createCorrelationId("SYS");
   incidentCorrelations.set(key, correlationId);
-  const errorId = await reportAutomationError({
+  await reportAutomationError({
     correlationId,
     environment: env.automationEnvironment,
     service: "automation-watchdog",
@@ -293,7 +294,6 @@ async function observeIncident(
     attemptCount: failures,
     metadata: { monitor: key },
   });
-  if (errorId && autoRepair) await queueAutomaticRepair(errorId);
 }
 
 let healthCheckRunning = false;
@@ -308,19 +308,38 @@ async function runHealthCycle(): Promise<void> {
     if (snapshot.databaseReachable) await persistHealth(snapshot);
 
     await Promise.all([
-      observeIncident("worker-offline", !snapshot.creditWorkerReachable, "Worker offline: processo de credito sem resposta.", true),
+      observeIncident(
+        "worker-offline",
+        !snapshot.creditWorkerReachable,
+        "Worker offline: processo de credito sem resposta.",
+      ),
       observeIncident(
         "worker-not-ready",
         snapshot.creditWorkerReachable && !snapshot.creditWorkerReady,
         String(snapshot.creditWorkerHealth.auth || "") === "required"
-          ? "Authentication error: a sessao do portal requer intervencao ou renovacao."
+          ? "Authentication error: a sessao do portal requer renovacao automatica."
           : "Worker offline: processo ativo, mas a fila nao esta pronta.",
-        true,
       ),
-      observeIncident("portal-offline", !snapshot.portalReachable, "CredPago unavailable: portal externo indisponivel.", false),
-      observeIncident("high-cpu", snapshot.cpuPercent != null && snapshot.cpuPercent >= env.highCpuPercent, `High CPU: CPU acima de ${env.highCpuPercent}%.`, true),
-      observeIncident("high-memory", snapshot.memoryPercent != null && snapshot.memoryPercent >= env.highMemoryPercent, `High memory: memoria acima de ${env.highMemoryPercent}%.`, true),
-      observeIncident("low-disk", snapshot.diskUsedPercent != null && snapshot.diskUsedPercent >= env.lowDiskUsedPercent, `Low disk: disco acima de ${env.lowDiskUsedPercent}% de uso.`, true),
+      observeIncident(
+        "portal-offline",
+        !snapshot.portalReachable,
+        "CredPago unavailable: portal externo indisponivel.",
+      ),
+      observeIncident(
+        "high-cpu",
+        snapshot.cpuPercent != null && snapshot.cpuPercent >= env.highCpuPercent,
+        `High CPU: CPU acima de ${env.highCpuPercent}%.`,
+      ),
+      observeIncident(
+        "high-memory",
+        snapshot.memoryPercent != null && snapshot.memoryPercent >= env.highMemoryPercent,
+        `High memory: memoria acima de ${env.highMemoryPercent}%.`,
+      ),
+      observeIncident(
+        "low-disk",
+        snapshot.diskUsedPercent != null && snapshot.diskUsedPercent >= env.lowDiskUsedPercent,
+        `Low disk: disco acima de ${env.lowDiskUsedPercent}% de uso.`,
+      ),
     ]);
   } catch (error) {
     runtime.databaseReachable = false;
@@ -342,11 +361,15 @@ function startHealthServer(): http.Server {
     };
     if (req.method === "GET" && req.url === "/live") {
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ status: "ok", service: "repair-worker", version: env.automationVersion }));
+      res.end(
+        JSON.stringify({ status: "ok", service: "repair-worker", version: env.automationVersion }),
+      );
       return;
     }
     if (req.method === "GET" && req.url === "/health") {
-      res.writeHead(runtime.status === "OFFLINE" ? 503 : 200, { "Content-Type": "application/json" });
+      res.writeHead(runtime.status === "OFFLINE" ? 503 : 200, {
+        "Content-Type": "application/json",
+      });
       res.end(JSON.stringify(publicHealth));
       return;
     }
@@ -457,7 +480,9 @@ async function processJob(job: RepairJobRecord): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  log(`Repair worker iniciado (${workerId}). Auto-recuperacao: ${env.repairAutoEnabled ? "ativa" : "desativada"}.`);
+  log(
+    `Repair worker iniciado (${workerId}). Auto-recuperacao: ${env.repairAutoEnabled ? "ativa" : "desativada"}.`,
+  );
   const healthServer = startHealthServer();
   await runHealthCycle();
   const healthTimer = setInterval(() => void runHealthCycle(), 30_000);

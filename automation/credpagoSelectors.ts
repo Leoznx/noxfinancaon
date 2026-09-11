@@ -238,7 +238,9 @@ export async function validateSimulationFormReady(page: Page): Promise<Record<st
     );
   }
   if (await isCaptchaPresent(page)) {
-    throw new Error("A Loft solicitou captcha/OTP; intervencao humana obrigatoria.");
+    throw new Error(
+      "A Loft solicitou captcha/OTP; a sessao sera reavaliada automaticamente sem contornar o desafio externo.",
+    );
   }
 
   await clickButtonByText(page, [/pessoa\s+f[ií]sica/i, /^\s*pf\s*$/i]);
