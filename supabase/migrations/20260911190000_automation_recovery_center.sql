@@ -270,15 +270,19 @@ GRANT SELECT ON public.automation_errors, public.repair_jobs, public.repair_step
 GRANT ALL ON public.automation_errors, public.repair_jobs, public.repair_steps,
   public.repair_locks, public.system_health TO service_role;
 
+DROP POLICY IF EXISTS "Automation admins read errors" ON public.automation_errors;
 CREATE POLICY "Automation admins read errors"
   ON public.automation_errors FOR SELECT TO authenticated
   USING (public.is_automation_admin(auth.uid()));
+DROP POLICY IF EXISTS "Automation admins read repair jobs" ON public.repair_jobs;
 CREATE POLICY "Automation admins read repair jobs"
   ON public.repair_jobs FOR SELECT TO authenticated
   USING (public.is_automation_admin(auth.uid()));
+DROP POLICY IF EXISTS "Automation admins read repair steps" ON public.repair_steps;
 CREATE POLICY "Automation admins read repair steps"
   ON public.repair_steps FOR SELECT TO authenticated
   USING (public.is_automation_admin(auth.uid()));
+DROP POLICY IF EXISTS "Automation admins read system health" ON public.system_health;
 CREATE POLICY "Automation admins read system health"
   ON public.system_health FOR SELECT TO authenticated
   USING (public.is_automation_admin(auth.uid()));
