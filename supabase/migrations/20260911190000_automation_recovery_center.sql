@@ -222,7 +222,7 @@ SELECT
   CASE
     WHEN concat_ws(' ', c.error_message, c.mensagem, c.raw_response::text) ~* 'sess[aã]o.*expir|login.*expir' THEN 'SESSION_EXPIRED'
     WHEN concat_ws(' ', c.error_message, c.mensagem, c.raw_response::text) ~* 'captcha|otp|autentica' THEN 'AUTHENTICATION_ERROR'
-    WHEN concat_ws(' ', c.error_message, c.mensagem, c.raw_response::text) ~* 'selector|seletor|n[aã]o encontrad' THEN 'SELECTOR_NOT_FOUND'
+    WHEN concat_ws(' ', c.error_message, c.mensagem, c.raw_response::text) ~* 'selector|locator|seletor|n[aã]o encontrad' THEN 'SELECTOR_NOT_FOUND'
     WHEN concat_ws(' ', c.error_message, c.mensagem, c.raw_response::text) ~* 'timeout|tempo limite|exceeded' THEN 'PLAYWRIGHT_TIMEOUT'
     WHEN concat_ws(' ', c.error_message, c.mensagem, c.raw_response::text) ~* 'network|gateway|econn|enotfound|fetch failed' THEN 'NETWORK_ERROR'
     WHEN concat_ws(' ', c.error_message, c.mensagem, c.raw_response::text) ~* 'browser|chromium|page.*closed|target.*closed' THEN 'BROWSER_CRASH'
