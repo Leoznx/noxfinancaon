@@ -14,7 +14,7 @@ RUN npm install --omit=dev && \
     npm install --no-save tsx@^4.19.2 && \
     npx playwright install chromium --with-deps
 
-COPY credpagoParser.ts credpagoSelectors.ts credpagoWorker.ts env.ts exportSession.ts logger.ts supabaseAdmin.ts types.ts tsconfig.json ./
+COPY credpagoParser.ts credpagoSelectors.ts credpagoWorker.ts env.ts errorPolicy.ts exportSession.ts logger.ts supabaseAdmin.ts types.ts tsconfig.json ./
 COPY --chmod=0755 docker-entrypoint.sh /usr/local/bin/nox-worker-entrypoint
 
 # Diretório de dados (sessão exportada, se usada) com o dono certo antes de trocar de usuário.
