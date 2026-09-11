@@ -18,9 +18,7 @@ import {
 import { DEMO_SIMULATION_DATA } from "@/lib/demo-accounts";
 import { isDemoSession } from "@/lib/demo-session";
 
-const TEMPO_LIMITE_ACOMPANHAMENTO_MS = 210_000;
-const MENSAGEM_SERVICO_INDISPONIVEL =
-  "O serviço de análise está se reconectando. Sua consulta ficou salva; tente novamente em instantes.";
+const TEMPO_LIMITE_ACOMPANHAMENTO_MS = 360_000;
 
 export const Route = createFileRoute("/consultas/nova")({
   component: () => (
@@ -61,11 +59,9 @@ function NovaConsulta() {
         const status = consulta.status as StatusConsulta;
         setEtapaAutomacao(consulta.automation_step);
         setProgresso(progressoConsulta(consulta.status, consulta.automation_step));
-        if (consulta.automation_step === "aguardando_autenticacao") {
-          setErroAutomacao(MENSAGEM_SERVICO_INDISPONIVEL);
-          pararEscuta();
-          return;
-        }
+        // Uma indisponibilidade curta é recuperada automaticamente pelo worker.
+        // Mantemos Realtime/polling ativos para o usuário seguir até o resultado,
+        // enquanto o modal mostra "Restabelecendo conexão segura".
         if (!STATUS_FINAIS.includes(status)) return;
         if (status === "erro") {
           setErroAutomacao(
@@ -93,8 +89,8 @@ function NovaConsulta() {
 
     // Rede de segurança: se por algum motivo o worker não responder (ex.: automação
     // temporariamente fora do ar), não deixamos o modal "Consultando crédito" girar
-    // pra sempre. Depois de um tempo bem maior que o processamento normal (~10s) e que
-    // o timeout do worker (180s), mostramos uma mensagem clara com opção de reenviar —
+    // pra sempre. Depois de um tempo maior que o processamento normal, o timeout do
+    // worker e uma tentativa de reconexão, mostramos uma mensagem clara para reenviar —
     // reaproveitando a mesma UI de erro (a consulta continua salva e pode ser reenviada).
     timeoutRef.current = setTimeout(() => {
       setErroAutomacao(

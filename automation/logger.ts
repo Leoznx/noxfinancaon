@@ -6,8 +6,50 @@ export function log(msg: string): void {
   console.log(`[${timestamp()}] ${msg}`);
 }
 
+const MAX_ERROR_DETAIL_LENGTH = 2_000;
+
+/**
+ * Erros do Supabase nem sempre são instâncias de Error. Antes eles viravam apenas
+ * "[object Object]", justamente quando mais precisávamos do código e da mensagem
+ * para diagnosticar uma queda do worker.
+ */
+export function formatErrorDetail(err: unknown): string {
+  if (err == null) return "";
+  if (typeof err === "string") return err.slice(0, MAX_ERROR_DETAIL_LENGTH);
+  if (err instanceof Error) {
+    const cause = err.cause ? formatErrorDetail(err.cause) : "";
+    return `${err.name === "Error" ? "" : `${err.name}: `}${err.message}${
+      cause ? ` | causa: ${cause}` : ""
+    }`.slice(0, MAX_ERROR_DETAIL_LENGTH);
+  }
+  if (typeof err === "object") {
+    const record = err as Record<string, unknown>;
+    const fields = ["name", "message", "code", "details", "hint", "status", "statusText"];
+    const detail = fields
+      .filter((field) => record[field] != null && record[field] !== "")
+      .map((field) => `${field}=${String(record[field])}`)
+      .join(" | ");
+    if (detail) return detail.slice(0, MAX_ERROR_DETAIL_LENGTH);
+
+    try {
+      const seen = new WeakSet<object>();
+      return JSON.stringify(err, (_key, value: unknown) => {
+        if (typeof value === "bigint") return value.toString();
+        if (value && typeof value === "object") {
+          if (seen.has(value)) return "[circular]";
+          seen.add(value);
+        }
+        return value;
+      }).slice(0, MAX_ERROR_DETAIL_LENGTH);
+    } catch {
+      return Object.prototype.toString.call(err);
+    }
+  }
+  return String(err).slice(0, MAX_ERROR_DETAIL_LENGTH);
+}
+
 export function logErro(msg: string, err?: unknown): void {
-  const detalhe = err instanceof Error ? err.message : err ? String(err) : "";
+  const detalhe = formatErrorDetail(err);
   console.error(`[${timestamp()}] ERRO: ${msg}${detalhe ? " — " + detalhe : ""}`);
 }
 

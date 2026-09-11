@@ -4,7 +4,7 @@ import { stdin, stdout } from "node:process";
 import http from "node:http";
 import { env } from "./env";
 import { supabaseAdmin } from "./supabaseAdmin";
-import { log, logErro, maskDocumento } from "./logger";
+import { formatErrorDetail, log, logErro, maskDocumento } from "./logger";
 import {
   fillPessoa,
   fillDocumento,
@@ -17,6 +17,7 @@ import {
   detectAuthenticationState,
 } from "./credpagoSelectors";
 import { parseResultado } from "./credpagoParser";
+import { isTransientPortalError, validateConsultaForAutomation } from "./errorPolicy";
 import type { ConsultaCreditoRow } from "./types";
 
 /**
@@ -56,7 +57,22 @@ class CredPagoAuthenticationError extends Error {
   }
 }
 
+class CredPagoServiceUnavailableError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "CredPagoServiceUnavailableError";
+  }
+}
+
+class ConsultaStateConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ConsultaStateConflictError";
+  }
+}
+
 type AuthRuntimeStatus = "checking" | "ok" | "required" | "unavailable";
+type QueueRuntimeStatus = "checking" | "ok" | "unavailable";
 
 const runtimeState: {
   auth: AuthRuntimeStatus;
@@ -66,6 +82,10 @@ const runtimeState: {
   lastLoopAt: string | null;
   consecutiveAuthFailures: number;
   browserRestarts: number;
+  queue: QueueRuntimeStatus;
+  lastQueueSuccessAt: string | null;
+  lastQueueErrorAt: string | null;
+  consecutiveQueueFailures: number;
 } = {
   auth: "checking",
   lastAuthCheckAt: null,
@@ -74,11 +94,62 @@ const runtimeState: {
   lastLoopAt: null,
   consecutiveAuthFailures: 0,
   browserRestarts: 0,
+  queue: "checking",
+  lastQueueSuccessAt: null,
+  lastQueueErrorAt: null,
+  consecutiveQueueFailures: 0,
 };
 
 let proximaValidacaoAuthEm = 0;
 let ultimaRecuperacaoConsultasEm = 0;
 let ultimaSinalizacaoAuthNaFilaEm = 0;
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+function registrarSucessoFila(): void {
+  const estavaIndisponivel = runtimeState.queue === "unavailable";
+  runtimeState.queue = "ok";
+  runtimeState.lastQueueSuccessAt = new Date().toISOString();
+  runtimeState.consecutiveQueueFailures = 0;
+  if (estavaIndisponivel) log("Conexão com a fila do Supabase recuperada.");
+}
+
+function registrarFalhaFila(contexto: string, error: unknown): void {
+  const primeiraFalha = runtimeState.queue !== "unavailable";
+  runtimeState.queue = "unavailable";
+  runtimeState.lastQueueErrorAt = new Date().toISOString();
+  runtimeState.consecutiveQueueFailures += 1;
+  if (primeiraFalha || runtimeState.consecutiveQueueFailures % 12 === 0) {
+    logErro(
+      `${contexto}; o worker continuará ativo e tentará novamente (falha ${runtimeState.consecutiveQueueFailures})`,
+      error,
+    );
+  }
+}
+
+async function navegarParaPortal(page: Page, timeoutMs = 30_000): Promise<void> {
+  let ultimoErro: unknown;
+  for (let tentativa = 1; tentativa <= 2; tentativa += 1) {
+    try {
+      await page.goto(env.credpagoUrl, { waitUntil: "domcontentloaded", timeout: timeoutMs });
+      return;
+    } catch (error) {
+      ultimoErro = error;
+      if (!isTransientPortalError(error) || page.isClosed()) throw error;
+      if (tentativa === 2) {
+        throw new CredPagoServiceUnavailableError(
+          "O portal permaneceu indisponível após duas tentativas de navegação.",
+          { cause: error },
+        );
+      }
+      logErro(`Portal indisponível na navegação; nova tentativa ${tentativa + 1}/2`, error);
+      await sleep(1_000);
+    }
+  }
+  throw new CredPagoServiceUnavailableError("Não foi possível abrir o portal.", {
+    cause: ultimoErro,
+  });
+}
 
 async function solicitarLoginManual(): Promise<void> {
   log("Tela de login detectada na CredPago.");
@@ -96,7 +167,9 @@ async function ensureLoggedIn(
   const initialState = await detectAuthenticationState(page);
   if (initialState === "authenticated") return;
   if (initialState === "unknown") {
-    throw new Error("O portal da CredPago não informou o estado da autenticação.");
+    throw new CredPagoServiceUnavailableError(
+      "O portal da CredPago não informou o estado da autenticação.",
+    );
   }
 
   if (!loginEmAndamento) {
@@ -143,7 +216,7 @@ async function ensureLoggedIn(
 
   // O login pode ter sido feito em OUTRA aba — recarrega esta para herdar a sessão
   // agora autenticada no contexto compartilhado (cookies são por contexto, não por aba).
-  await page.goto(env.credpagoUrl, { waitUntil: "domcontentloaded" }).catch(() => {});
+  await navegarParaPortal(page);
 
   if ((await detectAuthenticationState(page)) !== "authenticated") {
     throw new CredPagoAuthenticationError(
@@ -182,6 +255,7 @@ async function fetchConsultasPendentes(limite: number): Promise<ConsultaCreditoR
     .order("created_at", { ascending: true })
     .limit(limite);
   if (error) throw error;
+  registrarSucessoFila();
   return (data as ConsultaCreditoRow[]) || [];
 }
 
@@ -198,6 +272,7 @@ async function marcarProcessando(id: string): Promise<boolean> {
     .eq("status", "pendente")
     .select("id");
   if (error) throw error;
+  registrarSucessoFila();
   return Array.isArray(data) && data.length > 0;
 }
 
@@ -211,8 +286,15 @@ async function atualizarStep(
   step: "abrindo" | "preenchendo" | "enviando" | "aguardando_resultado",
 ): Promise<void> {
   try {
-    await supabaseAdmin.from("consultas_credito").update({ automation_step: step }).eq("id", id);
-  } catch {
+    const { error } = await supabaseAdmin
+      .from("consultas_credito")
+      .update({ automation_step: step })
+      .eq("id", id)
+      .eq("status", "processando");
+    if (error) throw error;
+    registrarSucessoFila();
+  } catch (error) {
+    registrarFalhaFila("Falha ao atualizar o progresso visual da consulta", error);
     // indicador visual apenas — nunca deve derrubar a consulta
   }
 }
@@ -247,8 +329,34 @@ async function atualizarResultado(
     payload.documento_masked = maskDocumento(resultado.clienteDocumento);
   }
 
-  const { error } = await supabaseAdmin.from("consultas_credito").update(payload).eq("id", id);
-  if (error) throw error;
+  let ultimoErro: unknown;
+  for (let tentativa = 1; tentativa <= 5; tentativa += 1) {
+    try {
+      const { data, error } = await supabaseAdmin
+        .from("consultas_credito")
+        .update(payload)
+        .eq("id", id)
+        .eq("status", "processando")
+        .select("id");
+      if (error) throw error;
+      if (!data?.length) {
+        throw new ConsultaStateConflictError(
+          "A consulta não estava mais em processamento ao salvar o resultado.",
+        );
+      }
+      registrarSucessoFila();
+      return;
+    } catch (error) {
+      if (error instanceof ConsultaStateConflictError) throw error;
+      ultimoErro = error;
+      registrarFalhaFila(
+        `Falha ao salvar resultado da consulta (tentativa ${tentativa}/5)`,
+        error,
+      );
+      if (tentativa < 5) await sleep(Math.min(1_000 * 2 ** (tentativa - 1), 8_000));
+    }
+  }
+  throw ultimoErro;
 }
 
 async function marcarErro(id: string, erroTecnico: string): Promise<void> {
@@ -265,7 +373,7 @@ async function marcarErro(id: string, erroTecnico: string): Promise<void> {
  * retomá-la automaticamente depois que a sessão for recuperada, em vez de mostrar
  * erro ao corretor no site ou no aplicativo.
  */
-async function recolocarNaFilaAguardandoAutenticacao(id: string): Promise<void> {
+async function recolocarNaFilaAguardandoServico(id: string): Promise<void> {
   const { error } = await supabaseAdmin
     .from("consultas_credito")
     .update({
@@ -280,6 +388,7 @@ async function recolocarNaFilaAguardandoAutenticacao(id: string): Promise<void> 
     .eq("id", id)
     .eq("status", "processando");
   if (error) throw error;
+  registrarSucessoFila();
 }
 
 /**
@@ -287,13 +396,13 @@ async function recolocarNaFilaAguardandoAutenticacao(id: string): Promise<void> 
  * "processando" e nenhum worker voltava a enxergá-la. Este lease temporal devolve
  * somente consultas antigas à fila; consultas ativas ficam protegidas pelo corte.
  */
-async function recuperarConsultasTravadas(): Promise<void> {
+async function recuperarConsultasTravadas(idsEmAndamento: ReadonlySet<string>): Promise<void> {
   const agora = Date.now();
   if (agora - ultimaRecuperacaoConsultasEm < env.staleRecoveryIntervalMs) return;
   ultimaRecuperacaoConsultasEm = agora;
 
   const cutoff = new Date(agora - env.staleConsultaMs).toISOString();
-  const { data, error } = await supabaseAdmin
+  let query = supabaseAdmin
     .from("consultas_credito")
     .update({
       status: "pendente",
@@ -306,10 +415,17 @@ async function recuperarConsultasTravadas(): Promise<void> {
     })
     .eq("status", "processando")
     .eq("origem", "nox_financa")
-    .lt("automation_started_at", cutoff)
-    .select("id");
+    .lt("automation_started_at", cutoff);
+
+  // A própria instância conhece suas abas ativas. Isso evita reencaminhar uma
+  // resposta lenta enquanto ela está sendo persistida no banco.
+  if (idsEmAndamento.size > 0) {
+    query = query.not("id", "in", `(${Array.from(idsEmAndamento).join(",")})`);
+  }
+  const { data, error } = await query.select("id");
 
   if (error) throw error;
+  registrarSucessoFila();
   if (data?.length) {
     log(`${data.length} consulta(s) interrompida(s) recuperada(s) automaticamente para a fila.`);
   }
@@ -333,6 +449,7 @@ async function sinalizarFilaAguardandoAutenticacao(): Promise<void> {
     .select("id");
 
   if (error) throw error;
+  registrarSucessoFila();
   if (data?.length) {
     log(`${data.length} consulta(s) aguardando a recuperação da autenticação.`);
   }
@@ -350,24 +467,22 @@ async function validarAutenticacao(
   runtimeState.lastAuthCheckAt = new Date().toISOString();
   runtimeState.authCheckStartedAt = runtimeState.lastAuthCheckAt;
 
-  const page = await context.newPage();
+  let page: Page | null = null;
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
+    page = await context.newPage();
     const validacao = (async () => {
-      await page.goto(env.credpagoUrl, {
-        waitUntil: "domcontentloaded",
-        timeout: Math.min(30_000, env.authValidationTimeoutMs),
-      });
-      await ensureLoggedIn("auth", page, persistirSessao);
+      await navegarParaPortal(page!, Math.min(30_000, env.authValidationTimeoutMs));
+      await ensureLoggedIn("auth", page!, persistirSessao);
 
-      if ((await detectAuthenticationState(page)) !== "authenticated") {
+      if ((await detectAuthenticationState(page!)) !== "authenticated") {
         throw new CredPagoAuthenticationError("A sessão ainda redireciona para o Login Loft.");
       }
     })();
 
     const watchdog = new Promise<never>((_, reject) => {
       timer = setTimeout(() => {
-        void page.close().catch(() => {});
+        void page?.close().catch(() => {});
         reject(
           new Error(
             `A validação da autenticação excedeu ${Math.round(env.authValidationTimeoutMs / 1000)}s e foi abortada.`,
@@ -403,7 +518,7 @@ async function validarAutenticacao(
   } finally {
     if (timer) clearTimeout(timer);
     runtimeState.authCheckStartedAt = null;
-    await page.close().catch(() => {});
+    await page?.close().catch(() => {});
   }
 }
 
@@ -415,6 +530,7 @@ async function validarAutenticacao(
 
 interface EstadoConsulta {
   finalizado: boolean;
+  persistindoResultado: boolean;
   page: Page | null;
 }
 
@@ -428,13 +544,19 @@ async function processarConsulta(
   const doc = consulta.documento_masked || maskDocumento(consulta.documento);
   log(`[${cid}] Consulta recebida (documento ${doc})`);
 
-  const page = await context.newPage();
-  estado.page = page;
+  let page: Page | null = null;
+  let simulacaoEnviada = false;
+  let resultadoObtido = false;
   try {
+    const erroValidacao = validateConsultaForAutomation(consulta);
+    if (erroValidacao) throw new Error(`Dados da consulta inválidos: ${erroValidacao}.`);
+
+    page = await context.newPage();
+    estado.page = page;
     log(`[${cid}] Abrindo CredPago`);
     const sessaoPodeEstarFria = Date.now() - ultimaAtividadeEm > SESSAO_OCIOSA_MS;
     ultimaAtividadeEm = Date.now();
-    await page.goto(env.credpagoUrl, { waitUntil: "domcontentloaded" });
+    await navegarParaPortal(page);
 
     if (sessaoPodeEstarFria) {
       log(
@@ -451,7 +573,7 @@ async function processarConsulta(
     // O login costuma redirecionar para o dashboard em vez de voltar à página de origem —
     // garante que esta aba termine na tela de simulação antes de preencher os dados.
     if (!page.url().includes("/imobiliaria/proposta")) {
-      await page.goto(env.credpagoUrl, { waitUntil: "domcontentloaded" });
+      await navegarParaPortal(page);
     }
 
     if (await isCaptchaPresent(page)) {
@@ -488,6 +610,10 @@ async function processarConsulta(
 
     log(`[${cid}] Enviando simulação`);
     await atualizarStep(consulta.id, "enviando");
+    // A partir daqui assumimos que o clique pode ter chegado ao parceiro mesmo se
+    // o Playwright perder a conexão durante a resposta. Não reenfileiramos
+    // automaticamente esse caso para não criar uma simulação duplicada.
+    simulacaoEnviada = true;
     await submitSimulation(page);
 
     log(`[${cid}] Aguardando resultado`);
@@ -500,6 +626,7 @@ async function processarConsulta(
       // 100% parada (ver heurística em parseResultado), nunca durante progresso real.
       onRetryClick: () => submitSimulation(page),
     });
+    resultadoObtido = true;
     log(`[${cid}] Resultado identificado: ${resultado.status}`);
 
     if (estado.finalizado) {
@@ -508,11 +635,16 @@ async function processarConsulta(
       );
       return;
     }
-    estado.finalizado = true;
-    await atualizarResultado(consulta.id, resultado);
+    estado.persistindoResultado = true;
+    try {
+      await atualizarResultado(consulta.id, resultado);
+      estado.finalizado = true;
+    } finally {
+      estado.persistindoResultado = false;
+    }
     log(`[${cid}] Consulta atualizada -> ${resultado.status}`);
   } catch (err) {
-    const erroTecnico = err instanceof Error ? err.message : String(err);
+    const erroTecnico = formatErrorDetail(err);
     logErro(`[${cid}] Falha ao processar consulta`, err);
     if (estado.finalizado) {
       log(
@@ -520,14 +652,39 @@ async function processarConsulta(
       );
       return;
     }
+    if (err instanceof ConsultaStateConflictError) {
+      estado.finalizado = true;
+      log(
+        `[${cid}] O estado da consulta mudou antes da gravação; resultado tardio descartado com segurança.`,
+      );
+      return;
+    }
+    if (resultadoObtido) {
+      // O parceiro já respondeu. Não converte uma resposta real em "erro" só porque
+      // o banco ficou indisponível durante a gravação; o lease a recuperará se todas
+      // as cinco tentativas de persistência falharem.
+      logErro(
+        `[${cid}] Resultado obtido, mas não persistido após as tentativas; consulta será recuperada pelo lease`,
+        err,
+      );
+      return;
+    }
+
+    const falhaTemporariaAntesDoEnvio =
+      !simulacaoEnviada &&
+      (err instanceof CredPagoAuthenticationError ||
+        err instanceof CredPagoServiceUnavailableError ||
+        isTransientPortalError(err));
     estado.finalizado = true;
-    if (err instanceof CredPagoAuthenticationError) {
-      runtimeState.auth = "required";
+    if (falhaTemporariaAntesDoEnvio) {
+      const falhaDeAutenticacao = err instanceof CredPagoAuthenticationError;
+      runtimeState.auth = falhaDeAutenticacao ? "required" : "unavailable";
       runtimeState.lastAuthCheckAt = new Date().toISOString();
-      proximaValidacaoAuthEm = Date.now() + env.authRetryIntervalMs;
-      await recolocarNaFilaAguardandoAutenticacao(consulta.id)
+      runtimeState.consecutiveAuthFailures += 1;
+      proximaValidacaoAuthEm = 0;
+      await recolocarNaFilaAguardandoServico(consulta.id)
         .then(() =>
-          log(`[${cid}] Consulta preservada na fila enquanto a autenticação é recuperada.`),
+          log(`[${cid}] Consulta preservada na fila enquanto o serviço é recuperado.`),
         )
         .catch((e) => logErro(`[${cid}] Falha ao devolver consulta para a fila`, e));
     } else {
@@ -536,7 +693,7 @@ async function processarConsulta(
       );
     }
   } finally {
-    await page.close().catch(() => {});
+    await page?.close().catch(() => {});
     estado.page = null;
     log(`[${cid}] Aba fechada`);
   }
@@ -549,13 +706,19 @@ async function processarConsultaComTimeout(
   persistirSessao: () => Promise<void>,
 ): Promise<void> {
   const cid = consulta.id.slice(0, 8);
-  const estado: EstadoConsulta = { finalizado: false, page: null };
+  const estado: EstadoConsulta = { finalizado: false, persistindoResultado: false, page: null };
 
   let timer: ReturnType<typeof setTimeout> | undefined;
   let timeoutAtingido = false;
   const timeoutPromise = new Promise<void>((resolve) => {
     timer = setTimeout(async () => {
       if (estado.finalizado) return;
+      if (estado.persistindoResultado) {
+        log(
+          `[${cid}] Resultado já recebido no tempo limite; aguardando apenas a gravação resiliente no Supabase.`,
+        );
+        return;
+      }
       timeoutAtingido = true;
       estado.finalizado = true;
       logErro(`[${cid}] Tempo limite de ${env.consultaTimeoutMs}ms excedido`);
@@ -669,26 +832,37 @@ function iniciarServidorHealth(): http.Server {
       const loopTravado =
         loopAgeMs > Math.max(env.authValidationTimeoutMs + 30_000, env.pollIntervalMs * 12);
       const healthy = !authTravada && !loopTravado;
+      const ready = runtimeState.auth === "ok" && runtimeState.queue === "ok";
 
       res.writeHead(healthy ? 200 : 503, { "Content-Type": "application/json" });
       res.end(
         JSON.stringify({
           status: healthy ? "ok" : "stalled",
-          ready: runtimeState.auth === "ok",
+          ready,
           auth: runtimeState.auth,
+          queue: runtimeState.queue,
           lastAuthCheckAt: runtimeState.lastAuthCheckAt,
           lastAuthSuccessAt: runtimeState.lastAuthSuccessAt,
           lastLoopAt: runtimeState.lastLoopAt,
           consecutiveAuthFailures: runtimeState.consecutiveAuthFailures,
           browserRestarts: runtimeState.browserRestarts,
+          lastQueueSuccessAt: runtimeState.lastQueueSuccessAt,
+          lastQueueErrorAt: runtimeState.lastQueueErrorAt,
+          consecutiveQueueFailures: runtimeState.consecutiveQueueFailures,
         }),
       );
       return;
     }
     if (req.method === "GET" && req.url === "/ready") {
-      const ready = runtimeState.auth === "ok";
+      const ready = runtimeState.auth === "ok" && runtimeState.queue === "ok";
       res.writeHead(ready ? 200 : 503, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ status: ready ? "ready" : "not_ready", auth: runtimeState.auth }));
+      res.end(
+        JSON.stringify({
+          status: ready ? "ready" : "not_ready",
+          auth: runtimeState.auth,
+          queue: runtimeState.queue,
+        }),
+      );
       return;
     }
     res.writeHead(404, { "Content-Type": "application/json" });
@@ -758,8 +932,8 @@ async function loop(once: boolean): Promise<void> {
       if (desligando) break;
       runtimeState.lastLoopAt = new Date().toISOString();
 
-      await recuperarConsultasTravadas().catch((error) =>
-        logErro("Falha ao recuperar consultas interrompidas", error),
+      await recuperarConsultasTravadas(new Set(emAndamento.keys())).catch((error) =>
+        registrarFalhaFila("Falha ao recuperar consultas interrompidas", error),
       );
 
       const autenticacaoPronta = await validarAutenticacao(
@@ -768,7 +942,7 @@ async function loop(once: boolean): Promise<void> {
       );
       if (!autenticacaoPronta) {
         await sinalizarFilaAguardandoAutenticacao().catch((error) =>
-          logErro("Falha ao sinalizar fila aguardando autenticação", error),
+          registrarFalhaFila("Falha ao sinalizar fila aguardando autenticação", error),
         );
         if (once) {
           log("Autenticação indisponível — nenhuma consulta foi retirada da fila.");
@@ -782,13 +956,19 @@ async function loop(once: boolean): Promise<void> {
           log(
             `Reiniciando navegador após ${runtimeState.consecutiveAuthFailures} falha(s) consecutiva(s) de autenticação.`,
           );
-          await fecharContexto(contextoAberto);
-          loginEmAndamento = null;
-          contextoAberto = await abrirContexto();
-          runtimeState.browserRestarts += 1;
-          runtimeState.consecutiveAuthFailures = 0;
-          runtimeState.auth = "checking";
-          proximaValidacaoAuthEm = 0;
+          try {
+            await fecharContexto(contextoAberto);
+            loginEmAndamento = null;
+            contextoAberto = await abrirContexto();
+            runtimeState.browserRestarts += 1;
+            runtimeState.consecutiveAuthFailures = 0;
+            runtimeState.auth = "checking";
+            proximaValidacaoAuthEm = 0;
+          } catch (error) {
+            runtimeState.auth = "unavailable";
+            proximaValidacaoAuthEm = Date.now() + env.authRetryIntervalMs;
+            logErro("Falha ao reiniciar o navegador; nova tentativa será feita", error);
+          }
         }
 
         await new Promise((r) => setTimeout(r, env.pollIntervalMs));
@@ -797,11 +977,28 @@ async function loop(once: boolean): Promise<void> {
 
       const vagas = env.maxConcurrentConsultas - emAndamento.size;
       if (vagas > 0) {
-        const pendentes = await fetchConsultasPendentes(vagas);
+        let pendentes: ConsultaCreditoRow[] = [];
+        try {
+          pendentes = await fetchConsultasPendentes(vagas);
+        } catch (error) {
+          registrarFalhaFila("Falha ao consultar a fila do Supabase", error);
+          if (once) break;
+          await sleep(env.pollIntervalMs);
+          continue;
+        }
         for (const consulta of pendentes) {
           if (emAndamento.size >= env.maxConcurrentConsultas) break;
 
-          const reservou = await marcarProcessando(consulta.id);
+          let reservou = false;
+          try {
+            reservou = await marcarProcessando(consulta.id);
+          } catch (error) {
+            registrarFalhaFila(
+              `Falha ao reservar a consulta ${consulta.id.slice(0, 8)} na fila`,
+              error,
+            );
+            break;
+          }
           if (!reservou) continue; // outra execução pegou essa consulta primeiro
 
           const contextoDaConsulta = contextoAberto;

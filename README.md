@@ -204,6 +204,7 @@ Preencha:
 | `CREDPAGO_URL` | `https://app.loft.com.br/fianca-aluguel/imobiliaria/proposta` |
 | `MAX_CONCURRENT_CONSULTAS` | Quantas consultas rodam em paralelo, cada uma em sua aba (padrão: `10`) |
 | `CONSULTA_TIMEOUT_MS` | Tempo máximo por consulta antes de marcar erro (padrão: `180000`) |
+| `STALE_CONSULTA_MS` | Recupera consultas interrompidas; deve ser maior que o timeout (padrão: `360000`) |
 | `HEADLESS` | `true` para rodar sem janela visível (requer sessão já logada) — padrão `false` |
 
 > Nota: o `.env.example` sugerido para este tipo de automação às vezes cita
@@ -337,10 +338,13 @@ As proteções contra fila travada são complementares:
 - cada acesso ao Supabase, validação de login e consulta possui prazo máximo;
 - a autenticação só é aceita quando há uma rota interna ou o formulário real de simulação;
 - após falhas consecutivas, contexto e navegador são recriados sem reiniciar a VPS;
+- indisponibilidade temporária do portal antes do envio devolve a consulta à fila em vez de
+  registrar uma reprovação/erro definitivo;
+- falhas do Supabase têm retentativa, não encerram o processo e preservam um resultado já lido;
 - uma aba que excede o timeout é fechada antes de liberar a vaga, impedindo envio duplicado;
 - linhas antigas em `processando` voltam automaticamente à fila após queda/reinício;
 - `/health` mede se o loop está vivo e retorna erro se ele congelar; `/ready` informa se a
-  sessão do parceiro está pronta para consumir a fila;
+  sessão do parceiro e a conexão com a fila estão prontas;
 - site e aplicativo usam Realtime com polling não sobreposto, cancelamento e timeout local.
 
 O endpoint público de monitoramento é `https://automacao.noxfianca.com/health`; prontidão é
