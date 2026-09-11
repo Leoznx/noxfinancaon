@@ -11,6 +11,7 @@ import {
   Megaphone,
   Sparkles,
   X,
+  UserPlus,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -48,6 +49,7 @@ const ICONES_NOTIFICACAO: Record<string, LucideIcon> = {
   pagamento: CheckCircle,
   sistema: Megaphone,
   atualizacao: Sparkles,
+  cadastro_link: UserPlus,
 };
 
 const CORES_NOTIFICACAO: Record<string, { fundo: string; icone: string }> = {
@@ -230,8 +232,7 @@ export function SinoNotificacoes() {
                 <div className="divide-y divide-neutral-50">
                   {notificacoes.map((notif) => {
                     const cor =
-                      CORES_NOTIFICACAO[notif.cor_destaque || "cinza"] ??
-                      CORES_NOTIFICACAO.cinza;
+                      CORES_NOTIFICACAO[notif.cor_destaque || "cinza"] ?? CORES_NOTIFICACAO.cinza;
                     const Icone = ICONES_NOTIFICACAO[notif.tipo] || Bell;
 
                     return (

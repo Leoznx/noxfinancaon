@@ -47,6 +47,10 @@ const cadastroSearchSchema = z.object({
     .string()
     .regex(/^[a-f0-9]{48}$/i)
     .optional(),
+  sl: z
+    .string()
+    .regex(/^[a-f0-9]{48}$/i)
+    .optional(),
 });
 
 export const Route = createFileRoute("/cadastro")({
@@ -225,11 +229,12 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
       search: {
         ref: search.ref,
         sr: search.sr,
+        sl: search.sl,
         ...(!perfilInicial && search.perfil ? { perfil: search.perfil } : {}),
       } as any,
       replace: true,
     });
-  }, [navigate, perfilInicial, search.perfil, search.ref, search.returnTo, search.sr]);
+  }, [navigate, perfilInicial, search.perfil, search.ref, search.returnTo, search.sl, search.sr]);
 
   useEffect(() => {
     if (resendCooldown <= 0) return;
@@ -258,7 +263,7 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
   const handleTypeSelect = (type: CadastroPerfil) => {
     navigate({
       to: CADASTRO_ROUTES[type] as any,
-      search: { returnTo: search.returnTo, ref: search.ref, sr: search.sr } as any,
+      search: { returnTo: search.returnTo, ref: search.ref, sr: search.sr, sl: search.sl } as any,
     });
   };
 
@@ -395,6 +400,7 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
           cpfCnpj: data.cpfCnpj,
           cidade: data.cidade,
           estado: data.estado,
+          sellerLinkToken: search.sl,
         },
       });
 
@@ -402,7 +408,9 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
         toast.error(
           result.error === "imobiliaria_nao_encontrada"
             ? "A imobiliária selecionada não está mais disponível. Atualize a página e escolha novamente."
-            : "Não foi possível criar a conta com os dados informados.",
+            : result.error === "link_vendedor_invalido"
+              ? "Este link de cadastro não é válido para o perfil escolhido. Solicite um novo link ao consultor."
+              : "Não foi possível criar a conta com os dados informados.",
         );
         setIsSubmitting(false);
         return;
@@ -665,7 +673,12 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
                   onClick={() =>
                     navigate({
                       to: "/cadastro",
-                      search: { returnTo: search.returnTo, ref: search.ref },
+                      search: {
+                        returnTo: search.returnTo,
+                        ref: search.ref,
+                        sr: search.sr,
+                        sl: search.sl,
+                      },
                     })
                   }
                   aria-label="Voltar para a seleção do tipo de conta"

@@ -46,6 +46,54 @@ export async function sendVerificationEmail({
   return { sent: true as const, id: data?.id };
 }
 
+// Server-only — avisa o responsável comercial depois que o cadastro já foi
+// atribuído no ranking. Em vínculos compartilhados, o chamador envia uma
+// mensagem independente ao SDR e ao Closer retornados pela RPC transacional.
+export async function sendSellerSignupNotificationEmail({
+  email,
+  nome,
+  clientName,
+  profileRole,
+  rankingUrl,
+}: {
+  email: string;
+  nome: string;
+  clientName: string;
+  profileRole: "proprietario" | "imobiliaria" | "corretor";
+  rankingUrl: string;
+}) {
+  const roleLabel =
+    profileRole === "proprietario"
+      ? "proprietário"
+      : profileRole === "imobiliaria"
+        ? "imobiliária"
+        : "corretor";
+  const { data, error } = await getResend().emails.send({
+    from: process.env.RESEND_FROM_EMAIL!,
+    to: [email],
+    subject: "Novo cadastro pelo seu link | NOX Fiança",
+    reply_to: process.env.RESEND_REPLY_TO,
+    html: renderNoxEmail(
+      `
+        <h1 style="font-size:24px;line-height:1.25;margin:0 0 18px">Seu link gerou um novo cadastro</h1>
+        <p>Olá, ${escapeEmailHtml(nome || "consultor")}.</p>
+        <p><strong>${escapeEmailHtml(clientName || "Um novo cliente")}</strong> concluiu o cadastro como ${roleLabel} usando um link vinculado a você.</p>
+        <p>O cadastro já foi contabilizado no ranking comercial.</p>
+        <p style="margin:26px 0">
+          <a href="${escapeEmailHtml(rankingUrl)}" style="display:inline-block;background:#ffd60a;color:#171717;text-decoration:none;font-weight:700;padding:14px 22px;border-radius:10px">Ver meu ranking</a>
+        </p>
+      `,
+      "Um novo cadastro foi contabilizado no seu ranking NOX.",
+    ),
+  } as any);
+
+  if (error) {
+    console.error("[Resend] Falha ao avisar cadastro do link:", error);
+    return { sent: false as const };
+  }
+  return { sent: true as const, id: data?.id };
+}
+
 // Server-only — nunca importar a partir de código de cliente (RESEND_API_KEY não é público).
 export async function sendPasswordResetEmail({
   email,

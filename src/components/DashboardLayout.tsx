@@ -44,6 +44,7 @@ import {
   Gift,
   Clock3,
   Wrench,
+  Send,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { SinoNotificacoes } from "./SinoNotificacoes";
@@ -300,7 +301,21 @@ const adminMasterItems = adminItems;
 // separados. Dashboard e Meu Perfil sem module = sempre visíveis (todo mundo
 // precisa de um ponto de entrada e acesso ao próprio perfil).
 const vendedorItems: MenuItem[] = [
-  { icon: Bell, label: "Minha Agenda", href: "/vendedor/agenda", module: "agenda", highlight: true, sellerTypes: ["sdr", "closer"] },
+  {
+    icon: Bell,
+    label: "Minha Agenda",
+    href: "/vendedor/agenda",
+    module: "agenda",
+    highlight: true,
+    sellerTypes: ["sdr", "closer"],
+  },
+  {
+    icon: Send,
+    label: "ENVIAR LINK",
+    href: "/vendedor/enviar-link",
+    highlight: true,
+    sellerTypes: ["sdr", "closer"],
+  },
   {
     icon: ContactRound,
     label: "Cadastrar Cliente",
@@ -309,10 +324,32 @@ const vendedorItems: MenuItem[] = [
     sellerTypes: ["sdr", "closer"],
   },
   { icon: LayoutDashboard, label: "Dashboard", href: "/vendedor", sellerTypes: ["sdr", "closer"] },
-  { icon: Clock3, label: "Registrar ponto", href: "/vendedor/ponto", sellerTypes: ["sdr", "closer"] },
-  { icon: MonitorPlay, label: "Contas demo", href: "/vendedor/contas-demo", sellerTypes: ["closer"] },
-  { icon: Users, label: "Leads e Atendimento", href: "/vendedor/leads", module: "leads_proprios", sellerTypes: ["sdr"] },
-  { icon: Target, label: "Minhas Metas", href: "/vendedor/metas", module: "metas", sellerTypes: ["sdr", "closer"] },
+  {
+    icon: Clock3,
+    label: "Registrar ponto",
+    href: "/vendedor/ponto",
+    sellerTypes: ["sdr", "closer"],
+  },
+  {
+    icon: MonitorPlay,
+    label: "Contas demo",
+    href: "/vendedor/contas-demo",
+    sellerTypes: ["closer"],
+  },
+  {
+    icon: Users,
+    label: "Leads e Atendimento",
+    href: "/vendedor/leads",
+    module: "leads_proprios",
+    sellerTypes: ["sdr"],
+  },
+  {
+    icon: Target,
+    label: "Minhas Metas",
+    href: "/vendedor/metas",
+    module: "metas",
+    sellerTypes: ["sdr", "closer"],
+  },
   {
     icon: DollarSign,
     label: "Minhas Comissões",
@@ -326,7 +363,13 @@ const vendedorItems: MenuItem[] = [
     href: "/vendedor/indicacoes",
     sellerTypes: ["sdr"],
   },
-  { icon: Trophy, label: "Ranking", href: "/vendedor/ranking", module: "ranking", sellerTypes: ["sdr", "closer"] },
+  {
+    icon: Trophy,
+    label: "Ranking",
+    href: "/vendedor/ranking",
+    module: "ranking",
+    sellerTypes: ["sdr", "closer"],
+  },
   { icon: User, label: "Meu Perfil", href: "/configuracoes", sellerTypes: ["sdr", "closer"] },
 ];
 
@@ -687,42 +730,43 @@ export function DashboardLayout({
           {menuPermissionsLoading && (
             <div className="space-y-2" aria-label="Carregando acessos do menu">
               {Array.from({ length: 7 }, (_, index) => (
-                <div
-                  key={index}
-                  className="h-11 animate-pulse rounded-xl bg-white/[0.07]"
-                />
+                <div key={index} className="h-11 animate-pulse rounded-xl bg-white/[0.07]" />
               ))}
             </div>
           )}
-          {!menuPermissionsLoading && visibleMenuItems.map((item) => {
-            const isActive = location.pathname === item.href.split("?")[0];
-            const isHighlight = item.highlight;
-            return (
-              <Link
-                key={`${item.href}-${item.parentLabel ?? "principal"}`}
-                to={item.href}
-                className={`flex items-center gap-3 pl-3 pr-4 py-3 rounded-xl border-l-4 transition-all ${
-                  isActive
-                    ? cargoInterno === "juridico" || isImobiliaria || isProprietario || isInquilino
-                      ? "bg-yellow-400 border-yellow-400 text-neutral-950 font-bold shadow-sm shadow-yellow-400/20"
-                      : "bg-white/10 border-yellow-400 text-white font-semibold"
-                    : isHighlight && !isImobiliaria
-                      ? "bg-yellow-400 border-transparent text-neutral-900 font-bold hover:bg-yellow-500 shadow-sm shadow-yellow-400/20"
-                      : "border-transparent text-neutral-400 hover:bg-white/5 hover:text-white"
-                }`}
-              >
-                <item.icon size={20} strokeWidth={isActive || isHighlight ? 2.2 : 1.5} />
-                <span className="min-w-0 text-sm">
-                  <span className="block truncate">{item.label}</span>
-                  {item.parentLabel && (
-                    <span className="block truncate text-[10px] font-medium text-neutral-500">
-                      {item.parentLabel} › subaba
-                    </span>
-                  )}
-                </span>
-              </Link>
-            );
-          })}
+          {!menuPermissionsLoading &&
+            visibleMenuItems.map((item) => {
+              const isActive = location.pathname === item.href.split("?")[0];
+              const isHighlight = item.highlight;
+              return (
+                <Link
+                  key={`${item.href}-${item.parentLabel ?? "principal"}`}
+                  to={item.href}
+                  className={`flex items-center gap-3 pl-3 pr-4 py-3 rounded-xl border-l-4 transition-all ${
+                    isActive
+                      ? cargoInterno === "juridico" ||
+                        isImobiliaria ||
+                        isProprietario ||
+                        isInquilino
+                        ? "bg-yellow-400 border-yellow-400 text-neutral-950 font-bold shadow-sm shadow-yellow-400/20"
+                        : "bg-white/10 border-yellow-400 text-white font-semibold"
+                      : isHighlight && !isImobiliaria
+                        ? "bg-yellow-400 border-transparent text-neutral-900 font-bold hover:bg-yellow-500 shadow-sm shadow-yellow-400/20"
+                        : "border-transparent text-neutral-400 hover:bg-white/5 hover:text-white"
+                  }`}
+                >
+                  <item.icon size={20} strokeWidth={isActive || isHighlight ? 2.2 : 1.5} />
+                  <span className="min-w-0 text-sm">
+                    <span className="block truncate">{item.label}</span>
+                    {item.parentLabel && (
+                      <span className="block truncate text-[10px] font-medium text-neutral-500">
+                        {item.parentLabel} › subaba
+                      </span>
+                    )}
+                  </span>
+                </Link>
+              );
+            })}
           {canSearchAdminMenu && normalizedMenuSearch && visibleMenuItems.length === 0 && (
             <p className="px-3 py-6 text-center text-xs text-neutral-500">
               Nenhuma aba encontrada.

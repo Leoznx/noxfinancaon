@@ -73,6 +73,7 @@ import { Route as VendedorMateriaisRouteImport } from './routes/vendedor.materia
 import { Route as VendedorLeadsRouteImport } from './routes/vendedor.leads'
 import { Route as VendedorIndicacoesRouteImport } from './routes/vendedor.indicacoes'
 import { Route as VendedorHistoricoComissoesRouteImport } from './routes/vendedor.historico-comissoes'
+import { Route as VendedorEnviarLinkRouteImport } from './routes/vendedor.enviar-link'
 import { Route as VendedorContasDemoRouteImport } from './routes/vendedor.contas-demo'
 import { Route as VendedorComissoesRouteImport } from './routes/vendedor.comissoes'
 import { Route as VendedorClientesRouteImport } from './routes/vendedor.clientes'
@@ -456,6 +457,11 @@ const VendedorHistoricoComissoesRoute =
     path: '/historico-comissoes',
     getParentRoute: () => VendedorRoute,
   } as any)
+const VendedorEnviarLinkRoute = VendedorEnviarLinkRouteImport.update({
+  id: '/enviar-link',
+  path: '/enviar-link',
+  getParentRoute: () => VendedorRoute,
+} as any)
 const VendedorContasDemoRoute = VendedorContasDemoRouteImport.update({
   id: '/contas-demo',
   path: '/contas-demo',
@@ -841,6 +847,7 @@ export interface FileRoutesByFullPath {
   '/vendedor/clientes': typeof VendedorClientesRoute
   '/vendedor/comissoes': typeof VendedorComissoesRoute
   '/vendedor/contas-demo': typeof VendedorContasDemoRoute
+  '/vendedor/enviar-link': typeof VendedorEnviarLinkRoute
   '/vendedor/historico-comissoes': typeof VendedorHistoricoComissoesRoute
   '/vendedor/indicacoes': typeof VendedorIndicacoesRoute
   '/vendedor/leads': typeof VendedorLeadsRoute
@@ -957,6 +964,7 @@ export interface FileRoutesByTo {
   '/vendedor/clientes': typeof VendedorClientesRoute
   '/vendedor/comissoes': typeof VendedorComissoesRoute
   '/vendedor/contas-demo': typeof VendedorContasDemoRoute
+  '/vendedor/enviar-link': typeof VendedorEnviarLinkRoute
   '/vendedor/historico-comissoes': typeof VendedorHistoricoComissoesRoute
   '/vendedor/indicacoes': typeof VendedorIndicacoesRoute
   '/vendedor/leads': typeof VendedorLeadsRoute
@@ -1078,6 +1086,7 @@ export interface FileRoutesById {
   '/vendedor/clientes': typeof VendedorClientesRoute
   '/vendedor/comissoes': typeof VendedorComissoesRoute
   '/vendedor/contas-demo': typeof VendedorContasDemoRoute
+  '/vendedor/enviar-link': typeof VendedorEnviarLinkRoute
   '/vendedor/historico-comissoes': typeof VendedorHistoricoComissoesRoute
   '/vendedor/indicacoes': typeof VendedorIndicacoesRoute
   '/vendedor/leads': typeof VendedorLeadsRoute
@@ -1200,6 +1209,7 @@ export interface FileRouteTypes {
     | '/vendedor/clientes'
     | '/vendedor/comissoes'
     | '/vendedor/contas-demo'
+    | '/vendedor/enviar-link'
     | '/vendedor/historico-comissoes'
     | '/vendedor/indicacoes'
     | '/vendedor/leads'
@@ -1316,6 +1326,7 @@ export interface FileRouteTypes {
     | '/vendedor/clientes'
     | '/vendedor/comissoes'
     | '/vendedor/contas-demo'
+    | '/vendedor/enviar-link'
     | '/vendedor/historico-comissoes'
     | '/vendedor/indicacoes'
     | '/vendedor/leads'
@@ -1436,6 +1447,7 @@ export interface FileRouteTypes {
     | '/vendedor/clientes'
     | '/vendedor/comissoes'
     | '/vendedor/contas-demo'
+    | '/vendedor/enviar-link'
     | '/vendedor/historico-comissoes'
     | '/vendedor/indicacoes'
     | '/vendedor/leads'
@@ -2004,6 +2016,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof VendedorHistoricoComissoesRouteImport
       parentRoute: typeof VendedorRoute
     }
+    '/vendedor/enviar-link': {
+      id: '/vendedor/enviar-link'
+      path: '/enviar-link'
+      fullPath: '/vendedor/enviar-link'
+      preLoaderRoute: typeof VendedorEnviarLinkRouteImport
+      parentRoute: typeof VendedorRoute
+    }
     '/vendedor/contas-demo': {
       id: '/vendedor/contas-demo'
       path: '/contas-demo'
@@ -2453,6 +2472,7 @@ interface VendedorRouteChildren {
   VendedorClientesRoute: typeof VendedorClientesRoute
   VendedorComissoesRoute: typeof VendedorComissoesRoute
   VendedorContasDemoRoute: typeof VendedorContasDemoRoute
+  VendedorEnviarLinkRoute: typeof VendedorEnviarLinkRoute
   VendedorHistoricoComissoesRoute: typeof VendedorHistoricoComissoesRoute
   VendedorIndicacoesRoute: typeof VendedorIndicacoesRoute
   VendedorLeadsRoute: typeof VendedorLeadsRoute
@@ -2470,6 +2490,7 @@ const VendedorRouteChildren: VendedorRouteChildren = {
   VendedorClientesRoute: VendedorClientesRoute,
   VendedorComissoesRoute: VendedorComissoesRoute,
   VendedorContasDemoRoute: VendedorContasDemoRoute,
+  VendedorEnviarLinkRoute: VendedorEnviarLinkRoute,
   VendedorHistoricoComissoesRoute: VendedorHistoricoComissoesRoute,
   VendedorIndicacoesRoute: VendedorIndicacoesRoute,
   VendedorLeadsRoute: VendedorLeadsRoute,

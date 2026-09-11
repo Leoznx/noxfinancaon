@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { sendVerificationEmail } from "@/lib/resend.service";
+import { sendSellerSignupNotificationEmail, sendVerificationEmail } from "@/lib/resend.service";
 import { linkTenantRecordsByCpf } from "@/lib/inquilino-signup.functions";
 import { defaultAvatarForName } from "@/lib/gender-avatar";
 import { buildAuthEmailCallbackUrl } from "@/lib/auth-email-links";
@@ -159,6 +159,10 @@ const profissionalSchema = z
     // Comuns a corretor/proprietário
     cidade: z.string().optional(),
     estado: z.string().optional(),
+    sellerLinkToken: z
+      .string()
+      .regex(/^[a-f0-9]{48}$/i)
+      .optional(),
   })
   .superRefine((data, ctx) => {
     if (
@@ -187,6 +191,16 @@ export const signUpProfissional = createServerFn({ method: "POST" })
       windowSeconds: 3600,
       blockSeconds: 3600,
     });
+
+    if (data.sellerLinkToken) {
+      const { data: validLink, error: linkValidationError } = await (supabaseAdmin as any).rpc(
+        "resolve_seller_signup_link",
+        { p_token: data.sellerLinkToken, p_profile_role: data.role },
+      );
+      if (linkValidationError || !validLink) {
+        return { ok: false as const, error: "link_vendedor_invalido" as const };
+      }
+    }
 
     if (await emailAlreadyRegistered(supabaseAdmin, emailLower)) {
       return { ok: false as const, error: "erro" as const };
@@ -312,6 +326,44 @@ export const signUpProfissional = createServerFn({ method: "POST" })
       nome: nomeExibicao,
       verificationLink: buildVerificationLink(linkData.properties),
     });
+
+    if (data.sellerLinkToken) {
+      const { data: recipients, error: attributionError } = await (supabaseAdmin as any).rpc(
+        "claim_seller_signup_link",
+        {
+          p_token: data.sellerLinkToken,
+          p_profile_id: userId,
+          p_profile_role: data.role,
+          p_email: emailLower,
+          p_display_name: nomeExibicao,
+        },
+      );
+      if (attributionError) {
+        console.error("[signUpProfissional] Cadastro criado, mas o vínculo comercial falhou", {
+          message: attributionError.message,
+          userId,
+        });
+      } else {
+        const appUrl =
+          process.env.APP_URL ||
+          process.env.APP_BASE_URL ||
+          process.env.FRONTEND_URL ||
+          "https://noxfianca.com";
+        await Promise.allSettled(
+          ((recipients as Array<{ recipient_email: string; recipient_name: string }> | null) ?? [])
+            .filter((recipient) => !!recipient.recipient_email)
+            .map((recipient) =>
+              sendSellerSignupNotificationEmail({
+                email: recipient.recipient_email,
+                nome: recipient.recipient_name,
+                clientName: nomeExibicao,
+                profileRole: data.role,
+                rankingUrl: `${appUrl.replace(/\/$/, "")}/vendedor/ranking`,
+              }),
+            ),
+        );
+      }
+    }
 
     return { ok: true as const, userId, emailSent: emailResult.sent };
   });
