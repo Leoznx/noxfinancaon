@@ -433,10 +433,25 @@ async function processJob(job: RepairJobRecord): Promise<void> {
     });
   } finally {
     clearInterval(leaseTimer);
-    await (supabaseAdmin as any).rpc("release_repair_lock", {
-      p_job_id: job.id,
-      p_worker_id: workerId,
-    }).catch(() => {});
+    try {
+      const { error: releaseError } = await (supabaseAdmin as any).rpc("release_repair_lock", {
+        p_job_id: job.id,
+        p_worker_id: workerId,
+      });
+      if (releaseError) {
+        logStructured("repair_lock_release_failed", {
+          jobId: job.id,
+          error: redactSensitiveText(String(releaseError.message ?? releaseError)),
+        });
+      }
+    } catch (releaseError) {
+      logStructured("repair_lock_release_failed", {
+        jobId: job.id,
+        error: redactSensitiveText(
+          releaseError instanceof Error ? releaseError.message : String(releaseError),
+        ),
+      });
+    }
     runtime.currentJobId = null;
   }
 }
