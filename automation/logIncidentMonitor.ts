@@ -15,7 +15,7 @@ const knownHandledEvents = new Set([
 ]);
 
 const errorPattern =
-  /\b(?:erro|error|fatal|failed|failure|falha|uncaught|unhandled|crash(?:ed)?)\b/i;
+  /\b(?:erro|error|fatal|failed|failure|falha|falhou|falhado|falhada|uncaught|unhandled|crash(?:ed)?)\b/i;
 const correlationPattern = /\bNOX-(?:SIM|SYS)-\d{8}-[A-F0-9]{8}\b/i;
 
 export function analyzeWorkerLogLine(line: string, date = new Date()): MonitoredLogIncident | null {

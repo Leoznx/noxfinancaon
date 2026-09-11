@@ -76,6 +76,10 @@ test("monitor transforma qualquer linha real de erro em incidente e ignora event
     analyzeWorkerLogLine("ERRO: navegador falhou", when)?.correlationId ?? "",
     /^NOX-SYS-20260911-/,
   );
+  assert.match(
+    analyzeWorkerLogLine("Worker de credito falhou: exit=1", when)?.correlationId ?? "",
+    /^NOX-SYS-20260911-/,
+  );
   assert.equal(
     analyzeWorkerLogLine('{"event":"automation_error_recorded","status":"ERROR"}', when),
     null,
