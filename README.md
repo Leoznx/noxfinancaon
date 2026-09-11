@@ -125,7 +125,7 @@ misturar dados nem arriscar corromper o perfil.
   'pendente'` condicional — se duas execuções tentarem pegar a mesma consulta ao mesmo tempo,
   só uma consegue: a outra recebe zero linhas afetadas e segue para a próxima. Isso é o que
   garante que o resultado nunca vai parar na consulta errada.
-- **Timeout por consulta** (`CONSULTA_TIMEOUT_MS`, padrão `90000` = 90s): se uma consulta travar
+- **Timeout por consulta** (`CONSULTA_TIMEOUT_MS`, padrão `180000` = 180s): se uma consulta travar
   na CredPago, só ela é marcada como `erro` — as outras continuam rodando normalmente.
 - **Fechamento seguro**: só a aba da consulta que terminou é fechada (`page.close()`). O
   navegador/contexto inteiro só fecha quando o worker inteiro é encerrado (Ctrl+C ou fim do
@@ -203,7 +203,7 @@ Preencha:
 | `AUTOMATION_POLL_INTERVAL_MS` | Intervalo de verificação de novas consultas (padrão: `5000`) |
 | `CREDPAGO_URL` | `https://app.loft.com.br/fianca-aluguel/imobiliaria/proposta` |
 | `MAX_CONCURRENT_CONSULTAS` | Quantas consultas rodam em paralelo, cada uma em sua aba (padrão: `10`) |
-| `CONSULTA_TIMEOUT_MS` | Tempo máximo por consulta antes de marcar erro (padrão: `90000`) |
+| `CONSULTA_TIMEOUT_MS` | Tempo máximo por consulta antes de marcar erro (padrão: `180000`) |
 | `HEADLESS` | `true` para rodar sem janela visível (requer sessão já logada) — padrão `false` |
 
 > Nota: o `.env.example` sugerido para este tipo de automação às vezes cita

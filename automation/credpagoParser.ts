@@ -9,7 +9,10 @@ const PADROES: { status: Exclude<ResultadoStatus, "erro">; regex: RegExp }[] = [
     regex: /(cr[ée]dito\s+)?(recusad[oa]|reprovad[oa]|negad[oa]|n[ãa]o\s+(foi\s+)?aprovad[oa])/i,
   },
   // A CredPago usa "Crédito pendente de análise" (não "em análise") — aceita as duas formas.
-  { status: "em_analise", regex: /(pendente\s+de\s+an[aá]lise|em\s+an[aá]lise|an[aá]lise\s+pendente)/i },
+  {
+    status: "em_analise",
+    regex: /(pendente\s+de\s+an[aá]lise|em\s+an[aá]lise|an[aá]lise\s+pendente)/i,
+  },
   { status: "aprovado", regex: /(valor\s+locat[ií]cio\s+)?(cr[ée]dito\s+)?aprovad[oa]/i },
 ];
 
@@ -22,7 +25,10 @@ const MENSAGEM_POR_STATUS: Record<Exclude<ResultadoStatus, "erro">, string> = {
 };
 
 const TIMEOUT_MS = 30000;
+const PROCESSING_TIMEOUT_MS = 150000;
 const POLL_INTERVAL_MS = 1000;
+const PROCESSING_REGEX =
+  /(estamos\s+fazendo\s+a\s+an[aá]lise\s+de\s+cr[ée]dito|an[aá]lise\s+de\s+cr[ée]dito\s+em\s+andamento|aguarde[^\n]{0,80}an[aá]lise\s+de\s+cr[ée]dito)/i;
 /**
  * Se a página ficar com o texto EXATAMENTE igual por esse tempo depois do clique em
  * "Simular Crédito" (nem um spinner, nem uma navegação, nada), assumimos que o clique
@@ -37,6 +43,12 @@ export interface ParseResultadoOpts {
   onRetryClick?: (tentativa: number) => Promise<void>;
   /** Log opcional de progresso (o worker usa para deixar rastro no console). */
   onLog?: (mensagem: string) => void;
+  /** Limites substituíveis apenas para testes e ajustes operacionais controlados. */
+  timeoutMs?: number;
+  processingTimeoutMs?: number;
+  pollIntervalMs?: number;
+  retryAfterMs?: number;
+  maxRetryClicks?: number;
 }
 
 /**
@@ -47,8 +59,21 @@ export interface ParseResultadoOpts {
  * Nunca inventa uma resposta: se nenhum padrão bater dentro do timeout, retorna
  * status "erro" com o texto capturado para diagnóstico manual.
  */
-export async function parseResultado(page: Page, opts: ParseResultadoOpts = {}): Promise<ResultadoParse> {
+export async function parseResultado(
+  page: Page,
+  opts: ParseResultadoOpts = {},
+): Promise<ResultadoParse> {
   const inicio = Date.now();
+  const timeoutInicial = opts.timeoutMs ?? TIMEOUT_MS;
+  const timeoutProcessando = Math.max(
+    timeoutInicial,
+    opts.processingTimeoutMs ?? PROCESSING_TIMEOUT_MS,
+  );
+  const pollInterval = opts.pollIntervalMs ?? POLL_INTERVAL_MS;
+  const retryAfter = opts.retryAfterMs ?? RETRY_APOS_MS;
+  const maxRetryClicks = opts.maxRetryClicks ?? MAX_RECLIQUES;
+  let deadline = inicio + timeoutInicial;
+  let processamentoDetectado = false;
   let bodyText = "";
   let baseline = await page
     .locator("body")
@@ -57,7 +82,7 @@ export async function parseResultado(page: Page, opts: ParseResultadoOpts = {}):
   let ultimoReclique = Date.now();
   let tentativasReclique = 0;
 
-  while (Date.now() - inicio < TIMEOUT_MS) {
+  while (Date.now() < deadline) {
     bodyText = await page
       .locator("body")
       .innerText()
@@ -76,16 +101,34 @@ export async function parseResultado(page: Page, opts: ParseResultadoOpts = {}):
       }
     }
 
+    // A Loft pode manter esta mensagem estática por mais de 30 segundos enquanto
+    // processa a proposta. Isso é progresso real: não repetimos o clique (que pode
+    // duplicar/reiniciar a simulação) e estendemos somente esse estado comprovado.
+    const processamentoAtivo = PROCESSING_REGEX.test(bodyText);
+    if (processamentoAtivo && !processamentoDetectado) {
+      processamentoDetectado = true;
+      deadline = Math.max(deadline, inicio + timeoutProcessando);
+      opts.onLog?.(
+        `Análise confirmada no portal — aguardando o resultado por até ${Math.round(timeoutProcessando / 1000)}s, sem reenviar a simulação.`,
+      );
+    }
+
     // Nada mudou desde a última "foto" (nem um spinner, nem uma navegação) — sinal
     // mais confiável de que o clique não surtiu efeito. Não reclicamos enquanto algo
     // estiver visivelmente mudando (ex.: "Sua análise está pronta!"), só quando a
     // página está totalmente parada — evita clicar duas vezes numa simulação real.
     const semMudancaNenhuma = bodyText === baseline;
     const tempoTravado = Date.now() - ultimoReclique;
-    if (semMudancaNenhuma && opts.onRetryClick && tentativasReclique < MAX_RECLIQUES && tempoTravado >= RETRY_APOS_MS) {
+    if (
+      !processamentoAtivo &&
+      semMudancaNenhuma &&
+      opts.onRetryClick &&
+      tentativasReclique < maxRetryClicks &&
+      tempoTravado >= retryAfter
+    ) {
       tentativasReclique++;
       opts.onLog?.(
-        `Página sem nenhuma mudança após ${Math.round(tempoTravado / 1000)}s — tentativa ${tentativasReclique}/${MAX_RECLIQUES} de reenviar o clique em "Simular Crédito".`,
+        `Página sem nenhuma mudança após ${Math.round(tempoTravado / 1000)}s — tentativa ${tentativasReclique}/${maxRetryClicks} de reenviar o clique em "Simular Crédito".`,
       );
       await opts.onRetryClick(tentativasReclique).catch(() => {});
       ultimoReclique = Date.now();
@@ -97,7 +140,7 @@ export async function parseResultado(page: Page, opts: ParseResultadoOpts = {}):
       continue;
     }
 
-    await page.waitForTimeout(POLL_INTERVAL_MS);
+    await page.waitForTimeout(pollInterval);
   }
 
   return {
@@ -130,7 +173,9 @@ function buildSummary(page: Page, bodyText: string): Record<string, unknown> {
  * próprio texto "CPF: 000.000.000-00" como se fosse o nome.
  */
 function extrairClienteInfo(texto: string): { nome: string | null; documento: string | null } {
-  const nomeMatch = texto.match(/Cliente:\s*([A-ZÀ-Ý][A-ZÀ-Ýa-zà-ÿ]*(?:\s+[A-ZÀ-Ýa-zà-ÿ]+)+)\s*(?=CPF\s*:|CNPJ\s*:|\n|$)/);
+  const nomeMatch = texto.match(
+    /Cliente:\s*([A-ZÀ-Ý][A-ZÀ-Ýa-zà-ÿ]*(?:\s+[A-ZÀ-Ýa-zà-ÿ]+)+)\s*(?=CPF\s*:|CNPJ\s*:|\n|$)/,
+  );
   const docMatch = texto.match(/(?:CPF|CNPJ)\s*:\s*([\d./-]{11,20})/i);
   return {
     nome: nomeMatch ? nomeMatch[1].replace(/\s+/g, " ").trim() : null,

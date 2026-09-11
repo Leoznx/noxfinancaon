@@ -18,7 +18,7 @@ import {
 import { DEMO_SIMULATION_DATA } from "@/lib/demo-accounts";
 import { isDemoSession } from "@/lib/demo-session";
 
-const TEMPO_LIMITE_ACOMPANHAMENTO_MS = 120_000;
+const TEMPO_LIMITE_ACOMPANHAMENTO_MS = 210_000;
 const MENSAGEM_SERVICO_INDISPONIVEL =
   "O serviço de análise está se reconectando. Sua consulta ficou salva; tente novamente em instantes.";
 
@@ -94,7 +94,7 @@ function NovaConsulta() {
     // Rede de segurança: se por algum motivo o worker não responder (ex.: automação
     // temporariamente fora do ar), não deixamos o modal "Consultando crédito" girar
     // pra sempre. Depois de um tempo bem maior que o processamento normal (~10s) e que
-    // o timeout do worker (90s), mostramos uma mensagem clara com opção de reenviar —
+    // o timeout do worker (180s), mostramos uma mensagem clara com opção de reenviar —
     // reaproveitando a mesma UI de erro (a consulta continua salva e pode ser reenviada).
     timeoutRef.current = setTimeout(() => {
       setErroAutomacao(

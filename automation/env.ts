@@ -73,10 +73,7 @@ export const env = {
   /** Watchdog externo ao fluxo de login: fecha a aba mesmo se o Playwright/SSO não responder. */
   authValidationTimeoutMs: positiveNumber("AUTH_VALIDATION_TIMEOUT_MS", 90 * 1000, 15_000),
   /** Reinicia contexto+navegador depois de falhas seguidas, sem derrubar o processo. */
-  authFailuresBeforeBrowserRestart: positiveNumber(
-    "AUTH_FAILURES_BEFORE_BROWSER_RESTART",
-    2,
-  ),
+  authFailuresBeforeBrowserRestart: positiveNumber("AUTH_FAILURES_BEFORE_BROWSER_RESTART", 2),
   keepBrowserOpen: process.env.AUTOMATION_KEEP_BROWSER_OPEN === "true",
   /**
    * Quantas consultas podem rodar em paralelo, cada uma na sua própria aba do mesmo
@@ -87,14 +84,10 @@ export const env = {
    */
   maxConcurrentConsultas: positiveNumber("MAX_CONCURRENT_CONSULTAS", 10),
   /** Tempo máximo (ms) para uma consulta individual antes de ser marcada como erro. */
-  consultaTimeoutMs: positiveNumber("CONSULTA_TIMEOUT_MS", 90_000, 10_000),
+  consultaTimeoutMs: positiveNumber("CONSULTA_TIMEOUT_MS", 180_000, 10_000),
   /** Recupera leases "processando" deixados por queda/reinício do worker. */
   staleConsultaMs: positiveNumber("STALE_CONSULTA_MS", 3 * 60 * 1000, 60_000),
-  staleRecoveryIntervalMs: positiveNumber(
-    "STALE_RECOVERY_INTERVAL_MS",
-    60 * 1000,
-    10_000,
-  ),
+  staleRecoveryIntervalMs: positiveNumber("STALE_RECOVERY_INTERVAL_MS", 60 * 1000, 10_000),
   /**
    * Chrome invisível. Login manual exige uma janela visível — se HEADLESS=true e a sessão
    * expirar, o worker falha com uma mensagem clara em vez de travar esperando um Enter que
