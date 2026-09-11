@@ -1,5 +1,6 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import os from "node:os";
 import dotenv from "dotenv";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -30,6 +31,12 @@ function positiveNumber(name: string, fallback: number, minimum = 1): number {
   return value;
 }
 
+function percentage(name: string, fallback: number): number {
+  const value = positiveNumber(name, fallback, 1);
+  if (value > 100) throw new Error(`${name} precisa ficar entre 1 e 100.`);
+  return value;
+}
+
 const credpagoLogin = process.env.CREDPAGO_LOGIN?.trim() || "";
 const credpagoPassword = process.env.CREDPAGO_PASSWORD || "";
 if (Boolean(credpagoLogin) !== Boolean(credpagoPassword)) {
@@ -38,13 +45,17 @@ if (Boolean(credpagoLogin) !== Boolean(credpagoPassword)) {
   );
 }
 
+const storageStatePath = process.env.CREDPAGO_STORAGE_STATE_PATH || "";
+const profileDir =
+  process.env.CREDPAGO_PROFILE_DIR || path.resolve(__dirname, "chrome-profile-credpago");
+const dataDir = storageStatePath ? path.dirname(storageStatePath) : path.resolve(__dirname, "data");
+
 export const env = {
   supabaseUrl: required("SUPABASE_URL"),
   supabaseServiceRoleKey: required("SUPABASE_SERVICE_ROLE_KEY"),
   /** Evita que uma conexão degradada com a fila congele o loop do worker. */
   supabaseRequestTimeoutMs: positiveNumber("SUPABASE_REQUEST_TIMEOUT_MS", 15_000, 3_000),
-  profileDir:
-    process.env.CREDPAGO_PROFILE_DIR || path.resolve(__dirname, "chrome-profile-credpago"),
+  profileDir,
   /**
    * Caminho de um arquivo de sessão portátil (Playwright storageState — cookies +
    * localStorage em JSON puro, sem a criptografia OS-level do perfil do Chrome).
@@ -55,9 +66,24 @@ export const env = {
    * `npm run automation:export-session`. Se vazio, mantém o comportamento local de
    * sempre (perfil persistente em profileDir).
    */
-  storageStatePath: process.env.CREDPAGO_STORAGE_STATE_PATH || "",
+  storageStatePath,
   /** Porta do servidor HTTP só com /health — não expõe nenhuma rota de negócio. */
   healthPort: positiveNumber("HEALTH_PORT", 3000),
+  repairHealthPort: positiveNumber("REPAIR_HEALTH_PORT", 3001),
+  repairPollIntervalMs: positiveNumber("REPAIR_POLL_INTERVAL_MS", 3000, 500),
+  repairValidationTimeoutMs: positiveNumber("REPAIR_VALIDATION_TIMEOUT_MS", 60_000, 10_000),
+  repairAutoEnabled: process.env.REPAIR_AUTO_ENABLED !== "false",
+  repairHealthToken: process.env.REPAIR_HEALTH_TOKEN || "",
+  automationEnvironment: process.env.AUTOMATION_ENVIRONMENT || "production",
+  automationVersion: process.env.AUTOMATION_VERSION || process.env.VERCEL_GIT_COMMIT_SHA || "unknown",
+  deployVersion: process.env.DEPLOY_VERSION || process.env.AUTOMATION_VERSION || "unknown",
+  vpsId: process.env.VPS_ID || os.hostname(),
+  automationLockPath: process.env.AUTOMATION_LOCK_PATH || path.join(dataDir, "credit-automation.lock"),
+  errorSpoolDir: process.env.ERROR_SPOOL_DIR || path.join(dataDir, "error-spool"),
+  repairArtifactDir: process.env.REPAIR_ARTIFACT_DIR || path.join(dataDir, "repair-artifacts"),
+  highCpuPercent: percentage("VPS_HIGH_CPU_PERCENT", 90),
+  highMemoryPercent: percentage("VPS_HIGH_MEMORY_PERCENT", 90),
+  lowDiskUsedPercent: percentage("VPS_LOW_DISK_USED_PERCENT", 90),
   pollIntervalMs: positiveNumber("AUTOMATION_POLL_INTERVAL_MS", 5000, 500),
   credpagoUrl:
     process.env.CREDPAGO_URL || "https://app.loft.com.br/fianca-aluguel/imobiliaria/proposta",

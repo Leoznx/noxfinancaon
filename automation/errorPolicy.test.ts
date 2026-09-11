@@ -5,6 +5,9 @@ import type { ConsultaCreditoRow } from "./types";
 
 const consultaValida: ConsultaCreditoRow = {
   id: "00000000-0000-0000-0000-000000000000",
+  correlation_id: "NOX-SIM-20260911-TEST0001",
+  profile_id_solicitante: "00000000-0000-0000-0000-000000000001",
+  created_at: "2026-09-11T10:00:00.000Z",
   tipo_pessoa: "PF",
   documento: "12345678901",
   documento_masked: "123.***.***-01",

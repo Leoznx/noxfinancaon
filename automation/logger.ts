@@ -1,3 +1,5 @@
+import { redactObject, redactSensitiveText } from "./redaction";
+
 function timestamp(): string {
   return new Date().toISOString();
 }
@@ -49,8 +51,21 @@ export function formatErrorDetail(err: unknown): string {
 }
 
 export function logErro(msg: string, err?: unknown): void {
-  const detalhe = formatErrorDetail(err);
-  console.error(`[${timestamp()}] ERRO: ${msg}${detalhe ? " — " + detalhe : ""}`);
+  const detalhe = redactSensitiveText(formatErrorDetail(err), MAX_ERROR_DETAIL_LENGTH);
+  console.error(
+    `[${timestamp()}] ERRO: ${redactSensitiveText(msg, 1_000)}${detalhe ? " — " + detalhe : ""}`,
+  );
+}
+
+/** Eventos consumidos pela central/observabilidade, sempre em JSON e ja redigidos. */
+export function logStructured(event: string, fields: Record<string, unknown> = {}): void {
+  console.log(
+    JSON.stringify({
+      timestamp: timestamp(),
+      event,
+      ...(redactObject(fields) as Record<string, unknown>),
+    }),
+  );
 }
 
 /**

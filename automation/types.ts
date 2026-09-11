@@ -1,5 +1,8 @@
 export interface ConsultaCreditoRow {
   id: string;
+  correlation_id: string;
+  profile_id_solicitante: string | null;
+  created_at: string;
   tipo_pessoa: "PF" | "PJ" | null;
   documento: string | null;
   documento_masked: string | null;

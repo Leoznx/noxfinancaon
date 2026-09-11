@@ -14,7 +14,7 @@ RUN npm install --omit=dev && \
     npm install --no-save tsx@^4.19.2 && \
     npx playwright install chromium --with-deps
 
-COPY credpagoParser.ts credpagoSelectors.ts credpagoWorker.ts env.ts errorPolicy.ts exportSession.ts logger.ts supabaseAdmin.ts types.ts tsconfig.json ./
+COPY *.ts *.mjs ./
 COPY --chmod=0755 docker-entrypoint.sh /usr/local/bin/nox-worker-entrypoint
 
 # Diretório de dados (sessão exportada, se usada) com o dono certo antes de trocar de usuário.
@@ -23,10 +23,10 @@ RUN mkdir -p /app/data && chown -R nox:nox /app
 ENV NODE_ENV=production
 ENV TZ=America/Sao_Paulo
 
-EXPOSE 3000
+EXPOSE 3000 3001
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:'+(process.env.HEALTH_PORT||3000)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.REPAIR_HEALTH_PORT||3001)+'/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 ENTRYPOINT ["/usr/local/bin/nox-worker-entrypoint"]
-CMD ["npx", "tsx", "credpagoWorker.ts"]
+CMD ["npx", "tsx", "supervisor.ts"]

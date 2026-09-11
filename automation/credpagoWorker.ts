@@ -4,7 +4,7 @@ import { stdin, stdout } from "node:process";
 import http from "node:http";
 import { env } from "./env";
 import { supabaseAdmin } from "./supabaseAdmin";
-import { formatErrorDetail, log, logErro, maskDocumento } from "./logger";
+import { formatErrorDetail, log, logErro, logStructured, maskDocumento } from "./logger";
 import {
   fillPessoa,
   fillDocumento,
@@ -19,6 +19,12 @@ import {
 import { parseResultado } from "./credpagoParser";
 import { isTransientPortalError, validateConsultaForAutomation } from "./errorPolicy";
 import type { ConsultaCreditoRow } from "./types";
+import { acquireAutomationLock, type AutomationLockHandle } from "./automationLock";
+import { ensureCorrelationId, createCorrelationId } from "./correlation";
+import { classifyAutomationError } from "./errorClassifier";
+import { reportAutomationError } from "./errorReporter";
+import { redactSensitiveText } from "./redaction";
+import { captureSafeErrorArtifacts } from "./safeArtifacts";
 
 /**
  * Traduz qualquer falha interna (Playwright, rede, timeout) para uma mensagem segura,
@@ -73,6 +79,7 @@ class ConsultaStateConflictError extends Error {
 
 type AuthRuntimeStatus = "checking" | "ok" | "required" | "unavailable";
 type QueueRuntimeStatus = "checking" | "ok" | "unavailable";
+type BrowserRuntimeStatus = "checking" | "ok" | "unavailable";
 
 const runtimeState: {
   auth: AuthRuntimeStatus;
@@ -86,6 +93,12 @@ const runtimeState: {
   lastQueueSuccessAt: string | null;
   lastQueueErrorAt: string | null;
   consecutiveQueueFailures: number;
+  browser: BrowserRuntimeStatus;
+  activeConsultations: number;
+  totalProcessed: number;
+  totalFailed: number;
+  lastSuccessfulSimulationAt: string | null;
+  averageDurationMs: number | null;
 } = {
   auth: "checking",
   lastAuthCheckAt: null,
@@ -98,7 +111,15 @@ const runtimeState: {
   lastQueueSuccessAt: null,
   lastQueueErrorAt: null,
   consecutiveQueueFailures: 0,
+  browser: "checking",
+  activeConsultations: 0,
+  totalProcessed: 0,
+  totalFailed: 0,
+  lastSuccessfulSimulationAt: null,
+  averageDurationMs: null,
 };
+
+const recentDurations: number[] = [];
 
 let proximaValidacaoAuthEm = 0;
 let ultimaRecuperacaoConsultasEm = 0;
@@ -248,7 +269,7 @@ async function fetchConsultasPendentes(limite: number): Promise<ConsultaCreditoR
   const { data, error } = await supabaseAdmin
     .from("consultas_credito")
     .select(
-      "id, tipo_pessoa, documento, documento_masked, tipo_imovel, cep, valor_aluguel, valor_condominio, valor_taxas, status",
+      "id, correlation_id, profile_id_solicitante, created_at, tipo_pessoa, documento, documento_masked, tipo_imovel, cep, valor_aluguel, valor_condominio, valor_taxas, status",
     )
     .eq("status", "pendente")
     .eq("origem", "nox_financa")
@@ -361,10 +382,15 @@ async function atualizarResultado(
 
 async function marcarErro(id: string, erroTecnico: string): Promise<void> {
   const mensagemSegura = mensagemSeguraParaErro(erroTecnico);
+  const classified = classifyAutomationError(erroTecnico);
   await atualizarResultado(id, {
     status: "erro",
     mensagem: mensagemSegura,
-    rawSummary: { erroTecnico, capturadoEm: new Date().toISOString() },
+    rawSummary: {
+      erroTecnico: redactSensitiveText(erroTecnico, 2_000),
+      categoria: classified.category,
+      capturadoEm: new Date().toISOString(),
+    },
   });
 }
 
@@ -532,6 +558,9 @@ interface EstadoConsulta {
   finalizado: boolean;
   persistindoResultado: boolean;
   page: Page | null;
+  lastSuccessfulStep: string | null;
+  startedAt: number;
+  simulationSubmitted: boolean;
 }
 
 async function processarConsulta(
@@ -540,9 +569,15 @@ async function processarConsulta(
   estado: EstadoConsulta,
   persistirSessao: () => Promise<void>,
 ): Promise<void> {
-  const cid = consulta.id.slice(0, 8);
+  const correlationId = ensureCorrelationId(consulta.correlation_id);
+  const cid = correlationId;
   const doc = consulta.documento_masked || maskDocumento(consulta.documento);
   log(`[${cid}] Consulta recebida (documento ${doc})`);
+  logStructured("credit_simulation_started", {
+    correlationId,
+    simulationId: consulta.id,
+    document: doc,
+  });
 
   let page: Page | null = null;
   let simulacaoEnviada = false;
@@ -553,10 +588,12 @@ async function processarConsulta(
 
     page = await context.newPage();
     estado.page = page;
+    estado.lastSuccessfulStep = "page-created";
     log(`[${cid}] Abrindo CredPago`);
     const sessaoPodeEstarFria = Date.now() - ultimaAtividadeEm > SESSAO_OCIOSA_MS;
     ultimaAtividadeEm = Date.now();
     await navegarParaPortal(page);
+    estado.lastSuccessfulStep = "portal-opened";
 
     if (sessaoPodeEstarFria) {
       log(
@@ -566,6 +603,7 @@ async function processarConsulta(
     }
 
     await ensureLoggedIn(cid, page, persistirSessao);
+    estado.lastSuccessfulStep = "authentication-confirmed";
     runtimeState.auth = "ok";
     runtimeState.lastAuthSuccessAt = new Date().toISOString();
     proximaValidacaoAuthEm = Date.now() + env.authCheckIntervalMs;
@@ -607,6 +645,7 @@ async function processarConsulta(
       condominio: 0,
       taxas: 0,
     });
+    estado.lastSuccessfulStep = "form-filled";
 
     log(`[${cid}] Enviando simulação`);
     await atualizarStep(consulta.id, "enviando");
@@ -614,19 +653,23 @@ async function processarConsulta(
     // o Playwright perder a conexão durante a resposta. Não reenfileiramos
     // automaticamente esse caso para não criar uma simulação duplicada.
     simulacaoEnviada = true;
+    estado.simulationSubmitted = true;
     await submitSimulation(page);
+    estado.lastSuccessfulStep = "simulation-submitted";
 
     log(`[${cid}] Aguardando resultado`);
     await atualizarStep(consulta.id, "aguardando_resultado");
+    const resultPage = page;
     const resultado = await parseResultado(page, {
       onLog: (msg) => log(`[${cid}] ${msg}`),
       // Causa raiz observada em produção: o clique em "Simular Crédito" às vezes não
       // registra (nada na página muda por dezenas de segundos). Reenviar o mesmo clique
       // resolve sem precisar preencher tudo de novo — só reclicamos quando a página está
       // 100% parada (ver heurística em parseResultado), nunca durante progresso real.
-      onRetryClick: () => submitSimulation(page),
+      onRetryClick: () => submitSimulation(resultPage),
     });
     resultadoObtido = true;
+    estado.lastSuccessfulStep = "result-read";
     log(`[${cid}] Resultado identificado: ${resultado.status}`);
 
     if (estado.finalizado) {
@@ -639,10 +682,39 @@ async function processarConsulta(
     try {
       await atualizarResultado(consulta.id, resultado);
       estado.finalizado = true;
+      estado.lastSuccessfulStep = "result-persisted";
     } finally {
       estado.persistindoResultado = false;
     }
     log(`[${cid}] Consulta atualizada -> ${resultado.status}`);
+    const durationMs = Date.now() - estado.startedAt;
+    recentDurations.push(durationMs);
+    if (recentDurations.length > 100) recentDurations.shift();
+    runtimeState.totalProcessed += 1;
+    runtimeState.averageDurationMs = Math.round(
+      recentDurations.reduce((sum, value) => sum + value, 0) / recentDurations.length,
+    );
+    if (resultado.status !== "erro") runtimeState.lastSuccessfulSimulationAt = new Date().toISOString();
+    if (resultado.status === "erro") {
+      runtimeState.totalFailed += 1;
+      await reportAutomationError({
+        correlationId,
+        simulationId: consulta.id,
+        initiatingUserId: consulta.profile_id_solicitante,
+        environment: env.automationEnvironment,
+        step: "aguardando_resultado",
+        lastSuccessfulStep: estado.lastSuccessfulStep,
+        error: new Error(resultado.mensagem),
+        durationMs,
+        artifacts: await captureSafeErrorArtifacts(page, true),
+      });
+    }
+    logStructured("credit_simulation_finished", {
+      correlationId,
+      simulationId: consulta.id,
+      status: resultado.status,
+      durationMs,
+    });
   } catch (err) {
     const erroTecnico = formatErrorDetail(err);
     logErro(`[${cid}] Falha ao processar consulta`, err);
@@ -682,15 +754,50 @@ async function processarConsulta(
       runtimeState.lastAuthCheckAt = new Date().toISOString();
       runtimeState.consecutiveAuthFailures += 1;
       proximaValidacaoAuthEm = 0;
-      await recolocarNaFilaAguardandoServico(consulta.id)
-        .then(() =>
-          log(`[${cid}] Consulta preservada na fila enquanto o serviço é recuperado.`),
-        )
-        .catch((e) => logErro(`[${cid}] Falha ao devolver consulta para a fila`, e));
+      const artifacts = await captureSafeErrorArtifacts(page, false);
+      const returnedToQueue = await recolocarNaFilaAguardandoServico(consulta.id)
+        .then(() => {
+          log(`[${cid}] Consulta preservada na fila enquanto o serviço é recuperado.`);
+          return true;
+        })
+        .catch((e) => {
+          logErro(`[${cid}] Falha ao devolver consulta para a fila`, e);
+          return false;
+        });
+      await reportAutomationError({
+        correlationId,
+        simulationId: consulta.id,
+        initiatingUserId: consulta.profile_id_solicitante,
+        environment: env.automationEnvironment,
+        step: estado.lastSuccessfulStep ?? "service-recovery",
+        lastSuccessfulStep: estado.lastSuccessfulStep,
+        error: err,
+        durationMs: Date.now() - estado.startedAt,
+        metadata: { consultationReturnedToQueue: returnedToQueue, simulationSubmitted: false },
+        artifacts,
+      });
     } else {
-      await marcarErro(consulta.id, erroTecnico).catch((e) =>
-        logErro(`[${cid}] Falha ao gravar erro no Supabase`, e),
-      );
+      const artifacts = await captureSafeErrorArtifacts(page, simulacaoEnviada);
+      const persisted = await marcarErro(consulta.id, erroTecnico)
+        .then(() => true)
+        .catch((e) => {
+          logErro(`[${cid}] Falha ao gravar erro no Supabase`, e);
+          return false;
+        });
+      runtimeState.totalProcessed += 1;
+      runtimeState.totalFailed += 1;
+      await reportAutomationError({
+        correlationId,
+        simulationId: consulta.id,
+        initiatingUserId: consulta.profile_id_solicitante,
+        environment: env.automationEnvironment,
+        step: estado.lastSuccessfulStep ?? "unknown",
+        lastSuccessfulStep: estado.lastSuccessfulStep,
+        error: err,
+        durationMs: Date.now() - estado.startedAt,
+        metadata: { consultationStatusPersisted: persisted, simulationSubmitted: simulacaoEnviada },
+        artifacts,
+      });
     }
   } finally {
     await page?.close().catch(() => {});
@@ -705,8 +812,16 @@ async function processarConsultaComTimeout(
   consulta: ConsultaCreditoRow,
   persistirSessao: () => Promise<void>,
 ): Promise<void> {
-  const cid = consulta.id.slice(0, 8);
-  const estado: EstadoConsulta = { finalizado: false, persistindoResultado: false, page: null };
+  const correlationId = ensureCorrelationId(consulta.correlation_id);
+  const cid = correlationId;
+  const estado: EstadoConsulta = {
+    finalizado: false,
+    persistindoResultado: false,
+    page: null,
+    lastSuccessfulStep: "claimed",
+    startedAt: Date.now(),
+    simulationSubmitted: false,
+  };
 
   let timer: ReturnType<typeof setTimeout> | undefined;
   let timeoutAtingido = false;
@@ -722,13 +837,35 @@ async function processarConsultaComTimeout(
       timeoutAtingido = true;
       estado.finalizado = true;
       logErro(`[${cid}] Tempo limite de ${env.consultaTimeoutMs}ms excedido`);
+      const timeoutError = new Error(
+        `Tempo limite de ${Math.round(env.consultaTimeoutMs / 1000)}s excedido ao consultar.`,
+      );
+      const artifacts = await Promise.race([
+        captureSafeErrorArtifacts(estado.page, estado.simulationSubmitted),
+        new Promise<Awaited<ReturnType<typeof captureSafeErrorArtifacts>>>((resolve) =>
+          setTimeout(() => resolve({ screenshotSkippedReason: "Captura excedeu o prazo seguro." }), 2_000),
+        ),
+      ]);
       // Interrompe de verdade a aba desta consulta. Antes, o trabalho continuava em
       // segundo plano e um retry podia enviar a mesma simulação duas vezes.
       await estado.page?.close().catch(() => {});
       await marcarErro(
         consulta.id,
-        `Tempo limite de ${Math.round(env.consultaTimeoutMs / 1000)}s excedido ao consultar.`,
+        timeoutError.message,
       ).catch((e) => logErro(`[${cid}] Falha ao gravar erro de timeout no Supabase`, e));
+      runtimeState.totalProcessed += 1;
+      runtimeState.totalFailed += 1;
+      await reportAutomationError({
+        correlationId,
+        simulationId: consulta.id,
+        initiatingUserId: consulta.profile_id_solicitante,
+        environment: env.automationEnvironment,
+        step: "timeout",
+        lastSuccessfulStep: estado.lastSuccessfulStep,
+        error: timeoutError,
+        durationMs: Date.now() - estado.startedAt,
+        artifacts,
+      });
       resolve();
     }, env.consultaTimeoutMs);
   });
@@ -780,6 +917,7 @@ async function abrirContexto(): Promise<ContextoAberto> {
       storageState: env.storageStatePath,
       viewport: { width: 1366, height: 900 },
     });
+    runtimeState.browser = "ok";
     return {
       context,
       browser,
@@ -796,8 +934,10 @@ async function abrirContexto(): Promise<ContextoAberto> {
       headless: env.headless,
       viewport: { width: 1366, height: 900 },
     });
+    runtimeState.browser = "ok";
     return { context, browser: null, persistirSessao: async () => {} };
   } catch (err) {
+    runtimeState.browser = "unavailable";
     const msg = err instanceof Error ? err.message : String(err);
     if (/lock|already in use|singleton|profile.*use/i.test(msg)) {
       throw new Error(
@@ -831,14 +971,16 @@ function iniciarServidorHealth(): http.Server {
       const authTravada = authCheckAgeMs > env.authValidationTimeoutMs + 15_000;
       const loopTravado =
         loopAgeMs > Math.max(env.authValidationTimeoutMs + 30_000, env.pollIntervalMs * 12);
-      const healthy = !authTravada && !loopTravado;
+      const healthy = !authTravada && !loopTravado && runtimeState.browser !== "unavailable";
       const ready = runtimeState.auth === "ok" && runtimeState.queue === "ok";
+      const browserReady = runtimeState.browser === "ok";
+      const fullyReady = ready && browserReady;
 
       res.writeHead(healthy ? 200 : 503, { "Content-Type": "application/json" });
       res.end(
         JSON.stringify({
           status: healthy ? "ok" : "stalled",
-          ready,
+          ready: fullyReady,
           auth: runtimeState.auth,
           queue: runtimeState.queue,
           lastAuthCheckAt: runtimeState.lastAuthCheckAt,
@@ -849,18 +991,27 @@ function iniciarServidorHealth(): http.Server {
           lastQueueSuccessAt: runtimeState.lastQueueSuccessAt,
           lastQueueErrorAt: runtimeState.lastQueueErrorAt,
           consecutiveQueueFailures: runtimeState.consecutiveQueueFailures,
+          browser: runtimeState.browser,
+          activeConsultations: runtimeState.activeConsultations,
+          totalProcessed: runtimeState.totalProcessed,
+          totalFailed: runtimeState.totalFailed,
+          lastSuccessfulSimulationAt: runtimeState.lastSuccessfulSimulationAt,
+          averageDurationMs: runtimeState.averageDurationMs,
+          automationVersion: env.automationVersion,
         }),
       );
       return;
     }
     if (req.method === "GET" && req.url === "/ready") {
-      const ready = runtimeState.auth === "ok" && runtimeState.queue === "ok";
+      const ready =
+        runtimeState.auth === "ok" && runtimeState.queue === "ok" && runtimeState.browser === "ok";
       res.writeHead(ready ? 200 : 503, { "Content-Type": "application/json" });
       res.end(
         JSON.stringify({
           status: ready ? "ready" : "not_ready",
           auth: runtimeState.auth,
           queue: runtimeState.queue,
+          browser: runtimeState.browser,
         }),
       );
       return;
@@ -889,6 +1040,12 @@ async function loop(once: boolean): Promise<void> {
       env.credpagoLogin ? "configurada" : "não configurada"
     }`,
   );
+  let lock: AutomationLockHandle | null = null;
+  lock = await acquireAutomationLock(
+    env.automationLockPath,
+    env.storageStatePath ? "portable-session" : "persistent-profile",
+  );
+  log(`Mutex adquirido em ${lock.path}.`);
   let contextoAberto = await abrirContexto();
   log(`Chrome iniciado em modo ${env.headless ? "headless (invisível)" : "visível"}`);
 
@@ -904,6 +1061,8 @@ async function loop(once: boolean): Promise<void> {
     } else {
       log("AUTOMATION_KEEP_BROWSER_OPEN=true — Chrome permanece aberto.");
     }
+    runtimeState.browser = "unavailable";
+    await lock?.release();
   };
 
   const handleSigint = async () => {
@@ -1008,8 +1167,12 @@ async function loop(once: boolean): Promise<void> {
             contextoDaConsulta.persistirSessao,
           )
             .catch((e) => logErro(`Falha não tratada na consulta ${consulta.id}`, e))
-            .finally(() => emAndamento.delete(consulta.id));
+            .finally(() => {
+              emAndamento.delete(consulta.id);
+              runtimeState.activeConsultations = emAndamento.size;
+            });
           emAndamento.set(consulta.id, tarefa);
+          runtimeState.activeConsultations = emAndamento.size;
         }
       }
 
@@ -1039,5 +1202,13 @@ async function loop(once: boolean): Promise<void> {
 const once = process.argv.includes("--once");
 loop(once).catch((err) => {
   logErro("Worker encerrado com erro fatal", err);
-  process.exit(1);
+  const correlationId = createCorrelationId("SYS");
+  void reportAutomationError({
+    correlationId,
+    environment: env.automationEnvironment,
+    service: "credit-worker",
+    step: "bootstrap",
+    error: err,
+    metadata: { fatal: true },
+  }).finally(() => process.exit(1));
 });

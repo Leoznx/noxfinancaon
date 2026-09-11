@@ -43,6 +43,7 @@ import {
   ArrowRight,
   Gift,
   Clock3,
+  Wrench,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { SinoNotificacoes } from "./SinoNotificacoes";
@@ -80,6 +81,7 @@ type MenuItem = {
   keywords?: string[];
   children?: MenuSubItem[];
   sellerTypes?: Array<"sdr" | "closer">;
+  adminOnly?: boolean;
 };
 
 type MenuSubItem = {
@@ -118,6 +120,14 @@ const adminItems: MenuItem[] = [
     module: "documentos",
   },
   { icon: Search, label: "Consultas", href: "/admin/consultas", module: "consultas" },
+  {
+    icon: Wrench,
+    label: "Central de Erros",
+    href: "/admin/central-erros",
+    module: "central_erros",
+    adminOnly: true,
+    keywords: ["automação", "reparo", "saúde", "crédito"],
+  },
   { icon: FileText, label: "Contratos Ativos", href: "/admin/contratos", module: "contratos" },
   {
     icon: Users,
@@ -510,7 +520,7 @@ export function DashboardLayout({
   // Saques e dados financeiros ficam restritos a admin, admin_master e financeiro.
   // A rota tambem aplica essa protecao; este filtro evita expor a entrada no menu.
   if (isAnalista) {
-    menuItems = menuItems.filter((item) => item.module !== "financeiro");
+    menuItems = menuItems.filter((item) => item.module !== "financeiro" && !item.adminOnly);
   }
 
   // admin/admin_master têm acesso integral; analista não acessa Financeiro. Os 5
@@ -527,6 +537,7 @@ export function DashboardLayout({
       ...(INTERNAL_ROLES_WITH_DASHBOARD.has(cargoInterno) ? [INTERNAL_ROLE_DASHBOARD_ITEM] : []),
       ...ADMIN_CATALOG.filter(
         (item) =>
+          !item.adminOnly &&
           podeVerModulo(permissoesCargo, item.module) &&
           item.module !== undefined &&
           item.module !== "dashboard_admin" &&

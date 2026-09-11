@@ -12,6 +12,7 @@ services:
       CREDPAGO_STORAGE_STATE_PATH: /app/data/credpago-session.json
       HEADLESS: "true"
       HEALTH_PORT: "3000"
+      REPAIR_HEALTH_PORT: "3001"
     volumes:
       # Só o arquivo de sessão (poucos KB) fica persistido no host — nunca o
       # perfil completo do Chrome. Gerado localmente por
@@ -22,6 +23,7 @@ services:
     # https://automacao.noxfianca.com, via proxy reverso.
     ports:
       - "127.0.0.1:3000:3000"
+      - "127.0.0.1:3001:3001"
     shm_size: "2gb" # Chromium precisa de /dev/shm maior que o padrão de 64MB do Docker;
                      # dobrado junto com o limite de memória abaixo (mais abas = mais /dev/shm).
     deploy:
@@ -38,7 +40,7 @@ services:
         reservations:
           memory: 1g
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
       timeout: 5s
       start_period: 30s

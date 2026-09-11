@@ -4,6 +4,7 @@ import { upsertConsultaCredito } from "@/lib/consultas";
 import type { DadosSimulacao } from "@/components/simulacao/FormularioSimulacao";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { getDemoDecision } from "@/lib/demo-accounts";
+import { createSimulationCorrelationId } from "@/lib/correlation-id";
 
 /** Status do fluxo de automação local CredPago. */
 export type StatusConsulta =
@@ -13,6 +14,7 @@ export const STATUS_FINAIS: StatusConsulta[] = ["aprovado", "recusado", "em_anal
 
 export interface ConsultaCredito {
   id: string;
+  correlation_id: string;
   created_at: string;
   updated_at: string;
   tipo_pessoa: "PF" | "PJ" | null;
@@ -137,6 +139,7 @@ export async function criarConsultaParaAutomacao({
   const documento = normalizeDocumento(rawDoc);
 
   const payload: Record<string, unknown> = {
+    correlation_id: createSimulationCorrelationId(),
     tipo_pessoa: dados.tipoInquilino,
     documento,
     documento_masked: maskDocumento(documento),
@@ -229,7 +232,7 @@ export async function getConsultaCredito(
   const query = supabase
     .from("consultas_credito")
     .select(
-      "id, created_at, updated_at, tipo_pessoa, documento, documento_masked, tenant_name, tipo_imovel, cep, valor_aluguel, valor_condominio, valor_taxas, status, resultado, mensagem, origem, automation_started_at, automation_finished_at, automation_step, error_message, raw_response, substatus, documentos_prazo_iniciado_em, documentos_prazo_limite_em, documentos_faltantes_em",
+      "id, correlation_id, created_at, updated_at, tipo_pessoa, documento, documento_masked, tenant_name, tipo_imovel, cep, valor_aluguel, valor_condominio, valor_taxas, status, resultado, mensagem, origem, automation_started_at, automation_finished_at, automation_step, error_message, raw_response, substatus, documentos_prazo_iniciado_em, documentos_prazo_limite_em, documentos_faltantes_em",
     )
     .eq("id", id);
   try {

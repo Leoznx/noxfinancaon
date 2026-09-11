@@ -1,4 +1,5 @@
 import type { Page, Locator } from "playwright";
+import { redactSensitiveText, sanitizeUrl } from "./redaction";
 
 // Teto/intervalo de poll pra dar tempo do formulário (SPA) terminar de hidratar
 // antes de desistir de achar um campo/botão. Sem isso, uma checagem única logo
@@ -113,11 +114,11 @@ async function clickButtonByText(page: Page, textos: (string | RegExp)[]): Promi
   // dados do cliente, só o suficiente pra saber o que a CredPago realmente
   // devolveu nesta tentativa (detecção de headless? captcha fora do padrão
   // já checado? página completamente diferente?).
-  const urlAtual = page.url();
+  const urlAtual = sanitizeUrl(page.url());
   const amostraTexto = await page
     .locator("body")
     .innerText()
-    .then((t) => t.replace(/\s+/g, " ").trim().slice(0, 400))
+    .then((t) => redactSensitiveText(t.replace(/\s+/g, " ").trim(), 400))
     .catch(() => "(não foi possível ler o corpo da página)");
   throw new Error(
     `Botão não encontrado (tentativas: ${textos.map(String).join(", ")}). O layout da CredPago pode ter mudado. ` +
@@ -221,6 +222,42 @@ export async function fillValores(
 
 export async function submitSimulation(page: Page): Promise<void> {
   await clickButtonByText(page, [/simular\s+cr[ée]dito/i, /simular/i]);
+}
+
+/**
+ * Valida o contrato visual atual do formulario sem preencher CPF/CNPJ, valores
+ * ou clicar em Simular. E usada exclusivamente pela validacao pos-reparo.
+ */
+export async function validateSimulationFormReady(page: Page): Promise<Record<string, boolean>> {
+  const authState = await detectAuthenticationState(page);
+  if (authState !== "authenticated") {
+    throw new Error(
+      authState === "login"
+        ? "Sessao expirada: o portal redirecionou para o Login Loft."
+        : "O portal nao confirmou a autenticacao nem exibiu o formulario.",
+    );
+  }
+  if (await isCaptchaPresent(page)) {
+    throw new Error("A Loft solicitou captcha/OTP; intervencao humana obrigatoria.");
+  }
+
+  await clickButtonByText(page, [/pessoa\s+f[ií]sica/i, /^\s*pf\s*$/i]);
+  const [documento, cep, aluguel] = await Promise.all([
+    locateField(page, { label: /cpf/i, placeholder: /cpf/i, role: { name: /cpf/i } }),
+    locateField(page, { label: /cep/i, placeholder: /cep/i, role: { name: /cep/i } }),
+    locateField(page, { label: /aluguel/i, placeholder: /aluguel/i, role: { name: /aluguel/i } }),
+  ]);
+  const simular = page.getByRole("button", { name: /simular\s+cr[ée]dito/i }).first();
+  const result = {
+    documento: await documento.isVisible().catch(() => false),
+    cep: await cep.isVisible().catch(() => false),
+    aluguel: await aluguel.isVisible().catch(() => false),
+    simular: await simular.isVisible().catch(() => false),
+  };
+  if (!Object.values(result).every(Boolean)) {
+    throw new Error("O formulario seguro nao apresentou todos os campos criticos esperados.");
+  }
+  return result;
 }
 
 export async function isLoginPage(page: Page): Promise<boolean> {

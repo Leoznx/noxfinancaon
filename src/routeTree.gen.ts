@@ -117,6 +117,7 @@ import { Route as AdminContratosRouteImport } from './routes/admin.contratos'
 import { Route as AdminContaNoxRouteImport } from './routes/admin.conta-nox'
 import { Route as AdminConsultasRouteImport } from './routes/admin.consultas'
 import { Route as AdminColaboradoresRouteImport } from './routes/admin.colaboradores'
+import { Route as AdminCentralErrosRouteImport } from './routes/admin.central-erros'
 import { Route as AdminAprovacoesRouteImport } from './routes/admin.aprovacoes'
 import { Route as AdminAfiliadosRouteImport } from './routes/admin.afiliados'
 import { Route as AdminAdicionarUsuariosRouteImport } from './routes/admin.adicionar-usuarios'
@@ -684,6 +685,11 @@ const AdminColaboradoresRoute = AdminColaboradoresRouteImport.update({
   path: '/admin/colaboradores',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminCentralErrosRoute = AdminCentralErrosRouteImport.update({
+  id: '/admin/central-erros',
+  path: '/admin/central-erros',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminAprovacoesRoute = AdminAprovacoesRouteImport.update({
   id: '/admin/aprovacoes',
   path: '/admin/aprovacoes',
@@ -790,6 +796,7 @@ export interface FileRoutesByFullPath {
   '/admin/adicionar-usuarios': typeof AdminAdicionarUsuariosRoute
   '/admin/afiliados': typeof AdminAfiliadosRoute
   '/admin/aprovacoes': typeof AdminAprovacoesRoute
+  '/admin/central-erros': typeof AdminCentralErrosRoute
   '/admin/colaboradores': typeof AdminColaboradoresRoute
   '/admin/consultas': typeof AdminConsultasRoute
   '/admin/conta-nox': typeof AdminContaNoxRoute
@@ -905,6 +912,7 @@ export interface FileRoutesByTo {
   '/admin/adicionar-usuarios': typeof AdminAdicionarUsuariosRoute
   '/admin/afiliados': typeof AdminAfiliadosRoute
   '/admin/aprovacoes': typeof AdminAprovacoesRoute
+  '/admin/central-erros': typeof AdminCentralErrosRoute
   '/admin/colaboradores': typeof AdminColaboradoresRoute
   '/admin/consultas': typeof AdminConsultasRoute
   '/admin/conta-nox': typeof AdminContaNoxRoute
@@ -1025,6 +1033,7 @@ export interface FileRoutesById {
   '/admin/adicionar-usuarios': typeof AdminAdicionarUsuariosRoute
   '/admin/afiliados': typeof AdminAfiliadosRoute
   '/admin/aprovacoes': typeof AdminAprovacoesRoute
+  '/admin/central-erros': typeof AdminCentralErrosRoute
   '/admin/colaboradores': typeof AdminColaboradoresRoute
   '/admin/consultas': typeof AdminConsultasRoute
   '/admin/conta-nox': typeof AdminContaNoxRoute
@@ -1146,6 +1155,7 @@ export interface FileRouteTypes {
     | '/admin/adicionar-usuarios'
     | '/admin/afiliados'
     | '/admin/aprovacoes'
+    | '/admin/central-erros'
     | '/admin/colaboradores'
     | '/admin/consultas'
     | '/admin/conta-nox'
@@ -1261,6 +1271,7 @@ export interface FileRouteTypes {
     | '/admin/adicionar-usuarios'
     | '/admin/afiliados'
     | '/admin/aprovacoes'
+    | '/admin/central-erros'
     | '/admin/colaboradores'
     | '/admin/consultas'
     | '/admin/conta-nox'
@@ -1380,6 +1391,7 @@ export interface FileRouteTypes {
     | '/admin/adicionar-usuarios'
     | '/admin/afiliados'
     | '/admin/aprovacoes'
+    | '/admin/central-erros'
     | '/admin/colaboradores'
     | '/admin/consultas'
     | '/admin/conta-nox'
@@ -1500,6 +1512,7 @@ export interface RootRouteChildren {
   AdminAdicionarUsuariosRoute: typeof AdminAdicionarUsuariosRoute
   AdminAfiliadosRoute: typeof AdminAfiliadosRoute
   AdminAprovacoesRoute: typeof AdminAprovacoesRoute
+  AdminCentralErrosRoute: typeof AdminCentralErrosRoute
   AdminColaboradoresRoute: typeof AdminColaboradoresRoute
   AdminConsultasRoute: typeof AdminConsultasRoute
   AdminContaNoxRoute: typeof AdminContaNoxRoute
@@ -2299,6 +2312,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminColaboradoresRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/central-erros': {
+      id: '/admin/central-erros'
+      path: '/admin/central-erros'
+      fullPath: '/admin/central-erros'
+      preLoaderRoute: typeof AdminCentralErrosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/aprovacoes': {
       id: '/admin/aprovacoes'
       path: '/admin/aprovacoes'
@@ -2519,6 +2539,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminAdicionarUsuariosRoute: AdminAdicionarUsuariosRoute,
   AdminAfiliadosRoute: AdminAfiliadosRoute,
   AdminAprovacoesRoute: AdminAprovacoesRoute,
+  AdminCentralErrosRoute: AdminCentralErrosRoute,
   AdminColaboradoresRoute: AdminColaboradoresRoute,
   AdminConsultasRoute: AdminConsultasRoute,
   AdminContaNoxRoute: AdminContaNoxRoute,

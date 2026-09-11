@@ -4,7 +4,10 @@
   "type": "module",
   "description": "Worker de automação da CredPago da NOX Fiança — roda separado do frontend (Vercel), hospedado na VPS.",
   "scripts": {
-    "start": "tsx credpagoWorker.ts",
+    "start": "tsx supervisor.ts",
+    "start:credit": "tsx credpagoWorker.ts",
+    "start:repair": "tsx repairWorker.ts",
+    "validate": "tsx validateAutomation.ts",
     "start:once": "tsx credpagoWorker.ts --once",
     "export-session": "tsx exportSession.ts",
     "login:interactive": "node interactiveLogin.mjs",
