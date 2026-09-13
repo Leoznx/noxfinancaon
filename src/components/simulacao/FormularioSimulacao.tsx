@@ -9,7 +9,6 @@ import {
   HelpCircle,
   Lock,
   MapPin,
-  Plus,
   UserRound,
   Building2,
 } from "lucide-react";
@@ -244,15 +243,6 @@ export function FormularioSimulacao({
                     />
                   </div>
                 ))}
-                {inquilinos.length < 3 && (
-                  <button
-                    type="button"
-                    onClick={() => setInquilinos([...inquilinos, { cpf: "", nome: "" }])}
-                    className="text-sm text-yellow-700 hover:underline flex items-center gap-1 font-bold"
-                  >
-                    <Plus className="w-4 h-4" /> Adicionar outro inquilino
-                  </button>
-                )}
               </div>
             ) : (
               <div className="space-y-4">
