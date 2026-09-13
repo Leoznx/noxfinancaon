@@ -79,6 +79,7 @@ type MenuItem = {
   href: string;
   module?: string;
   highlight?: boolean;
+  darkHighlight?: boolean;
   keywords?: string[];
   children?: MenuSubItem[];
   sellerTypes?: Array<"sdr" | "closer">;
@@ -306,14 +307,14 @@ const vendedorItems: MenuItem[] = [
     label: "Minha Agenda",
     href: "/vendedor/agenda",
     module: "agenda",
-    highlight: true,
+    darkHighlight: true,
     sellerTypes: ["sdr", "closer"],
   },
   {
     icon: Send,
     label: "ENVIAR LINK",
     href: "/vendedor/enviar-link",
-    highlight: true,
+    darkHighlight: true,
     sellerTypes: ["sdr", "closer"],
   },
   {
@@ -738,12 +739,15 @@ export function DashboardLayout({
             visibleMenuItems.map((item) => {
               const isActive = location.pathname === item.href.split("?")[0];
               const isHighlight = item.highlight;
+              const isDarkHighlight = item.darkHighlight;
               return (
                 <Link
                   key={`${item.href}-${item.parentLabel ?? "principal"}`}
                   to={item.href}
                   className={`flex items-center gap-3 pl-3 pr-4 py-3 rounded-xl border-l-4 transition-all ${
-                    isActive
+                    isDarkHighlight
+                      ? "bg-black border-yellow-400 text-yellow-400 font-bold shadow-sm shadow-black/30 hover:bg-neutral-900"
+                      : isActive
                       ? cargoInterno === "juridico" ||
                         isImobiliaria ||
                         isProprietario ||
@@ -755,7 +759,10 @@ export function DashboardLayout({
                         : "border-transparent text-neutral-400 hover:bg-white/5 hover:text-white"
                   }`}
                 >
-                  <item.icon size={20} strokeWidth={isActive || isHighlight ? 2.2 : 1.5} />
+                  <item.icon
+                    size={20}
+                    strokeWidth={isActive || isHighlight || isDarkHighlight ? 2.2 : 1.5}
+                  />
                   <span className="min-w-0 text-sm">
                     <span className="block truncate">{item.label}</span>
                     {item.parentLabel && (
