@@ -163,7 +163,7 @@ function EnviarLinkPage() {
           <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-yellow-400/20 blur-3xl" />
           <div className="relative">
             <Badge className="border-0 bg-yellow-400 px-3 py-1.5 font-black text-neutral-950">
-              <Send className="mr-1.5 h-4 w-4" /> ENVIAR LINK
+              <Send className="mr-1.5 h-4 w-4" /> Enviar Link
             </Badge>
             <h1 className="mt-4 max-w-3xl text-3xl font-black tracking-[-0.04em] sm:text-4xl">
               Três cadastros, um vínculo <span className="text-yellow-400">automático.</span>

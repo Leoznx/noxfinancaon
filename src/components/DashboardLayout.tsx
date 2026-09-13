@@ -83,6 +83,7 @@ type MenuItem = {
   keywords?: string[];
   children?: MenuSubItem[];
   sellerTypes?: Array<"sdr" | "closer">;
+  requiresTimeClockAccess?: boolean;
   adminOnly?: boolean;
 };
 
@@ -312,7 +313,7 @@ const vendedorItems: MenuItem[] = [
   },
   {
     icon: Send,
-    label: "ENVIAR LINK",
+    label: "Enviar Link",
     href: "/vendedor/enviar-link",
     darkHighlight: true,
     sellerTypes: ["sdr", "closer"],
@@ -330,6 +331,7 @@ const vendedorItems: MenuItem[] = [
     label: "Registrar ponto",
     href: "/vendedor/ponto",
     sellerTypes: ["sdr", "closer"],
+    requiresTimeClockAccess: true,
   },
   {
     icon: MonitorPlay,
@@ -574,6 +576,7 @@ export function DashboardLayout({
     menuItems = vendedorItems.filter(
       (item) =>
         (!item.sellerTypes || (!!user?.sellerType && item.sellerTypes.includes(user.sellerType))) &&
+        (!item.requiresTimeClockAccess || user?.timeClockEnabled === true) &&
         (!item.module || podeVerModulo(permissoesCargo, item.module)),
     );
   } else if (cargoInterno) {

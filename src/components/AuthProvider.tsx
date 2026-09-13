@@ -45,6 +45,7 @@ interface User {
   role: Role;
   internalRole?: InternalRole | null;
   sellerType?: SellerType | null;
+  timeClockEnabled: boolean;
 }
 
 interface AuthContextType {
@@ -55,6 +56,7 @@ interface AuthContextType {
     id: string,
     internalRoleHint?: InternalRole | null,
     sellerTypeHint?: SellerType | null,
+    timeClockEnabledHint?: boolean,
   ) => void;
   logout: () => Promise<void>;
   isLoading: boolean;
@@ -124,6 +126,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             role: parsed.role,
             internalRole: parsed.internalRole ?? null,
             sellerType: parsed.sellerType ?? null,
+            timeClockEnabled: parsed.timeClockEnabled === true,
           };
           // Começa a buscar as permissões junto com a restauração da sessão. Na
           // prática, o menu já está pronto quando a rota protegida é liberada.
@@ -179,7 +182,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               .maybeSingle(),
             supabase
               .from("internal_users" as any)
-              .select("role,status,seller_type")
+              .select("role,status,seller_type,time_clock_enabled")
               .eq("auth_user_id", userId)
               .maybeSingle(),
           ]);
@@ -190,7 +193,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const role = (profile as any)?.role as Role | undefined;
           if (!role) return; // profile ainda não existe (ex.: trigger em voo) — não força estado incompleto
           const internalUser = internalUserResult.data as
-            | { role?: string | null; status?: string | null; seller_type?: string | null }
+            | {
+                role?: string | null;
+                status?: string | null;
+                seller_type?: string | null;
+                time_clock_enabled?: boolean | null;
+              }
             | null;
           const internalRole = internalUser
             ? internalUser.status === "ativo" &&
@@ -223,7 +231,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const sellerType = ["sdr", "closer"].includes(internalUser?.seller_type || "")
             ? (internalUser!.seller_type as SellerType)
             : null;
-          login(email, role, userId, internalRole, sellerType);
+          login(
+            email,
+            role,
+            userId,
+            internalRole,
+            sellerType,
+            internalUser?.status === "ativo" && internalUser.time_clock_enabled === true,
+          );
 
           // Só na hora do SIGNED_IN de verdade (ex.: acabou de confirmar o e-mail do
           // cadastro) — não no getSession() passivo de todo carregamento de página —
@@ -295,7 +310,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const resolveInternalIdentity = async (
     role: Role,
     userId: string,
-  ): Promise<{ internalRole: InternalRole | null; sellerType: SellerType | null }> => {
+  ): Promise<{
+    internalRole: InternalRole | null;
+    sellerType: SellerType | null;
+    timeClockEnabled: boolean;
+  }> => {
     // Antes, quando profiles.role já era um nome de cargo interno (ex.: 'suporte'),
     // isso retornava direto sem nunca consultar internal_users — trocar o cargo ou
     // bloquear alguém pela aba Colaboradores não tinha efeito nenhum na prática,
@@ -307,7 +326,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { supabase } = await import("@/integrations/supabase/client");
       const { data } = await supabase
         .from("internal_users" as any)
-        .select("role,status,seller_type")
+        .select("role,status,seller_type,time_clock_enabled")
         .eq("auth_user_id", userId)
         .maybeSingle();
       if (data) {
@@ -318,17 +337,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             (data as any).status === "ativo" && ["sdr", "closer"].includes((data as any).seller_type)
               ? ((data as any).seller_type as SellerType)
               : null,
+          timeClockEnabled:
+            (data as any).status === "ativo" && (data as any).time_clock_enabled === true,
         };
       }
       return {
         internalRole: INTERNAL_ROLES.includes(role as InternalRole) ? (role as InternalRole) : null,
         sellerType: null,
+        timeClockEnabled: false,
       };
     } catch (e) {
       console.warn("[Auth] resolveInternalRole failed", e);
       return {
         internalRole: INTERNAL_ROLES.includes(role as InternalRole) ? (role as InternalRole) : null,
         sellerType: null,
+        timeClockEnabled: false,
       };
     }
   };
@@ -339,6 +362,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     id: string,
     internalRoleHint?: InternalRole | null,
     sellerTypeHint?: SellerType | null,
+    timeClockEnabledHint?: boolean,
   ) => {
     isLoggingOutRef.current = false;
     authVersionRef.current += 1;
@@ -357,6 +381,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       role,
       internalRole: immediateInternalRole,
       sellerType: sellerTypeHint ?? null,
+      timeClockEnabled: timeClockEnabledHint === true,
     };
     setUser(baseUser);
     try {
@@ -364,11 +389,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {}
     // Quando o chamador já consultou internal_users, o estado acima é definitivo
     // e não precisa de um segundo roundtrip. Chamadas legadas ainda são enriquecidas.
-    if (internalRoleHint !== undefined && sellerTypeHint !== undefined) return;
+    if (
+      internalRoleHint !== undefined &&
+      sellerTypeHint !== undefined &&
+      timeClockEnabledHint !== undefined
+    )
+      return;
     resolveInternalIdentity(role, id)
-      .then(({ internalRole, sellerType }) => {
+      .then(({ internalRole, sellerType, timeClockEnabled }) => {
         if (isLoggingOutRef.current || loginVersion !== authVersionRef.current) return;
-        const enriched: User = { id, email, role, internalRole, sellerType };
+        const enriched: User = {
+          id,
+          email,
+          role,
+          internalRole,
+          sellerType,
+          timeClockEnabled,
+        };
         setUser(enriched);
         try {
           getPreferredStorage().setItem("nox_user", JSON.stringify(enriched));
