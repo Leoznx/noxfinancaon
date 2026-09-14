@@ -5,12 +5,14 @@ import path from "node:path";
 import { chromium } from "playwright";
 import { createCorrelationId } from "./correlation";
 import { validateSimulationFormReady } from "./credpagoSelectors";
+import { isCredPagoAccountBlockedError } from "./credpagoAvailability";
 import { planAiRecovery } from "./aiRecoveryPlanner";
 import { env } from "./env";
 import { flushAutomationErrorSpool, reportAutomationError } from "./errorReporter";
 import { log, logErro, logStructured } from "./logger";
 import {
   executeRepairJob,
+  ManualRepairRequiredError,
   RetryableRepairError,
   type RepairEngineDependencies,
   type RunbookResult,
@@ -142,6 +144,11 @@ async function applyRunbook(
       };
     }
     case "WAIT_EXTERNAL_DEPENDENCY":
+      if (snapshot.portalBlocked || isCredPagoAccountBlockedError(error.message_redacted)) {
+        throw new ManualRepairRequiredError(
+          "A conta da integracao esta bloqueada pela Loft para criar contratos. Solicite a liberacao ao time comercial do parceiro; depois disso, execute o reparo novamente.",
+        );
+      }
       await sleep(3_000);
       return {
         summary: "Dependencias consultadas novamente com espera controlada.",
@@ -202,6 +209,14 @@ async function validateRepair(): Promise<ValidationResult> {
   const snapshot = await collectSystemDiagnostics();
   if (!snapshot.databaseReachable)
     return { ok: false, summary: "Supabase/fila ainda indisponivel." };
+  if (snapshot.portalBlocked) {
+    return {
+      ok: false,
+      manualRequired: true,
+      summary:
+        "A conta da integracao esta bloqueada pela Loft para criar contratos. A liberacao pelo time comercial do parceiro e necessaria antes de retomar as simulacoes.",
+    };
+  }
   if (!snapshot.creditWorkerReachable)
     return { ok: false, summary: "Worker de credito ainda sem resposta." };
   if (!snapshot.creditWorkerReady) {
@@ -234,6 +249,7 @@ async function validateRepair(): Promise<ValidationResult> {
     const message = redactSensitiveText(error, 2_000);
     return {
       ok: false,
+      manualRequired: isCredPagoAccountBlockedError(error),
       summary: message,
     };
   }
@@ -315,7 +331,7 @@ async function runHealthCycle(): Promise<void> {
       ),
       observeIncident(
         "worker-not-ready",
-        snapshot.creditWorkerReachable && !snapshot.creditWorkerReady,
+        snapshot.creditWorkerReachable && !snapshot.creditWorkerReady && !snapshot.portalBlocked,
         String(snapshot.creditWorkerHealth.auth || "") === "required"
           ? "Authentication error: a sessao do portal requer renovacao automatica."
           : "Worker offline: processo ativo, mas a fila nao esta pronta.",
@@ -324,6 +340,11 @@ async function runHealthCycle(): Promise<void> {
         "portal-offline",
         !snapshot.portalReachable,
         "CredPago unavailable: portal externo indisponivel.",
+      ),
+      observeIncident(
+        "portal-account-blocked",
+        snapshot.portalBlocked,
+        "CREDPAGO_ACCOUNT_BLOCKED: conta do parceiro bloqueada para criar contratos; liberacao externa necessaria.",
       ),
       observeIncident(
         "high-cpu",

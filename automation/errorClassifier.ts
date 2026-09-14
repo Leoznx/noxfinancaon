@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { formatErrorDetail } from "./logger";
+import { isCredPagoAccountBlockedError } from "./credpagoAvailability";
 import { redactSensitiveText } from "./redaction";
 import type {
   AutomationErrorCategory,
@@ -18,13 +19,26 @@ export interface ClassifiedAutomationError {
   runbook: RepairRunbook;
 }
 
-const RULES: Array<{
+type ClassificationRule = {
   category: AutomationErrorCategory;
   severity: AutomationErrorSeverity;
   pattern: RegExp;
   diagnosis: string;
   runbook: RepairRunbook;
-}> = [
+};
+
+const CREDPAGO_ACCOUNT_BLOCKED_RULE: ClassificationRule = {
+  category: "CREDPAGO_UNAVAILABLE",
+  severity: "ERROR",
+  pattern:
+    /CREDPAGO_ACCOUNT_BLOCKED|libera[cç][aã]o necess[aá]ria para criar contratos|plataforma de fian[cç]a.{0,120}bloquead[ao].{0,120}cria[cç][aã]o de contratos|solicite a libera[cç][aã]o.{0,120}time comercial da loft/i,
+  diagnosis:
+    "A conta do parceiro esta autenticada, mas bloqueada para criar contratos; a liberacao externa e necessaria antes de retomar a fila.",
+  runbook: "WAIT_EXTERNAL_DEPENDENCY",
+};
+
+const RULES: ClassificationRule[] = [
+  CREDPAGO_ACCOUNT_BLOCKED_RULE,
   {
     category: "BROWSER_PROFILE_LOCKED",
     severity: "ERROR",
@@ -171,7 +185,9 @@ export function classifyAutomationError(error: unknown): ClassifiedAutomationErr
     error && typeof error === "object" && "code" in error
       ? redactSensitiveText(String((error as { code?: unknown }).code ?? ""), 160) || null
       : null;
-  const rule = RULES.find((candidate) => candidate.pattern.test(detail));
+  const rule = isCredPagoAccountBlockedError(error)
+    ? CREDPAGO_ACCOUNT_BLOCKED_RULE
+    : RULES.find((candidate) => candidate.pattern.test(detail));
   const category = rule?.category ?? "UNKNOWN_ERROR";
   const normalized = message
     .toLowerCase()

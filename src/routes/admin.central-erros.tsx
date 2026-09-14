@@ -89,7 +89,7 @@ const categoryLabels: Record<string, string> = {
   PLAYWRIGHT_TIMEOUT: "Tempo limite do navegador",
   SELECTOR_NOT_FOUND: "Elemento não encontrado",
   ELEMENT_NOT_VISIBLE: "Elemento não visível",
-  CREDPAGO_UNAVAILABLE: "Parceiro indisponível",
+  CREDPAGO_UNAVAILABLE: "Parceiro indisponível ou bloqueado",
   AUTHENTICATION_ERROR: "Falha de autenticação",
   NETWORK_ERROR: "Falha de rede",
   VPS_OFFLINE: "VPS fora do ar",
@@ -112,7 +112,7 @@ const statusLabels: Record<string, string> = {
   CORRIGIDO: "Corrigido",
   FALHOU: "Falhou",
   ROLLBACK_REALIZADO: "Rollback realizado",
-  INTERVENCAO_NECESSARIA: "Análise de IA",
+  INTERVENCAO_NECESSARIA: "Ação necessária",
   QUEUED: "Na fila",
   COLLECTING_CONTEXT: "Coletando contexto",
   DIAGNOSING: "Diagnosticando",
@@ -124,16 +124,16 @@ const statusLabels: Record<string, string> = {
   FAILED: "Falhou",
   ROLLING_BACK: "Revertendo",
   ROLLED_BACK: "Revertido",
-  MANUAL_REQUIRED: "Análise de IA",
+  MANUAL_REQUIRED: "Ação necessária",
 };
 
 function aiPresentation(value?: string | null): string {
   return String(value ?? "")
-    .replaceAll("Análise humana necessária", "Análise de IA automática agendada")
-    .replaceAll("Analise humana necessaria", "Análise de IA automática agendada")
-    .replaceAll("Intervenção necessária", "Análise de IA")
-    .replaceAll("Intervencao necessaria", "Análise de IA")
-    .replaceAll("MANUAL_INTERVENTION", "AI_DIAGNOSE_AND_RECOVER");
+    .replaceAll("Análise humana necessária", "Ação necessária")
+    .replaceAll("Analise humana necessaria", "Ação necessária")
+    .replaceAll("Intervenção necessária", "Ação necessária")
+    .replaceAll("Intervencao necessaria", "Ação necessária")
+    .replaceAll("MANUAL_INTERVENTION", "MANUAL_REQUIRED");
 }
 
 function formatDate(value?: string | null): string {
@@ -247,6 +247,9 @@ function RecoveryCenterPage() {
 
   const health = latestHealth(data.health);
   const openCount = data.errors.filter((error) => error.status !== "CORRIGIDO").length;
+  const repairableCount = data.errors.filter((error) =>
+    ["NOVO", "FALHOU", "ROLLBACK_REALIZADO"].includes(error.status),
+  ).length;
   const criticalCount = data.errors.filter(
     (error) => error.status !== "CORRIGIDO" && error.severity === "CRITICAL",
   ).length;
@@ -279,7 +282,7 @@ function RecoveryCenterPage() {
       toast.success(
         result.queued_count > 0
           ? `${result.queued_count} erro(s) enviados para análise de IA.`
-          : "Todos os erros abertos já estão em análise.",
+          : "Nenhum reparo automático pendente. Itens com ação externa necessária foram preservados.",
       );
       await load(true);
     } catch (repairError) {
@@ -317,7 +320,7 @@ function RecoveryCenterPage() {
           <div className="flex flex-wrap gap-2">
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button disabled={startingAll || openCount === 0}>
+                <Button disabled={startingAll || repairableCount === 0}>
                   {startingAll ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
@@ -330,8 +333,9 @@ function RecoveryCenterPage() {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Analisar todos os erros abertos?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    A IA colocará apenas os erros sem reparo ativo na fila. Os jobs continuam na VPS
-                    mesmo se esta página for fechada.
+                    A IA colocará apenas erros reparáveis e sem job ativo na fila. Bloqueios externos
+                    ficam sinalizados como ação necessária, sem repetir tentativas. Os jobs continuam
+                    na VPS mesmo se esta página for fechada.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>

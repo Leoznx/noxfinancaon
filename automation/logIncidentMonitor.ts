@@ -17,11 +17,17 @@ const knownHandledEvents = new Set([
 const errorPattern =
   /\b(?:erro|error|fatal|failed|failure|falha|falhou|falhado|falhada|uncaught|unhandled|crash(?:ed)?)\b/i;
 const correlationPattern = /\bNOX-(?:SIM|SYS)-\d{8}-[A-F0-9]{8}\b/i;
+const ignoredOperationalNoise = [
+  /Spool\s+[^\s]+\.json\s+ainda nao pode ser enviado/i,
+  /Falha ao preservar erro no spool local/i,
+  /dbus\/bus\.cc.*Failed to connect to the bus/i,
+];
 
 export function analyzeWorkerLogLine(line: string, date = new Date()): MonitoredLogIncident | null {
   const message = line.trim();
   if (!message || /\b(?:0|zero)\s+(?:errors?|erros?|failures?|falhas?)\b/i.test(message))
     return null;
+  if (ignoredOperationalNoise.some((pattern) => pattern.test(message))) return null;
 
   try {
     const structured = JSON.parse(message) as Record<string, unknown>;

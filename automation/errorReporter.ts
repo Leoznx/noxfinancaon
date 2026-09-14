@@ -105,7 +105,9 @@ async function uploadArtifacts(
   if (domText) {
     const objectPath = `${errorId}/page-context.txt`;
     const { error } = await bucket.upload(objectPath, redactSensitiveText(domText), {
-      contentType: "text/plain; charset=utf-8",
+      // O bucket aceita o MIME canonico. O sufixo charset fazia o Storage
+      // rejeitar o artefato e prendia o registro no spool local.
+      contentType: "text/plain",
       upsert: true,
     });
     if (error) throw error;

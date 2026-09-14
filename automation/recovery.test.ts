@@ -70,6 +70,16 @@ test("falha de banco e worker offline recebem severidade critica", () => {
   assert.equal(classifyAutomationError(new Error("worker offline")).severity, "CRITICAL");
 });
 
+test("classifica bloqueio comercial do parceiro sem confundir com seletor", () => {
+  const result = classifyAutomationError(
+    new Error(
+      "Botão não encontrado. Liberação necessária para criar contratos; solicite a liberação ao time comercial da Loft.",
+    ),
+  );
+  assert.equal(result.category, "CREDPAGO_UNAVAILABLE");
+  assert.equal(result.runbook, "WAIT_EXTERNAL_DEPENDENCY");
+});
+
 test("monitor transforma qualquer linha real de erro em incidente e ignora evento ja tratado", () => {
   const when = new Date("2026-09-11T12:00:00Z");
   assert.match(
@@ -85,6 +95,17 @@ test("monitor transforma qualquer linha real de erro em incidente e ignora event
     null,
   );
   assert.equal(analyzeWorkerLogLine("Validação concluída com 0 erros", when), null);
+  assert.equal(
+    analyzeWorkerLogLine(
+      "ERRO: Spool 1789420477371-caa817.json ainda nao pode ser enviado — StorageApiError",
+      when,
+    ),
+    null,
+  );
+  assert.equal(
+    analyzeWorkerLogLine("ERROR:dbus/bus.cc:405 Failed to connect to the bus", when),
+    null,
+  );
 });
 
 test("analise automatica seleciona somente runbooks permitidos a partir da saude atual", () => {
@@ -93,6 +114,7 @@ test("analise automatica seleciona somente runbooks permitidos a partir da saude
     creditWorkerReachable: true,
     creditWorkerReady: true,
     portalReachable: true,
+    portalBlocked: false,
     activeConsultations: 0,
   } as DiagnosticSnapshot;
   const error = { category: "UNKNOWN_ERROR" } as AutomationErrorRecord;
@@ -104,5 +126,9 @@ test("analise automatica seleciona somente runbooks permitidos a partir da saude
   assert.equal(
     planAiRecovery({ ...snapshot, creditWorkerReady: false }, error).runbook,
     "RESTART_CREDIT_WORKER",
+  );
+  assert.equal(
+    planAiRecovery({ ...snapshot, portalBlocked: true }, error).runbook,
+    "WAIT_EXTERNAL_DEPENDENCY",
   );
 });

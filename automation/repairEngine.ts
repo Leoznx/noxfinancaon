@@ -15,6 +15,13 @@ export class RetryableRepairError extends Error {
   }
 }
 
+export class ManualRepairRequiredError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ManualRepairRequiredError";
+  }
+}
+
 export interface RunbookResult {
   summary: string;
   changed: boolean;
@@ -25,6 +32,7 @@ export interface RunbookResult {
 export interface ValidationResult {
   ok: boolean;
   summary: string;
+  manualRequired?: boolean;
   details?: Record<string, unknown>;
 }
 
@@ -53,7 +61,12 @@ export interface RepairEngineDependencies {
   sleep?: (ms: number) => Promise<void>;
 }
 
-export type RepairExecutionResult = "success" | "retry" | "failed" | "rolled_back";
+export type RepairExecutionResult =
+  | "success"
+  | "retry"
+  | "failed"
+  | "rolled_back"
+  | "manual_required";
 
 const BACKOFF_MS = [5_000, 15_000, 45_000];
 
@@ -163,7 +176,9 @@ export async function executeRepairJob(
     );
     const validation = await deps.validate(runbook, snapshot, error);
     if (!validation.ok) {
-      throw new RetryableRepairError(validation.summary);
+      throw validation.manualRequired
+        ? new ManualRepairRequiredError(validation.summary)
+        : new RetryableRepairError(validation.summary);
     }
     await step("VALIDATING", "SUCCESS", 96, validation.summary, validation.details);
     await transition("SUCCESS", 100, "Correcao aplicada e validada com sucesso.", {
@@ -176,6 +191,27 @@ export async function executeRepairJob(
   } catch (caught) {
     const errorMessage = redactSensitiveText(caught, 4_000);
     await step("ERROR", "FAILED", Math.min(95, 60 + sequence * 4), errorMessage).catch(() => {});
+
+    if (caught instanceof ManualRepairRequiredError) {
+      await transition(
+        "MANUAL_REQUIRED",
+        100,
+        "Acao externa necessaria; novas tentativas automaticas foram pausadas.",
+        {
+          failure_reason: errorMessage,
+          result_summary: errorMessage,
+          finished_at: new Date().toISOString(),
+          lease_expires_at: null,
+        },
+      );
+      await step(
+        "MANUAL_REQUIRED",
+        "SUCCESS",
+        100,
+        "O erro foi classificado corretamente e preservado sem repetir uma tentativa impossivel.",
+      ).catch(() => {});
+      return "manual_required";
+    }
 
     if (applied?.changed && applied.rollbackAvailable && applied.rollbackContext) {
       try {

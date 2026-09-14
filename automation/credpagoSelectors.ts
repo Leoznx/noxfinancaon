@@ -1,5 +1,6 @@
 import type { Page, Locator } from "playwright";
 import { redactSensitiveText, sanitizeUrl } from "./redaction";
+import { assertCreditSimulationAvailable } from "./credpagoAvailability";
 
 // Teto/intervalo de poll pra dar tempo do formulário (SPA) terminar de hidratar
 // antes de desistir de achar um campo/botão. Sem isso, uma checagem única logo
@@ -75,6 +76,7 @@ async function locateField(
     await page.waitForTimeout(FIND_POLL_MS);
   } while (Date.now() - inicio < FIND_TIMEOUT_MS);
 
+  await assertCreditSimulationAvailable(page);
   throw new Error(
     `Campo não encontrado (label=${opts.label ?? "-"}, placeholder=${opts.placeholder ?? "-"}). O layout da CredPago pode ter mudado.`,
   );
@@ -110,6 +112,7 @@ async function clickButtonByText(page: Page, textos: (string | RegExp)[]): Promi
     await page.waitForTimeout(FIND_POLL_MS);
   } while (Date.now() - inicio < FIND_TIMEOUT_MS);
 
+  await assertCreditSimulationAvailable(page);
   // Diagnóstico temporário (ver DIAGNOSTICO_HEADLESS.md) — nunca deve conter
   // dados do cliente, só o suficiente pra saber o que a CredPago realmente
   // devolveu nesta tentativa (detecção de headless? captcha fora do padrão
@@ -243,6 +246,7 @@ export async function validateSimulationFormReady(page: Page): Promise<Record<st
     );
   }
 
+  await assertCreditSimulationAvailable(page);
   await clickButtonByText(page, [/pessoa\s+f[ií]sica/i, /^\s*pf\s*$/i]);
   const [documento, cep, aluguel] = await Promise.all([
     locateField(page, { label: /cpf/i, placeholder: /cpf/i, role: { name: /cpf/i } }),

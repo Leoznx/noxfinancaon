@@ -6,6 +6,11 @@ import {
   fillValores,
   hasVisibleCaptchaChallenge,
 } from "./credpagoSelectors";
+import {
+  assertCreditSimulationAvailable,
+  CredPagoAccountBlockedError,
+  isCreditSimulationAccountBlockedText,
+} from "./credpagoAvailability";
 
 let browser: Browser;
 
@@ -102,6 +107,22 @@ test("reconhece a rota interna autenticada após o SSO (app.loft.com.br)", async
     "<main><h1>Painel da imobiliária</h1></main>",
   );
   assert.equal(await detectAuthenticationState(page, 300), "authenticated");
+  await page.close();
+});
+
+test("reconhece o bloqueio comercial da Loft antes de procurar seletores", async () => {
+  const aviso =
+    "Liberação necessária para criar contratos. A plataforma de fiança está bloqueada para criação de contratos nesta conta. Para continuar, solicite a liberação ao time comercial da Loft.";
+  assert.equal(isCreditSimulationAccountBlockedText(aviso), true);
+
+  const page = await pageWithHtml(
+    "https://app.loft.com.br/fianca-aluguel/imobiliaria/cr/index.php",
+    `<main><h1>Liberação necessária para criar contratos</h1><p>${aviso}</p></main>`,
+  );
+  await assert.rejects(
+    () => assertCreditSimulationAvailable(page),
+    CredPagoAccountBlockedError,
+  );
   await page.close();
 });
 

@@ -1,4 +1,5 @@
 import type { AutomationErrorRecord, DiagnosticSnapshot, RepairRunbook } from "./recoveryTypes";
+import { isCredPagoAccountBlockedError } from "./credpagoAvailability";
 
 type ConcreteRunbook = Exclude<RepairRunbook, "AI_DIAGNOSE_AND_RECOVER">;
 
@@ -37,6 +38,7 @@ export function planAiRecovery(
     `worker=${snapshot.creditWorkerReachable ? "online" : "offline"}`,
     `worker_pronto=${snapshot.creditWorkerReady ? "sim" : "nao"}`,
     `portal=${snapshot.portalReachable ? "online" : "offline"}`,
+    `conta_portal=${snapshot.portalBlocked ? "bloqueada" : "apta"}`,
     `consultas_ativas=${snapshot.activeConsultations}`,
   ];
 
@@ -55,13 +57,17 @@ export function planAiRecovery(
     };
   }
   if (
+    snapshot.portalBlocked ||
+    isCredPagoAccountBlockedError(error.message_redacted) ||
     !snapshot.portalReachable ||
     error.category === "CREDPAGO_UNAVAILABLE" ||
     error.category === "NETWORK_ERROR"
   ) {
     return {
       runbook: "WAIT_EXTERNAL_DEPENDENCY",
-      explanation: "A dependencia externa sera consultada novamente com espera controlada.",
+      explanation: snapshot.portalBlocked || isCredPagoAccountBlockedError(error.message_redacted)
+        ? "A conta esta bloqueada pelo parceiro e requer liberacao externa antes de retomar as simulacoes."
+        : "A dependencia externa sera consultada novamente com espera controlada.",
       evidence,
     };
   }

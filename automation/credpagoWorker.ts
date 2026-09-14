@@ -25,6 +25,10 @@ import { classifyAutomationError } from "./errorClassifier";
 import { reportAutomationError } from "./errorReporter";
 import { redactSensitiveText } from "./redaction";
 import { captureSafeErrorArtifacts } from "./safeArtifacts";
+import {
+  assertCreditSimulationAvailable,
+  isCredPagoAccountBlockedError,
+} from "./credpagoAvailability";
 
 /**
  * Traduz qualquer falha interna (Playwright, rede, timeout) para uma mensagem segura,
@@ -32,6 +36,9 @@ import { captureSafeErrorArtifacts } from "./safeArtifacts";
  * vê no NOX FINANÇA quando a automação não consegue concluir a consulta.
  */
 function mensagemSeguraParaErro(erroTecnico: string): string {
+  if (isCredPagoAccountBlockedError(erroTecnico)) {
+    return "A conta de integração aguarda liberação do parceiro para criar contratos. Nenhum dado foi enviado; tente novamente após a liberação.";
+  }
   if (/captcha/i.test(erroTecnico)) {
     return "Não foi possível continuar automaticamente por causa de uma verificação de segurança. Resolva manualmente e reenvie a consulta.";
   }
@@ -77,7 +84,7 @@ class ConsultaStateConflictError extends Error {
   }
 }
 
-type AuthRuntimeStatus = "checking" | "ok" | "required" | "unavailable";
+type AuthRuntimeStatus = "checking" | "ok" | "required" | "unavailable" | "blocked";
 type QueueRuntimeStatus = "checking" | "ok" | "unavailable";
 type BrowserRuntimeStatus = "checking" | "ok" | "unavailable";
 
@@ -399,7 +406,10 @@ async function marcarErro(id: string, erroTecnico: string): Promise<void> {
  * retomá-la automaticamente depois que a sessão for recuperada, em vez de mostrar
  * erro ao corretor no site ou no aplicativo.
  */
-async function recolocarNaFilaAguardandoServico(id: string): Promise<void> {
+async function recolocarNaFilaAguardandoServico(
+  id: string,
+  step: "aguardando_autenticacao" | "aguardando_liberacao_parceiro" = "aguardando_autenticacao",
+): Promise<void> {
   const { error } = await supabaseAdmin
     .from("consultas_credito")
     .update({
@@ -409,7 +419,7 @@ async function recolocarNaFilaAguardandoServico(id: string): Promise<void> {
       error_message: null,
       automation_started_at: null,
       automation_finished_at: null,
-      automation_step: "aguardando_autenticacao",
+      automation_step: step,
     })
     .eq("id", id)
     .eq("status", "processando");
@@ -462,14 +472,16 @@ async function recuperarConsultasTravadas(idsEmAndamento: ReadonlySet<string>): 
  * uma consulta nova permanecia como "pendente" sem qualquer indicação enquanto
  * o worker tentava recuperar a sessão do parceiro.
  */
-async function sinalizarFilaAguardandoAutenticacao(): Promise<void> {
+async function sinalizarFilaAguardandoServico(
+  step: "aguardando_autenticacao" | "aguardando_liberacao_parceiro",
+): Promise<void> {
   const agora = Date.now();
   if (agora - ultimaSinalizacaoAuthNaFilaEm < env.authRetryIntervalMs) return;
   ultimaSinalizacaoAuthNaFilaEm = agora;
 
   const { data, error } = await supabaseAdmin
     .from("consultas_credito")
-    .update({ automation_step: "aguardando_autenticacao" })
+    .update({ automation_step: step })
     .eq("status", "pendente")
     .eq("origem", "nox_financa")
     .select("id");
@@ -477,7 +489,11 @@ async function sinalizarFilaAguardandoAutenticacao(): Promise<void> {
   if (error) throw error;
   registrarSucessoFila();
   if (data?.length) {
-    log(`${data.length} consulta(s) aguardando a recuperação da autenticação.`);
+    log(
+      step === "aguardando_liberacao_parceiro"
+        ? `${data.length} consulta(s) preservada(s) enquanto a conta aguarda liberacao do parceiro.`
+        : `${data.length} consulta(s) aguardando a recuperação da autenticação.`,
+    );
   }
 }
 
@@ -500,6 +516,7 @@ async function validarAutenticacao(
     const validacao = (async () => {
       await navegarParaPortal(page!, Math.min(30_000, env.authValidationTimeoutMs));
       await ensureLoggedIn("auth", page!, persistirSessao);
+      await assertCreditSimulationAvailable(page!);
 
       if ((await detectAuthenticationState(page!)) !== "authenticated") {
         throw new CredPagoAuthenticationError("A sessão ainda redireciona para o Login Loft.");
@@ -529,12 +546,15 @@ async function validarAutenticacao(
     return true;
   } catch (error) {
     const isAuthError = error instanceof CredPagoAuthenticationError;
-    runtimeState.auth = isAuthError ? "required" : "unavailable";
+    const isAccountBlocked = isCredPagoAccountBlockedError(error);
+    runtimeState.auth = isAccountBlocked ? "blocked" : isAuthError ? "required" : "unavailable";
     runtimeState.consecutiveAuthFailures += 1;
     proximaValidacaoAuthEm = Date.now() + env.authRetryIntervalMs;
     if (statusAnterior !== runtimeState.auth) {
       logErro(
-        isAuthError
+        isAccountBlocked
+          ? "Fila pausada: a conta do parceiro esta bloqueada para criar contratos"
+          : isAuthError
           ? "Fila pausada: a autenticação da CredPago precisa ser recuperada"
           : "Fila pausada: não foi possível validar o portal da CredPago",
         error,
@@ -619,6 +639,7 @@ async function processarConsulta(
         "A CredPago exibiu um captcha. A automação não tenta resolver captchas — resolva manualmente e reenvie a consulta.",
       );
     }
+    await assertCreditSimulationAvailable(page);
 
     log(`[${cid}] Preenchendo dados`);
     await atualizarStep(consulta.id, "preenchendo");
@@ -746,16 +767,21 @@ async function processarConsulta(
       !simulacaoEnviada &&
       (err instanceof CredPagoAuthenticationError ||
         err instanceof CredPagoServiceUnavailableError ||
+        isCredPagoAccountBlockedError(err) ||
         isTransientPortalError(err));
     estado.finalizado = true;
     if (falhaTemporariaAntesDoEnvio) {
       const falhaDeAutenticacao = err instanceof CredPagoAuthenticationError;
-      runtimeState.auth = falhaDeAutenticacao ? "required" : "unavailable";
+      const contaBloqueada = isCredPagoAccountBlockedError(err);
+      runtimeState.auth = contaBloqueada ? "blocked" : falhaDeAutenticacao ? "required" : "unavailable";
       runtimeState.lastAuthCheckAt = new Date().toISOString();
       runtimeState.consecutiveAuthFailures += 1;
       proximaValidacaoAuthEm = 0;
       const artifacts = await captureSafeErrorArtifacts(page, false);
-      const returnedToQueue = await recolocarNaFilaAguardandoServico(consulta.id)
+      const returnedToQueue = await recolocarNaFilaAguardandoServico(
+        consulta.id,
+        contaBloqueada ? "aguardando_liberacao_parceiro" : "aguardando_autenticacao",
+      )
         .then(() => {
           log(`[${cid}] Consulta preservada na fila enquanto o serviço é recuperado.`);
           return true;
@@ -1100,8 +1126,11 @@ async function loop(once: boolean): Promise<void> {
         contextoAberto.persistirSessao,
       );
       if (!autenticacaoPronta) {
-        await sinalizarFilaAguardandoAutenticacao().catch((error) =>
-          registrarFalhaFila("Falha ao sinalizar fila aguardando autenticação", error),
+        const contaBloqueada = runtimeState.auth === "blocked";
+        await sinalizarFilaAguardandoServico(
+          contaBloqueada ? "aguardando_liberacao_parceiro" : "aguardando_autenticacao",
+        ).catch((error) =>
+          registrarFalhaFila("Falha ao sinalizar fila aguardando disponibilidade", error),
         );
         if (once) {
           log("Autenticação indisponível — nenhuma consulta foi retirada da fila.");
@@ -1110,6 +1139,7 @@ async function loop(once: boolean): Promise<void> {
 
         if (
           emAndamento.size === 0 &&
+          !contaBloqueada &&
           runtimeState.consecutiveAuthFailures >= env.authFailuresBeforeBrowserRestart
         ) {
           log(

@@ -107,6 +107,7 @@ export interface DiagnosticSnapshot {
   creditWorkerHealth: Record<string, unknown>;
   databaseReachable: boolean;
   portalReachable: boolean;
+  portalBlocked: boolean;
   activeConsultations: number;
   sessionLock: Record<string, unknown>;
 }

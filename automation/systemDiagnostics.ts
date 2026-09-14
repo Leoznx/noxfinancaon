@@ -89,6 +89,8 @@ export async function collectSystemDiagnostics(): Promise<DiagnosticSnapshot> {
     // Mantem null: falta de metrica nunca vira zero saudavel.
   }
 
+  const portalBlocked = String(creditHealth?.auth ?? "") === "blocked";
+
   return {
     collectedAt: new Date().toISOString(),
     environment: env.automationEnvironment,
@@ -106,6 +108,7 @@ export async function collectSystemDiagnostics(): Promise<DiagnosticSnapshot> {
     creditWorkerHealth: (redactObject(creditHealth ?? {}) as Record<string, unknown>) || {},
     databaseReachable,
     portalReachable: portalOk,
+    portalBlocked,
     activeConsultations,
     sessionLock: lock,
   };
@@ -121,6 +124,7 @@ export function overallHealthStatus(snapshot: DiagnosticSnapshot): HealthStatus 
   if (
     !snapshot.creditWorkerReady ||
     !snapshot.portalReachable ||
+    snapshot.portalBlocked ||
     (snapshot.cpuPercent != null && snapshot.cpuPercent >= env.highCpuPercent) ||
     (snapshot.memoryPercent != null && snapshot.memoryPercent >= env.highMemoryPercent) ||
     (snapshot.diskUsedPercent != null && snapshot.diskUsedPercent >= env.lowDiskUsedPercent)
@@ -157,9 +161,13 @@ export function healthComponents(snapshot: DiagnosticSnapshot): Array<{
     },
     {
       component: "portal",
-      status: snapshot.portalReachable ? "ONLINE" : "OFFLINE",
-      summary: snapshot.portalReachable ? "Portal de credito acessivel." : "Portal de credito sem resposta.",
-      metrics: {},
+      status: !snapshot.portalReachable ? "OFFLINE" : snapshot.portalBlocked ? "UNSTABLE" : "ONLINE",
+      summary: !snapshot.portalReachable
+        ? "Portal de credito sem resposta."
+        : snapshot.portalBlocked
+          ? "Conta do parceiro bloqueada para criar contratos; liberacao externa necessaria."
+          : "Portal de credito acessivel e conta apta para simulacoes.",
+      metrics: { accountBlocked: snapshot.portalBlocked },
     },
     {
       component: "vps-resources",

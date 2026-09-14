@@ -34,6 +34,8 @@ function etapaLabel(etapa?: string | null): string {
   if (etapa === "aguardando_resultado") return "Aguardando o resultado";
   if (etapa === "abrindo") return "Abrindo a consulta";
   if (etapa === "aguardando_autenticacao") return "Restabelecendo conexão segura";
+  if (etapa === "aguardando_liberacao_parceiro")
+    return "Aguardando a liberação da conta pelo parceiro";
   if (etapa === "recuperada_automaticamente") return "Consulta recuperada e reenfileirada";
   return "Consulta adicionada à fila";
 }
