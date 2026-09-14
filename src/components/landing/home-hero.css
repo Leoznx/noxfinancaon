@@ -223,8 +223,10 @@
   .nox-home-hero__visual { left: 44%; }
 }
 
-/* A wider visual and a shorter hero keep every information card legible on
-   common notebook viewports (1280–1600px) without leaving empty space. */
+/* On notebook screens the complete artwork must remain visible: the cards
+   and the handwritten signature are part of the image, not decoration that
+   can be cropped. The wider visual keeps the banner prominent while contain
+   preserves both horizontal edges below the floating navbar. */
 @media (min-width: 1024px) and (max-width: 1600px) {
   .nox-home-hero {
     padding-top: 118px;
@@ -250,12 +252,14 @@
   .nox-home-hero__metrics dd { font-size: 20px; }
 
   .nox-home-hero__visual {
-    left: 40%;
-    mask-image: linear-gradient(to right, transparent, #000 9%);
+    top: 32px;
+    left: 30%;
+    mask-image: linear-gradient(to right, transparent, #000 26%);
   }
 
   .nox-home-hero__visual img {
-    object-position: 72% center;
+    object-fit: contain;
+    object-position: right bottom;
   }
 }
 
