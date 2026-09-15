@@ -29,23 +29,18 @@ const IMAGENS_RESULTADO = [
  * (redirecionamento) ou pelo estado de erro.
  */
 function etapaLabel(etapa?: string | null): string {
-  if (etapa === "pendente") return "Simulação pendente";
+  if (etapa === "pendente") return "Preparando a análise";
   if (etapa === "preenchendo") return "Preenchendo os dados da consulta";
   if (etapa === "enviando") return "Enviando a simulação";
   if (etapa === "aguardando_resultado") return "Aguardando o resultado";
   if (etapa === "abrindo") return "Abrindo a consulta";
-  if (etapa === "aguardando_autenticacao") return "Simulação pendente";
-  if (etapa === "aguardando_liberacao_parceiro") return "Simulação pendente";
+  if (etapa === "aguardando_autenticacao") return "Preparando a análise";
+  if (etapa === "aguardando_liberacao_parceiro") return "Preparando a análise";
   if (etapa === "recuperada_automaticamente") return "Consulta recuperada e reenfileirada";
   return "Consulta adicionada à fila";
 }
 
 export function ModalConsultando({ open, erro, onTentarNovamente, onFechar, progresso = 5, etapa }: ModalConsultandoProps) {
-  const aguardandoLiberacao =
-    etapa === "pendente" ||
-    etapa === "aguardando_autenticacao" ||
-    etapa === "aguardando_liberacao_parceiro";
-
   useEffect(() => {
     if (!open) return;
     IMAGENS_RESULTADO.forEach((src) => {
@@ -61,29 +56,7 @@ export function ModalConsultando({ open, erro, onTentarNovamente, onFechar, prog
         onInteractOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
       >
-        {aguardandoLiberacao ? (
-          <div className="flex flex-col items-center text-center gap-5">
-            <div className="flex items-center justify-center w-24 h-24 rounded-full bg-yellow-50 border border-yellow-200">
-              <AlertTriangle className="w-11 h-11 text-yellow-600" strokeWidth={1.5} />
-            </div>
-            <DialogTitle className="text-2xl font-bold text-neutral-900 tracking-tight">
-              Simulação pendente
-            </DialogTitle>
-            <DialogDescription className="text-base text-neutral-600 leading-relaxed">
-              Sua simulação foi recebida e ficou PENDENTE. Ela está salva com segurança e será
-              retomada quando o serviço de análise estiver disponível novamente.
-            </DialogDescription>
-            {onFechar && (
-              <Button
-                variant="outline"
-                onClick={onFechar}
-                className="w-full font-bold h-12 rounded-xl text-neutral-700"
-              >
-                Fechar
-              </Button>
-            )}
-          </div>
-        ) : !erro ? (
+        {!erro ? (
           <div className="flex flex-col items-center text-center gap-5">
             <div className="relative flex items-center justify-center w-24 h-24 rounded-full bg-yellow-50 border border-yellow-100">
               <Settings
