@@ -29,19 +29,22 @@ const IMAGENS_RESULTADO = [
  * (redirecionamento) ou pelo estado de erro.
  */
 function etapaLabel(etapa?: string | null): string {
+  if (etapa === "pendente") return "Simulação pendente";
   if (etapa === "preenchendo") return "Preenchendo os dados da consulta";
   if (etapa === "enviando") return "Enviando a simulação";
   if (etapa === "aguardando_resultado") return "Aguardando o resultado";
   if (etapa === "abrindo") return "Abrindo a consulta";
-  if (etapa === "aguardando_autenticacao") return "Restabelecendo conexão segura";
-  if (etapa === "aguardando_liberacao_parceiro")
-    return "Aguardando a liberação da conta pelo parceiro";
+  if (etapa === "aguardando_autenticacao") return "Simulação pendente";
+  if (etapa === "aguardando_liberacao_parceiro") return "Simulação pendente";
   if (etapa === "recuperada_automaticamente") return "Consulta recuperada e reenfileirada";
   return "Consulta adicionada à fila";
 }
 
 export function ModalConsultando({ open, erro, onTentarNovamente, onFechar, progresso = 5, etapa }: ModalConsultandoProps) {
-  const aguardandoLiberacao = etapa === "aguardando_liberacao_parceiro";
+  const aguardandoLiberacao =
+    etapa === "pendente" ||
+    etapa === "aguardando_autenticacao" ||
+    etapa === "aguardando_liberacao_parceiro";
 
   useEffect(() => {
     if (!open) return;
@@ -64,11 +67,11 @@ export function ModalConsultando({ open, erro, onTentarNovamente, onFechar, prog
               <AlertTriangle className="w-11 h-11 text-yellow-600" strokeWidth={1.5} />
             </div>
             <DialogTitle className="text-2xl font-bold text-neutral-900 tracking-tight">
-              Análise temporariamente indisponível
+              Simulação pendente
             </DialogTitle>
             <DialogDescription className="text-base text-neutral-600 leading-relaxed">
-              O serviço de análise de crédito está temporariamente indisponível. Sua consulta foi
-              salva com segurança. Tente novamente mais tarde.
+              Sua simulação foi recebida e ficou PENDENTE. Ela está salva com segurança e será
+              retomada quando o serviço de análise estiver disponível novamente.
             </DialogDescription>
             {onFechar && (
               <Button

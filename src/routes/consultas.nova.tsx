@@ -57,8 +57,15 @@ function NovaConsulta() {
       id,
       (consulta) => {
         const status = consulta.status as StatusConsulta;
-        setEtapaAutomacao(consulta.automation_step);
+        setEtapaAutomacao(consulta.automation_step ?? (status === "pendente" ? "pendente" : null));
         setProgresso(progressoConsulta(consulta.status, consulta.automation_step));
+        if (status === "pendente") {
+          if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
+            timeoutRef.current = null;
+          }
+          return;
+        }
         // Uma indisponibilidade curta é recuperada automaticamente pelo worker.
         // Mantemos Realtime/polling ativos para o usuário seguir até o resultado,
         // enquanto o modal mostra "Restabelecendo conexão segura".

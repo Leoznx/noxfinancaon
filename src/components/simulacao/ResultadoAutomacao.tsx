@@ -56,6 +56,12 @@ const STATUS_UI: Record<
     iconClassName: "text-red-500",
     Icon: AlertTriangle,
   },
+  pendente: {
+    label: "Pendente",
+    className: "bg-yellow-50 border-yellow-200 text-yellow-900",
+    iconClassName: "text-yellow-600",
+    Icon: Clock,
+  },
 };
 
 function formatarMoeda(v: number | null): string {
@@ -106,7 +112,8 @@ export function ResultadoAutomacao({
     : aindaNaAnaliseDeCredito
       ? consulta.status
       : "aprovado") as StatusConsulta;
-  const emAndamento = !resultadoConhecido && aindaNaAnaliseDeCredito;
+  const aguardandoDisponibilidade = statusBruto === "pendente";
+  const emAndamento = !resultadoConhecido && aindaNaAnaliseDeCredito && !aguardandoDisponibilidade;
   const ui = STATUS_UI[status];
   const statusNormalizado = String(status ?? "").toLowerCase();
   const isRecusado = statusNormalizado.includes("recusado") || statusNormalizado.includes("reprovado");
@@ -441,6 +448,12 @@ export function ResultadoAutomacao({
             {(consulta.mensagem || consulta.error_message) && (
               <p className="text-base max-w-xl leading-relaxed">
                 {consulta.mensagem || consulta.error_message}
+              </p>
+            )}
+            {status === "pendente" && !consulta.mensagem && !consulta.error_message && (
+              <p className="text-base max-w-xl leading-relaxed">
+                Sua simulação está salva e será retomada quando o serviço de análise estiver
+                disponível novamente.
               </p>
             )}
             {consulta.automation_finished_at && (

@@ -782,7 +782,7 @@ async function processarConsulta(
       const artifacts = await captureSafeErrorArtifacts(page, false);
       const returnedToQueue = await recolocarNaFilaAguardandoServico(
         consulta.id,
-        contaBloqueada ? "aguardando_liberacao_parceiro" : "aguardando_autenticacao",
+        "aguardando_liberacao_parceiro",
       )
         .then(() => {
           log(`[${cid}] Consulta preservada na fila enquanto o serviço é recuperado.`);
@@ -1129,9 +1129,7 @@ async function loop(once: boolean): Promise<void> {
       );
       if (!autenticacaoPronta) {
         const contaBloqueada = runtimeState.auth === "blocked";
-        await sinalizarFilaAguardandoServico(
-          contaBloqueada ? "aguardando_liberacao_parceiro" : "aguardando_autenticacao",
-        ).catch((error) =>
+        await sinalizarFilaAguardandoServico("aguardando_liberacao_parceiro").catch((error) =>
           registrarFalhaFila("Falha ao sinalizar fila aguardando disponibilidade", error),
         );
         if (once) {
