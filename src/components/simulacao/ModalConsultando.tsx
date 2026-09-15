@@ -41,6 +41,8 @@ function etapaLabel(etapa?: string | null): string {
 }
 
 export function ModalConsultando({ open, erro, onTentarNovamente, onFechar, progresso = 5, etapa }: ModalConsultandoProps) {
+  const aguardandoLiberacao = etapa === "aguardando_liberacao_parceiro";
+
   useEffect(() => {
     if (!open) return;
     IMAGENS_RESULTADO.forEach((src) => {
@@ -56,7 +58,29 @@ export function ModalConsultando({ open, erro, onTentarNovamente, onFechar, prog
         onInteractOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
       >
-        {!erro ? (
+        {aguardandoLiberacao ? (
+          <div className="flex flex-col items-center text-center gap-5">
+            <div className="flex items-center justify-center w-24 h-24 rounded-full bg-yellow-50 border border-yellow-200">
+              <AlertTriangle className="w-11 h-11 text-yellow-600" strokeWidth={1.5} />
+            </div>
+            <DialogTitle className="text-2xl font-bold text-neutral-900 tracking-tight">
+              Liberação da Loft pendente
+            </DialogTitle>
+            <DialogDescription className="text-base text-neutral-600 leading-relaxed">
+              A conta de integração precisa ser liberada pela Loft para criar contratos. Sua
+              consulta foi salva e nenhum dado será reenviado enquanto esse bloqueio estiver ativo.
+            </DialogDescription>
+            {onFechar && (
+              <Button
+                variant="outline"
+                onClick={onFechar}
+                className="w-full font-bold h-12 rounded-xl text-neutral-700"
+              >
+                Fechar
+              </Button>
+            )}
+          </div>
+        ) : !erro ? (
           <div className="flex flex-col items-center text-center gap-5">
             <div className="relative flex items-center justify-center w-24 h-24 rounded-full bg-yellow-50 border border-yellow-100">
               <Settings
