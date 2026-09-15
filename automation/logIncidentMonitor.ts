@@ -21,6 +21,7 @@ const ignoredOperationalNoise = [
   /Spool\s+[^\s]+\.json\s+ainda nao pode ser enviado/i,
   /Falha ao preservar erro no spool local/i,
   /dbus\/bus\.cc.*Failed to connect to the bus/i,
+  /Falha ao salvar sess[aã]o atualizada.*(?:Failed to find browser context|Target (?:page, )?context or browser has been closed)/i,
 ];
 
 export function analyzeWorkerLogLine(line: string, date = new Date()): MonitoredLogIncident | null {

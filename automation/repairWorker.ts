@@ -19,6 +19,7 @@ import {
   type ValidationResult,
 } from "./repairEngine";
 import { redactObject, redactSensitiveText } from "./redaction";
+import { shouldSkipHealthyCreditWorkerRestart } from "./repairPolicy";
 import type {
   AutomationErrorRecord,
   DiagnosticSnapshot,
@@ -130,6 +131,14 @@ async function applyRunbook(
   switch (runbook) {
     case "VALIDATE_SESSION":
     case "RESTART_CREDIT_WORKER": {
+      if (shouldSkipHealthyCreditWorkerRestart(runbook, snapshot)) {
+        return {
+          summary:
+            "Worker de credito ja esta autenticado e saudavel; reinicio historico ignorado.",
+          changed: false,
+          rollbackAvailable: false,
+        };
+      }
       if (snapshot.activeConsultations > 0) {
         throw new RetryableRepairError(
           `Ha ${snapshot.activeConsultations} consulta(s) em andamento; restart adiado para evitar duplicidade.`,

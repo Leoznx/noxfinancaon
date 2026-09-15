@@ -9,6 +9,7 @@ import {
 import { classifyAutomationError, runbookForCategory } from "./errorClassifier";
 import { planAiRecovery } from "./aiRecoveryPlanner";
 import { analyzeWorkerLogLine } from "./logIncidentMonitor";
+import { shouldSkipHealthyCreditWorkerRestart } from "./repairPolicy";
 import { redactObject, redactSensitiveText, sanitizeUrl } from "./redaction";
 import type { AutomationErrorRecord, DiagnosticSnapshot } from "./recoveryTypes";
 
@@ -119,6 +120,33 @@ test("monitor transforma qualquer linha real de erro em incidente e ignora event
     analyzeWorkerLogLine("ERROR:dbus/bus.cc:405 Failed to connect to the bus", when),
     null,
   );
+  assert.equal(
+    analyzeWorkerLogLine(
+      "ERRO: Falha ao salvar sessão atualizada — browserContext.storageState: Protocol error (Storage.getCookies): Failed to find browser context for id ABC",
+      when,
+    ),
+    null,
+  );
+});
+
+test("reparo historico nao reinicia um worker que ja esta saudavel", () => {
+  const snapshot = {
+    creditWorkerReachable: true,
+    creditWorkerReady: true,
+    creditWorkerHealth: { auth: "ok", queue: "ok", browser: "ok" },
+  } as DiagnosticSnapshot;
+
+  assert.equal(shouldSkipHealthyCreditWorkerRestart("RESTART_CREDIT_WORKER", snapshot), true);
+  assert.equal(shouldSkipHealthyCreditWorkerRestart("VALIDATE_SESSION", snapshot), true);
+  assert.equal(
+    shouldSkipHealthyCreditWorkerRestart("RESTART_CREDIT_WORKER", {
+      ...snapshot,
+      creditWorkerReady: false,
+      creditWorkerHealth: { auth: "required", queue: "ok", browser: "ok" },
+    }),
+    false,
+  );
+  assert.equal(shouldSkipHealthyCreditWorkerRestart("VALIDATE_SELECTORS", snapshot), false);
 });
 
 test("analise automatica seleciona somente runbooks permitidos a partir da saude atual", () => {
