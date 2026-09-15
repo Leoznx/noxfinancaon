@@ -15,6 +15,8 @@ import {
   isCaptchaPresent,
   loginWithCredentials,
   detectAuthenticationState,
+  isCreditSimulationUrl,
+  isErpCreditSimulationUrl,
 } from "./credpagoSelectors";
 import { parseResultado } from "./credpagoParser";
 import { isTransientPortalError, validateConsultaForAutomation } from "./errorPolicy";
@@ -632,7 +634,7 @@ async function processarConsulta(
 
     // O login costuma redirecionar para o dashboard em vez de voltar à página de origem —
     // garante que esta aba termine na tela de simulação antes de preencher os dados.
-    if (!page.url().includes("/imobiliaria/proposta")) {
+    if (!isCreditSimulationUrl(page.url())) {
       await navegarParaPortal(page);
     }
 
@@ -651,7 +653,11 @@ async function processarConsulta(
       page,
       (consulta.tipo_imovel as "Residencial" | "Comercial") || "Residencial",
     );
-    await fillCep(page, consulta.cep || "");
+    // A nova tela ERP removeu o CEP desta etapa. Mantemos o preenchimento apenas
+    // para a rota legada caso seja necessário fazer rollback operacional.
+    if (!isErpCreditSimulationUrl(page.url())) {
+      await fillCep(page, consulta.cep || "");
+    }
     // A CredPago avalia o crédito com base no que é digitado no campo "Aluguel"
     // do formulário dela — por isso a análise deve considerar o compromisso
     // mensal total do inquilino (aluguel + condomínio + taxas), não só o

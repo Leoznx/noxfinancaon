@@ -1,5 +1,6 @@
 import type { Page } from "playwright";
 import type { ResultadoParse, ResultadoStatus } from "./types";
+import { redactSensitiveText, sanitizeUrl } from "./redaction";
 
 // Ordem importa: "recusado" (inclui negações como "não aprovado") é checado antes de
 // "aprovado" para não gerar falso-positivo quando o texto for algo como "locatício não aprovado".
@@ -11,7 +12,8 @@ const PADROES: { status: Exclude<ResultadoStatus, "erro">; regex: RegExp }[] = [
   // A CredPago usa "Crédito pendente de análise" (não "em análise") — aceita as duas formas.
   {
     status: "em_analise",
-    regex: /(pendente\s+de\s+an[aá]lise|em\s+an[aá]lise|an[aá]lise\s+pendente)/i,
+    regex:
+      /(pendente\s+de\s+an[aá]lise|em\s+an[aá]lise|an[aá]lise\s+pendente|an[aá]lise\s+complementar\s+necess[aá]ria)/i,
   },
   { status: "aprovado", regex: /(valor\s+locat[ií]cio\s+)?(cr[ée]dito\s+)?aprovad[oa]/i },
 ];
@@ -28,7 +30,7 @@ const TIMEOUT_MS = 30000;
 const PROCESSING_TIMEOUT_MS = 150000;
 const POLL_INTERVAL_MS = 1000;
 const PROCESSING_REGEX =
-  /(estamos\s+fazendo\s+a\s+an[aá]lise\s+de\s+cr[ée]dito|an[aá]lise\s+de\s+cr[ée]dito\s+em\s+andamento|aguarde[^\n]{0,80}an[aá]lise\s+de\s+cr[ée]dito)/i;
+  /(estamos\s+fazendo\s+a\s+an[aá]lise\s+de\s+cr[ée]dito|an[aá]lise\s+de\s+cr[ée]dito\s+em\s+andamento|analisando\s+cr[ée]dito|consultando\s+hist[oó]rico[^\n]{0,80}(?:pagamento|cliente)|aguarde[^\n]{0,80}an[aá]lise\s+de\s+cr[ée]dito)/i;
 /**
  * Se a página ficar com o texto EXATAMENTE igual por esse tempo depois do clique em
  * "Simular Crédito" (nem um spinner, nem uma navegação, nada), assumimos que o clique
@@ -155,8 +157,8 @@ export async function parseResultado(
 
 function buildSummary(page: Page, bodyText: string): Record<string, unknown> {
   return {
-    url: page.url(),
-    textoCapturado: bodyText.slice(0, 4000),
+    url: sanitizeUrl(page.url()),
+    textoCapturado: redactSensitiveText(bodyText, 4000),
     capturadoEm: new Date().toISOString(),
   };
 }

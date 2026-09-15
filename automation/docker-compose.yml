@@ -10,6 +10,8 @@ services:
       TZ: America/Sao_Paulo
       # Sessão portátil dentro do container — ver ./data/README (montado abaixo).
       CREDPAGO_STORAGE_STATE_PATH: /app/data/credpago-session.json
+      # Sobrescreve um eventual valor legado ainda presente no .env da VPS.
+      CREDPAGO_URL: https://app.loft.com.br/erp/proposta/analise-de-credito
       HEADLESS: "true"
       HEALTH_PORT: "3000"
       REPAIR_HEALTH_PORT: "3001"

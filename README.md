@@ -88,8 +88,8 @@ rodar em uma VPS:
 
 ## Automação de simulação de crédito (CredPago)
 
-A tela **Nova Consulta** (`/consultas/nova`) permite ao corretor simular crédito no site da
-CredPago (`https://app.loft.com.br/fianca-aluguel/imobiliaria/proposta`) sem sair do NOX FINANÇA. O fluxo é:
+A tela **Nova Consulta** (`/consultas/nova`) permite ao corretor simular crédito no portal
+externo (`https://app.loft.com.br/erp/proposta/analise-de-credito`) sem sair do NOX FINANÇA. O fluxo é:
 
 1. Corretor preenche os dados do inquilino/imóvel e clica em **Simular crédito**.
 2. O frontend cria um registro em `public.consultas_credito` com `status = "pendente"` e
@@ -201,7 +201,7 @@ Preencha:
 | `SUPABASE_SERVICE_ROLE_KEY` | Painel Supabase → Project Settings → API → `service_role` (secreta!) |
 | `CREDPAGO_PROFILE_DIR` | Pasta do perfil do Chrome (padrão: `./automation/chrome-profile-credpago`) |
 | `AUTOMATION_POLL_INTERVAL_MS` | Intervalo de verificação de novas consultas (padrão: `5000`) |
-| `CREDPAGO_URL` | `https://app.loft.com.br/fianca-aluguel/imobiliaria/proposta` |
+| `CREDPAGO_URL` | `https://app.loft.com.br/erp/proposta/analise-de-credito` |
 | `MAX_CONCURRENT_CONSULTAS` | Quantas consultas rodam em paralelo, cada uma em sua aba (padrão: `10`) |
 | `CONSULTA_TIMEOUT_MS` | Tempo máximo por consulta antes de marcar erro (padrão: `180000`) |
 | `STALE_CONSULTA_MS` | Recupera consultas interrompidas; deve ser maior que o timeout (padrão: `360000`) |

@@ -7,11 +7,20 @@ import type {
   SimulateCredPagoResponse,
 } from "@/types/credpago";
 
-const DEFAULT_PORTAL_URL = "https://app.loft.com.br/fianca-aluguel/imobiliaria";
+const DEFAULT_PORTAL_URL = "https://app.loft.com.br/erp/proposta/analise-de-credito";
 
 /** URL do portal de imobiliárias da CredPago, para abrir em nova aba no fluxo manual assistido. */
 export function getCredPagoPortalUrl(): string {
-  return (import.meta.env.VITE_CREDPAGO_PORTAL_URL as string | undefined) || DEFAULT_PORTAL_URL;
+  const configured = (import.meta.env.VITE_CREDPAGO_PORTAL_URL as string | undefined)?.trim();
+  if (
+    !configured ||
+    /^(?:https?:\/\/)?(?:www\.)?(?:credpago\.com\/imobiliaria\/proposta|app\.loft\.com\.br\/fianca-aluguel\/imobiliaria(?:\/proposta)?)[/?#]?$/i.test(
+      configured,
+    )
+  ) {
+    return DEFAULT_PORTAL_URL;
+  }
+  return configured;
 }
 
 async function invoke(body: {

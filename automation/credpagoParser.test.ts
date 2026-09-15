@@ -15,7 +15,7 @@ after(async () => {
 
 test("aguarda a análise ativa além do prazo inicial sem repetir o clique", async () => {
   const page = await browser.newPage();
-  await page.setContent("<main>Estamos fazendo a análise de crédito...</main>");
+  await page.setContent("<main>Analisando crédito</main>");
   await page.evaluate(() => {
     setTimeout(() => {
       document.body.innerHTML = "<main>Crédito aprovado</main>";
@@ -35,6 +35,41 @@ test("aguarda a análise ativa além do prazo inicial sem repetir o clique", asy
 
   assert.equal(resultado.status, "aprovado");
   assert.equal(recliques, 0);
+  await page.close();
+});
+
+test("reconhece a análise complementar do novo portal como em análise", async () => {
+  const page = await browser.newPage();
+  await page.setContent("<main><h1>Análise complementar necessária</h1></main>");
+
+  const resultado = await parseResultado(page, {
+    timeoutMs: 100,
+    processingTimeoutMs: 100,
+    pollIntervalMs: 10,
+  });
+
+  assert.equal(resultado.status, "em_analise");
+  await page.close();
+});
+
+test("não persiste a marca do provedor nem dados sensíveis no resumo técnico", async () => {
+  const page = await browser.newPage();
+  await page.setContent(
+    "<main>Fiança aprovada pela Loft para Cliente: MARIA DA SILVA CPF: 111.444.777-35</main>",
+  );
+
+  const resultado = await parseResultado(page, {
+    timeoutMs: 100,
+    processingTimeoutMs: 100,
+    pollIntervalMs: 10,
+  });
+  const resumo = JSON.stringify(resultado.rawSummary);
+
+  assert.equal(resultado.status, "aprovado");
+  assert.doesNotMatch(resumo, /loft/i);
+  assert.doesNotMatch(resumo, /111[.]444[.]777-35/);
+  assert.match(resumo, /parceiro de crédito/i);
+  assert.match(resumo, /DOCUMENT_REDACTED/);
   await page.close();
 });
 

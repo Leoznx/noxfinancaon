@@ -3,8 +3,15 @@ import { after, before, test } from "node:test";
 import { chromium, type Browser } from "playwright";
 import {
   detectAuthenticationState,
+  fillDocumento,
+  fillPessoa,
+  fillTipoImovel,
   fillValores,
   hasVisibleCaptchaChallenge,
+  isCreditSimulationUrl,
+  isErpCreditSimulationUrl,
+  submitSimulation,
+  validateSimulationFormReady,
 } from "./credpagoSelectors";
 import {
   assertCreditSimulationAvailable,
@@ -110,6 +117,52 @@ test("reconhece a rota interna autenticada após o SSO (app.loft.com.br)", async
   await page.close();
 });
 
+test("preenche e valida o novo formulário ERP sem exigir o CEP removido da tela", async () => {
+  const url = "https://app.loft.com.br/erp/proposta/analise-de-credito";
+  const page = await pageWithHtml(
+    url,
+    `<main>
+      <h1>Análise de crédito</h1>
+      <section aria-label="Dados do Inquilino">
+        <button type="button">Pessoa física</button>
+        <button type="button">Pessoa jurídica</button>
+        <label>CPF*<input /></label>
+      </section>
+      <section aria-label="Dados do Imóvel">
+        <span>Tipo do imóvel *</span>
+        <button type="button">Residencial</button>
+        <button type="button">Comercial</button>
+        <label>Valor Aluguel<input placeholder="R$ 0.000,00" /></label>
+      </section>
+      <button type="button" onclick="document.body.dataset.submitted='true'">Simular análise de crédito</button>
+    </main>`,
+  );
+
+  assert.equal(isCreditSimulationUrl(url), true);
+  assert.equal(isErpCreditSimulationUrl(url), true);
+  assert.equal(await detectAuthenticationState(page, 300), "authenticated");
+  assert.deepEqual(await validateSimulationFormReady(page), {
+    documento: true,
+    aluguel: true,
+    simular: true,
+  });
+
+  await fillPessoa(page, "PF");
+  await fillDocumento(page, "11144477735", "PF");
+  await fillTipoImovel(page, "Residencial");
+  await fillValores(page, { aluguel: 1750, condominio: 0, taxas: 0 });
+  await submitSimulation(page);
+
+  assert.equal(await page.getByLabel(/cpf/i).inputValue(), "11144477735");
+  assert.equal(await page.getByLabel(/valor aluguel/i).inputValue(), "1750");
+  assert.equal(await page.locator("body").getAttribute("data-submitted"), "true");
+  await page.close();
+});
+
+test("não reconhece uma URL externa parecida como tela de simulação", () => {
+  assert.equal(isCreditSimulationUrl("https://example.com/erp/proposta/analise-de-credito"), false);
+});
+
 test("reconhece o bloqueio comercial da Loft antes de procurar seletores", async () => {
   const aviso =
     "Liberação necessária para criar contratos. A plataforma de fiança está bloqueada para criação de contratos nesta conta. Para continuar, solicite a liberação ao time comercial da Loft.";
@@ -119,10 +172,7 @@ test("reconhece o bloqueio comercial da Loft antes de procurar seletores", async
     "https://app.loft.com.br/fianca-aluguel/imobiliaria/cr/index.php",
     `<main><h1>Liberação necessária para criar contratos</h1><p>${aviso}</p></main>`,
   );
-  await assert.rejects(
-    () => assertCreditSimulationAvailable(page),
-    CredPagoAccountBlockedError,
-  );
+  await assert.rejects(() => assertCreditSimulationAvailable(page), CredPagoAccountBlockedError);
   await page.close();
 });
 

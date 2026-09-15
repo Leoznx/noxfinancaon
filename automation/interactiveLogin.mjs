@@ -8,7 +8,15 @@ const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(scriptDirectory, ".env") });
 dotenv.config({ path: path.resolve(scriptDirectory, "..", ".env") });
 
-const credpagoUrl = process.env.CREDPAGO_URL || "https://credpago.com/imobiliaria/proposta";
+const currentCreditSimulationUrl = "https://app.loft.com.br/erp/proposta/analise-de-credito";
+const configuredCreditSimulationUrl = process.env.CREDPAGO_URL?.trim() || "";
+const credpagoUrl =
+  !configuredCreditSimulationUrl ||
+  /^(?:https?:\/\/)?(?:www\.)?(?:credpago\.com\/imobiliaria\/proposta|app\.loft\.com\.br\/fianca-aluguel\/imobiliaria(?:\/proposta)?)[/?#]?$/i.test(
+    configuredCreditSimulationUrl,
+  )
+    ? currentCreditSimulationUrl
+    : configuredCreditSimulationUrl;
 const storageStatePath =
   process.env.CREDPAGO_STORAGE_STATE_PATH || path.resolve(scriptDirectory, "credpago-session.json");
 const otpFile =
@@ -18,6 +26,7 @@ const password = process.env.CREDPAGO_PASSWORD;
 const otpTimeoutMs = Number(process.env.AUTH_OTP_TIMEOUT_MS) || 10 * 60 * 1000;
 const interactiveTimeoutMs = Number(process.env.AUTH_INTERACTIVE_TIMEOUT_MS) || 10 * 60 * 1000;
 const interactiveHeadless = process.env.INTERACTIVE_HEADLESS === "true";
+const erpCreditSimulationPath = /\/erp\/proposta\/analise-de-credito(?:\/|$)/i;
 
 if (Boolean(login) !== Boolean(password)) {
   throw new Error("CREDPAGO_LOGIN e CREDPAGO_PASSWORD precisam ser configuradas juntas.");
@@ -64,8 +73,15 @@ async function isAuthenticated() {
   )
     return false;
 
-  if (/\/imobiliaria\/cr\//i.test(url.pathname)) return true;
-  const simulationButton = page.getByRole("button", { name: /simular\s+cr[ée]dito/i });
+  if (
+    /\/imobiliaria\/cr(?:\/|$)/i.test(url.pathname) ||
+    (/\/erp(?:\/|$)/i.test(url.pathname) && !erpCreditSimulationPath.test(url.pathname))
+  ) {
+    return true;
+  }
+  const simulationButton = page.getByRole("button", {
+    name: /simular(?:\s+an[aá]lise\s+de)?\s+cr[ée]dito/i,
+  });
   return simulationButton
     .first()
     .isVisible()
@@ -122,10 +138,7 @@ try {
     ) {
       await loginLoftButton.first().click();
       await Promise.race([
-        page.waitForURL(/\/imobiliaria\/cr\/index\.php/i, {
-          waitUntil: "domcontentloaded",
-          timeout: 60_000,
-        }),
+        waitForManualAuthentication(60_000),
         page
           .getByLabel(/e-?mail ou telefone|e-?mail|telefone/i)
           .first()
@@ -142,10 +155,9 @@ try {
       console.log(
         "Preencha o login e conclua CAPTCHA/OTP na janela. A sessão será salva automaticamente.",
       );
-      await page.waitForURL(/credpago\.com\/imobiliaria/i, {
-        waitUntil: "domcontentloaded",
-        timeout: interactiveTimeoutMs,
-      });
+      if (!(await waitForManualAuthentication(interactiveTimeoutMs))) {
+        throw new Error("Tempo esgotado aguardando a autenticação manual do portal.");
+      }
       await page.goto(credpagoUrl, { waitUntil: "domcontentloaded", timeout: 30_000 });
       await page.waitForTimeout(2_000);
       if (!(await isAuthenticated())) {
@@ -201,9 +213,7 @@ try {
       }
 
       await Promise.race([
-        page
-          .waitForURL(/credpago\.com\/imobiliaria/i, { timeout: interactiveTimeoutMs })
-          .catch(() => {}),
+        waitForManualAuthentication(interactiveTimeoutMs),
         page
           .getByText(/insira o c[oó]digo enviado/i)
           .first()

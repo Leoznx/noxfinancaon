@@ -13,11 +13,39 @@ const FIND_TIMEOUT_MS = 8000;
 const FIND_POLL_MS = 200;
 const LOGIN_LOFT_URL_PATTERN = /(?:^https?:\/\/sso\.loft\.com\.br\/|\/realms\/loft\/)/i;
 const AUTHENTICATED_CREDPAGO_URL_PATTERN =
-  /\/imobiliaria\/(?:cr\/|dashboard(?:\/|$)|home(?:\/|$)|index(?:\.php)?(?:\/|$))/i;
+  /\/(?:imobiliaria\/(?:cr\/|dashboard(?:\/|$)|home(?:\/|$)|index(?:\.php)?(?:\/|$))|erp(?:\/|$))/i;
 // A tela de simulação já morou em credpago.com e hoje mora em app.loft.com.br
 // (ver CREDPAGO_URL em env.ts) — aceita os dois hostnames pra não depender de
 // nenhum redirecionamento entre eles continuar existindo no futuro.
 const AUTHENTICATED_HOSTNAMES = ["credpago.com", "app.loft.com.br"];
+const CREDIT_SIMULATION_PATH_PATTERN =
+  /\/(?:fianca-aluguel\/imobiliaria\/proposta|imobiliaria\/proposta|erp\/proposta\/analise-de-credito)(?:\/|$)/i;
+const ERP_CREDIT_SIMULATION_PATH_PATTERN = /\/erp\/proposta\/analise-de-credito(?:\/|$)/i;
+
+export function isCreditSimulationUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      AUTHENTICATED_HOSTNAMES.some(
+        (hostname) => url.hostname === hostname || url.hostname.endsWith(`.${hostname}`),
+      ) && CREDIT_SIMULATION_PATH_PATTERN.test(url.pathname)
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function isErpCreditSimulationUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      (url.hostname === "app.loft.com.br" || url.hostname.endsWith(".app.loft.com.br")) &&
+      ERP_CREDIT_SIMULATION_PATH_PATTERN.test(url.pathname)
+    );
+  } catch {
+    return false;
+  }
+}
 
 function tempoRestante(deadline: number): number {
   return Math.max(1, deadline - Date.now());
@@ -224,7 +252,7 @@ export async function fillValores(
 }
 
 export async function submitSimulation(page: Page): Promise<void> {
-  await clickButtonByText(page, [/simular\s+cr[ée]dito/i, /simular/i]);
+  await clickButtonByText(page, [/simular(?:\s+an[aá]lise\s+de)?\s+cr[ée]dito/i, /simular/i]);
 }
 
 /**
@@ -248,15 +276,25 @@ export async function validateSimulationFormReady(page: Page): Promise<Record<st
 
   await assertCreditSimulationAvailable(page);
   await clickButtonByText(page, [/pessoa\s+f[ií]sica/i, /^\s*pf\s*$/i]);
-  const [documento, cep, aluguel] = await Promise.all([
+  const [documento, aluguel] = await Promise.all([
     locateField(page, { label: /cpf/i, placeholder: /cpf/i, role: { name: /cpf/i } }),
-    locateField(page, { label: /cep/i, placeholder: /cep/i, role: { name: /cep/i } }),
     locateField(page, { label: /aluguel/i, placeholder: /aluguel/i, role: { name: /aluguel/i } }),
   ]);
-  const simular = page.getByRole("button", { name: /simular\s+cr[ée]dito/i }).first();
+  // O formulário ERP atual não solicita endereço/CEP nesta etapa. A tela legada
+  // ainda exige o campo, então ele continua sendo validado somente nessa rota.
+  const cep = isErpCreditSimulationUrl(page.url())
+    ? null
+    : await locateField(page, {
+        label: /cep/i,
+        placeholder: /cep/i,
+        role: { name: /cep/i },
+      });
+  const simular = page
+    .getByRole("button", { name: /simular(?:\s+an[aá]lise\s+de)?\s+cr[ée]dito/i })
+    .first();
   const result = {
     documento: await documento.isVisible().catch(() => false),
-    cep: await cep.isVisible().catch(() => false),
+    ...(cep ? { cep: await cep.isVisible().catch(() => false) } : {}),
     aluguel: await aluguel.isVisible().catch(() => false),
     simular: await simular.isVisible().catch(() => false),
   };
@@ -342,10 +380,17 @@ async function isAuthenticatedCredPagoPage(page: Page): Promise<boolean> {
   // A página pública de entrada também tem texto e, durante a hidratação, o botão Login
   // Loft pode levar alguns instantes para aparecer. Esse falso positivo deixava o worker
   // anunciando login renovado e voltando imediatamente para a tela de login.
-  if (AUTHENTICATED_CREDPAGO_URL_PATTERN.test(page.url())) return true;
+  // Rotas internas gerais confirmam a sessão por URL. Já a rota do formulário
+  // exige um marcador visual: assim o shell da SPA não vira um falso positivo
+  // enquanto ainda está redirecionando uma sessão expirada para o SSO.
+  if (AUTHENTICATED_CREDPAGO_URL_PATTERN.test(page.url()) && !isCreditSimulationUrl(page.url())) {
+    return true;
+  }
 
   const simulationMarkers = [
-    page.getByRole("button", { name: /simular\s+cr[ée]dito/i }),
+    page.getByRole("button", {
+      name: /simular(?:\s+an[aá]lise\s+de)?\s+cr[ée]dito/i,
+    }),
     page.getByText(/pessoa\s+f[íi]sica/i, { exact: false }),
     page.getByLabel(/cpf|cnpj/i),
   ];

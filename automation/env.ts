@@ -49,6 +49,12 @@ const storageStatePath = process.env.CREDPAGO_STORAGE_STATE_PATH || "";
 const profileDir =
   process.env.CREDPAGO_PROFILE_DIR || path.resolve(__dirname, "chrome-profile-credpago");
 const dataDir = storageStatePath ? path.dirname(storageStatePath) : path.resolve(__dirname, "data");
+const CURRENT_CREDIT_SIMULATION_URL = "https://app.loft.com.br/erp/proposta/analise-de-credito";
+const configuredCreditSimulationUrl = process.env.CREDPAGO_URL?.trim() || "";
+const usesLegacyCreditSimulationUrl =
+  /^(?:https?:\/\/)?(?:www\.)?(?:credpago\.com\/imobiliaria\/proposta|app\.loft\.com\.br\/fianca-aluguel\/imobiliaria(?:\/proposta)?)[/?#]?$/i.test(
+    configuredCreditSimulationUrl,
+  );
 
 export const env = {
   supabaseUrl: required("SUPABASE_URL"),
@@ -86,7 +92,9 @@ export const env = {
   lowDiskUsedPercent: percentage("VPS_LOW_DISK_USED_PERCENT", 90),
   pollIntervalMs: positiveNumber("AUTOMATION_POLL_INTERVAL_MS", 5000, 500),
   credpagoUrl:
-    process.env.CREDPAGO_URL || "https://app.loft.com.br/fianca-aluguel/imobiliaria/proposta",
+    !configuredCreditSimulationUrl || usesLegacyCreditSimulationUrl
+      ? CURRENT_CREDIT_SIMULATION_URL
+      : configuredCreditSimulationUrl,
   /** Credenciais exclusivas do servidor para renovar automaticamente a sessão do Login Loft. */
   credpagoLogin,
   credpagoPassword,
