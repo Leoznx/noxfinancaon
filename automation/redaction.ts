@@ -7,6 +7,8 @@ const BEARER_PATTERN = /\bBearer\s+[A-Za-z0-9._~+/-]+=*/gi;
 const EMAIL_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
 const DOCUMENT_PATTERN = /(?<!\d)(?:\d{3}[.\s-]?\d{3}[.\s-]?\d{3}[-\s]?\d{2}|\d{2}[.\s-]?\d{3}[.\s-]?\d{3}[/.\s-]?\d{4}[-\s]?\d{2})(?!\d)/g;
 const PHONE_PATTERN = /(?<!\d)(?:\+?55\s*)?\(?\d{2}\)?\s*9?\d{4}[-\s]?\d{4}(?!\d)/g;
+const CREDIT_PROVIDER_URL_PATTERN = /https?:\/\/[^\s"'<>]*loft[^\s"'<>]*/gi;
+const CREDIT_PROVIDER_NAME_PATTERN = /\bloft\b/gi;
 
 export function redactSensitiveText(value: unknown, maxLength = MAX_TEXT): string {
   const raw = value instanceof Error ? `${value.name}: ${value.message}\n${value.stack ?? ""}` : String(value ?? "");
@@ -17,6 +19,8 @@ export function redactSensitiveText(value: unknown, maxLength = MAX_TEXT): strin
     .replace(EMAIL_PATTERN, "[EMAIL_REDACTED]")
     .replace(DOCUMENT_PATTERN, "[DOCUMENT_REDACTED]")
     .replace(PHONE_PATTERN, "[PHONE_REDACTED]")
+    .replace(CREDIT_PROVIDER_URL_PATTERN, "[PORTAL_DO_PARCEIRO]")
+    .replace(CREDIT_PROVIDER_NAME_PATTERN, "parceiro de crédito")
     .slice(0, maxLength);
 }
 
@@ -25,7 +29,7 @@ export function sanitizeUrl(value: unknown): string {
     const url = new URL(String(value));
     url.search = "";
     url.hash = "";
-    return url.toString().slice(0, 500);
+    return redactSensitiveText(url.toString(), 500);
   } catch {
     return redactSensitiveText(value, 500);
   }

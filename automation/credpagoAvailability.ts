@@ -12,7 +12,7 @@ function normalizePortalText(value: string): string {
 }
 
 /**
- * Identifica o bloqueio comercial exibido pela Loft sem depender do layout,
+ * Identifica o bloqueio comercial exibido pelo provedor sem depender do layout,
  * seletor CSS ou pontuacao do texto da pagina.
  */
 export function isCreditSimulationAccountBlockedText(value: string): boolean {
@@ -30,7 +30,7 @@ export class CredPagoAccountBlockedError extends Error {
   constructor() {
     super(
       `${CREDPAGO_ACCOUNT_BLOCKED_CODE}: A conta da integracao esta bloqueada pelo parceiro para criar contratos. ` +
-        "Solicite a liberacao ao time comercial da Loft; nenhuma simulacao sera enviada enquanto o bloqueio estiver ativo.",
+        "A análise de crédito está temporariamente indisponível; nenhuma simulação será enviada enquanto o bloqueio estiver ativo.",
     );
     this.name = "CredPagoAccountBlockedError";
   }

@@ -48,6 +48,19 @@ test("remove query e hash de URLs capturadas", () => {
   );
 });
 
+test("oculta a marca e o endereço do provedor nos diagnósticos", () => {
+  const output = redactSensitiveText(
+    "Liberação da Loft pendente em https://app.loft.com.br/fianca-aluguel/imobiliaria/cr/index.php",
+  );
+  assert.doesNotMatch(output, /loft/i);
+  assert.match(output, /parceiro de crédito/);
+  assert.match(output, /PORTAL_DO_PARCEIRO/);
+  assert.equal(
+    sanitizeUrl("https://app.loft.com.br/fianca-aluguel/imobiliaria?cpf=123"),
+    "[PORTAL_DO_PARCEIRO]",
+  );
+});
+
 test("mascara chaves sigilosas em objetos aninhados", () => {
   assert.deepEqual(redactObject({ ok: true, nested: { token: "abc", email: "user@nox.com" } }), {
     ok: true,

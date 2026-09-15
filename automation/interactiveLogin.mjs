@@ -181,7 +181,7 @@ try {
           .isDisabled()
           .catch(() => true)
       ) {
-        throw new Error("O Login Loft não habilitou o botão Entrar após o preenchimento.");
+        throw new Error("O portal não habilitou o botão Entrar após o preenchimento.");
       }
       await enterButton.first().click({ timeout: 60_000 });
 
@@ -220,7 +220,7 @@ try {
             .isVisible()
             .catch(() => false))
         ) {
-          throw new Error("O Login Loft não avançou para a verificação esperada.");
+          throw new Error("O portal não avançou para a verificação esperada.");
         }
 
         if (!interactiveHeadless) {
@@ -229,7 +229,7 @@ try {
             "Digite o código diretamente na janela e conclua o acesso. A sessão será salva automaticamente.",
           );
           if (!(await waitForManualAuthentication(interactiveTimeoutMs))) {
-            throw new Error("Tempo esgotado aguardando a confirmação manual do Login Loft.");
+            throw new Error("Tempo esgotado aguardando a confirmação manual do portal.");
           }
         } else {
           const code = await waitForOtpCode();
@@ -248,7 +248,7 @@ try {
           const continueButton = page.getByRole("button", { name: /^continuar$/i });
           await continueButton.first().click({ timeout: 30_000 });
           if (!(await waitForManualAuthentication(60_000))) {
-            throw new Error("O Login Loft não confirmou o código de verificação.");
+            throw new Error("O portal não confirmou o código de verificação.");
           }
         }
       }

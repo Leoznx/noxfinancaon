@@ -146,7 +146,7 @@ async function applyRunbook(
     case "WAIT_EXTERNAL_DEPENDENCY":
       if (snapshot.portalBlocked || isCredPagoAccountBlockedError(error.message_redacted)) {
         throw new ManualRepairRequiredError(
-          "A conta da integracao esta bloqueada pela Loft para criar contratos. Solicite a liberacao ao time comercial do parceiro; depois disso, execute o reparo novamente.",
+          "O serviço externo de análise bloqueou a criação de contratos. A liberação pelo parceiro é necessária antes de executar o reparo novamente.",
         );
       }
       await sleep(3_000);
@@ -214,7 +214,7 @@ async function validateRepair(): Promise<ValidationResult> {
       ok: false,
       manualRequired: true,
       summary:
-        "A conta da integracao esta bloqueada pela Loft para criar contratos. A liberacao pelo time comercial do parceiro e necessaria antes de retomar as simulacoes.",
+        "O serviço externo de análise bloqueou a criação de contratos. A liberação pelo parceiro é necessária antes de retomar as simulações.",
     };
   }
   if (!snapshot.creditWorkerReachable)

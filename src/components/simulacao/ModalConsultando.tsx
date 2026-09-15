@@ -64,11 +64,11 @@ export function ModalConsultando({ open, erro, onTentarNovamente, onFechar, prog
               <AlertTriangle className="w-11 h-11 text-yellow-600" strokeWidth={1.5} />
             </div>
             <DialogTitle className="text-2xl font-bold text-neutral-900 tracking-tight">
-              Liberação da Loft pendente
+              Análise temporariamente indisponível
             </DialogTitle>
             <DialogDescription className="text-base text-neutral-600 leading-relaxed">
-              A conta de integração precisa ser liberada pela Loft para criar contratos. Sua
-              consulta foi salva e nenhum dado será reenviado enquanto esse bloqueio estiver ativo.
+              O serviço de análise de crédito está temporariamente indisponível. Sua consulta foi
+              salva com segurança. Tente novamente mais tarde.
             </DialogDescription>
             {onFechar && (
               <Button

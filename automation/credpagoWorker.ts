@@ -203,7 +203,7 @@ async function ensureLoggedIn(
   if (!loginEmAndamento) {
     loginEmAndamento = (async () => {
       if (env.credpagoLogin && env.credpagoPassword) {
-        log("Sessão expirada — renovando automaticamente pelo Login Loft.");
+        log("Sessão expirada — renovando automaticamente pelo portal de autenticação.");
         await loginWithCredentials(
           page,
           env.credpagoLogin,
@@ -211,7 +211,7 @@ async function ensureLoggedIn(
           env.authLoginTimeoutMs,
         );
         await persistirSessao();
-        log("Login Loft renovado e sessão persistida.");
+        log("Acesso ao portal renovado e sessão persistida.");
         return;
       }
 
@@ -228,8 +228,8 @@ async function ensureLoggedIn(
         if (error instanceof CredPagoAuthenticationError) throw error;
         throw new CredPagoAuthenticationError(
           error instanceof Error
-            ? `Não foi possível renovar o Login Loft: ${error.message}`
-            : "Não foi possível renovar o Login Loft.",
+            ? `Não foi possível renovar o acesso ao portal: ${error.message}`
+            : "Não foi possível renovar o acesso ao portal.",
           { cause: error },
         );
       })
@@ -519,7 +519,9 @@ async function validarAutenticacao(
       await assertCreditSimulationAvailable(page!);
 
       if ((await detectAuthenticationState(page!)) !== "authenticated") {
-        throw new CredPagoAuthenticationError("A sessão ainda redireciona para o Login Loft.");
+        throw new CredPagoAuthenticationError(
+          "A sessão ainda redireciona para o portal de autenticação.",
+        );
       }
     })();
 

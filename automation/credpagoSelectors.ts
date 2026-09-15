@@ -236,13 +236,13 @@ export async function validateSimulationFormReady(page: Page): Promise<Record<st
   if (authState !== "authenticated") {
     throw new Error(
       authState === "login"
-        ? "Sessao expirada: o portal redirecionou para o Login Loft."
+        ? "Sessao expirada: o portal redirecionou para a tela de autenticacao."
         : "O portal nao confirmou a autenticacao nem exibiu o formulario.",
     );
   }
   if (await isCaptchaPresent(page)) {
     throw new Error(
-      "A Loft solicitou captcha/OTP; a sessao sera reavaliada automaticamente sem contornar o desafio externo.",
+      "O provedor solicitou captcha/OTP; a sessao sera reavaliada automaticamente sem contornar o desafio externo.",
     );
   }
 
@@ -380,17 +380,17 @@ async function authenticationChallenge(page: Page): Promise<string | null> {
       texto,
     )
   ) {
-    return "A Loft solicitou uma verificação de segurança durante o login.";
+    return "O provedor solicitou uma verificação de segurança durante o acesso.";
   }
   if (
     /insira\s+o\s+c[oó]digo|c[oó]digo\s+(?:de\s+)?verifica[cç][aã]o|c[oó]digo\s+enviado|autentica[cç][aã]o\s+em\s+duas\s+etapas/i.test(
       texto,
     )
   ) {
-    return "A Loft solicitou um código de verificação para renovar a sessão.";
+    return "O provedor solicitou um código de verificação para renovar a sessão.";
   }
   if (/credenciais?\s+inv[aá]lid|senha\s+incorret|usu[aá]rio\s+n[aã]o\s+encontrado/i.test(texto)) {
-    return "O Login Loft recusou as credenciais configuradas.";
+    return "O portal de autenticação recusou as credenciais configuradas.";
   }
   return null;
 }
@@ -448,7 +448,7 @@ async function firstVisibleLocator(
     }
     await page.waitForTimeout(FIND_POLL_MS);
   } while (Date.now() - inicio < timeoutMs);
-  throw new Error(`${descricao} não encontrado. O layout do Login Loft pode ter mudado.`);
+  throw new Error(`${descricao} não encontrado. O layout do portal pode ter mudado.`);
 }
 
 /** Campo de identificação (e-mail/telefone/usuário) do Login Loft, com fallbacks amplos. */
@@ -536,12 +536,12 @@ export async function loginWithCredentials(
 
   if (Date.now() >= deadline) {
     throw new Error(
-      `Tempo limite total de ${Math.round(timeoutMs / 1000)}s excedido no Login Loft.`,
+      `Tempo limite total de ${Math.round(timeoutMs / 1000)}s excedido no portal de autenticação.`,
     );
   }
   throw ultimoErro instanceof Error
     ? ultimoErro
-    : new Error("Não foi possível concluir o Login Loft.");
+    : new Error("Não foi possível concluir o acesso ao portal.");
 }
 
 async function tentarLoginLoft(
@@ -583,7 +583,7 @@ async function tentarLoginLoft(
   );
 
   if (!formularioDisponivel) {
-    throw new Error("O formulário do Login Loft não ficou disponível dentro do tempo esperado.");
+    throw new Error("O formulário de acesso não ficou disponível dentro do tempo esperado.");
   }
   if (await isAuthenticatedCredPagoPage(page)) return;
 
@@ -591,13 +591,13 @@ async function tentarLoginLoft(
     page,
     loginIdentifierCandidates(page),
     tempoRestante(deadline),
-    "Campo de e-mail/telefone do Login Loft",
+    "Campo de e-mail/telefone do portal",
   );
   const senhaField = await firstVisibleLocator(
     page,
     passwordCandidates(page),
     tempoRestante(deadline),
-    "Campo de senha do Login Loft",
+    "Campo de senha do portal",
   );
 
   // O Login Loft usa um campo React controlado que interpreta `fill()` como
@@ -620,11 +620,11 @@ async function tentarLoginLoft(
       ? entrarButton.first()
       : page.locator('button[type="submit"], input[type="submit"]').first();
   if ((await submitButton.count().catch(() => 0)) === 0) {
-    throw new Error("O botão Entrar do Login Loft não foi encontrado.");
+    throw new Error("O botão Entrar do portal não foi encontrado.");
   }
   await submitButton.waitFor({ state: "visible", timeout: tempoRestante(deadline) });
   if (await submitButton.isDisabled().catch(() => true)) {
-    throw new Error("O Login Loft não habilitou o botão Entrar após o preenchimento.");
+    throw new Error("O portal não habilitou o botão Entrar após o preenchimento.");
   }
   await submitButton.click({ timeout: tempoRestante(deadline) });
 
@@ -639,7 +639,7 @@ async function tentarLoginLoft(
   );
   if (desafio) throw new Error(desafio);
   if (!concluiu || !(await isAuthenticatedCredPagoPage(page))) {
-    throw new Error("O Login Loft não confirmou as credenciais dentro do tempo esperado.");
+    throw new Error("O portal não confirmou as credenciais dentro do tempo esperado.");
   }
 }
 
