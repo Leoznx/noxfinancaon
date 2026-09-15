@@ -3,17 +3,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  ArrowRight,
-  ExternalLink,
-  Eye,
-  EyeOff,
-  Info,
-  Lock,
-  Settings,
-  ShieldCheck,
-  UserRound,
-} from "lucide-react";
+import { ArrowRight, Eye, EyeOff, Info, Lock, Settings, UserRound } from "lucide-react";
 import { useAuth, type InternalRole } from "@/components/AuthProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -28,7 +18,6 @@ import { useServerFn } from "@tanstack/react-start";
 import { resendVerificationEmail } from "@/lib/auth-signup.functions";
 import { isEmailNotConfirmedError } from "@/lib/auth-errors";
 import { safeInternalRedirect } from "@/lib/safe-redirect";
-import { getCredPagoPortalUrl } from "@/lib/credpago";
 
 const loginSearchSchema = z.object({
   returnTo: z.string().optional(),
@@ -403,26 +392,6 @@ function LoginComponent() {
                     <ArrowRight className="absolute right-5" size={21} strokeWidth={2.2} />
                   )}
                 </Button>
-
-                <a
-                  href={getCredPagoPortalUrl()}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex min-h-[52px] items-center gap-3 rounded-xl border border-yellow-300 bg-yellow-50 px-4 text-left transition-colors hover:border-yellow-400 hover:bg-yellow-100"
-                >
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-yellow-400 text-neutral-950">
-                    <ShieldCheck size={20} strokeWidth={2} />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-extrabold text-neutral-950">
-                      Liberar análise externa
-                    </span>
-                    <span className="block text-[11px] font-medium text-neutral-600">
-                      Acesso administrativo ao serviço de crédito
-                    </span>
-                  </span>
-                  <ExternalLink className="shrink-0 text-neutral-700" size={18} strokeWidth={2} />
-                </a>
 
                 <div className="flex items-center gap-5 py-1" aria-hidden="true">
                   <span className="h-px flex-1 bg-neutral-200" />
