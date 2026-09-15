@@ -16,7 +16,6 @@ import {
   loginWithCredentials,
   detectAuthenticationState,
   isCreditSimulationUrl,
-  isErpCreditSimulationUrl,
 } from "./credpagoSelectors";
 import { parseResultado } from "./credpagoParser";
 import { isTransientPortalError, validateConsultaForAutomation } from "./errorPolicy";
@@ -653,11 +652,9 @@ async function processarConsulta(
       page,
       (consulta.tipo_imovel as "Residencial" | "Comercial") || "Residencial",
     );
-    // A nova tela ERP removeu o CEP desta etapa. Mantemos o preenchimento apenas
-    // para a rota legada caso seja necessário fazer rollback operacional.
-    if (!isErpCreditSimulationUrl(page.url())) {
-      await fillCep(page, consulta.cep || "");
-    }
+    // O CEP permanece obrigatório na nova rota ERP, embora fique abaixo da dobra
+    // em telas menores. Sem preenchê-lo, o botão de simulação continua desabilitado.
+    await fillCep(page, consulta.cep || "");
     // A CredPago avalia o crédito com base no que é digitado no campo "Aluguel"
     // do formulário dela — por isso a análise deve considerar o compromisso
     // mensal total do inquilino (aluguel + condomínio + taxas), não só o

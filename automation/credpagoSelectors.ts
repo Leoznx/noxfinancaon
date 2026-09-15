@@ -280,21 +280,19 @@ export async function validateSimulationFormReady(page: Page): Promise<Record<st
     locateField(page, { label: /cpf/i, placeholder: /cpf/i, role: { name: /cpf/i } }),
     locateField(page, { label: /aluguel/i, placeholder: /aluguel/i, role: { name: /aluguel/i } }),
   ]);
-  // O formulário ERP atual não solicita endereço/CEP nesta etapa. A tela legada
-  // ainda exige o campo, então ele continua sendo validado somente nessa rota.
-  const cep = isErpCreditSimulationUrl(page.url())
-    ? null
-    : await locateField(page, {
-        label: /cep/i,
-        placeholder: /cep/i,
-        role: { name: /cep/i },
-      });
+  // O CEP também é obrigatório na rota ERP atual; ele só aparece abaixo da dobra
+  // em telas menores, então precisa fazer parte da validação do contrato visual.
+  const cep = await locateField(page, {
+    label: /cep/i,
+    placeholder: /cep/i,
+    role: { name: /cep/i },
+  });
   const simular = page
     .getByRole("button", { name: /simular(?:\s+an[aá]lise\s+de)?\s+cr[ée]dito/i })
     .first();
   const result = {
     documento: await documento.isVisible().catch(() => false),
-    ...(cep ? { cep: await cep.isVisible().catch(() => false) } : {}),
+    cep: await cep.isVisible().catch(() => false),
     aluguel: await aluguel.isVisible().catch(() => false),
     simular: await simular.isVisible().catch(() => false),
   };

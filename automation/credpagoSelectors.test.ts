@@ -3,6 +3,7 @@ import { after, before, test } from "node:test";
 import { chromium, type Browser } from "playwright";
 import {
   detectAuthenticationState,
+  fillCep,
   fillDocumento,
   fillPessoa,
   fillTipoImovel,
@@ -117,7 +118,7 @@ test("reconhece a rota interna autenticada após o SSO (app.loft.com.br)", async
   await page.close();
 });
 
-test("preenche e valida o novo formulário ERP sem exigir o CEP removido da tela", async () => {
+test("preenche e valida o formulário ERP incluindo o CEP abaixo da dobra", async () => {
   const url = "https://app.loft.com.br/erp/proposta/analise-de-credito";
   const page = await pageWithHtml(
     url,
@@ -132,6 +133,7 @@ test("preenche e valida o novo formulário ERP sem exigir o CEP removido da tela
         <span>Tipo do imóvel *</span>
         <button type="button">Residencial</button>
         <button type="button">Comercial</button>
+        <label>CEP<input placeholder="00000-000" /></label>
         <label>Valor Aluguel<input placeholder="R$ 0.000,00" /></label>
       </section>
       <button type="button" onclick="document.body.dataset.submitted='true'">Simular análise de crédito</button>
@@ -143,6 +145,7 @@ test("preenche e valida o novo formulário ERP sem exigir o CEP removido da tela
   assert.equal(await detectAuthenticationState(page, 300), "authenticated");
   assert.deepEqual(await validateSimulationFormReady(page), {
     documento: true,
+    cep: true,
     aluguel: true,
     simular: true,
   });
@@ -150,10 +153,12 @@ test("preenche e valida o novo formulário ERP sem exigir o CEP removido da tela
   await fillPessoa(page, "PF");
   await fillDocumento(page, "11144477735", "PF");
   await fillTipoImovel(page, "Residencial");
+  await fillCep(page, "01001000");
   await fillValores(page, { aluguel: 1750, condominio: 0, taxas: 0 });
   await submitSimulation(page);
 
   assert.equal(await page.getByLabel(/cpf/i).inputValue(), "11144477735");
+  assert.equal(await page.getByLabel(/cep/i).inputValue(), "01001000");
   assert.equal(await page.getByLabel(/valor aluguel/i).inputValue(), "1750");
   assert.equal(await page.locator("body").getAttribute("data-submitted"), "true");
   await page.close();
