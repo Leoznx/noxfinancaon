@@ -55,9 +55,14 @@ function TimeClockPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [photo, setPhoto] = useState<File | null>(null);
   const [preview, setPreview] = useState("");
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [cameraLoading, setCameraLoading] = useState(false);
+  const [cameraError, setCameraError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [now, setNow] = useState(new Date());
-  const inputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const cameraRequestRef = useRef(0);
 
   const load = useCallback(async () => {
     setError("");
@@ -79,16 +84,114 @@ function TimeClockPage() {
     if (preview) URL.revokeObjectURL(preview);
   }, [preview]);
 
-  const selectPhoto = (file?: File) => {
-    if (preview) URL.revokeObjectURL(preview);
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !cameraStream) return;
+    video.srcObject = cameraStream;
+    void video.play().catch(() => setCameraError("Não foi possível iniciar a visualização da câmera."));
+    return () => {
+      video.srcObject = null;
+    };
+  }, [cameraStream]);
+
+  useEffect(() => () => {
+    cameraRequestRef.current += 1;
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+  }, []);
+
+  const selectPhoto = useCallback((file?: File) => {
     setPhoto(file ?? null);
     setPreview(file ? URL.createObjectURL(file) : "");
-  };
+  }, []);
+
+  const stopCamera = useCallback(() => {
+    cameraRequestRef.current += 1;
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    setCameraStream(null);
+    setCameraLoading(false);
+  }, []);
+
+  const startCamera = useCallback(async () => {
+    stopCamera();
+    setCameraError("");
+    setCameraLoading(true);
+    const requestId = cameraRequestRef.current;
+
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error("Este navegador não oferece captura ao vivo pela câmera.");
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: {
+          facingMode: { ideal: "user" },
+          width: { ideal: 1280 },
+          height: { ideal: 960 },
+        },
+      });
+      if (cameraRequestRef.current !== requestId) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+      streamRef.current = stream;
+      setCameraStream(stream);
+    } catch (cause) {
+      if (cameraRequestRef.current === requestId) {
+        const denied = cause instanceof DOMException && (cause.name === "NotAllowedError" || cause.name === "PermissionDeniedError");
+        setCameraError(denied
+          ? "Autorize o uso da câmera no navegador para registrar o ponto."
+          : cause instanceof Error ? cause.message : "Não foi possível abrir a câmera.");
+      }
+    } finally {
+      if (cameraRequestRef.current === requestId) setCameraLoading(false);
+    }
+  }, [stopCamera]);
 
   const openPunch = () => {
     if (!dashboard?.next_punch_type) return;
     selectPhoto();
     setDialogOpen(true);
+    void startCamera();
+  };
+
+  const closePunch = () => {
+    if (submitting) return;
+    stopCamera();
+    selectPhoto();
+    setDialogOpen(false);
+  };
+
+  const capturePhoto = async () => {
+    const video = videoRef.current;
+    if (!video || !cameraStream || video.videoWidth <= 0 || video.videoHeight <= 0) {
+      setCameraError("A câmera ainda está carregando. Aguarde um instante e tente novamente.");
+      return;
+    }
+
+    const scale = Math.min(1, 1280 / video.videoWidth);
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(video.videoWidth * scale);
+    canvas.height = Math.round(video.videoHeight * scale);
+    const context = canvas.getContext("2d");
+    if (!context) {
+      setCameraError("Não foi possível capturar a foto. Tente novamente.");
+      return;
+    }
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
+    if (!blob) {
+      setCameraError("Não foi possível gerar a foto. Tente novamente.");
+      return;
+    }
+    selectPhoto(new File([blob], `ponto-${Date.now()}.jpg`, { type: "image/jpeg", lastModified: Date.now() }));
+    stopCamera();
+  };
+
+  const retakePhoto = () => {
+    selectPhoto();
+    void startCamera();
   };
 
   const submit = async () => {
@@ -163,7 +266,7 @@ function TimeClockPage() {
                           {dashboard.next_punch_type ? `Próxima marcação: ${TIME_CLOCK_LABELS[dashboard.next_punch_type]}` : "Jornada registrada por completo"}
                         </p>
                         <p className="mt-0.5 text-xs text-neutral-600">
-                          {dashboard.next_punch_type ? "Tire uma foto agora; imagens da galeria não são necessárias." : "Seu saldo diário já foi apurado e aparece no histórico."}
+                          {dashboard.next_punch_type ? "A câmera será aberta agora. Galeria, álbum e arquivos não são aceitos." : "Seu saldo diário já foi apurado e aparece no histórico."}
                         </p>
                       </div>
                       <Button onClick={openPunch} disabled={!dashboard.next_punch_type} className="h-11 rounded-xl bg-neutral-950 font-black text-white hover:bg-neutral-800">
@@ -192,24 +295,29 @@ function TimeClockPage() {
         ) : null}
       </main>
 
-      <Dialog open={dialogOpen} onOpenChange={(open) => !submitting && setDialogOpen(open)}>
+      <Dialog open={dialogOpen} onOpenChange={(open) => !open && closePunch()}>
         <DialogContent className="max-w-md overflow-hidden rounded-[24px] p-0">
           <DialogHeader className="border-b border-neutral-100 bg-yellow-50 px-6 py-5 text-left">
             <DialogTitle className="flex items-center gap-2"><Camera className="h-5 w-5 text-yellow-700" /> Confirmar {dashboard?.next_punch_type ? TIME_CLOCK_LABELS[dashboard.next_punch_type].toLowerCase() : "marcação"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 px-6 py-5">
-            <input ref={inputRef} type="file" accept="image/jpeg,image/png,image/webp" capture="user" className="hidden" onChange={(event) => selectPhoto(event.target.files?.[0])} />
             {preview ? (
-              <button type="button" onClick={() => inputRef.current?.click()} className="group relative block aspect-[4/3] w-full overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-100">
+              <button type="button" onClick={retakePhoto} className="group relative block aspect-[4/3] w-full overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-100">
                 <img src={preview} alt="Prévia da foto do registro de ponto" className="h-full w-full object-cover" />
                 <span className="absolute inset-x-3 bottom-3 rounded-xl bg-black/70 px-3 py-2 text-xs font-bold text-white backdrop-blur">Toque para refazer a foto</span>
               </button>
             ) : (
-              <button type="button" onClick={() => inputRef.current?.click()} className="flex aspect-[4/3] w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed border-yellow-300 bg-yellow-50 text-center transition hover:bg-yellow-100">
-                <span className="rounded-2xl bg-yellow-400 p-3"><Camera className="h-6 w-6 text-neutral-950" /></span>
-                <strong className="mt-3 text-sm">Abrir câmera</strong>
-                <span className="mt-1 max-w-64 text-xs text-neutral-500">A foto é obrigatória e deve mostrar você no momento da marcação.</span>
-              </button>
+              <div className="space-y-3">
+                <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-950">
+                  <video ref={videoRef} autoPlay muted playsInline aria-label="Visualização ao vivo da câmera" className="h-full w-full object-cover [transform:scaleX(-1)]" />
+                  {cameraLoading ? <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-neutral-950 text-white"><Loader2 className="h-7 w-7 animate-spin text-yellow-400" /><span className="text-xs font-bold">Abrindo câmera...</span></div> : null}
+                  {cameraError ? <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-neutral-950 px-6 text-center text-white"><AlertTriangle className="h-8 w-8 text-yellow-400" /><p className="text-sm font-bold">{cameraError}</p><Button type="button" variant="outline" onClick={() => void startCamera()} className="border-white/30 bg-white/10 text-white hover:bg-white/20 hover:text-white"><RefreshCw className="mr-2 h-4 w-4" /> Tentar novamente</Button></div> : null}
+                </div>
+                <Button type="button" onClick={() => void capturePhoto()} disabled={!cameraStream || cameraLoading || !!cameraError} className="h-11 w-full rounded-xl bg-yellow-400 font-black text-neutral-950 hover:bg-yellow-300">
+                  <Camera className="mr-2 h-4 w-4" /> Capturar foto agora
+                </Button>
+                <p className="text-center text-xs text-neutral-500">Somente captura ao vivo pela câmera. Galeria, álbum e envio de arquivos estão bloqueados.</p>
+              </div>
             )}
             <div className="flex gap-2 rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-[11px] leading-4 text-neutral-600">
               <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0 text-neutral-800" />
@@ -217,7 +325,7 @@ function TimeClockPage() {
             </div>
           </div>
           <DialogFooter className="border-t border-neutral-100 bg-neutral-50 px-6 py-4">
-            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={submitting}>Cancelar</Button>
+            <Button variant="outline" onClick={closePunch} disabled={submitting}>Cancelar</Button>
             <Button onClick={submit} disabled={!photo || submitting} className="bg-neutral-950 text-white hover:bg-neutral-800">
               {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />} Confirmar ponto
             </Button>
