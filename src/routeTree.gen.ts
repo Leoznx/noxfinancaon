@@ -120,6 +120,7 @@ import { Route as AdminConsultasRouteImport } from './routes/admin.consultas'
 import { Route as AdminColaboradoresRouteImport } from './routes/admin.colaboradores'
 import { Route as AdminCentralErrosRouteImport } from './routes/admin.central-erros'
 import { Route as AdminAprovacoesRouteImport } from './routes/admin.aprovacoes'
+import { Route as AdminAgendaClosersRouteImport } from './routes/admin.agenda-closers'
 import { Route as AdminAfiliadosRouteImport } from './routes/admin.afiliados'
 import { Route as AdminAdicionarUsuariosRouteImport } from './routes/admin.adicionar-usuarios'
 import { Route as AbrirAppDocumentosRouteImport } from './routes/abrir-app.documentos'
@@ -701,6 +702,11 @@ const AdminAprovacoesRoute = AdminAprovacoesRouteImport.update({
   path: '/admin/aprovacoes',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminAgendaClosersRoute = AdminAgendaClosersRouteImport.update({
+  id: '/admin/agenda-closers',
+  path: '/admin/agenda-closers',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminAfiliadosRoute = AdminAfiliadosRouteImport.update({
   id: '/admin/afiliados',
   path: '/admin/afiliados',
@@ -801,6 +807,7 @@ export interface FileRoutesByFullPath {
   '/abrir-app/documentos': typeof AbrirAppDocumentosRoute
   '/admin/adicionar-usuarios': typeof AdminAdicionarUsuariosRoute
   '/admin/afiliados': typeof AdminAfiliadosRoute
+  '/admin/agenda-closers': typeof AdminAgendaClosersRoute
   '/admin/aprovacoes': typeof AdminAprovacoesRoute
   '/admin/central-erros': typeof AdminCentralErrosRoute
   '/admin/colaboradores': typeof AdminColaboradoresRoute
@@ -918,6 +925,7 @@ export interface FileRoutesByTo {
   '/abrir-app/documentos': typeof AbrirAppDocumentosRoute
   '/admin/adicionar-usuarios': typeof AdminAdicionarUsuariosRoute
   '/admin/afiliados': typeof AdminAfiliadosRoute
+  '/admin/agenda-closers': typeof AdminAgendaClosersRoute
   '/admin/aprovacoes': typeof AdminAprovacoesRoute
   '/admin/central-erros': typeof AdminCentralErrosRoute
   '/admin/colaboradores': typeof AdminColaboradoresRoute
@@ -1040,6 +1048,7 @@ export interface FileRoutesById {
   '/abrir-app/documentos': typeof AbrirAppDocumentosRoute
   '/admin/adicionar-usuarios': typeof AdminAdicionarUsuariosRoute
   '/admin/afiliados': typeof AdminAfiliadosRoute
+  '/admin/agenda-closers': typeof AdminAgendaClosersRoute
   '/admin/aprovacoes': typeof AdminAprovacoesRoute
   '/admin/central-erros': typeof AdminCentralErrosRoute
   '/admin/colaboradores': typeof AdminColaboradoresRoute
@@ -1163,6 +1172,7 @@ export interface FileRouteTypes {
     | '/abrir-app/documentos'
     | '/admin/adicionar-usuarios'
     | '/admin/afiliados'
+    | '/admin/agenda-closers'
     | '/admin/aprovacoes'
     | '/admin/central-erros'
     | '/admin/colaboradores'
@@ -1280,6 +1290,7 @@ export interface FileRouteTypes {
     | '/abrir-app/documentos'
     | '/admin/adicionar-usuarios'
     | '/admin/afiliados'
+    | '/admin/agenda-closers'
     | '/admin/aprovacoes'
     | '/admin/central-erros'
     | '/admin/colaboradores'
@@ -1401,6 +1412,7 @@ export interface FileRouteTypes {
     | '/abrir-app/documentos'
     | '/admin/adicionar-usuarios'
     | '/admin/afiliados'
+    | '/admin/agenda-closers'
     | '/admin/aprovacoes'
     | '/admin/central-erros'
     | '/admin/colaboradores'
@@ -1523,6 +1535,7 @@ export interface RootRouteChildren {
   AbrirAppDocumentosRoute: typeof AbrirAppDocumentosRoute
   AdminAdicionarUsuariosRoute: typeof AdminAdicionarUsuariosRoute
   AdminAfiliadosRoute: typeof AdminAfiliadosRoute
+  AdminAgendaClosersRoute: typeof AdminAgendaClosersRoute
   AdminAprovacoesRoute: typeof AdminAprovacoesRoute
   AdminCentralErrosRoute: typeof AdminCentralErrosRoute
   AdminColaboradoresRoute: typeof AdminColaboradoresRoute
@@ -2345,6 +2358,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAprovacoesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/agenda-closers': {
+      id: '/admin/agenda-closers'
+      path: '/admin/agenda-closers'
+      fullPath: '/admin/agenda-closers'
+      preLoaderRoute: typeof AdminAgendaClosersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/afiliados': {
       id: '/admin/afiliados'
       path: '/admin/afiliados'
@@ -2559,6 +2579,7 @@ const rootRouteChildren: RootRouteChildren = {
   AbrirAppDocumentosRoute: AbrirAppDocumentosRoute,
   AdminAdicionarUsuariosRoute: AdminAdicionarUsuariosRoute,
   AdminAfiliadosRoute: AdminAfiliadosRoute,
+  AdminAgendaClosersRoute: AdminAgendaClosersRoute,
   AdminAprovacoesRoute: AdminAprovacoesRoute,
   AdminCentralErrosRoute: AdminCentralErrosRoute,
   AdminColaboradoresRoute: AdminColaboradoresRoute,

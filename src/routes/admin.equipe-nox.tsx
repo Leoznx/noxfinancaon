@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
+import { createFileRoute, Navigate, useNavigate, useSearch } from "@tanstack/react-router";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useCallback, useEffect, useState } from "react";
@@ -38,14 +38,12 @@ import { toast } from "sonner";
 import {
   Users2,
   Target,
-  Bell,
   DollarSign,
   ChevronLeft,
   ChevronRight,
   Users,
   Briefcase,
   Gift,
-  History,
   Clock3,
 } from "lucide-react";
 import { z } from "zod";
@@ -55,12 +53,14 @@ import { useAuth } from "@/components/AuthProvider";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { formatMoney, formatDateTime, toDatetimeLocal } from "@/lib/vendedor-portal";
 import {
-  fetchSellerTeamMonthlyProgress,
-  type SellerTeamMonthlyProgress,
-} from "@/lib/seller-progress";
-import { TabAuditoria, TabColaboradores, TabEquipeComercial } from "./admin.equipe-permissoes";
+  fetchTeamGoalProgress,
+  saveTeamMeetingGoals,
+  type TeamGoalProgress,
+} from "@/lib/admin-team-goals";
+import { TabColaboradores, TabEquipeComercial } from "./admin.equipe-permissoes";
 import { SellerRewardsTab } from "@/components/admin/SellerRewardsTab";
 import { TimeClockHistoryTab } from "@/components/admin/TimeClockHistoryTab";
+import { NoxEmployeeInviteCards } from "@/components/admin/NoxEmployeeInviteCards";
 
 const VALID_TABS = [
   "metas",
@@ -73,6 +73,7 @@ const VALID_TABS = [
   "auditoria",
 ] as const;
 type TabKey = (typeof VALID_TABS)[number];
+type VisibleTabKey = Exclude<TabKey, "equipe-comercial">;
 
 const searchSchema = z.object({ tab: z.enum(VALID_TABS).optional() });
 
@@ -89,10 +90,14 @@ function EquipeNoxPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const search = useSearch({ from: "/admin/equipe-nox" });
-  const activeTab: TabKey = (search.tab as TabKey) ?? "metas";
-  const setTab = (t: TabKey) =>
+  const requestedTab: TabKey = (search.tab as TabKey) ?? "metas";
+  const activeTab: VisibleTabKey = requestedTab === "equipe-comercial" ? "comissoes" : requestedTab;
+  const setTab = (t: VisibleTabKey) =>
     navigate({ to: "/admin/equipe-nox", search: { tab: t } as any, replace: true });
-  const canManageTimeClock = user?.role === "admin" || user?.role === "admin_master" || user?.internalRole === "admin_master";
+  const canManageTimeClock =
+    user?.role === "admin" ||
+    user?.role === "admin_master" ||
+    user?.internalRole === "admin_master";
 
   return (
     <DashboardLayout>
@@ -104,12 +109,12 @@ function EquipeNoxPage() {
           <div>
             <h1 className="text-2xl font-bold text-neutral-950">Equipe NOX</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Metas, jornada, agenda, comissões, colaboradores e auditoria em um só lugar.
+              Contas, metas, comissões, colaboradores e jornada em um só lugar.
             </p>
           </div>
         </div>
 
-        <Tabs value={activeTab} onValueChange={(v) => setTab(v as TabKey)}>
+        <Tabs value={activeTab} onValueChange={(v) => setTab(v as VisibleTabKey)}>
           <TabsList className="h-auto w-full flex-wrap justify-start">
             <TabsTrigger value="metas">
               <Target className="mr-2 h-4 w-4" />
@@ -119,30 +124,20 @@ function EquipeNoxPage() {
               <Gift className="mr-2 h-4 w-4" />
               Recompensas
             </TabsTrigger>
-            <TabsTrigger value="agenda">
-              <Bell className="mr-2 h-4 w-4" />
-              Agenda
-            </TabsTrigger>
             <TabsTrigger value="comissoes">
               <DollarSign className="mr-2 h-4 w-4" />
-              Comissões
+              Comissões e equipe
             </TabsTrigger>
             <TabsTrigger value="colaboradores">
               <Users className="mr-2 h-4 w-4" />
               Colaboradores
             </TabsTrigger>
-            <TabsTrigger value="equipe-comercial">
-              <Briefcase className="mr-2 h-4 w-4" />
-              Equipe Comercial
-            </TabsTrigger>
-            {canManageTimeClock && <TabsTrigger value="historico-ponto">
-              <Clock3 className="mr-2 h-4 w-4" />
-              Histórico de ponto
-            </TabsTrigger>}
-            <TabsTrigger value="auditoria">
-              <History className="mr-2 h-4 w-4" />
-              Auditoria
-            </TabsTrigger>
+            {canManageTimeClock && (
+              <TabsTrigger value="historico-ponto">
+                <Clock3 className="mr-2 h-4 w-4" />
+                Histórico de ponto
+              </TabsTrigger>
+            )}
           </TabsList>
           <TabsContent value="metas" className="mt-4">
             <TabMetas />
@@ -151,22 +146,24 @@ function EquipeNoxPage() {
             <SellerRewardsTab />
           </TabsContent>
           <TabsContent value="agenda" className="mt-4">
-            <TabAgenda />
+            <Navigate to="/admin/agenda-closers" replace />
           </TabsContent>
           <TabsContent value="comissoes" className="mt-4">
-            <TabComissoes />
+            <TabComissoesEquipe
+              initialView={requestedTab === "equipe-comercial" ? "equipe" : "comissoes"}
+            />
           </TabsContent>
           <TabsContent value="colaboradores" className="mt-4">
+            <NoxEmployeeInviteCards />
             <TabColaboradores />
           </TabsContent>
-          <TabsContent value="equipe-comercial" className="mt-4">
-            <TabEquipeComercial />
-          </TabsContent>
-          {canManageTimeClock && <TabsContent value="historico-ponto" className="mt-4">
-            <TimeClockHistoryTab />
-          </TabsContent>}
+          {canManageTimeClock && (
+            <TabsContent value="historico-ponto" className="mt-4">
+              <TimeClockHistoryTab />
+            </TabsContent>
+          )}
           <TabsContent value="auditoria" className="mt-4">
-            <TabAuditoria />
+            <Navigate to="/admin/equipe-nox" search={{ tab: "metas" } as any} replace />
           </TabsContent>
         </Tabs>
       </div>
@@ -207,15 +204,17 @@ function TabMetas() {
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
-  const [linhas, setLinhas] = useState<SellerTeamMonthlyProgress[]>([]);
-  const [edits, setEdits] = useState<Record<string, string>>({});
+  const [linhas, setLinhas] = useState<TeamGoalProgress[]>([]);
+  const [edits, setEdits] = useState<
+    Record<string, { daily: string; weekly: string; monthly: string }>
+  >({});
   const [loading, setLoading] = useState(true);
   const [salvandoId, setSalvandoId] = useState<string | null>(null);
 
   const carregar = useCallback(async () => {
     setLoading(true);
     try {
-      setLinhas(await fetchSellerTeamMonthlyProgress(month, year));
+      setLinhas(await fetchTeamGoalProgress(month, year));
       setEdits({});
     } catch (error: any) {
       toast.error(error.message || "Não foi possível carregar as metas da equipe.");
@@ -249,67 +248,99 @@ function TabMetas() {
     };
   }, [carregar]);
 
-  const salvar = async (linha: SellerTeamMonthlyProgress) => {
-    const edit = edits[linha.seller_id] ??
-      (linha.target_clients == null ? "" : String(linha.target_clients));
-    const targetClients = Number(edit);
-    if (edit.trim() === "" || !Number.isInteger(targetClients) || targetClients < 0) {
-      toast.error("Preencha a meta de cadastros com um número inteiro igual ou maior que zero.");
+  const salvar = async (linha: TeamGoalProgress) => {
+    const scheduled = linha.seller_type === "sdr";
+    const values = edits[linha.seller_id] ?? {
+      daily: String(
+        scheduled
+          ? (linha.target_meetings_scheduled_daily ?? "")
+          : (linha.target_meetings_completed_daily ?? ""),
+      ),
+      weekly: String(
+        scheduled
+          ? (linha.target_meetings_scheduled_weekly ?? "")
+          : (linha.target_meetings_completed_weekly ?? ""),
+      ),
+      monthly: String(
+        scheduled
+          ? (linha.target_meetings_scheduled_monthly ?? "")
+          : (linha.target_meetings_completed_monthly ?? ""),
+      ),
+    };
+    const targets = {
+      daily: Number(values.daily),
+      weekly: Number(values.weekly),
+      monthly: Number(values.monthly),
+    };
+    if (
+      Object.values(values).some((value) => value.trim() === "") ||
+      Object.values(targets).some((value) => !Number.isInteger(value) || value < 0)
+    ) {
+      toast.error("Preencha as metas diária, semanal e mensal com números inteiros.");
       return;
     }
     setSalvandoId(linha.seller_id);
-    const { error } = await supabase.from("seller_goals" as any).upsert(
-      {
-        seller_id: linha.seller_id,
-        month,
-        year,
-        target_meetings: 0,
-        target_clients: targetClients,
-        target_contracts: 0,
-      },
-      { onConflict: "seller_id,month,year" },
-    );
-    setSalvandoId(null);
-    if (error) {
-      toast.error(error.message);
+    try {
+      await saveTeamMeetingGoals(linha, month, year, targets);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível salvar.");
+      setSalvandoId(null);
       return;
     }
-    toast.success(`Meta de cadastros de ${linha.seller_name} atualizada.`);
+    setSalvandoId(null);
+    toast.success(`Metas de ${linha.seller_name} atualizadas.`);
     registrarAuditoria({
       actorUserId: user?.id,
       actorRole: user?.internalRole || user?.role,
-      action: "definir_metas_mensais",
+      action: "definir_metas_reunioes_por_periodo",
       tableName: "seller_goals",
       recordId: linha.seller_id,
-      before: {
-        target_meetings: linha.target_meetings,
-        target_clients: linha.target_clients,
-        target_contracts: linha.target_contracts,
-        month,
-        year,
-      },
-      after: {
-        target_meetings: 0,
-        target_clients: targetClients,
-        target_contracts: 0,
-        month,
-        year,
-      },
+      before: linha,
+      after: { ...targets, seller_type: linha.seller_type, month, year },
     });
     void carregar();
   };
 
-  const updateEdit = (linha: SellerTeamMonthlyProgress, value: string) => {
-    setEdits((current) => ({ ...current, [linha.seller_id]: value }));
+  const updateEdit = (
+    linha: TeamGoalProgress,
+    period: "daily" | "weekly" | "monthly",
+    value: string,
+  ) => {
+    const scheduled = linha.seller_type === "sdr";
+    const initial = {
+      daily: String(
+        scheduled
+          ? (linha.target_meetings_scheduled_daily ?? "")
+          : (linha.target_meetings_completed_daily ?? ""),
+      ),
+      weekly: String(
+        scheduled
+          ? (linha.target_meetings_scheduled_weekly ?? "")
+          : (linha.target_meetings_completed_weekly ?? ""),
+      ),
+      monthly: String(
+        scheduled
+          ? (linha.target_meetings_scheduled_monthly ?? "")
+          : (linha.target_meetings_completed_monthly ?? ""),
+      ),
+    };
+    setEdits((current) => ({
+      ...current,
+      [linha.seller_id]: {
+        ...(current[linha.seller_id] ?? initial),
+        [period]: value.replace(/\D/g, ""),
+      },
+    }));
   };
 
   return (
     <Card>
       <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
         <div>
-          <CardTitle>Meta mensal de cadastros por vendedor</CardTitle>
+          <CardTitle>Metas de reuniões por SDR e Closer</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Defina a prioridade de novos parceiros cadastrados. O progresso é automático e atualizado em tempo real.
+            SDR contabiliza reuniões marcadas; Closer contabiliza reuniões realizadas. O progresso
+            atualiza em tempo real.
           </p>
         </div>
         <SeletorMes
@@ -330,14 +361,54 @@ function TabMetas() {
           </p>
         ) : (
           linhas.map((linha) => {
-            const edit = edits[linha.seller_id];
+            const scheduled = linha.seller_type === "sdr";
+            const edit = edits[linha.seller_id] ?? {
+              daily: String(
+                scheduled
+                  ? (linha.target_meetings_scheduled_daily ?? "")
+                  : (linha.target_meetings_completed_daily ?? ""),
+              ),
+              weekly: String(
+                scheduled
+                  ? (linha.target_meetings_scheduled_weekly ?? "")
+                  : (linha.target_meetings_completed_weekly ?? ""),
+              ),
+              monthly: String(
+                scheduled
+                  ? (linha.target_meetings_scheduled_monthly ?? "")
+                  : (linha.target_meetings_completed_monthly ?? ""),
+              ),
+            };
+            const current = scheduled
+              ? {
+                  daily: linha.meetings_scheduled_daily,
+                  weekly: linha.meetings_scheduled_weekly,
+                  monthly: linha.meetings_scheduled_monthly,
+                }
+              : {
+                  daily: linha.meetings_completed_daily,
+                  weekly: linha.meetings_completed_weekly,
+                  monthly: linha.meetings_completed_monthly,
+                };
             return (
               <div
                 key={linha.seller_id}
                 className="space-y-4 rounded-xl border border-neutral-100 p-4"
               >
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="font-bold text-neutral-950">{linha.seller_name}</p>
+                  <div>
+                    <p className="font-bold text-neutral-950">{linha.seller_name}</p>
+                    <Badge
+                      variant="outline"
+                      className={
+                        scheduled
+                          ? "mt-1 border-yellow-300 bg-yellow-50"
+                          : "mt-1 border-emerald-300 bg-emerald-50"
+                      }
+                    >
+                      {scheduled ? "SDR · reuniões marcadas" : "Closer · reuniões realizadas"}
+                    </Badge>
+                  </div>
                   <Button
                     size="sm"
                     disabled={salvandoId === linha.seller_id}
@@ -346,16 +417,27 @@ function TabMetas() {
                     {salvandoId === linha.seller_id ? "Salvando…" : "Salvar meta"}
                   </Button>
                 </div>
-                <div className="grid gap-3 lg:grid-cols-1">
+                <div className="grid gap-3 md:grid-cols-3">
                   <MetaEditor
-                    label="Cadastros realizados"
-                    current={linha.clients_registered}
-                    target={linha.target_clients}
-                    value={
-                      edit ??
-                      (linha.target_clients == null ? "" : String(linha.target_clients))
-                    }
-                    onChange={(value) => updateEdit(linha, value)}
+                    label="Meta por dia"
+                    current={current.daily}
+                    target={Number(edit.daily || 0)}
+                    value={edit.daily}
+                    onChange={(value) => updateEdit(linha, "daily", value)}
+                  />
+                  <MetaEditor
+                    label="Meta por semana"
+                    current={current.weekly}
+                    target={Number(edit.weekly || 0)}
+                    value={edit.weekly}
+                    onChange={(value) => updateEdit(linha, "weekly", value)}
+                  />
+                  <MetaEditor
+                    label="Meta por mês"
+                    current={current.monthly}
+                    target={Number(edit.monthly || 0)}
+                    value={edit.monthly}
+                    onChange={(value) => updateEdit(linha, "monthly", value)}
                   />
                 </div>
               </div>
@@ -669,6 +751,43 @@ function TabAgenda() {
 }
 
 /* ===================== COMISSÕES ===================== */
+function TabComissoesEquipe({ initialView }: { initialView: "comissoes" | "equipe" }) {
+  const [view, setView] = useState(initialView);
+
+  useEffect(() => setView(initialView), [initialView]);
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm">
+        <div className="mb-3 px-1">
+          <h2 className="font-black text-neutral-950">Controle comercial</h2>
+          <p className="text-sm text-muted-foreground">
+            Selecione entre lançamentos de comissão e desempenho da equipe comercial.
+          </p>
+        </div>
+        <Tabs value={view} onValueChange={(value) => setView(value as "comissoes" | "equipe")}>
+          <TabsList className="h-auto w-full justify-start">
+            <TabsTrigger value="comissoes">
+              <DollarSign className="mr-2 h-4 w-4" />
+              Comissões
+            </TabsTrigger>
+            <TabsTrigger value="equipe">
+              <Briefcase className="mr-2 h-4 w-4" />
+              Equipe comercial
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="comissoes" className="mt-4">
+            <TabComissoes />
+          </TabsContent>
+          <TabsContent value="equipe" className="mt-4">
+            <TabEquipeComercial />
+          </TabsContent>
+        </Tabs>
+      </div>
+    </div>
+  );
+}
+
 const STATUS_COMISSAO = [
   { v: "aguardando_primeira_parcela", l: "Aguardando 1ª parcela" },
   { v: "pendente", l: "Pendente" },
@@ -690,19 +809,20 @@ function TabComissoes() {
   const [loading, setLoading] = useState(true);
   const [openNovo, setOpenNovo] = useState(false);
   const [editando, setEditando] = useState<any | null>(null);
+  const [detalheSellerId, setDetalheSellerId] = useState<string | null>(null);
 
   const carregar = useCallback(async () => {
     setLoading(true);
     const [{ data: vs }, { data: rows }] = await Promise.all([
       supabase
         .from("internal_users" as any)
-        .select("id, full_name")
+        .select("id, full_name, seller_type")
         .eq("role", "vendedor")
         .eq("status", "ativo")
         .order("full_name"),
       supabase
         .from("seller_commissions" as any)
-        .select("*, internal_users(full_name)")
+        .select("*, internal_users(full_name, seller_type)")
         .eq("month", month)
         .eq("year", year)
         .order("created_at", { ascending: false }),
@@ -713,6 +833,19 @@ function TabComissoes() {
   }, [month, year]);
   useEffect(() => {
     carregar();
+  }, [carregar]);
+  useEffect(() => {
+    const refresh = () => void carregar();
+    const channel = supabase
+      .channel("admin-team-commissions-live")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "seller_commissions" },
+        refresh,
+      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "internal_users" }, refresh)
+      .subscribe();
+    return () => void supabase.removeChannel(channel);
   }, [carregar]);
 
   const salvar = async (form: any) => {
@@ -761,6 +894,33 @@ function TabComissoes() {
 
   return (
     <div className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {vendedores.map((vendedor) => {
+          const historico = linhas.filter((linha) => linha.seller_id === vendedor.id);
+          const total = historico.reduce(
+            (sum, linha) =>
+              sum + Number(linha.commission_amount || 0) + Number(linha.bonus_amount || 0),
+            0,
+          );
+          return (
+            <button
+              type="button"
+              key={vendedor.id}
+              onClick={() => setDetalheSellerId(vendedor.id)}
+              className="rounded-xl border border-neutral-200 bg-white p-4 text-left transition hover:border-yellow-400 hover:shadow-sm"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <strong className="truncate text-sm">{vendedor.full_name}</strong>
+                <Badge variant="outline">{(vendedor.seller_type || "sdr").toUpperCase()}</Badge>
+              </div>
+              <p className="mt-3 text-2xl font-black">{formatMoney(total)}</p>
+              <p className="text-xs text-neutral-500">
+                {historico.length} lançamento(s) · clique para o histórico
+              </p>
+            </button>
+          );
+        })}
+      </div>
       <Card>
         <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
           <div>
@@ -892,6 +1052,55 @@ function TabComissoes() {
           onSubmit={salvar}
         />
       )}
+      <Dialog open={!!detalheSellerId} onOpenChange={(open) => !open && setDetalheSellerId(null)}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>
+              Histórico detalhado ·{" "}
+              {vendedores.find((item) => item.id === detalheSellerId)?.full_name}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="max-h-[60vh] space-y-2 overflow-y-auto">
+            {linhas
+              .filter((linha) => linha.seller_id === detalheSellerId)
+              .map((linha) => (
+                <div
+                  key={linha.id}
+                  className="grid gap-2 rounded-xl border p-3 text-sm sm:grid-cols-[1fr_auto_auto]"
+                >
+                  <div>
+                    <p className="font-bold">
+                      {STATUS_COMISSAO.find((item) => item.v === linha.status)?.l || linha.status}
+                    </p>
+                    <p className="text-xs text-neutral-500">
+                      {formatDateTime(linha.created_at)} · contrato{" "}
+                      {linha.contract_id || "lançamento manual"}
+                    </p>
+                  </div>
+                  <span>
+                    Comissão + bônus
+                    <br />
+                    <b>
+                      {formatMoney(
+                        Number(linha.commission_amount || 0) + Number(linha.bonus_amount || 0),
+                      )}
+                    </b>
+                  </span>
+                  <span>
+                    Liberado
+                    <br />
+                    <b>{formatMoney(linha.released_amount)}</b>
+                  </span>
+                </div>
+              ))}
+            {linhas.filter((linha) => linha.seller_id === detalheSellerId).length === 0 && (
+              <p className="py-8 text-center text-sm text-muted-foreground">
+                Nenhum lançamento neste mês.
+              </p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

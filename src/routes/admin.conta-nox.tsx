@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { DashboardLayout } from "@/components/DashboardLayout";
@@ -60,7 +60,7 @@ import { setSellerTimeClockEnabled } from "@/lib/time-clock";
 export const Route = createFileRoute("/admin/conta-nox")({
   component: () => (
     <ProtectedRoute roles={["admin", "admin_master", "analista"]}>
-      <ContaNoxPage />
+      <Navigate to="/admin/equipe-nox" search={{ tab: "colaboradores" } as any} replace />
     </ProtectedRoute>
   ),
 });

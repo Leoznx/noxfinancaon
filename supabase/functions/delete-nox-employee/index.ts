@@ -118,6 +118,9 @@ serve(async (req) => {
         email: deletedEmail,
         phone: null,
         status: "excluido",
+        seller_type: null,
+        time_clock_enabled: false,
+        exclude_from_commercial_metrics: true,
       })
       .eq("id", employeeId),
     admin
