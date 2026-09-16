@@ -26,7 +26,7 @@ const CARDS = [
     description: "aguardando contato",
     icon: PhoneForwarded,
     value: (summary: AgendaSummary) => summary.pendingFollowups,
-    tone: "bg-violet-50 text-violet-700",
+    tone: "bg-amber-100 text-amber-800",
   },
   {
     key: "meetings" as const,

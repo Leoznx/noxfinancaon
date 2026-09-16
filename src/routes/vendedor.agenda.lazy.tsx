@@ -77,7 +77,7 @@ function AgendaPage() {
   const [deleteTarget, setDeleteTarget] = useState<SellerAppointment | null>(null);
   const realtimeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const load = useCallback(async (silent = false) => {
+  const load = useCallback(async (silent = false, requestedMonth = month) => {
     if (silent) setRefreshing(true);
     else setLoading(true);
     setError("");
@@ -87,7 +87,7 @@ function AgendaPage() {
       setSellerId(context.sellerId);
       setSellerName(context.sellerName);
       setSellerType(context.sellerType);
-      const data = await fetchSellerAgenda(context.sellerId, month);
+      const data = await fetchSellerAgenda(context.sellerId, requestedMonth);
       setAppointments(data.appointments);
       setSummary(data.summary);
       setLeads(data.leads);
@@ -100,6 +100,16 @@ function AgendaPage() {
       setRefreshing(false);
     }
   }, [month]);
+
+  const refreshAgenda = useCallback(async (focusDate?: Date) => {
+    const requestedMonth = focusDate ? startOfMonth(focusDate) : month;
+    if (focusDate) {
+      setMonth(requestedMonth);
+      setSelectedDate(focusDate);
+      setFilter("todos");
+    }
+    await load(true, requestedMonth);
+  }, [load, month]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
@@ -193,7 +203,9 @@ function AgendaPage() {
     setViewing(null);
     try {
       await setSellerAppointmentStatus(sellerId, item.id, "concluido");
-      toast.success("Compromisso concluído com sucesso.");
+      toast.success(item.type === "reuniao" && (item.assigned_closer_id || sellerType === "closer")
+        ? "Reunião concluída. Follow-ups de 24 horas e 4 dias adicionados à agenda de quem marcou."
+        : "Compromisso concluído com sucesso.");
       await load(true);
     } catch (statusError) {
       setAppointments(previous);
@@ -255,7 +267,7 @@ function AgendaPage() {
           sellerId={sellerId}
           sellerName={sellerName}
           appointments={appointments}
-          onRefresh={() => load(true)}
+          onRefresh={refreshAgenda}
         />
 
         <AgendaSummaryCards summary={summary} loading={loading} onSelect={handleSummaryAction} />

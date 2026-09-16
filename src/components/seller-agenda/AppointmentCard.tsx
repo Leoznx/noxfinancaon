@@ -13,8 +13,8 @@ import {
 } from "@/lib/seller-agenda";
 
 const TYPE_STYLE: Record<string, string> = {
-  reuniao: "border-sky-200 bg-sky-100 text-sky-800",
-  follow_up: "border-violet-200 bg-violet-100 text-violet-800",
+  reuniao: "border-emerald-200 bg-emerald-100 text-emerald-900",
+  follow_up: "border-amber-300 bg-amber-100 text-amber-900",
   visita: "border-lime-200 bg-lime-100 text-lime-800",
   call: "border-cyan-200 bg-cyan-100 text-cyan-800",
   retorno: "border-emerald-200 bg-emerald-100 text-emerald-800",

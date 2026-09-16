@@ -51,13 +51,15 @@ export type SellerAppointment = {
   scheduled_at: string;
   reminder_minutes: number | null;
   notes: string | null;
-  source: "manual" | "admin" | "lead_follow_up" | "sdr_handoff";
+  source: "manual" | "admin" | "lead_follow_up" | "sdr_handoff" | "meeting_follow_up";
   sdr_id: string | null;
   assigned_closer_id: string | null;
   duration_minutes: number;
   contact_name: string | null;
   contact_email: string | null;
   contact_phone: string | null;
+  origin_appointment_id: string | null;
+  follow_up_offset_days: number | null;
   completed_at: string | null;
   created_at: string;
   updated_at: string;
@@ -212,6 +214,12 @@ export function getAppointmentContact(
   };
 }
 
+export function formatSharedMeetingTitle(profileLabel: string, contactName: string) {
+  const profile = profileLabel.trim() || "Cliente";
+  const contact = contactName.trim() || "Contato não informado";
+  return `${profile} — ${contact}`;
+}
+
 export function sellerAgendaRange(month: Date) {
   const start = startOfWeek(startOfMonth(month), { weekStartsOn: 0 });
   const end = addDays(endOfWeek(endOfMonth(month), { weekStartsOn: 0 }), 1);
@@ -246,7 +254,7 @@ export async function fetchSellerAgenda(
     supabase
       .from("seller_appointments" as any)
       .select(
-        "id, seller_id, sdr_id, assigned_closer_id, lead_id, partnership_id, title, type, status, priority, scheduled_at, reminder_minutes, notes, source, completed_at, duration_minutes, contact_name, contact_email, contact_phone, created_at, updated_at, sales_leads(full_name, email, phone)",
+        "id, seller_id, sdr_id, assigned_closer_id, lead_id, partnership_id, title, type, status, priority, scheduled_at, reminder_minutes, notes, source, completed_at, duration_minutes, contact_name, contact_email, contact_phone, origin_appointment_id, follow_up_offset_days, created_at, updated_at, sales_leads(full_name, email, phone)",
       )
       .or(`seller_id.eq.${sellerId},sdr_id.eq.${sellerId},assigned_closer_id.eq.${sellerId}`)
       .gte("scheduled_at", start.toISOString())
@@ -276,6 +284,8 @@ export async function fetchSellerAgenda(
     contact_name: row.contact_name ?? null,
     contact_email: row.contact_email ?? null,
     contact_phone: row.contact_phone ?? null,
+    origin_appointment_id: row.origin_appointment_id ?? null,
+    follow_up_offset_days: row.follow_up_offset_days ?? null,
     lead_name: row.sales_leads?.full_name ?? null,
     lead_email: row.sales_leads?.email ?? null,
     lead_phone: row.sales_leads?.phone ?? null,

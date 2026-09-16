@@ -1,6 +1,11 @@
 import { CalendarDays, List } from "lucide-react";
 import { AGENDA_FILTERS, type AgendaFilter, type AgendaViewMode } from "@/lib/seller-agenda";
 
+const ACTIVE_FILTER_STYLE: Partial<Record<AgendaFilter, string>> = {
+  reuniao: "border-emerald-700 bg-emerald-600 text-white",
+  follow_up: "border-amber-400 bg-amber-300 text-amber-950",
+};
+
 export function AgendaControls({
   view,
   filter,
@@ -43,7 +48,7 @@ export function AgendaControls({
             onClick={() => onFilterChange(option.value)}
             className={`h-7 shrink-0 rounded-full border px-3 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400 ${
               filter === option.value
-                ? "border-neutral-950 bg-neutral-950 text-white"
+                ? ACTIVE_FILTER_STYLE[option.value] ?? "border-neutral-950 bg-neutral-950 text-white"
                 : "border-neutral-200 bg-white text-neutral-600 hover:border-yellow-300 hover:bg-yellow-50"
             }`}
           >

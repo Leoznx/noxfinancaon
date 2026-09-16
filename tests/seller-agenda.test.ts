@@ -4,6 +4,7 @@ import {
   agendaStatusLabel,
   agendaTypeKey,
   appointmentMatchesFilter,
+  formatSharedMeetingTitle,
   getAppointmentContact,
   sellerAgendaRange,
   type SellerAppointment,
@@ -29,6 +30,8 @@ function appointment(overrides: Partial<SellerAppointment> = {}): SellerAppointm
     contact_name: null,
     contact_email: null,
     contact_phone: null,
+    origin_appointment_id: null,
+    follow_up_offset_days: null,
     completed_at: null,
     created_at: "2026-08-24T10:00:00.000Z",
     updated_at: "2026-08-24T10:00:00.000Z",
@@ -88,4 +91,9 @@ test("detalhes usam os dados do lead quando a reunião não possui contato próp
     name: "Cliente do lead",
     phone: "(47) 98888-7777",
   });
+});
+
+test("título principal combina perfil e nome do cliente", () => {
+  assert.equal(formatSharedMeetingTitle("Corretor", "Simone Ferreira"), "Corretor — Simone Ferreira");
+  assert.equal(formatSharedMeetingTitle("Imobiliária", "Primmê Imóveis"), "Imobiliária — Primmê Imóveis");
 });

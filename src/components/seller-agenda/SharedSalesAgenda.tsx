@@ -38,6 +38,7 @@ import {
   buildShortNameValueMap,
   fetchCloserAvailability,
   firstNameOnly,
+  formatSharedMeetingTitle,
   getSharedMeetingMetadata,
   rescheduleSharedMeeting,
   scheduleSdrCloserMeeting,
@@ -55,7 +56,7 @@ type Props = {
   sellerId: string | null;
   sellerName: string | null;
   appointments: SellerAppointment[];
-  onRefresh: () => Promise<void>;
+  onRefresh: (focusDate?: Date) => Promise<void>;
 };
 
 const CLIENT_TYPES: Array<{
@@ -84,7 +85,7 @@ export function SharedSalesAgenda({ sellerType, sellerId, sellerName, appointmen
   return null;
 }
 
-function SdrScheduler({ sellerName, onRefresh }: { sellerName: string | null; onRefresh: () => Promise<void> }) {
+function SdrScheduler({ sellerName, onRefresh }: { sellerName: string | null; onRefresh: (focusDate?: Date) => Promise<void> }) {
   const today = useMemo(() => startOfDay(new Date()), []);
   const [month, setMonth] = useState(() => startOfMonth(today));
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -173,7 +174,7 @@ function SdrScheduler({ sellerName, onRefresh }: { sellerName: string | null; on
       ].filter(Boolean).join("\n");
       const meeting = await scheduleSdrCloserMeeting({
         slotStart: selected.slot_start,
-        title: `Apresentação NOX — ${contactName}`,
+        title: formatSharedMeetingTitle(typeConfig.label, contactName),
         contactName,
         contactPhone,
         notes,
@@ -181,7 +182,7 @@ function SdrScheduler({ sellerName, onRefresh }: { sellerName: string | null; on
       toast.success(`Reunião de 1 hora distribuída para ${closerNames.get(meeting.closer_id) ?? firstNameOnly(meeting.closer_name)}. Os e-mails de confirmação serão enviados automaticamente.`);
       resetClientForm();
       setSelected(null);
-      await Promise.all([loadSlots(selectedDate), onRefresh()]);
+      await Promise.all([loadSlots(selectedDate), onRefresh(new Date(selected.slot_start))]);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Não foi possível agendar a reunião.");
       await loadSlots(selectedDate);
