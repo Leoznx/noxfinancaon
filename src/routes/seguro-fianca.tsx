@@ -13,12 +13,12 @@ import {
 export const Route = createFileRoute('/seguro-fianca')({
   head: () => ({
     meta: [
-      { title: 'Seguro Fiança | NOX Fiança' },
+      { title: 'NOX FIANÇA' },
       {
         name: 'description',
         content: 'Entenda como funciona o seguro fiança da NOX, compare a locação com e sem a garantia e conheça os benefícios para inquilinos, proprietários, corretores e imobiliárias.',
       },
-      { property: 'og:title', content: 'Seguro Fiança Digital | NOX Fiança' },
+      { property: 'og:title', content: 'NOX FIANÇA' },
       { property: 'og:description', content: 'Alugue sem fiador e sem caução, com análise rápida e contratação digital.' },
       { property: 'og:type', content: 'website' },
       { property: 'og:url', content: 'https://www.noxfianca.com/seguro-fianca' },

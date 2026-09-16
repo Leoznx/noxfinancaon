@@ -18,9 +18,9 @@ import {
 export const Route = createFileRoute("/sobre")({
   head: () => ({
     meta: [
-      { title: "Sobre a NOX Fiança — A nova forma de garantir locações" },
+      { title: "NOX FIANÇA" },
       { name: "description", content: "Conheça a NOX Fiança: plataforma nacional de garantia locatícia que conecta corretores, imobiliárias, proprietários e inquilinos com tecnologia, segurança e agilidade." },
-      { property: "og:title", content: "Sobre a NOX Fiança" },
+      { property: "og:title", content: "NOX FIANÇA" },
       { property: "og:description", content: "A nova forma de garantir locações no Brasil — digital, segura e nacional." },
     ],
   }),

@@ -13,9 +13,9 @@ import { useState, useEffect } from "react";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "NOX - Seguro Fiança" },
+      { title: "NOX FIANÇA" },
       { name: "description", content: "Plataforma de seguro fiança 100% digital. Aprovação em até 1 minuto, cobertura de até 40x o aluguel, sem fiador e sem caução." },
-      { property: "og:title", content: "NOX FIANÇA — Seguro Fiança Digital" },
+      { property: "og:title", content: "NOX FIANÇA" },
       { property: "og:description", content: "Aprovação em até 1 minuto, sem fiador e sem caução." },
       { property: "og:type", content: "website" },
       { property: "og:url", content: "https://www.noxfianca.com" },

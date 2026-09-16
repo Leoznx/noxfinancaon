@@ -14,13 +14,13 @@ import { PostReactions } from "@/components/blog/PostReactions";
 export const Route = createFileRoute("/blog/")({
   head: () => ({
     meta: [
-      { title: "Blog NOX Fiança — Locação, garantia locatícia e mercado imobiliário" },
+      { title: "NOX FIANÇA" },
       { name: "description", content: "Guias completos, dicas e novidades sobre garantia locatícia, seguro fiança, aluguel sem fiador e mercado imobiliário para corretores, imobiliárias, proprietários e inquilinos." },
       { name: "keywords", content: "garantia locatícia, seguro fiança, aluguel sem fiador, caução, fiador, locação, NOX Fiança" },
-      { property: "og:title", content: "Blog NOX Fiança" },
+      { property: "og:title", content: "NOX FIANÇA" },
       { property: "og:description", content: "Central de conteúdos sobre locação, garantia e mercado imobiliário." },
       { property: "og:type", content: "website" },
-      { property: "og:image", content: "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?q=80&w=1600&auto=format&fit=crop" },
+      { property: "og:image", content: "https://noxfianca.com/nox-fianca-compartilhamento-2026.png" },
     ],
   }),
   component: BlogPage,

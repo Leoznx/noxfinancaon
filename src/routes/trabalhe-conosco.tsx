@@ -18,9 +18,9 @@ import { z } from "zod";
 export const Route = createFileRoute("/trabalhe-conosco")({
   head: () => ({
     meta: [
-      { title: "Trabalhe conosco — Faça parte do time NOX Fiança" },
+      { title: "NOX FIANÇA" },
       { name: "description", content: "Construa o futuro da garantia locatícia com a NOX. Veja vagas abertas e envie seu currículo em PDF para fazer parte do time." },
-      { property: "og:title", content: "Trabalhe conosco — NOX Fiança" },
+      { property: "og:title", content: "NOX FIANÇA" },
       { property: "og:description", content: "Vagas abertas e candidatura espontânea para entrar no time NOX." },
     ],
   }),

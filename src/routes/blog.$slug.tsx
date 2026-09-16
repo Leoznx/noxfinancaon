@@ -15,23 +15,21 @@ export const Route = createFileRoute("/blog/$slug")({
     const url = post ? `/blog/${post.slug}` : "/blog";
     return {
       meta: [
-        { title: post ? `${post.titulo} — Blog NOX Fiança` : "Artigo — Blog NOX Fiança" },
+        { title: "NOX FIANÇA" },
         { name: "description", content: post?.resumo ?? "Conteúdos sobre garantia locatícia." },
         { name: "keywords", content: post?.tags.join(", ") ?? "" },
         { name: "author", content: post?.autor ?? "NOX Fiança" },
-        { property: "og:title", content: post?.titulo ?? "Blog NOX Fiança" },
+        { property: "og:title", content: "NOX FIANÇA" },
         { property: "og:description", content: post?.resumo ?? "" },
         { property: "og:type", content: "article" },
         { property: "og:url", content: url },
         { property: "article:section", content: post?.categoria ?? "" },
         { property: "article:published_time", content: post?.data ?? "" },
         { name: "twitter:card", content: "summary_large_image" },
-        { name: "twitter:title", content: post?.titulo ?? "" },
+        { name: "twitter:title", content: "NOX FIANÇA" },
         { name: "twitter:description", content: post?.resumo ?? "" },
-        ...(post?.imageUrl ? [
-          { property: "og:image", content: post.imageUrl },
-          { name: "twitter:image", content: post.imageUrl },
-        ] : []),
+        { property: "og:image", content: "https://noxfianca.com/nox-fianca-compartilhamento-2026.png" },
+        { name: "twitter:image", content: "https://noxfianca.com/nox-fianca-compartilhamento-2026.png" },
       ],
       links: [{ rel: "canonical", href: url }],
       scripts: post ? [{

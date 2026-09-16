@@ -21,7 +21,7 @@ export const Route = createFileRoute("/cadastro-concluido")({
   // URL de conversão, não uma página de conteúdo: fora do índice de busca.
   head: () => ({
     meta: [
-      { title: "Cadastro concluído — NOX Fiança" },
+      { title: "NOX FIANÇA" },
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),

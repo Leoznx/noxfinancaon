@@ -33,9 +33,9 @@ export const Route = createFileRoute("/seja-parceiro")({
 
   head: () => ({
     meta: [
-      { title: "Seja Parceiro NOX Fiança — Indique e ganhe R$ 50,00" },
+      { title: "NOX FIANÇA" },
       { name: "description", content: "Participe do programa de parceiros e indicação da NOX Fiança. Ganhe R$ 50,00 por cada indicação que fechar o primeiro contrato." },
-      { property: "og:title", content: "Seja Parceiro NOX Fiança" },
+      { property: "og:title", content: "NOX FIANÇA" },
       { property: "og:description", content: "Indique, conecte e ganhe com a plataforma que está transformando a garantia locatícia no Brasil." },
     ],
   }),

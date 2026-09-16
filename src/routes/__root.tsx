@@ -18,6 +18,9 @@ import { ROTA_CADASTRO_CONCLUIDO, precisaMostrarCadastroConcluido } from "@/lib/
 
 import appCss from "../styles.css?url";
 
+const SITE_TITLE = "NOX FIANÇA";
+const SOCIAL_SHARE_IMAGE = "https://noxfianca.com/nox-fianca-compartilhamento-2026.png";
+
 /**
  * PageView em cada troca de rota. Como o site é uma SPA, o Google Ads e o Pixel
  * da Meta só contariam o primeiro carregamento se dependessem apenas do
@@ -36,6 +39,17 @@ function PageViewTracker() {
     }
 
     trackPageView();
+  }, [locationHref]);
+
+  return null;
+}
+
+/** Mantém o nome da aba idêntico em todas as rotas, inclusive nas telas internas. */
+function PageTitleSync() {
+  const locationHref = useRouterState({ select: (state) => state.location.href });
+
+  React.useEffect(() => {
+    document.title = SITE_TITLE;
   }, [locationHref]);
 
   return null;
@@ -160,7 +174,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "NOX Fiança — Seguro Fiança Digital sem Fiador" },
+      { title: SITE_TITLE },
       {
         name: "description",
         content:
@@ -175,28 +189,30 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "robots", content: "index, follow" },
       { name: "theme-color", content: "#0A0A0A" },
       { property: "og:type", content: "website" },
-      { property: "og:site_name", content: "NOX Fiança" },
-      { property: "og:title", content: "NOX Fiança — Seguro Fiança Digital sem Fiador" },
+      { property: "og:site_name", content: SITE_TITLE },
+      { property: "og:title", content: SITE_TITLE },
       {
         property: "og:description",
         content:
           "Aluguel sem fiador, sem caução e sem burocracia. Aprovação em até 1 minuto. 100% digital.",
       },
       { property: "og:url", content: "https://noxfianca.com" },
-      { property: "og:image", content: "https://noxfianca.com/og-image.png" },
+      { property: "og:image", content: SOCIAL_SHARE_IMAGE },
+      { property: "og:image:secure_url", content: SOCIAL_SHARE_IMAGE },
+      { property: "og:image:type", content: "image/png" },
       { property: "og:image:width", content: "1200" },
       { property: "og:image:height", content: "630" },
       { property: "og:image:alt", content: "NOX Fiança — Aluguel sem fiador, sem caução." },
       { property: "og:locale", content: "pt_BR" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:site", content: "@NoxFianca" },
-      { name: "twitter:title", content: "NOX Fiança — Seguro Fiança Digital sem Fiador" },
+      { name: "twitter:title", content: SITE_TITLE },
       {
         name: "twitter:description",
         content:
           "Aluguel sem fiador, sem caução e sem burocracia. Aprovação em até 1 minuto. 100% digital.",
       },
-      { name: "twitter:image", content: "https://noxfianca.com/og-image.png" },
+      { name: "twitter:image", content: SOCIAL_SHARE_IMAGE },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
@@ -252,7 +268,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
           alternateName: "NOX",
           url: "https://noxfianca.com",
           logo: "https://noxfianca.com/favicon-512.png",
-          image: "https://noxfianca.com/og-image.png",
+          image: SOCIAL_SHARE_IMAGE,
           description:
             "Seguro fiança digital com aprovação em até 1 minuto. Aluguel sem fiador, sem caução, 100% online.",
           address: {
@@ -328,6 +344,7 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
+        <PageTitleSync />
         <PageViewTracker />
         <PrimeiroAcessoRedirect />
         <Outlet />

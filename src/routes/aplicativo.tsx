@@ -16,12 +16,12 @@ import { LogoNox } from '@/components/LogoNox';
 export const Route = createFileRoute('/aplicativo')({
   head: () => ({
     meta: [
-      { title: 'Aplicativo NOX Fiança — sua operação no bolso' },
+      { title: 'NOX FIANÇA' },
       {
         name: 'description',
         content: 'Conheça o aplicativo da NOX Fiança para acompanhar análises, contratos, documentos, pagamentos e notificações em um só lugar.',
       },
-      { property: 'og:title', content: 'Aplicativo NOX Fiança' },
+      { property: 'og:title', content: 'NOX FIANÇA' },
       { property: 'og:description', content: 'Seguro fiança digital, simples e seguro, onde você estiver.' },
     ],
   }),

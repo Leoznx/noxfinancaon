@@ -10,12 +10,12 @@ import noxPlansHero from '@/assets/nox-plans-hero.png';
 export const Route = createFileRoute('/planos')({
   head: () => ({
     meta: [
-      { title: 'Planos e Coberturas | NOX Fiança' },
+      { title: 'NOX FIANÇA' },
       {
         name: 'description',
         content: 'Compare os planos NOX Smart, NOX Smart+ e NOX Up e escolha a cobertura adequada para sua locação residencial ou comercial.',
       },
-      { property: 'og:title', content: 'Planos e Coberturas | NOX Fiança' },
+      { property: 'og:title', content: 'NOX FIANÇA' },
       { property: 'og:description', content: 'Conheça as opções de cobertura da NOX para sua locação.' },
       { property: 'og:type', content: 'website' },
       { property: 'og:url', content: 'https://www.noxfianca.com/planos' },

@@ -9,13 +9,13 @@ import {
 export const Route = createFileRoute('/corretor')({
   head: () => ({
     meta: [
-      { title: 'Corretores | Venda mais com garantia locatícia | NOX Fiança' },
+      { title: 'NOX FIANÇA' },
       { name: 'description', content: 'Simule garantias, envie propostas, acompanhe contratos e receba comissões em uma plataforma feita para corretores.' },
-      { property: 'og:title', content: 'Corretores | Venda mais com garantia locatícia | NOX Fiança' },
+      { property: 'og:title', content: 'NOX FIANÇA' },
       { property: 'og:description', content: 'Simule garantias, envie propostas, acompanhe contratos e receba comissões em uma plataforma feita para corretores.' },
       { property: 'og:type', content: 'website' },
       { property: 'og:url', content: '/corretor' },
-      { property: 'og:image', content: 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?q=80&w=1600&auto=format&fit=crop' },
+      { property: 'og:image', content: 'https://noxfianca.com/nox-fianca-compartilhamento-2026.png' },
     ],
     links: [{ rel: 'canonical', href: '/corretor' }],
   }),

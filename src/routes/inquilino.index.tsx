@@ -9,13 +9,13 @@ import {
 export const Route = createFileRoute('/inquilino/')({
   head: () => ({
     meta: [
-      { title: 'Inquilino | Acesse faturas e documentos | NOX Fiança' },
+      { title: 'NOX FIANÇA' },
       { name: 'description', content: 'Crie seu acesso de inquilino para consultar seguros ativos, documentos, boletos, faturas e vencimentos vinculados ao seu CPF.' },
-      { property: 'og:title', content: 'Inquilino | Acesse faturas e documentos | NOX Fiança' },
+      { property: 'og:title', content: 'NOX FIANÇA' },
       { property: 'og:description', content: 'Crie seu acesso de inquilino para consultar seguros ativos, documentos, boletos, faturas e vencimentos vinculados ao seu CPF.' },
       { property: 'og:type', content: 'website' },
       { property: 'og:url', content: '/inquilino' },
-      { property: 'og:image', content: 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?q=80&w=1600&auto=format&fit=crop' },
+      { property: 'og:image', content: 'https://noxfianca.com/nox-fianca-compartilhamento-2026.png' },
     ],
     links: [{ rel: 'canonical', href: '/inquilino' }],
   }),

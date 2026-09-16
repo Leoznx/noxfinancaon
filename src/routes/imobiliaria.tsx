@@ -9,13 +9,13 @@ import {
 export const Route = createFileRoute('/imobiliaria')({
   head: () => ({
     meta: [
-      { title: 'Imobiliárias | Gestão de garantia locatícia | NOX Fiança' },
+      { title: 'NOX FIANÇA' },
       { name: 'description', content: 'Controle corretores, consultas, contratos, faturas e garantias locatícias em um painel completo para imobiliárias.' },
-      { property: 'og:title', content: 'Imobiliárias | Gestão de garantia locatícia | NOX Fiança' },
+      { property: 'og:title', content: 'NOX FIANÇA' },
       { property: 'og:description', content: 'Controle corretores, consultas, contratos, faturas e garantias locatícias em um painel completo para imobiliárias.' },
       { property: 'og:type', content: 'website' },
       { property: 'og:url', content: '/imobiliaria' },
-      { property: 'og:image', content: 'https://images.unsplash.com/photo-1497366216548-37526070297c?q=80&w=1600&auto=format&fit=crop' },
+      { property: 'og:image', content: 'https://noxfianca.com/nox-fianca-compartilhamento-2026.png' },
     ],
     links: [{ rel: 'canonical', href: '/imobiliaria' }],
   }),

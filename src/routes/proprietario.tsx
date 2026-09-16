@@ -9,13 +9,13 @@ import {
 export const Route = createFileRoute('/proprietario')({
   head: () => ({
     meta: [
-      { title: 'Proprietários | Proteção para aluguel | NOX Fiança' },
+      { title: 'NOX FIANÇA' },
       { name: 'description', content: 'Acompanhe contratos, documentos, inquilinos e garantias vinculadas aos seus imóveis com mais segurança.' },
-      { property: 'og:title', content: 'Proprietários | Proteção para aluguel | NOX Fiança' },
+      { property: 'og:title', content: 'NOX FIANÇA' },
       { property: 'og:description', content: 'Acompanhe contratos, documentos, inquilinos e garantias vinculadas aos seus imóveis com mais segurança.' },
       { property: 'og:type', content: 'website' },
       { property: 'og:url', content: '/proprietario' },
-      { property: 'og:image', content: 'https://images.unsplash.com/photo-1582407947304-fd86f028f716?q=80&w=1600&auto=format&fit=crop' },
+      { property: 'og:image', content: 'https://noxfianca.com/nox-fianca-compartilhamento-2026.png' },
     ],
     links: [{ rel: 'canonical', href: '/proprietario' }],
   }),
