@@ -4,6 +4,8 @@ import {
   agendaStatusLabel,
   agendaTypeKey,
   appointmentMatchesFilter,
+  appointmentWhatsAppMessage,
+  buildAppointmentWhatsAppUrl,
   formatSharedMeetingTitle,
   getAppointmentContact,
   sellerAgendaRange,
@@ -32,6 +34,10 @@ function appointment(overrides: Partial<SellerAppointment> = {}): SellerAppointm
     contact_phone: null,
     origin_appointment_id: null,
     follow_up_offset_days: null,
+    follow_up_owner_type: null,
+    follow_up_message_key: null,
+    meeting_feedback: null,
+    feedback_submitted_at: null,
     completed_at: null,
     created_at: "2026-08-24T10:00:00.000Z",
     updated_at: "2026-08-24T10:00:00.000Z",
@@ -96,4 +102,31 @@ test("detalhes usam os dados do lead quando a reunião não possui contato próp
 test("título principal combina perfil e nome do cliente", () => {
   assert.equal(formatSharedMeetingTitle("Corretor", "Simone Ferreira"), "Corretor — Simone Ferreira");
   assert.equal(formatSharedMeetingTitle("Imobiliária", "Primmê Imóveis"), "Imobiliária — Primmê Imóveis");
+});
+
+test("follow-ups usam mensagens diferentes por etapa e personalizam o contato", () => {
+  const closer = appointment({
+    contact_name: "Simone",
+    source: "meeting_follow_up",
+    follow_up_owner_type: "closer",
+    follow_up_message_key: "closer_24h",
+    follow_up_offset_days: 1,
+  });
+  const sdr = appointment({
+    contact_name: "Primmê Imóveis",
+    source: "meeting_follow_up",
+    follow_up_owner_type: "sdr",
+    follow_up_message_key: "sdr_5d",
+    follow_up_offset_days: 5,
+  });
+
+  assert.match(appointmentWhatsAppMessage(closer), /^Olá, Simone!/);
+  assert.match(appointmentWhatsAppMessage(closer), /Ficou alguma dúvida/);
+  assert.match(appointmentWhatsAppMessage(sdr), /Como está o uso da plataforma/);
+  assert.notEqual(appointmentWhatsAppMessage(closer), appointmentWhatsAppMessage(sdr));
+});
+
+test("link do WhatsApp normaliza telefone brasileiro e codifica a mensagem", () => {
+  const url = buildAppointmentWhatsAppUrl("(47) 99999-8888", "Olá, Simone!");
+  assert.equal(url, "https://wa.me/5547999998888?text=Ol%C3%A1%2C%20Simone!");
 });

@@ -12,6 +12,7 @@ import { AgendaDayPanel } from "@/components/seller-agenda/AgendaDayPanel";
 import { AgendaSummaryCards } from "@/components/seller-agenda/AgendaSummaryCards";
 import { AppointmentCard } from "@/components/seller-agenda/AppointmentCard";
 import { AppointmentDetailsDialog } from "@/components/seller-agenda/AppointmentDetailsDialog";
+import { MeetingFeedbackDialog } from "@/components/seller-agenda/MeetingFeedbackDialog";
 import { AppointmentModal } from "@/components/seller-agenda/AppointmentModal";
 import { SharedSalesAgenda } from "@/components/seller-agenda/SharedSalesAgenda";
 import {
@@ -29,6 +30,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   appointmentMatchesFilter,
   buildShortNameValueMap,
+  completeCloserMeeting,
   deleteSellerAppointment,
   fetchSellerAgenda,
   getSharedMeetingMetadata,
@@ -75,6 +77,7 @@ function AgendaPage() {
   const [editing, setEditing] = useState<SellerAppointment | null>(null);
   const [viewing, setViewing] = useState<SellerAppointment | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SellerAppointment | null>(null);
+  const [feedbackTarget, setFeedbackTarget] = useState<SellerAppointment | null>(null);
   const realtimeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(async (silent = false, requestedMonth = month) => {
@@ -198,18 +201,39 @@ function AgendaPage() {
 
   async function complete(item: SellerAppointment) {
     if (!sellerId) return;
+    if (
+      item.type === "reuniao"
+      && sellerType === "closer"
+      && (item.assigned_closer_id === sellerId || (!item.assigned_closer_id && item.seller_id === sellerId))
+    ) {
+      setViewing(null);
+      setFeedbackTarget(item);
+      return;
+    }
     const previous = appointments;
     setAppointments((current) => current.map((row) => row.id === item.id ? { ...row, status: "concluido" } : row));
     setViewing(null);
     try {
       await setSellerAppointmentStatus(sellerId, item.id, "concluido");
-      toast.success(item.type === "reuniao" && (item.assigned_closer_id || sellerType === "closer")
-        ? "Reunião concluída. Follow-ups de 24 horas e 4 dias adicionados à agenda de quem marcou."
-        : "Compromisso concluído com sucesso.");
+      toast.success("Compromisso concluído com sucesso.");
       await load(true);
     } catch (statusError) {
       setAppointments(previous);
       toast.error(statusError instanceof Error ? statusError.message : "Não foi possível concluir o compromisso.");
+    }
+  }
+
+  async function submitMeetingFeedback(feedback: string) {
+    if (!feedbackTarget) return;
+    try {
+      await completeCloserMeeting(feedbackTarget.id, feedback);
+      setFeedbackTarget(null);
+      toast.success(feedbackTarget.sdr_id
+        ? "Feedback salvo. Closer: 24h e 3 dias; SDR: 48h, 5 dias e ciclo de 27 dias."
+        : "Feedback salvo. Follow-ups do Closer criados para 24 horas e 3 dias.");
+      await load(true);
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Não foi possível concluir a reunião.");
     }
   }
 
@@ -296,7 +320,8 @@ function AgendaPage() {
         )}
 
         <AppointmentModal open={modalOpen} initial={editing} defaultDate={selectedDate} leads={leads} clients={clients} onOpenChange={(open) => { setModalOpen(open); if (!open) setEditing(null); }} onSave={handleSave} onDelete={(item) => { setDeleteTarget(item); setModalOpen(false); }} />
-        <AppointmentDetailsDialog item={viewing} sdrNames={sdrNames} onClose={() => setViewing(null)} onEdit={openEdit} onComplete={complete} onDelete={setDeleteTarget} />
+        <AppointmentDetailsDialog item={viewing} sdrNames={sdrNames} onClose={() => setViewing(null)} onEdit={openEdit} onComplete={complete} onDelete={setDeleteTarget} canManageCloserMeeting={sellerType === "closer" && !!viewing && (viewing.assigned_closer_id === sellerId || (!viewing.assigned_closer_id && viewing.seller_id === sellerId))} />
+        <MeetingFeedbackDialog item={feedbackTarget} onClose={() => setFeedbackTarget(null)} onSubmit={submitMeetingFeedback} />
         <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
           <AlertDialogContent>
             <AlertDialogHeader><AlertDialogTitle>Excluir compromisso?</AlertDialogTitle><AlertDialogDescription>“{deleteTarget?.title}” será removido da agenda. Se for um follow-up sincronizado, o próximo retorno do lead também será cancelado.</AlertDialogDescription></AlertDialogHeader>

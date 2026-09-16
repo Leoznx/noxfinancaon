@@ -66,7 +66,8 @@ WITH inserted AS (
     source,
     duration_minutes,
     contact_name,
-    contact_phone
+    contact_phone,
+    meeting_feedback
   )
   SELECT
     closer_id,
@@ -82,7 +83,8 @@ WITH inserted AS (
     'sdr_handoff',
     240,
     'Cliente Teste',
-    '(11) 99999-9999'
+    '(11) 99999-9999',
+    'Cliente interessado e cadastro combinado para hoje.'
   FROM seller_agenda_followup_context
   RETURNING id
 )
@@ -103,8 +105,8 @@ SELECT is(
     FROM public.seller_appointments AS follow_up
     WHERE follow_up.origin_appointment_id = context.meeting_id
   ),
-  2,
-  'conclusao cria exatamente dois follow-ups'
+  5,
+  'conclusao cria dois follow-ups do Closer e tres do SDR'
 )
 FROM seller_agenda_followup_context AS context;
 
@@ -116,8 +118,8 @@ SELECT is(
       AND follow_up.seller_id = context.sdr_id
       AND follow_up.assigned_closer_id IS NULL
   ),
-  2,
-  'follow-ups pertencem ao SDR que marcou a reuniao'
+  3,
+  'tres follow-ups pertencem ao SDR que marcou a reuniao'
 )
 FROM seller_agenda_followup_context AS context;
 
@@ -127,8 +129,8 @@ SELECT is(
     FROM public.seller_appointments AS follow_up
     WHERE follow_up.origin_appointment_id = context.meeting_id
   ),
-  ARRAY[1, 4],
-  'follow-ups usam os prazos de 24 horas e 4 dias'
+  ARRAY[1, 2, 3, 5, 27],
+  'follow-ups usam os prazos separados de Closer e SDR'
 )
 FROM seller_agenda_followup_context AS context;
 
@@ -148,7 +150,7 @@ SELECT is(
     FROM public.seller_appointments AS follow_up
     WHERE follow_up.origin_appointment_id = context.meeting_id
   ),
-  2,
+  5,
   'nova conclusao nao duplica os lembretes'
 )
 FROM seller_agenda_followup_context AS context;

@@ -60,6 +60,10 @@ export type SellerAppointment = {
   contact_phone: string | null;
   origin_appointment_id: string | null;
   follow_up_offset_days: number | null;
+  follow_up_owner_type: "sdr" | "closer" | null;
+  follow_up_message_key: string | null;
+  meeting_feedback: string | null;
+  feedback_submitted_at: string | null;
   completed_at: string | null;
   created_at: string;
   updated_at: string;
@@ -254,7 +258,7 @@ export async function fetchSellerAgenda(
     supabase
       .from("seller_appointments" as any)
       .select(
-        "id, seller_id, sdr_id, assigned_closer_id, lead_id, partnership_id, title, type, status, priority, scheduled_at, reminder_minutes, notes, source, completed_at, duration_minutes, contact_name, contact_email, contact_phone, origin_appointment_id, follow_up_offset_days, created_at, updated_at, sales_leads(full_name, email, phone)",
+        "id, seller_id, sdr_id, assigned_closer_id, lead_id, partnership_id, title, type, status, priority, scheduled_at, reminder_minutes, notes, source, completed_at, duration_minutes, contact_name, contact_email, contact_phone, origin_appointment_id, follow_up_offset_days, follow_up_owner_type, follow_up_message_key, meeting_feedback, feedback_submitted_at, created_at, updated_at, sales_leads(full_name, email, phone)",
       )
       .or(`seller_id.eq.${sellerId},sdr_id.eq.${sellerId},assigned_closer_id.eq.${sellerId}`)
       .gte("scheduled_at", start.toISOString())
@@ -286,6 +290,10 @@ export async function fetchSellerAgenda(
     contact_phone: row.contact_phone ?? null,
     origin_appointment_id: row.origin_appointment_id ?? null,
     follow_up_offset_days: row.follow_up_offset_days ?? null,
+    follow_up_owner_type: row.follow_up_owner_type ?? null,
+    follow_up_message_key: row.follow_up_message_key ?? null,
+    meeting_feedback: row.meeting_feedback ?? null,
+    feedback_submitted_at: row.feedback_submitted_at ?? null,
     lead_name: row.sales_leads?.full_name ?? null,
     lead_email: row.sales_leads?.email ?? null,
     lead_phone: row.sales_leads?.phone ?? null,
@@ -354,6 +362,60 @@ export async function setSellerAppointmentStatus(sellerId: string, id: string, s
     .eq("id", id)
     .or(`seller_id.eq.${sellerId},sdr_id.eq.${sellerId},assigned_closer_id.eq.${sellerId}`);
   if (error) throw error;
+}
+
+export async function completeCloserMeeting(id: string, feedback: string) {
+  const { error } = await supabase.rpc("complete_closer_meeting" as any, {
+    p_appointment_id: id,
+    p_feedback: feedback.trim(),
+  });
+  if (error) throw new Error(error.message || "Não foi possível concluir a reunião.");
+}
+
+const FOLLOW_UP_MESSAGES: Record<string, string> = {
+  closer_24h: "Foi muito bom conversar com você. Ficou alguma dúvida sobre a parceria com a NOX Fiança?",
+  closer_3d: "Conseguiu avançar no cadastro? Estou à disposição para ajudar em qualquer etapa.",
+  sdr_48h: "Como foi a conversa com nosso Closer? Posso ajudar em alguma dúvida sobre a parceria?",
+  sdr_5d: "Como está o uso da plataforma NOX Fiança? Se precisar, estou por aqui para ajudar.",
+};
+
+const RECURRING_MESSAGES = [
+  "Como está o uso da plataforma NOX Fiança? Ficou alguma dúvida em que eu possa ajudar?",
+  "Passando para saber como está a parceria com a NOX Fiança e se posso apoiar em algo.",
+  "Tudo bem por aí? Quero saber se a plataforma está atendendo bem e se existe alguma dúvida.",
+];
+
+function whatsappGreeting(name: string | null) {
+  const normalized = name?.trim();
+  return normalized ? `Olá, ${normalized}!` : "Olá!";
+}
+
+export function appointmentWhatsAppMessage(
+  item: Pick<SellerAppointment, "contact_name" | "client_name" | "lead_name" | "follow_up_message_key" | "follow_up_offset_days">,
+) {
+  const name = item.contact_name || item.client_name || item.lead_name || null;
+  const key = item.follow_up_message_key ?? "";
+  const body = FOLLOW_UP_MESSAGES[key] ?? (
+    key === "sdr_27d"
+      ? RECURRING_MESSAGES[Math.max(0, Math.floor((item.follow_up_offset_days ?? 27) / 27) - 1) % RECURRING_MESSAGES.length]
+      : "Como você está? Posso ajudar em alguma dúvida sobre a NOX Fiança?"
+  );
+  return `${whatsappGreeting(name)} ${body}`;
+}
+
+export function registrationWhatsAppMessage(
+  item: Pick<SellerAppointment, "contact_name" | "client_name" | "lead_name">,
+  roleLabel: string,
+  url: string,
+) {
+  const name = item.contact_name || item.client_name || item.lead_name || null;
+  return `${whatsappGreeting(name)} Para avançarmos, faça o cadastro de ${roleLabel} na NOX Fiança por este link exclusivo: ${url}`;
+}
+
+export function buildAppointmentWhatsAppUrl(phone: string | null | undefined, message: string) {
+  const digits = String(phone ?? "").replace(/\D/g, "");
+  const normalized = digits.length === 10 || digits.length === 11 ? `55${digits}` : digits;
+  return `https://wa.me/${normalized}?text=${encodeURIComponent(message)}`;
 }
 
 export async function deleteSellerAppointment(sellerId: string, id: string) {

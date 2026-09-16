@@ -24,6 +24,19 @@ export async function fetchSellerSignupLinks(sourceSdrId: string | null) {
   })) satisfies SellerSignupLink[];
 }
 
+export async function fetchMeetingSignupLinks(appointmentId: string) {
+  const { data, error } = await (supabase as any).rpc("get_meeting_signup_links", {
+    p_appointment_id: appointmentId,
+  });
+  if (error) throw error;
+  return ((data as Record<string, unknown>[] | null) ?? []).map((row) => ({
+    profileRole: String(row.profile_role) as SellerSignupRole,
+    token: String(row.token),
+    sourceSdrId: row.source_sdr_id ? String(row.source_sdr_id) : null,
+    sourceSdrName: row.source_sdr_name ? String(row.source_sdr_name) : null,
+  })) satisfies SellerSignupLink[];
+}
+
 export async function fetchSignupLinkSdrs() {
   const { data, error } = await (supabase as any).rpc("get_my_signup_link_sdrs");
   if (error) throw error;

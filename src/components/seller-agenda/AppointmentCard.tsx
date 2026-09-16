@@ -1,12 +1,14 @@
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Building2, Check, Clock3, Edit3, Eye, Trash2, UserRound } from "lucide-react";
+import { Building2, Check, Clock3, Edit3, Eye, MessageCircle, Trash2, UserRound } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   agendaStatusLabel,
   agendaTypeKey,
   agendaTypeLabel,
+  appointmentWhatsAppMessage,
+  buildAppointmentWhatsAppUrl,
   getSharedMeetingMetadata,
   getVisibleAppointmentNotes,
   type SellerAppointment,
@@ -49,6 +51,9 @@ export function AppointmentCard({
   const visibleNotes = getVisibleAppointmentNotes(item);
   const sdrName = sharedMetadata.sdrName
     ? sdrNames?.get(sharedMetadata.sdrName) ?? sharedMetadata.sdrName.trim().split(/\s+/)[0]
+    : null;
+  const whatsappUrl = item.source === "meeting_follow_up"
+    ? buildAppointmentWhatsAppUrl(item.contact_phone || item.lead_phone, appointmentWhatsAppMessage(item))
     : null;
 
   return (
@@ -94,6 +99,7 @@ export function AppointmentCard({
       </div>
 
       <div className="mt-3 flex items-center justify-end gap-1 border-t border-neutral-100 pt-2.5">
+        {whatsappUrl && <Button type="button" size="sm" variant="ghost" className="h-7 gap-1 px-2 text-[10px] text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800" asChild><a href={whatsappUrl} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}><MessageCircle className="h-3.5 w-3.5" /> WhatsApp</a></Button>}
         <Button type="button" size="sm" variant="ghost" className="h-7 gap-1 px-2 text-[10px]" onClick={() => onView(item)}>
           <Eye className="h-3.5 w-3.5" /> Detalhes
         </Button>

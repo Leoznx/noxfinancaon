@@ -1,10 +1,11 @@
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Bell, Building2, CalendarDays, Check, Clock3, Edit3, Phone, Trash2, UserRound } from "lucide-react";
+import { Bell, Building2, CalendarDays, Check, Clock3, Edit3, MessageCircle, MessageSquareText, Phone, Trash2, UserRound } from "lucide-react";
+import { MeetingSignupLinks } from "@/components/seller-agenda/MeetingSignupLinks";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { AGENDA_REMINDERS, agendaStatusLabel, agendaTypeLabel, getAppointmentContact, getSharedMeetingMetadata, getVisibleAppointmentNotes, type SellerAppointment } from "@/lib/seller-agenda";
+import { AGENDA_REMINDERS, agendaStatusLabel, agendaTypeLabel, appointmentWhatsAppMessage, buildAppointmentWhatsAppUrl, getAppointmentContact, getSharedMeetingMetadata, getVisibleAppointmentNotes, type SellerAppointment } from "@/lib/seller-agenda";
 import { formatBrazilianPhoneInput, normalizeBrazilianPhone } from "@/lib/seller-clients";
 
 export function AppointmentDetailsDialog({
@@ -14,6 +15,7 @@ export function AppointmentDetailsDialog({
   onEdit,
   onComplete,
   onDelete,
+  canManageCloserMeeting = false,
 }: {
   item: SellerAppointment | null;
   sdrNames?: ReadonlyMap<string, string>;
@@ -21,6 +23,7 @@ export function AppointmentDetailsDialog({
   onEdit: (item: SellerAppointment) => void;
   onComplete: (item: SellerAppointment) => void;
   onDelete: (item: SellerAppointment) => void;
+  canManageCloserMeeting?: boolean;
 }) {
   if (!item) return null;
   const contact = getAppointmentContact(item);
@@ -31,6 +34,9 @@ export function AppointmentDetailsDialog({
   const visibleNotes = getVisibleAppointmentNotes(item);
   const sdrName = metadata.sdrName
     ? sdrNames?.get(metadata.sdrName) ?? metadata.sdrName.trim().split(/\s+/)[0]
+    : null;
+  const followUpWhatsAppUrl = item.source === "meeting_follow_up"
+    ? buildAppointmentWhatsAppUrl(contact.phone, appointmentWhatsAppMessage(item))
     : null;
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -67,6 +73,9 @@ export function AppointmentDetailsDialog({
           )}
           {item.source === "sdr_handoff" && (metadata.clientType || sdrName) && <div className="grid gap-2 rounded-xl border border-yellow-200 bg-yellow-50 p-3 text-xs font-semibold text-neutral-700 sm:grid-cols-2">{metadata.clientType && <p><span className="text-neutral-500">Tipo:</span> {metadata.clientType}</p>}{sdrName && <p><span className="text-neutral-500">SDR:</span> {sdrName}</p>}</div>}
           {visibleNotes && <p className="rounded-xl border border-neutral-200 p-3 leading-relaxed text-neutral-600">{visibleNotes}</p>}
+          {item.meeting_feedback && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3"><p className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-emerald-800"><MessageSquareText className="h-3.5 w-3.5" /> Feedback da reunião</p><p className="mt-1 whitespace-pre-wrap leading-relaxed text-neutral-700">{item.meeting_feedback}</p></div>}
+          {canManageCloserMeeting && item.type === "reuniao" && <MeetingSignupLinks item={item} />}
+          {followUpWhatsAppUrl && <Button type="button" className="w-full bg-[#25D366] font-black text-white hover:bg-[#20bd5a]" asChild><a href={followUpWhatsAppUrl} target="_blank" rel="noreferrer"><MessageCircle className="mr-1.5 h-4 w-4" /> Abrir mensagem pronta no WhatsApp</a></Button>}
         </div>
         <DialogFooter className="flex-wrap">
           <Button variant="ghost" className="mr-auto text-red-600 hover:bg-red-50" onClick={() => onDelete(item)}><Trash2 className="mr-1.5 h-4 w-4" /> Excluir</Button>
