@@ -22,6 +22,7 @@ import {
 import { toast } from "sonner";
 
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { AdminAreaSwitcher } from "@/components/admin/AdminAreaSwitcher";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { WithdrawalDetailsDialog } from "@/components/comissoes/WithdrawalDetailsDialog";
 import { Badge } from "@/components/ui/badge";
@@ -289,6 +290,7 @@ function FinanceiroAdminPage() {
   return (
     <DashboardLayout>
       <div className="space-y-7 pb-10">
+        <AdminAreaSwitcher area="financeiro" />
         <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.2em] text-yellow-600">

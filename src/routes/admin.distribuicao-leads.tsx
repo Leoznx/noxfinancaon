@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Plus, RefreshCw, Shuffle, Upload, Users } from "lucide-react";
 import { toast } from "sonner";
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { AdminAreaSwitcher } from "@/components/admin/AdminAreaSwitcher";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
@@ -272,6 +273,7 @@ function DistribuicaoLeadsAdmin() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
+        <AdminAreaSwitcher area="leads" />
         <header className="flex items-center gap-3">
           <div className="rounded-lg bg-yellow-100 p-2 text-yellow-700">
             <Shuffle className="h-6 w-6" />

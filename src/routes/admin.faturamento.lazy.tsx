@@ -1,5 +1,6 @@
 import { createLazyFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { AdminAreaSwitcher } from "@/components/admin/AdminAreaSwitcher";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -237,6 +238,7 @@ function FaturamentoAdminPage() {
   return (
     <DashboardLayout>
       <div className="space-y-8">
+        <AdminAreaSwitcher area="financeiro" />
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Faturamento</h1>
           <p className="text-neutral-500 mt-2">Visão financeira por mês, vencidos, a receber e pagos.</p>

@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { AdminAreaSwitcher } from "@/components/admin/AdminAreaSwitcher";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
@@ -652,6 +653,7 @@ function MarketingLeadsAdmin() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
+        <AdminAreaSwitcher area="leads" />
         <header className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-yellow-100 p-2 text-yellow-700">

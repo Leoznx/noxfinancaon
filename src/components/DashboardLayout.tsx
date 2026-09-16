@@ -35,7 +35,6 @@ import {
   Menu,
   X,
   Users2,
-  Shuffle,
   IdCard,
   MonitorPlay,
   ArrowRight,
@@ -77,6 +76,7 @@ type MenuItem = {
   label: string;
   href: string;
   module?: string;
+  modules?: string[];
   highlight?: boolean;
   darkHighlight?: boolean;
   keywords?: string[];
@@ -102,6 +102,15 @@ function normalizeMenuSearch(value: string) {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim();
+}
+
+function menuModuleKeys(item: Pick<MenuItem, "module" | "modules">) {
+  return item.modules ?? (item.module ? [item.module] : []);
+}
+
+function podeVerItemMenu(permissoes: PermissoesPorModulo | undefined, item: MenuItem) {
+  const modules = menuModuleKeys(item);
+  return modules.length === 0 || modules.some((module) => podeVerModulo(permissoes, module));
 }
 
 // module: chave em role_permissions (ver permissoes-cache.ts). Admin/admin_master/
@@ -147,21 +156,17 @@ const adminItems: MenuItem[] = [
   },
   {
     icon: DollarSign,
-    label: "Financeiro",
+    label: "Financeiro e Faturamento",
     href: "/admin/financeiro",
     module: "financeiro",
+    modules: ["financeiro", "faturamento"],
+    keywords: ["faturamento", "receitas", "cobranças"],
     children: [
+      { label: "Visão financeira", href: "/admin/financeiro" },
+      { label: "Faturamento", href: "/admin/faturamento" },
       { label: "Saques", href: "/admin/financeiro?tab=withdrawals" },
       { label: "Comissões", href: "/admin/financeiro?tab=commissions" },
       { label: "Pagamentos", href: "/admin/financeiro?tab=payments" },
-    ],
-  },
-  {
-    icon: Wallet,
-    label: "Faturamento",
-    href: "/admin/faturamento",
-    module: "faturamento",
-    children: [
       { label: "A receber", href: "/admin/faturamento?tab=receber" },
       { label: "Vencidos", href: "/admin/faturamento?tab=vencidos" },
       { label: "Pagos", href: "/admin/faturamento?tab=pagos" },
@@ -170,10 +175,14 @@ const adminItems: MenuItem[] = [
   { icon: ShieldAlert, label: "Sinistros", href: "/sinistros", module: "sinistros" },
   {
     icon: UserPlus,
-    label: "Leads Marketing",
+    label: "Leads e Distribuição",
     href: "/admin/leads",
     module: "leads",
+    modules: ["leads", "distribuicao_leads"],
+    keywords: ["marketing", "rodízio", "distribuição"],
     children: [
+      { label: "Leads Marketing", href: "/admin/leads" },
+      { label: "Distribuição de Leads", href: "/admin/distribuicao-leads" },
       { label: "Leads", href: "/admin/leads?tab=leads" },
       { label: "Inquilinos", href: "/admin/leads?tab=inquilinos" },
       { label: "Corretores", href: "/admin/leads?tab=corretores" },
@@ -185,12 +194,6 @@ const adminItems: MenuItem[] = [
         keywords: ["anúncios", "campanhas"],
       },
     ],
-  },
-  {
-    icon: Shuffle,
-    label: "Distribuição de Leads",
-    href: "/admin/distribuicao-leads",
-    module: "distribuicao_leads",
   },
   {
     icon: Briefcase,
@@ -572,7 +575,7 @@ export function DashboardLayout({
       (item) =>
         (!item.sellerTypes || (!!user?.sellerType && item.sellerTypes.includes(user.sellerType))) &&
         (!item.requiresTimeClockAccess || user?.timeClockEnabled === true) &&
-        (!item.module || podeVerModulo(permissoesCargo, item.module)),
+        podeVerItemMenu(permissoesCargo, item),
     );
   } else if (cargoInterno) {
     menuItems = [
@@ -580,10 +583,10 @@ export function DashboardLayout({
       ...ADMIN_CATALOG.filter(
         (item) =>
           !item.adminOnly &&
-          podeVerModulo(permissoesCargo, item.module) &&
-          item.module !== undefined &&
+          podeVerItemMenu(permissoesCargo, item) &&
+          menuModuleKeys(item).length > 0 &&
           item.module !== "dashboard_admin" &&
-          (cargoInterno !== "juridico" || item.module !== "documentos"),
+          (cargoInterno !== "juridico" || !menuModuleKeys(item).includes("documentos")),
       ),
       CARGO_GATEADO_MENU_ITEM,
     ];
@@ -620,6 +623,7 @@ export function DashboardLayout({
                 label: child.label,
                 href: child.href,
                 module: item.module,
+                modules: item.modules,
                 parentLabel: item.label,
               });
             }
