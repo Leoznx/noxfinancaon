@@ -41,6 +41,7 @@ import {
   getSharedMeetingMetadata,
   rescheduleSharedMeeting,
   scheduleSdrCloserMeeting,
+  AGENDA_BUSINESS_HOURS_LABEL,
   SHARED_MEETING_DURATION_MINUTES,
   type CloserAvailabilitySlot,
   type SellerAppointment,
@@ -295,7 +296,7 @@ function AvailabilityCalendar({ month, today, selectedDate, onDateSelect, onMont
           );
         })}
       </div>
-      <p className="border-t border-neutral-100 bg-neutral-50/70 px-3 py-2 text-[10px] font-medium text-neutral-500">Atendimentos de segunda a sexta. Dias passados e fins de semana ficam desabilitados.</p>
+      <p className="border-t border-neutral-100 bg-neutral-50/70 px-3 py-2 text-[10px] font-medium leading-4 text-neutral-500">{AGENDA_BUSINESS_HOURS_LABEL} Dias passados e fins de semana ficam desabilitados.</p>
     </div>
   );
 }

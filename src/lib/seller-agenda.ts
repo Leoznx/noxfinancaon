@@ -171,6 +171,9 @@ export const AGENDA_FILTERS: Array<{ value: AgendaFilter; label: string }> = [
   { value: "pendente", label: "Pendente" },
 ];
 
+export const AGENDA_BUSINESS_HOURS_LABEL =
+  "Segunda a quinta: 08:00–12:00 e 13:00–18:00. Sexta: 08:00–12:00 e 13:00–17:00.";
+
 const CANONICAL_TYPES = new Set(["reuniao", "follow_up", "visita", "call", "ligacao", "retorno"]);
 
 export function agendaTypeKey(type: string) {
@@ -195,6 +198,18 @@ export function appointmentMatchesFilter(item: SellerAppointment, filter: Agenda
   if (filter === "call") return ["call", "ligacao"].includes(item.type);
   if (filter === "outro") return !CANONICAL_TYPES.has(item.type);
   return item.type === filter;
+}
+
+export function getAppointmentContact(
+  item: Pick<
+    SellerAppointment,
+    "contact_name" | "contact_phone" | "client_name" | "lead_name" | "lead_phone"
+  >,
+) {
+  return {
+    name: item.contact_name || item.client_name || item.lead_name || null,
+    phone: item.contact_phone || item.lead_phone || null,
+  };
 }
 
 export function sellerAgendaRange(month: Date) {
