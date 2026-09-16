@@ -15,7 +15,7 @@ export const Route = createFileRoute('/inquilino/')({
       { property: 'og:description', content: 'Crie seu acesso de inquilino para consultar seguros ativos, documentos, boletos, faturas e vencimentos vinculados ao seu CPF.' },
       { property: 'og:type', content: 'website' },
       { property: 'og:url', content: '/inquilino' },
-      { property: 'og:image', content: 'https://noxfianca.com/nox-fianca-compartilhamento-2026.png' },
+      { property: 'og:image', content: 'https://noxfianca.com/nox-financa-whatsapp-2026-v2.png' },
     ],
     links: [{ rel: 'canonical', href: '/inquilino' }],
   }),

@@ -15,7 +15,7 @@ export const Route = createFileRoute('/corretor')({
       { property: 'og:description', content: 'Simule garantias, envie propostas, acompanhe contratos e receba comissões em uma plataforma feita para corretores.' },
       { property: 'og:type', content: 'website' },
       { property: 'og:url', content: '/corretor' },
-      { property: 'og:image', content: 'https://noxfianca.com/nox-fianca-compartilhamento-2026.png' },
+      { property: 'og:image', content: 'https://noxfianca.com/nox-financa-whatsapp-2026-v2.png' },
     ],
     links: [{ rel: 'canonical', href: '/corretor' }],
   }),

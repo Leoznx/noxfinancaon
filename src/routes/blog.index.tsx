@@ -20,7 +20,7 @@ export const Route = createFileRoute("/blog/")({
       { property: "og:title", content: "NOX FIANÇA" },
       { property: "og:description", content: "Central de conteúdos sobre locação, garantia e mercado imobiliário." },
       { property: "og:type", content: "website" },
-      { property: "og:image", content: "https://noxfianca.com/nox-fianca-compartilhamento-2026.png" },
+      { property: "og:image", content: "https://noxfianca.com/nox-financa-whatsapp-2026-v2.png" },
     ],
   }),
   component: BlogPage,

@@ -15,7 +15,7 @@ export const Route = createFileRoute('/imobiliaria')({
       { property: 'og:description', content: 'Controle corretores, consultas, contratos, faturas e garantias locatícias em um painel completo para imobiliárias.' },
       { property: 'og:type', content: 'website' },
       { property: 'og:url', content: '/imobiliaria' },
-      { property: 'og:image', content: 'https://noxfianca.com/nox-fianca-compartilhamento-2026.png' },
+      { property: 'og:image', content: 'https://noxfianca.com/nox-financa-whatsapp-2026-v2.png' },
     ],
     links: [{ rel: 'canonical', href: '/imobiliaria' }],
   }),

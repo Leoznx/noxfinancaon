@@ -15,7 +15,7 @@ export const Route = createFileRoute('/proprietario')({
       { property: 'og:description', content: 'Acompanhe contratos, documentos, inquilinos e garantias vinculadas aos seus imóveis com mais segurança.' },
       { property: 'og:type', content: 'website' },
       { property: 'og:url', content: '/proprietario' },
-      { property: 'og:image', content: 'https://noxfianca.com/nox-fianca-compartilhamento-2026.png' },
+      { property: 'og:image', content: 'https://noxfianca.com/nox-financa-whatsapp-2026-v2.png' },
     ],
     links: [{ rel: 'canonical', href: '/proprietario' }],
   }),

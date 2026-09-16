@@ -19,7 +19,7 @@ import { ROTA_CADASTRO_CONCLUIDO, precisaMostrarCadastroConcluido } from "@/lib/
 import appCss from "../styles.css?url";
 
 const SITE_TITLE = "NOX FIANÇA";
-const SOCIAL_SHARE_IMAGE = "https://noxfianca.com/nox-fianca-compartilhamento-2026.png";
+const SOCIAL_SHARE_IMAGE = "https://noxfianca.com/nox-financa-whatsapp-2026-v2.png";
 
 /**
  * PageView em cada troca de rota. Como o site é uma SPA, o Google Ads e o Pixel
@@ -200,9 +200,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:image", content: SOCIAL_SHARE_IMAGE },
       { property: "og:image:secure_url", content: SOCIAL_SHARE_IMAGE },
       { property: "og:image:type", content: "image/png" },
-      { property: "og:image:width", content: "1200" },
-      { property: "og:image:height", content: "630" },
-      { property: "og:image:alt", content: "NOX Fiança — Aluguel sem fiador, sem caução." },
+      { property: "og:image:width", content: "1600" },
+      { property: "og:image:height", content: "900" },
+      { property: "og:image:alt", content: "Logotipo da NOX Finança em fundo preto" },
       { property: "og:locale", content: "pt_BR" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:site", content: "@NoxFianca" },

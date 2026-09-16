@@ -28,8 +28,8 @@ export const Route = createFileRoute("/blog/$slug")({
         { name: "twitter:card", content: "summary_large_image" },
         { name: "twitter:title", content: "NOX FIANÇA" },
         { name: "twitter:description", content: post?.resumo ?? "" },
-        { property: "og:image", content: "https://noxfianca.com/nox-fianca-compartilhamento-2026.png" },
-        { name: "twitter:image", content: "https://noxfianca.com/nox-fianca-compartilhamento-2026.png" },
+        { property: "og:image", content: "https://noxfianca.com/nox-financa-whatsapp-2026-v2.png" },
+        { name: "twitter:image", content: "https://noxfianca.com/nox-financa-whatsapp-2026-v2.png" },
       ],
       links: [{ rel: "canonical", href: url }],
       scripts: post ? [{
