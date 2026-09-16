@@ -112,7 +112,7 @@ export function AgendaCalendar({
           return (
             <div
               key={day.toISOString()}
-              className={`group relative min-h-[68px] border-b border-r border-neutral-100 p-1.5 text-left transition duration-200 sm:min-h-[80px] ${
+              className={`group relative min-h-[68px] border-b border-r border-neutral-100 p-1.5 text-left transition duration-200 sm:min-h-[96px] xl:min-h-[110px] ${
                 index % 7 === 6 ? "border-r-0" : ""
               } ${selected ? "bg-yellow-50 ring-1 ring-inset ring-yellow-400" : "hover:bg-neutral-50"} ${
                 !isSameMonth(day, month) ? "bg-neutral-50/60 text-neutral-300" : ""
@@ -141,10 +141,13 @@ export function AgendaCalendar({
                         onDateSelect(day);
                         onEventOpen(item);
                       }}
-                      className={`pointer-events-auto block w-full truncate rounded-md border px-1.5 py-1 text-left font-sans text-[10px] font-semibold leading-tight tracking-normal transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400 xl:text-[11px] ${EVENT_STYLE[agendaTypeKey(item.type)]}`}
+                      className={`pointer-events-auto block w-full rounded-md border px-1.5 py-1.5 text-left font-sans text-[10px] font-semibold leading-tight tracking-normal transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400 xl:text-[11px] ${EVENT_STYLE[agendaTypeKey(item.type)]}`}
+                      title={`${format(new Date(item.scheduled_at), "HH:mm")} — ${item.title}`}
                     >
-                      <span className="mr-1 font-bold tabular-nums">{format(new Date(item.scheduled_at), "HH:mm")}</span>
-                      {item.title}
+                      <span className="flex items-start gap-1">
+                        <span className="shrink-0 font-black tabular-nums">{format(new Date(item.scheduled_at), "HH:mm")}</span>
+                        <span className="min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]">{item.title}</span>
+                      </span>
                     </button>
                   ))}
                   {dayItems.length > 2 && (

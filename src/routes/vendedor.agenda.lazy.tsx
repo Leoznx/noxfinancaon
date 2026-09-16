@@ -301,7 +301,7 @@ function AgendaPage() {
         <AgendaControls view={view} filter={filter} onViewChange={(nextView) => { setView(nextView); if (nextView === "lista") setListScope("month"); }} onFilterChange={setFilter} />
 
         {error ? <ErrorState message={error} onRetry={() => load()} /> : loading ? <AgendaSkeleton /> : view === "calendario" ? (
-          <div className="grid items-start gap-3 xl:min-h-0 xl:grid-cols-[minmax(0,1fr)_340px]">
+          <div className="grid items-start gap-3 xl:min-h-0 xl:grid-cols-[minmax(0,1fr)_390px] 2xl:grid-cols-[minmax(0,1fr)_420px]">
             <AgendaCalendar month={month} selectedDate={selectedDate} items={filtered} onMonthChange={changeMonth} onDateSelect={selectDate} onEventOpen={setViewing} />
             <AgendaDayPanel date={selectedDate} items={selectedItems} sdrNames={sdrNames} onNew={() => openNew(selectedDate)} onView={setViewing} onEdit={openEdit} onComplete={complete} onDelete={setDeleteTarget} />
           </div>
@@ -335,7 +335,7 @@ function AgendaPage() {
 
 function AgendaSkeleton() {
   return (
-    <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_340px]" aria-label="Carregando agenda">
+    <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_390px] 2xl:grid-cols-[minmax(0,1fr)_420px]" aria-label="Carregando agenda">
       <div className="h-[500px] animate-pulse rounded-2xl border border-neutral-200 bg-white p-4"><div className="h-6 w-44 rounded bg-neutral-100" /><div className="mt-4 grid grid-cols-7 gap-2">{Array.from({ length: 35 }).map((_, index) => <div key={index} className="h-14 rounded-lg bg-neutral-50" />)}</div></div>
       <div className="h-96 animate-pulse rounded-2xl border border-neutral-200 bg-white p-5"><div className="h-5 w-32 rounded bg-neutral-100" /><div className="mt-5 h-24 rounded-xl bg-neutral-50" /><div className="mt-3 h-24 rounded-xl bg-neutral-50" /></div>
     </div>

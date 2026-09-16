@@ -43,7 +43,7 @@ export function AgendaDayPanel({
         </div>
       </header>
 
-      <div className="max-h-[410px] overflow-y-auto p-3">
+      <div className="max-h-[540px] overflow-y-auto p-3">
         {items.length === 0 ? (
           <div className="flex min-h-52 flex-col items-center justify-center rounded-xl border border-dashed border-neutral-200 bg-neutral-50/50 px-5 text-center">
             <span className="grid h-10 w-10 place-items-center rounded-xl bg-yellow-100 text-yellow-800">

@@ -81,7 +81,7 @@ export function AppointmentCard({
               {agendaStatusLabel(item.status)}
             </Badge>
           </div>
-          <h3 className={`mt-1.5 truncate font-extrabold text-neutral-950 ${compact ? "text-sm" : "text-base"}`}>{item.title}</h3>
+          <h3 className={`mt-1.5 whitespace-normal break-words font-extrabold leading-snug text-neutral-950 [overflow-wrap:anywhere] ${compact ? "text-sm" : "text-base"}`}>{item.title}</h3>
           {item.source === "sdr_handoff" && (sharedMetadata.clientType || sdrName) && <p className="mt-0.5 truncate text-[10px] font-bold text-yellow-700">{sharedMetadata.clientType ?? "Cliente"}{sdrName ? ` · SDR ${sdrName}` : ""}</p>}
           {relatedName && (
             <p className="mt-0.5 flex items-center gap-1 truncate text-[11px] font-medium text-neutral-500">
@@ -98,7 +98,7 @@ export function AppointmentCard({
         </button>
       </div>
 
-      <div className="mt-3 flex items-center justify-end gap-1 border-t border-neutral-100 pt-2.5">
+      <div className="mt-3 flex flex-wrap items-center justify-end gap-1 border-t border-neutral-100 pt-2.5">
         {whatsappUrl && <Button type="button" size="sm" variant="ghost" className="h-7 gap-1 px-2 text-[10px] text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800" asChild><a href={whatsappUrl} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}><MessageCircle className="h-3.5 w-3.5" /> WhatsApp</a></Button>}
         <Button type="button" size="sm" variant="ghost" className="h-7 gap-1 px-2 text-[10px]" onClick={() => onView(item)}>
           <Eye className="h-3.5 w-3.5" /> Detalhes
