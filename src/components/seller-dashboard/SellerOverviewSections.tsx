@@ -89,21 +89,21 @@ export function RecentActivities({ activities }: { activities: SellerDashboardAc
             return (
               <div
                 key={activity.id}
-                className="flex items-center gap-3 py-2 first:pt-0 last:pb-0 xl:gap-2 xl:py-1"
+                className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0 xl:py-1.5"
               >
                 <span
-                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg xl:h-7 xl:w-7 ${presentation.className}`}
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg xl:h-8 xl:w-8 ${presentation.className}`}
                 >
                   <Icon className="h-4 w-4" strokeWidth={1.8} />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[11px] font-bold text-neutral-900">
+                  <p className="truncate text-xs font-bold text-neutral-900">
                     {activity.title}
                   </p>
-                  <p className="truncate text-[10px] text-neutral-500">{activity.subtitle}</p>
+                  <p className="truncate text-[10.5px] text-neutral-500">{activity.subtitle}</p>
                 </div>
                 <time
-                  className="shrink-0 text-[9px] text-neutral-400"
+                  className="shrink-0 text-[9.5px] text-neutral-400"
                   dateTime={activity.occurredAt}
                 >
                   {relativeTime(activity.occurredAt)}
@@ -136,10 +136,10 @@ export function TodayAgenda({ appointments }: { appointments: SellerDashboardApp
             return (
               <div
                 key={appointment.id}
-                className="flex items-center gap-2 py-2.5 first:pt-0 last:pb-0 xl:py-1"
+                className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0 xl:py-1.5"
               >
                 <time
-                  className="flex h-9 w-11 shrink-0 items-center justify-center rounded-lg border border-yellow-200 bg-yellow-50 text-[11px] font-bold text-neutral-900 xl:h-8 xl:w-10"
+                  className="flex h-9 w-12 shrink-0 items-center justify-center rounded-lg border border-yellow-200 bg-yellow-50 text-[11px] font-bold text-neutral-900"
                   dateTime={appointment.scheduledAt}
                 >
                   {new Date(appointment.scheduledAt).toLocaleTimeString("pt-BR", {
@@ -148,15 +148,15 @@ export function TodayAgenda({ appointments }: { appointments: SellerDashboardApp
                   })}
                 </time>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[11px] font-bold text-neutral-900">
+                  <p className="truncate text-xs font-bold text-neutral-900">
                     {appointment.title}
                   </p>
-                  <p className="truncate text-[10px] text-neutral-500">
+                  <p className="truncate text-[10.5px] text-neutral-500">
                     {appointment.leadName || "Compromisso comercial"}
                   </p>
                 </div>
                 <span
-                  className={`shrink-0 rounded-full border px-2 py-1 text-[8px] font-semibold ${badge.className}`}
+                  className={`shrink-0 rounded-full border px-2 py-1 text-[9px] font-semibold ${badge.className}`}
                 >
                   {badge.label}
                 </span>

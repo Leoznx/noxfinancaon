@@ -1,26 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, CircleDollarSign, FileCheck2, RefreshCw, Target, Users } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AlertCircle, RefreshCw } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { Button } from "@/components/ui/button";
-import { ContractsChart, type ChartRange } from "@/components/seller-dashboard/ContractsChart";
-import { SellerKpiCard } from "@/components/seller-dashboard/SellerKpiCard";
-import {
-  PipelineSummary,
-  RecentActivities,
-  SellerRanking,
-  TodayAgenda,
-} from "@/components/seller-dashboard/SellerOverviewSections";
+import { RecentActivities, TodayAgenda } from "@/components/seller-dashboard/SellerOverviewSections";
 import { SellerPerformanceBanner } from "@/components/seller-dashboard/SellerPerformanceBanner";
+import { SellerRoleGoals } from "@/components/seller-dashboard/SellerRoleGoals";
 import { supabase } from "@/integrations/supabase/client";
-import {
-  calculateGrowth,
-  fetchSellerDashboard,
-  goalProgress,
-  type SellerDashboardData,
-} from "@/lib/seller-dashboard";
-import { formatMoney } from "@/lib/vendedor-portal";
+import { fetchSellerDashboard, type SellerDashboardData } from "@/lib/seller-dashboard";
+import { fetchMySellerGoalProgress, type SellerGoalProgress } from "@/lib/seller-progress";
 import { useAuth } from "@/components/AuthProvider";
 import "@/components/seller-dashboard/seller-dashboard.css";
 
@@ -36,16 +25,21 @@ function VendedorDashboard() {
   const { user } = useAuth();
   const isCloser = user?.sellerType === "closer";
   const [data, setData] = useState<SellerDashboardData | null>(null);
+  const [goalProgress, setGoalProgress] = useState<SellerGoalProgress | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [chartRange, setChartRange] = useState<ChartRange>("12");
   const realtimeRefreshTimer = useRef<number | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      setData(await fetchSellerDashboard());
+      const [dashboardData, goalsData] = await Promise.all([
+        fetchSellerDashboard(),
+        fetchMySellerGoalProgress(),
+      ]);
+      setData(dashboardData);
+      setGoalProgress(goalsData);
     } catch (loadError) {
       setError(
         loadError instanceof Error ? loadError.message : "Não foi possível carregar o dashboard.",
@@ -92,6 +86,16 @@ function VendedorDashboard() {
       )
       .on(
         "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "seller_appointments",
+          filter: `sdr_id=eq.${sellerId}`,
+        },
+        scheduleRefresh,
+      )
+      .on(
+        "postgres_changes",
         { event: "*", schema: "public", table: "seller_goals", filter: sellerFilter },
         scheduleRefresh,
       )
@@ -116,34 +120,23 @@ function VendedorDashboard() {
     };
   }, [data?.seller.id, load]);
 
-  const computed = useMemo(() => {
-    if (!data) return null;
-    return {
-      contractsGrowth: calculateGrowth(
-        data.metrics.contractsCurrent,
-        data.metrics.contractsPrevious,
-      ),
-      commissionsGrowth: calculateGrowth(
-        data.metrics.commissionsCurrent,
-        data.metrics.commissionsPrevious,
-      ),
-      goalPercentage: goalProgress(data.metrics.registrationsCurrent, data.metrics.goalTarget),
-      contractsDelta: data.metrics.contractsCurrent - data.metrics.contractsPrevious,
-      contractTrend: data.monthlyHistory.slice(-8).map((month) => month.contracts),
-      commissionTrend: data.monthlyHistory.slice(-8).map((month) => month.commissions),
-    };
-  }, [data]);
-
   return (
     <DashboardLayout lockDesktopViewport>
-      <div className="seller-dashboard relative mx-auto w-full max-w-[1440px] space-y-3 sm:space-y-4 xl:grid xl:grid-rows-[auto_120px_auto_auto] xl:gap-3 xl:space-y-0">
+      <div className="seller-dashboard relative mx-auto w-full max-w-[1440px] space-y-3 sm:space-y-4 xl:grid xl:h-full xl:min-h-0 xl:grid-rows-[auto_120px_auto_minmax(210px,1fr)] xl:gap-3 xl:space-y-0">
         <div className="seller-dashboard__heading flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="text-[26px] font-bold tracking-[-0.035em] text-neutral-950 sm:text-[27px]">
-              Dashboard
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-[26px] font-bold tracking-[-0.035em] text-neutral-950 sm:text-[27px]">
+                Dashboard
+              </h1>
+              <span className="rounded-full border border-yellow-300 bg-yellow-50 px-2 py-1 text-[9px] font-black uppercase tracking-[0.16em] text-yellow-800">
+                {isCloser ? "Closer" : "SDR"}
+              </span>
+            </div>
             <p className="mt-0.5 text-sm font-medium text-neutral-500">
-              Resumo real da sua operação comercial.
+              {isCloser
+                ? "Metas, atividades e agenda para conduzir cada oportunidade ao fechamento."
+                : "Metas, atividades e agenda para manter sua prospecção no ritmo certo."}
             </p>
           </div>
           <Button
@@ -159,7 +152,7 @@ function VendedorDashboard() {
 
         {loading && !data ? (
           <DashboardSkeleton />
-        ) : data && computed ? (
+        ) : data && goalProgress ? (
           <>
             <SellerPerformanceBanner />
 
@@ -169,76 +162,14 @@ function VendedorDashboard() {
               </div>
             )}
 
-            <div className="seller-dashboard__primary grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.18fr)_minmax(480px,0.98fr)] xl:gap-3">
-              <ContractsChart
-                history={data.monthlyHistory}
-                range={chartRange}
-                onRangeChange={setChartRange}
-              />
+            <SellerRoleGoals
+              progress={goalProgress}
+              sellerType={isCloser ? "closer" : "sdr"}
+            />
 
-              <div className="seller-dashboard__kpis grid min-w-0 grid-cols-2 gap-3 sm:gap-4 xl:gap-3">
-                {!isCloser && <SellerKpiCard
-                  icon={Users}
-                  title="Leads e atendimentos pendentes"
-                  value={String(data.metrics.leadsPending)}
-                  subtitle={data.metrics.leadsNewThisWeek > 0 ? `+${data.metrics.leadsNewThisWeek} novos esta semana ↑` : "Nenhum novo esta semana"}
-                  variant="yellow"
-                  sparkline={data.leadTrend}
-                />}
-                {isCloser && <SellerKpiCard
-                  icon={Users}
-                  title="Reuniões de hoje"
-                  value={String(data.agenda.length)}
-                  subtitle="Agenda compartilhada dos SDRs"
-                  variant="yellow"
-                  sparkline={[]}
-                />}
-                <SellerKpiCard
-                  icon={FileCheck2}
-                  title="Contratos fechados no mês"
-                  value={String(data.metrics.contractsCurrent)}
-                  subtitle={
-                    computed.contractsDelta > 0
-                      ? `+${computed.contractsDelta} vs mês anterior ↑`
-                      : computed.contractsDelta < 0
-                        ? `${computed.contractsDelta} vs mês anterior`
-                        : "Mesmo resultado do mês anterior"
-                  }
-                  variant="green"
-                  sparkline={computed.contractTrend}
-                />
-                <SellerKpiCard
-                  icon={CircleDollarSign}
-                  title="Comissões acumuladas"
-                  value={formatMoney(data.metrics.commissionsAccumulated)}
-                  subtitle={formatGrowthText(computed.commissionsGrowth)}
-                  variant="purple"
-                  sparkline={computed.commissionTrend}
-                />
-                <SellerKpiCard
-                  icon={Target}
-                  title="Meta do mês"
-                  value={
-                    computed.goalPercentage === null
-                      ? "0%"
-                      : `${Math.round(computed.goalPercentage)}%`
-                  }
-                  subtitle={
-                    data.metrics.goalTarget
-                      ? `${data.metrics.registrationsCurrent} / ${data.metrics.goalTarget} cadastros`
-                      : "Meta ainda não definida"
-                  }
-                  variant="blue"
-                  progress={computed.goalPercentage}
-                />
-              </div>
-            </div>
-
-            <div className={`seller-dashboard__overview grid min-w-0 items-stretch gap-4 md:grid-cols-2 xl:gap-3 ${isCloser ? "xl:grid-cols-2" : "xl:grid-cols-4"}`}>
-              {!isCloser && <PipelineSummary stages={data.pipeline} />}
-              {!isCloser && <RecentActivities activities={data.activities} />}
+            <div className="seller-dashboard__overview grid min-w-0 items-stretch gap-4 md:grid-cols-2 xl:min-h-0 xl:gap-3">
+              <RecentActivities activities={data.activities} />
               <TodayAgenda appointments={data.agenda} />
-              <SellerRanking ranking={data.ranking} />
             </div>
           </>
         ) : (
@@ -247,13 +178,6 @@ function VendedorDashboard() {
       </div>
     </DashboardLayout>
   );
-}
-
-function formatGrowthText(value: number | null) {
-  if (value === null) return "Sem base no mês anterior";
-  const rounded = Math.round(value);
-  if (rounded === 0) return "Mesmo resultado do mês anterior";
-  return `${rounded > 0 ? "+" : ""}${rounded}% vs mês anterior${rounded > 0 ? " ↑" : ""}`;
 }
 
 function DashboardError({ message }: { message: string }) {
@@ -270,19 +194,12 @@ function DashboardError({ message }: { message: string }) {
 
 function DashboardSkeleton() {
   return (
-    <div aria-label="Carregando dashboard" className="animate-pulse space-y-4">
-      <div className="h-[150px] rounded-2xl bg-neutral-200/70" />
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.18fr)_minmax(480px,0.98fr)]">
-        <div className="h-[310px] rounded-2xl bg-neutral-200/70" />
-        <div className="grid grid-cols-2 gap-3 sm:gap-4">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <div key={index} className="h-[147px] rounded-2xl bg-neutral-200/70" />
-          ))}
-        </div>
-      </div>
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, index) => (
-          <div key={index} className="h-[286px] rounded-2xl bg-neutral-200/70" />
+    <div aria-label="Carregando dashboard" className="animate-pulse space-y-4 xl:contents">
+      <div className="h-[120px] rounded-2xl bg-neutral-200/70" />
+      <div className="h-[220px] rounded-2xl bg-neutral-200/70" />
+      <div className="grid gap-4 md:grid-cols-2">
+        {Array.from({ length: 2 }).map((_, index) => (
+          <div key={index} className="h-[260px] rounded-2xl bg-neutral-200/70" />
         ))}
       </div>
     </div>
