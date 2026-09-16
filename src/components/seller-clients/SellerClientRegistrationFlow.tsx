@@ -26,11 +26,16 @@ import {
 } from "@/lib/seller-clients";
 
 type SellerClientRegistrationFlowProps = {
-  onPhoneClaimed: () => void;
-  onRegistered: () => void;
+  onPhoneClaimed?: () => void;
+  onRegistered?: () => void;
+  mode?: "full" | "registration-only";
 };
 
-export function SellerClientRegistrationFlow({ onPhoneClaimed, onRegistered }: SellerClientRegistrationFlowProps) {
+export function SellerClientRegistrationFlow({
+  onPhoneClaimed,
+  onRegistered,
+  mode = "full",
+}: SellerClientRegistrationFlowProps) {
   const [consultationPhone, setConsultationPhone] = useState("");
   const [claim, setClaim] = useState<SellerClientPhoneClaim | null>(null);
   const [checkingPhone, setCheckingPhone] = useState(false);
@@ -83,7 +88,7 @@ export function SellerClientRegistrationFlow({ onPhoneClaimed, onRegistered }: S
       const result = await claimSellerClientPhone(consultationPhone);
       setConsultationPhone(result.phone_display);
       setClaim(result);
-      if (result.outcome !== "in_use") onPhoneClaimed();
+      if (result.outcome !== "in_use") onPhoneClaimed?.();
     } catch (caught) {
       toast.error(caught instanceof Error ? caught.message : "Não foi possível consultar o telefone.");
     } finally {
@@ -99,7 +104,7 @@ export function SellerClientRegistrationFlow({ onPhoneClaimed, onRegistered }: S
       setClient((current) => current ? { ...current, link_status: "already_mine", linked_seller_name: null } : current);
       setConfirmedNow(true);
       toast.success("Cliente confirmado e cadastro contabilizado no seu ranking.");
-      onRegistered();
+      onRegistered?.();
     } catch (caught) {
       toast.error(caught instanceof Error ? caught.message : "Não foi possível confirmar o cliente.");
     } finally {
@@ -108,8 +113,8 @@ export function SellerClientRegistrationFlow({ onPhoneClaimed, onRegistered }: S
   }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
-      <section className="rounded-2xl border border-black/10 bg-white p-5 shadow-sm">
+    <div className={mode === "registration-only" ? "" : "grid gap-4 lg:grid-cols-2"}>
+      {mode === "full" && <section className="rounded-2xl border border-black/10 bg-white p-5 shadow-sm">
         <FlowHeading icon={Search} title="Consultar antes do atendimento" description="A consulta é independente do cadastro e reserva o telefone para você por 1 hora." dark />
         <Label htmlFor="consultation-phone" className="mt-5 block text-xs font-black uppercase tracking-widest text-neutral-600">Telefone com DDD</Label>
         <div className="mt-2 flex flex-col gap-2 sm:flex-row">
@@ -136,7 +141,7 @@ export function SellerClientRegistrationFlow({ onPhoneClaimed, onRegistered }: S
           </Button>
         </div>
         {claim && <PhoneClaimNotice claim={claim} />}
-      </section>
+      </section>}
 
       <section className="rounded-2xl border border-yellow-300 bg-yellow-50/50 p-5 shadow-sm">
         <FlowHeading
@@ -181,9 +186,9 @@ export function SellerClientRegistrationFlow({ onPhoneClaimed, onRegistered }: S
         )}
       </section>
 
-      <div className="rounded-2xl border border-neutral-200 bg-neutral-950 px-5 py-4 text-sm text-white lg:col-span-2">
+      {mode === "full" && <div className="rounded-2xl border border-neutral-200 bg-neutral-950 px-5 py-4 text-sm text-white lg:col-span-2">
         <strong className="text-yellow-300">Contabilização imediata:</strong> cada SDR e cada Closer pode confirmar o próprio vínculo com o mesmo cliente. A confirmação entra automaticamente no ranking da respectiva função como cadastro realizado.
-      </div>
+      </div>}
     </div>
   );
 }

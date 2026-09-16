@@ -16,6 +16,7 @@ import {
 import { toast } from "sonner";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { SellerClientRegistrationFlow } from "@/components/seller-clients/SellerClientRegistrationFlow";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -326,6 +327,19 @@ function EnviarLinkPage() {
             </div>
           </section>
         )}
+
+        <section className="rounded-[22px] border border-neutral-200 bg-white p-5 shadow-sm sm:p-6">
+          <div className="mb-4">
+            <Badge className="border-0 bg-yellow-400 px-3 py-1.5 font-black text-neutral-950">
+              Cadastro manual
+            </Badge>
+            <p className="mt-3 text-sm text-neutral-500">
+              Preencha somente o e-mail usado pelo cliente no login da NOX para localizar e
+              confirmar o vínculo manualmente.
+            </p>
+          </div>
+          <SellerClientRegistrationFlow mode="registration-only" />
+        </section>
       </main>
     </DashboardLayout>
   );
