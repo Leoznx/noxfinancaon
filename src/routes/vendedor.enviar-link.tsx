@@ -32,6 +32,7 @@ import {
   buildSellerSignupUrl,
   fetchSellerSignupLinks,
   fetchSignupLinkSdrs,
+  recordSellerSignupLinkSend,
   type SellerSignupLink,
   type SellerSignupRole,
   type SignupLinkSdr,
@@ -140,8 +141,17 @@ function EnviarLinkPage() {
     void loadLinks(id);
   }
 
-  async function copyLink(role: SellerSignupRole, url: string) {
+  async function registerSend(token: string, role: SellerSignupRole, channel: "copy" | "whatsapp") {
+    try {
+      await recordSellerSignupLinkSend(token, role, channel);
+    } catch {
+      toast.warning("O link foi enviado, mas o histórico não pôde ser atualizado.");
+    }
+  }
+
+  async function copyLink(role: SellerSignupRole, token: string, url: string) {
     await navigator.clipboard.writeText(url);
+    await registerSend(token, role, "copy");
     setCopiedRole(role);
     toast.success("Link de cadastro copiado.");
     window.setTimeout(() => setCopiedRole((current) => (current === role ? null : current)), 1800);
@@ -299,7 +309,7 @@ function EnviarLinkPage() {
                       <Button
                         variant="outline"
                         className="rounded-xl"
-                        onClick={() => void copyLink(link.profileRole, url)}
+                        onClick={() => void copyLink(link.profileRole, link.token, url)}
                       >
                         {copiedRole === link.profileRole ? (
                           <Check className="mr-2 h-4 w-4 text-emerald-600" />
@@ -316,6 +326,9 @@ function EnviarLinkPage() {
                           href={`https://wa.me/?text=${encodeURIComponent(message)}`}
                           target="_blank"
                           rel="noreferrer"
+                          onClick={() =>
+                            void registerSend(link.token, link.profileRole, "whatsapp")
+                          }
                         >
                           <MessageCircle className="mr-2 h-4 w-4" /> WhatsApp
                         </a>

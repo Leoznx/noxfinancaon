@@ -12,7 +12,15 @@ import {
   startOfWeek,
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { CalendarDays, ChevronLeft, ChevronRight, Clock3, RefreshCw, Users2 } from "lucide-react";
+import {
+  CalendarCheck2,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Clock3,
+  RefreshCw,
+  Users2,
+} from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { Badge } from "@/components/ui/badge";
@@ -28,17 +36,35 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 
 type Closer = { id: string; full_name: string | null; email: string | null };
+type Sdr = Closer;
 type Appointment = {
   id: string;
   seller_id: string | null;
+  sdr_id: string | null;
   assigned_closer_id: string | null;
   scheduled_at: string;
+  created_at: string;
   status: string;
   type: string;
   title: string | null;
   contact_name: string | null;
   contact_phone: string | null;
   duration_minutes: number | null;
+};
+type LinkSendEvent = {
+  id: string;
+  seller_id: string;
+  source_sdr_id: string | null;
+  profile_role: string;
+  channel: string;
+  created_at: string;
+};
+type SignupAttribution = {
+  id: string;
+  seller_id: string;
+  profile_role: string;
+  registered_email: string;
+  created_at: string;
 };
 
 export const Route = createFileRoute("/admin/agenda-closers")({
@@ -59,31 +85,75 @@ function activeMeeting(item: Appointment) {
 function CloserAgendaPage() {
   const [anchor, setAnchor] = useState(startOfMonth(new Date()));
   const [closers, setClosers] = useState<Closer[]>([]);
+  const [sdrs, setSdrs] = useState<Sdr[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [sdrMeetings, setSdrMeetings] = useState<Appointment[]>([]);
+  const [linkSendEvents, setLinkSendEvents] = useState<LinkSendEvent[]>([]);
+  const [signupAttributions, setSignupAttributions] = useState<SignupAttribution[]>([]);
   const [selected, setSelected] = useState("all");
+  const [selectedSdrId, setSelectedSdrId] = useState<string | null>(null);
+  const [selectedDay, setSelectedDay] = useState<Date | null>(null);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
     const from = startOfMonth(anchor);
     const to = addMonths(from, 1);
-    const [closerResult, appointmentResult] = await Promise.all([
+    const [
+      closerResult,
+      sdrResult,
+      appointmentResult,
+      sdrMeetingResult,
+      linkSendResult,
+      attributionResult,
+    ] = await Promise.all([
       (supabase.from("internal_users" as any) as any)
         .select("id, full_name, email")
         .eq("role", "vendedor")
         .eq("seller_type", "closer")
         .eq("status", "ativo")
         .order("full_name"),
+      (supabase.from("internal_users" as any) as any)
+        .select("id, full_name, email")
+        .eq("role", "vendedor")
+        .eq("seller_type", "sdr")
+        .eq("status", "ativo")
+        .order("full_name"),
       (supabase.from("seller_appointments" as any) as any)
         .select(
-          "id, seller_id, assigned_closer_id, scheduled_at, status, type, title, contact_name, contact_phone, duration_minutes",
+          "id, seller_id, sdr_id, assigned_closer_id, scheduled_at, created_at, status, type, title, contact_name, contact_phone, duration_minutes",
         )
         .gte("scheduled_at", from.toISOString())
         .lt("scheduled_at", to.toISOString())
         .order("scheduled_at"),
+      (supabase.from("seller_appointments" as any) as any)
+        .select(
+          "id, seller_id, sdr_id, assigned_closer_id, scheduled_at, created_at, status, type, title, contact_name, contact_phone, duration_minutes",
+        )
+        .eq("type", "reuniao")
+        .neq("status", "cancelado")
+        .not("sdr_id", "is", null)
+        .gte("created_at", from.toISOString())
+        .lt("created_at", to.toISOString())
+        .order("created_at", { ascending: false }),
+      (supabase.from("seller_signup_link_send_events" as any) as any)
+        .select("id, seller_id, source_sdr_id, profile_role, channel, created_at")
+        .gte("created_at", from.toISOString())
+        .lt("created_at", to.toISOString())
+        .order("created_at", { ascending: false }),
+      (supabase.from("seller_signup_attributions" as any) as any)
+        .select("id, seller_id, profile_role, registered_email, created_at")
+        .eq("seller_type", "sdr")
+        .gte("created_at", from.toISOString())
+        .lt("created_at", to.toISOString())
+        .order("created_at", { ascending: false }),
     ]);
     setClosers((closerResult.data as Closer[] | null) ?? []);
+    setSdrs((sdrResult.data as Sdr[] | null) ?? []);
     setAppointments((appointmentResult.data as Appointment[] | null) ?? []);
+    setSdrMeetings((sdrMeetingResult.data as Appointment[] | null) ?? []);
+    setLinkSendEvents((linkSendResult.data as LinkSendEvent[] | null) ?? []);
+    setSignupAttributions((attributionResult.data as SignupAttribution[] | null) ?? []);
     setLoading(false);
   }, [anchor]);
 
@@ -101,6 +171,16 @@ function CloserAgendaPage() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "internal_users" },
+        () => void load(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "seller_signup_link_send_events" },
+        () => void load(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "seller_signup_attributions" },
         () => void load(),
       )
       .subscribe();
@@ -131,6 +211,22 @@ function CloserAgendaPage() {
   const days = Array.from({ length: leading + endOfMonth(anchor).getDate() }, (_, index) =>
     index < leading ? null : new Date(anchor.getFullYear(), anchor.getMonth(), index - leading + 1),
   );
+  const sdrPerformance = useMemo(
+    () =>
+      sdrs.map((sdr) => ({
+        sdr,
+        meetings: sdrMeetings.filter((item) => item.sdr_id === sdr.id),
+        sends: linkSendEvents.filter(
+          (event) => event.seller_id === sdr.id || event.source_sdr_id === sdr.id,
+        ),
+        registrations: signupAttributions.filter((item) => item.seller_id === sdr.id),
+      })),
+    [linkSendEvents, sdrMeetings, sdrs, signupAttributions],
+  );
+  const selectedSdr = sdrPerformance.find((item) => item.sdr.id === selectedSdrId) ?? null;
+  const selectedDayRows = selectedDay
+    ? filtered.filter((item) => isSameDay(new Date(item.scheduled_at), selectedDay))
+    : [];
 
   return (
     <DashboardLayout>
@@ -167,7 +263,7 @@ function CloserAgendaPage() {
               </p>
             </div>
             <Select value={selected} onValueChange={setSelected}>
-              <SelectTrigger className="w-64">
+              <SelectTrigger className="w-full sm:w-64">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -215,6 +311,109 @@ function CloserAgendaPage() {
           </CardContent>
         </Card>
         <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CalendarCheck2 className="h-5 w-5 text-yellow-600" /> Desempenho dos SDRs
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Reuniões marcadas, links enviados e cadastros concluídos no mês selecionado.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Metric title="Reuniões marcadas" value={sdrMeetings.length} subtitle="pelos SDRs" />
+              <Metric
+                title="Links enviados"
+                value={
+                  linkSendEvents.filter((event) =>
+                    sdrs.some(
+                      (sdr) => event.seller_id === sdr.id || event.source_sdr_id === sdr.id,
+                    ),
+                  ).length
+                }
+                subtitle="ações registradas"
+              />
+              <Metric title="Cadastros" value={signupAttributions.length} subtitle="concluídos" />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {sdrPerformance.map((item) => (
+                <button
+                  key={item.sdr.id}
+                  type="button"
+                  onClick={() =>
+                    setSelectedSdrId((current) => (current === item.sdr.id ? null : item.sdr.id))
+                  }
+                  className={`rounded-xl border p-4 text-left transition ${selectedSdrId === item.sdr.id ? "border-yellow-400 bg-yellow-50" : "border-neutral-200 hover:border-yellow-300"}`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <strong className="truncate text-sm">
+                      {item.sdr.full_name || item.sdr.email || "SDR"}
+                    </strong>
+                    <Badge variant="outline">SDR</Badge>
+                  </div>
+                  <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+                    <SdrCount label="Reuniões" value={item.meetings.length} />
+                    <SdrCount label="Links" value={item.sends.length} />
+                    <SdrCount label="Cadastros" value={item.registrations.length} />
+                  </div>
+                </button>
+              ))}
+              {sdrPerformance.length === 0 && (
+                <p className="col-span-full py-6 text-center text-sm text-muted-foreground">
+                  Nenhum SDR ativo encontrado.
+                </p>
+              )}
+            </div>
+
+            {selectedSdr && (
+              <div className="rounded-2xl border border-yellow-300 bg-yellow-50/50 p-4 sm:p-5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-wider text-yellow-700">
+                      Detalhamento individual
+                    </p>
+                    <h3 className="mt-1 text-lg font-black">
+                      {selectedSdr.sdr.full_name || selectedSdr.sdr.email || "SDR"}
+                    </h3>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => setSelectedSdrId(null)}>
+                    Fechar detalhes
+                  </Button>
+                </div>
+                <div className="mt-4 grid gap-4 lg:grid-cols-3">
+                  <SdrDetailColumn
+                    title="Reuniões marcadas"
+                    empty="Nenhuma reunião marcada neste mês."
+                    rows={selectedSdr.meetings.map((meeting) => ({
+                      id: meeting.id,
+                      title: meeting.contact_name || meeting.title || "Reunião",
+                      detail: `${format(new Date(meeting.scheduled_at), "dd/MM 'às' HH:mm")} · ${closers.find((closer) => closer.id === ownerId(meeting))?.full_name || "Closer"}`,
+                    }))}
+                  />
+                  <SdrDetailColumn
+                    title="Links enviados"
+                    empty="Nenhum envio registrado neste mês."
+                    rows={selectedSdr.sends.map((event) => ({
+                      id: event.id,
+                      title: `${roleLabel(event.profile_role)} · ${channelLabel(event.channel)}`,
+                      detail: format(new Date(event.created_at), "dd/MM/yyyy 'às' HH:mm"),
+                    }))}
+                  />
+                  <SdrDetailColumn
+                    title="Cadastros concluídos"
+                    empty="Nenhum cadastro concluído neste mês."
+                    rows={selectedSdr.registrations.map((registration) => ({
+                      id: registration.id,
+                      title: roleLabel(registration.profile_role),
+                      detail: `${registration.registered_email} · ${format(new Date(registration.created_at), "dd/MM 'às' HH:mm")}`,
+                    }))}
+                  />
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+        <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="capitalize">
               {format(anchor, "MMMM 'de' yyyy", { locale: ptBR })}
@@ -237,7 +436,70 @@ function CloserAgendaPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-7 border-l border-t text-center text-[10px] font-black uppercase text-neutral-400">
+            <div className="md:hidden">
+              <div className="grid grid-cols-7 text-center text-[9px] font-black uppercase text-neutral-400">
+                {["S", "T", "Q", "Q", "S", "S", "D"].map((label, index) => (
+                  <div key={`${label}-${index}`} className="py-2">
+                    {label}
+                  </div>
+                ))}
+              </div>
+              <div className="grid grid-cols-7 gap-1">
+                {days.map((day, index) => {
+                  const rows = day
+                    ? filtered.filter((item) => isSameDay(new Date(item.scheduled_at), day))
+                    : [];
+                  const active = Boolean(day && selectedDay && isSameDay(day, selectedDay));
+                  return day ? (
+                    <button
+                      key={day.toISOString()}
+                      type="button"
+                      onClick={() => setSelectedDay(day)}
+                      className={`relative flex min-h-14 flex-col items-center justify-center rounded-xl border text-xs font-black ${active ? "border-yellow-500 bg-yellow-100" : isSameDay(day, now) ? "border-yellow-300 bg-yellow-50" : "border-neutral-200 bg-white"}`}
+                    >
+                      {day.getDate()}
+                      {rows.length > 0 && (
+                        <span className="mt-1 rounded-full bg-emerald-600 px-1.5 py-0.5 text-[8px] text-white">
+                          {rows.length}
+                        </span>
+                      )}
+                    </button>
+                  ) : (
+                    <span key={`blank-${index}`} className="min-h-14" />
+                  );
+                })}
+              </div>
+              <div className="mt-4 rounded-xl bg-neutral-50 p-3">
+                <p className="text-xs font-black uppercase tracking-wider text-neutral-500">
+                  {selectedDay
+                    ? format(selectedDay, "dd 'de' MMMM", { locale: ptBR })
+                    : "Toque em um dia para ver as reuniões"}
+                </p>
+                {selectedDay && selectedDayRows.length === 0 && (
+                  <p className="mt-2 text-sm text-neutral-500">Nenhuma reunião neste dia.</p>
+                )}
+                <div className="mt-2 space-y-2">
+                  {selectedDayRows.map((item) => {
+                    const closer = closers.find((value) => value.id === ownerId(item));
+                    return (
+                      <div
+                        key={item.id}
+                        className="rounded-lg border border-emerald-200 bg-white p-3"
+                      >
+                        <p className="text-sm font-black">
+                          {format(new Date(item.scheduled_at), "HH:mm")} ·{" "}
+                          {item.contact_name || item.title || "Reunião"}
+                        </p>
+                        <p className="mt-1 text-xs text-neutral-500">
+                          {closer?.full_name || "Closer"} · {item.contact_phone || "Sem telefone"}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+            <div className="hidden grid-cols-7 border-l border-t text-center text-[10px] font-black uppercase text-neutral-400 md:grid">
               {["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"].map((label) => (
                 <div key={label} className="border-b border-r p-2">
                   {label}
@@ -341,4 +603,55 @@ function Metric({ title, value, subtitle }: { title: string; value: number; subt
       </CardContent>
     </Card>
   );
+}
+
+function SdrCount({ label, value }: { label: string; value: number }) {
+  return (
+    <span className="rounded-lg bg-neutral-50 px-2 py-2">
+      <b className="block text-xl text-neutral-950">{value}</b>
+      <small className="text-[9px] font-bold uppercase text-neutral-500">{label}</small>
+    </span>
+  );
+}
+
+function SdrDetailColumn({
+  title,
+  empty,
+  rows,
+}: {
+  title: string;
+  empty: string;
+  rows: { id: string; title: string; detail: string }[];
+}) {
+  return (
+    <section className="rounded-xl border border-neutral-200 bg-white p-3">
+      <h4 className="text-sm font-black">{title}</h4>
+      <div className="mt-3 max-h-64 space-y-2 overflow-y-auto pr-1">
+        {rows.slice(0, 20).map((row) => (
+          <div key={row.id} className="rounded-lg bg-neutral-50 p-2.5">
+            <p className="text-xs font-bold text-neutral-900">{row.title}</p>
+            <p className="mt-1 break-words text-[10px] text-neutral-500">{row.detail}</p>
+          </div>
+        ))}
+        {rows.length === 0 && <p className="py-4 text-xs text-neutral-500">{empty}</p>}
+        {rows.length > 20 && (
+          <p className="text-center text-[10px] font-bold text-neutral-500">
+            +{rows.length - 20} registros neste mês
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function roleLabel(role: string) {
+  if (role === "proprietario") return "Proprietário";
+  if (role === "imobiliaria") return "Imobiliária";
+  return "Corretor";
+}
+
+function channelLabel(channel: string) {
+  if (channel === "whatsapp") return "WhatsApp";
+  if (channel === "share") return "Compartilhamento";
+  return "Cópia do link";
 }

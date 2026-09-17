@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 
 export type SellerSignupRole = "proprietario" | "imobiliaria" | "corretor";
+export type SellerSignupSendChannel = "copy" | "whatsapp" | "share";
 
 export type SellerSignupLink = {
   profileRole: SellerSignupRole;
@@ -44,6 +45,19 @@ export async function fetchSignupLinkSdrs() {
     id: String(row.sdr_id),
     name: String(row.sdr_name || "SDR"),
   })) satisfies SignupLinkSdr[];
+}
+
+export async function recordSellerSignupLinkSend(
+  token: string,
+  profileRole: SellerSignupRole,
+  channel: SellerSignupSendChannel,
+) {
+  const { error } = await (supabase as any).rpc("record_my_seller_signup_link_send", {
+    p_token: token,
+    p_profile_role: profileRole,
+    p_channel: channel,
+  });
+  if (error) throw error;
 }
 
 export function buildSellerSignupUrl(role: SellerSignupRole, token: string) {
