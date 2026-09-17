@@ -163,6 +163,7 @@ const profissionalSchema = z
       .string()
       .regex(/^[a-f0-9]{48}$/i)
       .optional(),
+    sellerMeetingId: z.string().uuid().optional(),
   })
   .superRefine((data, ctx) => {
     if (
@@ -174,6 +175,13 @@ const profissionalSchema = z
         code: z.ZodIssueCode.custom,
         path: ["imobiliariaIdentificador"],
         message: "Informe o CNPJ ou o e-mail da imobiliária à qual o corretor está vinculado.",
+      });
+    }
+    if (data.sellerMeetingId && !data.sellerLinkToken) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["sellerMeetingId"],
+        message: "A reunião informada exige um link comercial válido.",
       });
     }
   });
@@ -199,6 +207,20 @@ export const signUpProfissional = createServerFn({ method: "POST" })
       );
       if (linkValidationError || !validLink) {
         return { ok: false as const, error: "link_vendedor_invalido" as const };
+      }
+
+      if (data.sellerMeetingId) {
+        const { data: validMeetingLink, error: meetingLinkError } = await (supabaseAdmin as any).rpc(
+          "resolve_meeting_signup_link",
+          {
+            p_appointment_id: data.sellerMeetingId,
+            p_token: data.sellerLinkToken,
+            p_profile_role: data.role,
+          },
+        );
+        if (meetingLinkError || !validMeetingLink) {
+          return { ok: false as const, error: "link_vendedor_invalido" as const };
+        }
       }
     }
 
@@ -328,9 +350,13 @@ export const signUpProfissional = createServerFn({ method: "POST" })
     });
 
     if (data.sellerLinkToken) {
+      const claimFunction = data.sellerMeetingId
+        ? "claim_seller_signup_link_for_meeting"
+        : "claim_seller_signup_link";
       const { data: recipients, error: attributionError } = await (supabaseAdmin as any).rpc(
-        "claim_seller_signup_link",
+        claimFunction,
         {
+          ...(data.sellerMeetingId ? { p_appointment_id: data.sellerMeetingId } : {}),
           p_token: data.sellerLinkToken,
           p_profile_id: userId,
           p_profile_role: data.role,

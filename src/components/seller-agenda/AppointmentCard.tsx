@@ -103,9 +103,9 @@ export function AppointmentCard({
         <Button type="button" size="sm" variant="ghost" className="h-7 gap-1 px-2 text-[10px]" onClick={() => onView(item)}>
           <Eye className="h-3.5 w-3.5" /> Detalhes
         </Button>
-        <Button type="button" size="sm" variant="ghost" className="h-7 gap-1 px-2 text-[10px]" onClick={() => onEdit(item)}>
+        {item.source !== "meeting_follow_up" && <Button type="button" size="sm" variant="ghost" className="h-7 gap-1 px-2 text-[10px]" onClick={() => onEdit(item)}>
           <Edit3 className="h-3.5 w-3.5" /> Editar
-        </Button>
+        </Button>}
         {!finished && (
           <Button
             type="button"
@@ -117,7 +117,7 @@ export function AppointmentCard({
             <Check className="h-3.5 w-3.5" /> Concluir
           </Button>
         )}
-        <Button
+        {item.source !== "meeting_follow_up" && <Button
           type="button"
           size="icon"
           variant="ghost"
@@ -126,7 +126,7 @@ export function AppointmentCard({
           onClick={() => onDelete(item)}
         >
           <Trash2 className="h-3.5 w-3.5" />
-        </Button>
+        </Button>}
       </div>
     </article>
   );

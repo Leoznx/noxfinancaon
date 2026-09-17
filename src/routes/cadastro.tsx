@@ -51,6 +51,7 @@ const cadastroSearchSchema = z.object({
     .string()
     .regex(/^[a-f0-9]{48}$/i)
     .optional(),
+  ma: z.string().uuid().optional(),
 });
 
 export const Route = createFileRoute("/cadastro")({
@@ -230,11 +231,12 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
         ref: search.ref,
         sr: search.sr,
         sl: search.sl,
+        ma: search.ma,
         ...(!perfilInicial && search.perfil ? { perfil: search.perfil } : {}),
       } as any,
       replace: true,
     });
-  }, [navigate, perfilInicial, search.perfil, search.ref, search.returnTo, search.sl, search.sr]);
+  }, [navigate, perfilInicial, search.ma, search.perfil, search.ref, search.returnTo, search.sl, search.sr]);
 
   useEffect(() => {
     if (resendCooldown <= 0) return;
@@ -263,7 +265,7 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
   const handleTypeSelect = (type: CadastroPerfil) => {
     navigate({
       to: CADASTRO_ROUTES[type] as any,
-      search: { returnTo: search.returnTo, ref: search.ref, sr: search.sr, sl: search.sl } as any,
+      search: { returnTo: search.returnTo, ref: search.ref, sr: search.sr, sl: search.sl, ma: search.ma } as any,
     });
   };
 
@@ -401,6 +403,7 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
           cidade: data.cidade,
           estado: data.estado,
           sellerLinkToken: search.sl,
+          sellerMeetingId: search.ma,
         },
       });
 
@@ -678,6 +681,7 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
                         ref: search.ref,
                         sr: search.sr,
                         sl: search.sl,
+                        ma: search.ma,
                       },
                     })
                   }

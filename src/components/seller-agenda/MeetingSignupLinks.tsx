@@ -18,6 +18,7 @@ import {
 import {
   buildSellerSignupUrl,
   fetchMeetingSignupLinks,
+  recordMeetingSignupLinkSend,
   type SellerSignupLink,
   type SellerSignupRole,
 } from "@/lib/seller-signup-links";
@@ -41,7 +42,7 @@ export function MeetingSignupLinks({ item }: { item: SellerAppointment }) {
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const selected = useMemo(() => links.find((link) => link.profileRole === role) ?? null, [links, role]);
-  const url = selected ? buildSellerSignupUrl(selected.profileRole, selected.token) : "";
+  const url = selected ? buildSellerSignupUrl(selected.profileRole, selected.token, item.id) : "";
   const message = selected ? registrationWhatsAppMessage(item, ROLE_LABELS[selected.profileRole], url) : "";
   const whatsappUrl = selected ? buildAppointmentWhatsAppUrl(item.contact_phone, message) : "";
 
@@ -61,11 +62,23 @@ export function MeetingSignupLinks({ item }: { item: SellerAppointment }) {
   }
 
   async function copy() {
-    if (!url) return;
+    if (!url || !selected) return;
     await navigator.clipboard.writeText(url);
+    try {
+      await recordMeetingSignupLinkSend(item.id, selected.token, selected.profileRole, "copy");
+    } catch {
+      toast.warning("O link foi copiado, mas o vínculo com a reunião não pôde ser registrado.");
+      return;
+    }
     setCopied(true);
     toast.success("Link de cadastro copiado.");
     window.setTimeout(() => setCopied(false), 1800);
+  }
+
+  function registerWhatsAppSend() {
+    if (!selected) return;
+    void recordMeetingSignupLinkSend(item.id, selected.token, selected.profileRole, "whatsapp")
+      .catch(() => toast.warning("O WhatsApp abriu, mas o vínculo com a reunião não pôde ser registrado."));
   }
 
   if (links.length === 0) {
@@ -102,7 +115,7 @@ export function MeetingSignupLinks({ item }: { item: SellerAppointment }) {
             {copied ? <Check className="mr-1.5 h-4 w-4" /> : <Copy className="mr-1.5 h-4 w-4" />} Copiar
           </Button>
           <Button type="button" size="sm" className="bg-[#25D366] font-black text-white hover:bg-[#20bd5a]" asChild>
-            <a href={whatsappUrl} target="_blank" rel="noreferrer"><MessageCircle className="mr-1.5 h-4 w-4" /> WhatsApp</a>
+            <a href={whatsappUrl} target="_blank" rel="noreferrer" onClick={registerWhatsAppSend}><MessageCircle className="mr-1.5 h-4 w-4" /> WhatsApp</a>
           </Button>
         </div>
       </div>

@@ -131,11 +131,19 @@ function AgendaPage() {
       .on("postgres_changes", { event: "*", schema: "public", table: "seller_appointments", filter: `sdr_id=eq.${sellerId}` }, scheduleRefresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "seller_appointments", filter: `assigned_closer_id=eq.${sellerId}` }, scheduleRefresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "sales_leads", filter: `assigned_seller_id=eq.${sellerId}` }, scheduleRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "consultas_credito" }, scheduleRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "apolices" }, scheduleRefresh)
       .subscribe();
     return () => {
       if (realtimeTimer.current) clearTimeout(realtimeTimer.current);
       supabase.removeChannel(channel);
     };
+  }, [sellerId, load]);
+
+  useEffect(() => {
+    if (!sellerId) return;
+    const visibilityTimer = window.setInterval(() => void load(true), 60_000);
+    return () => window.clearInterval(visibilityTimer);
   }, [sellerId, load]);
 
   const filtered = useMemo(() => appointments.filter((item) => appointmentMatchesFilter(item, filter)), [appointments, filter]);

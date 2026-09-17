@@ -1,12 +1,39 @@
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Bell, Building2, CalendarDays, Check, Clock3, Edit3, MessageCircle, MessageSquareText, Phone, Trash2, UserRound } from "lucide-react";
+import { Activity, Bell, Building2, CalendarDays, Check, CheckCircle2, Clock3, Edit3, MessageCircle, MessageSquareText, Phone, Search, Trash2, UserRound } from "lucide-react";
 import { MeetingSignupLinks } from "@/components/seller-agenda/MeetingSignupLinks";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AGENDA_REMINDERS, agendaStatusLabel, agendaTypeLabel, appointmentWhatsAppMessage, buildAppointmentWhatsAppUrl, getAppointmentContact, getSharedMeetingMetadata, getVisibleAppointmentNotes, type SellerAppointment } from "@/lib/seller-agenda";
 import { formatBrazilianPhoneInput, normalizeBrazilianPhone } from "@/lib/seller-clients";
+
+const JOURNEY_COPY = {
+  registration_pending: {
+    label: "Cadastro ainda não concluído",
+    detail: "O link foi enviado pela reunião. A jornada começa assim que o cliente concluir o cadastro.",
+    className: "border-neutral-200 bg-neutral-50 text-neutral-700",
+    icon: Activity,
+  },
+  no_consultations: {
+    label: "Sem consultas feitas",
+    detail: "O cliente já está vinculado, mas ainda não iniciou uma simulação de crédito.",
+    className: "border-amber-200 bg-amber-50 text-amber-900",
+    icon: Search,
+  },
+  consultation_in_progress: {
+    label: "Fazendo consulta, mas sem fechamento",
+    detail: "Já existe consulta de crédito, porém nenhum contrato foi fechado até agora.",
+    className: "border-blue-200 bg-blue-50 text-blue-900",
+    icon: Activity,
+  },
+  contract_closed: {
+    label: "Contrato fechado",
+    detail: "A jornada deste cliente já gerou contrato na NOX Fiança.",
+    className: "border-emerald-200 bg-emerald-50 text-emerald-900",
+    icon: CheckCircle2,
+  },
+} as const;
 
 export function AppointmentDetailsDialog({
   item,
@@ -38,6 +65,10 @@ export function AppointmentDetailsDialog({
   const followUpWhatsAppUrl = item.source === "meeting_follow_up"
     ? buildAppointmentWhatsAppUrl(contact.phone, appointmentWhatsAppMessage(item))
     : null;
+  const journey = item.source === "meeting_follow_up" && item.journey
+    ? JOURNEY_COPY[item.journey.status]
+    : null;
+  const JourneyIcon = journey?.icon;
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-lg">
@@ -72,14 +103,33 @@ export function AppointmentDetailsDialog({
             </div>
           )}
           {item.source === "sdr_handoff" && (metadata.clientType || sdrName) && <div className="grid gap-2 rounded-xl border border-yellow-200 bg-yellow-50 p-3 text-xs font-semibold text-neutral-700 sm:grid-cols-2">{metadata.clientType && <p><span className="text-neutral-500">Tipo:</span> {metadata.clientType}</p>}{sdrName && <p><span className="text-neutral-500">SDR:</span> {sdrName}</p>}</div>}
+          {journey && JourneyIcon && (
+            <div className={`rounded-xl border p-3 ${journey.className}`}>
+              <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wide">
+                <JourneyIcon className="h-4 w-4" /> Jornada do cliente
+              </p>
+              <p className="mt-2 font-black">{journey.label}</p>
+              <p className="mt-1 text-xs leading-relaxed opacity-80">{journey.detail}</p>
+              {item.journey && item.journey.consultationCount > 0 && (
+                <p className="mt-2 text-[11px] font-bold">
+                  {item.journey.consultationCount} consulta(s) · {item.journey.contractCount} contrato(s)
+                </p>
+              )}
+            </div>
+          )}
+          {item.source === "meeting_follow_up" && item.status !== "concluido" && (
+            <div className="rounded-xl border border-yellow-300 bg-yellow-50 p-3 text-xs font-bold text-yellow-900">
+              Conclusão obrigatória: este follow-up automático não pode ser editado, cancelado ou excluído.
+            </div>
+          )}
           {visibleNotes && <p className="rounded-xl border border-neutral-200 p-3 leading-relaxed text-neutral-600">{visibleNotes}</p>}
           {item.meeting_feedback && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3"><p className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-emerald-800"><MessageSquareText className="h-3.5 w-3.5" /> Feedback da reunião</p><p className="mt-1 whitespace-pre-wrap leading-relaxed text-neutral-700">{item.meeting_feedback}</p></div>}
           {canManageCloserMeeting && item.type === "reuniao" && <MeetingSignupLinks item={item} />}
           {followUpWhatsAppUrl && <Button type="button" className="w-full bg-[#25D366] font-black text-white hover:bg-[#20bd5a]" asChild><a href={followUpWhatsAppUrl} target="_blank" rel="noreferrer"><MessageCircle className="mr-1.5 h-4 w-4" /> Abrir mensagem pronta no WhatsApp</a></Button>}
         </div>
         <DialogFooter className="flex-wrap">
-          <Button variant="ghost" className="mr-auto text-red-600 hover:bg-red-50" onClick={() => onDelete(item)}><Trash2 className="mr-1.5 h-4 w-4" /> Excluir</Button>
-          <Button variant="outline" onClick={() => onEdit(item)}><Edit3 className="mr-1.5 h-4 w-4" /> Editar</Button>
+          {item.source !== "meeting_follow_up" && <Button variant="ghost" className="mr-auto text-red-600 hover:bg-red-50" onClick={() => onDelete(item)}><Trash2 className="mr-1.5 h-4 w-4" /> Excluir</Button>}
+          {item.source !== "meeting_follow_up" && <Button variant="outline" onClick={() => onEdit(item)}><Edit3 className="mr-1.5 h-4 w-4" /> Editar</Button>}
           {!["concluido", "cancelado"].includes(item.status) && (
             <Button className="bg-neutral-950 text-white hover:bg-neutral-800" onClick={() => onComplete(item)}><Check className="mr-1.5 h-4 w-4" /> Concluir</Button>
           )}

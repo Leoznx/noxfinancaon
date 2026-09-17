@@ -13,6 +13,7 @@ const searchSchema = z.object({
     .string()
     .regex(/^[a-f0-9]{48}$/i)
     .optional(),
+  ma: z.string().uuid().optional(),
 });
 
 export const Route = createFileRoute("/cadastro-corretor")({

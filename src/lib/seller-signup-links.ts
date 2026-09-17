@@ -60,7 +60,28 @@ export async function recordSellerSignupLinkSend(
   if (error) throw error;
 }
 
-export function buildSellerSignupUrl(role: SellerSignupRole, token: string) {
+export async function recordMeetingSignupLinkSend(
+  appointmentId: string,
+  token: string,
+  profileRole: SellerSignupRole,
+  channel: SellerSignupSendChannel,
+) {
+  const { error } = await (supabase as any).rpc("record_meeting_signup_link_send", {
+    p_appointment_id: appointmentId,
+    p_token: token,
+    p_profile_role: profileRole,
+    p_channel: channel,
+  });
+  if (error) throw error;
+}
+
+export function buildSellerSignupUrl(
+  role: SellerSignupRole,
+  token: string,
+  appointmentId?: string,
+) {
   const origin = typeof window === "undefined" ? "https://noxfianca.com" : window.location.origin;
-  return `${origin}/cadastro-${role}?sl=${encodeURIComponent(token)}`;
+  const params = new URLSearchParams({ sl: token });
+  if (appointmentId) params.set("ma", appointmentId);
+  return `${origin}/cadastro-${role}?${params.toString()}`;
 }

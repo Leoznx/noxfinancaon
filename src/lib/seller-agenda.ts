@@ -21,6 +21,19 @@ export type AgendaSummary = {
   scheduledMeetings: number;
 };
 
+export type FollowUpJourneyStatus =
+  | "registration_pending"
+  | "no_consultations"
+  | "consultation_in_progress"
+  | "contract_closed";
+
+export type FollowUpJourney = {
+  status: FollowUpJourneyStatus;
+  consultationCount: number;
+  contractCount: number;
+  lastActivityAt: string | null;
+};
+
 export type AgendaLeadOption = {
   id: string;
   full_name: string;
@@ -64,6 +77,9 @@ export type SellerAppointment = {
   follow_up_message_key: string | null;
   meeting_feedback: string | null;
   feedback_submitted_at: string | null;
+  tracked_profile_id: string | null;
+  visible_from: string | null;
+  journey: FollowUpJourney | null;
   completed_at: string | null;
   created_at: string;
   updated_at: string;
@@ -258,7 +274,7 @@ export async function fetchSellerAgenda(
     supabase
       .from("seller_appointments" as any)
       .select(
-        "id, seller_id, sdr_id, assigned_closer_id, lead_id, partnership_id, title, type, status, priority, scheduled_at, reminder_minutes, notes, source, completed_at, duration_minutes, contact_name, contact_email, contact_phone, origin_appointment_id, follow_up_offset_days, follow_up_owner_type, follow_up_message_key, meeting_feedback, feedback_submitted_at, created_at, updated_at, sales_leads(full_name, email, phone)",
+        "id, seller_id, sdr_id, assigned_closer_id, lead_id, partnership_id, title, type, status, priority, scheduled_at, reminder_minutes, notes, source, completed_at, duration_minutes, contact_name, contact_email, contact_phone, origin_appointment_id, follow_up_offset_days, follow_up_owner_type, follow_up_message_key, meeting_feedback, feedback_submitted_at, tracked_profile_id, visible_from, created_at, updated_at, sales_leads(full_name, email, phone)",
       )
       .or(`seller_id.eq.${sellerId},sdr_id.eq.${sellerId},assigned_closer_id.eq.${sellerId}`)
       .gte("scheduled_at", start.toISOString())
@@ -277,7 +293,28 @@ export async function fetchSellerAgenda(
 
   const clients = clientsToOptions(sellerClients);
   const clientsById = new Map(clients.map((client) => [client.id, client]));
-  const appointments = ((appointmentsResult.data as any[]) ?? []).map((row): SellerAppointment => ({
+  const appointmentRows = (appointmentsResult.data as any[]) ?? [];
+  const journeyAppointmentIds = appointmentRows
+    .filter((row) => row.source === "meeting_follow_up")
+    .map((row) => String(row.id));
+  const journeyByAppointment = new Map<string, FollowUpJourney>();
+  if (journeyAppointmentIds.length > 0) {
+    const { data: journeyRows, error: journeyError } = await (supabase as any).rpc(
+      "get_my_follow_up_journeys",
+      { p_appointment_ids: journeyAppointmentIds },
+    );
+    if (journeyError) throw journeyError;
+    for (const row of (journeyRows as any[] | null) ?? []) {
+      journeyByAppointment.set(String(row.appointment_id), {
+        status: String(row.journey_status) as FollowUpJourneyStatus,
+        consultationCount: Number(row.consultation_count ?? 0),
+        contractCount: Number(row.contract_count ?? 0),
+        lastActivityAt: row.last_activity_at ? String(row.last_activity_at) : null,
+      });
+    }
+  }
+
+  const appointments = appointmentRows.map((row): SellerAppointment => ({
     ...row,
     partnership_id: row.partnership_id ?? null,
     source: row.source ?? "manual",
@@ -294,11 +331,14 @@ export async function fetchSellerAgenda(
     follow_up_message_key: row.follow_up_message_key ?? null,
     meeting_feedback: row.meeting_feedback ?? null,
     feedback_submitted_at: row.feedback_submitted_at ?? null,
+    tracked_profile_id: row.tracked_profile_id ?? null,
+    visible_from: row.visible_from ?? null,
+    journey: journeyByAppointment.get(String(row.id)) ?? null,
     lead_name: row.sales_leads?.full_name ?? null,
     lead_email: row.sales_leads?.email ?? null,
     lead_phone: row.sales_leads?.phone ?? null,
     client_name: row.partnership_id ? clientsById.get(row.partnership_id)?.name ?? null : null,
-  }));
+  })).filter((item) => !item.visible_from || new Date(item.visible_from).getTime() <= Date.now());
 
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
