@@ -6,8 +6,6 @@ import {
   Camera,
   Check,
   Clock3,
-  History,
-  Image as ImageIcon,
   Loader2,
   LockKeyhole,
   RefreshCw,
@@ -21,8 +19,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { SellerTimeClockHistory } from "@/components/time-clock/SellerTimeClockHistory";
 import {
-  createTimeClockPhotoUrl,
   defaultTimeClockRange,
   fetchMyTimeClockDashboard,
   formatPunchTime,
@@ -30,7 +28,6 @@ import {
   registerTimeClockPunch,
   TIME_CLOCK_CLASSIFICATION_LABELS,
   TIME_CLOCK_LABELS,
-  type TimeClockClassification,
   type TimeClockDashboard,
   type TimeClockDay,
   type TimeClockPunchType,
@@ -290,7 +287,7 @@ function TimeClockPage() {
               </div>
             )}
 
-            <HistorySection days={dashboard.history} onRefresh={load} />
+            <SellerTimeClockHistory initialDays={dashboard.history} />
           </>
         ) : null}
       </main>
@@ -345,52 +342,6 @@ function PunchStep({ type, index, punch, active }: { type: TimeClockPunchType; i
       {punch && <p className="mt-1 text-[9px] font-bold text-neutral-500">{TIME_CLOCK_CLASSIFICATION_LABELS[punch.classification]}</p>}
     </div>
   );
-}
-
-function HistorySection({ days, onRefresh }: { days: TimeClockDay[]; onRefresh: () => Promise<void> }) {
-  return (
-    <Card className="overflow-hidden border-neutral-200 shadow-sm">
-      <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-neutral-100">
-        <div><CardTitle className="flex items-center gap-2 text-base"><History className="h-5 w-5 text-yellow-600" /> Meu histórico</CardTitle><p className="mt-1 text-xs text-neutral-500">Dias úteis do mês, com detalhes e saldo individual.</p></div>
-        <Button variant="outline" size="icon" className="rounded-xl" onClick={() => void onRefresh()} aria-label="Atualizar histórico"><RefreshCw className="h-4 w-4" /></Button>
-      </CardHeader>
-      <CardContent className="p-0">
-        <div className="divide-y divide-neutral-100">
-          {days.map((day) => <HistoryDay key={day.work_date} day={day} />)}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function HistoryDay({ day }: { day: TimeClockDay }) {
-  const [opening, setOpening] = useState<string | null>(null);
-  const openPhoto = async (path: string) => {
-    setOpening(path);
-    try {
-      window.open(await createTimeClockPhotoUrl(path), "_blank", "noopener,noreferrer");
-    } catch (cause) {
-      toast.error(cause instanceof Error ? cause.message : "Não foi possível abrir a foto.");
-    } finally { setOpening(null); }
-  };
-  const date = new Date(`${day.work_date}T12:00:00`);
-  return (
-    <div className="grid gap-3 px-4 py-4 sm:grid-cols-[170px_1fr_auto] sm:items-center sm:px-6">
-      <div><p className="text-sm font-black capitalize">{date.toLocaleDateString("pt-BR", { weekday: "long" })}</p><p className="text-xs text-neutral-500">{date.toLocaleDateString("pt-BR")}</p></div>
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-        {PUNCH_TYPES.map((type) => { const punch = day.punches.find((item) => item.type === type); return <div key={type} className="rounded-xl bg-neutral-50 px-3 py-2"><p className="text-[9px] font-bold uppercase tracking-wide text-neutral-400">{TIME_CLOCK_LABELS[type]}</p><div className="mt-1 flex items-center gap-2"><strong className="font-mono text-xs">{punch ? formatPunchTime(punch.punched_at) : "—"}</strong>{punch && <button onClick={() => void openPhoto(punch.photo_path)} className="text-neutral-400 hover:text-yellow-600" aria-label={`Abrir foto de ${TIME_CLOCK_LABELS[type]}`}>{opening === punch.photo_path ? <Loader2 className="h-3 w-3 animate-spin" /> : <ImageIcon className="h-3 w-3" />}</button>}</div></div>; })}
-      </div>
-      <div className="flex items-center justify-between gap-4 sm:min-w-32 sm:flex-col sm:items-end sm:justify-center">
-        <StatusBadge status={day.status} />
-        <div className="text-right"><p className={`text-sm font-black ${(day.bank_minutes ?? 0) > 0 ? "text-emerald-700" : (day.bank_minutes ?? 0) < 0 ? "text-red-600" : "text-neutral-700"}`}>{formatTimeClockMinutes(day.bank_minutes)}</p><p className="text-[9px] uppercase text-neutral-400">saldo do dia</p></div>
-      </div>
-    </div>
-  );
-}
-
-function StatusBadge({ status }: { status: TimeClockDay["status"] }) {
-  const copy = status === "completo" ? "Completo" : status === "em_andamento" ? "Em andamento" : status === "sem_registro" ? "Sem registro" : "Pendente";
-  return <Badge variant="outline" className={status === "completo" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : status === "sem_registro" ? "border-red-200 bg-red-50 text-red-700" : "border-neutral-200 bg-neutral-50 text-neutral-600"}>{copy}</Badge>;
 }
 
 function SummaryCard({ icon: Icon, title, value, description, emphasized = false }: { icon: typeof Clock3; title: string; value: string; description: string; emphasized?: boolean }) {

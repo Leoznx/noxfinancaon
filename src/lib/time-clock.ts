@@ -50,6 +50,26 @@ export type TimeClockDashboard = {
   history: TimeClockDay[];
 };
 
+export type TimeClockHistoryView = "day" | "week" | "month";
+
+export type TimeClockCalendarDay = {
+  date: string;
+  dayNumber: number;
+  inMonth: boolean;
+  weekend: boolean;
+};
+
+export type TimeClockPeriodSummary = {
+  scheduledMinutes: number;
+  workedMinutes: number;
+  bankMinutes: number;
+  lateMinutes: number;
+  earlyDepartureMinutes: number;
+  completedDays: number;
+  registeredDays: number;
+  totalDays: number;
+};
+
 export const TIME_CLOCK_LABELS: Record<TimeClockPunchType, string> = {
   entrada: "Entrada",
   inicio_intervalo: "Saída para almoço",
@@ -81,6 +101,78 @@ export function defaultTimeClockRange() {
   return { from: dateInput(firstDay), to };
 }
 
+export function timeClockMonthRange(year: number, month: number) {
+  const today = dateInput(new Date());
+  const from = `${year}-${String(month).padStart(2, "0")}-01`;
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const endOfMonth = `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+  return { from, to: from.slice(0, 7) === today.slice(0, 7) ? today : endOfMonth };
+}
+
+export function buildTimeClockCalendar(year: number, month: number): TimeClockCalendarDay[] {
+  const firstDay = new Date(Date.UTC(year, month - 1, 1));
+  const mondayOffset = (firstDay.getUTCDay() + 6) % 7;
+  const start = new Date(Date.UTC(year, month - 1, 1 - mondayOffset));
+
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(start);
+    date.setUTCDate(start.getUTCDate() + index);
+    const dateMonth = date.getUTCMonth() + 1;
+    const weekday = date.getUTCDay();
+    return {
+      date: date.toISOString().slice(0, 10),
+      dayNumber: date.getUTCDate(),
+      inMonth: date.getUTCFullYear() === year && dateMonth === month,
+      weekend: weekday === 0 || weekday === 6,
+    };
+  });
+}
+
+export function timeClockCalendarRange(year: number, month: number) {
+  const calendar = buildTimeClockCalendar(year, month);
+  const today = dateInput(new Date());
+  return {
+    from: calendar[0].date,
+    to: calendar[calendar.length - 1].date > today ? today : calendar[calendar.length - 1].date,
+  };
+}
+
+export function timeClockWeekRange(date: string) {
+  const anchor = new Date(`${date}T12:00:00Z`);
+  const mondayOffset = (anchor.getUTCDay() + 6) % 7;
+  const from = new Date(anchor);
+  from.setUTCDate(anchor.getUTCDate() - mondayOffset);
+  const to = new Date(from);
+  to.setUTCDate(from.getUTCDate() + 6);
+  return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
+}
+
+export function summarizeTimeClockDays(days: TimeClockDay[]): TimeClockPeriodSummary {
+  return days.reduce<TimeClockPeriodSummary>(
+    (summary, day) => ({
+      scheduledMinutes: summary.scheduledMinutes + Number(day.scheduled_minutes ?? 0),
+      workedMinutes: summary.workedMinutes + Number(day.worked_minutes ?? 0),
+      bankMinutes: summary.bankMinutes + Number(day.bank_minutes ?? 0),
+      lateMinutes: summary.lateMinutes + Number(day.late_minutes ?? 0),
+      earlyDepartureMinutes:
+        summary.earlyDepartureMinutes + Number(day.early_departure_minutes ?? 0),
+      completedDays: summary.completedDays + (day.status === "completo" ? 1 : 0),
+      registeredDays: summary.registeredDays + (day.punches.length > 0 ? 1 : 0),
+      totalDays: summary.totalDays + 1,
+    }),
+    {
+      scheduledMinutes: 0,
+      workedMinutes: 0,
+      bankMinutes: 0,
+      lateMinutes: 0,
+      earlyDepartureMinutes: 0,
+      completedDays: 0,
+      registeredDays: 0,
+      totalDays: 0,
+    },
+  );
+}
+
 export async function fetchMyTimeClockDashboard(from?: string, to?: string) {
   const { data, error } = await (supabase as any).rpc("get_my_time_clock_dashboard", {
     p_from: from ?? null,
@@ -88,6 +180,11 @@ export async function fetchMyTimeClockDashboard(from?: string, to?: string) {
   });
   if (error) throw new Error(error.message || "Não foi possível carregar o controle de ponto.");
   return data as TimeClockDashboard;
+}
+
+export async function fetchMyTimeClockHistory(from: string, to: string) {
+  const dashboard = await fetchMyTimeClockDashboard(from, to);
+  return dashboard.history;
 }
 
 export async function fetchAdminTimeClockHistory(from: string, to: string, employeeId?: string) {
