@@ -46,12 +46,14 @@ export function SellerRoleGoals({
             </span>
           </div>
           <h2 className="mt-2 text-lg font-black tracking-[-0.025em] text-neutral-950 sm:text-xl">
-            {role === "closer" ? "Reuniões confirmadas e cadastros" : "Reuniões agendadas e cadastros"}
+            {role === "closer"
+              ? "Reuniões confirmadas e cadastros"
+              : "Reuniões agendadas e cadastros"}
           </h2>
           <p className="mt-0.5 text-xs font-medium text-neutral-500">
             {role === "closer"
-              ? "Reuniões concluídas e cadastros atribuídos diretamente ou por reunião."
-              : "Reuniões criadas e cadastros atribuídos diretamente ou em conjunto com o Closer."}
+              ? "Meta compartilhada pelos Closers; o progresso abaixo é somente o seu."
+              : "Meta compartilhada pelos SDRs; o progresso abaixo é somente o seu."}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-3 rounded-xl border border-yellow-200 bg-white/90 px-3 py-2 shadow-sm">
@@ -86,7 +88,9 @@ function GoalCard({ goal }: { goal: GoalItem }) {
   return (
     <article className="seller-role-goal-card min-w-0 rounded-xl border border-neutral-200 bg-neutral-50/70 p-3">
       <div className="flex items-start gap-2.5">
-        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${goal.iconClass}`}>
+        <span
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${goal.iconClass}`}
+        >
           <Icon className="h-[18px] w-[18px]" />
         </span>
         <div className="min-w-0 flex-1">
@@ -118,17 +122,11 @@ function GoalCard({ goal }: { goal: GoalItem }) {
 }
 
 function sdrGoals(progress: SellerGoalProgress): GoalItem[] {
-  return [
-    ...meetingGoals(progress, "sdr"),
-    ...registrationGoals(progress),
-  ];
+  return [...meetingGoals(progress, "sdr"), ...registrationGoals(progress)];
 }
 
 function closerGoals(progress: SellerGoalProgress): GoalItem[] {
-  return [
-    ...meetingGoals(progress, "closer"),
-    ...registrationGoals(progress),
-  ];
+  return [...meetingGoals(progress, "closer"), ...registrationGoals(progress)];
 }
 
 function registrationGoals(progress: SellerGoalProgress): GoalItem[] {

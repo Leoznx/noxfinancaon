@@ -24,6 +24,18 @@ export type TeamGoalProgress = {
   meetings_completed_monthly: number;
 };
 
+export type TeamGoalConfig = {
+  seller_type: "sdr" | "closer";
+  month: number;
+  year: number;
+  target_meetings_daily: number | null;
+  target_meetings_weekly: number | null;
+  target_meetings_monthly: number | null;
+  target_clients_daily: number | null;
+  target_clients_weekly: number | null;
+  target_clients_monthly: number | null;
+};
+
 function numberOrNull(value: unknown) {
   return value == null ? null : Number(value);
 }
@@ -62,6 +74,27 @@ export async function fetchTeamGoalProgress(month: number, year: number) {
   return ((data as Record<string, unknown>[] | null) ?? []).map(normalize);
 }
 
+export async function fetchTeamGoalConfigs(month: number, year: number) {
+  const { data, error } = await (supabase.from("seller_team_goals" as any) as any)
+    .select(
+      "seller_type,month,year,target_meetings_daily,target_meetings_weekly,target_meetings_monthly,target_clients_daily,target_clients_weekly,target_clients_monthly",
+    )
+    .eq("month", month)
+    .eq("year", year);
+  if (error) throw error;
+  return ((data as Record<string, unknown>[] | null) ?? []).map((row): TeamGoalConfig => ({
+    seller_type: row.seller_type === "closer" ? "closer" : "sdr",
+    month: Number(row.month),
+    year: Number(row.year),
+    target_meetings_daily: numberOrNull(row.target_meetings_daily),
+    target_meetings_weekly: numberOrNull(row.target_meetings_weekly),
+    target_meetings_monthly: numberOrNull(row.target_meetings_monthly),
+    target_clients_daily: numberOrNull(row.target_clients_daily),
+    target_clients_weekly: numberOrNull(row.target_clients_weekly),
+    target_clients_monthly: numberOrNull(row.target_clients_monthly),
+  }));
+}
+
 export async function fetchMyRoleGoalProgress() {
   const { data, error } = await (supabase.rpc as any)("get_my_seller_goal_progress");
   if (error) throw error;
@@ -71,7 +104,7 @@ export async function fetchMyRoleGoalProgress() {
 }
 
 export async function saveTeamGoals(
-  row: TeamGoalProgress,
+  sellerType: "sdr" | "closer",
   month: number,
   year: number,
   targets: {
@@ -79,23 +112,16 @@ export async function saveTeamGoals(
     registrations: { daily: number; weekly: number; monthly: number };
   },
 ) {
-  const prefix =
-    row.seller_type === "closer" ? "target_meetings_completed" : "target_meetings_scheduled";
-  const payload: Record<string, unknown> = {
-    seller_id: row.seller_id,
-    month,
-    year,
-    target_meetings: 0,
-    target_clients_daily: targets.registrations.daily,
-    target_clients_weekly: targets.registrations.weekly,
-    target_clients: targets.registrations.monthly,
-    target_contracts: 0,
-    [`${prefix}_daily`]: targets.meetings.daily,
-    [`${prefix}_weekly`]: targets.meetings.weekly,
-    [`${prefix}_monthly`]: targets.meetings.monthly,
-  };
-  const { error } = await (supabase.from("seller_goals" as any) as any).upsert(payload, {
-    onConflict: "seller_id,month,year",
+  const { error } = await (supabase.rpc as any)("upsert_seller_team_goals", {
+    p_seller_type: sellerType,
+    p_month: month,
+    p_year: year,
+    p_target_meetings_daily: targets.meetings.daily,
+    p_target_meetings_weekly: targets.meetings.weekly,
+    p_target_meetings_monthly: targets.meetings.monthly,
+    p_target_clients_daily: targets.registrations.daily,
+    p_target_clients_weekly: targets.registrations.weekly,
+    p_target_clients_monthly: targets.registrations.monthly,
   });
   if (error) throw error;
 }

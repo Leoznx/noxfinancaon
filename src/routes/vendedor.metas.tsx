@@ -98,6 +98,11 @@ function Goals() {
       .channel("seller-registration-goal")
       .on(
         "postgres_changes",
+        { event: "*", schema: "public", table: "seller_team_goals" },
+        () => void load(),
+      )
+      .on(
+        "postgres_changes",
         { event: "*", schema: "public", table: "seller_goals" },
         () => void load(),
       )
@@ -179,7 +184,7 @@ function Goals() {
                     {roleProgress.seller_type === "sdr"
                       ? "Reuniões marcadas"
                       : "Reuniões confirmadas"}{" "}
-                    e cadastros · metas individuais
+                    e cadastros · metas da equipe
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-5">
@@ -195,23 +200,34 @@ function Goals() {
                       <div className="grid gap-3 sm:grid-cols-3">
                         {(["daily", "weekly", "monthly"] as const).map((period) => {
                           const scheduled = roleProgress.seller_type === "sdr";
-                          const current = metric === "registrations"
-                            ? roleProgress[`clients_registered_${period}`]
-                            : scheduled
-                              ? roleProgress[`meetings_scheduled_${period}`]
-                              : roleProgress[`meetings_completed_${period}`];
-                          const target = metric === "registrations"
-                            ? roleProgress[`target_clients_${period}`]
-                            : scheduled
-                              ? roleProgress[`target_meetings_scheduled_${period}`]
-                              : roleProgress[`target_meetings_completed_${period}`];
-                          const labels = { daily: "Hoje", weekly: "Esta semana", monthly: "Este mês" };
-                          const pct = target ? Math.min(100, Math.round((current / target) * 100)) : 0;
+                          const current =
+                            metric === "registrations"
+                              ? roleProgress[`clients_registered_${period}`]
+                              : scheduled
+                                ? roleProgress[`meetings_scheduled_${period}`]
+                                : roleProgress[`meetings_completed_${period}`];
+                          const target =
+                            metric === "registrations"
+                              ? roleProgress[`target_clients_${period}`]
+                              : scheduled
+                                ? roleProgress[`target_meetings_scheduled_${period}`]
+                                : roleProgress[`target_meetings_completed_${period}`];
+                          const labels = {
+                            daily: "Hoje",
+                            weekly: "Esta semana",
+                            monthly: "Este mês",
+                          };
+                          const pct = target
+                            ? Math.min(100, Math.round((current / target) * 100))
+                            : 0;
                           return (
                             <div key={period} className="rounded-2xl bg-neutral-50 p-4">
-                              <p className="text-xs font-black uppercase text-neutral-400">{labels[period]}</p>
+                              <p className="text-xs font-black uppercase text-neutral-400">
+                                {labels[period]}
+                              </p>
                               <p className="mt-2 text-3xl font-black">
-                                {current}<span className="text-sm text-neutral-400"> / {target ?? "—"}</span>
+                                {current}
+                                <span className="text-sm text-neutral-400"> / {target ?? "—"}</span>
                               </p>
                               <ProgressBar value={pct} />
                             </div>
@@ -233,7 +249,7 @@ function Goals() {
                 {progress.target_clients == null ? (
                   <State
                     title="Meta ainda não definida"
-                    description="O administrador precisa definir sua meta individual de cadastros deste mês."
+                    description="O administrador precisa definir a meta de cadastros da sua equipe neste mês."
                   />
                 ) : (
                   <>

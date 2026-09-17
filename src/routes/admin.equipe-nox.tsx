@@ -53,8 +53,10 @@ import { useAuth } from "@/components/AuthProvider";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { formatMoney, formatDateTime, toDatetimeLocal } from "@/lib/vendedor-portal";
 import {
+  fetchTeamGoalConfigs,
   fetchTeamGoalProgress,
   saveTeamGoals,
+  type TeamGoalConfig,
   type TeamGoalProgress,
 } from "@/lib/admin-team-goals";
 import { TabColaboradores, TabEquipeComercial } from "./admin.equipe-permissoes";
@@ -202,30 +204,37 @@ function SeletorMes({
 type GoalPeriods = { daily: string; weekly: string; monthly: string };
 type SellerGoalEdit = { meetings: GoalPeriods; registrations: GoalPeriods };
 
-function initialGoalEdit(row: TeamGoalProgress): SellerGoalEdit {
-  const scheduled = row.seller_type === "sdr";
+function initialGoalEdit(
+  team: "sdr" | "closer",
+  config?: TeamGoalConfig,
+  row?: TeamGoalProgress,
+): SellerGoalEdit {
+  const scheduled = team === "sdr";
   return {
     meetings: {
       daily: String(
-        scheduled
-          ? (row.target_meetings_scheduled_daily ?? "")
-          : (row.target_meetings_completed_daily ?? ""),
+        config?.target_meetings_daily ??
+          (scheduled
+            ? (row?.target_meetings_scheduled_daily ?? "")
+            : (row?.target_meetings_completed_daily ?? "")),
       ),
       weekly: String(
-        scheduled
-          ? (row.target_meetings_scheduled_weekly ?? "")
-          : (row.target_meetings_completed_weekly ?? ""),
+        config?.target_meetings_weekly ??
+          (scheduled
+            ? (row?.target_meetings_scheduled_weekly ?? "")
+            : (row?.target_meetings_completed_weekly ?? "")),
       ),
       monthly: String(
-        scheduled
-          ? (row.target_meetings_scheduled_monthly ?? "")
-          : (row.target_meetings_completed_monthly ?? ""),
+        config?.target_meetings_monthly ??
+          (scheduled
+            ? (row?.target_meetings_scheduled_monthly ?? "")
+            : (row?.target_meetings_completed_monthly ?? "")),
       ),
     },
     registrations: {
-      daily: String(row.target_clients_daily ?? ""),
-      weekly: String(row.target_clients_weekly ?? ""),
-      monthly: String(row.target_clients_monthly ?? ""),
+      daily: String(config?.target_clients_daily ?? row?.target_clients_daily ?? ""),
+      weekly: String(config?.target_clients_weekly ?? row?.target_clients_weekly ?? ""),
+      monthly: String(config?.target_clients_monthly ?? row?.target_clients_monthly ?? ""),
     },
   };
 }
@@ -236,16 +245,25 @@ function TabMetas() {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
   const [linhas, setLinhas] = useState<TeamGoalProgress[]>([]);
+  const [configs, setConfigs] = useState<Partial<Record<"sdr" | "closer", TeamGoalConfig>>>({});
   const [team, setTeam] = useState<"sdr" | "closer">("sdr");
-  const [selectedId, setSelectedId] = useState("");
-  const [edits, setEdits] = useState<Record<string, SellerGoalEdit>>({});
+  const [edits, setEdits] = useState<Partial<Record<"sdr" | "closer", SellerGoalEdit>>>({});
   const [loading, setLoading] = useState(true);
-  const [salvandoId, setSalvandoId] = useState<string | null>(null);
+  const [salvando, setSalvando] = useState(false);
 
   const carregar = useCallback(async () => {
     setLoading(true);
     try {
-      setLinhas(await fetchTeamGoalProgress(month, year));
+      const [progress, goalConfigs] = await Promise.all([
+        fetchTeamGoalProgress(month, year),
+        fetchTeamGoalConfigs(month, year),
+      ]);
+      setLinhas(progress);
+      setConfigs(
+        Object.fromEntries(goalConfigs.map((config) => [config.seller_type, config])) as Partial<
+          Record<"sdr" | "closer", TeamGoalConfig>
+        >,
+      );
       setEdits({});
     } catch (error: any) {
       toast.error(error.message || "Não foi possível carregar as metas da equipe.");
@@ -258,18 +276,14 @@ function TabMetas() {
   }, [carregar]);
 
   const teamRows = linhas.filter((linha) => linha.seller_type === team);
-  const selected = teamRows.find((linha) => linha.seller_id === selectedId) ?? teamRows[0];
-
-  useEffect(() => {
-    if (selected && selected.seller_id !== selectedId) setSelectedId(selected.seller_id);
-    if (!selected && selectedId) setSelectedId("");
-  }, [selected, selectedId]);
+  const teamConfig = configs[team];
+  const edit = edits[team] ?? initialGoalEdit(team, teamConfig, teamRows[0]);
 
   useEffect(() => {
     const refresh = () => void carregar();
     const channel = supabase
       .channel("admin-seller-goals-live")
-      .on("postgres_changes", { event: "*", schema: "public", table: "seller_goals" }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "seller_team_goals" }, refresh)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "seller_appointments" },
@@ -292,8 +306,8 @@ function TabMetas() {
     };
   }, [carregar]);
 
-  const salvar = async (linha: TeamGoalProgress) => {
-    const values = edits[linha.seller_id] ?? initialGoalEdit(linha);
+  const salvar = async () => {
+    const values = edit;
     const targets = {
       meetings: {
         daily: Number(values.meetings.daily),
@@ -307,48 +321,50 @@ function TabMetas() {
       },
     };
     const rawValues = [...Object.values(values.meetings), ...Object.values(values.registrations)];
-    const numericValues = [...Object.values(targets.meetings), ...Object.values(targets.registrations)];
+    const numericValues = [
+      ...Object.values(targets.meetings),
+      ...Object.values(targets.registrations),
+    ];
     if (
       rawValues.some((value) => value.trim() === "") ||
       numericValues.some((value) => !Number.isInteger(value) || value < 0)
     ) {
-      toast.error("Preencha as seis metas individuais com números inteiros.");
+      toast.error("Preencha as seis metas da equipe com números inteiros.");
       return;
     }
-    setSalvandoId(linha.seller_id);
+    setSalvando(true);
     try {
-      await saveTeamGoals(linha, month, year, targets);
+      await saveTeamGoals(team, month, year, targets);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Não foi possível salvar.");
-      setSalvandoId(null);
+      setSalvando(false);
       return;
     }
-    setSalvandoId(null);
-    toast.success(`Metas de ${linha.seller_name} atualizadas.`);
+    setSalvando(false);
+    toast.success(`Metas da equipe ${team.toUpperCase()} atualizadas para todos.`);
     registrarAuditoria({
       actorUserId: user?.id,
       actorRole: user?.internalRole || user?.role,
-      action: "definir_metas_comerciais_individuais",
-      tableName: "seller_goals",
-      recordId: linha.seller_id,
-      before: linha,
-      after: { ...targets, seller_type: linha.seller_type, month, year },
+      action: "definir_metas_comerciais_da_equipe",
+      tableName: "seller_team_goals",
+      recordId: `${team}-${year}-${month}`,
+      before: teamConfig,
+      after: { ...targets, seller_type: team, month, year },
     });
     void carregar();
   };
 
   const updateEdit = (
-    linha: TeamGoalProgress,
     metric: "meetings" | "registrations",
     period: "daily" | "weekly" | "monthly",
     value: string,
   ) => {
     setEdits((current) => ({
       ...current,
-      [linha.seller_id]: {
-        ...(current[linha.seller_id] ?? initialGoalEdit(linha)),
+      [team]: {
+        ...(current[team] ?? initialGoalEdit(team, teamConfig, teamRows[0])),
         [metric]: {
-          ...(current[linha.seller_id] ?? initialGoalEdit(linha))[metric],
+          ...(current[team] ?? initialGoalEdit(team, teamConfig, teamRows[0]))[metric],
           [period]: value.replace(/\D/g, ""),
         },
       },
@@ -359,10 +375,10 @@ function TabMetas() {
     <Card>
       <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
         <div>
-          <CardTitle>Metas individuais por equipe</CardTitle>
+          <CardTitle>Metas da equipe</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Escolha a equipe e uma pessoa. SDR contabiliza reuniões agendadas; Closer contabiliza
-            reuniões confirmadas como concluídas. Cadastros são atribuídos automaticamente.
+            Escolha SDR ou Closer. A mesma meta será aplicada automaticamente a todos os integrantes
+            ativos do time; os resultados continuam individuais e em tempo real.
           </p>
         </div>
         <SeletorMes
@@ -375,154 +391,129 @@ function TabMetas() {
         />
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid gap-3 rounded-xl border border-neutral-200 bg-neutral-50 p-4 md:grid-cols-2">
+        <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4">
           <div className="space-y-2">
             <Label>Equipe</Label>
-            <Select
-              value={team}
-              onValueChange={(value) => {
-                setTeam(value as "sdr" | "closer");
-                setSelectedId("");
-              }}
-            >
-              <SelectTrigger><SelectValue /></SelectTrigger>
+            <Select value={team} onValueChange={(value) => setTeam(value as "sdr" | "closer")}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="sdr">SDR · reuniões agendadas</SelectItem>
                 <SelectItem value="closer">Closer · reuniões confirmadas</SelectItem>
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-2">
-            <Label>Colaborador</Label>
-            <Select value={selected?.seller_id ?? ""} onValueChange={setSelectedId}>
-              <SelectTrigger><SelectValue placeholder="Selecione uma pessoa" /></SelectTrigger>
-              <SelectContent>
-                {teamRows.map((linha) => (
-                  <SelectItem key={linha.seller_id} value={linha.seller_id}>
-                    {linha.seller_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
         </div>
         {loading ? (
           <p className="py-6 text-center text-sm text-muted-foreground">Carregando…</p>
-        ) : !selected ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">
-            Nenhum colaborador ativo nesta equipe.
-          </p>
         ) : (
-          (() => {
-            const linha = selected;
-            const scheduled = linha.seller_type === "sdr";
-            const edit = edits[linha.seller_id] ?? initialGoalEdit(linha);
-            const meetingCurrent = scheduled
-              ? {
-                  daily: linha.meetings_scheduled_daily,
-                  weekly: linha.meetings_scheduled_weekly,
-                  monthly: linha.meetings_scheduled_monthly,
-                }
-              : {
-                  daily: linha.meetings_completed_daily,
-                  weekly: linha.meetings_completed_weekly,
-                  monthly: linha.meetings_completed_monthly,
-                };
-            const registrationCurrent = {
-              daily: linha.clients_registered_daily,
-              weekly: linha.clients_registered_weekly,
-              monthly: linha.clients_registered_monthly,
-            };
-            return (
-              <div
-                key={linha.seller_id}
-                className="space-y-4 rounded-xl border border-neutral-100 p-4"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="font-bold text-neutral-950">{linha.seller_name}</p>
-                    <Badge
-                      variant="outline"
-                      className={
-                        scheduled
-                          ? "mt-1 border-yellow-300 bg-yellow-50"
-                          : "mt-1 border-emerald-300 bg-emerald-50"
-                      }
-                    >
-                      {scheduled ? "SDR · reuniões marcadas" : "Closer · reuniões realizadas"}
-                    </Badge>
-                  </div>
-                  <Button
-                    size="sm"
-                    disabled={salvandoId === linha.seller_id}
-                    onClick={() => salvar(linha)}
+          <div className="space-y-5">
+            <div className="space-y-4 rounded-xl border border-neutral-100 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="font-bold text-neutral-950">
+                    Configuração única da equipe {team.toUpperCase()}
+                  </p>
+                  <Badge
+                    variant="outline"
+                    className={
+                      team === "sdr"
+                        ? "mt-1 border-yellow-300 bg-yellow-50"
+                        : "mt-1 border-emerald-300 bg-emerald-50"
+                    }
                   >
-                    {salvandoId === linha.seller_id ? "Salvando…" : "Salvar meta"}
-                  </Button>
+                    Aplicada a {teamRows.length} integrante{teamRows.length === 1 ? "" : "s"}
+                  </Badge>
                 </div>
-                <div>
-                  <h3 className="mb-2 text-sm font-black text-neutral-950">
-                    {scheduled ? "Reuniões agendadas" : "Reuniões confirmadas"}
-                  </h3>
+                <Button size="sm" disabled={salvando} onClick={salvar}>
+                  {salvando ? "Salvando…" : "Salvar para toda a equipe"}
+                </Button>
+              </div>
+              <div>
+                <h3 className="mb-2 text-sm font-black text-neutral-950">
+                  {team === "sdr" ? "Reuniões agendadas" : "Reuniões confirmadas"}
+                </h3>
                 <div className="grid gap-3 md:grid-cols-3">
-                  <MetaEditor
+                  <TeamMetaEditor
                     label="Meta por dia"
-                    current={meetingCurrent.daily}
-                    target={Number(edit.meetings.daily || 0)}
                     value={edit.meetings.daily}
-                    onChange={(value) => updateEdit(linha, "meetings", "daily", value)}
+                    onChange={(value) => updateEdit("meetings", "daily", value)}
                   />
-                  <MetaEditor
+                  <TeamMetaEditor
                     label="Meta por semana"
-                    current={meetingCurrent.weekly}
-                    target={Number(edit.meetings.weekly || 0)}
                     value={edit.meetings.weekly}
-                    onChange={(value) => updateEdit(linha, "meetings", "weekly", value)}
+                    onChange={(value) => updateEdit("meetings", "weekly", value)}
                   />
-                  <MetaEditor
+                  <TeamMetaEditor
                     label="Meta por mês"
-                    current={meetingCurrent.monthly}
-                    target={Number(edit.meetings.monthly || 0)}
                     value={edit.meetings.monthly}
-                    onChange={(value) => updateEdit(linha, "meetings", "monthly", value)}
+                    onChange={(value) => updateEdit("meetings", "monthly", value)}
                   />
-                </div>
-                </div>
-                <div>
-                  <h3 className="mb-2 text-sm font-black text-neutral-950">Cadastros realizados</h3>
-                  <div className="grid gap-3 md:grid-cols-3">
-                    <MetaEditor label="Meta por dia" current={registrationCurrent.daily} target={Number(edit.registrations.daily || 0)} value={edit.registrations.daily} onChange={(value) => updateEdit(linha, "registrations", "daily", value)} />
-                    <MetaEditor label="Meta por semana" current={registrationCurrent.weekly} target={Number(edit.registrations.weekly || 0)} value={edit.registrations.weekly} onChange={(value) => updateEdit(linha, "registrations", "weekly", value)} />
-                    <MetaEditor label="Meta por mês" current={registrationCurrent.monthly} target={Number(edit.registrations.monthly || 0)} value={edit.registrations.monthly} onChange={(value) => updateEdit(linha, "registrations", "monthly", value)} />
-                  </div>
                 </div>
               </div>
-            );
-          })()
+              <div>
+                <h3 className="mb-2 text-sm font-black text-neutral-950">Cadastros realizados</h3>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <TeamMetaEditor
+                    label="Meta por dia"
+                    value={edit.registrations.daily}
+                    onChange={(value) => updateEdit("registrations", "daily", value)}
+                  />
+                  <TeamMetaEditor
+                    label="Meta por semana"
+                    value={edit.registrations.weekly}
+                    onChange={(value) => updateEdit("registrations", "weekly", value)}
+                  />
+                  <TeamMetaEditor
+                    label="Meta por mês"
+                    value={edit.registrations.monthly}
+                    onChange={(value) => updateEdit("registrations", "monthly", value)}
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <h3 className="font-black text-neutral-950">Progresso individual do time</h3>
+                <p className="text-xs text-muted-foreground">
+                  Todos recebem a mesma meta acima; somente os resultados realizados são
+                  individuais.
+                </p>
+              </div>
+              {teamRows.length === 0 ? (
+                <p className="rounded-xl border border-dashed p-5 text-center text-sm text-muted-foreground">
+                  Nenhum colaborador ativo nesta equipe. A meta ficará pronta para os próximos
+                  integrantes.
+                </p>
+              ) : (
+                <div className="grid gap-3 lg:grid-cols-2">
+                  {teamRows.map((row) => (
+                    <TeamMemberProgress key={row.seller_id} row={row} />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         )}
       </CardContent>
     </Card>
   );
 }
 
-function MetaEditor({
+function TeamMetaEditor({
   label,
-  current,
-  target,
   value,
   onChange,
 }: {
   label: string;
-  current: number;
-  target: number | null;
   value: string;
   onChange: (value: string) => void;
 }) {
-  const pct = target && target > 0 ? Math.min(100, Math.round((current / target) * 100)) : 0;
   return (
     <div className="rounded-xl bg-neutral-50 p-3">
       <Label className="text-xs font-bold">{label}</Label>
-      <div className="mt-2 flex items-center gap-2">
+      <div className="mt-2">
         <Input
           type="number"
           min={0}
@@ -531,9 +522,70 @@ function MetaEditor({
           placeholder="Definir"
           onChange={(event) => onChange(event.target.value)}
         />
-        <span className="shrink-0 text-xs font-bold text-neutral-500">{current} feitos</span>
       </div>
-      <Progress value={pct} className="mt-2 h-2" />
+    </div>
+  );
+}
+
+function TeamMemberProgress({ row }: { row: TeamGoalProgress }) {
+  const meetings =
+    row.seller_type === "sdr"
+      ? [
+          row.meetings_scheduled_daily,
+          row.meetings_scheduled_weekly,
+          row.meetings_scheduled_monthly,
+        ]
+      : [
+          row.meetings_completed_daily,
+          row.meetings_completed_weekly,
+          row.meetings_completed_monthly,
+        ];
+  const meetingTargets =
+    row.seller_type === "sdr"
+      ? [
+          row.target_meetings_scheduled_daily,
+          row.target_meetings_scheduled_weekly,
+          row.target_meetings_scheduled_monthly,
+        ]
+      : [
+          row.target_meetings_completed_daily,
+          row.target_meetings_completed_weekly,
+          row.target_meetings_completed_monthly,
+        ];
+  const registrations = [
+    row.clients_registered_daily,
+    row.clients_registered_weekly,
+    row.clients_registered_monthly,
+  ];
+  const registrationTargets = [
+    row.target_clients_daily,
+    row.target_clients_weekly,
+    row.target_clients_monthly,
+  ];
+  return (
+    <div className="rounded-xl border border-neutral-200 bg-white p-4">
+      <p className="font-black text-neutral-950">{row.seller_name}</p>
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        {(["Dia", "Semana", "Mês"] as const).map((period, index) => (
+          <div key={period} className="rounded-lg bg-neutral-50 p-2">
+            <p className="text-[10px] font-black uppercase text-neutral-400">{period}</p>
+            <p className="mt-1 text-xs font-bold">
+              Reuniões {meetings[index]}/{meetingTargets[index] ?? "—"}
+            </p>
+            <p className="text-xs font-bold">
+              Cadastros {registrations[index]}/{registrationTargets[index] ?? "—"}
+            </p>
+            <Progress
+              value={
+                meetingTargets[index]
+                  ? Math.min(100, Math.round((meetings[index] / meetingTargets[index]!) * 100))
+                  : 0
+              }
+              className="mt-2 h-1.5"
+            />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
