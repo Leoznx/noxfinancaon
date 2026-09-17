@@ -326,7 +326,7 @@ export const updateNoxEmployeeStatus = createServerFn({ method: "POST" })
 
 const updateRoleSchema = z.object({
   employeeId: z.string().uuid(),
-  accountType: z.enum(NOX_INTERNAL_ACCOUNT_TYPES as [string, ...string[]]),
+  accountType: z.enum(["sdr", "closer", "financeiro", "juridico", "marketing", "suporte"]),
 });
 
 export const updateNoxEmployeeRole = createServerFn({ method: "POST" })
@@ -334,11 +334,17 @@ export const updateNoxEmployeeRole = createServerFn({ method: "POST" })
   .validator((data: unknown) => updateRoleSchema.parse(data))
   .handler(async ({ data, context }) => {
     await assertIsAdmin(context.supabase, context.userId);
-    if (!(NOX_INTERNAL_ACCOUNT_TYPES as readonly string[]).includes(data.accountType)) {
+    if (
+      !(NOX_INTERNAL_ACCOUNT_TYPES as readonly string[]).includes(data.accountType) &&
+      data.accountType !== "suporte"
+    ) {
       throw new Error("Cargo inválido.");
     }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const account = noxInternalAccounts[data.accountType as keyof typeof noxInternalAccounts];
+    const account =
+      data.accountType === "suporte"
+        ? { internalRole: "suporte", sellerType: null }
+        : noxInternalAccounts[data.accountType as keyof typeof noxInternalAccounts];
 
     const { data: employee } = await supabaseAdmin
       .from("internal_users" as any)

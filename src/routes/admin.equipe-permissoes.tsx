@@ -1,4 +1,5 @@
 import { createFileRoute, Navigate, useNavigate, useSearch } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useEffect, useMemo, useState } from "react";
@@ -24,12 +25,22 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Users, ShieldCheck, Briefcase, History, UserX, UserCheck, Trash2, Clock3 } from "lucide-react";
+import {
+  Users,
+  ShieldCheck,
+  Briefcase,
+  History,
+  UserX,
+  UserCheck,
+  Trash2,
+  Clock3,
+} from "lucide-react";
 import { z } from "zod";
 import { useAuth } from "@/components/AuthProvider";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { deleteNoxEmployee } from "@/lib/delete-nox-employee";
 import { setSellerTimeClockEnabled } from "@/lib/time-clock";
+import { updateNoxEmployeeRole } from "@/lib/nox-employees.functions";
 
 const VALID_TABS = ["colaboradores", "permissoes", "equipe-comercial", "auditoria"] as const;
 type TabKey = (typeof VALID_TABS)[number];
@@ -49,7 +60,18 @@ export const Route = createFileRoute("/admin/equipe-permissoes")({
 
 // Cargos visíveis na UI — Admin Master fica oculto (Admin já é o Admin Master)
 const CARGOS_VISIVEIS = ["juridico", "financeiro", "marketing", "suporte", "vendedor"];
+const CARGOS_COLABORADORES = [
+  "sdr",
+  "closer",
+  "juridico",
+  "financeiro",
+  "marketing",
+  "suporte",
+] as const;
+type CargoColaborador = (typeof CARGOS_COLABORADORES)[number];
 const CARGO_LABEL: Record<string, string> = {
+  sdr: "Vendedor SDR",
+  closer: "Vendedor Closer",
   juridico: "Jurídico",
   financeiro: "Financeiro",
   marketing: "Marketing",
@@ -57,6 +79,13 @@ const CARGO_LABEL: Record<string, string> = {
   vendedor: "Vendedor",
   admin_master: "Admin Master",
 };
+
+function cargoAtualDoColaborador(colaborador: any): CargoColaborador {
+  if (colaborador.role === "vendedor") {
+    return colaborador.seller_type === "closer" ? "closer" : "sdr";
+  }
+  return colaborador.role as CargoColaborador;
+}
 
 function EquipePermissoesPage() {
   const navigate = useNavigate();
@@ -191,11 +220,15 @@ export function CardResumo({
 /* ===================== COLABORADORES ===================== */
 export function TabColaboradores() {
   const { user } = useAuth();
+  const updateRoleFn = useServerFn(updateNoxEmployeeRole);
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [savingClockId, setSavingClockId] = useState<string | null>(null);
-  const canManageClock = user?.role === "admin" || user?.role === "admin_master" || user?.internalRole === "admin_master";
+  const canManageClock =
+    user?.role === "admin" ||
+    user?.role === "admin_master" ||
+    user?.internalRole === "admin_master";
 
   const carregar = async () => {
     setLoading(true);
@@ -211,27 +244,14 @@ export function TabColaboradores() {
     carregar();
   }, []);
 
-  const alterarCargo = async (id: string, role: string) => {
-    const antes = rows.find((r) => r.id === id);
-    const { error } = await supabase
-      .from("internal_users" as any)
-      .update({ role })
-      .eq("id", id);
-    if (error) {
-      toast.error(error.message);
-      return;
+  const alterarCargo = async (id: string, cargo: CargoColaborador) => {
+    try {
+      await updateRoleFn({ data: { employeeId: id, accountType: cargo } });
+      toast.success("Cargo atualizado");
+      await carregar();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível atualizar o cargo.");
     }
-    toast.success("Cargo atualizado");
-    registrarAuditoria({
-      actorUserId: user?.id,
-      actorRole: user?.internalRole || user?.role,
-      action: "alterar_cargo",
-      tableName: "internal_users",
-      recordId: id,
-      before: { role: antes?.role },
-      after: { role },
-    });
-    carregar();
   };
   const excluirColaborador = async (employee: any) => {
     const confirmed = window.confirm(
@@ -252,13 +272,23 @@ export function TabColaboradores() {
 
   const toggleTimeClock = async (employee: any, enabled: boolean) => {
     setSavingClockId(employee.id);
-    setRows((current) => current.map((row) => row.id === employee.id ? { ...row, time_clock_enabled: enabled } : row));
+    setRows((current) =>
+      current.map((row) =>
+        row.id === employee.id ? { ...row, time_clock_enabled: enabled } : row,
+      ),
+    );
     try {
       await setSellerTimeClockEnabled(employee.id, enabled);
       toast.success(enabled ? "Controle de ponto ativado" : "Controle de ponto desativado");
     } catch (cause) {
-      setRows((current) => current.map((row) => row.id === employee.id ? { ...row, time_clock_enabled: !enabled } : row));
-      toast.error(cause instanceof Error ? cause.message : "Não foi possível alterar o controle de ponto.");
+      setRows((current) =>
+        current.map((row) =>
+          row.id === employee.id ? { ...row, time_clock_enabled: !enabled } : row,
+        ),
+      );
+      toast.error(
+        cause instanceof Error ? cause.message : "Não foi possível alterar o controle de ponto.",
+      );
     } finally {
       setSavingClockId(null);
     }
@@ -269,7 +299,7 @@ export function TabColaboradores() {
       <CardHeader>
         <CardTitle>Colaboradores Internos</CardTitle>
         <p className="text-sm text-muted-foreground">
-          Equipe interna — Jurídico, Financeiro, Marketing, Suporte e Vendedor.
+          Equipe interna — Vendedor SDR, Vendedor Closer, Jurídico, Financeiro, Marketing e Suporte.
         </p>
       </CardHeader>
       <CardContent>
@@ -306,12 +336,15 @@ export function TabColaboradores() {
                   {u.role === "admin_master" ? (
                     <Badge variant="outline">Admin Master</Badge>
                   ) : (
-                    <Select value={u.role} onValueChange={(v) => alterarCargo(u.id, v)}>
-                      <SelectTrigger className="w-40">
+                    <Select
+                      value={cargoAtualDoColaborador(u)}
+                      onValueChange={(v) => alterarCargo(u.id, v as CargoColaborador)}
+                    >
+                      <SelectTrigger className="w-48">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {CARGOS_VISIVEIS.map((c) => (
+                        {CARGOS_COLABORADORES.map((c) => (
                           <SelectItem key={c} value={c}>
                             {CARGO_LABEL[c]}
                           </SelectItem>
@@ -329,7 +362,9 @@ export function TabColaboradores() {
                       <Clock3 className="h-4 w-4 text-yellow-700" />
                       <div>
                         <p className="text-xs font-bold">Registrar ponto</p>
-                        <p className="text-[10px] text-muted-foreground">Ativar ou desativar para este colaborador</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          Ativar ou desativar para este colaborador
+                        </p>
                       </div>
                     </div>
                     <Switch
@@ -392,12 +427,15 @@ export function TabColaboradores() {
                       {u.role === "admin_master" ? (
                         <Badge variant="outline">Admin Master</Badge>
                       ) : (
-                        <Select value={u.role} onValueChange={(v) => alterarCargo(u.id, v)}>
-                          <SelectTrigger className="w-40">
+                        <Select
+                          value={cargoAtualDoColaborador(u)}
+                          onValueChange={(v) => alterarCargo(u.id, v as CargoColaborador)}
+                        >
+                          <SelectTrigger className="w-48">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            {CARGOS_VISIVEIS.map((c) => (
+                            {CARGOS_COLABORADORES.map((c) => (
                               <SelectItem key={c} value={c}>
                                 {CARGO_LABEL[c]}
                               </SelectItem>
@@ -424,7 +462,9 @@ export function TabColaboradores() {
                         <div className="flex items-center gap-2">
                           <Switch
                             checked={!!u.time_clock_enabled}
-                            disabled={!canManageClock || savingClockId === u.id || u.status !== "ativo"}
+                            disabled={
+                              !canManageClock || savingClockId === u.id || u.status !== "ativo"
+                            }
                             onCheckedChange={(checked) => void toggleTimeClock(u, checked)}
                             aria-label={`Controle de ponto de ${u.full_name}`}
                           />
