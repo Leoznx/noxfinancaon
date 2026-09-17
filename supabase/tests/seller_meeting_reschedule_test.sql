@@ -3,7 +3,14 @@ BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET LOCAL search_path = public, extensions, pg_catalog;
 
-SELECT plan(5);
+SELECT plan(6);
+
+SELECT has_column(
+  'public',
+  'seller_appointments',
+  'creation_notified_at',
+  'agenda registra o envio da confirmacao de criacao ou reagendamento'
+);
 
 SELECT has_function(
   'public',
