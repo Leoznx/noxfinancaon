@@ -15,35 +15,10 @@ import { AppointmentDetailsDialog } from "@/components/seller-agenda/Appointment
 import { MeetingFeedbackDialog } from "@/components/seller-agenda/MeetingFeedbackDialog";
 import { AppointmentModal } from "@/components/seller-agenda/AppointmentModal";
 import { SharedSalesAgenda } from "@/components/seller-agenda/SharedSalesAgenda";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import {
-  appointmentMatchesFilter,
-  buildShortNameValueMap,
-  completeCloserMeeting,
-  deleteSellerAppointment,
-  fetchSellerAgenda,
-  getSharedMeetingMetadata,
-  saveSellerAppointment,
-  setSellerAppointmentStatus,
-  type AgendaClientOption,
-  type AgendaFilter,
-  type AgendaLeadOption,
-  type AgendaSummary,
-  type AgendaViewMode,
-  type AppointmentDraft,
-  type SellerAppointment,
-} from "@/lib/seller-agenda";
+import { appointmentMatchesFilter, buildShortNameValueMap, completeCloserMeeting, deleteSellerAppointment, fetchSellerAgenda, getSharedMeetingMetadata, saveSellerAppointment, setSellerAppointmentStatus, type AgendaClientOption, type AgendaFilter, type AgendaLeadOption, type AgendaSummary, type AgendaViewMode, type AppointmentDraft, type SellerAppointment } from "@/lib/seller-agenda";
 import { getSellerContext } from "@/lib/vendedor-portal";
 
 export const Route = createLazyFileRoute("/vendedor/agenda")({
@@ -54,7 +29,12 @@ export const Route = createLazyFileRoute("/vendedor/agenda")({
   ),
 });
 
-const EMPTY_SUMMARY: AgendaSummary = { today: 0, thisWeek: 0, pendingFollowups: 0, scheduledMeetings: 0 };
+const EMPTY_SUMMARY: AgendaSummary = {
+  today: 0,
+  thisWeek: 0,
+  pendingFollowups: 0,
+  scheduledMeetings: 0,
+};
 type ListScope = "month" | "week";
 
 function AgendaPage() {
@@ -80,41 +60,49 @@ function AgendaPage() {
   const [feedbackTarget, setFeedbackTarget] = useState<SellerAppointment | null>(null);
   const realtimeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const load = useCallback(async (silent = false, requestedMonth = month) => {
-    if (silent) setRefreshing(true);
-    else setLoading(true);
-    setError("");
-    try {
-      const context = await getSellerContext();
-      if (!context.isSeller || !context.sellerId) throw new Error("Não encontramos um vendedor ativo para este usuário.");
-      setSellerId(context.sellerId);
-      setSellerName(context.sellerName);
-      setSellerType(context.sellerType);
-      const data = await fetchSellerAgenda(context.sellerId, requestedMonth);
-      setAppointments(data.appointments);
-      setSummary(data.summary);
-      setLeads(data.leads);
-      setClients(data.clients);
-      setViewing((current) => current ? data.appointments.find((item) => item.id === current.id) ?? null : null);
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Não foi possível carregar sua agenda.");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [month]);
+  const load = useCallback(
+    async (silent = false, requestedMonth = month) => {
+      if (silent) setRefreshing(true);
+      else setLoading(true);
+      setError("");
+      try {
+        const context = await getSellerContext();
+        if (!context.isSeller || !context.sellerId) throw new Error("Não encontramos um vendedor ativo para este usuário.");
+        setSellerId(context.sellerId);
+        setSellerName(context.sellerName);
+        setSellerType(context.sellerType);
+        const data = await fetchSellerAgenda(context.sellerId, requestedMonth);
+        setAppointments(data.appointments);
+        setSummary(data.summary);
+        setLeads(data.leads);
+        setClients(data.clients);
+        setViewing((current) => (current ? (data.appointments.find((item) => item.id === current.id) ?? null) : null));
+      } catch (loadError) {
+        setError(loadError instanceof Error ? loadError.message : "Não foi possível carregar sua agenda.");
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [month],
+  );
 
-  const refreshAgenda = useCallback(async (focusDate?: Date) => {
-    const requestedMonth = focusDate ? startOfMonth(focusDate) : month;
-    if (focusDate) {
-      setMonth(requestedMonth);
-      setSelectedDate(focusDate);
-      setFilter("todos");
-    }
-    await load(true, requestedMonth);
-  }, [load, month]);
+  const refreshAgenda = useCallback(
+    async (focusDate?: Date) => {
+      const requestedMonth = focusDate ? startOfMonth(focusDate) : month;
+      if (focusDate) {
+        setMonth(requestedMonth);
+        setSelectedDate(focusDate);
+        setFilter("todos");
+      }
+      await load(true, requestedMonth);
+    },
+    [load, month],
+  );
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
   useEffect(() => {
     if (typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches) setView("lista");
   }, []);
@@ -127,10 +115,46 @@ function AgendaPage() {
     };
     const channel = supabase
       .channel(`seller-agenda-${sellerId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "seller_appointments", filter: `seller_id=eq.${sellerId}` }, scheduleRefresh)
-      .on("postgres_changes", { event: "*", schema: "public", table: "seller_appointments", filter: `sdr_id=eq.${sellerId}` }, scheduleRefresh)
-      .on("postgres_changes", { event: "*", schema: "public", table: "seller_appointments", filter: `assigned_closer_id=eq.${sellerId}` }, scheduleRefresh)
-      .on("postgres_changes", { event: "*", schema: "public", table: "sales_leads", filter: `assigned_seller_id=eq.${sellerId}` }, scheduleRefresh)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "seller_appointments",
+          filter: `seller_id=eq.${sellerId}`,
+        },
+        scheduleRefresh,
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "seller_appointments",
+          filter: `sdr_id=eq.${sellerId}`,
+        },
+        scheduleRefresh,
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "seller_appointments",
+          filter: `assigned_closer_id=eq.${sellerId}`,
+        },
+        scheduleRefresh,
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "sales_leads",
+          filter: `assigned_seller_id=eq.${sellerId}`,
+        },
+        scheduleRefresh,
+      )
       .on("postgres_changes", { event: "*", schema: "public", table: "consultas_credito" }, scheduleRefresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "apolices" }, scheduleRefresh)
       .subscribe();
@@ -148,17 +172,16 @@ function AgendaPage() {
 
   const filtered = useMemo(() => appointments.filter((item) => appointmentMatchesFilter(item, filter)), [appointments, filter]);
   const selectedItems = useMemo(() => filtered.filter((item) => isSameDay(new Date(item.scheduled_at), selectedDate)), [filtered, selectedDate]);
-  const weekInterval = useMemo(() => ({ start: startOfWeek(selectedDate, { weekStartsOn: 1 }), end: endOfWeek(selectedDate, { weekStartsOn: 1 }) }), [selectedDate]);
-  const listItems = useMemo(() => filtered
-    .filter((item) => listScope === "week"
-      ? isWithinInterval(new Date(item.scheduled_at), weekInterval)
-      : isSameMonth(new Date(item.scheduled_at), month))
-    .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime()), [filtered, listScope, month, weekInterval]);
-  const overdueCount = useMemo(() => appointments.filter((item) => new Date(item.scheduled_at) < new Date() && !["concluido", "cancelado"].includes(item.status)).length, [appointments]);
-  const sdrNames = useMemo(
-    () => buildShortNameValueMap(appointments.map((item) => getSharedMeetingMetadata(item.notes).sdrName)),
-    [appointments],
+  const weekInterval = useMemo(
+    () => ({
+      start: startOfWeek(selectedDate, { weekStartsOn: 1 }),
+      end: endOfWeek(selectedDate, { weekStartsOn: 1 }),
+    }),
+    [selectedDate],
   );
+  const listItems = useMemo(() => filtered.filter((item) => (listScope === "week" ? isWithinInterval(new Date(item.scheduled_at), weekInterval) : isSameMonth(new Date(item.scheduled_at), month))).sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime()), [filtered, listScope, month, weekInterval]);
+  const overdueCount = useMemo(() => appointments.filter((item) => new Date(item.scheduled_at) < new Date() && !["concluido", "cancelado"].includes(item.status)).length, [appointments]);
+  const sdrNames = useMemo(() => buildShortNameValueMap(appointments.map((item) => getSharedMeetingMetadata(item.notes).sdrName)), [appointments]);
 
   function openNew(date = selectedDate) {
     setSelectedDate(date);
@@ -209,17 +232,13 @@ function AgendaPage() {
 
   async function complete(item: SellerAppointment) {
     if (!sellerId) return;
-    if (
-      item.type === "reuniao"
-      && sellerType === "closer"
-      && (item.assigned_closer_id === sellerId || (!item.assigned_closer_id && item.seller_id === sellerId))
-    ) {
+    if (item.type === "reuniao" && sellerType === "closer" && (item.assigned_closer_id === sellerId || (!item.assigned_closer_id && item.seller_id === sellerId))) {
       setViewing(null);
       setFeedbackTarget(item);
       return;
     }
     const previous = appointments;
-    setAppointments((current) => current.map((row) => row.id === item.id ? { ...row, status: "concluido" } : row));
+    setAppointments((current) => current.map((row) => (row.id === item.id ? { ...row, status: "concluido" } : row)));
     setViewing(null);
     try {
       await setSellerAppointmentStatus(sellerId, item.id, "concluido");
@@ -236,9 +255,7 @@ function AgendaPage() {
     try {
       await completeCloserMeeting(feedbackTarget.id, feedback);
       setFeedbackTarget(null);
-      toast.success(feedbackTarget.sdr_id
-        ? "Feedback salvo. Closer: 24h e 3 dias; SDR: 48h, 5 dias e ciclo de 27 dias."
-        : "Feedback salvo. Follow-ups do Closer criados para 24 horas e 3 dias.");
+      toast.success(feedbackTarget.sdr_id ? "Feedback salvo. Follow-ups de 1, 4, 15 e 30 dias criados somente para o SDR, às 10h." : "Feedback salvo. Follow-ups de 1, 4, 15 e 30 dias criados somente para o Closer, às 10h.");
       await load(true);
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "Não foi possível concluir a reunião.");
@@ -282,33 +299,48 @@ function AgendaPage() {
       <main className="space-y-3 pb-4">
         <header className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div className="flex items-start gap-3">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-yellow-100 text-yellow-800"><CalendarClock className="h-5 w-5" /></span>
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-yellow-100 text-yellow-800">
+              <CalendarClock className="h-5 w-5" />
+            </span>
             <div>
               <h1 className="text-2xl font-black tracking-tight text-neutral-950">Minha Agenda</h1>
               <p className="text-xs font-medium text-neutral-500 sm:text-sm">Reuniões, retornos, follow-ups e compromissos comerciais.</p>
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" className="h-9 gap-2 font-bold" onClick={() => load(true)} disabled={refreshing}><RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Atualizar</Button>
-            <Button type="button" className="h-9 gap-2 bg-yellow-400 font-extrabold text-black hover:bg-yellow-500" onClick={() => openNew()} disabled={loading || !sellerType}><Plus className="h-4 w-4" /> {sellerType === "sdr" ? "Agendar reunião" : "Novo compromisso"}</Button>
+            <Button type="button" variant="outline" className="h-9 gap-2 font-bold" onClick={() => load(true)} disabled={refreshing}>
+              <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Atualizar
+            </Button>
+            <Button type="button" className="h-9 gap-2 bg-yellow-400 font-extrabold text-black hover:bg-yellow-500" onClick={() => openNew()} disabled={loading || !sellerType}>
+              <Plus className="h-4 w-4" /> {sellerType === "sdr" ? "Agendar reunião" : "Novo compromisso"}
+            </Button>
           </div>
         </header>
 
-        <SharedSalesAgenda
-          sellerType={sellerType}
-          sellerId={sellerId}
-          sellerName={sellerName}
-          appointments={appointments}
-          onRefresh={refreshAgenda}
-        />
+        <SharedSalesAgenda sellerType={sellerType} sellerId={sellerId} sellerName={sellerName} appointments={appointments} onRefresh={refreshAgenda} />
 
         <AgendaSummaryCards summary={summary} loading={loading} onSelect={handleSummaryAction} />
         {overdueCount > 0 && !loading && (
-          <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs font-semibold text-amber-900"><AlertTriangle className="h-4 w-4 shrink-0" />Você tem {overdueCount} {overdueCount === 1 ? "compromisso pendente que já passou do horário" : "compromissos pendentes que já passaram do horário"}.</div>
+          <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs font-semibold text-amber-900">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            Você tem {overdueCount} {overdueCount === 1 ? "compromisso pendente que já passou do horário" : "compromissos pendentes que já passaram do horário"}.
+          </div>
         )}
-        <AgendaControls view={view} filter={filter} onViewChange={(nextView) => { setView(nextView); if (nextView === "lista") setListScope("month"); }} onFilterChange={setFilter} />
+        <AgendaControls
+          view={view}
+          filter={filter}
+          onViewChange={(nextView) => {
+            setView(nextView);
+            if (nextView === "lista") setListScope("month");
+          }}
+          onFilterChange={setFilter}
+        />
 
-        {error ? <ErrorState message={error} onRetry={() => load()} /> : loading ? <AgendaSkeleton /> : view === "calendario" ? (
+        {error ? (
+          <ErrorState message={error} onRetry={() => load()} />
+        ) : loading ? (
+          <AgendaSkeleton />
+        ) : view === "calendario" ? (
           <div className="grid items-start gap-3 xl:min-h-0 xl:grid-cols-[minmax(0,1fr)_390px] 2xl:grid-cols-[minmax(0,1fr)_420px]">
             <AgendaCalendar month={month} selectedDate={selectedDate} items={filtered} onMonthChange={changeMonth} onDateSelect={selectDate} onEventOpen={setViewing} />
             <AgendaDayPanel date={selectedDate} items={selectedItems} sdrNames={sdrNames} onNew={() => openNew(selectedDate)} onView={setViewing} onEdit={openEdit} onComplete={complete} onDelete={setDeleteTarget} />
@@ -316,24 +348,62 @@ function AgendaPage() {
         ) : (
           <section className="rounded-2xl border border-neutral-200 bg-white p-3 shadow-[0_2px_8px_rgba(0,0,0,0.03)] sm:p-4">
             <div className="mb-3 flex items-center justify-between gap-3 border-b border-neutral-100 pb-3">
-              <div><p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-neutral-400">Modo lista</p><h2 className="mt-0.5 text-base font-black capitalize text-neutral-950">{listScope === "week" ? `Semana de ${format(weekInterval.start, "dd/MM")} a ${format(weekInterval.end, "dd/MM")}` : format(month, "MMMM 'de' yyyy", { locale: ptBR })}</h2></div>
+              <div>
+                <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-neutral-400">Modo lista</p>
+                <h2 className="mt-0.5 text-base font-black capitalize text-neutral-950">{listScope === "week" ? `Semana de ${format(weekInterval.start, "dd/MM")} a ${format(weekInterval.end, "dd/MM")}` : format(month, "MMMM 'de' yyyy", { locale: ptBR })}</h2>
+              </div>
               <span className="rounded-full bg-neutral-100 px-3 py-1 text-xs font-black text-neutral-600">{listItems.length}</span>
             </div>
             {listItems.length === 0 ? (
-              <div className="grid min-h-52 place-items-center rounded-xl border border-dashed border-neutral-200 bg-neutral-50/50 p-6 text-center"><div><p className="font-black text-neutral-950">Nenhum compromisso encontrado</p><p className="mt-1 text-sm text-neutral-500">Ajuste o filtro ou crie um novo compromisso para este período.</p><Button className="mt-4 bg-yellow-400 font-bold text-black hover:bg-yellow-500" onClick={() => openNew()}><Plus className="mr-1.5 h-4 w-4" /> Novo compromisso</Button></div></div>
+              <div className="grid min-h-52 place-items-center rounded-xl border border-dashed border-neutral-200 bg-neutral-50/50 p-6 text-center">
+                <div>
+                  <p className="font-black text-neutral-950">Nenhum compromisso encontrado</p>
+                  <p className="mt-1 text-sm text-neutral-500">Ajuste o filtro ou crie um novo compromisso para este período.</p>
+                  <Button className="mt-4 bg-yellow-400 font-bold text-black hover:bg-yellow-500" onClick={() => openNew()}>
+                    <Plus className="mr-1.5 h-4 w-4" /> Novo compromisso
+                  </Button>
+                </div>
+              </div>
             ) : (
-              <div className="grid gap-3 lg:grid-cols-2">{listItems.map((item) => <AppointmentCard key={item.id} item={item} sdrNames={sdrNames} onView={setViewing} onEdit={openEdit} onComplete={complete} onDelete={setDeleteTarget} />)}</div>
+              <div className="grid gap-3 lg:grid-cols-2">
+                {listItems.map((item) => (
+                  <AppointmentCard key={item.id} item={item} sdrNames={sdrNames} onView={setViewing} onEdit={openEdit} onComplete={complete} onDelete={setDeleteTarget} />
+                ))}
+              </div>
             )}
           </section>
         )}
 
-        <AppointmentModal open={modalOpen} initial={editing} defaultDate={selectedDate} leads={leads} clients={clients} onOpenChange={(open) => { setModalOpen(open); if (!open) setEditing(null); }} onSave={handleSave} onDelete={(item) => { setDeleteTarget(item); setModalOpen(false); }} />
+        <AppointmentModal
+          open={modalOpen}
+          initial={editing}
+          defaultDate={selectedDate}
+          leads={leads}
+          clients={clients}
+          onOpenChange={(open) => {
+            setModalOpen(open);
+            if (!open) setEditing(null);
+          }}
+          onSave={handleSave}
+          onDelete={(item) => {
+            setDeleteTarget(item);
+            setModalOpen(false);
+          }}
+        />
         <AppointmentDetailsDialog item={viewing} sdrNames={sdrNames} onClose={() => setViewing(null)} onEdit={openEdit} onComplete={complete} onDelete={setDeleteTarget} canManageCloserMeeting={sellerType === "closer" && !!viewing && (viewing.assigned_closer_id === sellerId || (!viewing.assigned_closer_id && viewing.seller_id === sellerId))} />
         <MeetingFeedbackDialog item={feedbackTarget} onClose={() => setFeedbackTarget(null)} onSubmit={submitMeetingFeedback} />
         <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
           <AlertDialogContent>
-            <AlertDialogHeader><AlertDialogTitle>Excluir compromisso?</AlertDialogTitle><AlertDialogDescription>“{deleteTarget?.title}” será removido da agenda. Se for um follow-up sincronizado, o próximo retorno do lead também será cancelado.</AlertDialogDescription></AlertDialogHeader>
-            <AlertDialogFooter><AlertDialogCancel>Manter compromisso</AlertDialogCancel><AlertDialogAction className="bg-red-600 text-white hover:bg-red-700" onClick={confirmDelete}>Excluir</AlertDialogAction></AlertDialogFooter>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir compromisso?</AlertDialogTitle>
+              <AlertDialogDescription>“{deleteTarget?.title}” será removido da agenda. Se for um follow-up sincronizado, o próximo retorno do lead também será cancelado.</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Manter compromisso</AlertDialogCancel>
+              <AlertDialogAction className="bg-red-600 text-white hover:bg-red-700" onClick={confirmDelete}>
+                Excluir
+              </AlertDialogAction>
+            </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
       </main>
@@ -344,12 +414,31 @@ function AgendaPage() {
 function AgendaSkeleton() {
   return (
     <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_390px] 2xl:grid-cols-[minmax(0,1fr)_420px]" aria-label="Carregando agenda">
-      <div className="h-[500px] animate-pulse rounded-2xl border border-neutral-200 bg-white p-4"><div className="h-6 w-44 rounded bg-neutral-100" /><div className="mt-4 grid grid-cols-7 gap-2">{Array.from({ length: 35 }).map((_, index) => <div key={index} className="h-14 rounded-lg bg-neutral-50" />)}</div></div>
-      <div className="h-96 animate-pulse rounded-2xl border border-neutral-200 bg-white p-5"><div className="h-5 w-32 rounded bg-neutral-100" /><div className="mt-5 h-24 rounded-xl bg-neutral-50" /><div className="mt-3 h-24 rounded-xl bg-neutral-50" /></div>
+      <div className="h-[500px] animate-pulse rounded-2xl border border-neutral-200 bg-white p-4">
+        <div className="h-6 w-44 rounded bg-neutral-100" />
+        <div className="mt-4 grid grid-cols-7 gap-2">
+          {Array.from({ length: 35 }).map((_, index) => (
+            <div key={index} className="h-14 rounded-lg bg-neutral-50" />
+          ))}
+        </div>
+      </div>
+      <div className="h-96 animate-pulse rounded-2xl border border-neutral-200 bg-white p-5">
+        <div className="h-5 w-32 rounded bg-neutral-100" />
+        <div className="mt-5 h-24 rounded-xl bg-neutral-50" />
+        <div className="mt-3 h-24 rounded-xl bg-neutral-50" />
+      </div>
     </div>
   );
 }
 
 function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
-  return <div className="rounded-2xl border border-red-200 bg-red-50 p-8 text-center"><p className="font-black text-red-800">Não foi possível carregar a agenda</p><p className="mx-auto mt-1 max-w-xl text-sm text-red-700">{message}</p><Button variant="outline" className="mt-4 border-red-200 bg-white text-red-700 hover:bg-red-100" onClick={onRetry}>Tentar novamente</Button></div>;
+  return (
+    <div className="rounded-2xl border border-red-200 bg-red-50 p-8 text-center">
+      <p className="font-black text-red-800">Não foi possível carregar a agenda</p>
+      <p className="mx-auto mt-1 max-w-xl text-sm text-red-700">{message}</p>
+      <Button variant="outline" className="mt-4 border-red-200 bg-white text-red-700 hover:bg-red-100" onClick={onRetry}>
+        Tentar novamente
+      </Button>
+    </div>
+  );
 }

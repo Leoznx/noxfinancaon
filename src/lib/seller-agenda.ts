@@ -3,16 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { fetchSellerClients, type SellerClient } from "@/lib/seller-clients";
 
 export type AgendaViewMode = "calendario" | "lista";
-export type AgendaFilter =
-  | "todos"
-  | "reuniao"
-  | "follow_up"
-  | "visita"
-  | "call"
-  | "retorno"
-  | "outro"
-  | "concluido"
-  | "pendente";
+export type AgendaFilter = "todos" | "reuniao" | "follow_up" | "visita" | "call" | "retorno" | "outro" | "concluido" | "pendente";
 
 export type AgendaSummary = {
   today: number;
@@ -21,11 +12,7 @@ export type AgendaSummary = {
   scheduledMeetings: number;
 };
 
-export type FollowUpJourneyStatus =
-  | "registration_pending"
-  | "no_consultations"
-  | "consultation_in_progress"
-  | "contract_closed";
+export type FollowUpJourneyStatus = "registration_pending" | "no_consultations" | "consultation_in_progress" | "contract_closed";
 
 export type FollowUpJourney = {
   status: FollowUpJourneyStatus;
@@ -105,15 +92,11 @@ export function getSharedMeetingMetadata(notes?: string | null): SharedMeetingMe
       .find((line) => line.toLocaleLowerCase("pt-BR").startsWith(prefix.toLocaleLowerCase("pt-BR")))
       ?.slice(prefix.length)
       .trim() || null;
-  const observationIndex = lines.findIndex((line) =>
-    line.toLocaleLowerCase("pt-BR").startsWith("observação:"),
-  );
+  const observationIndex = lines.findIndex((line) => line.toLocaleLowerCase("pt-BR").startsWith("observação:"));
   return {
     clientType: valueAfter("Tipo de cliente:"),
     sdrName: valueAfter("SDR responsável:"),
-    observation: observationIndex >= 0
-      ? [lines[observationIndex].slice("Observação:".length).trim(), ...lines.slice(observationIndex + 1)].filter(Boolean).join("\n") || null
-      : null,
+    observation: observationIndex >= 0 ? [lines[observationIndex].slice("Observação:".length).trim(), ...lines.slice(observationIndex + 1)].filter(Boolean).join("\n") || null : null,
   };
 }
 
@@ -130,11 +113,13 @@ export function buildShortNameValueMap(names: Array<string | null>) {
     const key = firstNameOnly(name).toLocaleLowerCase("pt-BR");
     firstNameCounts.set(key, (firstNameCounts.get(key) ?? 0) + 1);
   }
-  return new Map(normalizedNames.map((name) => {
-    const pieces = name.split(" ");
-    const duplicated = (firstNameCounts.get(pieces[0].toLocaleLowerCase("pt-BR")) ?? 0) > 1;
-    return [name, duplicated ? pieces.slice(0, 2).join(" ") : pieces[0]];
-  }));
+  return new Map(
+    normalizedNames.map((name) => {
+      const pieces = name.split(" ");
+      const duplicated = (firstNameCounts.get(pieces[0].toLocaleLowerCase("pt-BR")) ?? 0) > 1;
+      return [name, duplicated ? pieces.slice(0, 2).join(" ") : pieces[0]];
+    }),
+  );
 }
 
 export function firstNameOnly(value: string) {
@@ -193,8 +178,7 @@ export const AGENDA_FILTERS: Array<{ value: AgendaFilter; label: string }> = [
   { value: "pendente", label: "Pendente" },
 ];
 
-export const AGENDA_BUSINESS_HOURS_LABEL =
-  "Segunda a quinta: 08:00–12:00 e 13:00–18:00. Sexta: 08:00–12:00 e 13:00–17:00.";
+export const AGENDA_BUSINESS_HOURS_LABEL = "Segunda a quinta: 08:00–12:00 e 13:00–18:00. Sexta: 08:00–12:00 e 13:00–17:00.";
 
 const CANONICAL_TYPES = new Set(["reuniao", "follow_up", "visita", "call", "ligacao", "retorno"]);
 
@@ -222,12 +206,7 @@ export function appointmentMatchesFilter(item: SellerAppointment, filter: Agenda
   return item.type === filter;
 }
 
-export function getAppointmentContact(
-  item: Pick<
-    SellerAppointment,
-    "contact_name" | "contact_phone" | "client_name" | "lead_name" | "lead_phone"
-  >,
-) {
+export function getAppointmentContact(item: Pick<SellerAppointment, "contact_name" | "contact_phone" | "client_name" | "lead_name" | "lead_phone">) {
   return {
     name: item.contact_name || item.client_name || item.lead_name || null,
     phone: item.contact_phone || item.lead_phone || null,
@@ -253,10 +232,7 @@ function clientsToOptions(clients: SellerClient[]): AgendaClientOption[] {
     email: client.partner_email,
     city: client.partner_city,
     type: client.partner_type,
-    searchText: [client.partner_name, client.partner_email, client.partner_city]
-      .filter(Boolean)
-      .join(" ")
-      .toLocaleLowerCase("pt-BR"),
+    searchText: [client.partner_name, client.partner_email, client.partner_city].filter(Boolean).join(" ").toLocaleLowerCase("pt-BR"),
   }));
 }
 
@@ -273,9 +249,7 @@ export async function fetchSellerAgenda(
   const [appointmentsResult, leadsResult, sellerClients] = await Promise.all([
     supabase
       .from("seller_appointments" as any)
-      .select(
-        "id, seller_id, sdr_id, assigned_closer_id, lead_id, partnership_id, title, type, status, priority, scheduled_at, reminder_minutes, notes, source, completed_at, duration_minutes, contact_name, contact_email, contact_phone, origin_appointment_id, follow_up_offset_days, follow_up_owner_type, follow_up_message_key, meeting_feedback, feedback_submitted_at, tracked_profile_id, visible_from, created_at, updated_at, sales_leads(full_name, email, phone)",
-      )
+      .select("id, seller_id, sdr_id, assigned_closer_id, lead_id, partnership_id, title, type, status, priority, scheduled_at, reminder_minutes, notes, source, completed_at, duration_minutes, contact_name, contact_email, contact_phone, origin_appointment_id, follow_up_offset_days, follow_up_owner_type, follow_up_message_key, meeting_feedback, feedback_submitted_at, tracked_profile_id, visible_from, created_at, updated_at, sales_leads(full_name, email, phone)")
       .or(`seller_id.eq.${sellerId},sdr_id.eq.${sellerId},assigned_closer_id.eq.${sellerId}`)
       .gte("scheduled_at", start.toISOString())
       .lt("scheduled_at", end.toISOString())
@@ -294,15 +268,10 @@ export async function fetchSellerAgenda(
   const clients = clientsToOptions(sellerClients);
   const clientsById = new Map(clients.map((client) => [client.id, client]));
   const appointmentRows = (appointmentsResult.data as any[]) ?? [];
-  const journeyAppointmentIds = appointmentRows
-    .filter((row) => row.source === "meeting_follow_up")
-    .map((row) => String(row.id));
+  const journeyAppointmentIds = appointmentRows.filter((row) => row.source === "meeting_follow_up").map((row) => String(row.id));
   const journeyByAppointment = new Map<string, FollowUpJourney>();
   if (journeyAppointmentIds.length > 0) {
-    const { data: journeyRows, error: journeyError } = await (supabase as any).rpc(
-      "get_my_follow_up_journeys",
-      { p_appointment_ids: journeyAppointmentIds },
-    );
+    const { data: journeyRows, error: journeyError } = await (supabase as any).rpc("get_my_follow_up_journeys", { p_appointment_ids: journeyAppointmentIds });
     if (journeyError) throw journeyError;
     for (const row of (journeyRows as any[] | null) ?? []) {
       journeyByAppointment.set(String(row.appointment_id), {
@@ -314,31 +283,33 @@ export async function fetchSellerAgenda(
     }
   }
 
-  const appointments = appointmentRows.map((row): SellerAppointment => ({
-    ...row,
-    partnership_id: row.partnership_id ?? null,
-    source: row.source ?? "manual",
-    completed_at: row.completed_at ?? null,
-    sdr_id: row.sdr_id ?? null,
-    assigned_closer_id: row.assigned_closer_id ?? null,
-    duration_minutes: Number(row.duration_minutes ?? SHARED_MEETING_DURATION_MINUTES),
-    contact_name: row.contact_name ?? null,
-    contact_email: row.contact_email ?? null,
-    contact_phone: row.contact_phone ?? null,
-    origin_appointment_id: row.origin_appointment_id ?? null,
-    follow_up_offset_days: row.follow_up_offset_days ?? null,
-    follow_up_owner_type: row.follow_up_owner_type ?? null,
-    follow_up_message_key: row.follow_up_message_key ?? null,
-    meeting_feedback: row.meeting_feedback ?? null,
-    feedback_submitted_at: row.feedback_submitted_at ?? null,
-    tracked_profile_id: row.tracked_profile_id ?? null,
-    visible_from: row.visible_from ?? null,
-    journey: journeyByAppointment.get(String(row.id)) ?? null,
-    lead_name: row.sales_leads?.full_name ?? null,
-    lead_email: row.sales_leads?.email ?? null,
-    lead_phone: row.sales_leads?.phone ?? null,
-    client_name: row.partnership_id ? clientsById.get(row.partnership_id)?.name ?? null : null,
-  })).filter((item) => !item.visible_from || new Date(item.visible_from).getTime() <= Date.now());
+  const appointments = appointmentRows
+    .map((row): SellerAppointment => ({
+      ...row,
+      partnership_id: row.partnership_id ?? null,
+      source: row.source ?? "manual",
+      completed_at: row.completed_at ?? null,
+      sdr_id: row.sdr_id ?? null,
+      assigned_closer_id: row.assigned_closer_id ?? null,
+      duration_minutes: Number(row.duration_minutes ?? SHARED_MEETING_DURATION_MINUTES),
+      contact_name: row.contact_name ?? null,
+      contact_email: row.contact_email ?? null,
+      contact_phone: row.contact_phone ?? null,
+      origin_appointment_id: row.origin_appointment_id ?? null,
+      follow_up_offset_days: row.follow_up_offset_days ?? null,
+      follow_up_owner_type: row.follow_up_owner_type ?? null,
+      follow_up_message_key: row.follow_up_message_key ?? null,
+      meeting_feedback: row.meeting_feedback ?? null,
+      feedback_submitted_at: row.feedback_submitted_at ?? null,
+      tracked_profile_id: row.tracked_profile_id ?? null,
+      visible_from: row.visible_from ?? null,
+      journey: journeyByAppointment.get(String(row.id)) ?? null,
+      lead_name: row.sales_leads?.full_name ?? null,
+      lead_email: row.sales_leads?.email ?? null,
+      lead_phone: row.sales_leads?.phone ?? null,
+      client_name: row.partnership_id ? (clientsById.get(row.partnership_id)?.name ?? null) : null,
+    }))
+    .filter((item) => !item.visible_from || new Date(item.visible_from).getTime() <= Date.now());
 
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -358,12 +329,8 @@ export async function fetchSellerAgenda(
         const date = new Date(item.scheduled_at);
         return date >= weekStart && date < weekEnd;
       }).length,
-      pendingFollowups: active.filter(
-        (item) => item.type === "follow_up" && !["concluido", "cancelado"].includes(item.status),
-      ).length,
-      scheduledMeetings: active.filter(
-        (item) => item.type === "reuniao" && !["concluido", "cancelado"].includes(item.status),
-      ).length,
+      pendingFollowups: active.filter((item) => item.type === "follow_up" && !["concluido", "cancelado"].includes(item.status)).length,
+      scheduledMeetings: active.filter((item) => item.type === "reuniao" && !["concluido", "cancelado"].includes(item.status)).length,
     },
     leads: ((leadsResult.data as any[]) ?? []) as AgendaLeadOption[],
     clients,
@@ -413,41 +380,31 @@ export async function completeCloserMeeting(id: string, feedback: string) {
 }
 
 const FOLLOW_UP_MESSAGES: Record<string, string> = {
+  cadence_1d: "Foi muito bom conversar com você. Ficou alguma dúvida sobre a parceria com a NOX Fiança?",
+  cadence_4d: "Conseguiu avançar no cadastro? Estou à disposição para ajudar em qualquer etapa.",
+  cadence_15d: "Como está o uso da plataforma NOX Fiança? Se precisar, estou por aqui para ajudar.",
+  cadence_30d: "Passando para saber como está a parceria com a NOX Fiança e se posso apoiar em algo.",
   closer_24h: "Foi muito bom conversar com você. Ficou alguma dúvida sobre a parceria com a NOX Fiança?",
   closer_3d: "Conseguiu avançar no cadastro? Estou à disposição para ajudar em qualquer etapa.",
   sdr_48h: "Como foi a conversa com nosso Closer? Posso ajudar em alguma dúvida sobre a parceria?",
   sdr_5d: "Como está o uso da plataforma NOX Fiança? Se precisar, estou por aqui para ajudar.",
 };
 
-const RECURRING_MESSAGES = [
-  "Como está o uso da plataforma NOX Fiança? Ficou alguma dúvida em que eu possa ajudar?",
-  "Passando para saber como está a parceria com a NOX Fiança e se posso apoiar em algo.",
-  "Tudo bem por aí? Quero saber se a plataforma está atendendo bem e se existe alguma dúvida.",
-];
+const RECURRING_MESSAGES = ["Como está o uso da plataforma NOX Fiança? Ficou alguma dúvida em que eu possa ajudar?", "Passando para saber como está a parceria com a NOX Fiança e se posso apoiar em algo.", "Tudo bem por aí? Quero saber se a plataforma está atendendo bem e se existe alguma dúvida."];
 
 function whatsappGreeting(name: string | null) {
   const normalized = name?.trim();
   return normalized ? `Olá, ${normalized}!` : "Olá!";
 }
 
-export function appointmentWhatsAppMessage(
-  item: Pick<SellerAppointment, "contact_name" | "client_name" | "lead_name" | "follow_up_message_key" | "follow_up_offset_days">,
-) {
+export function appointmentWhatsAppMessage(item: Pick<SellerAppointment, "contact_name" | "client_name" | "lead_name" | "follow_up_message_key" | "follow_up_offset_days">) {
   const name = item.contact_name || item.client_name || item.lead_name || null;
   const key = item.follow_up_message_key ?? "";
-  const body = FOLLOW_UP_MESSAGES[key] ?? (
-    key === "sdr_27d"
-      ? RECURRING_MESSAGES[Math.max(0, Math.floor((item.follow_up_offset_days ?? 27) / 27) - 1) % RECURRING_MESSAGES.length]
-      : "Como você está? Posso ajudar em alguma dúvida sobre a NOX Fiança?"
-  );
+  const body = FOLLOW_UP_MESSAGES[key] ?? (key === "sdr_27d" ? RECURRING_MESSAGES[Math.max(0, Math.floor((item.follow_up_offset_days ?? 27) / 27) - 1) % RECURRING_MESSAGES.length] : "Como você está? Posso ajudar em alguma dúvida sobre a NOX Fiança?");
   return `${whatsappGreeting(name)} ${body}`;
 }
 
-export function registrationWhatsAppMessage(
-  item: Pick<SellerAppointment, "contact_name" | "client_name" | "lead_name">,
-  roleLabel: string,
-  url: string,
-) {
+export function registrationWhatsAppMessage(item: Pick<SellerAppointment, "contact_name" | "client_name" | "lead_name">, roleLabel: string, url: string) {
   const name = item.contact_name || item.client_name || item.lead_name || null;
   return `${whatsappGreeting(name)} Para avançarmos, faça o cadastro de ${roleLabel} na NOX Fiança por este link exclusivo: ${url}`;
 }
@@ -501,14 +458,7 @@ function formatLocalDate(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
-export async function scheduleSdrCloserMeeting(input: {
-  slotStart: string;
-  title: string;
-  contactName: string;
-  contactEmail?: string;
-  contactPhone?: string;
-  notes?: string;
-}) {
+export async function scheduleSdrCloserMeeting(input: { slotStart: string; title: string; contactName: string; contactEmail?: string; contactPhone?: string; notes?: string }) {
   const { data, error } = await supabase.rpc("schedule_sdr_closer_meeting" as any, {
     p_slot_start: input.slotStart,
     p_title: input.title,
