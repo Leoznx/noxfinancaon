@@ -4,6 +4,8 @@ export type TeamGoalProgress = {
   seller_id: string;
   seller_name: string;
   seller_type: "sdr" | "closer";
+  target_clients_daily: number | null;
+  target_clients_weekly: number | null;
   target_clients_monthly: number | null;
   target_meetings_scheduled_daily: number | null;
   target_meetings_scheduled_weekly: number | null;
@@ -11,6 +13,9 @@ export type TeamGoalProgress = {
   target_meetings_completed_daily: number | null;
   target_meetings_completed_weekly: number | null;
   target_meetings_completed_monthly: number | null;
+  clients_registered_daily: number;
+  clients_registered_weekly: number;
+  clients_registered_monthly: number;
   meetings_scheduled_daily: number;
   meetings_scheduled_weekly: number;
   meetings_scheduled_monthly: number;
@@ -27,6 +32,8 @@ function normalize(row: Record<string, unknown>): TeamGoalProgress {
   return {
     ...(row as unknown as TeamGoalProgress),
     seller_type: row.seller_type === "closer" ? "closer" : "sdr",
+    target_clients_daily: numberOrNull(row.target_clients_daily),
+    target_clients_weekly: numberOrNull(row.target_clients_weekly),
     target_clients_monthly: numberOrNull(row.target_clients_monthly),
     target_meetings_scheduled_daily: numberOrNull(row.target_meetings_scheduled_daily),
     target_meetings_scheduled_weekly: numberOrNull(row.target_meetings_scheduled_weekly),
@@ -34,6 +41,9 @@ function normalize(row: Record<string, unknown>): TeamGoalProgress {
     target_meetings_completed_daily: numberOrNull(row.target_meetings_completed_daily),
     target_meetings_completed_weekly: numberOrNull(row.target_meetings_completed_weekly),
     target_meetings_completed_monthly: numberOrNull(row.target_meetings_completed_monthly),
+    clients_registered_daily: Number(row.clients_registered_daily ?? 0),
+    clients_registered_weekly: Number(row.clients_registered_weekly ?? 0),
+    clients_registered_monthly: Number(row.clients_registered_monthly ?? 0),
     meetings_scheduled_daily: Number(row.meetings_scheduled_daily ?? 0),
     meetings_scheduled_weekly: Number(row.meetings_scheduled_weekly ?? 0),
     meetings_scheduled_monthly: Number(row.meetings_scheduled_monthly ?? 0),
@@ -60,11 +70,14 @@ export async function fetchMyRoleGoalProgress() {
   return normalize(row as Record<string, unknown>);
 }
 
-export async function saveTeamMeetingGoals(
+export async function saveTeamGoals(
   row: TeamGoalProgress,
   month: number,
   year: number,
-  targets: { daily: number; weekly: number; monthly: number },
+  targets: {
+    meetings: { daily: number; weekly: number; monthly: number };
+    registrations: { daily: number; weekly: number; monthly: number };
+  },
 ) {
   const prefix =
     row.seller_type === "closer" ? "target_meetings_completed" : "target_meetings_scheduled";
@@ -73,11 +86,13 @@ export async function saveTeamMeetingGoals(
     month,
     year,
     target_meetings: 0,
-    target_clients: row.target_clients_monthly ?? 0,
+    target_clients_daily: targets.registrations.daily,
+    target_clients_weekly: targets.registrations.weekly,
+    target_clients: targets.registrations.monthly,
     target_contracts: 0,
-    [`${prefix}_daily`]: targets.daily,
-    [`${prefix}_weekly`]: targets.weekly,
-    [`${prefix}_monthly`]: targets.monthly,
+    [`${prefix}_daily`]: targets.meetings.daily,
+    [`${prefix}_weekly`]: targets.meetings.weekly,
+    [`${prefix}_monthly`]: targets.meetings.monthly,
   };
   const { error } = await (supabase.from("seller_goals" as any) as any).upsert(payload, {
     onConflict: "seller_id,month,year",

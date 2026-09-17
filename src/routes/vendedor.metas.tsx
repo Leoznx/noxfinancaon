@@ -106,6 +106,11 @@ function Goals() {
         { event: "*", schema: "public", table: "seller_client_partnerships" },
         () => void load(),
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "seller_signup_attributions" },
+        () => void load(),
+      )
       .subscribe();
     return () => void supabase.removeChannel(channel);
   }, [load]);
@@ -173,34 +178,48 @@ function Goals() {
                     <CalendarDays className="h-5 w-5 text-yellow-600" />{" "}
                     {roleProgress.seller_type === "sdr"
                       ? "Reuniões marcadas"
-                      : "Reuniões realizadas"}{" "}
-                    · metas por período
+                      : "Reuniões confirmadas"}{" "}
+                    e cadastros · metas individuais
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="grid gap-3 sm:grid-cols-3">
-                  {(["daily", "weekly", "monthly"] as const).map((period) => {
-                    const scheduled = roleProgress.seller_type === "sdr";
-                    const current = scheduled
-                      ? roleProgress[`meetings_scheduled_${period}`]
-                      : roleProgress[`meetings_completed_${period}`];
-                    const target = scheduled
-                      ? roleProgress[`target_meetings_scheduled_${period}`]
-                      : roleProgress[`target_meetings_completed_${period}`];
-                    const labels = { daily: "Hoje", weekly: "Esta semana", monthly: "Este mês" };
-                    const pct = target ? Math.min(100, Math.round((current / target) * 100)) : 0;
-                    return (
-                      <div key={period} className="rounded-2xl bg-neutral-50 p-4">
-                        <p className="text-xs font-black uppercase text-neutral-400">
-                          {labels[period]}
-                        </p>
-                        <p className="mt-2 text-3xl font-black">
-                          {current}
-                          <span className="text-sm text-neutral-400"> / {target ?? "—"}</span>
-                        </p>
-                        <ProgressBar value={pct} />
+                <CardContent className="space-y-5">
+                  {(["meetings", "registrations"] as const).map((metric) => (
+                    <div key={metric}>
+                      <p className="mb-2 text-xs font-black uppercase tracking-wide text-neutral-500">
+                        {metric === "registrations"
+                          ? "Cadastros realizados"
+                          : roleProgress.seller_type === "sdr"
+                            ? "Reuniões agendadas"
+                            : "Reuniões confirmadas"}
+                      </p>
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        {(["daily", "weekly", "monthly"] as const).map((period) => {
+                          const scheduled = roleProgress.seller_type === "sdr";
+                          const current = metric === "registrations"
+                            ? roleProgress[`clients_registered_${period}`]
+                            : scheduled
+                              ? roleProgress[`meetings_scheduled_${period}`]
+                              : roleProgress[`meetings_completed_${period}`];
+                          const target = metric === "registrations"
+                            ? roleProgress[`target_clients_${period}`]
+                            : scheduled
+                              ? roleProgress[`target_meetings_scheduled_${period}`]
+                              : roleProgress[`target_meetings_completed_${period}`];
+                          const labels = { daily: "Hoje", weekly: "Esta semana", monthly: "Este mês" };
+                          const pct = target ? Math.min(100, Math.round((current / target) * 100)) : 0;
+                          return (
+                            <div key={period} className="rounded-2xl bg-neutral-50 p-4">
+                              <p className="text-xs font-black uppercase text-neutral-400">{labels[period]}</p>
+                              <p className="mt-2 text-3xl font-black">
+                                {current}<span className="text-sm text-neutral-400"> / {target ?? "—"}</span>
+                              </p>
+                              <ProgressBar value={pct} />
+                            </div>
+                          );
+                        })}
                       </div>
-                    );
-                  })}
+                    </div>
+                  ))}
                 </CardContent>
               </Card>
             )}

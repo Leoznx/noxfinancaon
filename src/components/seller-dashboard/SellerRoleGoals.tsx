@@ -46,12 +46,12 @@ export function SellerRoleGoals({
             </span>
           </div>
           <h2 className="mt-2 text-lg font-black tracking-[-0.025em] text-neutral-950 sm:text-xl">
-            {role === "closer" ? "Ritmo de reuniões realizadas" : "Prospecção e reuniões agendadas"}
+            {role === "closer" ? "Reuniões confirmadas e cadastros" : "Reuniões agendadas e cadastros"}
           </h2>
           <p className="mt-0.5 text-xs font-medium text-neutral-500">
             {role === "closer"
-              ? "Acompanhe as reuniões concluídas hoje, na semana e no mês."
-              : "Acompanhe seus cadastros e os repasses de reuniões para os Closers."}
+              ? "Reuniões concluídas e cadastros atribuídos diretamente ou por reunião."
+              : "Reuniões criadas e cadastros atribuídos diretamente ou em conjunto com o Closer."}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-3 rounded-xl border border-yellow-200 bg-white/90 px-3 py-2 shadow-sm">
@@ -119,6 +119,20 @@ function GoalCard({ goal }: { goal: GoalItem }) {
 
 function sdrGoals(progress: SellerGoalProgress): GoalItem[] {
   return [
+    ...meetingGoals(progress, "sdr"),
+    ...registrationGoals(progress),
+  ];
+}
+
+function closerGoals(progress: SellerGoalProgress): GoalItem[] {
+  return [
+    ...meetingGoals(progress, "closer"),
+    ...registrationGoals(progress),
+  ];
+}
+
+function registrationGoals(progress: SellerGoalProgress): GoalItem[] {
+  return [
     {
       label: "Cadastros realizados",
       period: "Hoje",
@@ -130,51 +144,60 @@ function sdrGoals(progress: SellerGoalProgress): GoalItem[] {
     },
     {
       label: "Cadastros realizados",
-      period: "No mês",
-      current: progress.clients_registered_monthly,
-      target: progress.target_clients_monthly,
+      period: "Esta semana",
+      current: progress.clients_registered_weekly,
+      target: progress.target_clients_weekly,
       icon: Target,
       accent: "bg-blue-500",
       iconClass: "bg-blue-50 text-blue-600",
     },
     {
-      label: "Reuniões agendadas",
+      label: "Cadastros realizados",
       period: "No mês",
-      current: progress.meetings_scheduled_monthly,
-      target: progress.target_meetings_scheduled_monthly,
-      icon: CalendarClock,
+      current: progress.clients_registered_monthly,
+      target: progress.target_clients_monthly,
+      icon: UserPlus,
       accent: "bg-violet-500",
       iconClass: "bg-violet-50 text-violet-600",
     },
   ];
 }
 
-function closerGoals(progress: SellerGoalProgress): GoalItem[] {
+function meetingGoals(progress: SellerGoalProgress, role: SellerType): GoalItem[] {
+  const closer = role === "closer";
+  const label = closer ? "Reuniões confirmadas" : "Reuniões agendadas";
+  const Icon = closer ? CalendarCheck2 : CalendarClock;
   return [
     {
-      label: "Reuniões realizadas",
+      label,
       period: "Hoje",
-      current: progress.meetings_completed_daily,
-      target: progress.target_meetings_completed_daily,
-      icon: CalendarCheck2,
+      current: closer ? progress.meetings_completed_daily : progress.meetings_scheduled_daily,
+      target: closer
+        ? progress.target_meetings_completed_daily
+        : progress.target_meetings_scheduled_daily,
+      icon: Icon,
       accent: "bg-yellow-400",
       iconClass: "bg-yellow-100 text-yellow-700",
     },
     {
-      label: "Reuniões realizadas",
+      label,
       period: "Esta semana",
-      current: progress.meetings_completed_weekly,
-      target: progress.target_meetings_completed_weekly,
-      icon: CalendarCheck2,
+      current: closer ? progress.meetings_completed_weekly : progress.meetings_scheduled_weekly,
+      target: closer
+        ? progress.target_meetings_completed_weekly
+        : progress.target_meetings_scheduled_weekly,
+      icon: Icon,
       accent: "bg-blue-500",
       iconClass: "bg-blue-50 text-blue-600",
     },
     {
-      label: "Reuniões realizadas",
+      label,
       period: "No mês",
-      current: progress.meetings_completed_monthly,
-      target: progress.target_meetings_completed_monthly,
-      icon: Target,
+      current: closer ? progress.meetings_completed_monthly : progress.meetings_scheduled_monthly,
+      target: closer
+        ? progress.target_meetings_completed_monthly
+        : progress.target_meetings_scheduled_monthly,
+      icon: Icon,
       accent: "bg-violet-500",
       iconClass: "bg-violet-50 text-violet-600",
     },

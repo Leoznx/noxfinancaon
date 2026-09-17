@@ -54,7 +54,7 @@ import { registrarAuditoria } from "@/lib/auditoria";
 import { formatMoney, formatDateTime, toDatetimeLocal } from "@/lib/vendedor-portal";
 import {
   fetchTeamGoalProgress,
-  saveTeamMeetingGoals,
+  saveTeamGoals,
   type TeamGoalProgress,
 } from "@/lib/admin-team-goals";
 import { TabColaboradores, TabEquipeComercial } from "./admin.equipe-permissoes";
@@ -199,15 +199,46 @@ function SeletorMes({
 }
 
 /* ===================== METAS ===================== */
+type GoalPeriods = { daily: string; weekly: string; monthly: string };
+type SellerGoalEdit = { meetings: GoalPeriods; registrations: GoalPeriods };
+
+function initialGoalEdit(row: TeamGoalProgress): SellerGoalEdit {
+  const scheduled = row.seller_type === "sdr";
+  return {
+    meetings: {
+      daily: String(
+        scheduled
+          ? (row.target_meetings_scheduled_daily ?? "")
+          : (row.target_meetings_completed_daily ?? ""),
+      ),
+      weekly: String(
+        scheduled
+          ? (row.target_meetings_scheduled_weekly ?? "")
+          : (row.target_meetings_completed_weekly ?? ""),
+      ),
+      monthly: String(
+        scheduled
+          ? (row.target_meetings_scheduled_monthly ?? "")
+          : (row.target_meetings_completed_monthly ?? ""),
+      ),
+    },
+    registrations: {
+      daily: String(row.target_clients_daily ?? ""),
+      weekly: String(row.target_clients_weekly ?? ""),
+      monthly: String(row.target_clients_monthly ?? ""),
+    },
+  };
+}
+
 function TabMetas() {
   const { user } = useAuth();
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
   const [linhas, setLinhas] = useState<TeamGoalProgress[]>([]);
-  const [edits, setEdits] = useState<
-    Record<string, { daily: string; weekly: string; monthly: string }>
-  >({});
+  const [team, setTeam] = useState<"sdr" | "closer">("sdr");
+  const [selectedId, setSelectedId] = useState("");
+  const [edits, setEdits] = useState<Record<string, SellerGoalEdit>>({});
   const [loading, setLoading] = useState(true);
   const [salvandoId, setSalvandoId] = useState<string | null>(null);
 
@@ -226,6 +257,14 @@ function TabMetas() {
     void carregar();
   }, [carregar]);
 
+  const teamRows = linhas.filter((linha) => linha.seller_type === team);
+  const selected = teamRows.find((linha) => linha.seller_id === selectedId) ?? teamRows[0];
+
+  useEffect(() => {
+    if (selected && selected.seller_id !== selectedId) setSelectedId(selected.seller_id);
+    if (!selected && selectedId) setSelectedId("");
+  }, [selected, selectedId]);
+
   useEffect(() => {
     const refresh = () => void carregar();
     const channel = supabase
@@ -241,6 +280,11 @@ function TabMetas() {
         { event: "*", schema: "public", table: "seller_client_partnerships" },
         refresh,
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "seller_signup_attributions" },
+        refresh,
+      )
       .on("postgres_changes", { event: "*", schema: "public", table: "apolices" }, refresh)
       .subscribe();
     return () => {
@@ -249,39 +293,31 @@ function TabMetas() {
   }, [carregar]);
 
   const salvar = async (linha: TeamGoalProgress) => {
-    const scheduled = linha.seller_type === "sdr";
-    const values = edits[linha.seller_id] ?? {
-      daily: String(
-        scheduled
-          ? (linha.target_meetings_scheduled_daily ?? "")
-          : (linha.target_meetings_completed_daily ?? ""),
-      ),
-      weekly: String(
-        scheduled
-          ? (linha.target_meetings_scheduled_weekly ?? "")
-          : (linha.target_meetings_completed_weekly ?? ""),
-      ),
-      monthly: String(
-        scheduled
-          ? (linha.target_meetings_scheduled_monthly ?? "")
-          : (linha.target_meetings_completed_monthly ?? ""),
-      ),
-    };
+    const values = edits[linha.seller_id] ?? initialGoalEdit(linha);
     const targets = {
-      daily: Number(values.daily),
-      weekly: Number(values.weekly),
-      monthly: Number(values.monthly),
+      meetings: {
+        daily: Number(values.meetings.daily),
+        weekly: Number(values.meetings.weekly),
+        monthly: Number(values.meetings.monthly),
+      },
+      registrations: {
+        daily: Number(values.registrations.daily),
+        weekly: Number(values.registrations.weekly),
+        monthly: Number(values.registrations.monthly),
+      },
     };
+    const rawValues = [...Object.values(values.meetings), ...Object.values(values.registrations)];
+    const numericValues = [...Object.values(targets.meetings), ...Object.values(targets.registrations)];
     if (
-      Object.values(values).some((value) => value.trim() === "") ||
-      Object.values(targets).some((value) => !Number.isInteger(value) || value < 0)
+      rawValues.some((value) => value.trim() === "") ||
+      numericValues.some((value) => !Number.isInteger(value) || value < 0)
     ) {
-      toast.error("Preencha as metas diária, semanal e mensal com números inteiros.");
+      toast.error("Preencha as seis metas individuais com números inteiros.");
       return;
     }
     setSalvandoId(linha.seller_id);
     try {
-      await saveTeamMeetingGoals(linha, month, year, targets);
+      await saveTeamGoals(linha, month, year, targets);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Não foi possível salvar.");
       setSalvandoId(null);
@@ -292,7 +328,7 @@ function TabMetas() {
     registrarAuditoria({
       actorUserId: user?.id,
       actorRole: user?.internalRole || user?.role,
-      action: "definir_metas_reunioes_por_periodo",
+      action: "definir_metas_comerciais_individuais",
       tableName: "seller_goals",
       recordId: linha.seller_id,
       before: linha,
@@ -303,32 +339,18 @@ function TabMetas() {
 
   const updateEdit = (
     linha: TeamGoalProgress,
+    metric: "meetings" | "registrations",
     period: "daily" | "weekly" | "monthly",
     value: string,
   ) => {
-    const scheduled = linha.seller_type === "sdr";
-    const initial = {
-      daily: String(
-        scheduled
-          ? (linha.target_meetings_scheduled_daily ?? "")
-          : (linha.target_meetings_completed_daily ?? ""),
-      ),
-      weekly: String(
-        scheduled
-          ? (linha.target_meetings_scheduled_weekly ?? "")
-          : (linha.target_meetings_completed_weekly ?? ""),
-      ),
-      monthly: String(
-        scheduled
-          ? (linha.target_meetings_scheduled_monthly ?? "")
-          : (linha.target_meetings_completed_monthly ?? ""),
-      ),
-    };
     setEdits((current) => ({
       ...current,
       [linha.seller_id]: {
-        ...(current[linha.seller_id] ?? initial),
-        [period]: value.replace(/\D/g, ""),
+        ...(current[linha.seller_id] ?? initialGoalEdit(linha)),
+        [metric]: {
+          ...(current[linha.seller_id] ?? initialGoalEdit(linha))[metric],
+          [period]: value.replace(/\D/g, ""),
+        },
       },
     }));
   };
@@ -337,10 +359,10 @@ function TabMetas() {
     <Card>
       <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
         <div>
-          <CardTitle>Metas de reuniões por SDR e Closer</CardTitle>
+          <CardTitle>Metas individuais por equipe</CardTitle>
           <p className="text-sm text-muted-foreground">
-            SDR contabiliza reuniões marcadas; Closer contabiliza reuniões realizadas. O progresso
-            atualiza em tempo real.
+            Escolha a equipe e uma pessoa. SDR contabiliza reuniões agendadas; Closer contabiliza
+            reuniões confirmadas como concluídas. Cadastros são atribuídos automaticamente.
           </p>
         </div>
         <SeletorMes
@@ -353,33 +375,49 @@ function TabMetas() {
         />
       </CardHeader>
       <CardContent className="space-y-4">
+        <div className="grid gap-3 rounded-xl border border-neutral-200 bg-neutral-50 p-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Equipe</Label>
+            <Select
+              value={team}
+              onValueChange={(value) => {
+                setTeam(value as "sdr" | "closer");
+                setSelectedId("");
+              }}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="sdr">SDR · reuniões agendadas</SelectItem>
+                <SelectItem value="closer">Closer · reuniões confirmadas</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Colaborador</Label>
+            <Select value={selected?.seller_id ?? ""} onValueChange={setSelectedId}>
+              <SelectTrigger><SelectValue placeholder="Selecione uma pessoa" /></SelectTrigger>
+              <SelectContent>
+                {teamRows.map((linha) => (
+                  <SelectItem key={linha.seller_id} value={linha.seller_id}>
+                    {linha.seller_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
         {loading ? (
           <p className="py-6 text-center text-sm text-muted-foreground">Carregando…</p>
-        ) : linhas.length === 0 ? (
+        ) : !selected ? (
           <p className="py-6 text-center text-sm text-muted-foreground">
-            Nenhum vendedor ativo cadastrado.
+            Nenhum colaborador ativo nesta equipe.
           </p>
         ) : (
-          linhas.map((linha) => {
+          (() => {
+            const linha = selected;
             const scheduled = linha.seller_type === "sdr";
-            const edit = edits[linha.seller_id] ?? {
-              daily: String(
-                scheduled
-                  ? (linha.target_meetings_scheduled_daily ?? "")
-                  : (linha.target_meetings_completed_daily ?? ""),
-              ),
-              weekly: String(
-                scheduled
-                  ? (linha.target_meetings_scheduled_weekly ?? "")
-                  : (linha.target_meetings_completed_weekly ?? ""),
-              ),
-              monthly: String(
-                scheduled
-                  ? (linha.target_meetings_scheduled_monthly ?? "")
-                  : (linha.target_meetings_completed_monthly ?? ""),
-              ),
-            };
-            const current = scheduled
+            const edit = edits[linha.seller_id] ?? initialGoalEdit(linha);
+            const meetingCurrent = scheduled
               ? {
                   daily: linha.meetings_scheduled_daily,
                   weekly: linha.meetings_scheduled_weekly,
@@ -390,6 +428,11 @@ function TabMetas() {
                   weekly: linha.meetings_completed_weekly,
                   monthly: linha.meetings_completed_monthly,
                 };
+            const registrationCurrent = {
+              daily: linha.clients_registered_daily,
+              weekly: linha.clients_registered_weekly,
+              monthly: linha.clients_registered_monthly,
+            };
             return (
               <div
                 key={linha.seller_id}
@@ -417,32 +460,45 @@ function TabMetas() {
                     {salvandoId === linha.seller_id ? "Salvando…" : "Salvar meta"}
                   </Button>
                 </div>
+                <div>
+                  <h3 className="mb-2 text-sm font-black text-neutral-950">
+                    {scheduled ? "Reuniões agendadas" : "Reuniões confirmadas"}
+                  </h3>
                 <div className="grid gap-3 md:grid-cols-3">
                   <MetaEditor
                     label="Meta por dia"
-                    current={current.daily}
-                    target={Number(edit.daily || 0)}
-                    value={edit.daily}
-                    onChange={(value) => updateEdit(linha, "daily", value)}
+                    current={meetingCurrent.daily}
+                    target={Number(edit.meetings.daily || 0)}
+                    value={edit.meetings.daily}
+                    onChange={(value) => updateEdit(linha, "meetings", "daily", value)}
                   />
                   <MetaEditor
                     label="Meta por semana"
-                    current={current.weekly}
-                    target={Number(edit.weekly || 0)}
-                    value={edit.weekly}
-                    onChange={(value) => updateEdit(linha, "weekly", value)}
+                    current={meetingCurrent.weekly}
+                    target={Number(edit.meetings.weekly || 0)}
+                    value={edit.meetings.weekly}
+                    onChange={(value) => updateEdit(linha, "meetings", "weekly", value)}
                   />
                   <MetaEditor
                     label="Meta por mês"
-                    current={current.monthly}
-                    target={Number(edit.monthly || 0)}
-                    value={edit.monthly}
-                    onChange={(value) => updateEdit(linha, "monthly", value)}
+                    current={meetingCurrent.monthly}
+                    target={Number(edit.meetings.monthly || 0)}
+                    value={edit.meetings.monthly}
+                    onChange={(value) => updateEdit(linha, "meetings", "monthly", value)}
                   />
+                </div>
+                </div>
+                <div>
+                  <h3 className="mb-2 text-sm font-black text-neutral-950">Cadastros realizados</h3>
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <MetaEditor label="Meta por dia" current={registrationCurrent.daily} target={Number(edit.registrations.daily || 0)} value={edit.registrations.daily} onChange={(value) => updateEdit(linha, "registrations", "daily", value)} />
+                    <MetaEditor label="Meta por semana" current={registrationCurrent.weekly} target={Number(edit.registrations.weekly || 0)} value={edit.registrations.weekly} onChange={(value) => updateEdit(linha, "registrations", "weekly", value)} />
+                    <MetaEditor label="Meta por mês" current={registrationCurrent.monthly} target={Number(edit.registrations.monthly || 0)} value={edit.registrations.monthly} onChange={(value) => updateEdit(linha, "registrations", "monthly", value)} />
+                  </div>
                 </div>
               </div>
             );
-          })
+          })()
         )}
       </CardContent>
     </Card>
