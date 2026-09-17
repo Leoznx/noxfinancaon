@@ -926,6 +926,81 @@ export type Database = {
           },
         ]
       }
+      broker_agency_invitations: {
+        Row: {
+          accepted_at: string | null
+          agency_activation_email_sent_at: string | null
+          agency_profile_id: string
+          broker_activation_email_sent_at: string | null
+          broker_profile_id: string
+          commission_allocation_mode: string
+          corretor_id: string
+          created_at: string
+          expires_at: string
+          id: string
+          invitation_email_sent_at: string | null
+          last_email_error: string | null
+          imobiliaria_id: string
+          requested_at: string
+          status: string
+          token_hash: string
+          updated_at: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          agency_activation_email_sent_at?: string | null
+          agency_profile_id: string
+          broker_activation_email_sent_at?: string | null
+          broker_profile_id: string
+          commission_allocation_mode: string
+          corretor_id: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          invitation_email_sent_at?: string | null
+          last_email_error?: string | null
+          imobiliaria_id: string
+          requested_at?: string
+          status?: string
+          token_hash: string
+          updated_at?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          agency_activation_email_sent_at?: string | null
+          agency_profile_id?: string
+          broker_activation_email_sent_at?: string | null
+          broker_profile_id?: string
+          commission_allocation_mode?: string
+          corretor_id?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          invitation_email_sent_at?: string | null
+          last_email_error?: string | null
+          imobiliaria_id?: string
+          requested_at?: string
+          status?: string
+          token_hash?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "broker_agency_invitations_corretor_id_fkey"
+            columns: ["corretor_id"]
+            isOneToOne: false
+            referencedRelation: "corretores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "broker_agency_invitations_imobiliaria_id_fkey"
+            columns: ["imobiliaria_id"]
+            isOneToOne: false
+            referencedRelation: "imobiliarias"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       corretores: {
         Row: {
           cidade: string | null
@@ -3268,6 +3343,67 @@ export type Database = {
         Returns: number
       }
       current_imobiliaria_id: { Args: never; Returns: string }
+      create_my_broker_agency_invitation: {
+        Args: {
+          p_agency_profile_id: string
+          p_commission_allocation_mode: string
+          p_corretor_id: string
+        }
+        Returns: {
+          agency_email: string
+          agency_name: string
+          allocation_mode: string
+          broker_email: string
+          broker_name: string
+          invitation_expires_at: string
+          invitation_id: string
+          invitation_token: string
+        }[]
+      }
+      inspect_broker_agency_invitation: {
+        Args: { p_token: string }
+        Returns: {
+          agency_name: string
+          allocation_mode: string
+          broker_name: string
+          invitation_expires_at: string
+          invitation_id: string
+          invitation_status: string
+        }[]
+      }
+      accept_broker_agency_invitation: {
+        Args: { p_token: string }
+        Returns: {
+          activated_now: boolean
+          agency_email: string
+          agency_name: string
+          agency_profile_id: string
+          allocation_mode: string
+          broker_email: string
+          broker_name: string
+          broker_profile_id: string
+          invitation_id: string
+        }[]
+      }
+      list_my_broker_agency_members: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          commission_allocation_mode: string
+          contracts_count: number
+          corretor_id: string
+          cpf: string | null
+          creci: string | null
+          email: string | null
+          linked_at: string
+          membership_id: string
+          membership_status: string
+          nome: string | null
+          profile_id: string
+          profile_status: string | null
+          registered_at: string
+          telefone: string | null
+        }[]
+      }
       ensure_nox_demo_auth_user: {
         Args: {
           p_email: string

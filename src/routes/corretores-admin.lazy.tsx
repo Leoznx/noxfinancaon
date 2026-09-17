@@ -29,6 +29,10 @@ import {
   getBrokerCommissionOption,
   type BrokerCommissionAllocationMode,
 } from "@/lib/broker-commission-policy";
+import {
+  createBrokerAgencyInvitation,
+  listMyBrokerAgencyMembers,
+} from "@/lib/broker-agency-invitations";
 
 export const Route = createLazyFileRoute("/corretores-admin")({
   component: () => (
@@ -90,12 +94,23 @@ function CorretoresAdmin() {
 
   const isImobiliaria = user?.role === "imobiliaria";
 
-  const fetchLinkedCorretores = useCallback(async (imobId: string) => {
-    setLoading(true);
-    const { data, error } = await supabase.from("corretores").select("*, profiles:profile_id (nome, email, telefone, status)").eq("imobiliaria_id", imobId);
-    if (error) toast.error("Erro ao carregar corretores: " + error.message);
-    setCorretores(data || []);
-    setLoading(false);
+  const fetchLinkedCorretores = useCallback(async (_imobId: string, silent = false) => {
+    if (!silent) setLoading(true);
+    const { data, error } = await listMyBrokerAgencyMembers();
+    if (error) toast.error("Erro ao carregar corretores: " + error);
+    setCorretores(
+      (data || []).map((row) => ({
+        ...row,
+        id: row.corretor_id,
+        profiles: {
+          nome: row.nome,
+          email: row.email,
+          telefone: row.telefone,
+          status: row.profile_status,
+        },
+      })),
+    );
+    if (!silent) setLoading(false);
   }, []);
 
   const fetchAllCorretores = useCallback(async () => {
@@ -127,6 +142,32 @@ function CorretoresAdmin() {
     if (isImobiliaria) resolveImobiliariaId();
     else fetchAllCorretores();
   }, [user, isImobiliaria, resolveImobiliariaId, fetchAllCorretores]);
+
+  useEffect(() => {
+    if (!isImobiliaria || !imobiliariaId) return;
+    const refresh = () => void fetchLinkedCorretores(imobiliariaId, true);
+    const channel = supabase
+      .channel(`broker-team-${imobiliariaId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "broker_agency_invitations", filter: `imobiliaria_id=eq.${imobiliariaId}` },
+        refresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "corretores", filter: `imobiliaria_id=eq.${imobiliariaId}` },
+        refresh,
+      )
+      .subscribe();
+    const interval = window.setInterval(refresh, 30_000);
+    const onFocus = () => refresh();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+      void supabase.removeChannel(channel);
+    };
+  }, [fetchLinkedCorretores, imobiliariaId, isImobiliaria]);
 
   const resetModal = () => {
     setSearchInput("");
@@ -210,15 +251,16 @@ function CorretoresAdmin() {
     if (!foundCorretor) return;
     setIsLinking(true);
     try {
-      const { error } = await supabase.rpc("link_my_corretor", {
-        p_corretor_id: foundCorretor.id,
-        p_commission_allocation_mode: commissionMode,
-      });
-      if (error) {
-        toast.error("Não foi possível vincular: " + error.message);
+      const result = await createBrokerAgencyInvitation(foundCorretor.id, commissionMode);
+      if (!result.ok) {
+        toast.error(result.error || "Não foi possível enviar o convite.");
         return;
       }
-      toast.success("Corretor vinculado com sucesso à sua imobiliária.");
+      if (result.emailSent) {
+        toast.success("Convite enviado. O vínculo ficará pendente até a confirmação do corretor.");
+      } else {
+        toast.warning("O convite foi registrado, mas o e-mail não pôde ser enviado. Tente enviar novamente.");
+      }
       setOpen(false);
       resetModal();
       if (imobiliariaId) await fetchLinkedCorretores(imobiliariaId);
@@ -410,7 +452,7 @@ function CorretoresAdmin() {
                       <CheckCircle2 className="text-green-600" size={26} />
                       Corretor encontrado
                     </DialogTitle>
-                    <DialogDescription>Confira os dados antes de vincular à sua imobiliária.</DialogDescription>
+                    <DialogDescription>Confira os dados e envie o convite de confirmação ao corretor.</DialogDescription>
                   </DialogHeader>
 
                   <Card className="p-5 mb-6 bg-neutral-50 border-neutral-200 space-y-3">
@@ -441,7 +483,7 @@ function CorretoresAdmin() {
                       Cancelar
                     </Button>
                     <Button type="button" onClick={handleConfirmLink} disabled={isLinking} className="h-12 bg-neutral-900 hover:bg-neutral-800 text-white font-bold rounded-xl">
-                      {isLinking ? "Vinculando..." : "OK, vincular corretor"}
+                      {isLinking ? "Enviando convite..." : "Enviar convite de vínculo"}
                     </Button>
                   </DialogFooter>
                 </div>
@@ -469,24 +511,30 @@ function CorretoresAdmin() {
               )}
             </div>
           ) : (
-            corretores.map((c) => (
-              <div key={c.id} className="p-4 space-y-3">
+            corretores.map((c) => {
+              const activeMembership = !isImobiliaria || c.membership_status === "active";
+              return (
+              <div key={c.membership_id || c.id} className="p-4 space-y-3">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-yellow-400 flex items-center justify-center font-black text-neutral-900 shrink-0">
                     {c.profiles?.nome?.substring(0, 1) || "?"}
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="font-bold text-neutral-900 truncate">{c.profiles?.nome || "Sem nome"}</p>
-                    <p className="text-xs text-neutral-500 font-medium">Vinculado em {new Date(c.updated_at || c.created_at).toLocaleDateString("pt-BR")}</p>
+                    <p className="text-xs text-neutral-500 font-medium">
+                      {activeMembership
+                        ? `Cadastrado em ${new Date(c.registered_at || c.created_at).toLocaleDateString("pt-BR")}`
+                        : `Convite enviado em ${new Date(c.linked_at).toLocaleDateString("pt-BR")}`}
+                    </p>
                   </div>
                   <Badge
                     variant="outline"
-                    className={`shrink-0 ${c.profiles?.status === "ativo" ? "bg-green-50 text-green-700 border-green-200" : "bg-yellow-50 text-yellow-700 border-yellow-200"}`}
+                    className={`shrink-0 ${activeMembership ? "bg-green-50 text-green-700 border-green-200" : "bg-yellow-50 text-yellow-700 border-yellow-200"}`}
                   >
-                    {c.profiles?.status === "ativo" ? "Ativo" : "Pendente"}
+                    {activeMembership ? "Ativo" : "Pendente"}
                   </Badge>
                 </div>
-                <div className="space-y-1">
+                {activeMembership ? <div className="space-y-1">
                   <div className="flex items-center gap-2 text-sm text-neutral-600">
                     <Mail size={14} className="text-neutral-400 shrink-0" />
                     <span className="truncate">{c.profiles?.email}</span>
@@ -504,15 +552,19 @@ function CorretoresAdmin() {
                     </div>
                   )}
                   {c.creci && <div className="text-xs text-neutral-500 font-medium">CRECI {c.creci}</div>}
-                </div>
-                <p className="text-xs font-bold text-neutral-500">{c.imobiliaria_id ? "EQUIPE" : "AUTÔNOMO"}</p>
+                  <div className="text-xs font-bold text-neutral-500">{c.contracts_count || 0} contrato(s) gerado(s)</div>
+                </div> : (
+                  <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-900">
+                    Aguardando a confirmação enviada ao e-mail do corretor.
+                  </div>
+                )}
                 {isImobiliaria && (
                   <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-3">
                     <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Comissão dos próximos contratos</p>
                     <p className="mt-1 text-sm font-bold text-neutral-900">{getBrokerCommissionOption(c.commission_allocation_mode).shortLabel}</p>
                   </div>
                 )}
-                {isImobiliaria && (
+                {isImobiliaria && activeMembership && (
                   <div className="flex items-center gap-2 pt-1">
                     <Button variant="outline" size="sm" onClick={() => setDetailOf(c)} className="flex-1 h-9 rounded-lg text-neutral-700">
                       <Eye size={16} className="mr-1.5" />
@@ -537,7 +589,7 @@ function CorretoresAdmin() {
                   </div>
                 )}
               </div>
-            ))
+            );})
           )}
         </div>
         {/* Tablet/desktop: tabela completa. */}
@@ -577,8 +629,10 @@ function CorretoresAdmin() {
                   </TableCell>
                 </TableRow>
               ) : (
-                corretores.map((c) => (
-                  <TableRow key={c.id} className="hover:bg-neutral-50/50 transition-colors">
+                corretores.map((c) => {
+                  const activeMembership = !isImobiliaria || c.membership_status === "active";
+                  return (
+                  <TableRow key={c.membership_id || c.id} className="hover:bg-neutral-50/50 transition-colors">
                     <TableCell className="px-8 py-6">
                       <div className="flex items-center gap-4">
                         <div className="w-10 h-10 rounded-full bg-yellow-400 flex items-center justify-center font-black text-neutral-900">
@@ -586,12 +640,16 @@ function CorretoresAdmin() {
                         </div>
                         <div className="flex flex-col">
                           <span className="font-bold text-neutral-900">{c.profiles?.nome || "Sem nome"}</span>
-                          <span className="text-xs text-neutral-500 font-medium">Vinculado em {new Date(c.updated_at || c.created_at).toLocaleDateString("pt-BR")}</span>
+                          <span className="text-xs text-neutral-500 font-medium">
+                            {activeMembership
+                              ? `Cadastrado em ${new Date(c.registered_at || c.created_at).toLocaleDateString("pt-BR")}`
+                              : `Convite enviado em ${new Date(c.linked_at).toLocaleDateString("pt-BR")}`}
+                          </span>
                         </div>
                       </div>
                     </TableCell>
                     <TableCell className="py-6">
-                      <div className="space-y-1">
+                      {activeMembership ? <div className="space-y-1">
                         <div className="flex items-center gap-2 text-sm text-neutral-600">
                           <Mail size={14} className="text-neutral-400" />
                           {c.profiles?.email}
@@ -609,9 +667,11 @@ function CorretoresAdmin() {
                           </div>
                         )}
                         {c.creci && <div className="text-xs text-neutral-500 font-medium">CRECI {c.creci}</div>}
-                      </div>
+                      </div> : <span className="text-sm text-neutral-500">Dados liberados após a confirmação</span>}
                     </TableCell>
-                    <TableCell className="py-6 text-xs font-bold text-neutral-500">{c.imobiliaria_id ? "EQUIPE" : "AUTÔNOMO"}</TableCell>
+                    <TableCell className="py-6 text-xs font-bold text-neutral-500">
+                      {activeMembership ? `${c.contracts_count || 0} contrato(s) gerado(s)` : "Aguardando aceite por e-mail"}
+                    </TableCell>
                     {isImobiliaria && (
                       <TableCell className="py-6">
                         <Badge variant="outline" className="border-yellow-200 bg-yellow-50 text-yellow-800">
@@ -622,12 +682,12 @@ function CorretoresAdmin() {
                     <TableCell className="py-6 text-center">
                       <Badge
                         variant="outline"
-                        className={c.profiles?.status === "ativo" ? "bg-green-50 text-green-700 border-green-200" : "bg-yellow-50 text-yellow-700 border-yellow-200"}
+                        className={activeMembership ? "bg-green-50 text-green-700 border-green-200" : "bg-yellow-50 text-yellow-700 border-yellow-200"}
                       >
-                        {c.profiles?.status === "ativo" ? "Ativo" : "Pendente"}
+                        {activeMembership ? "Ativo" : "Pendente"}
                       </Badge>
                     </TableCell>
-                    {isImobiliaria && (
+                    {isImobiliaria && activeMembership && (
                       <TableCell className="px-8 py-6 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <Button variant="ghost" size="sm" onClick={() => setDetailOf(c)} className="h-9 px-3 rounded-lg text-neutral-700 hover:bg-neutral-100">
@@ -653,8 +713,13 @@ function CorretoresAdmin() {
                         </div>
                       </TableCell>
                     )}
+                    {isImobiliaria && !activeMembership && (
+                      <TableCell className="px-8 py-6 text-right text-xs font-bold text-yellow-700">
+                        Confirmação pendente
+                      </TableCell>
+                    )}
                   </TableRow>
-                ))
+                );})
               )}
             </TableBody>
           </Table>
@@ -717,13 +782,14 @@ function CorretoresAdmin() {
                 value={
                   <Badge
                     variant="outline"
-                    className={detailOf.profiles?.status === "ativo" ? "bg-green-50 text-green-700 border-green-200" : "bg-yellow-50 text-yellow-700 border-yellow-200"}
+                    className="bg-green-50 text-green-700 border-green-200"
                   >
-                    {detailOf.profiles?.status === "ativo" ? "Ativo" : "Pendente"}
+                    Ativo
                   </Badge>
                 }
               />
-              <Row label="Vinculado em" value={new Date(detailOf.updated_at || detailOf.created_at).toLocaleDateString("pt-BR")} />
+              <Row label="Cadastrado em" value={new Date(detailOf.registered_at || detailOf.created_at).toLocaleDateString("pt-BR")} />
+              <Row label="Contratos gerados" value={String(detailOf.contracts_count || 0)} />
             </Card>
           )}
 

@@ -42,6 +42,7 @@ import { Route as CorretorRouteImport } from './routes/corretor'
 import { Route as ContatoRouteImport } from './routes/contato'
 import { Route as ConsultasRouteImport } from './routes/consultas'
 import { Route as ConsultaRapidaRouteImport } from './routes/consulta-rapida'
+import { Route as ConfirmarVinculoCorretorRouteImport } from './routes/confirmar-vinculo-corretor'
 import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
 import { Route as CompletarAcessoInquilinoRouteImport } from './routes/completar-acesso-inquilino'
 import { Route as CarteiraCobrancasRouteImport } from './routes/carteira-cobrancas'
@@ -299,6 +300,12 @@ const ConsultaRapidaRoute = ConsultaRapidaRouteImport.update({
   path: '/consulta-rapida',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ConfirmarVinculoCorretorRoute =
+  ConfirmarVinculoCorretorRouteImport.update({
+    id: '/confirmar-vinculo-corretor',
+    path: '/confirmar-vinculo-corretor',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ConfiguracoesRoute = ConfiguracoesRouteImport.update({
   id: '/configuracoes',
   path: '/configuracoes',
@@ -771,6 +778,7 @@ export interface FileRoutesByFullPath {
   '/carteira-cobrancas': typeof CarteiraCobrancasRoute
   '/completar-acesso-inquilino': typeof CompletarAcessoInquilinoRoute
   '/configuracoes': typeof ConfiguracoesRouteWithChildren
+  '/confirmar-vinculo-corretor': typeof ConfirmarVinculoCorretorRoute
   '/consulta-rapida': typeof ConsultaRapidaRoute
   '/consultas': typeof ConsultasRouteWithChildren
   '/contato': typeof ContatoRoute
@@ -892,6 +900,7 @@ export interface FileRoutesByTo {
   '/carteira-cobrancas': typeof CarteiraCobrancasRoute
   '/completar-acesso-inquilino': typeof CompletarAcessoInquilinoRoute
   '/configuracoes': typeof ConfiguracoesRouteWithChildren
+  '/confirmar-vinculo-corretor': typeof ConfirmarVinculoCorretorRoute
   '/consulta-rapida': typeof ConsultaRapidaRoute
   '/contato': typeof ContatoRoute
   '/corretor': typeof CorretorRoute
@@ -1012,6 +1021,7 @@ export interface FileRoutesById {
   '/carteira-cobrancas': typeof CarteiraCobrancasRoute
   '/completar-acesso-inquilino': typeof CompletarAcessoInquilinoRoute
   '/configuracoes': typeof ConfiguracoesRouteWithChildren
+  '/confirmar-vinculo-corretor': typeof ConfirmarVinculoCorretorRoute
   '/consulta-rapida': typeof ConsultaRapidaRoute
   '/consultas': typeof ConsultasRouteWithChildren
   '/contato': typeof ContatoRoute
@@ -1136,6 +1146,7 @@ export interface FileRouteTypes {
     | '/carteira-cobrancas'
     | '/completar-acesso-inquilino'
     | '/configuracoes'
+    | '/confirmar-vinculo-corretor'
     | '/consulta-rapida'
     | '/consultas'
     | '/contato'
@@ -1257,6 +1268,7 @@ export interface FileRouteTypes {
     | '/carteira-cobrancas'
     | '/completar-acesso-inquilino'
     | '/configuracoes'
+    | '/confirmar-vinculo-corretor'
     | '/consulta-rapida'
     | '/contato'
     | '/corretor'
@@ -1376,6 +1388,7 @@ export interface FileRouteTypes {
     | '/carteira-cobrancas'
     | '/completar-acesso-inquilino'
     | '/configuracoes'
+    | '/confirmar-vinculo-corretor'
     | '/consulta-rapida'
     | '/consultas'
     | '/contato'
@@ -1499,6 +1512,7 @@ export interface RootRouteChildren {
   CarteiraCobrancasRoute: typeof CarteiraCobrancasRoute
   CompletarAcessoInquilinoRoute: typeof CompletarAcessoInquilinoRoute
   ConfiguracoesRoute: typeof ConfiguracoesRouteWithChildren
+  ConfirmarVinculoCorretorRoute: typeof ConfirmarVinculoCorretorRoute
   ConsultaRapidaRoute: typeof ConsultaRapidaRoute
   ConsultasRoute: typeof ConsultasRouteWithChildren
   ContatoRoute: typeof ContatoRoute
@@ -1810,6 +1824,13 @@ declare module '@tanstack/react-router' {
       path: '/consulta-rapida'
       fullPath: '/consulta-rapida'
       preLoaderRoute: typeof ConsultaRapidaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/confirmar-vinculo-corretor': {
+      id: '/confirmar-vinculo-corretor'
+      path: '/confirmar-vinculo-corretor'
+      fullPath: '/confirmar-vinculo-corretor'
+      preLoaderRoute: typeof ConfirmarVinculoCorretorRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/configuracoes': {
@@ -2543,6 +2564,7 @@ const rootRouteChildren: RootRouteChildren = {
   CarteiraCobrancasRoute: CarteiraCobrancasRoute,
   CompletarAcessoInquilinoRoute: CompletarAcessoInquilinoRoute,
   ConfiguracoesRoute: ConfiguracoesRouteWithChildren,
+  ConfirmarVinculoCorretorRoute: ConfirmarVinculoCorretorRoute,
   ConsultaRapidaRoute: ConsultaRapidaRoute,
   ConsultasRoute: ConsultasRouteWithChildren,
   ContatoRoute: ContatoRoute,
