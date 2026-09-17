@@ -8,7 +8,6 @@ import {
   RefreshCw,
   Target,
   Trophy,
-  Users,
 } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -135,18 +134,18 @@ function Goals() {
 
   return (
     <DashboardLayout lockDesktopViewport>
-      <main className="flex min-h-0 flex-col gap-3 text-neutral-950 xl:h-full">
-        <section className="relative overflow-hidden rounded-[22px] border border-yellow-300 bg-[radial-gradient(circle_at_92%_20%,rgba(250,204,21,0.25),transparent_24%),linear-gradient(115deg,#fff_0%,#fffef8_60%,#fff4b3_100%)] px-4 py-4 shadow-sm sm:px-6">
-          <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <main className="flex min-h-0 flex-col gap-2 text-neutral-950 xl:h-full xl:overflow-hidden">
+        <section className="relative shrink-0 overflow-hidden rounded-[18px] border border-yellow-300 bg-[radial-gradient(circle_at_92%_20%,rgba(250,204,21,0.25),transparent_24%),linear-gradient(115deg,#fff_0%,#fffef8_60%,#fff4b3_100%)] px-4 py-2.5 shadow-sm sm:px-5">
+          <div className="relative flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <span className="inline-flex items-center gap-2 rounded-full border border-yellow-400 bg-white/80 px-3 py-1 text-[9px] font-black uppercase tracking-[0.18em] text-yellow-700">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-yellow-400 bg-white/80 px-2.5 py-0.5 text-[8px] font-black uppercase tracking-[0.18em] text-yellow-700">
                 <CalendarDays className="h-3 w-3" />
                 {MONTHS[month - 1]} de {year}
               </span>
-              <h1 className="mt-2 text-2xl font-black sm:text-3xl">
+              <h1 className="mt-1 text-xl font-black sm:text-2xl">
                 Minha meta de <span className="text-yellow-500">cadastros</span>
               </h1>
-              <p className="mt-1 text-xs font-medium text-neutral-600 sm:text-sm">
+              <p className="mt-0.5 text-[11px] font-medium text-neutral-600 sm:text-xs">
                 Sua prioridade comercial é cadastrar novas imobiliárias e corretores parceiros.
               </p>
             </div>
@@ -175,29 +174,33 @@ function Goals() {
         ) : loading ? (
           <div className="h-64 animate-pulse rounded-[22px] bg-neutral-100" />
         ) : progress ? (
-          <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[1.2fr_0.8fr]">
+          <div
+            className={`grid min-h-0 flex-1 gap-2 lg:grid-cols-[1.2fr_0.8fr] xl:overflow-hidden ${
+              roleProgress ? "xl:grid-rows-[minmax(0,1.08fr)_minmax(0,0.92fr)]" : "xl:grid-rows-1"
+            }`}
+          >
             {roleProgress && (
-              <Card className="border-yellow-300 shadow-sm lg:col-span-2">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <CalendarDays className="h-5 w-5 text-yellow-600" />{" "}
+              <Card className="flex min-h-0 flex-col overflow-hidden border-yellow-300 shadow-sm lg:col-span-2">
+                <CardHeader className="shrink-0 px-4 py-2.5">
+                  <CardTitle className="flex items-center gap-2 text-sm">
+                    <CalendarDays className="h-4 w-4 text-yellow-600" />{" "}
                     {roleProgress.seller_type === "sdr"
                       ? "Reuniões marcadas"
                       : "Reuniões confirmadas"}{" "}
                     e cadastros · metas da equipe
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-5">
+                <CardContent className="grid min-h-0 flex-1 grid-rows-2 gap-2 px-4 pb-3 pt-0">
                   {(["meetings", "registrations"] as const).map((metric) => (
-                    <div key={metric}>
-                      <p className="mb-2 text-xs font-black uppercase tracking-wide text-neutral-500">
+                    <div key={metric} className="flex min-h-0 flex-col">
+                      <p className="mb-1 text-[10px] font-black uppercase tracking-wide text-neutral-500">
                         {metric === "registrations"
                           ? "Cadastros realizados"
                           : roleProgress.seller_type === "sdr"
                             ? "Reuniões agendadas"
                             : "Reuniões confirmadas"}
                       </p>
-                      <div className="grid gap-3 sm:grid-cols-3">
+                      <div className="grid min-h-0 flex-1 gap-2 sm:grid-cols-3">
                         {(["daily", "weekly", "monthly"] as const).map((period) => {
                           const scheduled = roleProgress.seller_type === "sdr";
                           const current =
@@ -221,13 +224,16 @@ function Goals() {
                             ? Math.min(100, Math.round((current / target) * 100))
                             : 0;
                           return (
-                            <div key={period} className="rounded-2xl bg-neutral-50 p-4">
-                              <p className="text-xs font-black uppercase text-neutral-400">
+                            <div
+                              key={period}
+                              className="flex min-h-0 flex-col justify-center rounded-xl bg-neutral-50 px-3 py-2"
+                            >
+                              <p className="text-[10px] font-black uppercase text-neutral-400">
                                 {labels[period]}
                               </p>
-                              <p className="mt-2 text-3xl font-black">
+                              <p className="mt-0.5 text-2xl font-black leading-none">
                                 {current}
-                                <span className="text-sm text-neutral-400"> / {target ?? "—"}</span>
+                                <span className="text-xs text-neutral-400"> / {target ?? "—"}</span>
                               </p>
                               <ProgressBar value={pct} />
                             </div>
@@ -239,13 +245,13 @@ function Goals() {
                 </CardContent>
               </Card>
             )}
-            <Card className="overflow-hidden border-yellow-300 shadow-sm">
-              <CardHeader className="border-b border-yellow-100 bg-yellow-50">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Target className="h-5 w-5 text-yellow-600" /> Cadastros realizados no mês
+            <Card className="flex min-h-0 flex-col overflow-hidden border-yellow-300 shadow-sm">
+              <CardHeader className="shrink-0 border-b border-yellow-100 bg-yellow-50 px-4 py-2.5">
+                <CardTitle className="flex items-center gap-2 text-sm">
+                  <Target className="h-4 w-4 text-yellow-600" /> Cadastros realizados no mês
                 </CardTitle>
               </CardHeader>
-              <CardContent className="flex h-full min-h-64 flex-col justify-center p-5 sm:p-8">
+              <CardContent className="flex min-h-0 flex-1 flex-col justify-center p-3 sm:p-4">
                 {progress.target_clients == null ? (
                   <State
                     title="Meta ainda não definida"
@@ -255,37 +261,37 @@ function Goals() {
                   <>
                     <div className="flex items-end justify-between gap-4">
                       <div>
-                        <strong className="text-5xl font-black text-neutral-950">
+                        <strong className="text-4xl font-black leading-none text-neutral-950">
                           {progress.clients_registered}
                         </strong>
                         <span className="ml-2 text-lg font-bold text-neutral-400">
                           / {progress.target_clients}
                         </span>
-                        <p className="mt-1 text-sm font-semibold text-neutral-500">
+                        <p className="mt-0.5 text-xs font-semibold text-neutral-500">
                           novos parceiros cadastrados
                         </p>
                       </div>
-                      <strong className="text-3xl font-black text-yellow-600">{percentage}%</strong>
+                      <strong className="text-2xl font-black text-yellow-600">{percentage}%</strong>
                     </div>
-                    <div className="mt-6 h-4 overflow-hidden rounded-full bg-neutral-100">
+                    <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-neutral-100">
                       <div
                         className="h-full rounded-full bg-gradient-to-r from-yellow-500 to-yellow-300 transition-all"
                         style={{ width: `${percentage}%` }}
                       />
                     </div>
-                    <div className="mt-5 flex items-center gap-3 rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
+                    <div className="mt-3 flex items-center gap-2 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2">
                       {remaining === 0 ? (
-                        <CheckCircle2 className="h-7 w-7 text-emerald-600" />
+                        <CheckCircle2 className="h-5 w-5 text-emerald-600" />
                       ) : (
-                        <Target className="h-7 w-7 text-yellow-600" />
+                        <Target className="h-5 w-5 text-yellow-600" />
                       )}
                       <div>
-                        <p className="font-black">
+                        <p className="text-sm font-black leading-tight">
                           {remaining === 0
                             ? "Meta concluída!"
                             : `Faltam ${remaining} cadastro${remaining === 1 ? "" : "s"}`}
                         </p>
-                        <p className="text-xs text-neutral-500">
+                        <p className="text-[10px] leading-tight text-neutral-500">
                           Cada novo cadastro válido entra automaticamente nesta contagem.
                         </p>
                       </div>
@@ -295,16 +301,16 @@ function Goals() {
               </CardContent>
             </Card>
 
-            <Card className="min-h-0 overflow-hidden border-neutral-200 shadow-sm">
-              <CardHeader className="border-b border-neutral-100">
-                <CardTitle className="flex items-center justify-between gap-2 text-base">
+            <Card className="flex min-h-0 flex-col overflow-hidden border-neutral-200 shadow-sm">
+              <CardHeader className="shrink-0 border-b border-neutral-100 px-4 py-2.5">
+                <CardTitle className="flex items-center justify-between gap-2 text-sm">
                   <span className="flex items-center gap-2">
-                    <Award className="h-5 w-5 text-yellow-600" /> Sua equipe
+                    <Award className="h-4 w-4 text-yellow-600" /> Sua equipe
                   </span>
                   <Badge variant="outline">{teamTotal} cadastros</Badge>
                 </CardTitle>
               </CardHeader>
-              <CardContent className="max-h-[460px] overflow-y-auto p-0">
+              <CardContent className="min-h-0 flex-1 overflow-hidden p-0">
                 {ranking.length === 0 ? (
                   <div className="p-4">
                     <State
@@ -313,7 +319,15 @@ function Goals() {
                     />
                   </div>
                 ) : (
-                  <ol className="divide-y divide-neutral-100">
+                  <ol
+                    className={`grid h-full min-h-0 auto-rows-fr gap-px bg-neutral-100 ${
+                      ranking.length > 8
+                        ? "sm:grid-cols-2 xl:grid-cols-3"
+                        : ranking.length > 4
+                          ? "sm:grid-cols-2"
+                          : "grid-cols-1"
+                    }`}
+                  >
                     {ranking.map((row) => (
                       <TeamRow key={row.id} row={row} current={row.id === progress.seller_id} />
                     ))}
@@ -331,21 +345,21 @@ function Goals() {
 function TeamRow({ row, current }: { row: RankingRow; current: boolean }) {
   return (
     <li
-      className={`grid grid-cols-[28px_auto_minmax(0,1fr)_auto] items-center gap-2.5 px-4 py-3 ${current ? "bg-yellow-50" : "bg-white"}`}
+      className={`grid min-h-0 grid-cols-[22px_auto_minmax(0,1fr)_auto] items-center gap-2 px-3 py-1.5 ${current ? "bg-yellow-50" : "bg-white"}`}
     >
       <span className="text-right text-sm font-black text-neutral-400">{row.position}.</span>
-      <Avatar className="h-9 w-9">
+      <Avatar className="h-7 w-7">
         <AvatarImage src={row.avatarUrl || defaultAvatarForName(row.name)} />
         <AvatarFallback>{row.name.slice(0, 2).toUpperCase()}</AvatarFallback>
       </Avatar>
       <div className="min-w-0">
-        <p className="truncate text-xs font-black">
+        <p className="truncate text-[11px] font-black leading-tight">
           {row.name}
           {current && <span className="ml-2 text-[8px] uppercase text-yellow-600">Você</span>}
         </p>
-        <p className="text-[9px] text-neutral-400">cadastros realizados</p>
+        <p className="text-[8px] leading-tight text-neutral-400">cadastros realizados</p>
       </div>
-      <strong className="text-lg font-black text-yellow-600">{row.registrations}</strong>
+      <strong className="text-base font-black text-yellow-600">{row.registrations}</strong>
     </li>
   );
 }
@@ -376,7 +390,7 @@ function State({
 
 function ProgressBar({ value }: { value: number }) {
   return (
-    <div className="mt-3 h-2 overflow-hidden rounded-full bg-neutral-200">
+    <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-neutral-200">
       <div className="h-full rounded-full bg-yellow-400" style={{ width: `${value}%` }} />
     </div>
   );
