@@ -4,7 +4,10 @@ import { AlertCircle, RefreshCw } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { Button } from "@/components/ui/button";
-import { RecentActivities, TodayAgenda } from "@/components/seller-dashboard/SellerOverviewSections";
+import {
+  RecentActivities,
+  TodayAgenda,
+} from "@/components/seller-dashboard/SellerOverviewSections";
 import { SellerPerformanceBanner } from "@/components/seller-dashboard/SellerPerformanceBanner";
 import { SellerRoleGoals } from "@/components/seller-dashboard/SellerRoleGoals";
 import { supabase } from "@/integrations/supabase/client";
@@ -122,7 +125,7 @@ function VendedorDashboard() {
 
   return (
     <DashboardLayout lockDesktopViewport>
-      <div className="seller-dashboard relative mx-auto w-full max-w-[1440px] space-y-3 sm:space-y-4 xl:grid xl:h-full xl:min-h-0 xl:grid-rows-[auto_120px_auto_minmax(210px,1fr)] xl:gap-3 xl:space-y-0">
+      <div className="seller-dashboard relative mx-auto w-full max-w-[1440px] space-y-3 sm:space-y-4 xl:grid xl:h-full xl:min-h-0 xl:grid-rows-[auto_minmax(82px,112px)_auto_minmax(250px,300px)] xl:gap-3 xl:space-y-0">
         <div className="seller-dashboard__heading flex items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
@@ -162,12 +165,9 @@ function VendedorDashboard() {
               </div>
             )}
 
-            <SellerRoleGoals
-              progress={goalProgress}
-              sellerType={isCloser ? "closer" : "sdr"}
-            />
+            <SellerRoleGoals progress={goalProgress} sellerType={isCloser ? "closer" : "sdr"} />
 
-            <div className="seller-dashboard__overview grid min-w-0 items-stretch gap-4 md:grid-cols-2 xl:min-h-0 xl:gap-3">
+            <div className="seller-dashboard__overview grid min-w-0 items-stretch gap-4 md:grid-cols-2 xl:h-full xl:min-h-0 xl:gap-3">
               <RecentActivities activities={data.activities} />
               <TodayAgenda appointments={data.agenda} />
             </div>

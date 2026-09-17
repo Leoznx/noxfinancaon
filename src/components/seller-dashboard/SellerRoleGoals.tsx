@@ -35,7 +35,7 @@ export function SellerRoleGoals({
 
   return (
     <section className="seller-role-goals overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-[0_8px_30px_rgba(0,0,0,0.035)]">
-      <div className="flex flex-col gap-3 border-b border-neutral-100 bg-[radial-gradient(circle_at_92%_10%,rgba(250,204,21,0.2),transparent_30%),linear-gradient(105deg,#fff_0%,#fffdf4_100%)] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+      <div className="seller-role-goals__header flex flex-col gap-3 border-b border-neutral-100 bg-[radial-gradient(circle_at_92%_10%,rgba(250,204,21,0.2),transparent_30%),linear-gradient(105deg,#fff_0%,#fffdf4_100%)] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-full border border-yellow-300 bg-yellow-50 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.18em] text-yellow-800">
@@ -45,19 +45,19 @@ export function SellerRoleGoals({
               {role.toUpperCase()}
             </span>
           </div>
-          <h2 className="mt-2 text-lg font-black tracking-[-0.025em] text-neutral-950 sm:text-xl">
+          <h2 className="seller-role-goals__title mt-2 text-lg font-black tracking-[-0.025em] text-neutral-950 sm:text-xl">
             {role === "closer"
               ? "Reuniões confirmadas e cadastros"
               : "Reuniões agendadas e cadastros"}
           </h2>
-          <p className="mt-0.5 text-xs font-medium text-neutral-500">
+          <p className="seller-role-goals__description mt-0.5 text-xs font-medium text-neutral-500">
             {role === "closer"
               ? "Meta compartilhada pelos Closers; o progresso abaixo é somente o seu."
               : "Meta compartilhada pelos SDRs; o progresso abaixo é somente o seu."}
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-3 rounded-xl border border-yellow-200 bg-white/90 px-3 py-2 shadow-sm">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-yellow-100 text-yellow-700">
+        <div className="seller-role-goals__overall flex shrink-0 items-center gap-3 rounded-xl border border-yellow-200 bg-white/90 px-3 py-2 shadow-sm">
+          <span className="seller-role-goals__overall-icon flex h-9 w-9 items-center justify-center rounded-lg bg-yellow-100 text-yellow-700">
             <Target className="h-5 w-5" />
           </span>
           <div>
@@ -71,7 +71,7 @@ export function SellerRoleGoals({
         </div>
       </div>
 
-      <div className="seller-role-goals__grid grid gap-2.5 p-3 sm:grid-cols-3 sm:p-4">
+      <div className="seller-role-goals__grid grid gap-2.5 p-3 sm:grid-cols-3 sm:p-4 xl:grid-cols-6">
         {goals.map((goal) => (
           <GoalCard key={`${goal.label}-${goal.period}`} goal={goal} />
         ))}
@@ -87,9 +87,9 @@ function GoalCard({ goal }: { goal: GoalItem }) {
 
   return (
     <article className="seller-role-goal-card min-w-0 rounded-xl border border-neutral-200 bg-neutral-50/70 p-3">
-      <div className="flex items-start gap-2.5">
+      <div className="seller-role-goal-card__top flex items-start gap-2.5">
         <span
-          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${goal.iconClass}`}
+          className={`seller-role-goal-card__icon flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${goal.iconClass}`}
         >
           <Icon className="h-[18px] w-[18px]" />
         </span>
@@ -97,20 +97,22 @@ function GoalCard({ goal }: { goal: GoalItem }) {
           <p className="text-[9px] font-black uppercase tracking-[0.14em] text-neutral-400">
             {goal.period}
           </p>
-          <h3 className="truncate text-xs font-black text-neutral-900">{goal.label}</h3>
+          <h3 className="seller-role-goal-card__label text-xs font-black leading-tight text-neutral-900">
+            {goal.label}
+          </h3>
         </div>
         <strong className="text-sm font-black text-neutral-950">
           {goal.current}
           <span className="font-bold text-neutral-400">/{goal.target ?? "—"}</span>
         </strong>
       </div>
-      <div className="mt-3 h-2 overflow-hidden rounded-full bg-neutral-200">
+      <div className="seller-role-goal-card__track mt-3 h-2 overflow-hidden rounded-full bg-neutral-200">
         <span
           className={`block h-full rounded-full transition-[width] ${goal.accent}`}
           style={{ width: `${goal.target == null ? 0 : value}%` }}
         />
       </div>
-      <p className="mt-2 text-[10px] font-semibold text-neutral-500">
+      <p className="seller-role-goal-card__status mt-2 text-[10px] font-semibold text-neutral-500">
         {goal.target == null
           ? "Meta ainda não definida"
           : remaining === 0

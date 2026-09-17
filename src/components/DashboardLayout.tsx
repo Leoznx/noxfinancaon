@@ -750,15 +750,15 @@ export function DashboardLayout({
                     isDarkHighlight
                       ? "bg-black border-yellow-400 text-yellow-400 font-bold shadow-sm shadow-black/30 hover:bg-neutral-900"
                       : isActive
-                      ? cargoInterno === "juridico" ||
-                        isImobiliaria ||
-                        isProprietario ||
-                        isInquilino
-                        ? "bg-yellow-400 border-yellow-400 text-neutral-950 font-bold shadow-sm shadow-yellow-400/20"
-                        : "bg-white/10 border-yellow-400 text-white font-semibold"
-                      : isHighlight && !isImobiliaria
-                        ? "bg-yellow-400 border-transparent text-neutral-900 font-bold hover:bg-yellow-500 shadow-sm shadow-yellow-400/20"
-                        : "border-transparent text-neutral-400 hover:bg-white/5 hover:text-white"
+                        ? cargoInterno === "juridico" ||
+                          isImobiliaria ||
+                          isProprietario ||
+                          isInquilino
+                          ? "bg-yellow-400 border-yellow-400 text-neutral-950 font-bold shadow-sm shadow-yellow-400/20"
+                          : "bg-white/10 border-yellow-400 text-white font-semibold"
+                        : isHighlight && !isImobiliaria
+                          ? "bg-yellow-400 border-transparent text-neutral-900 font-bold hover:bg-yellow-500 shadow-sm shadow-yellow-400/20"
+                          : "border-transparent text-neutral-400 hover:bg-white/5 hover:text-white"
                   }`}
                 >
                   <item.icon

@@ -73,17 +73,19 @@ export function PipelineSummary({
 }
 
 export function RecentActivities({ activities }: { activities: SellerDashboardActivity[] }) {
+  const preview = activities.slice(0, 4);
+
   return (
     <DashboardSection
       title="Últimas atividades"
       footer="Ver todas atividades"
       href="/vendedor/leads"
     >
-      {activities.length === 0 ? (
+      {preview.length === 0 ? (
         <EmptyMessage>Nenhuma atividade recente.</EmptyMessage>
       ) : (
         <div className="divide-y divide-neutral-100">
-          {activities.map((activity) => {
+          {preview.map((activity) => {
             const presentation = ACTIVITY_PRESENTATION[activity.type] ?? ACTIVITY_PRESENTATION.lead;
             const Icon = presentation.icon;
             return (
@@ -97,9 +99,7 @@ export function RecentActivities({ activities }: { activities: SellerDashboardAc
                   <Icon className="h-4 w-4" strokeWidth={1.8} />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-xs font-bold text-neutral-900">
-                    {activity.title}
-                  </p>
+                  <p className="truncate text-xs font-bold text-neutral-900">{activity.title}</p>
                   <p className="truncate text-[10.5px] text-neutral-500">{activity.subtitle}</p>
                 </div>
                 <time
@@ -148,9 +148,7 @@ export function TodayAgenda({ appointments }: { appointments: SellerDashboardApp
                   })}
                 </time>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-xs font-bold text-neutral-900">
-                    {appointment.title}
-                  </p>
+                  <p className="truncate text-xs font-bold text-neutral-900">{appointment.title}</p>
                   <p className="truncate text-[10.5px] text-neutral-500">
                     {appointment.leadName || "Compromisso comercial"}
                   </p>
@@ -228,7 +226,7 @@ function DashboardSection({
   children: React.ReactNode;
 }) {
   return (
-    <section className="seller-dashboard-section flex min-h-[230px] min-w-0 flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white p-4 shadow-[0_1px_4px_rgba(0,0,0,0.03)] sm:min-h-[260px] xl:p-3">
+    <section className="seller-dashboard-section flex min-h-[230px] min-w-0 flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white p-4 shadow-[0_1px_4px_rgba(0,0,0,0.03)] sm:min-h-[260px] xl:h-full xl:min-h-[250px] xl:p-3">
       <div className="mb-4 flex items-center gap-2 xl:mb-1.5">
         <h2 className="text-sm font-bold text-neutral-950">{title}</h2>
         {info && <Info className="h-3.5 w-3.5 text-neutral-400" aria-label={info} />}
@@ -282,7 +280,10 @@ function relativeTime(value: string) {
 function rankingPreview(ranking: SellerDashboardRanking[]) {
   if (ranking.length <= 4) return ranking;
   const currentSeller = ranking.find((seller) => seller.isCurrent);
-  if (!currentSeller || ranking.slice(0, 4).some((seller) => seller.sellerId === currentSeller.sellerId)) {
+  if (
+    !currentSeller ||
+    ranking.slice(0, 4).some((seller) => seller.sellerId === currentSeller.sellerId)
+  ) {
     return ranking.slice(0, 4);
   }
   return [...ranking.slice(0, 3), currentSeller];

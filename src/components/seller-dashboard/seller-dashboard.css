@@ -1,8 +1,19 @@
-/* Keep the four dashboard essentials readable on short notebook displays.
-   The content area remains scrollable if the available height is smaller. */
+/* Keep the four dashboard essentials readable on notebook displays without
+   allowing the goals block to push the overview cards below the viewport. */
+@media (min-width: 1280px) {
+  .seller-role-goals__grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  .seller-role-goal-card__label {
+    min-height: 2.35em;
+  }
+}
+
 @media (min-width: 1280px) and (max-height: 900px) {
   .seller-dashboard {
-    grid-template-rows: auto 96px auto minmax(190px, 1fr) !important;
+    grid-template-rows: auto 92px auto minmax(250px, 300px) !important;
+    gap: 10px !important;
   }
 
   .seller-dashboard__heading h1 {
@@ -15,30 +26,73 @@
   }
 
   .seller-performance-banner img {
-    height: 88px !important;
-    max-height: 88px !important;
+    height: 82px !important;
+    max-height: 82px !important;
   }
 
   .seller-performance-banner p {
     font-size: clamp(26px, 2.05vw, 34px) !important;
   }
 
-  .seller-role-goals > div:first-child {
-    padding-top: 10px;
-    padding-bottom: 10px;
+  .seller-role-goals__header {
+    gap: 8px !important;
+    padding: 8px 14px !important;
+  }
+
+  .seller-role-goals__title {
+    margin-top: 5px !important;
+    font-size: 16px !important;
+    line-height: 1.1 !important;
+  }
+
+  .seller-role-goals__description {
+    font-size: 10px !important;
+  }
+
+  .seller-role-goals__overall {
+    gap: 8px !important;
+    padding: 6px 9px !important;
+  }
+
+  .seller-role-goals__overall-icon {
+    width: 32px !important;
+    height: 32px !important;
   }
 
   .seller-role-goals__grid {
-    padding-top: 10px;
-    padding-bottom: 10px;
+    gap: 8px !important;
+    padding: 8px !important;
   }
 
   .seller-role-goal-card {
-    padding: 10px;
+    padding: 8px !important;
+  }
+
+  .seller-role-goal-card__top {
+    gap: 6px !important;
+  }
+
+  .seller-role-goal-card__icon {
+    width: 30px !important;
+    height: 30px !important;
+  }
+
+  .seller-role-goal-card__label {
+    font-size: 10px !important;
+  }
+
+  .seller-role-goal-card__track {
+    margin-top: 7px !important;
+    height: 6px !important;
+  }
+
+  .seller-role-goal-card__status {
+    margin-top: 5px !important;
+    font-size: 9px !important;
   }
 
   .seller-dashboard-section {
-    min-height: 190px !important;
+    min-height: 250px !important;
     height: 100%;
     padding: 10px !important;
   }
@@ -56,8 +110,8 @@
 
 @media (min-width: 1280px) and (max-height: 720px) {
   .seller-dashboard {
-    grid-template-rows: auto 82px auto minmax(175px, 1fr) !important;
-    gap: 9px !important;
+    grid-template-rows: auto 76px auto minmax(238px, 260px) !important;
+    gap: 8px !important;
   }
 
   .seller-performance-banner img {
@@ -67,5 +121,9 @@
 
   .seller-performance-banner p {
     font-size: clamp(23px, 1.8vw, 29px) !important;
+  }
+
+  .seller-dashboard-section {
+    min-height: 238px !important;
   }
 }
