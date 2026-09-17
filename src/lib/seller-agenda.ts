@@ -68,6 +68,7 @@ export type SellerAppointment = {
   visible_from: string | null;
   journey: FollowUpJourney | null;
   completed_at: string | null;
+  actual_duration_minutes: number | null;
   created_at: string;
   updated_at: string;
   lead_name: string | null;
@@ -257,7 +258,7 @@ export async function fetchSellerAgenda(
   const [appointmentsResult, leadsResult, sellerClients] = await Promise.all([
     supabase
       .from("seller_appointments" as any)
-      .select("id, seller_id, sdr_id, assigned_closer_id, lead_id, partnership_id, title, type, status, priority, scheduled_at, reminder_minutes, notes, source, completed_at, duration_minutes, contact_name, contact_email, contact_phone, origin_appointment_id, follow_up_offset_days, follow_up_owner_type, follow_up_message_key, meeting_feedback, feedback_submitted_at, tracked_profile_id, visible_from, created_at, updated_at, sales_leads(full_name, email, phone)")
+      .select("id, seller_id, sdr_id, assigned_closer_id, lead_id, partnership_id, title, type, status, priority, scheduled_at, reminder_minutes, notes, source, completed_at, actual_duration_minutes, duration_minutes, contact_name, contact_email, contact_phone, origin_appointment_id, follow_up_offset_days, follow_up_owner_type, follow_up_message_key, meeting_feedback, feedback_submitted_at, tracked_profile_id, visible_from, created_at, updated_at, sales_leads(full_name, email, phone)")
       .or(`seller_id.eq.${sellerId},sdr_id.eq.${sellerId},assigned_closer_id.eq.${sellerId}`)
       .gte("scheduled_at", start.toISOString())
       .lt("scheduled_at", end.toISOString())
@@ -297,6 +298,7 @@ export async function fetchSellerAgenda(
       partnership_id: row.partnership_id ?? null,
       source: row.source ?? "manual",
       completed_at: row.completed_at ?? null,
+      actual_duration_minutes: row.actual_duration_minutes == null ? null : Number(row.actual_duration_minutes),
       sdr_id: row.sdr_id ?? null,
       assigned_closer_id: row.assigned_closer_id ?? null,
       duration_minutes: Number(row.duration_minutes ?? SHARED_MEETING_DURATION_MINUTES),

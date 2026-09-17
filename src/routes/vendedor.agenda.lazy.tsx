@@ -241,7 +241,11 @@ function AgendaPage() {
 
   async function complete(item: SellerAppointment) {
     if (!sellerId) return;
-    if (item.type === "reuniao" && sellerType === "closer" && (item.assigned_closer_id === sellerId || (!item.assigned_closer_id && item.seller_id === sellerId))) {
+    if (item.type === "reuniao") {
+      if (!canCompleteAppointment(item)) {
+        toast.error("Somente o Closer responsável pode concluir esta reunião.");
+        return;
+      }
       setViewing(null);
       setFeedbackTarget(item);
       return;
@@ -257,6 +261,14 @@ function AgendaPage() {
       setAppointments(previous);
       toast.error(statusError instanceof Error ? statusError.message : "Não foi possível concluir o compromisso.");
     }
+  }
+
+  function canCompleteAppointment(item: SellerAppointment) {
+    if (["concluido", "cancelado"].includes(item.status)) return false;
+    if (item.type !== "reuniao") return true;
+    return sellerType === "closer"
+      && (item.assigned_closer_id === sellerId
+        || (!item.assigned_closer_id && item.seller_id === sellerId));
   }
 
   async function submitMeetingFeedback(feedback: string) {
@@ -352,7 +364,7 @@ function AgendaPage() {
         ) : view === "calendario" ? (
           <div className="grid items-start gap-3 xl:min-h-0 xl:grid-cols-[minmax(0,1fr)_390px] 2xl:grid-cols-[minmax(0,1fr)_420px]">
             <AgendaCalendar month={month} selectedDate={selectedDate} items={filtered} onMonthChange={changeMonth} onDateSelect={selectDate} onEventOpen={setViewing} />
-            <AgendaDayPanel date={selectedDate} items={selectedItems} sdrNames={sdrNames} onNew={() => openNew(selectedDate)} onView={setViewing} onEdit={openEdit} onReschedule={openReschedule} onComplete={complete} onDelete={setDeleteTarget} />
+            <AgendaDayPanel date={selectedDate} items={selectedItems} sdrNames={sdrNames} onNew={() => openNew(selectedDate)} onView={setViewing} onEdit={openEdit} onReschedule={openReschedule} onComplete={complete} onDelete={setDeleteTarget} canComplete={canCompleteAppointment} />
           </div>
         ) : (
           <section className="rounded-2xl border border-neutral-200 bg-white p-3 shadow-[0_2px_8px_rgba(0,0,0,0.03)] sm:p-4">
@@ -376,7 +388,7 @@ function AgendaPage() {
             ) : (
               <div className="grid gap-3 lg:grid-cols-2">
                 {listItems.map((item) => (
-                  <AppointmentCard key={item.id} item={item} sdrNames={sdrNames} onView={setViewing} onEdit={openEdit} onReschedule={openReschedule} onComplete={complete} onDelete={setDeleteTarget} />
+                  <AppointmentCard key={item.id} item={item} sdrNames={sdrNames} onView={setViewing} onEdit={openEdit} onReschedule={openReschedule} onComplete={complete} onDelete={setDeleteTarget} canComplete={canCompleteAppointment(item)} />
                 ))}
               </div>
             )}
@@ -399,7 +411,7 @@ function AgendaPage() {
             setModalOpen(false);
           }}
         />
-        <AppointmentDetailsDialog item={viewing} sdrNames={sdrNames} onClose={() => setViewing(null)} onEdit={openEdit} onReschedule={openReschedule} onComplete={complete} onDelete={setDeleteTarget} canManageCloserMeeting={sellerType === "closer" && !!viewing && (viewing.assigned_closer_id === sellerId || (!viewing.assigned_closer_id && viewing.seller_id === sellerId))} />
+        <AppointmentDetailsDialog item={viewing} sdrNames={sdrNames} onClose={() => setViewing(null)} onEdit={openEdit} onReschedule={openReschedule} onComplete={complete} onDelete={setDeleteTarget} canManageCloserMeeting={sellerType === "closer" && !!viewing && (viewing.assigned_closer_id === sellerId || (!viewing.assigned_closer_id && viewing.seller_id === sellerId))} canComplete={!!viewing && canCompleteAppointment(viewing)} />
         <MeetingRescheduleDialog item={rescheduleTarget} onClose={() => setRescheduleTarget(null)} onRescheduled={refreshAgenda} />
         <MeetingFeedbackDialog item={feedbackTarget} onClose={() => setFeedbackTarget(null)} onSubmit={submitMeetingFeedback} />
         <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>

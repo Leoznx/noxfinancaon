@@ -44,6 +44,7 @@ export function AppointmentDetailsDialog({
   onComplete,
   onDelete,
   canManageCloserMeeting = false,
+  canComplete = true,
 }: {
   item: SellerAppointment | null;
   sdrNames?: ReadonlyMap<string, string>;
@@ -53,6 +54,7 @@ export function AppointmentDetailsDialog({
   onComplete: (item: SellerAppointment) => void;
   onDelete: (item: SellerAppointment) => void;
   canManageCloserMeeting?: boolean;
+  canComplete?: boolean;
 }) {
   if (!item) return null;
   const contact = getAppointmentContact(item);
@@ -126,6 +128,18 @@ export function AppointmentDetailsDialog({
           )}
           {visibleNotes && <p className="rounded-xl border border-neutral-200 p-3 leading-relaxed text-neutral-600">{visibleNotes}</p>}
           {item.meeting_feedback && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3"><p className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-emerald-800"><MessageSquareText className="h-3.5 w-3.5" /> Feedback da reunião</p><p className="mt-1 whitespace-pre-wrap leading-relaxed text-neutral-700">{item.meeting_feedback}</p></div>}
+          {item.type === "reuniao" && item.status === "concluido" && item.completed_at && (
+            <div className="grid gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-neutral-800 sm:grid-cols-2">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-wider text-emerald-800">Encerramento real</p>
+                <p className="mt-1 font-bold">{format(new Date(item.completed_at), "dd/MM/yyyy 'às' HH:mm")}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-wider text-emerald-800">Duração realizada</p>
+                <p className="mt-1 font-bold">{formatMeetingDuration(item.actual_duration_minutes)}</p>
+              </div>
+            </div>
+          )}
           {canManageCloserMeeting && item.type === "reuniao" && <MeetingSignupLinks item={item} />}
           {followUpWhatsAppUrl && <Button type="button" className="w-full bg-[#25D366] font-black text-white hover:bg-[#20bd5a]" asChild><a href={followUpWhatsAppUrl} target="_blank" rel="noreferrer"><MessageCircle className="mr-1.5 h-4 w-4" /> Abrir mensagem pronta no WhatsApp</a></Button>}
         </div>
@@ -133,11 +147,19 @@ export function AppointmentDetailsDialog({
           {item.source !== "meeting_follow_up" && <Button variant="ghost" className="mr-auto text-red-600 hover:bg-red-50" onClick={() => onDelete(item)}><Trash2 className="mr-1.5 h-4 w-4" /> Excluir</Button>}
           {item.source !== "meeting_follow_up" && <Button variant="outline" onClick={() => onEdit(item)}><Edit3 className="mr-1.5 h-4 w-4" /> Editar</Button>}
           {canRescheduleSellerMeeting(item) && <Button variant="outline" className="border-yellow-300 bg-yellow-50 text-yellow-900 hover:bg-yellow-100" onClick={() => onReschedule(item)}><CalendarClock className="mr-1.5 h-4 w-4" /> Reagendar</Button>}
-          {!["concluido", "cancelado"].includes(item.status) && (
+          {!["concluido", "cancelado"].includes(item.status) && canComplete && (
             <Button className="bg-neutral-950 text-white hover:bg-neutral-800" onClick={() => onComplete(item)}><Check className="mr-1.5 h-4 w-4" /> Concluir</Button>
           )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
+}
+
+function formatMeetingDuration(minutes: number | null) {
+  if (!minutes || minutes < 1) return "Não informada";
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  if (hours === 0) return `${minutes} min`;
+  return remainder === 0 ? `${hours}h` : `${hours}h ${remainder}min`;
 }

@@ -15,6 +15,7 @@ export function AgendaDayPanel({
   onReschedule,
   onComplete,
   onDelete,
+  canComplete,
 }: {
   date: Date;
   items: SellerAppointment[];
@@ -25,6 +26,7 @@ export function AgendaDayPanel({
   onReschedule: (item: SellerAppointment) => void;
   onComplete: (item: SellerAppointment) => void;
   onDelete: (item: SellerAppointment) => void;
+  canComplete: (item: SellerAppointment) => boolean;
 }) {
   return (
     <aside className="self-start overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-[0_2px_8px_rgba(0,0,0,0.03)] xl:sticky xl:top-3">
@@ -72,6 +74,7 @@ export function AgendaDayPanel({
                 onReschedule={onReschedule}
                 onComplete={onComplete}
                 onDelete={onDelete}
+                canComplete={canComplete(item)}
               />
             ))}
           </div>

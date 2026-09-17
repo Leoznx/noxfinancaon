@@ -38,6 +38,7 @@ export function AppointmentCard({
   onReschedule,
   onComplete,
   onDelete,
+  canComplete = true,
 }: {
   item: SellerAppointment;
   compact?: boolean;
@@ -47,6 +48,7 @@ export function AppointmentCard({
   onReschedule: (item: SellerAppointment) => void;
   onComplete: (item: SellerAppointment) => void;
   onDelete: (item: SellerAppointment) => void;
+  canComplete?: boolean;
 }) {
   const finished = ["concluido", "cancelado"].includes(item.status);
   const relatedName = item.client_name || item.lead_name;
@@ -112,7 +114,7 @@ export function AppointmentCard({
         {canRescheduleSellerMeeting(item) && <Button type="button" size="sm" variant="ghost" className="h-7 gap-1 px-2 text-[10px] text-yellow-800 hover:bg-yellow-50 hover:text-yellow-900" onClick={() => onReschedule(item)}>
           <CalendarClock className="h-3.5 w-3.5" /> Reagendar
         </Button>}
-        {!finished && (
+        {!finished && canComplete && (
           <Button
             type="button"
             size="sm"
