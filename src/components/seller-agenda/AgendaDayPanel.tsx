@@ -12,6 +12,7 @@ export function AgendaDayPanel({
   onNew,
   onView,
   onEdit,
+  onReschedule,
   onComplete,
   onDelete,
 }: {
@@ -21,6 +22,7 @@ export function AgendaDayPanel({
   onNew: () => void;
   onView: (item: SellerAppointment) => void;
   onEdit: (item: SellerAppointment) => void;
+  onReschedule: (item: SellerAppointment) => void;
   onComplete: (item: SellerAppointment) => void;
   onDelete: (item: SellerAppointment) => void;
 }) {
@@ -67,6 +69,7 @@ export function AgendaDayPanel({
                 sdrNames={sdrNames}
                 onView={onView}
                 onEdit={onEdit}
+                onReschedule={onReschedule}
                 onComplete={onComplete}
                 onDelete={onDelete}
               />

@@ -147,6 +147,7 @@ export function AppointmentModal({
   const [form, setForm] = useState<FormState>(() => initialForm(initial, defaultDate));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const lockMeetingSchedule = initial?.type === "reuniao";
 
   useEffect(() => {
     if (open) {
@@ -252,12 +253,13 @@ export function AppointmentModal({
 
           <div className="space-y-1.5">
             <Label htmlFor="agenda-date">Data *</Label>
-            <Input id="agenda-date" type="date" value={form.date} onChange={(event) => setForm((current) => ({ ...current, date: event.target.value }))} />
+            <Input id="agenda-date" type="date" value={form.date} disabled={lockMeetingSchedule} onChange={(event) => setForm((current) => ({ ...current, date: event.target.value }))} />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="agenda-time">Horário *</Label>
-            <Input id="agenda-time" type="time" value={form.time} onChange={(event) => setForm((current) => ({ ...current, time: event.target.value }))} />
+            <Input id="agenda-time" type="time" value={form.time} disabled={lockMeetingSchedule} onChange={(event) => setForm((current) => ({ ...current, time: event.target.value }))} />
           </div>
+          {lockMeetingSchedule ? <p className="rounded-xl border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs font-semibold text-yellow-900 sm:col-span-2">Para alterar a data ou o horário com validação da agenda do Closer, feche esta edição e use o botão <strong>Reagendar</strong>.</p> : null}
 
           <SearchPicker
             label="Cliente parceiro"
@@ -321,4 +323,3 @@ export function AppointmentModal({
     </Dialog>
   );
 }
-

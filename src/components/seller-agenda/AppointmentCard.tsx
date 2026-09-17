@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Building2, Check, Clock3, Edit3, Eye, MessageCircle, Trash2, UserRound } from "lucide-react";
+import { Building2, CalendarClock, Check, Clock3, Edit3, Eye, MessageCircle, Trash2, UserRound } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -9,6 +9,7 @@ import {
   agendaTypeLabel,
   appointmentWhatsAppMessage,
   buildAppointmentWhatsAppUrl,
+  canRescheduleSellerMeeting,
   getSharedMeetingMetadata,
   getVisibleAppointmentNotes,
   type SellerAppointment,
@@ -34,6 +35,7 @@ export function AppointmentCard({
   sdrNames,
   onView,
   onEdit,
+  onReschedule,
   onComplete,
   onDelete,
 }: {
@@ -42,6 +44,7 @@ export function AppointmentCard({
   sdrNames?: ReadonlyMap<string, string>;
   onView: (item: SellerAppointment) => void;
   onEdit: (item: SellerAppointment) => void;
+  onReschedule: (item: SellerAppointment) => void;
   onComplete: (item: SellerAppointment) => void;
   onDelete: (item: SellerAppointment) => void;
 }) {
@@ -105,6 +108,9 @@ export function AppointmentCard({
         </Button>
         {item.source !== "meeting_follow_up" && <Button type="button" size="sm" variant="ghost" className="h-7 gap-1 px-2 text-[10px]" onClick={() => onEdit(item)}>
           <Edit3 className="h-3.5 w-3.5" /> Editar
+        </Button>}
+        {canRescheduleSellerMeeting(item) && <Button type="button" size="sm" variant="ghost" className="h-7 gap-1 px-2 text-[10px] text-yellow-800 hover:bg-yellow-50 hover:text-yellow-900" onClick={() => onReschedule(item)}>
+          <CalendarClock className="h-3.5 w-3.5" /> Reagendar
         </Button>}
         {!finished && (
           <Button

@@ -1,11 +1,11 @@
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Activity, Bell, Building2, CalendarDays, Check, CheckCircle2, Clock3, Edit3, MessageCircle, MessageSquareText, Phone, Search, Trash2, UserRound } from "lucide-react";
+import { Activity, Bell, Building2, CalendarClock, CalendarDays, Check, CheckCircle2, Clock3, Edit3, MessageCircle, MessageSquareText, Phone, Search, Trash2, UserRound } from "lucide-react";
 import { MeetingSignupLinks } from "@/components/seller-agenda/MeetingSignupLinks";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { AGENDA_REMINDERS, agendaStatusLabel, agendaTypeLabel, appointmentWhatsAppMessage, buildAppointmentWhatsAppUrl, getAppointmentContact, getSharedMeetingMetadata, getVisibleAppointmentNotes, type SellerAppointment } from "@/lib/seller-agenda";
+import { AGENDA_REMINDERS, agendaStatusLabel, agendaTypeLabel, appointmentWhatsAppMessage, buildAppointmentWhatsAppUrl, canRescheduleSellerMeeting, getAppointmentContact, getSharedMeetingMetadata, getVisibleAppointmentNotes, type SellerAppointment } from "@/lib/seller-agenda";
 import { formatBrazilianPhoneInput, normalizeBrazilianPhone } from "@/lib/seller-clients";
 
 const JOURNEY_COPY = {
@@ -40,6 +40,7 @@ export function AppointmentDetailsDialog({
   sdrNames,
   onClose,
   onEdit,
+  onReschedule,
   onComplete,
   onDelete,
   canManageCloserMeeting = false,
@@ -48,6 +49,7 @@ export function AppointmentDetailsDialog({
   sdrNames?: ReadonlyMap<string, string>;
   onClose: () => void;
   onEdit: (item: SellerAppointment) => void;
+  onReschedule: (item: SellerAppointment) => void;
   onComplete: (item: SellerAppointment) => void;
   onDelete: (item: SellerAppointment) => void;
   canManageCloserMeeting?: boolean;
@@ -130,6 +132,7 @@ export function AppointmentDetailsDialog({
         <DialogFooter className="flex-wrap">
           {item.source !== "meeting_follow_up" && <Button variant="ghost" className="mr-auto text-red-600 hover:bg-red-50" onClick={() => onDelete(item)}><Trash2 className="mr-1.5 h-4 w-4" /> Excluir</Button>}
           {item.source !== "meeting_follow_up" && <Button variant="outline" onClick={() => onEdit(item)}><Edit3 className="mr-1.5 h-4 w-4" /> Editar</Button>}
+          {canRescheduleSellerMeeting(item) && <Button variant="outline" className="border-yellow-300 bg-yellow-50 text-yellow-900 hover:bg-yellow-100" onClick={() => onReschedule(item)}><CalendarClock className="mr-1.5 h-4 w-4" /> Reagendar</Button>}
           {!["concluido", "cancelado"].includes(item.status) && (
             <Button className="bg-neutral-950 text-white hover:bg-neutral-800" onClick={() => onComplete(item)}><Check className="mr-1.5 h-4 w-4" /> Concluir</Button>
           )}

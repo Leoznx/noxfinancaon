@@ -206,6 +206,14 @@ export function appointmentMatchesFilter(item: SellerAppointment, filter: Agenda
   return item.type === filter;
 }
 
+export function canRescheduleSellerMeeting(
+  item: Pick<SellerAppointment, "type" | "status" | "source">,
+) {
+  return item.type === "reuniao"
+    && item.source !== "meeting_follow_up"
+    && !["concluido", "cancelado", "nao_compareceu"].includes(item.status);
+}
+
 export function getAppointmentContact(item: Pick<SellerAppointment, "contact_name" | "contact_phone" | "client_name" | "lead_name" | "lead_phone">) {
   return {
     name: item.contact_name || item.client_name || item.lead_name || null,
@@ -475,7 +483,25 @@ export async function scheduleSdrCloserMeeting(input: { slotStart: string; title
 }
 
 export async function rescheduleSharedMeeting(appointmentId: string, slotStart: string) {
-  const { error } = await supabase.rpc("reschedule_shared_sales_meeting" as any, {
+  await rescheduleSellerMeeting(appointmentId, slotStart);
+}
+
+export async function fetchMeetingRescheduleSlots(
+  appointmentId: string,
+  fromDate: Date,
+  days = 1,
+) {
+  const { data, error } = await supabase.rpc("get_available_meeting_reschedule_slots" as any, {
+    p_appointment_id: appointmentId,
+    p_from_date: formatLocalDate(fromDate),
+    p_days: days,
+  });
+  if (error) throw new Error(error.message || "Não foi possível consultar os horários para reagendamento.");
+  return ((data as any[]) ?? []) as CloserAvailabilitySlot[];
+}
+
+export async function rescheduleSellerMeeting(appointmentId: string, slotStart: string) {
+  const { error } = await supabase.rpc("reschedule_seller_meeting" as any, {
     p_appointment_id: appointmentId,
     p_slot_start: slotStart,
   });

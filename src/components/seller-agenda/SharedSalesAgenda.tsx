@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   addMonths,
   eachDayOfInterval,
@@ -33,10 +33,12 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { supabase } from "@/integrations/supabase/client";
 import {
   deleteSellerAppointment,
   buildShortNameValueMap,
   fetchCloserAvailability,
+  fetchMeetingRescheduleSlots,
   firstNameOnly,
   formatSharedMeetingTitle,
   getSharedMeetingMetadata,
@@ -100,13 +102,14 @@ function SdrScheduler({ sellerName, onRefresh }: { sellerName: string | null; on
   const [contactPhone, setContactPhone] = useState("");
   const [observation, setObservation] = useState("");
   const slotRequestId = useRef(0);
+  const availabilityTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const closerNames = useMemo(
     () => buildShortNameMap(slots.map((slot) => ({ id: slot.closer_id, name: slot.closer_name }))),
     [slots],
   );
 
-  async function loadSlots(date: Date) {
+  const loadSlots = useCallback(async (date: Date) => {
     const requestId = ++slotRequestId.current;
     setLoadingSlots(true);
     setSlots([]);
@@ -121,7 +124,23 @@ function SdrScheduler({ sellerName, onRefresh }: { sellerName: string | null; on
     } finally {
       if (requestId === slotRequestId.current) setLoadingSlots(false);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    if (!selectedDate) return;
+    const refresh = () => {
+      if (availabilityTimer.current) clearTimeout(availabilityTimer.current);
+      availabilityTimer.current = setTimeout(() => void loadSlots(selectedDate), 200);
+    };
+    const channel = supabase
+      .channel(`sdr-shared-availability-${format(selectedDate, "yyyy-MM-dd")}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "seller_agenda_availability_events" }, refresh)
+      .subscribe();
+    return () => {
+      if (availabilityTimer.current) clearTimeout(availabilityTimer.current);
+      supabase.removeChannel(channel);
+    };
+  }, [loadSlots, selectedDate]);
 
   function chooseDate(date: Date) {
     setSelectedDate(date);
@@ -444,7 +463,7 @@ function CloserCountdown({ sellerId, appointments, onRefresh }: Omit<Props, "sel
   async function showSlots() {
     setRescheduling(true);
     try {
-      setSlots(await fetchCloserAvailability(new Date(), 7));
+      setSlots(await fetchMeetingRescheduleSlots(meeting!.id, new Date(), 7));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Não foi possível consultar horários.");
     }

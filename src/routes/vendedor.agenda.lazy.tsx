@@ -13,6 +13,7 @@ import { AgendaSummaryCards } from "@/components/seller-agenda/AgendaSummaryCard
 import { AppointmentCard } from "@/components/seller-agenda/AppointmentCard";
 import { AppointmentDetailsDialog } from "@/components/seller-agenda/AppointmentDetailsDialog";
 import { MeetingFeedbackDialog } from "@/components/seller-agenda/MeetingFeedbackDialog";
+import { MeetingRescheduleDialog } from "@/components/seller-agenda/MeetingRescheduleDialog";
 import { AppointmentModal } from "@/components/seller-agenda/AppointmentModal";
 import { SharedSalesAgenda } from "@/components/seller-agenda/SharedSalesAgenda";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -58,6 +59,7 @@ function AgendaPage() {
   const [viewing, setViewing] = useState<SellerAppointment | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SellerAppointment | null>(null);
   const [feedbackTarget, setFeedbackTarget] = useState<SellerAppointment | null>(null);
+  const [rescheduleTarget, setRescheduleTarget] = useState<SellerAppointment | null>(null);
   const realtimeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(
@@ -204,6 +206,13 @@ function AgendaPage() {
     setModalOpen(true);
   }
 
+  function openReschedule(item: SellerAppointment) {
+    setViewing(null);
+    setModalOpen(false);
+    setEditing(null);
+    setRescheduleTarget(item);
+  }
+
   function selectDate(date: Date) {
     setSelectedDate(date);
     if (!isSameMonth(date, month)) setMonth(startOfMonth(date));
@@ -343,7 +352,7 @@ function AgendaPage() {
         ) : view === "calendario" ? (
           <div className="grid items-start gap-3 xl:min-h-0 xl:grid-cols-[minmax(0,1fr)_390px] 2xl:grid-cols-[minmax(0,1fr)_420px]">
             <AgendaCalendar month={month} selectedDate={selectedDate} items={filtered} onMonthChange={changeMonth} onDateSelect={selectDate} onEventOpen={setViewing} />
-            <AgendaDayPanel date={selectedDate} items={selectedItems} sdrNames={sdrNames} onNew={() => openNew(selectedDate)} onView={setViewing} onEdit={openEdit} onComplete={complete} onDelete={setDeleteTarget} />
+            <AgendaDayPanel date={selectedDate} items={selectedItems} sdrNames={sdrNames} onNew={() => openNew(selectedDate)} onView={setViewing} onEdit={openEdit} onReschedule={openReschedule} onComplete={complete} onDelete={setDeleteTarget} />
           </div>
         ) : (
           <section className="rounded-2xl border border-neutral-200 bg-white p-3 shadow-[0_2px_8px_rgba(0,0,0,0.03)] sm:p-4">
@@ -367,7 +376,7 @@ function AgendaPage() {
             ) : (
               <div className="grid gap-3 lg:grid-cols-2">
                 {listItems.map((item) => (
-                  <AppointmentCard key={item.id} item={item} sdrNames={sdrNames} onView={setViewing} onEdit={openEdit} onComplete={complete} onDelete={setDeleteTarget} />
+                  <AppointmentCard key={item.id} item={item} sdrNames={sdrNames} onView={setViewing} onEdit={openEdit} onReschedule={openReschedule} onComplete={complete} onDelete={setDeleteTarget} />
                 ))}
               </div>
             )}
@@ -390,7 +399,8 @@ function AgendaPage() {
             setModalOpen(false);
           }}
         />
-        <AppointmentDetailsDialog item={viewing} sdrNames={sdrNames} onClose={() => setViewing(null)} onEdit={openEdit} onComplete={complete} onDelete={setDeleteTarget} canManageCloserMeeting={sellerType === "closer" && !!viewing && (viewing.assigned_closer_id === sellerId || (!viewing.assigned_closer_id && viewing.seller_id === sellerId))} />
+        <AppointmentDetailsDialog item={viewing} sdrNames={sdrNames} onClose={() => setViewing(null)} onEdit={openEdit} onReschedule={openReschedule} onComplete={complete} onDelete={setDeleteTarget} canManageCloserMeeting={sellerType === "closer" && !!viewing && (viewing.assigned_closer_id === sellerId || (!viewing.assigned_closer_id && viewing.seller_id === sellerId))} />
+        <MeetingRescheduleDialog item={rescheduleTarget} onClose={() => setRescheduleTarget(null)} onRescheduled={refreshAgenda} />
         <MeetingFeedbackDialog item={feedbackTarget} onClose={() => setFeedbackTarget(null)} onSubmit={submitMeetingFeedback} />
         <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
           <AlertDialogContent>
