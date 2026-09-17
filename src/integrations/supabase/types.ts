@@ -930,6 +930,9 @@ export type Database = {
         Row: {
           cidade: string | null
           comissao_pct: number | null
+          commission_allocation_mode: string
+          commission_allocation_updated_at: string
+          commission_allocation_updated_by: string | null
           cpf: string | null
           created_at: string
           creci: string | null
@@ -945,6 +948,9 @@ export type Database = {
         Insert: {
           cidade?: string | null
           comissao_pct?: number | null
+          commission_allocation_mode?: string
+          commission_allocation_updated_at?: string
+          commission_allocation_updated_by?: string | null
           cpf?: string | null
           created_at?: string
           creci?: string | null
@@ -960,6 +966,9 @@ export type Database = {
         Update: {
           cidade?: string | null
           comissao_pct?: number | null
+          commission_allocation_mode?: string
+          commission_allocation_updated_at?: string
+          commission_allocation_updated_by?: string | null
           cpf?: string | null
           created_at?: string
           creci?: string | null
@@ -3317,7 +3326,25 @@ export type Database = {
       is_internal: { Args: { _uid: string }; Returns: boolean }
       liberar_reservas_vendedor: { Args: never; Returns: number }
       link_my_corretor: {
-        Args: { p_corretor_id: string }
+        Args: {
+          p_commission_allocation_mode?: string
+          p_corretor_id: string
+        }
+        Returns: string
+      }
+      get_my_broker_commission_access: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          agency_profile_id: string | null
+          can_access_financial_modules: boolean
+          commission_allocation_mode: string
+        }[]
+      }
+      update_my_corretor_commission_allocation: {
+        Args: {
+          p_commission_allocation_mode: string
+          p_corretor_id: string
+        }
         Returns: string
       }
       materializar_comissoes_vendedor: {

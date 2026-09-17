@@ -49,7 +49,7 @@ import {
 
 export const Route = createLazyFileRoute("/minhas-comissoes")({
   component: () => (
-    <ProtectedRoute roles={["corretor", "imobiliaria", "proprietario"]}>
+    <ProtectedRoute roles={["corretor", "imobiliaria", "proprietario"]} requiresBrokerFinancialAccess>
       <ErrorBoundary nome="comissões">
         <CommissionsPage />
       </ErrorBoundary>

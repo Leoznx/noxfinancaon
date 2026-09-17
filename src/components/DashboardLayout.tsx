@@ -62,6 +62,7 @@ import {
   type PermissoesPorModulo,
 } from "@/lib/permissoes-cache";
 import { isDemoSession } from "@/lib/demo-session";
+import { loadBrokerCommissionAccess } from "@/lib/broker-commission-policy";
 
 const CARGOS_INTERNOS_GATEADOS = [
   "juridico",
@@ -494,6 +495,35 @@ export function DashboardLayout({
   const isProprietario = user?.role === "proprietario";
   const isInquilino = user?.role === "inquilino";
   const isAnalista = user?.role === "analista";
+  const [brokerFinancialAccess, setBrokerFinancialAccess] = useState<boolean | undefined>(
+    user?.role === "corretor" ? undefined : true,
+  );
+
+  useEffect(() => {
+    if (user?.role !== "corretor" || !user.id) {
+      setBrokerFinancialAccess(true);
+      return;
+    }
+    let active = true;
+    const refreshAccess = (forceRefresh = false) => {
+      loadBrokerCommissionAccess(user.id, forceRefresh)
+        .then((access) => {
+          if (active) setBrokerFinancialAccess(access.canAccessFinancialModules);
+        })
+        .catch(() => {
+          if (active) setBrokerFinancialAccess(false);
+        });
+    };
+
+    setBrokerFinancialAccess(undefined);
+    refreshAccess();
+    const handleWindowFocus = () => refreshAccess(true);
+    window.addEventListener("focus", handleWindowFocus);
+    return () => {
+      active = false;
+      window.removeEventListener("focus", handleWindowFocus);
+    };
+  }, [user?.id, user?.role]);
 
   const temCardNivel = isCorretor || isImobiliaria || isProprietario;
   const [nivelInfo, setNivelInfo] = useState<NivelInfo | null | undefined>(
@@ -560,6 +590,15 @@ export function DashboardLayout({
   if (isInquilino) menuItems = inquilinoItems;
   if (user?.role === "admin_master" || user?.internalRole === "admin_master")
     menuItems = adminMasterItems;
+
+  if (isCorretor && brokerFinancialAccess !== true) {
+    const restrictedBrokerRoutes = new Set([
+      "/carteira-cobrancas",
+      "/minhas-comissoes",
+      "/plano-carreira",
+    ]);
+    menuItems = menuItems.filter((item) => !restrictedBrokerRoutes.has(item.href));
+  }
 
   // Saques e dados financeiros ficam restritos a admin, admin_master e financeiro.
   // A rota tambem aplica essa protecao; este filtro evita expor a entrada no menu.

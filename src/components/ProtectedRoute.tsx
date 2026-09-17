@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useLocation } from "@tanstack/react-router";
 import { useAuth } from "./AuthProvider";
 import { getCachedPermissoesCargo, loadPermissoesCargo, podeVerModulo } from "@/lib/permissoes-cache";
+import { loadBrokerCommissionAccess } from "@/lib/broker-commission-policy";
 
 const CARGOS_INTERNOS_GATEADOS = ["juridico", "financeiro", "marketing", "suporte", "vendedor"];
 
@@ -11,11 +12,13 @@ export function ProtectedRoute({
   roles,
   moduleKey,
   sellerTypes,
+  requiresBrokerFinancialAccess = false,
 }: {
   children: React.ReactNode;
   roles?: string[];
   moduleKey?: string;
   sellerTypes?: Array<"sdr" | "closer">;
+  requiresBrokerFinancialAccess?: boolean;
 }) {
   const { user, isLoading } = useAuth();
   const location = useLocation();
@@ -46,6 +49,10 @@ export function ProtectedRoute({
 
   const [permissoesCarregando, setPermissoesCarregando] = useState(!!cargoGateado);
   const [temPermissaoModulo, setTemPermissaoModulo] = useState<boolean>(!cargoGateado);
+  const [brokerAccessLoading, setBrokerAccessLoading] = useState(
+    requiresBrokerFinancialAccess && user?.role === "corretor",
+  );
+  const [brokerAccessAllowed, setBrokerAccessAllowed] = useState(true);
 
   useEffect(() => {
     if (!cargoGateado || !moduleKey) {
@@ -72,18 +79,41 @@ export function ProtectedRoute({
   }, [cargoGateado, moduleKey]);
 
   useEffect(() => {
-    if (isLoading || permissoesCarregando) return;
+    if (!requiresBrokerFinancialAccess || user?.role !== "corretor" || !user.id) {
+      setBrokerAccessAllowed(true);
+      setBrokerAccessLoading(false);
+      return;
+    }
+    let active = true;
+    setBrokerAccessLoading(true);
+    loadBrokerCommissionAccess(user.id)
+      .then((access) => {
+        if (active) setBrokerAccessAllowed(access.canAccessFinancialModules);
+      })
+      .catch(() => {
+        if (active) setBrokerAccessAllowed(false);
+      })
+      .finally(() => {
+        if (active) setBrokerAccessLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [requiresBrokerFinancialAccess, user?.id, user?.role]);
+
+  useEffect(() => {
+    if (isLoading || permissoesCarregando || brokerAccessLoading) return;
     if (!user && location.pathname !== "/login") {
       window.location.replace(`/login?returnTo=${encodeURIComponent(location.pathname)}`);
       return;
     }
-    if (user && (!isAllowed(user) || !temPermissaoModulo || !isSellerTypeAllowed)) {
+    if (user && (!isAllowed(user) || !temPermissaoModulo || !isSellerTypeAllowed || !brokerAccessAllowed)) {
       window.location.replace(isSellerAccount ? "/vendedor" : "/dashboard");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoading, permissoesCarregando, location.pathname, roles, user, temPermissaoModulo, isSellerTypeAllowed]);
+  }, [isLoading, permissoesCarregando, brokerAccessLoading, brokerAccessAllowed, location.pathname, roles, user, temPermissaoModulo, isSellerTypeAllowed]);
 
-  if (isLoading || permissoesCarregando) {
+  if (isLoading || permissoesCarregando || brokerAccessLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
@@ -95,7 +125,7 @@ export function ProtectedRoute({
     return null;
   }
 
-  if (!isAllowed(user) || !temPermissaoModulo || !isSellerTypeAllowed) {
+  if (!isAllowed(user) || !temPermissaoModulo || !isSellerTypeAllowed || !brokerAccessAllowed) {
     return null;
   }
 

@@ -43,7 +43,7 @@ import {
 
 export const Route = createFileRoute("/carteira-cobrancas")({
   component: () => (
-    <ProtectedRoute roles={["corretor", "imobiliaria", "proprietario"]}>
+    <ProtectedRoute roles={["corretor", "imobiliaria", "proprietario"]} requiresBrokerFinancialAccess>
       <CarteiraCobrancas />
     </ProtectedRoute>
   ),

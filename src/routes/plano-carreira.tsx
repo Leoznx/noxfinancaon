@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/plano-carreira")({
   component: () => (
-    <ProtectedRoute roles={["corretor", "imobiliaria", "proprietario"]}>
+    <ProtectedRoute roles={["corretor", "imobiliaria", "proprietario"]} requiresBrokerFinancialAccess>
       <PlanoCarreiraPage />
     </ProtectedRoute>
   ),

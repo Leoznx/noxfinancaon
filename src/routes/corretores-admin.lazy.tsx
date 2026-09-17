@@ -20,9 +20,15 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
-import { UserPlus, Mail, Phone, Trash2, Info, Eye, IdCard, CheckCircle2 } from "lucide-react";
+import { UserPlus, Mail, Phone, Trash2, Info, Eye, IdCard, CheckCircle2, Pencil, Split } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import {
+  BROKER_COMMISSION_OPTIONS,
+  clearBrokerCommissionAccessCache,
+  getBrokerCommissionOption,
+  type BrokerCommissionAllocationMode,
+} from "@/lib/broker-commission-policy";
 
 export const Route = createLazyFileRoute("/corretores-admin")({
   component: () => (
@@ -78,6 +84,9 @@ function CorretoresAdmin() {
   const [detailOf, setDetailOf] = useState<any | null>(null);
   const [detailApolices, setDetailApolices] = useState<any[]>([]);
   const [loadingDetailApolices, setLoadingDetailApolices] = useState(false);
+  const [commissionMode, setCommissionMode] = useState<BrokerCommissionAllocationMode>("broker_full");
+  const [editingCommissionOf, setEditingCommissionOf] = useState<any | null>(null);
+  const [savingCommissionMode, setSavingCommissionMode] = useState(false);
 
   const isImobiliaria = user?.role === "imobiliaria";
 
@@ -125,6 +134,7 @@ function CorretoresAdmin() {
     setFoundCorretor(null);
     setIsSearching(false);
     setIsLinking(false);
+    setCommissionMode("broker_full");
   };
 
   const handleSearch = async (e: React.FormEvent) => {
@@ -202,6 +212,7 @@ function CorretoresAdmin() {
     try {
       const { error } = await supabase.rpc("link_my_corretor", {
         p_corretor_id: foundCorretor.id,
+        p_commission_allocation_mode: commissionMode,
       });
       if (error) {
         toast.error("Não foi possível vincular: " + error.message);
@@ -214,6 +225,27 @@ function CorretoresAdmin() {
       else await resolveImobiliariaId();
     } finally {
       setIsLinking(false);
+    }
+  };
+
+  const handleUpdateCommissionMode = async () => {
+    if (!editingCommissionOf) return;
+    setSavingCommissionMode(true);
+    try {
+      const { error } = await supabase.rpc("update_my_corretor_commission_allocation", {
+        p_corretor_id: editingCommissionOf.id,
+        p_commission_allocation_mode: commissionMode,
+      });
+      if (error) {
+        toast.error("Não foi possível atualizar a regra: " + error.message);
+        return;
+      }
+      clearBrokerCommissionAccessCache(editingCommissionOf.profile_id);
+      toast.success("Regra atualizada para os próximos contratos.");
+      setEditingCommissionOf(null);
+      if (imobiliariaId) await fetchLinkedCorretores(imobiliariaId);
+    } finally {
+      setSavingCommissionMode(false);
     }
   };
 
@@ -400,6 +432,10 @@ function CorretoresAdmin() {
                     />
                   </Card>
 
+                  <div className="mb-6">
+                    <CommissionPolicySelector value={commissionMode} onChange={setCommissionMode} />
+                  </div>
+
                   <DialogFooter className="gap-2">
                     <Button type="button" variant="outline" onClick={() => setFoundCorretor(null)} className="h-12 rounded-xl">
                       Cancelar
@@ -471,10 +507,28 @@ function CorretoresAdmin() {
                 </div>
                 <p className="text-xs font-bold text-neutral-500">{c.imobiliaria_id ? "EQUIPE" : "AUTÔNOMO"}</p>
                 {isImobiliaria && (
+                  <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-3">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Comissão dos próximos contratos</p>
+                    <p className="mt-1 text-sm font-bold text-neutral-900">{getBrokerCommissionOption(c.commission_allocation_mode).shortLabel}</p>
+                  </div>
+                )}
+                {isImobiliaria && (
                   <div className="flex items-center gap-2 pt-1">
                     <Button variant="outline" size="sm" onClick={() => setDetailOf(c)} className="flex-1 h-9 rounded-lg text-neutral-700">
                       <Eye size={16} className="mr-1.5" />
                       Detalhes
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setCommissionMode((c.commission_allocation_mode || "broker_full") as BrokerCommissionAllocationMode);
+                        setEditingCommissionOf(c);
+                      }}
+                      className="flex-1 h-9 rounded-lg text-neutral-700"
+                    >
+                      <Pencil size={15} className="mr-1.5" />
+                      Comissão
                     </Button>
                     <Button variant="outline" size="sm" onClick={() => setToUnlink(c)} className="flex-1 h-9 rounded-lg text-red-600 hover:text-red-700">
                       <Trash2 size={16} className="mr-1.5" />
@@ -494,6 +548,7 @@ function CorretoresAdmin() {
                 <TableHead className="text-[10px] font-black uppercase tracking-widest py-5 px-8">Corretor</TableHead>
                 <TableHead className="text-[10px] font-black uppercase tracking-widest py-5">Identificação</TableHead>
                 <TableHead className="text-[10px] font-black uppercase tracking-widest py-5">Vínculo</TableHead>
+                {isImobiliaria && <TableHead className="text-[10px] font-black uppercase tracking-widest py-5">Comissão</TableHead>}
                 <TableHead className="text-[10px] font-black uppercase tracking-widest py-5 text-center">Status</TableHead>
                 {isImobiliaria && <TableHead className="text-[10px] font-black uppercase tracking-widest py-5 text-right px-8">Ações</TableHead>}
               </TableRow>
@@ -501,13 +556,13 @@ function CorretoresAdmin() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={isImobiliaria ? 5 : 4} className="h-32 text-center text-neutral-400">
+                  <TableCell colSpan={isImobiliaria ? 6 : 4} className="h-32 text-center text-neutral-400">
                     Carregando corretores...
                   </TableCell>
                 </TableRow>
               ) : corretores.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={isImobiliaria ? 5 : 4} className="h-64 text-center">
+                  <TableCell colSpan={isImobiliaria ? 6 : 4} className="h-64 text-center">
                     <div className="flex flex-col items-center justify-center space-y-3 px-6">
                       <div className="w-16 h-16 rounded-full bg-neutral-50 flex items-center justify-center text-neutral-300">
                         <Mail size={32} />
@@ -557,6 +612,13 @@ function CorretoresAdmin() {
                       </div>
                     </TableCell>
                     <TableCell className="py-6 text-xs font-bold text-neutral-500">{c.imobiliaria_id ? "EQUIPE" : "AUTÔNOMO"}</TableCell>
+                    {isImobiliaria && (
+                      <TableCell className="py-6">
+                        <Badge variant="outline" className="border-yellow-200 bg-yellow-50 text-yellow-800">
+                          {getBrokerCommissionOption(c.commission_allocation_mode).shortLabel}
+                        </Badge>
+                      </TableCell>
+                    )}
                     <TableCell className="py-6 text-center">
                       <Badge
                         variant="outline"
@@ -571,6 +633,18 @@ function CorretoresAdmin() {
                           <Button variant="ghost" size="sm" onClick={() => setDetailOf(c)} className="h-9 px-3 rounded-lg text-neutral-700 hover:bg-neutral-100">
                             <Eye size={16} className="mr-1.5" />
                             Detalhes
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setCommissionMode((c.commission_allocation_mode || "broker_full") as BrokerCommissionAllocationMode);
+                              setEditingCommissionOf(c);
+                            }}
+                            className="h-9 px-3 rounded-lg text-neutral-700 hover:bg-neutral-100"
+                          >
+                            <Pencil size={16} className="mr-1.5" />
+                            Comissão
                           </Button>
                           <Button variant="ghost" size="sm" onClick={() => setToUnlink(c)} className="h-9 px-3 rounded-lg text-red-600 hover:bg-red-50 hover:text-red-700">
                             <Trash2 size={16} className="mr-1.5" />
@@ -607,6 +681,24 @@ function CorretoresAdmin() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={!!editingCommissionOf} onOpenChange={(next) => !next && setEditingCommissionOf(null)}>
+        <DialogContent className="sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle>Regra de comissão de {editingCommissionOf?.profiles?.nome || "corretor"}</DialogTitle>
+            <DialogDescription>
+              A alteração vale somente para contratos criados depois da confirmação. O histórico financeiro permanece intacto.
+            </DialogDescription>
+          </DialogHeader>
+          <CommissionPolicySelector value={commissionMode} onChange={setCommissionMode} />
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setEditingCommissionOf(null)}>Cancelar</Button>
+            <Button onClick={handleUpdateCommissionMode} disabled={savingCommissionMode} className="bg-neutral-900 text-white hover:bg-neutral-800">
+              {savingCommissionMode ? "Salvando..." : "Salvar para próximos contratos"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!detailOf} onOpenChange={(o) => !o && setDetailOf(null)}>
         <DialogContent className="sm:max-w-[500px]">
@@ -665,6 +757,47 @@ function CorretoresAdmin() {
         </DialogContent>
       </Dialog>
     </DashboardLayout>
+  );
+}
+
+function CommissionPolicySelector({
+  value,
+  onChange,
+}: {
+  value: BrokerCommissionAllocationMode;
+  onChange: (value: BrokerCommissionAllocationMode) => void;
+}) {
+  return (
+    <fieldset>
+      <legend className="mb-2 flex items-center gap-2 text-sm font-black text-neutral-900">
+        <Split size={17} className="text-yellow-600" />
+        Como deseja distribuir a comissão dos contratos?
+      </legend>
+      <p className="mb-3 text-xs text-neutral-500">A regra é individual para este corretor e fica registrada em cada novo contrato.</p>
+      <div className="space-y-2">
+        {BROKER_COMMISSION_OPTIONS.map((option) => {
+          const selected = value === option.value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => onChange(option.value)}
+              className={`w-full rounded-xl border p-3 text-left transition ${
+                selected ? "border-yellow-400 bg-yellow-50 ring-1 ring-yellow-300" : "border-neutral-200 bg-white hover:border-neutral-300"
+              }`}
+            >
+              <span className="flex items-start gap-3">
+                <span className={`mt-0.5 h-4 w-4 shrink-0 rounded-full border-4 ${selected ? "border-neutral-900 bg-yellow-400" : "border-neutral-300 bg-white"}`} />
+                <span>
+                  <span className="block text-sm font-black text-neutral-900">{option.label}</span>
+                  <span className="mt-0.5 block text-xs leading-relaxed text-neutral-500">{option.description}</span>
+                </span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </fieldset>
   );
 }
 
