@@ -213,15 +213,20 @@ async function setCoverageToggle(
   // dessincronizado do estado React (em produção ele dizia false enquanto o campo
   // estava habilitado e a cobertura visualmente ligada). A habilitação do campo
   // monetário é o estado funcional que a validação do formulário realmente usa.
-  if ((await valueField.isEnabled().catch(() => !enabled)) !== enabled) {
-    await root.first().click();
-  }
+  if ((await valueField.isEnabled().catch(() => !enabled)) === enabled) return true;
 
-  const inicio = Date.now();
-  do {
-    if ((await valueField.isEnabled().catch(() => !enabled)) === enabled) return true;
-    await page.waitForTimeout(FIND_POLL_MS);
-  } while (Date.now() - inicio < 2000);
+  // Na versão atual do Copan, o primeiro clique pode apenas sincronizar o input
+  // oculto com o estado visual já ativo. Só um segundo clique efetivamente muda
+  // o estado React. Confirma pelo campo depois de cada clique e limita a três
+  // tentativas para nunca inverter uma cobertura que já chegou ao estado certo.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await root.first().click();
+    const deadline = Date.now() + 700;
+    do {
+      if ((await valueField.isEnabled().catch(() => !enabled)) === enabled) return true;
+      await page.waitForTimeout(FIND_POLL_MS);
+    } while (Date.now() < deadline);
+  }
 
   throw new Error(`Não foi possível ajustar a cobertura (${testId}).`);
 }

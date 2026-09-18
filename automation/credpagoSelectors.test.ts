@@ -257,11 +257,11 @@ test("desliga coberturas ERP sem valor para liberar o formulário", async () => 
     `<main>
       <label>Valor mensal do aluguel<input id="aluguel" placeholder="R$ 0.000,00" /></label>
       <label data-testid="property-condominium-coverage-toggle">
-        Incluir cobertura<input id="condominio-toggle" type="checkbox" onchange="document.querySelector('#condominio').disabled = this.checked" />
+        Incluir cobertura<input id="condominio-toggle" type="checkbox" onchange="if (!this.checked) document.querySelector('#condominio').disabled = true" />
       </label>
       <label>Condomínio<input data-testid="property-condominium-value" id="condominio" placeholder="R$ 0.000,00" /></label>
       <label data-testid="property-iptu-coverage-toggle">
-        Incluir cobertura<input id="iptu-toggle" type="checkbox" onchange="document.querySelector('#iptu').disabled = this.checked" />
+        Incluir cobertura<input id="iptu-toggle" type="checkbox" onchange="if (!this.checked) document.querySelector('#iptu').disabled = true" />
       </label>
       <label>IPTU<input data-testid="property-iptu-value" id="iptu" placeholder="R$ 0.000,00" /></label>
     </main>`,
