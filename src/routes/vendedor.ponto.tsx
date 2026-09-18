@@ -44,6 +44,11 @@ export const Route = createFileRoute("/vendedor/ponto")({
 const PUNCH_TYPES: TimeClockPunchType[] = ["entrada", "inicio_intervalo", "fim_intervalo", "saida"];
 const DATE_FORMAT = new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "2-digit", month: "long" });
 
+type TimeClockNotice = {
+  lateEntry: boolean;
+  message: string;
+};
+
 function TimeClockPage() {
   const range = useMemo(defaultTimeClockRange, []);
   const [dashboard, setDashboard] = useState<TimeClockDashboard | null>(null);
@@ -56,6 +61,7 @@ function TimeClockPage() {
   const [cameraLoading, setCameraLoading] = useState(false);
   const [cameraError, setCameraError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [notice, setNotice] = useState<TimeClockNotice | null>(null);
   const [now, setNow] = useState(new Date());
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -193,13 +199,18 @@ function TimeClockPage() {
 
   const submit = async () => {
     if (!dashboard?.next_punch_type || !photo) return;
+    const punchType = dashboard.next_punch_type;
     setSubmitting(true);
     try {
-      const result = await registerTimeClockPunch(dashboard.next_punch_type, photo);
+      const result = await registerTimeClockPunch(punchType, photo);
       toast.success(result.message);
       if (result.emailWarning) toast.warning(result.emailWarning);
       setDialogOpen(false);
       selectPhoto();
+      setNotice({
+        lateEntry: punchType === "entrada" && result.classification === "atrasado",
+        message: result.message,
+      });
       await load();
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "Não foi possível registrar o ponto.");
@@ -325,6 +336,45 @@ function TimeClockPage() {
             <Button variant="outline" onClick={closePunch} disabled={submitting}>Cancelar</Button>
             <Button onClick={submit} disabled={!photo || submitting} className="bg-neutral-950 text-white hover:bg-neutral-800">
               {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />} Confirmar ponto
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!notice} onOpenChange={() => undefined}>
+        <DialogContent
+          className="max-h-[90vh] max-w-lg overflow-y-auto rounded-[24px] border-yellow-300 p-0 [&>button]:hidden"
+          onEscapeKeyDown={(event) => event.preventDefault()}
+          onInteractOutside={(event) => event.preventDefault()}
+          onPointerDownOutside={(event) => event.preventDefault()}
+        >
+          <DialogHeader className="border-b border-yellow-300 bg-yellow-400 px-6 py-5 text-left">
+            <DialogTitle className="flex items-center gap-2 text-xl font-black text-neutral-950">
+              <AlertTriangle className="h-6 w-6" /> AVISO IMPORTANTE
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-5 px-6 py-5">
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+              <p className="font-black text-emerald-950">Ponto registrado com sucesso</p>
+              <p className="mt-1 text-sm leading-5 text-emerald-800">{notice?.message}</p>
+            </div>
+            <ul className="space-y-3 text-sm font-black uppercase leading-5 text-neutral-950">
+              <li className="rounded-xl border border-red-200 bg-red-50 p-3">Proibido o uso do celular durante o horário comercial.</li>
+              {notice?.lateEntry ? (
+                <li className="rounded-xl border border-amber-300 bg-amber-50 p-3">Atenção ao horário de chegada para evitar atrasos.</li>
+              ) : null}
+              <li className="rounded-xl border border-neutral-200 bg-neutral-50 p-3">Cuidado com o tempo que leva para ir ao banheiro ou buscar café.</li>
+              <li className="rounded-xl border border-neutral-200 bg-neutral-50 p-3">Não serão tolerados passeios na imobiliária ou na galeria.</li>
+              <li className="rounded-xl border border-neutral-200 bg-neutral-50 p-3">Atenção total durante o horário comercial.</li>
+            </ul>
+          </div>
+          <DialogFooter className="border-t border-neutral-100 bg-neutral-50 px-6 py-4">
+            <Button
+              autoFocus
+              onClick={() => setNotice(null)}
+              className="h-12 w-full rounded-xl bg-neutral-950 font-black text-white hover:bg-neutral-800 sm:w-auto sm:min-w-48"
+            >
+              <Check className="mr-2 h-5 w-5" /> COMPREENDIDO
             </Button>
           </DialogFooter>
         </DialogContent>
