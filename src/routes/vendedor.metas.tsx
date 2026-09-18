@@ -79,7 +79,7 @@ function Goals() {
             id: String(row.vendedor_id),
             name: String(row.nome || "Vendedor"),
             avatarUrl: row.avatar_url ? String(row.avatar_url) : null,
-            registrations: Number(row.contratos_fechados ?? 0),
+            registrations: Number(row.total_leads ?? 0),
             position: Number(row.posicao ?? 0),
           }))
           .sort((a, b) => a.position - b.position),

@@ -107,6 +107,11 @@ function VendedorDashboard() {
         { event: "*", schema: "public", table: "seller_client_partnerships", filter: sellerFilter },
         scheduleRefresh,
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "seller_signup_attributions", filter: sellerFilter },
+        scheduleRefresh,
+      )
       .subscribe();
 
     const refreshWhenVisible = () => {
