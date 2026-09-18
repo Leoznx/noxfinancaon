@@ -33,9 +33,9 @@ const PROCESSING_REGEX =
   /(estamos\s+fazendo\s+a\s+an[aá]lise\s+de\s+cr[ée]dito|an[aá]lise\s+de\s+cr[ée]dito\s+em\s+andamento|analisando\s+cr[ée]dito|consultando\s+hist[oó]rico[^\n]{0,80}(?:pagamento|cliente)|aguarde[^\n]{0,80}an[aá]lise\s+de\s+cr[ée]dito)/i;
 /**
  * Se a página ficar com o texto EXATAMENTE igual por esse tempo depois do clique em
- * "Simular Crédito" (nem um spinner, nem uma navegação, nada), assumimos que o clique
+ * de envio (nem um spinner, nem uma navegação, nada), assumimos que o clique
  * não registrou e tentamos de novo — foi a causa raiz observada em produção (consulta
- * ficou 30s travada na tela do formulário, com "Simular Crédito" ainda visível).
+ * ficou 30s travada na tela do formulário, com a ação de análise ainda visível).
  */
 const RETRY_APOS_MS = 7000;
 const MAX_RECLIQUES = 2;
@@ -74,13 +74,19 @@ export async function parseResultado(
   const pollInterval = opts.pollIntervalMs ?? POLL_INTERVAL_MS;
   const retryAfter = opts.retryAfterMs ?? RETRY_APOS_MS;
   const maxRetryClicks = opts.maxRetryClicks ?? MAX_RECLIQUES;
-  let deadline = inicio + timeoutInicial;
-  let processamentoDetectado = false;
   let bodyText = "";
   let baseline = await page
     .locator("body")
     .innerText()
     .catch(() => "");
+  let processamentoDetectado = PROCESSING_REGEX.test(baseline);
+  let deadline =
+    inicio + (processamentoDetectado ? timeoutProcessando : timeoutInicial);
+  if (processamentoDetectado) {
+    opts.onLog?.(
+      `Análise confirmada no portal — aguardando o resultado por até ${Math.round(timeoutProcessando / 1000)}s, sem reenviar a simulação.`,
+    );
+  }
   let ultimoReclique = Date.now();
   let tentativasReclique = 0;
 
@@ -130,7 +136,7 @@ export async function parseResultado(
     ) {
       tentativasReclique++;
       opts.onLog?.(
-        `Página sem nenhuma mudança após ${Math.round(tempoTravado / 1000)}s — tentativa ${tentativasReclique}/${maxRetryClicks} de reenviar o clique em "Simular Crédito".`,
+        `Página sem nenhuma mudança após ${Math.round(tempoTravado / 1000)}s — tentativa ${tentativasReclique}/${maxRetryClicks} de reenviar a análise.`,
       );
       await opts.onRetryClick(tentativasReclique).catch(() => {});
       ultimoReclique = Date.now();

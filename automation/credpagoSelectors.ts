@@ -21,6 +21,8 @@ const AUTHENTICATED_HOSTNAMES = ["credpago.com", "app.loft.com.br"];
 const CREDIT_SIMULATION_PATH_PATTERN =
   /\/(?:fianca-aluguel\/imobiliaria\/proposta|imobiliaria\/proposta|erp\/proposta\/analise-de-credito)(?:\/|$)/i;
 const ERP_CREDIT_SIMULATION_PATH_PATTERN = /\/erp\/proposta\/analise-de-credito(?:\/|$)/i;
+const SUBMIT_CREDIT_BUTTON_PATTERN =
+  /(?:simular(?:\s+an[aá]lise\s+de)?\s+cr[ée]dito|fazer\s+(?:a\s+)?an[aá]lise(?:\s+de\s+cr[ée]dito)?)/i;
 
 export function isCreditSimulationUrl(value: string): boolean {
   try {
@@ -120,20 +122,13 @@ async function clickButtonByText(page: Page, textos: (string | RegExp)[]): Promi
         (await byRole
           .first()
           .isVisible()
+          .catch(() => false)) &&
+        (await byRole
+          .first()
+          .isEnabled()
           .catch(() => false))
       ) {
         await byRole.first().click();
-        return;
-      }
-      const byText = page.getByText(t, { exact: false });
-      if (
-        (await byText.count().catch(() => 0)) > 0 &&
-        (await byText
-          .first()
-          .isVisible()
-          .catch(() => false))
-      ) {
-        await byText.first().click();
         return;
       }
     }
@@ -252,7 +247,7 @@ export async function fillValores(
 }
 
 export async function submitSimulation(page: Page): Promise<void> {
-  await clickButtonByText(page, [/simular(?:\s+an[aá]lise\s+de)?\s+cr[ée]dito/i, /simular/i]);
+  await clickButtonByText(page, [SUBMIT_CREDIT_BUTTON_PATTERN]);
 }
 
 /**
@@ -288,7 +283,7 @@ export async function validateSimulationFormReady(page: Page): Promise<Record<st
     role: { name: /cep/i },
   });
   const simular = page
-    .getByRole("button", { name: /simular(?:\s+an[aá]lise\s+de)?\s+cr[ée]dito/i })
+    .getByRole("button", { name: SUBMIT_CREDIT_BUTTON_PATTERN })
     .first();
   const result = {
     documento: await documento.isVisible().catch(() => false),
@@ -387,7 +382,7 @@ async function isAuthenticatedCredPagoPage(page: Page): Promise<boolean> {
 
   const simulationMarkers = [
     page.getByRole("button", {
-      name: /simular(?:\s+an[aá]lise\s+de)?\s+cr[ée]dito/i,
+      name: SUBMIT_CREDIT_BUTTON_PATTERN,
     }),
     page.getByText(/pessoa\s+f[íi]sica/i, { exact: false }),
     page.getByLabel(/cpf|cnpj/i),

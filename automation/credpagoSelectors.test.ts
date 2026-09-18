@@ -164,6 +164,38 @@ test("preenche e valida o formulário ERP incluindo o CEP abaixo da dobra", asyn
   await page.close();
 });
 
+test("envia pelo botão Fazer análise sem clicar no texto explicativo que contém simular o crédito", async () => {
+  const url = "https://app.loft.com.br/erp/proposta/analise-de-credito";
+  const page = await pageWithHtml(
+    url,
+    `<main>
+      <p>Preencha os dados do imóvel e do inquilino para simular o crédito.</p>
+      <button type="button" onclick="document.body.dataset.submitted='true'">Fazer análise</button>
+    </main>`,
+  );
+
+  await submitSimulation(page);
+
+  assert.equal(await page.locator("body").getAttribute("data-submitted"), "true");
+  await page.close();
+});
+
+test("aguarda o botão Fazer análise ficar habilitado antes de enviar", async () => {
+  const url = "https://app.loft.com.br/erp/proposta/analise-de-credito";
+  const page = await pageWithHtml(
+    url,
+    `<main>
+      <button type="button" disabled onclick="document.body.dataset.submitted='true'">Fazer análise</button>
+      <script>setTimeout(() => document.querySelector('button').disabled = false, 100)</script>
+    </main>`,
+  );
+
+  await submitSimulation(page);
+
+  assert.equal(await page.locator("body").getAttribute("data-submitted"), "true");
+  await page.close();
+});
+
 test("não reconhece uma URL externa parecida como tela de simulação", () => {
   assert.equal(isCreditSimulationUrl("https://example.com/erp/proposta/analise-de-credito"), false);
 });
