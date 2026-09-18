@@ -223,6 +223,79 @@ test("preenche a máscara monetária em reais sem reduzir o valor em cem vezes",
   await page.close();
 });
 
+test("preenche aluguel, condomínio e IPTU separadamente quando as coberturas ERP estão ligadas", async () => {
+  const url = "https://app.loft.com.br/erp/proposta/analise-de-credito";
+  const page = await pageWithHtml(
+    url,
+    `<main>
+      <label>Valor mensal do aluguel<input id="aluguel" placeholder="R$ 0.000,00" /></label>
+      <label data-testid="property-condominium-coverage-toggle">
+        Incluir cobertura<input id="condominio-toggle" type="checkbox" checked />
+      </label>
+      <label>Condomínio<input data-testid="property-condominium-value" id="condominio" placeholder="R$ 0.000,00" /></label>
+      <label data-testid="property-iptu-coverage-toggle">
+        Incluir cobertura<input id="iptu-toggle" type="checkbox" checked />
+      </label>
+      <label>IPTU<input data-testid="property-iptu-value" id="iptu" placeholder="R$ 0.000,00" /></label>
+    </main>`,
+  );
+
+  await fillValores(page, { aluguel: 1500, condominio: 380, taxas: 460 });
+
+  assert.equal(await page.locator("#aluguel").inputValue(), "1500,00");
+  assert.equal(await page.locator("#condominio").inputValue(), "380,00");
+  assert.equal(await page.locator("#iptu").inputValue(), "460,00");
+  assert.equal(await page.locator("#condominio-toggle").isChecked(), true);
+  assert.equal(await page.locator("#iptu-toggle").isChecked(), true);
+  await page.close();
+});
+
+test("desliga coberturas ERP sem valor para liberar o formulário", async () => {
+  const url = "https://app.loft.com.br/erp/proposta/analise-de-credito";
+  const page = await pageWithHtml(
+    url,
+    `<main>
+      <label>Valor mensal do aluguel<input id="aluguel" placeholder="R$ 0.000,00" /></label>
+      <label data-testid="property-condominium-coverage-toggle">
+        Incluir cobertura<input id="condominio-toggle" type="checkbox" onchange="document.querySelector('#condominio').disabled = this.checked" />
+      </label>
+      <label>Condomínio<input data-testid="property-condominium-value" id="condominio" placeholder="R$ 0.000,00" /></label>
+      <label data-testid="property-iptu-coverage-toggle">
+        Incluir cobertura<input id="iptu-toggle" type="checkbox" onchange="document.querySelector('#iptu').disabled = this.checked" />
+      </label>
+      <label>IPTU<input data-testid="property-iptu-value" id="iptu" placeholder="R$ 0.000,00" /></label>
+    </main>`,
+  );
+
+  await fillValores(page, { aluguel: 1880, condominio: 0, taxas: 0 });
+
+  assert.equal(await page.locator("#aluguel").inputValue(), "1880,00");
+  assert.equal(await page.locator("#condominio").isEnabled(), false);
+  assert.equal(await page.locator("#iptu").isEnabled(), false);
+  assert.equal(await page.locator("#condominio").inputValue(), "");
+  assert.equal(await page.locator("#iptu").inputValue(), "");
+  await page.close();
+});
+
+test("só sinaliza envio quando o botão Fazer análise realmente será clicado", async () => {
+  const url = "https://app.loft.com.br/erp/proposta/analise-de-credito";
+  const page = await pageWithHtml(
+    url,
+    `<main><button type="button" onclick="document.body.dataset.submitted='true'">Fazer análise</button></main>`,
+  );
+  let beforeClickCalled = false;
+
+  await submitSimulation(page, {
+    onBeforeClick: () => {
+      beforeClickCalled = true;
+    },
+  });
+
+  assert.equal(beforeClickCalled, true);
+  assert.equal(await page.locator("body").getAttribute("data-submitted"), "true");
+  await page.close();
+});
+
 test("não reconhece uma URL externa parecida como tela de simulação", () => {
   assert.equal(isCreditSimulationUrl("https://example.com/erp/proposta/analise-de-credito"), false);
 });

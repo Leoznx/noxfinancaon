@@ -112,25 +112,32 @@ async function locateField(
   );
 }
 
-async function clickButtonByText(page: Page, textos: (string | RegExp)[]): Promise<void> {
+type ClickButtonOptions = {
+  onBeforeClick?: () => void | Promise<void>;
+};
+
+async function clickButtonByText(
+  page: Page,
+  textos: (string | RegExp)[],
+  options: ClickButtonOptions = {},
+): Promise<void> {
   const inicio = Date.now();
+  let encontrouBotaoDesabilitado = false;
   do {
     for (const t of textos) {
       const byRole = page.getByRole("button", { name: t });
-      if (
-        (await byRole.count().catch(() => 0)) > 0 &&
-        (await byRole
-          .first()
-          .isVisible()
-          .catch(() => false)) &&
-        (await byRole
-          .first()
-          .isEnabled()
-          .catch(() => false))
-      ) {
+      if ((await byRole.count().catch(() => 0)) === 0) continue;
+
+      const button = byRole.first();
+      if (!(await button.isVisible().catch(() => false))) continue;
+
+      if (await button.isEnabled().catch(() => false)) {
+        await options.onBeforeClick?.();
         await byRole.first().click();
         return;
       }
+
+      encontrouBotaoDesabilitado = true;
     }
     await page.waitForTimeout(FIND_POLL_MS);
   } while (Date.now() - inicio < FIND_TIMEOUT_MS);
@@ -146,8 +153,11 @@ async function clickButtonByText(page: Page, textos: (string | RegExp)[]): Promi
     .innerText()
     .then((t) => redactSensitiveText(t.replace(/\s+/g, " ").trim(), 400))
     .catch(() => "(não foi possível ler o corpo da página)");
+  const motivo = encontrouBotaoDesabilitado
+    ? "Botão encontrado, mas permaneceu desabilitado"
+    : "Botão não encontrado";
   throw new Error(
-    `Botão não encontrado (tentativas: ${textos.map(String).join(", ")}). O layout da CredPago pode ter mudado. ` +
+    `${motivo} (tentativas: ${textos.map(String).join(", ")}). O formulário da CredPago pode ter mudado ou ainda conter dados inválidos. ` +
       `[diagnóstico] url=${urlAtual} | amostra="${amostraTexto}"`,
   );
 }
@@ -165,6 +175,87 @@ async function fillCurrencyField(field: Locator, value: number): Promise<void> {
     ? value.toFixed(2).replace(".", ",")
     : String(value);
   await field.fill(inputValue);
+}
+
+/**
+ * O formulário ERP atual inicia as coberturas de condomínio e IPTU ligadas.
+ * Quando uma cobertura está ligada, o respectivo valor passa a ser obrigatório
+ * e o botão "Fazer análise" fica desabilitado enquanto ele estiver vazio.
+ *
+ * Clica no controle visual e confirma o estado pela habilitação do campo
+ * monetário, que é o que a validação do formulário realmente considera.
+ */
+async function setCoverageToggle(
+  page: Page,
+  testId: string,
+  valueTestId: string,
+  enabled: boolean,
+): Promise<boolean> {
+  const root = page.getByTestId(testId);
+  if ((await root.count().catch(() => 0)) === 0) return false;
+
+  const valueRoot = page.getByTestId(valueTestId);
+  if ((await valueRoot.count().catch(() => 0)) === 0) {
+    throw new Error(`Campo da cobertura não encontrado (${valueTestId}). O formulário mudou.`);
+  }
+  const rootIsField = await valueRoot
+    .first()
+    .evaluate((element) => element.matches("input, textarea, select"))
+    .catch(() => false);
+  const valueField = rootIsField
+    ? valueRoot.first()
+    : valueRoot.locator("input, textarea, select").first();
+  if (!rootIsField && (await valueField.count().catch(() => 0)) === 0) {
+    throw new Error(`Campo da cobertura não é preenchível (${valueTestId}). O formulário mudou.`);
+  }
+
+  // O Switch da biblioteca Copan mantém um input oculto cujo `checked` pode ficar
+  // dessincronizado do estado React (em produção ele dizia false enquanto o campo
+  // estava habilitado e a cobertura visualmente ligada). A habilitação do campo
+  // monetário é o estado funcional que a validação do formulário realmente usa.
+  if ((await valueField.isEnabled().catch(() => !enabled)) !== enabled) {
+    await root.first().click();
+  }
+
+  const inicio = Date.now();
+  do {
+    if ((await valueField.isEnabled().catch(() => !enabled)) === enabled) return true;
+    await page.waitForTimeout(FIND_POLL_MS);
+  } while (Date.now() - inicio < 2000);
+
+  throw new Error(`Não foi possível ajustar a cobertura (${testId}).`);
+}
+
+async function fillCoveredValue(
+  page: Page,
+  options: {
+    value: number;
+    toggleTestId: string;
+    valueTestId: string;
+    label: RegExp;
+  },
+): Promise<void> {
+  const hasToggle = await setCoverageToggle(
+    page,
+    options.toggleTestId,
+    options.valueTestId,
+    options.value > 0,
+  );
+  if (options.value <= 0) return;
+
+  try {
+    const field = await locateField(page, {
+      label: options.label,
+      placeholder: options.label,
+      role: { name: options.label },
+    });
+    await fillCurrencyField(field, options.value);
+  } catch (error) {
+    // Na rota ERP, o toggle confirma que esse campo faz parte do contrato atual
+    // do formulário. Ignorar a ausência deixaria o botão eternamente desabilitado.
+    if (hasToggle || isErpCreditSimulationUrl(page.url())) throw error;
+    // Telas legadas nem sempre oferecem os valores opcionais.
+  }
 }
 
 export async function fillPessoa(page: Page, tipo: "PF" | "PJ"): Promise<void> {
@@ -234,35 +325,25 @@ export async function fillValores(
   });
   await fillCurrencyField(aluguelField, valores.aluguel);
 
-  if (valores.condominio > 0) {
-    try {
-      const condominioField = await locateField(page, {
-        label: /condom[ií]nio/i,
-        placeholder: /condom[ií]nio/i,
-        role: { name: /condom[ií]nio/i },
-      });
-      await fillCurrencyField(condominioField, valores.condominio);
-    } catch {
-      // campo opcional em alguns formulários — não bloqueia a simulação
-    }
-  }
-
-  if (valores.taxas > 0) {
-    try {
-      const taxasField = await locateField(page, {
-        label: /taxas?/i,
-        placeholder: /taxas?/i,
-        role: { name: /taxas?/i },
-      });
-      await fillCurrencyField(taxasField, valores.taxas);
-    } catch {
-      // campo opcional
-    }
-  }
+  await fillCoveredValue(page, {
+    value: valores.condominio,
+    toggleTestId: "property-condominium-coverage-toggle",
+    valueTestId: "property-condominium-value",
+    label: /condom[ií]nio/i,
+  });
+  await fillCoveredValue(page, {
+    value: valores.taxas,
+    toggleTestId: "property-iptu-coverage-toggle",
+    valueTestId: "property-iptu-value",
+    label: /iptu|taxas?/i,
+  });
 }
 
-export async function submitSimulation(page: Page): Promise<void> {
-  await clickButtonByText(page, [SUBMIT_CREDIT_BUTTON_PATTERN]);
+export async function submitSimulation(
+  page: Page,
+  options: ClickButtonOptions = {},
+): Promise<void> {
+  await clickButtonByText(page, [SUBMIT_CREDIT_BUTTON_PATTERN], options);
 }
 
 /**

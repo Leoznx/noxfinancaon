@@ -655,32 +655,29 @@ async function processarConsulta(
     // O CEP permanece obrigatório na nova rota ERP, embora fique abaixo da dobra
     // em telas menores. Sem preenchê-lo, o botão de simulação continua desabilitado.
     await fillCep(page, consulta.cep || "");
-    // A CredPago avalia o crédito com base no que é digitado no campo "Aluguel"
-    // do formulário dela — por isso a análise deve considerar o compromisso
-    // mensal total do inquilino (aluguel + condomínio + taxas), não só o
-    // aluguel isolado. Soma tudo e preenche só o campo Aluguel com o total;
-    // Condomínio/Taxas ficam vazios lá para não contar o mesmo valor duas vezes
-    // (a base do site já guarda os três valores separados normalmente — isso
-    // só muda o que é enviado para a CredPago, não o que fica salvo na consulta).
-    const valorTotalParaAnaliseCredito =
-      (Number(consulta.valor_aluguel) || 0) +
-      (Number(consulta.valor_condominio) || 0) +
-      (Number(consulta.valor_taxas) || 0);
+    // A rota ERP atual inicia as coberturas de condomínio e IPTU ligadas e exige
+    // um valor positivo em cada campo ativo. Enviar o total apenas em "Aluguel"
+    // deixava esses campos vazios e o botão "Fazer análise" desabilitado. Mantém
+    // agora cada parcela em seu campo; fillValores desliga a cobertura quando o
+    // valor correspondente for zero, preservando o mesmo compromisso mensal.
     await fillValores(page, {
-      aluguel: valorTotalParaAnaliseCredito,
-      condominio: 0,
-      taxas: 0,
+      aluguel: Number(consulta.valor_aluguel) || 0,
+      condominio: Number(consulta.valor_condominio) || 0,
+      taxas: Number(consulta.valor_taxas) || 0,
     });
     estado.lastSuccessfulStep = "form-filled";
 
     log(`[${cid}] Enviando simulação`);
     await atualizarStep(consulta.id, "enviando");
-    // A partir daqui assumimos que o clique pode ter chegado ao parceiro mesmo se
-    // o Playwright perder a conexão durante a resposta. Não reenfileiramos
-    // automaticamente esse caso para não criar uma simulação duplicada.
-    simulacaoEnviada = true;
-    estado.simulationSubmitted = true;
-    await submitSimulation(page);
+    // Só marca a simulação como enviada imediatamente antes do clique real. Antes,
+    // um botão desabilitado já ativava essa trava e escondia os artefatos seguros
+    // de diagnóstico, embora nenhum dado tivesse sido submetido ao parceiro.
+    await submitSimulation(page, {
+      onBeforeClick: () => {
+        simulacaoEnviada = true;
+        estado.simulationSubmitted = true;
+      },
+    });
     estado.lastSuccessfulStep = "simulation-submitted";
 
     log(`[${cid}] Aguardando resultado`);
