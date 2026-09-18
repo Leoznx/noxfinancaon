@@ -129,6 +129,19 @@ function AgendaPage() {
         },
         scheduleRefresh,
       )
+      // DELETE em uma tabela com RLS não é entregue de forma confiável pelos
+      // filtros da linha apagada. O backend publica este sinal mínimo, sem dados
+      // do cliente, para que SDR, Closer e os demais SDRs recarreguem agenda e
+      // disponibilidade após excluir, cancelar ou reagendar uma reunião.
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "seller_agenda_availability_events",
+        },
+        scheduleRefresh,
+      )
       .on(
         "postgres_changes",
         {
@@ -304,7 +317,11 @@ function AgendaPage() {
     setModalOpen(false);
     try {
       await deleteSellerAppointment(sellerId, target.id);
-      toast.success("Compromisso excluído com sucesso.");
+      toast.success(
+        target.type === "reuniao"
+          ? "Reunião removida das agendas do SDR e do Closer. O horário já está disponível novamente."
+          : "Compromisso excluído com sucesso.",
+      );
       await load(true);
     } catch (deleteError) {
       setAppointments(previous);

@@ -3,7 +3,7 @@ BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET LOCAL search_path = public, extensions, pg_catalog;
 
-SELECT plan(6);
+SELECT plan(7);
 
 SELECT has_column(
   'public',
@@ -30,6 +30,17 @@ SELECT has_trigger(
   'seller_appointments',
   'trg_notify_seller_agenda_availability',
   'mudancas de reuniao invalidam os horarios em todos os logins'
+);
+
+SELECT ok(
+  EXISTS (
+    SELECT 1
+    FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime'
+      AND schemaname = 'public'
+      AND tablename = 'seller_agenda_availability_events'
+  ),
+  'mudancas de disponibilidade chegam em tempo real a SDR e Closer'
 );
 
 SELECT has_function(
