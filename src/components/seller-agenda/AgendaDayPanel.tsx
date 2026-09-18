@@ -15,6 +15,7 @@ export function AgendaDayPanel({
   onReschedule,
   onComplete,
   onDelete,
+  canEdit,
   canComplete,
 }: {
   date: Date;
@@ -26,6 +27,7 @@ export function AgendaDayPanel({
   onReschedule: (item: SellerAppointment) => void;
   onComplete: (item: SellerAppointment) => void;
   onDelete: (item: SellerAppointment) => void;
+  canEdit: (item: SellerAppointment) => boolean;
   canComplete: (item: SellerAppointment) => boolean;
 }) {
   return (
@@ -74,6 +76,7 @@ export function AgendaDayPanel({
                 onReschedule={onReschedule}
                 onComplete={onComplete}
                 onDelete={onDelete}
+                canEdit={canEdit(item)}
                 canComplete={canComplete(item)}
               />
             ))}

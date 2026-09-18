@@ -38,6 +38,7 @@ export function AppointmentCard({
   onReschedule,
   onComplete,
   onDelete,
+  canEdit = true,
   canComplete = true,
 }: {
   item: SellerAppointment;
@@ -48,6 +49,7 @@ export function AppointmentCard({
   onReschedule: (item: SellerAppointment) => void;
   onComplete: (item: SellerAppointment) => void;
   onDelete: (item: SellerAppointment) => void;
+  canEdit?: boolean;
   canComplete?: boolean;
 }) {
   const finished = ["concluido", "cancelado"].includes(item.status);
@@ -108,8 +110,8 @@ export function AppointmentCard({
         <Button type="button" size="sm" variant="ghost" className="h-7 gap-1 px-2 text-[10px]" onClick={() => onView(item)}>
           <Eye className="h-3.5 w-3.5" /> Detalhes
         </Button>
-        {item.source !== "meeting_follow_up" && <Button type="button" size="sm" variant="ghost" className="h-7 gap-1 px-2 text-[10px]" onClick={() => onEdit(item)}>
-          <Edit3 className="h-3.5 w-3.5" /> Editar
+        {item.source !== "meeting_follow_up" && canEdit && <Button type="button" size="sm" variant="ghost" className="h-7 gap-1 px-2 text-[10px]" onClick={() => onEdit(item)}>
+          <Edit3 className="h-3.5 w-3.5" /> {item.type === "reuniao" ? "Editar dados" : "Editar"}
         </Button>}
         {canRescheduleSellerMeeting(item) && <Button type="button" size="sm" variant="ghost" className="h-7 gap-1 px-2 text-[10px] text-yellow-800 hover:bg-yellow-50 hover:text-yellow-900" onClick={() => onReschedule(item)}>
           <CalendarClock className="h-3.5 w-3.5" /> Reagendar

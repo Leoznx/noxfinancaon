@@ -13,13 +13,14 @@ import { AgendaSummaryCards } from "@/components/seller-agenda/AgendaSummaryCard
 import { AppointmentCard } from "@/components/seller-agenda/AppointmentCard";
 import { AppointmentDetailsDialog } from "@/components/seller-agenda/AppointmentDetailsDialog";
 import { MeetingFeedbackDialog } from "@/components/seller-agenda/MeetingFeedbackDialog";
+import { MeetingContactEditDialog } from "@/components/seller-agenda/MeetingContactEditDialog";
 import { MeetingRescheduleDialog } from "@/components/seller-agenda/MeetingRescheduleDialog";
 import { AppointmentModal } from "@/components/seller-agenda/AppointmentModal";
 import { SharedSalesAgenda } from "@/components/seller-agenda/SharedSalesAgenda";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { appointmentMatchesFilter, buildShortNameValueMap, completeCloserMeeting, deleteSellerAppointment, fetchSellerAgenda, getSharedMeetingMetadata, saveSellerAppointment, setSellerAppointmentStatus, type AgendaClientOption, type AgendaFilter, type AgendaLeadOption, type AgendaSummary, type AgendaViewMode, type AppointmentDraft, type SellerAppointment } from "@/lib/seller-agenda";
+import { appointmentMatchesFilter, buildShortNameValueMap, canEditSellerMeetingContact, completeCloserMeeting, deleteSellerAppointment, fetchSellerAgenda, getSharedMeetingMetadata, saveSellerAppointment, setSellerAppointmentStatus, type AgendaClientOption, type AgendaFilter, type AgendaLeadOption, type AgendaSummary, type AgendaViewMode, type AppointmentDraft, type SellerAppointment } from "@/lib/seller-agenda";
 import { getSellerContext } from "@/lib/vendedor-portal";
 
 export const Route = createLazyFileRoute("/vendedor/agenda")({
@@ -59,6 +60,7 @@ function AgendaPage() {
   const [viewing, setViewing] = useState<SellerAppointment | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SellerAppointment | null>(null);
   const [feedbackTarget, setFeedbackTarget] = useState<SellerAppointment | null>(null);
+  const [contactEditTarget, setContactEditTarget] = useState<SellerAppointment | null>(null);
   const [rescheduleTarget, setRescheduleTarget] = useState<SellerAppointment | null>(null);
   const realtimeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -197,13 +199,22 @@ function AgendaPage() {
   }
 
   function openEdit(item: SellerAppointment) {
-    if (sellerType === "sdr" && item.source === "sdr_handoff") {
-      toast.info("Reuniões compartilhadas devem ser remarcadas pelos horários livres da equipe.");
+    if (!canEditAppointment(item)) {
+      toast.error("Somente quem cadastrou a reunião pode alterar os dados do cliente.");
       return;
     }
     setViewing(null);
+    if (item.type === "reuniao") {
+      setContactEditTarget(item);
+      return;
+    }
     setEditing(item);
     setModalOpen(true);
+  }
+
+  function canEditAppointment(item: SellerAppointment) {
+    if (item.type === "reuniao") return canEditSellerMeetingContact(item, sellerId);
+    return item.source !== "meeting_follow_up" && item.seller_id === sellerId;
   }
 
   function openReschedule(item: SellerAppointment) {
@@ -364,7 +375,7 @@ function AgendaPage() {
         ) : view === "calendario" ? (
           <div className="grid items-start gap-3 xl:min-h-0 xl:grid-cols-[minmax(0,1fr)_390px] 2xl:grid-cols-[minmax(0,1fr)_420px]">
             <AgendaCalendar month={month} selectedDate={selectedDate} items={filtered} onMonthChange={changeMonth} onDateSelect={selectDate} onEventOpen={setViewing} />
-            <AgendaDayPanel date={selectedDate} items={selectedItems} sdrNames={sdrNames} onNew={() => openNew(selectedDate)} onView={setViewing} onEdit={openEdit} onReschedule={openReschedule} onComplete={complete} onDelete={setDeleteTarget} canComplete={canCompleteAppointment} />
+            <AgendaDayPanel date={selectedDate} items={selectedItems} sdrNames={sdrNames} onNew={() => openNew(selectedDate)} onView={setViewing} onEdit={openEdit} onReschedule={openReschedule} onComplete={complete} onDelete={setDeleteTarget} canEdit={canEditAppointment} canComplete={canCompleteAppointment} />
           </div>
         ) : (
           <section className="rounded-2xl border border-neutral-200 bg-white p-3 shadow-[0_2px_8px_rgba(0,0,0,0.03)] sm:p-4">
@@ -388,7 +399,7 @@ function AgendaPage() {
             ) : (
               <div className="grid gap-3 lg:grid-cols-2">
                 {listItems.map((item) => (
-                  <AppointmentCard key={item.id} item={item} sdrNames={sdrNames} onView={setViewing} onEdit={openEdit} onReschedule={openReschedule} onComplete={complete} onDelete={setDeleteTarget} canComplete={canCompleteAppointment(item)} />
+                  <AppointmentCard key={item.id} item={item} sdrNames={sdrNames} onView={setViewing} onEdit={openEdit} onReschedule={openReschedule} onComplete={complete} onDelete={setDeleteTarget} canEdit={canEditAppointment(item)} canComplete={canCompleteAppointment(item)} />
                 ))}
               </div>
             )}
@@ -411,7 +422,8 @@ function AgendaPage() {
             setModalOpen(false);
           }}
         />
-        <AppointmentDetailsDialog item={viewing} sdrNames={sdrNames} onClose={() => setViewing(null)} onEdit={openEdit} onReschedule={openReschedule} onComplete={complete} onDelete={setDeleteTarget} canManageCloserMeeting={sellerType === "closer" && !!viewing && (viewing.assigned_closer_id === sellerId || (!viewing.assigned_closer_id && viewing.seller_id === sellerId))} canComplete={!!viewing && canCompleteAppointment(viewing)} />
+        <AppointmentDetailsDialog item={viewing} sdrNames={sdrNames} onClose={() => setViewing(null)} onEdit={openEdit} onReschedule={openReschedule} onComplete={complete} onDelete={setDeleteTarget} canEdit={!!viewing && canEditAppointment(viewing)} canManageCloserMeeting={sellerType === "closer" && !!viewing && (viewing.assigned_closer_id === sellerId || (!viewing.assigned_closer_id && viewing.seller_id === sellerId))} canComplete={!!viewing && canCompleteAppointment(viewing)} />
+        <MeetingContactEditDialog item={contactEditTarget} onClose={() => setContactEditTarget(null)} onSaved={async () => { toast.success("Dados da reunião atualizados para o SDR e o Closer."); await load(true); }} />
         <MeetingRescheduleDialog item={rescheduleTarget} onClose={() => setRescheduleTarget(null)} onRescheduled={refreshAgenda} />
         <MeetingFeedbackDialog item={feedbackTarget} onClose={() => setFeedbackTarget(null)} onSubmit={submitMeetingFeedback} />
         <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>

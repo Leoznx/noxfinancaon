@@ -43,6 +43,7 @@ export function AppointmentDetailsDialog({
   onReschedule,
   onComplete,
   onDelete,
+  canEdit = true,
   canManageCloserMeeting = false,
   canComplete = true,
 }: {
@@ -53,6 +54,7 @@ export function AppointmentDetailsDialog({
   onReschedule: (item: SellerAppointment) => void;
   onComplete: (item: SellerAppointment) => void;
   onDelete: (item: SellerAppointment) => void;
+  canEdit?: boolean;
   canManageCloserMeeting?: boolean;
   canComplete?: boolean;
 }) {
@@ -106,7 +108,7 @@ export function AppointmentDetailsDialog({
               )}
             </div>
           )}
-          {item.source === "sdr_handoff" && (metadata.clientType || sdrName) && <div className="grid gap-2 rounded-xl border border-yellow-200 bg-yellow-50 p-3 text-xs font-semibold text-neutral-700 sm:grid-cols-2">{metadata.clientType && <p><span className="text-neutral-500">Tipo:</span> {metadata.clientType}</p>}{sdrName && <p><span className="text-neutral-500">SDR:</span> {sdrName}</p>}</div>}
+          {item.type === "reuniao" && (metadata.clientType || sdrName) && <div className="grid gap-2 rounded-xl border border-yellow-200 bg-yellow-50 p-3 text-xs font-semibold text-neutral-700 sm:grid-cols-2">{metadata.clientType && <p><span className="text-neutral-500">Perfil:</span> {metadata.clientType}</p>}{sdrName && <p><span className="text-neutral-500">SDR:</span> {sdrName}</p>}</div>}
           {journey && JourneyIcon && (
             <div className={`rounded-xl border p-3 ${journey.className}`}>
               <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wide">
@@ -145,7 +147,7 @@ export function AppointmentDetailsDialog({
         </div>
         <DialogFooter className="flex-wrap">
           {item.source !== "meeting_follow_up" && <Button variant="ghost" className="mr-auto text-red-600 hover:bg-red-50" onClick={() => onDelete(item)}><Trash2 className="mr-1.5 h-4 w-4" /> Excluir</Button>}
-          {item.source !== "meeting_follow_up" && <Button variant="outline" onClick={() => onEdit(item)}><Edit3 className="mr-1.5 h-4 w-4" /> Editar</Button>}
+          {item.source !== "meeting_follow_up" && canEdit && <Button variant="outline" onClick={() => onEdit(item)}><Edit3 className="mr-1.5 h-4 w-4" /> {item.type === "reuniao" ? "Editar dados" : "Editar"}</Button>}
           {canRescheduleSellerMeeting(item) && <Button variant="outline" className="border-yellow-300 bg-yellow-50 text-yellow-900 hover:bg-yellow-100" onClick={() => onReschedule(item)}><CalendarClock className="mr-1.5 h-4 w-4" /> Reagendar</Button>}
           {!["concluido", "cancelado"].includes(item.status) && canComplete && (
             <Button className="bg-neutral-950 text-white hover:bg-neutral-800" onClick={() => onComplete(item)}><Check className="mr-1.5 h-4 w-4" /> Concluir</Button>

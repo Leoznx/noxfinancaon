@@ -83,6 +83,14 @@ export type SharedMeetingMetadata = {
   observation: string | null;
 };
 
+export type MeetingClientProfile = "autonomo" | "corretor" | "imobiliaria";
+
+export const MEETING_CLIENT_PROFILES: readonly { value: MeetingClientProfile; label: string }[] = [
+  { value: "autonomo", label: "Autônomo" },
+  { value: "corretor", label: "Corretor" },
+  { value: "imobiliaria", label: "Imobiliária" },
+];
+
 export function getSharedMeetingMetadata(notes?: string | null): SharedMeetingMetadata {
   const lines = String(notes ?? "")
     .split(/\r?\n/)
@@ -102,9 +110,24 @@ export function getSharedMeetingMetadata(notes?: string | null): SharedMeetingMe
 }
 
 export function getVisibleAppointmentNotes(item: Pick<SellerAppointment, "source" | "notes">) {
-  if (item.source !== "sdr_handoff") return item.notes;
   const metadata = getSharedMeetingMetadata(item.notes);
+  if (item.source !== "sdr_handoff") {
+    if (!metadata.clientType) return item.notes;
+    return String(item.notes ?? "")
+      .split(/\r?\n/)
+      .filter((line) => !line.trim().toLocaleLowerCase("pt-BR").startsWith("tipo de cliente:"))
+      .join("\n")
+      .trim() || null;
+  }
   return metadata.clientType || metadata.sdrName || metadata.observation ? metadata.observation : item.notes;
+}
+
+export function getMeetingClientProfile(item: Pick<SellerAppointment, "notes" | "title">): MeetingClientProfile {
+  const raw = getSharedMeetingMetadata(item.notes).clientType || item.title.split("—")[0] || "";
+  const normalized = raw.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
+  if (normalized.includes("imobili")) return "imobiliaria";
+  if (normalized.includes("corret")) return "corretor";
+  return "autonomo";
 }
 
 export function buildShortNameValueMap(names: Array<string | null>) {
@@ -213,6 +236,15 @@ export function canRescheduleSellerMeeting(
   return item.type === "reuniao"
     && item.source !== "meeting_follow_up"
     && !["concluido", "cancelado", "nao_compareceu"].includes(item.status);
+}
+
+export function canEditSellerMeetingContact(
+  item: Pick<SellerAppointment, "type" | "source" | "seller_id" | "sdr_id">,
+  sellerId: string | null,
+) {
+  if (!sellerId || item.type !== "reuniao" || item.source === "meeting_follow_up") return false;
+  const creatorId = item.source === "sdr_handoff" && item.sdr_id ? item.sdr_id : item.seller_id;
+  return creatorId === sellerId;
 }
 
 export function getAppointmentContact(item: Pick<SellerAppointment, "contact_name" | "contact_phone" | "client_name" | "lead_name" | "lead_phone">) {
@@ -387,6 +419,23 @@ export async function completeCloserMeeting(id: string, feedback: string) {
     p_feedback: feedback.trim(),
   });
   if (error) throw new Error(error.message || "Não foi possível concluir a reunião.");
+}
+
+export async function updateSellerMeetingContact(input: {
+  appointmentId: string;
+  contactName: string;
+  contactPhone: string;
+  contactProfile: MeetingClientProfile;
+  expectedUpdatedAt: string;
+}) {
+  const { error } = await supabase.rpc("update_seller_meeting_contact" as any, {
+    p_appointment_id: input.appointmentId,
+    p_contact_name: input.contactName.trim(),
+    p_contact_phone: input.contactPhone,
+    p_contact_profile: input.contactProfile,
+    p_expected_updated_at: input.expectedUpdatedAt,
+  });
+  if (error) throw new Error(error.message || "Não foi possível atualizar os dados da reunião.");
 }
 
 const FOLLOW_UP_MESSAGES: Record<string, string> = {
