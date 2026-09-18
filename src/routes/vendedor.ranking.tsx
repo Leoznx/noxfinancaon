@@ -35,7 +35,6 @@ type RankingRow = {
   avatarUrl: string | null;
   registrations: number;
   activeContracts: number;
-  commissions: number;
   position: number;
 };
 
@@ -77,7 +76,6 @@ function Ranking() {
             avatarUrl: row.avatar_url ? String(row.avatar_url) : null,
             registrations: Number(row.total_leads ?? 0),
             activeContracts: Number(row.contratos_fechados ?? 0),
-            commissions: Number(row.comissoes ?? 0),
             position: Number(row.posicao ?? 0),
           }))
           .sort((a, b) => a.position - b.position),
@@ -327,10 +325,7 @@ function PodiumCard({ row, current }: { row: RankingRow; current: boolean }) {
       </span>
       <span className="mt-2 text-[10px] font-bold text-neutral-600">
         {row.activeContracts} contrato{row.activeContracts === 1 ? "" : "s"} ativo
-        {row.activeContracts === 1 ? "" : "s"} · R${" "}
-        {row.commissions.toLocaleString("pt-BR", {
-          minimumFractionDigits: 2,
-        })}
+        {row.activeContracts === 1 ? "" : "s"}
       </span>
     </article>
   );
@@ -352,10 +347,7 @@ function ListRow({ row, current }: { row: RankingRow; current: boolean }) {
         <p className="truncate text-sm font-black">{row.name}</p>
         <p className="text-[10px] text-neutral-500">
           {row.activeContracts} contrato{row.activeContracts === 1 ? "" : "s"} ativo
-          {row.activeContracts === 1 ? "" : "s"} · R${" "}
-          {row.commissions.toLocaleString("pt-BR", {
-            minimumFractionDigits: 2,
-          })}
+          {row.activeContracts === 1 ? "" : "s"}
         </p>
       </div>
       <div className="text-right">
