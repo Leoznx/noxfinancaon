@@ -152,6 +152,21 @@ async function clickButtonByText(page: Page, textos: (string | RegExp)[]): Promi
   );
 }
 
+/**
+ * O campo monetário do portal atual é uma máscara em centavos: preencher "1880"
+ * produz R$ 18,80. Quando o placeholder confirma essa máscara brasileira, enviamos
+ * também os centavos ("1880,00") para que o valor final seja R$ 1.880,00. Mantemos
+ * o formato numérico simples nas telas legadas sem máscara.
+ */
+async function fillCurrencyField(field: Locator, value: number): Promise<void> {
+  const placeholder = await field.getAttribute("placeholder").catch(() => null);
+  const usesBrazilianCurrencyMask = /R\$.*,[0#]{2}/i.test(placeholder ?? "");
+  const inputValue = usesBrazilianCurrencyMask
+    ? value.toFixed(2).replace(".", ",")
+    : String(value);
+  await field.fill(inputValue);
+}
+
 export async function fillPessoa(page: Page, tipo: "PF" | "PJ"): Promise<void> {
   const textos =
     tipo === "PF"
@@ -217,7 +232,7 @@ export async function fillValores(
     placeholder: /aluguel/i,
     role: { name: /aluguel/i },
   });
-  await aluguelField.fill(String(valores.aluguel));
+  await fillCurrencyField(aluguelField, valores.aluguel);
 
   if (valores.condominio > 0) {
     try {
@@ -226,7 +241,7 @@ export async function fillValores(
         placeholder: /condom[ií]nio/i,
         role: { name: /condom[ií]nio/i },
       });
-      await condominioField.fill(String(valores.condominio));
+      await fillCurrencyField(condominioField, valores.condominio);
     } catch {
       // campo opcional em alguns formulários — não bloqueia a simulação
     }
@@ -239,7 +254,7 @@ export async function fillValores(
         placeholder: /taxas?/i,
         role: { name: /taxas?/i },
       });
-      await taxasField.fill(String(valores.taxas));
+      await fillCurrencyField(taxasField, valores.taxas);
     } catch {
       // campo opcional
     }

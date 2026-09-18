@@ -159,7 +159,7 @@ test("preenche e valida o formulário ERP incluindo o CEP abaixo da dobra", asyn
 
   assert.equal(await page.getByLabel(/cpf/i).inputValue(), "11144477735");
   assert.equal(await page.getByLabel(/cep/i).inputValue(), "01001000");
-  assert.equal(await page.getByLabel(/valor aluguel/i).inputValue(), "1750");
+  assert.equal(await page.getByLabel(/valor aluguel/i).inputValue(), "1750,00");
   assert.equal(await page.locator("body").getAttribute("data-submitted"), "true");
   await page.close();
 });
@@ -193,6 +193,33 @@ test("aguarda o botão Fazer análise ficar habilitado antes de enviar", async (
   await submitSimulation(page);
 
   assert.equal(await page.locator("body").getAttribute("data-submitted"), "true");
+  await page.close();
+});
+
+test("preenche a máscara monetária em reais sem reduzir o valor em cem vezes", async () => {
+  const url = "https://app.loft.com.br/erp/proposta/analise-de-credito";
+  const page = await pageWithHtml(
+    url,
+    `<main>
+      <label>Valor mensal do aluguel<input id="aluguel" placeholder="R$ 0.000,00" /></label>
+      <button id="submit" type="button" disabled>Fazer análise</button>
+      <script>
+        document.querySelector('#aluguel').addEventListener('input', (event) => {
+          const input = event.currentTarget;
+          const cents = Number(input.value.replace(/\\D/g, ''));
+          input.value = new Intl.NumberFormat('pt-BR', {
+            style: 'currency', currency: 'BRL'
+          }).format(cents / 100);
+          document.querySelector('#submit').disabled = cents < 10000;
+        });
+      </script>
+    </main>`,
+  );
+
+  await fillValores(page, { aluguel: 1880, condominio: 0, taxas: 0 });
+
+  assert.equal(await page.getByLabel(/aluguel/i).inputValue(), "R$ 1.880,00");
+  assert.equal(await page.getByRole("button", { name: /fazer análise/i }).isEnabled(), true);
   await page.close();
 });
 
