@@ -73,7 +73,7 @@ export type SellerClientLookup = {
   profile_id: string;
   full_name: string;
   email: string;
-  partner_type: "corretor_autonomo" | "imobiliaria";
+  partner_type: "proprietario" | "corretor_autonomo" | "imobiliaria" | "cliente";
   partner_name: string;
   phone: string | null;
   city: string | null;
@@ -120,9 +120,7 @@ export async function claimSellerClientPhone(phone: string): Promise<SellerClien
 }
 
 export async function fetchSellerClientPhoneHistory(): Promise<SellerClientPhoneContact[]> {
-  const { data, error } = await supabase.rpc(
-    "get_my_seller_client_phone_history" as never,
-  );
+  const { data, error } = await supabase.rpc("get_my_seller_client_phone_history" as never);
   if (error) throw error;
   return normalizeRows<SellerClientPhoneContact>(data);
 }

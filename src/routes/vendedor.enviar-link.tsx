@@ -347,8 +347,8 @@ function EnviarLinkPage() {
               Cadastro manual
             </Badge>
             <p className="mt-3 text-sm text-neutral-500">
-              Preencha somente o e-mail usado pelo cliente no login da NOX para localizar e
-              confirmar o vínculo manualmente.
+              Informe o e-mail usado no login da NOX. O sistema busca automaticamente qualquer conta
+              ativa de cliente e registra o crédito sem exigir um link.
             </p>
           </div>
           <SellerClientRegistrationFlow mode="registration-only" />
