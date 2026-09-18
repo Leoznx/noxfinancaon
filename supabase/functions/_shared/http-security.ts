@@ -1,16 +1,34 @@
-const DEFAULT_ALLOWED_ORIGINS = ["https://noxfianca.com", "https://www.noxfianca.com"];
+const DEFAULT_ALLOWED_ORIGINS = [
+  "https://noxfianca.com",
+  "https://www.noxfianca.com",
+  "https://noxfinancaon.vercel.app",
+];
 
 function configuredOrigins() {
-  return (Deno.env.get("ALLOWED_ORIGINS") || DEFAULT_ALLOWED_ORIGINS.join(","))
+  const configured = (Deno.env.get("ALLOWED_ORIGINS") || "")
     .split(",")
     .map((value) => value.trim())
     .filter(Boolean);
+  return new Set([...DEFAULT_ALLOWED_ORIGINS, ...configured]);
+}
+
+function isNoxVercelOrigin(origin: string) {
+  try {
+    const url = new URL(origin);
+    return (
+      url.protocol === "https:" &&
+      url.hostname.endsWith(".vercel.app") &&
+      (url.hostname === "noxfinancaon.vercel.app" || url.hostname.startsWith("noxfinancaon-"))
+    );
+  } catch {
+    return false;
+  }
 }
 
 export function isAllowedOrigin(request: Request) {
   const origin = request.headers.get("origin");
   if (!origin) return true;
-  if (configuredOrigins().includes(origin)) return true;
+  if (configuredOrigins().has(origin) || isNoxVercelOrigin(origin)) return true;
   if (Deno.env.get("ALLOW_LOCAL_ORIGINS") === "true") {
     try {
       const hostname = new URL(origin).hostname;

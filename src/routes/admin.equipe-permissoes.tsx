@@ -255,13 +255,13 @@ export function TabColaboradores() {
   };
   const excluirColaborador = async (employee: any) => {
     const confirmed = window.confirm(
-      `Remover permanentemente o acesso de ${employee.full_name || employee.email}?\n\nO login será inutilizado e os dados pessoais serão anonimizados. Registros necessários para auditoria serão preservados. Esta ação não pode ser desfeita.`,
+      `Desativar e remover ${employee.full_name || employee.email} da equipe?\n\nO acesso será encerrado imediatamente e o cadastro sairá da lista de colaboradores. O histórico necessário para auditoria, comissões e operações será preservado sem os dados pessoais. Esta ação não pode ser desfeita.`,
     );
     if (!confirmed) return;
     setDeletingId(employee.id);
     try {
       await deleteNoxEmployee(employee.id);
-      toast.success("Login removido e cadastro anonimizado permanentemente.");
+      toast.success("Acesso desativado e colaborador removido da equipe.");
       await carregar();
     } catch (error: any) {
       toast.error(error.message || "Não foi possível excluir o colaborador.");
@@ -384,7 +384,7 @@ export function TabColaboradores() {
                     onClick={() => excluirColaborador(u)}
                   >
                     <Trash2 className="h-4 w-4" />
-                    {deletingId === u.id ? "Excluindo…" : "Excluir colaborador"}
+                    {deletingId === u.id ? "Desativando…" : "Desativar e remover"}
                   </Button>
                 )}
               </div>
@@ -489,7 +489,7 @@ export function TabColaboradores() {
                           onClick={() => excluirColaborador(u)}
                         >
                           <Trash2 className="h-4 w-4" />
-                          {deletingId === u.id ? "Excluindo…" : "Excluir"}
+                          {deletingId === u.id ? "Desativando…" : "Desativar"}
                         </Button>
                       ) : (
                         <span className="text-xs text-muted-foreground">Protegido</span>
