@@ -176,7 +176,7 @@ export function SellerClientRegistrationFlow({
         <FlowHeading
           icon={UserRound}
           title="Cadastrar cliente de fato"
-          description="Digite o e-mail do login NOX. O sistema localiza automaticamente qualquer conta ativa de cliente para você apenas confirmar o vínculo."
+          description="Digite o e-mail do login NOX. O sistema confere o cadastro diretamente no banco, inclusive quando ainda aguarda aprovação, para você confirmar o vínculo."
         />
         <Label
           htmlFor="client-email"
