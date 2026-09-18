@@ -267,6 +267,14 @@ export const signUpProfissional = createServerFn({ method: "POST" })
           nome: nomeExibicao,
           role: data.role,
           telefone: data.telefone,
+          ...(data.sellerLinkToken
+            ? {
+                seller_link_token: data.sellerLinkToken,
+                ...(data.sellerMeetingId
+                  ? { seller_meeting_id: data.sellerMeetingId }
+                  : {}),
+              }
+            : {}),
           ...(data.role === "corretor"
             ? {
                 cpf: cpfCorretor,

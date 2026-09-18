@@ -122,8 +122,8 @@ export function MeetingSignupLinks({ item }: { item: SellerAppointment }) {
       <p className="break-all rounded-lg bg-white px-3 py-2 font-mono text-[10px] text-neutral-500">{url}</p>
       <p className="text-[11px] font-semibold text-neutral-600">
         {selected?.sourceSdrName
-          ? `Crédito automático para este Closer e para o SDR ${selected.sourceSdrName}.`
-          : "Crédito automático para este Closer."}
+          ? `Link permanente: cada cadastro conta para este Closer e para o SDR ${selected.sourceSdrName}.`
+          : "Link permanente: cada cadastro conta somente para este Closer."}
       </p>
     </div>
   );

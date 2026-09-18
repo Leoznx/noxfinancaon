@@ -180,8 +180,8 @@ function EnviarLinkPage() {
               Três cadastros, um vínculo <span className="text-yellow-400">automático.</span>
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-neutral-300 sm:text-base">
-              Escolha o perfil e envie. Quando o cliente concluir o cadastro normal da NOX, ele
-              entra no seu ranking e você recebe o aviso por e-mail e no sininho.
+              Escolha o perfil e envie o mesmo link quantas vezes precisar. Cada cliente que
+              concluir o cadastro entra no seu ranking, com aviso por e-mail e no sininho.
             </p>
           </div>
         </section>
@@ -275,8 +275,8 @@ function EnviarLinkPage() {
                 <h2 className="text-xl font-black">Links de cadastro</h2>
                 <p className="text-sm text-neutral-500">
                   {selectedSdr
-                    ? `Crédito compartilhado com ${selectedSdr.name}.`
-                    : "Links individuais vinculados ao seu usuário."}
+                    ? `Link permanente com crédito compartilhado com ${selectedSdr.name}.`
+                    : "Links permanentes e individuais vinculados somente ao seu usuário."}
                 </p>
               </div>
               {loadingLinks && (
