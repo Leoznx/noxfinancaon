@@ -95,6 +95,11 @@ function SellerClientsPage() {
       )
       .on(
         "postgres_changes",
+        { event: "*", schema: "public", table: "seller_client_partnerships" },
+        refresh,
+      )
+      .on(
+        "postgres_changes",
         { event: "*", schema: "public", table: "consultas_credito" },
         refresh,
       )
@@ -166,8 +171,8 @@ function SellerClientsPage() {
                 Acompanhe cada cliente <span className="text-yellow-400">em tempo real.</span>
               </h1>
               <p className="mt-3 max-w-3xl text-sm leading-6 text-neutral-300 sm:text-base">
-                Aqui aparecem somente os usuários cadastrados pelos seus links, com consultas da
-                semana, contratos ativos e a última movimentação.
+                Aqui aparecem os usuários cadastrados pelos seus links ou manualmente, com
+                consultas da semana, contratos ativos e a última movimentação.
               </p>
             </div>
             <Button
@@ -184,7 +189,7 @@ function SellerClientsPage() {
         </section>
 
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <SummaryCard icon={UsersRound} label="Minha carteira" value={clients.length} detail="cadastros pelos seus links" />
+          <SummaryCard icon={UsersRound} label="Minha carteira" value={clients.length} detail="cadastros por link ou manual" />
           <SummaryCard icon={CalendarCheck2} label="Ativos na semana" value={summary.consultedThisWeek} detail="clientes que fizeram consulta" tone="blue" />
           <SummaryCard icon={BriefcaseBusiness} label="Contratos ativos" value={summary.activeContracts} detail="contratos em andamento" tone="green" />
           <SummaryCard icon={Clock3} label="Precisam de atenção" value={summary.needsAttention} detail="sem consulta nesta semana" tone="yellow" />
@@ -238,7 +243,8 @@ function SellerClientsPage() {
               <UserRound className="mx-auto h-9 w-9 text-neutral-300" />
               <p className="mt-3 font-black text-neutral-800">Nenhum cliente encontrado</p>
               <p className="mt-1 text-sm text-neutral-500">
-                Os cadastros concluídos pelos seus links aparecerão aqui automaticamente.
+                Os cadastros concluídos pelos seus links ou manualmente aparecerão aqui
+                automaticamente.
               </p>
             </div>
           ) : (

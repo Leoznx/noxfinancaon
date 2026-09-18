@@ -134,6 +134,35 @@ function Ranking() {
     };
   }, [load]);
 
+  useEffect(() => {
+    const refresh = () => void load();
+    const channel = supabase
+      .channel("seller-ranking-production-live")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "seller_signup_attributions" },
+        refresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "seller_client_partnerships" },
+        refresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "seller_commissions" },
+        refresh,
+      )
+      .subscribe();
+    const timer = window.setInterval(refresh, 60_000);
+    window.addEventListener("focus", refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+      void supabase.removeChannel(channel);
+    };
+  }, [load]);
+
   async function dismissRegistrationAlerts() {
     const ids = registrationAlertIds;
     setRegistrationAlertIds([]);
