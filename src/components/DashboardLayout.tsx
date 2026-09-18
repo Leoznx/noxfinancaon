@@ -324,6 +324,12 @@ const vendedorItems: MenuItem[] = [
     darkHighlight: true,
     sellerTypes: ["sdr", "closer"],
   },
+  {
+    icon: Users2,
+    label: "Clientes",
+    href: "/vendedor/clientes",
+    sellerTypes: ["sdr", "closer"],
+  },
   { icon: LayoutDashboard, label: "Dashboard", href: "/vendedor", sellerTypes: ["sdr", "closer"] },
   {
     icon: Clock3,

@@ -1,67 +1,80 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Building2,
-  CalendarDays,
-  ChevronLeft,
-  ChevronRight,
+  Activity,
+  BriefcaseBusiness,
+  CalendarCheck2,
   Clock3,
-  MapPin,
-  PhoneCall,
   RefreshCw,
   Search,
-  Users,
+  UserRound,
+  UsersRound,
 } from "lucide-react";
 
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { SellerClientRegistrationFlow } from "@/components/seller-clients/SellerClientRegistrationFlow";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  fetchSellerClientPhoneHistory,
-  fetchSellerClients,
-  type SellerClient,
-  type SellerClientPhoneContact,
+  fetchSellerLinkClientActivity,
+  getSellerClientActivityStatus,
+  type SellerClientActivityStatus,
+  type SellerLinkClientActivity,
 } from "@/lib/seller-clients";
 
 export const Route = createFileRoute("/vendedor/clientes")({
   component: () => (
-    <ProtectedRoute roles={["vendedor", "admin_master", "admin"]}>
+    <ProtectedRoute roles={["vendedor"]} sellerTypes={["sdr", "closer"]}>
       <SellerClientsPage />
     </ProtectedRoute>
   ),
 });
 
-const PREVIEW_SIZE = 8;
+type ClientFilter = "all" | "moving" | "contracts" | "attention";
+
+const STATUS_COPY: Record<
+  SellerClientActivityStatus,
+  { label: string; className: string }
+> = {
+  active_contract: {
+    label: "Contrato ativo",
+    className: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  },
+  consulted_this_week: {
+    label: "Consultou na semana",
+    className: "border-blue-200 bg-blue-50 text-blue-800",
+  },
+  inactive_this_week: {
+    label: "Sem consulta na semana",
+    className: "border-amber-200 bg-amber-50 text-amber-800",
+  },
+  never_consulted: {
+    label: "Ainda não consultou",
+    className: "border-neutral-200 bg-neutral-100 text-neutral-700",
+  },
+};
 
 function SellerClientsPage() {
-  const [clients, setClients] = useState<SellerClient[]>([]);
-  const [phoneContacts, setPhoneContacts] = useState<SellerClientPhoneContact[]>([]);
+  const [clients, setClients] = useState<SellerLinkClientActivity[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<ClientFilter>("all");
 
   const load = useCallback(async (showLoader = false) => {
     if (showLoader) setLoading(true);
     setError("");
     try {
-      const [clientRows, contactRows] = await Promise.all([
-        fetchSellerClients(),
-        fetchSellerClientPhoneHistory(),
-      ]);
-      setClients(clientRows);
-      setPhoneContacts(contactRows);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Não foi possível carregar os clientes.");
+      setClients(await fetchSellerLinkClientActivity());
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Não foi possível carregar a movimentação dos clientes.",
+      );
     } finally {
       if (showLoader) setLoading(false);
     }
@@ -74,187 +87,309 @@ function SellerClientsPage() {
   useEffect(() => {
     const refresh = () => void load(false);
     const channel = supabase
-      .channel("seller-client-registration")
-      .on("postgres_changes", { event: "*", schema: "public", table: "seller_client_phone_contacts" }, refresh)
-      .on("postgres_changes", { event: "*", schema: "public", table: "seller_client_partnerships" }, refresh)
-      .on("postgres_changes", { event: "*", schema: "public", table: "corretores" }, refresh)
+      .channel("seller-link-client-activity")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "seller_signup_attributions" },
+        refresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "consultas_credito" },
+        refresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "apolices" },
+        refresh,
+      )
       .subscribe();
-    const expirationTimer = window.setInterval(refresh, 60_000);
+    const timer = window.setInterval(refresh, 60_000);
     window.addEventListener("focus", refresh);
     return () => {
-      window.clearInterval(expirationTimer);
+      window.clearInterval(timer);
       window.removeEventListener("focus", refresh);
       void supabase.removeChannel(channel);
     };
   }, [load]);
 
+  const summary = useMemo(() => {
+    const consultedThisWeek = clients.filter(
+      (client) => client.weekly_consultation_count > 0,
+    ).length;
+    const activeContracts = clients.reduce(
+      (total, client) => total + client.active_contract_count,
+      0,
+    );
+    const needsAttention = clients.filter(
+      (client) =>
+        client.weekly_consultation_count === 0 && client.active_contract_count === 0,
+    ).length;
+    return { consultedThisWeek, activeContracts, needsAttention };
+  }, [clients]);
+
+  const visibleClients = useMemo(() => {
+    const normalized = query.trim().toLocaleLowerCase("pt-BR");
+    return clients.filter((client) => {
+      const matchesQuery =
+        !normalized ||
+        `${client.client_name} ${client.client_email} ${client.client_phone ?? ""}`
+          .toLocaleLowerCase("pt-BR")
+          .includes(normalized);
+      if (!matchesQuery) return false;
+      if (filter === "moving") return client.weekly_consultation_count > 0;
+      if (filter === "contracts") return client.active_contract_count > 0;
+      if (filter === "attention") {
+        return client.weekly_consultation_count === 0 && client.active_contract_count === 0;
+      }
+      return true;
+    });
+  }, [clients, filter, query]);
+
+  async function refreshNow() {
+    setRefreshing(true);
+    await load(false);
+    setRefreshing(false);
+  }
+
   return (
     <DashboardLayout>
-      <div className="space-y-7 pb-6">
-        <section className="overflow-hidden rounded-3xl border border-yellow-300 bg-yellow-400 shadow-sm">
-          <div className="p-6 sm:p-8">
-            <Badge className="mb-4 border-neutral-900/10 bg-neutral-950 text-yellow-300 hover:bg-neutral-950">Cadastro sem duplicidade</Badge>
-            <h1 className="text-3xl font-black tracking-tight text-neutral-950">Cadastrar cliente</h1>
-            <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-neutral-800">
-              Consulte o telefone antes do contato. Cadastre pelo e-mail somente quando o cliente realmente seguir no atendimento — os dois processos são independentes.
-            </p>
-            <div className="mt-6">
-              <SellerClientRegistrationFlow onPhoneClaimed={() => void load(false)} onRegistered={() => void load(false)} />
+      <main className="space-y-5 pb-6">
+        <section className="relative overflow-hidden rounded-[28px] bg-neutral-950 p-6 text-white shadow-xl sm:p-8">
+          <div className="absolute -right-16 -top-16 h-52 w-52 rounded-full bg-yellow-400/20 blur-3xl" />
+          <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <Badge className="border-0 bg-yellow-400 px-3 py-1.5 font-black text-neutral-950 hover:bg-yellow-400">
+                <UsersRound className="mr-1.5 h-4 w-4" /> Clientes
+              </Badge>
+              <h1 className="mt-4 text-3xl font-black tracking-[-0.04em] sm:text-4xl">
+                Acompanhe cada cliente <span className="text-yellow-400">em tempo real.</span>
+              </h1>
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-neutral-300 sm:text-base">
+                Aqui aparecem somente os usuários cadastrados pelos seus links, com consultas da
+                semana, contratos ativos e a última movimentação.
+              </p>
             </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="border-white/20 bg-white/10 font-bold text-white hover:bg-white/20 hover:text-white"
+              onClick={() => void refreshNow()}
+              disabled={refreshing}
+            >
+              <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+              Atualizar
+            </Button>
           </div>
         </section>
 
-        {error && <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-800">{error}</div>}
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <SummaryCard icon={UsersRound} label="Minha carteira" value={clients.length} detail="cadastros pelos seus links" />
+          <SummaryCard icon={CalendarCheck2} label="Ativos na semana" value={summary.consultedThisWeek} detail="clientes que fizeram consulta" tone="blue" />
+          <SummaryCard icon={BriefcaseBusiness} label="Contratos ativos" value={summary.activeContracts} detail="contratos em andamento" tone="green" />
+          <SummaryCard icon={Clock3} label="Precisam de atenção" value={summary.needsAttention} detail="sem consulta nesta semana" tone="yellow" />
+        </section>
 
-        {loading ? (
-          <LoadingCard label="Carregando históricos..." />
-        ) : (
-          <>
-            <CollectionShowcase
-              title="Histórico de pré-atendimentos"
-              description="Reservas ativas. Cada telefone fica com você por 1 hora e depois é liberado automaticamente."
-              icon={<Clock3 className="h-5 w-5 text-neutral-700" />}
-              items={phoneContacts}
-              itemKey={(contact) => contact.contact_id}
-              searchText={(contact) => `${contact.phone_display} ${contact.client_email ?? ""}`}
-              emptyText="Nenhum telefone reservado neste momento."
-              searchPlaceholder="Pesquisar telefone"
-              renderItem={(contact) => <PhoneContactCard contact={contact} />}
-            />
-
-            <CollectionShowcase
-              title="Clientes cadastrados"
-              description="Clientes vinculados definitivamente à sua carteira."
-              icon={<Users className="h-5 w-5 text-neutral-700" />}
-              items={clients}
-              itemKey={(client) => client.partnership_id}
-              searchText={(client) => `${client.partner_name} ${client.partner_email} ${client.partner_city ?? ""}`}
-              emptyText="Cadastre o primeiro cliente para iniciar sua carteira."
-              searchPlaceholder="Pesquisar nome, e-mail ou cidade"
-              renderItem={(client) => <ClientCard client={client} />}
-            />
-          </>
+        {error && (
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-800">
+            {error}
+          </div>
         )}
-      </div>
+
+        <section className="overflow-hidden rounded-3xl border border-neutral-200 bg-white shadow-sm">
+          <div className="space-y-4 border-b border-neutral-200 p-5 sm:p-6">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h2 className="text-xl font-black text-neutral-950">Movimentação dos clientes</h2>
+                <p className="mt-1 text-sm text-neutral-500">
+                  Semana atual: {formatCurrentWeek()}. Atualização automática.
+                </p>
+              </div>
+              <span className="text-xs font-bold text-neutral-500">
+                {visibleClients.length} de {clients.length} cliente(s)
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <div className="relative w-full xl:max-w-md">
+                <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-neutral-400" />
+                <Input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Buscar nome, e-mail ou telefone"
+                  className="h-10 pl-9"
+                />
+              </div>
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                <FilterButton active={filter === "all"} onClick={() => setFilter("all")}>Todos</FilterButton>
+                <FilterButton active={filter === "moving"} onClick={() => setFilter("moving")}>Consultaram</FilterButton>
+                <FilterButton active={filter === "contracts"} onClick={() => setFilter("contracts")}>Com contrato</FilterButton>
+                <FilterButton active={filter === "attention"} onClick={() => setFilter("attention")}>Atenção</FilterButton>
+              </div>
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="flex items-center justify-center gap-2 p-12 text-sm font-semibold text-neutral-500">
+              <RefreshCw className="h-4 w-4 animate-spin" /> Carregando sua carteira...
+            </div>
+          ) : visibleClients.length === 0 ? (
+            <div className="p-10 text-center">
+              <UserRound className="mx-auto h-9 w-9 text-neutral-300" />
+              <p className="mt-3 font-black text-neutral-800">Nenhum cliente encontrado</p>
+              <p className="mt-1 text-sm text-neutral-500">
+                Os cadastros concluídos pelos seus links aparecerão aqui automaticamente.
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="hidden overflow-x-auto lg:block">
+                <table className="w-full min-w-[980px] text-left">
+                  <thead className="bg-neutral-50 text-[11px] font-black uppercase tracking-wider text-neutral-500">
+                    <tr>
+                      <th className="px-6 py-3">Cliente</th>
+                      <th className="px-4 py-3">Cadastro</th>
+                      <th className="px-4 py-3">Status semanal</th>
+                      <th className="px-4 py-3">Consultas</th>
+                      <th className="px-4 py-3">Contratos ativos</th>
+                      <th className="px-6 py-3">Última movimentação</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-100">
+                    {visibleClients.map((client) => <ClientTableRow key={client.attribution_id} client={client} />)}
+                  </tbody>
+                </table>
+              </div>
+              <div className="divide-y divide-neutral-100 lg:hidden">
+                {visibleClients.map((client) => <ClientMobileRow key={client.attribution_id} client={client} />)}
+              </div>
+            </>
+          )}
+        </section>
+      </main>
     </DashboardLayout>
   );
 }
 
-function CollectionShowcase<T>({ title, description, icon, items, itemKey, searchText, emptyText, searchPlaceholder, renderItem }: {
-  title: string;
-  description: string;
-  icon: ReactNode;
-  items: T[];
-  itemKey: (item: T) => string;
-  searchText: (item: T) => string;
-  emptyText: string;
-  searchPlaceholder: string;
-  renderItem: (item: T) => ReactNode;
+function SummaryCard({ icon: Icon, label, value, detail, tone = "neutral" }: {
+  icon: typeof UsersRound;
+  label: string;
+  value: number;
+  detail: string;
+  tone?: "neutral" | "blue" | "green" | "yellow";
 }) {
-  const [page, setPage] = useState(0);
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const pageCount = Math.max(1, Math.ceil(items.length / PREVIEW_SIZE));
-  const visibleItems = items.slice(page * PREVIEW_SIZE, (page + 1) * PREVIEW_SIZE);
-  const filteredItems = useMemo(() => {
-    const normalized = query.trim().toLocaleLowerCase("pt-BR");
-    return normalized ? items.filter((item) => searchText(item).toLocaleLowerCase("pt-BR").includes(normalized)) : items;
-  }, [items, query, searchText]);
-
-  useEffect(() => {
-    if (page >= pageCount) setPage(pageCount - 1);
-  }, [page, pageCount]);
-
+  const tones = {
+    neutral: "bg-neutral-100 text-neutral-800",
+    blue: "bg-blue-50 text-blue-700",
+    green: "bg-emerald-50 text-emerald-700",
+    yellow: "bg-yellow-100 text-yellow-800",
+  };
   return (
-    <section className="space-y-4 rounded-3xl border border-neutral-200 bg-white p-5 shadow-sm sm:p-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <article className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="flex items-center gap-2">{icon}<h2 className="text-lg font-black text-neutral-950">{title}</h2><Badge variant="secondary">{items.length}</Badge></div>
-          <p className="mt-1 text-sm text-neutral-500">{description}</p>
+          <p className="text-xs font-black uppercase tracking-wider text-neutral-500">{label}</p>
+          <p className="mt-2 text-3xl font-black text-neutral-950">{value}</p>
+          <p className="mt-1 text-xs text-neutral-500">{detail}</p>
         </div>
-        <div className="flex items-center gap-2">
-          {items.length > PREVIEW_SIZE && (
-            <>
-              <Button variant="outline" size="icon" aria-label="Página anterior" onClick={() => setPage((value) => Math.max(0, value - 1))} disabled={page === 0}><ChevronLeft className="h-4 w-4" /></Button>
-              <span className="min-w-12 text-center text-xs font-bold text-neutral-500">{page + 1}/{pageCount}</span>
-              <Button variant="outline" size="icon" aria-label="Próxima página" onClick={() => setPage((value) => Math.min(pageCount - 1, value + 1))} disabled={page === pageCount - 1}><ChevronRight className="h-4 w-4" /></Button>
-            </>
-          )}
-          <Button variant="outline" className="font-bold" onClick={() => setOpen(true)}>Ver mais</Button>
-        </div>
-      </div>
-
-      {items.length === 0 ? <EmptyCard text={emptyText} /> : <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{visibleItems.map((item) => <div key={itemKey(item)}>{renderItem(item)}</div>)}</div>}
-
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="flex max-h-[90vh] max-w-6xl flex-col overflow-hidden">
-          <DialogHeader>
-            <DialogTitle>{title}</DialogTitle>
-            <DialogDescription>{description}</DialogDescription>
-          </DialogHeader>
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-neutral-400" />
-            <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={searchPlaceholder} className="h-10 pl-9" autoFocus />
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-            {filteredItems.length === 0 ? <EmptyCard text="Nenhum resultado encontrado." /> : <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{filteredItems.map((item) => <div key={itemKey(item)}>{renderItem(item)}</div>)}</div>}
-          </div>
-        </DialogContent>
-      </Dialog>
-    </section>
-  );
-}
-
-function ClientCard({ client }: { client: SellerClient }) {
-  const isAgency = client.partner_type === "imobiliaria";
-  return (
-    <article className="h-full rounded-2xl border border-neutral-200 bg-neutral-50/60 p-4">
-      <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-neutral-950 text-yellow-300">{isAgency ? <Building2 className="h-5 w-5" /> : <Users className="h-5 w-5" />}</div>
-        <div className="min-w-0 flex-1"><p className="truncate font-black text-neutral-950">{client.partner_name}</p><p className="truncate text-xs text-neutral-500">{client.partner_email}</p></div>
-        <Badge variant="outline" className="shrink-0 text-[10px]">{isAgency ? "Imobiliária" : "Corretor"}</Badge>
-      </div>
-      <div className="mt-3 space-y-1.5 text-xs text-neutral-500">
-        <p className="flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5" />{client.partner_city || "Cidade não informada"}</p>
-        <p className="flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5" />Cadastrado em {formatDate(client.registered_at)}</p>
-        {isAgency && <p className="flex items-center gap-1.5"><Users className="h-3.5 w-3.5" />{client.broker_count} corretor(es) vinculado(s)</p>}
+        <span className={`grid h-11 w-11 place-items-center rounded-2xl ${tones[tone]}`}><Icon className="h-5 w-5" /></span>
       </div>
     </article>
   );
 }
 
-function PhoneContactCard({ contact }: { contact: SellerClientPhoneContact }) {
+function FilterButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: string }) {
   return (
-    <article className="h-full rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
-      <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-yellow-700 shadow-sm"><PhoneCall className="h-5 w-5" /></div>
-        <div className="min-w-0 flex-1"><p className="font-black text-neutral-950">{contact.phone_display}</p><p className="truncate text-xs text-neutral-500">Reservado para seu atendimento</p></div>
-        <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100">Ativo</Badge>
+    <Button type="button" size="sm" variant={active ? "default" : "outline"} className={active ? "bg-neutral-950 font-bold text-white hover:bg-neutral-800" : "font-bold"} onClick={onClick}>
+      {children}
+    </Button>
+  );
+}
+
+function ClientTableRow({ client }: { client: SellerLinkClientActivity }) {
+  return (
+    <tr className="transition-colors hover:bg-neutral-50/70">
+      <td className="px-6 py-4"><ClientIdentity client={client} /></td>
+      <td className="px-4 py-4 text-sm text-neutral-600">{formatDate(client.registered_at)}</td>
+      <td className="px-4 py-4"><WeeklyStatus client={client} /></td>
+      <td className="px-4 py-4"><strong className="text-neutral-950">{client.total_consultation_count}</strong><span className="ml-1 text-xs text-neutral-500">total</span></td>
+      <td className="px-4 py-4"><strong className={client.active_contract_count > 0 ? "text-emerald-700" : "text-neutral-500"}>{client.active_contract_count}</strong></td>
+      <td className="px-6 py-4"><LastActivity client={client} /></td>
+    </tr>
+  );
+}
+
+function ClientMobileRow({ client }: { client: SellerLinkClientActivity }) {
+  return (
+    <article className="space-y-4 p-5">
+      <div className="flex items-start justify-between gap-3"><ClientIdentity client={client} /><WeeklyStatus client={client} /></div>
+      <div className="grid grid-cols-3 gap-2">
+        <Metric label="Na semana" value={client.weekly_consultation_count} />
+        <Metric label="Consultas" value={client.total_consultation_count} />
+        <Metric label="Contratos" value={client.active_contract_count} highlight={client.active_contract_count > 0} />
       </div>
-      <div className="mt-3 flex items-center justify-between gap-3 border-t border-amber-200/70 pt-3 text-[11px] font-semibold text-neutral-500">
-        <span>Consultado {formatDateTime(contact.first_contact_at)}</span>
-        <span className="flex items-center gap-1 text-amber-800"><Clock3 className="h-3.5 w-3.5" />até {formatTime(contact.expires_at)}</span>
+      <div className="flex items-center justify-between gap-3 border-t border-neutral-100 pt-3 text-xs text-neutral-500">
+        <span>Cadastro: {formatDate(client.registered_at)}</span><LastActivity client={client} compact />
       </div>
     </article>
   );
+}
+
+function ClientIdentity({ client }: { client: SellerLinkClientActivity }) {
+  return (
+    <div className="flex min-w-0 items-center gap-3">
+      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-neutral-950 text-yellow-300"><UserRound className="h-5 w-5" /></span>
+      <div className="min-w-0">
+        <p className="truncate font-black text-neutral-950">{client.client_name}</p>
+        <p className="truncate text-xs text-neutral-500">{client.client_email}</p>
+        <p className="mt-1 text-[10px] font-black uppercase tracking-wider text-neutral-400">{profileLabel(client.profile_role)}</p>
+      </div>
+    </div>
+  );
+}
+
+function WeeklyStatus({ client }: { client: SellerLinkClientActivity }) {
+  const status = getSellerClientActivityStatus(client);
+  const copy = STATUS_COPY[status];
+  return <Badge variant="outline" className={`whitespace-nowrap ${copy.className}`}>{copy.label}</Badge>;
+}
+
+function LastActivity({ client, compact = false }: { client: SellerLinkClientActivity; compact?: boolean }) {
+  const status = getSellerClientActivityStatus(client);
+  const date = client.last_contract_at ?? client.last_consultation_at;
+  return (
+    <span className={`flex items-center gap-1.5 ${compact ? "justify-end" : "text-xs text-neutral-500"}`}>
+      <Activity className="h-3.5 w-3.5 shrink-0" />
+      {date ? formatDateTime(date) : status === "never_consulted" ? "Só cadastro" : formatDateTime(client.last_activity_at)}
+    </span>
+  );
+}
+
+function Metric({ label, value, highlight = false }: { label: string; value: number; highlight?: boolean }) {
+  return <div className={`rounded-xl border p-2.5 text-center ${highlight ? "border-emerald-200 bg-emerald-50" : "border-neutral-200 bg-neutral-50"}`}><p className={`text-lg font-black ${highlight ? "text-emerald-700" : "text-neutral-950"}`}>{value}</p><p className="text-[10px] font-bold text-neutral-500">{label}</p></div>;
+}
+
+function profileLabel(role: SellerLinkClientActivity["profile_role"]) {
+  if (role === "proprietario") return "Proprietário";
+  if (role === "imobiliaria") return "Imobiliária";
+  return "Corretor";
 }
 
 function formatDate(value: string) {
-  return new Date(value).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+  return new Date(value).toLocaleDateString("pt-BR");
 }
 
 function formatDateTime(value: string) {
   return new Date(value).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 
-function formatTime(value: string) {
-  return new Date(value).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-}
-
-function LoadingCard({ label }: { label: string }) {
-  return <div className="flex items-center justify-center gap-2 rounded-2xl border border-neutral-200 bg-white p-8 text-sm font-medium text-neutral-500"><RefreshCw className="h-4 w-4 animate-spin" />{label}</div>;
-}
-
-function EmptyCard({ text }: { text: string }) {
-  return <div className="rounded-2xl border border-dashed border-neutral-300 bg-white p-8 text-center text-sm font-medium text-neutral-500">{text}</div>;
+function formatCurrentWeek() {
+  const today = new Date();
+  const day = today.getDay() || 7;
+  const monday = new Date(today);
+  monday.setHours(0, 0, 0, 0);
+  monday.setDate(today.getDate() - day + 1);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  return `${monday.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} a ${sunday.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}`;
 }

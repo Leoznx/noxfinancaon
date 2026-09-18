@@ -81,6 +81,28 @@ export type SellerClientLookup = {
   linked_seller_name: string | null;
 };
 
+export type SellerLinkClientActivity = {
+  attribution_id: string;
+  profile_id: string;
+  client_name: string;
+  client_email: string;
+  client_phone: string | null;
+  profile_role: "proprietario" | "imobiliaria" | "corretor";
+  registered_at: string;
+  weekly_consultation_count: number;
+  total_consultation_count: number;
+  active_contract_count: number;
+  last_consultation_at: string | null;
+  last_contract_at: string | null;
+  last_activity_at: string;
+};
+
+export type SellerClientActivityStatus =
+  | "active_contract"
+  | "consulted_this_week"
+  | "inactive_this_week"
+  | "never_consulted";
+
 function normalizeRows<T>(rows: unknown): T[] {
   return Array.isArray(rows) ? (rows as T[]) : [];
 }
@@ -156,6 +178,31 @@ export async function fetchSellerClients(): Promise<SellerClient[]> {
     broker_count: Number(row.broker_count ?? 0),
     brokers: normalizeRows<SellerClientBroker>(row.brokers),
   }));
+}
+
+export async function fetchSellerLinkClientActivity(): Promise<SellerLinkClientActivity[]> {
+  const { data, error } = await supabase.rpc(
+    "get_my_seller_link_clients_activity" as never,
+  );
+  if (error) throw error;
+  return normalizeRows<SellerLinkClientActivity>(data).map((row) => ({
+    ...row,
+    weekly_consultation_count: Number(row.weekly_consultation_count ?? 0),
+    total_consultation_count: Number(row.total_consultation_count ?? 0),
+    active_contract_count: Number(row.active_contract_count ?? 0),
+  }));
+}
+
+export function getSellerClientActivityStatus(
+  client: Pick<
+    SellerLinkClientActivity,
+    "active_contract_count" | "weekly_consultation_count" | "total_consultation_count"
+  >,
+): SellerClientActivityStatus {
+  if (client.active_contract_count > 0) return "active_contract";
+  if (client.weekly_consultation_count > 0) return "consulted_this_week";
+  if (client.total_consultation_count > 0) return "inactive_this_week";
+  return "never_consulted";
 }
 
 export async function fetchSellerClientMonthlyHistory(): Promise<SellerClientMonthlyHistory[]> {
