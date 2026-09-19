@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -74,7 +74,7 @@ function VerificacoesDocumentoPage() {
   const [motivo, setMotivo] = useState("");
   const [processando, setProcessando] = useState<string | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     const { data: verifs, error } = await supabase
       .from("verificacoes_documento" as any)
@@ -100,12 +100,25 @@ function VerificacoesDocumentoPage() {
 
     setLinhas((verifs ?? []).map((v: any) => ({ ...v, perfil: profilesMap[v.user_id] ?? null })));
     setLoading(false);
-  };
+  }, []);
 
   useEffect(() => {
-    load();
+    void load();
     supabase.auth.getUser().then(({ data }) => setAdminId(data.user?.id ?? null));
-  }, []);
+
+    const channel = supabase
+      .channel("admin-document-approvals-live")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "verificacoes_documento" },
+        () => void load(),
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [load]);
 
   const filtradas = useMemo(() => {
     const q = busca.trim().toLowerCase();

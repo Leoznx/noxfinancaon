@@ -43,6 +43,7 @@ import {
   CalendarRange,
   Wrench,
   Send,
+  ChevronDown,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { SinoNotificacoes } from "./SinoNotificacoes";
@@ -63,6 +64,7 @@ import {
 } from "@/lib/permissoes-cache";
 import { isDemoSession } from "@/lib/demo-session";
 import { loadBrokerCommissionAccess } from "@/lib/broker-commission-policy";
+import { useAdminAttention } from "@/hooks/useAdminAttention";
 
 const CARGOS_INTERNOS_GATEADOS = [
   "juridico",
@@ -95,6 +97,7 @@ type MenuSubItem = {
 
 type VisibleMenuItem = Omit<MenuItem, "children"> & {
   parentLabel?: string;
+  hasChildren?: boolean;
 };
 
 function normalizeMenuSearch(value: string) {
@@ -125,21 +128,7 @@ const adminItems: MenuItem[] = [
     module: "dashboard_admin",
   },
   { icon: UserCheck, label: "Aprovações", href: "/admin/aprovacoes", module: "aprovacoes" },
-  {
-    icon: IdCard,
-    label: "Aprovações de Documentos",
-    href: "/admin/verificacoes",
-    module: "documentos",
-  },
   { icon: Search, label: "Consultas", href: "/admin/consultas", module: "consultas" },
-  {
-    icon: Wrench,
-    label: "Central de Erros",
-    href: "/admin/central-erros",
-    module: "central_erros",
-    adminOnly: true,
-    keywords: ["automação", "reparo", "saúde", "crédito"],
-  },
   { icon: FileText, label: "Contratos Ativos", href: "/admin/contratos", module: "contratos" },
   {
     icon: Users,
@@ -175,56 +164,23 @@ const adminItems: MenuItem[] = [
   },
   { icon: ShieldAlert, label: "Sinistros", href: "/sinistros", module: "sinistros" },
   {
-    icon: UserPlus,
-    label: "Leads e Distribuição",
-    href: "/admin/leads",
-    module: "leads",
-    modules: ["leads", "distribuicao_leads"],
-    keywords: ["marketing", "rodízio", "distribuição"],
-    children: [
-      { label: "Leads Marketing", href: "/admin/leads" },
-      { label: "Distribuição de Leads", href: "/admin/distribuicao-leads" },
-      { label: "Leads", href: "/admin/leads?tab=leads" },
-      { label: "Inquilinos", href: "/admin/leads?tab=inquilinos" },
-      { label: "Corretores", href: "/admin/leads?tab=corretores" },
-      { label: "Imobiliárias", href: "/admin/leads?tab=imobiliarias" },
-      { label: "Leads de consulta", href: "/admin/leads?tab=leads_consulta" },
-      {
-        label: "Facebook e Google Ads",
-        href: "/admin/leads?tab=ads",
-        keywords: ["anúncios", "campanhas"],
-      },
-    ],
-  },
-  {
-    icon: Briefcase,
-    label: "Vagas abertas",
-    href: "/admin/vagas",
-    module: "vagas_abertas",
-    children: [
-      { label: "Vagas cadastradas", href: "/admin/vagas?tab=vagas" },
-      { label: "Currículos recebidos", href: "/admin/vagas?tab=curriculos" },
-    ],
-  },
-  {
     icon: Users2,
     label: "Equipe NOX",
     href: "/admin/equipe-nox",
     module: "equipe_nox",
     children: [
+      { label: "Visão da equipe", href: "/admin/equipe-nox" },
+      { label: "Reunião com a equipe", href: "/admin/equipe-nox?tab=reunioes" },
+      { label: "Agenda dos Closers", href: "/admin/agenda-closers" },
+      { label: "Leads e Distribuição", href: "/admin/leads" },
+      { label: "Distribuição de Leads", href: "/admin/distribuicao-leads" },
+      { label: "Vagas abertas", href: "/admin/vagas" },
       { label: "Metas", href: "/admin/equipe-nox?tab=metas" },
       { label: "Recompensas", href: "/admin/equipe-nox?tab=recompensas" },
       { label: "Comissões e equipe comercial", href: "/admin/equipe-nox?tab=comissoes" },
       { label: "Colaboradores", href: "/admin/equipe-nox?tab=colaboradores" },
       { label: "Histórico de ponto", href: "/admin/equipe-nox?tab=historico-ponto" },
     ],
-  },
-  {
-    icon: CalendarRange,
-    label: "Agenda dos Closers",
-    href: "/admin/agenda-closers",
-    module: "equipe_nox",
-    keywords: ["escala", "reuniões", "agenda geral"],
   },
   {
     icon: Settings,
@@ -236,6 +192,8 @@ const adminItems: MenuItem[] = [
       { label: "Segurança", href: "/configuracoes?tab=seguranca" },
       { label: "Notificações", href: "/configuracoes?tab=notificacoes" },
       { label: "Plano e Nível", href: "/configuracoes?tab=comissoes" },
+      { label: "Aprovações de Documentos", href: "/admin/verificacoes" },
+      { label: "Central de Erros", href: "/admin/central-erros", keywords: ["automação", "reparo", "saúde"] },
     ],
   },
 ];
@@ -246,6 +204,11 @@ const adminItems: MenuItem[] = [
 // cargos já enxergavam nos arrays estáticos antigos.
 const ADMIN_CATALOG = [
   ...adminItems,
+  { icon: IdCard, label: "Aprovações de Documentos", href: "/admin/verificacoes", module: "documentos" },
+  { icon: Wrench, label: "Central de Erros", href: "/admin/central-erros", module: "central_erros", adminOnly: true },
+  { icon: UserPlus, label: "Leads e Distribuição", href: "/admin/leads", module: "leads", modules: ["leads", "distribuicao_leads"] },
+  { icon: Briefcase, label: "Vagas abertas", href: "/admin/vagas", module: "vagas_abertas" },
+  { icon: CalendarRange, label: "Agenda dos Closers", href: "/admin/agenda-closers", module: "equipe_nox" },
   { icon: Receipt, label: "Faturas Inquilinos", href: "/faturas-inquilinos", module: "faturas" },
   { icon: Headphones, label: "Chamados", href: "/suporte", module: "tickets" },
 ];
@@ -411,6 +374,10 @@ export function DashboardLayout({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [menuSearch, setMenuSearch] = useState("");
   const [headerSearch, setHeaderSearch] = useState("");
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
+    () => new Set(["Equipe NOX", "Configurações"]),
+  );
+  const adminAttention = useAdminAttention();
   const perfilCacheInicial = getCachedHeaderProfile(user?.email);
   const [nomeUsuario, setNomeUsuario] = useState(perfilCacheInicial?.nome || "");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(perfilCacheInicial?.avatarUrl || null);
@@ -681,7 +648,26 @@ export function DashboardLayout({
 
           return matches;
         })
-      : menuItems.map(({ children: _children, ...item }) => item);
+      : menuItems.flatMap((item) => {
+          const { children: _children, ...parentItem } = item;
+          const parent: VisibleMenuItem = {
+            ...parentItem,
+            hasChildren: (item.children?.length ?? 0) > 0,
+          };
+          if (!item.children?.length || !expandedGroups.has(item.label)) return [parent];
+          return [
+            parent,
+            ...item.children.map((child): VisibleMenuItem => ({
+              icon: item.icon,
+              label: child.label,
+              href: child.href,
+              module: item.module,
+              modules: item.modules,
+              keywords: child.keywords,
+              parentLabel: item.label,
+            })),
+          ];
+        });
   const iniciaisUsuario =
     nomeTopo
       .split(" ")
@@ -789,14 +775,33 @@ export function DashboardLayout({
           )}
           {!menuPermissionsLoading &&
             visibleMenuItems.map((item) => {
-              const isActive = location.pathname === item.href.split("?")[0];
+              const [itemPath, itemSearch = ""] = item.href.split("?");
+              const expectedParams = new URLSearchParams(itemSearch);
+              const currentParams = new URLSearchParams(location.searchStr);
+              const matchesExpectedParams = Array.from(expectedParams.entries()).every(
+                ([key, value]) => currentParams.get(key) === value,
+              );
+              const isActive =
+                location.pathname === itemPath &&
+                (itemSearch
+                  ? matchesExpectedParams
+                  : item.parentLabel
+                    ? !currentParams.has("tab")
+                    : true);
               const isHighlight = item.highlight;
               const isDarkHighlight = item.darkHighlight;
+              const attentionCount = item.href.startsWith("/admin/verificacoes")
+                ? adminAttention.documents
+                : item.href.startsWith("/admin/central-erros")
+                  ? adminAttention.errors
+                  : item.label === "Configurações" && !item.parentLabel
+                    ? adminAttention.documents + adminAttention.errors
+                    : 0;
               return (
-                <Link
-                  key={`${item.href}-${item.parentLabel ?? "principal"}`}
-                  to={item.href}
-                  className={`flex items-center gap-3 pl-3 pr-4 py-3 rounded-xl border-l-4 transition-all ${
+                <div key={`${item.href}-${item.parentLabel ?? "principal"}`} className="relative">
+                  <Link
+                    to={item.href}
+                    className={`flex items-center gap-3 rounded-xl border-l-4 py-3 pl-3 transition-all ${item.parentLabel ? "ml-5 pr-3" : item.hasChildren ? "pr-11" : "pr-4"} ${
                     isDarkHighlight
                       ? "bg-black border-yellow-400 text-yellow-400 font-bold shadow-sm shadow-black/30 hover:bg-neutral-900"
                       : isActive
@@ -810,20 +815,46 @@ export function DashboardLayout({
                           ? "bg-yellow-400 border-transparent text-neutral-900 font-bold hover:bg-yellow-500 shadow-sm shadow-yellow-400/20"
                           : "border-transparent text-neutral-400 hover:bg-white/5 hover:text-white"
                   }`}
-                >
-                  <item.icon
-                    size={20}
-                    strokeWidth={isActive || isHighlight || isDarkHighlight ? 2.2 : 1.5}
-                  />
-                  <span className="min-w-0 text-sm">
-                    <span className="block truncate">{item.label}</span>
-                    {item.parentLabel && (
-                      <span className="block truncate text-[10px] font-medium text-neutral-500">
-                        {item.parentLabel} › subaba
+                    >
+                    <item.icon
+                      size={item.parentLabel ? 16 : 20}
+                      strokeWidth={isActive || isHighlight || isDarkHighlight ? 2.2 : 1.5}
+                    />
+                    <span className="min-w-0 flex-1 text-sm">
+                      <span className="block truncate">{item.label}</span>
+                      {item.parentLabel && (
+                        <span className="block truncate text-[10px] font-medium text-neutral-500">
+                          {item.parentLabel} › subaba
+                        </span>
+                      )}
+                    </span>
+                    {attentionCount > 0 && (
+                      <span className="flex items-center gap-1 rounded-full bg-yellow-400 px-1.5 py-0.5 text-[9px] font-black text-neutral-950">
+                        <Bell className="h-3 w-3 fill-current" />
+                        {attentionCount > 9 ? "9+" : attentionCount}
                       </span>
                     )}
-                  </span>
-                </Link>
+                  </Link>
+                  {item.hasChildren && !item.parentLabel && (
+                    <button
+                      type="button"
+                      aria-label={`${expandedGroups.has(item.label) ? "Recolher" : "Expandir"} ${item.label}`}
+                      onClick={() =>
+                        setExpandedGroups((current) => {
+                          const next = new Set(current);
+                          if (next.has(item.label)) next.delete(item.label);
+                          else next.add(item.label);
+                          return next;
+                        })
+                      }
+                      className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-lg text-neutral-400 hover:bg-white/10 hover:text-white"
+                    >
+                      <ChevronDown
+                        className={`h-4 w-4 transition-transform ${expandedGroups.has(item.label) ? "rotate-180" : ""}`}
+                      />
+                    </button>
+                  )}
+                </div>
               );
             })}
           {canSearchAdminMenu && normalizedMenuSearch && visibleMenuItems.length === 0 && (

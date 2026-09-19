@@ -128,6 +128,11 @@ export function AppointmentDetailsDialog({
               Conclusão obrigatória: este follow-up automático não pode ser editado, cancelado ou excluído.
             </div>
           )}
+          {item.source === "admin" && item.status !== "cancelado" && (
+            <div className="rounded-xl border border-yellow-300 bg-yellow-50 p-3 text-xs font-bold text-yellow-900">
+              Reunião definida pela administração. O horário e a pauta são somente leitura e não podem ser reagendados ou excluídos.
+            </div>
+          )}
           {visibleNotes && <p className="rounded-xl border border-neutral-200 p-3 leading-relaxed text-neutral-600">{visibleNotes}</p>}
           {item.meeting_feedback && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3"><p className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-emerald-800"><MessageSquareText className="h-3.5 w-3.5" /> Feedback da reunião</p><p className="mt-1 whitespace-pre-wrap leading-relaxed text-neutral-700">{item.meeting_feedback}</p></div>}
           {item.type === "reuniao" && item.status === "concluido" && item.completed_at && (
@@ -146,8 +151,8 @@ export function AppointmentDetailsDialog({
           {followUpWhatsAppUrl && <Button type="button" className="w-full bg-[#25D366] font-black text-white hover:bg-[#20bd5a]" asChild><a href={followUpWhatsAppUrl} target="_blank" rel="noreferrer"><MessageCircle className="mr-1.5 h-4 w-4" /> Abrir mensagem pronta no WhatsApp</a></Button>}
         </div>
         <DialogFooter className="flex-wrap">
-          {item.source !== "meeting_follow_up" && <Button variant="ghost" className="mr-auto text-red-600 hover:bg-red-50" onClick={() => onDelete(item)}><Trash2 className="mr-1.5 h-4 w-4" /> Excluir</Button>}
-          {item.source !== "meeting_follow_up" && canEdit && <Button variant="outline" onClick={() => onEdit(item)}><Edit3 className="mr-1.5 h-4 w-4" /> {item.type === "reuniao" ? "Editar dados" : "Editar"}</Button>}
+          {!["meeting_follow_up", "admin"].includes(item.source) && <Button variant="ghost" className="mr-auto text-red-600 hover:bg-red-50" onClick={() => onDelete(item)}><Trash2 className="mr-1.5 h-4 w-4" /> Excluir</Button>}
+          {!["meeting_follow_up", "admin"].includes(item.source) && canEdit && <Button variant="outline" onClick={() => onEdit(item)}><Edit3 className="mr-1.5 h-4 w-4" /> {item.type === "reuniao" ? "Editar dados" : "Editar"}</Button>}
           {canRescheduleSellerMeeting(item) && <Button variant="outline" className="border-yellow-300 bg-yellow-50 text-yellow-900 hover:bg-yellow-100" onClick={() => onReschedule(item)}><CalendarClock className="mr-1.5 h-4 w-4" /> Reagendar</Button>}
           {!["concluido", "cancelado"].includes(item.status) && canComplete && (
             <Button className="bg-neutral-950 text-white hover:bg-neutral-800" onClick={() => onComplete(item)}><Check className="mr-1.5 h-4 w-4" /> Concluir</Button>

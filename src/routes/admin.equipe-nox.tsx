@@ -45,6 +45,12 @@ import {
   Briefcase,
   Gift,
   Clock3,
+  CalendarDays,
+  Sparkles,
+  Radio,
+  CheckCircle2,
+  AlertTriangle,
+  UserRound,
 } from "lucide-react";
 import { z } from "zod";
 import { addMonths, format } from "date-fns";
@@ -68,6 +74,7 @@ const VALID_TABS = [
   "metas",
   "recompensas",
   "agenda",
+  "reunioes",
   "comissoes",
   "colaboradores",
   "equipe-comercial",
@@ -93,7 +100,12 @@ function EquipeNoxPage() {
   const navigate = useNavigate();
   const search = useSearch({ from: "/admin/equipe-nox" });
   const requestedTab: TabKey = (search.tab as TabKey) ?? "metas";
-  const activeTab: VisibleTabKey = requestedTab === "equipe-comercial" ? "comissoes" : requestedTab;
+  const activeTab: VisibleTabKey =
+    requestedTab === "equipe-comercial"
+      ? "comissoes"
+      : requestedTab === "agenda"
+        ? "reunioes"
+        : requestedTab;
   const setTab = (t: VisibleTabKey) =>
     navigate({ to: "/admin/equipe-nox", search: { tab: t } as any, replace: true });
   const canManageTimeClock =
@@ -104,20 +116,37 @@ function EquipeNoxPage() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div className="flex items-center gap-3">
-          <div className="rounded-xl bg-yellow-100 p-2 text-yellow-700">
-            <Users2 className="h-6 w-6" />
+        <section className="relative overflow-hidden rounded-[2rem] bg-neutral-950 px-6 py-7 text-white shadow-xl shadow-neutral-950/10 sm:px-8 sm:py-9">
+          <div className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full bg-yellow-400/20 blur-3xl" />
+          <div className="relative flex flex-wrap items-end justify-between gap-6">
+            <div className="max-w-2xl">
+              <Badge className="border-yellow-400/20 bg-yellow-400 text-neutral-950 hover:bg-yellow-400">
+                <Sparkles className="mr-1.5 h-3.5 w-3.5" /> Central de gestão de pessoas
+              </Badge>
+              <h1 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl">Equipe NOX</h1>
+              <p className="mt-2 max-w-xl text-sm leading-relaxed text-neutral-300 sm:text-base">
+                Controle colaboradores, metas, agenda, desempenho e jornada em uma experiência única, clara e atualizada em tempo real.
+              </p>
+            </div>
+            <div className="grid min-w-[240px] grid-cols-2 gap-2 text-xs font-bold">
+              <button type="button" onClick={() => setTab("reunioes")} className="rounded-2xl border border-white/10 bg-white/10 p-3 text-left transition hover:border-yellow-400/60 hover:bg-white/15">
+                <CalendarDays className="mb-2 h-5 w-5 text-yellow-400" />
+                Reunião com a equipe
+              </button>
+              <button type="button" onClick={() => void navigate({ to: "/admin/agenda-closers" })} className="rounded-2xl border border-white/10 bg-white/10 p-3 text-left transition hover:border-yellow-400/60 hover:bg-white/15">
+                <Radio className="mb-2 h-5 w-5 text-emerald-400" />
+                Agenda em tempo real
+              </button>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-neutral-950">Equipe NOX</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Contas, metas, comissões, colaboradores e jornada em um só lugar.
-            </p>
-          </div>
-        </div>
+        </section>
 
         <Tabs value={activeTab} onValueChange={(v) => setTab(v as VisibleTabKey)}>
-          <TabsList className="h-auto w-full flex-wrap justify-start">
+          <TabsList className="h-auto w-full flex-wrap justify-start gap-1 rounded-2xl border border-neutral-200 bg-white p-1.5 shadow-sm">
+            <TabsTrigger value="reunioes">
+              <CalendarDays className="mr-2 h-4 w-4" />
+              Reunião com a equipe
+            </TabsTrigger>
             <TabsTrigger value="metas">
               <Target className="mr-2 h-4 w-4" />
               Metas
@@ -147,8 +176,8 @@ function EquipeNoxPage() {
           <TabsContent value="recompensas" className="mt-4">
             <SellerRewardsTab />
           </TabsContent>
-          <TabsContent value="agenda" className="mt-4">
-            <Navigate to="/admin/agenda-closers" replace />
+          <TabsContent value="reunioes" className="mt-4">
+            <TabAgenda />
           </TabsContent>
           <TabsContent value="comissoes" className="mt-4">
             <TabComissoesEquipe
@@ -610,24 +639,40 @@ const STATUS_COLOR: Record<string, string> = {
   nao_compareceu: "bg-red-100 text-red-800",
 };
 
+function defaultAdminMeetingDate() {
+  const date = new Date(Date.now() + 2 * 60 * 60 * 1000);
+  date.setMinutes(0, 0, 0);
+  if (date.getHours() < 8) date.setHours(8);
+  if (date.getHours() === 12) date.setHours(13);
+  if (date.getHours() >= 17) {
+    date.setDate(date.getDate() + 1);
+    date.setHours(8);
+  }
+  while (date.getDay() === 0 || date.getDay() === 6) date.setDate(date.getDate() + 1);
+  return toDatetimeLocal(date.toISOString());
+}
+
 function TabAgenda() {
   const { user } = useAuth();
   const [vendedores, setVendedores] = useState<any[]>([]);
   const [grupos, setGrupos] = useState<{ id: string; rows: any[] }[]>([]);
   const [loading, setLoading] = useState(true);
-  const [destino, setDestino] = useState<"geral" | "individual">("geral");
-  const [sellerId, setSellerId] = useState("");
+  const [destino, setDestino] = useState<"geral" | "selecionados">("geral");
+  const [sellerIds, setSellerIds] = useState<string[]>([]);
   const [titulo, setTitulo] = useState("");
-  const [dataHora, setDataHora] = useState(() => toDatetimeLocal());
+  const [dataHora, setDataHora] = useState(defaultAdminMeetingDate);
   const [notas, setNotas] = useState("");
   const [salvando, setSalvando] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [availability, setAvailability] = useState<any[]>([]);
+  const [availabilityError, setAvailabilityError] = useState<string | null>(null);
 
   const carregar = useCallback(async () => {
     setLoading(true);
     const [{ data: vs }, { data: rows }] = await Promise.all([
       supabase
         .from("internal_users" as any)
-        .select("id, full_name")
+        .select("id, full_name, seller_type")
         .eq("role", "vendedor")
         .eq("status", "ativo")
         .order("full_name"),
@@ -635,6 +680,7 @@ function TabAgenda() {
         .from("seller_appointments" as any)
         .select("*, internal_users(full_name)")
         .not("meeting_group_id", "is", null)
+        .eq("source", "admin")
         .order("scheduled_at", { ascending: false }),
     ]);
     setVendedores((vs as any[]) ?? []);
@@ -648,16 +694,72 @@ function TabAgenda() {
     setLoading(false);
   }, []);
   useEffect(() => {
-    carregar();
+    void carregar();
   }, [carregar]);
+
+  useEffect(() => {
+    const refresh = () => void carregar();
+    const channel = supabase
+      .channel("admin-team-meetings-live")
+      .on("postgres_changes", { event: "*", schema: "public", table: "seller_appointments" }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "internal_users" }, refresh)
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [carregar]);
+
+  const activeTargetIds = destino === "geral" ? vendedores.map((v) => v.id) : sellerIds;
+  const activeTargetCount = activeTargetIds.length;
+
+  useEffect(() => {
+    const scheduled = new Date(dataHora);
+    if (!dataHora || Number.isNaN(scheduled.getTime()) || activeTargetCount === 0) {
+      setAvailability([]);
+      setAvailabilityError(null);
+      setChecking(false);
+      return;
+    }
+    let cancelled = false;
+    setChecking(true);
+    setAvailabilityError(null);
+    const timer = window.setTimeout(async () => {
+      const { data, error } = await (supabase as any).rpc("check_admin_team_meeting_availability", {
+        p_participant_ids: destino === "geral" ? [] : sellerIds,
+        p_scheduled_at: scheduled.toISOString(),
+        p_all_sellers: destino === "geral",
+      });
+      if (cancelled) return;
+      setAvailability(error ? [] : ((data as any[]) ?? []));
+      setAvailabilityError(error ? "Não foi possível conferir as agendas. Tente novamente." : null);
+      setChecking(false);
+    }, 300);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [activeTargetCount, dataHora, destino, sellerIds]);
+
+  const busy = availability.filter((row) => !row.is_available);
+  const availabilityConfirmed =
+    !checking &&
+    !availabilityError &&
+    activeTargetCount > 0 &&
+    availability.length === activeTargetCount;
+
+  const toggleSeller = (id: string) => {
+    setSellerIds((current) =>
+      current.includes(id) ? current.filter((value) => value !== id) : [...current, id],
+    );
+  };
 
   const criar = async () => {
     if (!titulo.trim()) {
       toast.error("Informe um título para a reunião.");
       return;
     }
-    if (destino === "individual" && !sellerId) {
-      toast.error("Selecione o vendedor.");
+    if (destino === "selecionados" && sellerIds.length === 0) {
+      toast.error("Selecione pelo menos um colaborador.");
       return;
     }
     if (vendedores.length === 0) {
@@ -666,31 +768,33 @@ function TabAgenda() {
     }
 
     setSalvando(true);
-    const groupId = crypto.randomUUID();
-    const alvos = destino === "geral" ? vendedores.map((v) => v.id) : [sellerId];
-    const scheduledIso = new Date(dataHora).toISOString();
-    const linhas = alvos.map((id) => ({
-      seller_id: id,
-      meeting_group_id: groupId,
-      title: titulo.trim(),
-      type: "reuniao",
-      status: "agendado",
-      priority: "normal",
-      scheduled_at: scheduledIso,
-      notes: notas || null,
-      lead_id: null,
-    }));
-    const { error } = await supabase.from("seller_appointments" as any).insert(linhas);
+    const scheduled = new Date(dataHora);
+    if (Number.isNaN(scheduled.getTime())) {
+      toast.error("Informe uma data e um horário válidos.");
+      setSalvando(false);
+      return;
+    }
+    if (busy.length > 0) {
+      toast.error(`Escolha outro horário. ${busy.map((row) => row.participant_name).join(", ")} já possui reunião.`);
+      setSalvando(false);
+      return;
+    }
+    const { data, error } = await (supabase as any).rpc("schedule_admin_team_meeting", {
+      p_title: titulo.trim(),
+      p_notes: notas.trim() || null,
+      p_scheduled_at: scheduled.toISOString(),
+      p_participant_ids: destino === "geral" ? [] : sellerIds,
+      p_all_sellers: destino === "geral",
+    });
     setSalvando(false);
     if (error) {
       toast.error(error.message);
       return;
     }
-    toast.success(
-      destino === "geral"
-        ? `Reunião agendada para ${alvos.length} vendedores.`
-        : "Reunião agendada.",
-    );
+    const result = Array.isArray(data) ? data[0] : data;
+    const groupId = result?.meeting_group_id ?? "reuniao-equipe";
+    const participantCount = Number(result?.participant_count ?? activeTargetCount);
+    toast.success(`Reunião agendada para ${participantCount} colaborador${participantCount === 1 ? "" : "es"}.`);
     registrarAuditoria({
       actorUserId: user?.id,
       actorRole: user?.internalRole || user?.role,
@@ -700,20 +804,20 @@ function TabAgenda() {
       after: {
         title: titulo.trim(),
         destino,
-        vendedores: alvos.length,
-        scheduled_at: scheduledIso,
+        vendedores: participantCount,
+        scheduled_at: scheduled.toISOString(),
       },
     });
     setTitulo("");
     setNotas("");
-    carregar();
+    setSellerIds([]);
+    void carregar();
   };
 
   const cancelarGrupo = async (groupId: string) => {
-    const { error } = await supabase
-      .from("seller_appointments" as any)
-      .update({ status: "cancelado" })
-      .eq("meeting_group_id", groupId);
+    const { error } = await (supabase as any).rpc("cancel_admin_team_meeting", {
+      p_meeting_group_id: groupId,
+    });
     if (error) {
       toast.error(error.message);
       return;
@@ -727,48 +831,64 @@ function TabAgenda() {
       recordId: groupId,
       after: { status: "cancelado" },
     });
-    carregar();
+    void carregar();
   };
 
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle>Nova reunião de equipe</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Agende uma reunião individual com um vendedor ou geral para todos os vendedores ativos.
-          </p>
+    <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,.95fr)]">
+      <Card className="overflow-hidden border-neutral-200 shadow-sm">
+        <CardHeader className="border-b border-neutral-100 bg-gradient-to-br from-yellow-50 to-white">
+          <div className="flex items-start gap-3">
+            <span className="grid h-11 w-11 place-items-center rounded-2xl bg-yellow-400 text-neutral-950 shadow-sm">
+              <CalendarDays className="h-5 w-5" />
+            </span>
+            <div>
+              <CardTitle>Nova reunião com a equipe</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Selecione uma ou várias pessoas. O sistema confirma a disponibilidade de todos antes de reservar.
+              </p>
+            </div>
+          </div>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-4 pt-5">
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => setDestino("geral")}
               className={`rounded-md border px-3 py-1.5 text-xs font-bold ${destino === "geral" ? "border-yellow-400 bg-yellow-50 text-yellow-800" : "bg-white"}`}
             >
-              Geral (todos os vendedores)
+              Toda a equipe comercial
             </button>
             <button
               type="button"
-              onClick={() => setDestino("individual")}
-              className={`rounded-md border px-3 py-1.5 text-xs font-bold ${destino === "individual" ? "border-yellow-400 bg-yellow-50 text-yellow-800" : "bg-white"}`}
+              onClick={() => setDestino("selecionados")}
+              className={`rounded-md border px-3 py-1.5 text-xs font-bold ${destino === "selecionados" ? "border-yellow-400 bg-yellow-50 text-yellow-800" : "bg-white"}`}
             >
-              Individual
+              Selecionar participantes
             </button>
           </div>
-          {destino === "individual" && (
-            <Select value={sellerId} onValueChange={setSellerId}>
-              <SelectTrigger className="w-full sm:w-64">
-                <SelectValue placeholder="Selecione o vendedor" />
-              </SelectTrigger>
-              <SelectContent>
-                {vendedores.map((v) => (
-                  <SelectItem key={v.id} value={v.id}>
-                    {v.full_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          {destino === "selecionados" && (
+            <div className="grid gap-2 sm:grid-cols-2">
+              {vendedores.map((v) => {
+                const selected = sellerIds.includes(v.id);
+                return (
+                  <button
+                    key={v.id}
+                    type="button"
+                    onClick={() => toggleSeller(v.id)}
+                    className={`flex items-center gap-3 rounded-xl border p-3 text-left transition ${selected ? "border-yellow-400 bg-yellow-50" : "border-neutral-200 bg-white hover:border-yellow-300"}`}
+                  >
+                    <span className={`grid h-8 w-8 place-items-center rounded-full ${selected ? "bg-yellow-400" : "bg-neutral-100"}`}>
+                      {selected ? <CheckCircle2 className="h-4 w-4" /> : <UserRound className="h-4 w-4 text-neutral-500" />}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-bold">{v.full_name || "Vendedor"}</span>
+                      <span className="text-[10px] font-black uppercase tracking-wider text-neutral-400">{v.seller_type || "comercial"}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           )}
           <Input
             placeholder="Título da reunião"
@@ -785,9 +905,29 @@ function TabAgenda() {
             value={notas}
             onChange={(e) => setNotas(e.target.value)}
           />
+          <div className={`rounded-xl border p-3 ${busy.length > 0 || availabilityError ? "border-red-200 bg-red-50" : "border-emerald-200 bg-emerald-50"}`}>
+            {checking ? (
+              <p className="flex items-center gap-2 text-sm font-bold text-neutral-600"><Clock3 className="h-4 w-4 animate-pulse" /> Conferindo todas as agendas…</p>
+            ) : availabilityError ? (
+              <p className="flex items-center gap-2 text-sm font-bold text-red-800"><AlertTriangle className="h-4 w-4" /> {availabilityError}</p>
+            ) : activeTargetCount === 0 ? (
+              <p className="text-sm font-bold text-amber-800">Selecione os participantes para verificar o horário.</p>
+            ) : busy.length > 0 ? (
+              <div className="text-sm text-red-800">
+                <p className="flex items-center gap-2 font-black"><AlertTriangle className="h-4 w-4" /> Horário indisponível</p>
+                {busy.map((row) => (
+                  <p key={row.participant_id} className="mt-1 text-xs">
+                    {row.participant_name}: {row.conflict_title || "outra reunião"} às {formatDateTime(row.conflict_start)}
+                  </p>
+                ))}
+              </div>
+            ) : (
+              <p className="flex items-center gap-2 text-sm font-black text-emerald-800"><CheckCircle2 className="h-4 w-4" /> Todos disponíveis neste horário</p>
+            )}
+          </div>
           <Button
             className="bg-yellow-500 text-black hover:bg-yellow-600"
-            disabled={salvando}
+            disabled={salvando || !availabilityConfirmed || busy.length > 0}
             onClick={criar}
           >
             {salvando ? "Agendando…" : "Agendar reunião"}
@@ -795,9 +935,10 @@ function TabAgenda() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="border-neutral-200 shadow-sm">
         <CardHeader>
-          <CardTitle>Reuniões agendadas pela Equipe NOX</CardTitle>
+          <CardTitle>Agenda criada pela administração</CardTitle>
+          <p className="text-sm text-muted-foreground">Os participantes recebem um sino amarelo e não podem reagendar nem excluir estes compromissos.</p>
         </CardHeader>
         <CardContent className="space-y-3">
           {loading ? (
@@ -841,7 +982,7 @@ function TabAgenda() {
                           ? (STATUS_LABEL[primeira.status] ?? primeira.status)
                           : "Misto"}
                       </Badge>
-                      {primeira.status !== "cancelado" && (
+                      {primeira.status !== "cancelado" && new Date(primeira.scheduled_at) > new Date() && (
                         <Button size="sm" variant="outline" onClick={() => cancelarGrupo(grupo.id)}>
                           Cancelar
                         </Button>

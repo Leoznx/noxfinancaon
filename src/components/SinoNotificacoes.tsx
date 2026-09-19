@@ -12,6 +12,7 @@ import {
   Sparkles,
   X,
   UserPlus,
+  Wrench,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -50,6 +51,9 @@ const ICONES_NOTIFICACAO: Record<string, LucideIcon> = {
   sistema: Megaphone,
   atualizacao: Sparkles,
   cadastro_link: UserPlus,
+  documento_pendente: FileCheck,
+  erro_automacao: Wrench,
+  reuniao_equipe: Bell,
 };
 
 const CORES_NOTIFICACAO: Record<string, { fundo: string; icone: string }> = {

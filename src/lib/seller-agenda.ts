@@ -235,6 +235,7 @@ export function canRescheduleSellerMeeting(
 ) {
   return item.type === "reuniao"
     && item.source !== "meeting_follow_up"
+    && item.source !== "admin"
     && !["concluido", "cancelado", "nao_compareceu"].includes(item.status);
 }
 
@@ -242,7 +243,7 @@ export function canEditSellerMeetingContact(
   item: Pick<SellerAppointment, "type" | "source" | "seller_id" | "sdr_id">,
   sellerId: string | null,
 ) {
-  if (!sellerId || item.type !== "reuniao" || item.source === "meeting_follow_up") return false;
+  if (!sellerId || item.type !== "reuniao" || ["meeting_follow_up", "admin"].includes(item.source)) return false;
   const creatorId = item.source === "sdr_handoff" && item.sdr_id ? item.sdr_id : item.seller_id;
   return creatorId === sellerId;
 }
