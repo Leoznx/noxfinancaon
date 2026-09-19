@@ -94,9 +94,9 @@ function CorretoresAdmin() {
 
   const isImobiliaria = user?.role === "imobiliaria";
 
-  const fetchLinkedCorretores = useCallback(async (_imobId: string, silent = false) => {
+  const fetchLinkedCorretores = useCallback(async (imobId: string, silent = false) => {
     if (!silent) setLoading(true);
-    const { data, error } = await listMyBrokerAgencyMembers();
+    const { data, error } = await listMyBrokerAgencyMembers(imobId);
     if (error) toast.error("Erro ao carregar corretores: " + error);
     setCorretores(
       (data || []).map((row) => ({

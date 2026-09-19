@@ -18,6 +18,93 @@ export type BrokerAgencyMember = {
   contracts_count: number;
 };
 
+function normalizeCommissionAllocationMode(value: string | null | undefined): BrokerCommissionAllocationMode {
+  return value === "split_50" || value === "agency_full" ? value : "broker_full";
+}
+
+async function listBrokerAgencyMembersFallback(imobiliariaId: string) {
+  const now = new Date().toISOString();
+  const [activeResult, pendingResult] = await Promise.all([
+    supabase
+      .from("corretores")
+      .select("id, profile_id, cpf, creci, commission_allocation_mode, updated_at")
+      .eq("imobiliaria_id", imobiliariaId)
+      .or("vinculado_imobiliaria.eq.true,vinculado_imobiliaria.is.null"),
+    supabase
+      .from("broker_agency_invitations")
+      .select("id, corretor_id, broker_profile_id, commission_allocation_mode, requested_at")
+      .eq("imobiliaria_id", imobiliariaId)
+      .eq("status", "pending")
+      .gt("expires_at", now),
+  ]);
+
+  const queryError = activeResult.error || pendingResult.error;
+  if (queryError) return { data: [] as BrokerAgencyMember[], error: queryError.message };
+
+  const activeRows = activeResult.data || [];
+  const activeBrokerIds = new Set(activeRows.map((row) => row.id));
+  const pendingRows = (pendingResult.data || []).filter((row) => !activeBrokerIds.has(row.corretor_id));
+  const profileIds = Array.from(
+    new Set([
+      ...activeRows.map((row) => row.profile_id),
+      ...pendingRows.map((row) => row.broker_profile_id),
+    ]),
+  );
+
+  const profileResult = profileIds.length
+    ? await supabase.from("profiles").select("id, nome, email, telefone, status, created_at").in("id", profileIds)
+    : { data: [], error: null };
+  if (profileResult.error) return { data: [] as BrokerAgencyMember[], error: profileResult.error.message };
+
+  const profiles = new Map((profileResult.data || []).map((profile) => [profile.id, profile]));
+  const members: BrokerAgencyMember[] = [
+    ...activeRows.map((row) => {
+      const profile = profiles.get(row.profile_id);
+      return {
+        membership_id: row.id,
+        corretor_id: row.id,
+        profile_id: row.profile_id,
+        membership_status: "active" as const,
+        nome: profile?.nome || null,
+        email: profile?.email || null,
+        telefone: profile?.telefone || null,
+        cpf: row.cpf,
+        creci: row.creci,
+        commission_allocation_mode: normalizeCommissionAllocationMode(row.commission_allocation_mode),
+        profile_status: profile?.status || null,
+        registered_at: profile?.created_at || row.updated_at,
+        linked_at: row.updated_at,
+        contracts_count: 0,
+      };
+    }),
+    ...pendingRows.map((row) => {
+      const profile = profiles.get(row.broker_profile_id);
+      return {
+        membership_id: row.id,
+        corretor_id: row.corretor_id,
+        profile_id: row.broker_profile_id,
+        membership_status: "pending" as const,
+        nome: profile?.nome || null,
+        email: null,
+        telefone: null,
+        cpf: null,
+        creci: null,
+        commission_allocation_mode: normalizeCommissionAllocationMode(row.commission_allocation_mode),
+        profile_status: profile?.status || null,
+        registered_at: profile?.created_at || row.requested_at,
+        linked_at: row.requested_at,
+        contracts_count: 0,
+      };
+    }),
+  ];
+
+  members.sort((left, right) => {
+    if (left.membership_status !== right.membership_status) return left.membership_status === "active" ? -1 : 1;
+    return new Date(right.linked_at).getTime() - new Date(left.linked_at).getTime();
+  });
+  return { data: members, error: null };
+}
+
 type InvitationApiResponse = {
   ok: boolean;
   error?: string;
@@ -37,8 +124,9 @@ type InvitationApiResponse = {
   };
 };
 
-export async function listMyBrokerAgencyMembers() {
+export async function listMyBrokerAgencyMembers(imobiliariaId?: string) {
   const { data, error } = await supabase.rpc("list_my_broker_agency_members");
+  if (error && imobiliariaId) return listBrokerAgencyMembersFallback(imobiliariaId);
   return {
     data: ((data || []) as BrokerAgencyMember[]).map((row) => ({
       ...row,
