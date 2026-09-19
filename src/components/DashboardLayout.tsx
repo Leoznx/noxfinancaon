@@ -310,6 +310,12 @@ const adminMasterItems = adminItems;
 // precisa de um ponto de entrada e acesso ao próprio perfil).
 const vendedorItems: MenuItem[] = [
   {
+    icon: LayoutDashboard,
+    label: "Dashboard",
+    href: "/vendedor",
+    sellerTypes: ["sdr", "closer"],
+  },
+  {
     icon: Bell,
     label: "Minha Agenda",
     href: "/vendedor/agenda",
@@ -330,7 +336,6 @@ const vendedorItems: MenuItem[] = [
     href: "/vendedor/clientes",
     sellerTypes: ["sdr", "closer"],
   },
-  { icon: LayoutDashboard, label: "Dashboard", href: "/vendedor", sellerTypes: ["sdr", "closer"] },
   {
     icon: Clock3,
     label: "Registrar ponto",
