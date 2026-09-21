@@ -51,6 +51,18 @@ const cadastroSearchSchema = z.object({
     .string()
     .regex(/^[a-f0-9]{48}$/i)
     .optional(),
+  sl_proprietario: z
+    .string()
+    .regex(/^[a-f0-9]{48}$/i)
+    .optional(),
+  sl_imobiliaria: z
+    .string()
+    .regex(/^[a-f0-9]{48}$/i)
+    .optional(),
+  sl_corretor: z
+    .string()
+    .regex(/^[a-f0-9]{48}$/i)
+    .optional(),
   ma: z.string().uuid().optional(),
 });
 
@@ -231,12 +243,27 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
         ref: search.ref,
         sr: search.sr,
         sl: search.sl,
+        sl_proprietario: search.sl_proprietario,
+        sl_imobiliaria: search.sl_imobiliaria,
+        sl_corretor: search.sl_corretor,
         ma: search.ma,
         ...(!perfilInicial && search.perfil ? { perfil: search.perfil } : {}),
       } as any,
       replace: true,
     });
-  }, [navigate, perfilInicial, search.ma, search.perfil, search.ref, search.returnTo, search.sl, search.sr]);
+  }, [
+    navigate,
+    perfilInicial,
+    search.ma,
+    search.perfil,
+    search.ref,
+    search.returnTo,
+    search.sl,
+    search.sl_corretor,
+    search.sl_imobiliaria,
+    search.sl_proprietario,
+    search.sr,
+  ]);
 
   useEffect(() => {
     if (resendCooldown <= 0) return;
@@ -263,9 +290,26 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
   }, [routedPerfil]);
 
   const handleTypeSelect = (type: CadastroPerfil) => {
+    const meetingToken =
+      type === "proprietario"
+        ? search.sl_proprietario
+        : type === "imobiliaria"
+          ? search.sl_imobiliaria
+          : type === "corretor"
+            ? search.sl_corretor
+            : undefined;
     navigate({
       to: CADASTRO_ROUTES[type] as any,
-      search: { returnTo: search.returnTo, ref: search.ref, sr: search.sr, sl: search.sl, ma: search.ma } as any,
+      search: {
+        returnTo: search.returnTo,
+        ref: search.ref,
+        sr: search.sr,
+        sl: search.sl ?? meetingToken,
+        ma: meetingToken ? search.ma : undefined,
+        sl_proprietario: search.sl_proprietario,
+        sl_imobiliaria: search.sl_imobiliaria,
+        sl_corretor: search.sl_corretor,
+      } as any,
     });
   };
 
@@ -681,6 +725,9 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
                         ref: search.ref,
                         sr: search.sr,
                         sl: search.sl,
+                        sl_proprietario: search.sl_proprietario,
+                        sl_imobiliaria: search.sl_imobiliaria,
+                        sl_corretor: search.sl_corretor,
                         ma: search.ma,
                       },
                     })

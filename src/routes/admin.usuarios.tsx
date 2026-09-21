@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/components/AuthProvider";
 import { registrarAuditoria } from "@/lib/auditoria";
+import { deleteUserCompletely } from "@/lib/admin-delete-user";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -34,10 +35,18 @@ import {
   ShieldCheck,
   Eye,
   Crown,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 
-const USER_TABS = ["todos", "proprietario", "imobiliaria", "inquilino", "corretor", "equipe"] as const;
+const USER_TABS = [
+  "todos",
+  "proprietario",
+  "imobiliaria",
+  "inquilino",
+  "corretor",
+  "equipe",
+] as const;
 type UserTab = (typeof USER_TABS)[number];
 
 export const Route = createFileRoute("/admin/usuarios")({
@@ -100,6 +109,7 @@ function UsuariosUnificadosPage() {
   const activeTab: UserTab = (search.tab as UserTab) ?? "todos";
   const { user } = useAuth();
   const isAdminMaster = user?.role === "admin_master" || user?.internalRole === "admin_master";
+  const isAdmin = isAdminMaster || user?.role === "admin";
   const [loading, setLoading] = useState(true);
   const [usuarios, setUsuarios] = useState<UsuarioLinha[]>([]);
   const [busca, setBusca] = useState("");
@@ -109,6 +119,8 @@ function UsuariosUnificadosPage() {
   const [detalhe, setDetalhe] = useState<UsuarioLinha | null>(null);
   const [promovendo, setPromovendo] = useState<UsuarioLinha | null>(null);
   const [promovendoLoading, setPromovendoLoading] = useState(false);
+  const [excluindo, setExcluindo] = useState<UsuarioLinha | null>(null);
+  const [excluindoLoading, setExcluindoLoading] = useState(false);
 
   const carregar = async () => {
     setLoading(true);
@@ -292,6 +304,22 @@ function UsuariosUnificadosPage() {
     carregar();
   };
 
+  const excluirUsuario = async () => {
+    if (!excluindo) return;
+    setExcluindoLoading(true);
+    try {
+      await deleteUserCompletely(excluindo.id);
+      toast.success(`${excluindo.nome || excluindo.email} foi excluído totalmente do sistema.`);
+      setExcluindo(null);
+      setDetalhe(null);
+      await carregar();
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Não foi possível excluir o usuário.");
+    } finally {
+      setExcluindoLoading(false);
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-8">
@@ -415,8 +443,56 @@ function UsuariosUnificadosPage() {
             </div>
           )}
           <DialogFooter>
+            {detalhe && isAdmin && detalhe.id !== user?.id && detalhe.role !== "admin_master" && (
+              <Button
+                variant="destructive"
+                className="gap-2 sm:mr-auto"
+                onClick={() => {
+                  setExcluindo(detalhe);
+                  setDetalhe(null);
+                }}
+              >
+                <Trash2 size={15} /> Excluir usuário
+              </Button>
+            )}
             <Button variant="outline" onClick={() => setDetalhe(null)}>
               Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!excluindo}
+        onOpenChange={(open) => !open && !excluindoLoading && setExcluindo(null)}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Excluir usuário definitivamente?</DialogTitle>
+            <DialogDescription className="space-y-2">
+              <span className="block font-semibold text-neutral-900">
+                {excluindo?.nome || excluindo?.email}
+              </span>
+              <span className="block">
+                A conta, os arquivos e todos os vínculos deste usuário — inclusive SDR, Closer,
+                agenda, carteira e ranking — serão removidos. Esta ação não pode ser desfeita.
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={excluindoLoading}
+              onClick={() => setExcluindo(null)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={excluindoLoading}
+              onClick={() => void excluirUsuario()}
+            >
+              {excluindoLoading ? "Excluindo tudo..." : "Excluir definitivamente"}
             </Button>
           </DialogFooter>
         </DialogContent>

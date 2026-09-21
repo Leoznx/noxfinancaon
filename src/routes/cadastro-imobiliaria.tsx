@@ -13,6 +13,18 @@ const searchSchema = z.object({
     .string()
     .regex(/^[a-f0-9]{48}$/i)
     .optional(),
+  sl_proprietario: z
+    .string()
+    .regex(/^[a-f0-9]{48}$/i)
+    .optional(),
+  sl_imobiliaria: z
+    .string()
+    .regex(/^[a-f0-9]{48}$/i)
+    .optional(),
+  sl_corretor: z
+    .string()
+    .regex(/^[a-f0-9]{48}$/i)
+    .optional(),
   ma: z.string().uuid().optional(),
 });
 

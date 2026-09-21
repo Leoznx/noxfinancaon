@@ -75,6 +75,27 @@ export async function recordMeetingSignupLinkSend(
   if (error) throw error;
 }
 
+export async function recordMeetingSignupSelectorSend(
+  appointmentId: string,
+  links: SellerSignupLink[],
+  channel: SellerSignupSendChannel,
+) {
+  const tokens = Object.fromEntries(links.map((link) => [link.profileRole, link.token])) as Partial<
+    Record<SellerSignupRole, string>
+  >;
+  if (!tokens.proprietario || !tokens.imobiliaria || !tokens.corretor) {
+    throw new Error("Não foi possível preparar todos os tipos de cadastro desta reunião.");
+  }
+  const { error } = await (supabase as any).rpc("record_meeting_signup_selector_send", {
+    p_appointment_id: appointmentId,
+    p_proprietario_token: tokens.proprietario,
+    p_imobiliaria_token: tokens.imobiliaria,
+    p_corretor_token: tokens.corretor,
+    p_channel: channel,
+  });
+  if (error) throw error;
+}
+
 export function buildSellerSignupUrl(
   role: SellerSignupRole,
   token: string,
@@ -84,4 +105,13 @@ export function buildSellerSignupUrl(
   const params = new URLSearchParams({ sl: token });
   if (appointmentId) params.set("ma", appointmentId);
   return `${origin}/cadastro-${role}?${params.toString()}`;
+}
+
+export function buildMeetingSignupSelectorUrl(links: SellerSignupLink[], appointmentId: string) {
+  const origin = typeof window === "undefined" ? "https://noxfianca.com" : window.location.origin;
+  const params = new URLSearchParams({ ma: appointmentId });
+  for (const link of links) {
+    params.set(`sl_${link.profileRole}`, link.token);
+  }
+  return `${origin}/cadastro?${params.toString()}`;
 }

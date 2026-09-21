@@ -56,6 +56,7 @@ type LinkSendEvent = {
   seller_id: string;
   source_sdr_id: string | null;
   profile_role: string;
+  send_group_id: string | null;
   channel: string;
   created_at: string;
 };
@@ -137,7 +138,7 @@ function CloserAgendaPage() {
         .lt("created_at", to.toISOString())
         .order("created_at", { ascending: false }),
       (supabase.from("seller_signup_link_send_events" as any) as any)
-        .select("id, seller_id, source_sdr_id, profile_role, channel, created_at")
+        .select("id, seller_id, source_sdr_id, profile_role, send_group_id, channel, created_at")
         .gte("created_at", from.toISOString())
         .lt("created_at", to.toISOString())
         .order("created_at", { ascending: false }),
@@ -211,17 +212,18 @@ function CloserAgendaPage() {
   const days = Array.from({ length: leading + endOfMonth(anchor).getDate() }, (_, index) =>
     index < leading ? null : new Date(anchor.getFullYear(), anchor.getMonth(), index - leading + 1),
   );
+  const groupedLinkSendEvents = useMemo(() => uniqueLinkSends(linkSendEvents), [linkSendEvents]);
   const sdrPerformance = useMemo(
     () =>
       sdrs.map((sdr) => ({
         sdr,
         meetings: sdrMeetings.filter((item) => item.sdr_id === sdr.id),
-        sends: linkSendEvents.filter(
+        sends: groupedLinkSendEvents.filter(
           (event) => event.seller_id === sdr.id || event.source_sdr_id === sdr.id,
         ),
         registrations: signupAttributions.filter((item) => item.seller_id === sdr.id),
       })),
-    [linkSendEvents, sdrMeetings, sdrs, signupAttributions],
+    [groupedLinkSendEvents, sdrMeetings, sdrs, signupAttributions],
   );
   const selectedSdr = sdrPerformance.find((item) => item.sdr.id === selectedSdrId) ?? null;
   const selectedDayRows = selectedDay
@@ -325,7 +327,7 @@ function CloserAgendaPage() {
               <Metric
                 title="Links enviados"
                 value={
-                  linkSendEvents.filter((event) =>
+                  groupedLinkSendEvents.filter((event) =>
                     sdrs.some(
                       (sdr) => event.seller_id === sdr.id || event.source_sdr_id === sdr.id,
                     ),
@@ -395,7 +397,7 @@ function CloserAgendaPage() {
                     empty="Nenhum envio registrado neste mês."
                     rows={selectedSdr.sends.map((event) => ({
                       id: event.id,
-                      title: `${roleLabel(event.profile_role)} · ${channelLabel(event.channel)}`,
+                      title: `${event.send_group_id ? "Escolha do perfil" : roleLabel(event.profile_role)} · ${channelLabel(event.channel)}`,
                       detail: format(new Date(event.created_at), "dd/MM/yyyy 'às' HH:mm"),
                     }))}
                   />
@@ -648,6 +650,16 @@ function roleLabel(role: string) {
   if (role === "proprietario") return "Proprietário";
   if (role === "imobiliaria") return "Imobiliária";
   return "Corretor";
+}
+
+function uniqueLinkSends(events: LinkSendEvent[]) {
+  const seen = new Set<string>();
+  return events.filter((event) => {
+    const key = event.send_group_id || event.id;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function channelLabel(channel: string) {
