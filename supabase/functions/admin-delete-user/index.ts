@@ -1,24 +1,54 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import {
   createClient,
   type SupabaseClient,
 } from "https://esm.sh/@supabase/supabase-js@2.110.0";
-import { corsHeaders, hasOversizedBody, rejectDisallowedOrigin } from "../_shared/http-security.ts";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const USER_PREFIX_BUCKETS = ["time-clock-photos", "documentos-verificacao"] as const;
+const ALLOWED_ORIGINS = new Set([
+  "https://noxfianca.com",
+  "https://www.noxfianca.com",
+  "https://noxfinancaon.vercel.app",
+  ...(Deno.env.get("ALLOWED_ORIGINS") ?? "").split(",").map((origin) => origin.trim()).filter(Boolean),
+]);
 
-serve(async (req) => {
+function isAllowedOrigin(origin: string) {
+  if (ALLOWED_ORIGINS.has(origin)) return true;
+  try {
+    const url = new URL(origin);
+    if (url.protocol === "https:" && url.hostname.startsWith("noxfinancaon-") && url.hostname.endsWith(".vercel.app")) return true;
+    if (Deno.env.get("ALLOW_LOCAL_ORIGINS") === "true") {
+      return url.hostname === "localhost" || url.hostname === "127.0.0.1";
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
+
+function corsHeaders(req: Request) {
+  const origin = req.headers.get("origin");
+  return {
+    ...(origin && isAllowedOrigin(origin) ? { "Access-Control-Allow-Origin": origin } : {}),
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Max-Age": "600",
+    Vary: "Origin",
+  };
+}
+
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders(req) });
   const response = (body: unknown, status = 200) =>
     new Response(JSON.stringify(body), {
       status,
       headers: { ...corsHeaders(req), "Content-Type": "application/json" },
     });
-  const rejected = rejectDisallowedOrigin(req);
-  if (rejected) return rejected;
+  const origin = req.headers.get("origin");
+  if (origin && !isAllowedOrigin(origin))
+    return response({ ok: false, error: "Origem não autorizada." }, 403);
   if (req.method !== "POST") return response({ ok: false, error: "Método não permitido." }, 405);
-  if (hasOversizedBody(req, 8_192))
+  if (Number(req.headers.get("content-length") || "0") > 8_192)
     return response({ ok: false, error: "Payload muito grande." }, 413);
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";

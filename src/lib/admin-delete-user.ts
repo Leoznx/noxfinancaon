@@ -10,7 +10,11 @@ async function functionErrorMessage(error: unknown) {
       // Usa a mensagem original quando a resposta nao contem JSON.
     }
   }
-  return (error as { message?: string })?.message || "Não foi possível excluir o usuário.";
+  const message = (error as { message?: string })?.message || "";
+  if (/failed to send a request/i.test(message)) {
+    return "Não foi possível acessar o serviço de exclusão. Atualize a página e tente novamente.";
+  }
+  return message || "Não foi possível excluir o usuário.";
 }
 
 async function authenticatedHeaders() {
