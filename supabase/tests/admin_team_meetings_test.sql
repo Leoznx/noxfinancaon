@@ -3,7 +3,7 @@ BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET LOCAL search_path = public, extensions, pg_catalog;
 
-SELECT plan(10);
+SELECT plan(13);
 
 SELECT has_function(
   'public',
@@ -56,6 +56,21 @@ SELECT like(
   pg_get_functiondef('public.schedule_admin_team_meeting(text,text,timestamptz,uuid[],boolean)'::regprocedure),
   '%seller_appointment_blocks_availability%',
   'agendamento usa a regra canonica de conflito'
+);
+SELECT like(
+  pg_get_functiondef('public.check_admin_team_meeting_availability(uuid[],timestamptz,boolean)'::regprocedure),
+  '%seller_appointment_blocks_availability%',
+  'consulta confere todas as agendas com a regra canonica'
+);
+SELECT is(
+  public.seller_appointment_blocks_availability('follow_up', 'agendado'),
+  false,
+  'follow-up agendado nao ocupa horario'
+);
+SELECT is(
+  public.seller_appointment_blocks_availability('FOLLOW-UP', 'AGENDADO'),
+  false,
+  'variacao textual de follow-up tambem nao ocupa horario'
 );
 SELECT like(
   pg_get_functiondef('public.schedule_admin_team_meeting(text,text,timestamptz,uuid[],boolean)'::regprocedure),
