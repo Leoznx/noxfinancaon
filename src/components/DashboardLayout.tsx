@@ -310,7 +310,7 @@ const vendedorItems: MenuItem[] = [
     icon: MonitorPlay,
     label: "Contas demo",
     href: "/vendedor/contas-demo",
-    sellerTypes: ["closer"],
+    sellerTypes: ["sdr", "closer"],
   },
   {
     icon: Users,

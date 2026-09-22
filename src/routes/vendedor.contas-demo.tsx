@@ -28,7 +28,7 @@ import {
 
 export const Route = createFileRoute("/vendedor/contas-demo")({
   component: () => (
-    <ProtectedRoute roles={["vendedor"]} sellerTypes={["closer"]}>
+    <ProtectedRoute roles={["vendedor"]} sellerTypes={["sdr", "closer"]}>
       <DemoAccountsPage />
     </ProtectedRoute>
   ),
