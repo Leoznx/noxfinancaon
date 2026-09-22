@@ -93,7 +93,26 @@ export async function recordMeetingSignupSelectorSend(
     p_corretor_token: tokens.corretor,
     p_channel: channel,
   });
-  if (error) throw error;
+  if (!error) return;
+
+  // Ambientes que ainda não atualizaram o cache da função agrupada continuam
+  // registrando os três perfis pelo contrato anterior. Cada evento conserva o
+  // mesmo appointment_id, Closer e SDR, portanto a atribuição no cadastro é a
+  // mesma e o link nunca fica inutilizado por uma falha apenas de auditoria.
+  try {
+    await Promise.all(
+      links.map((link) =>
+        recordMeetingSignupLinkSend(
+          appointmentId,
+          link.token,
+          link.profileRole,
+          channel,
+        ),
+      ),
+    );
+  } catch (fallbackError) {
+    throw fallbackError instanceof Error ? fallbackError : error;
+  }
 }
 
 export function buildSellerSignupUrl(
