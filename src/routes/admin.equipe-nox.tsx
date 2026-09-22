@@ -51,6 +51,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   UserRound,
+  ContactRound,
 } from "lucide-react";
 import { z } from "zod";
 import { addMonths, format } from "date-fns";
@@ -69,6 +70,7 @@ import { TabColaboradores, TabEquipeComercial } from "./admin.equipe-permissoes"
 import { SellerRewardsTab } from "@/components/admin/SellerRewardsTab";
 import { TimeClockHistoryTab } from "@/components/admin/TimeClockHistoryTab";
 import { NoxEmployeeInviteCards } from "@/components/admin/NoxEmployeeInviteCards";
+import { SellerClientsAdminTab } from "@/components/admin/SellerClientsAdminTab";
 
 const VALID_TABS = [
   "metas",
@@ -79,6 +81,7 @@ const VALID_TABS = [
   "colaboradores",
   "equipe-comercial",
   "historico-ponto",
+  "clientes-vendedores",
   "auditoria",
 ] as const;
 type TabKey = (typeof VALID_TABS)[number];
@@ -100,7 +103,7 @@ function EquipeNoxPage() {
   const navigate = useNavigate();
   const search = useSearch({ from: "/admin/equipe-nox" });
   const requestedTab: TabKey = (search.tab as TabKey) ?? "metas";
-  const activeTab: VisibleTabKey =
+  const normalizedTab: VisibleTabKey =
     requestedTab === "equipe-comercial"
       ? "comissoes"
       : requestedTab === "agenda"
@@ -112,6 +115,8 @@ function EquipeNoxPage() {
     user?.role === "admin" ||
     user?.role === "admin_master" ||
     user?.internalRole === "admin_master";
+  const activeTab: VisibleTabKey =
+    normalizedTab === "clientes-vendedores" && !canManageTimeClock ? "metas" : normalizedTab;
 
   return (
     <DashboardLayout>
@@ -164,6 +169,12 @@ function EquipeNoxPage() {
               Colaboradores
             </TabsTrigger>
             {canManageTimeClock && (
+              <TabsTrigger value="clientes-vendedores">
+                <ContactRound className="mr-2 h-4 w-4" />
+                Clientes dos vendedores
+              </TabsTrigger>
+            )}
+            {canManageTimeClock && (
               <TabsTrigger value="historico-ponto">
                 <Clock3 className="mr-2 h-4 w-4" />
                 Histórico de ponto
@@ -188,6 +199,11 @@ function EquipeNoxPage() {
             <NoxEmployeeInviteCards />
             <TabColaboradores />
           </TabsContent>
+          {canManageTimeClock && (
+            <TabsContent value="clientes-vendedores" className="mt-4">
+              <SellerClientsAdminTab />
+            </TabsContent>
+          )}
           {canManageTimeClock && (
             <TabsContent value="historico-ponto" className="mt-4">
               <TimeClockHistoryTab />
