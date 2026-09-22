@@ -156,6 +156,7 @@ function normalizePersonName(value: string) {
 
 export type AppointmentDraft = {
   id?: string;
+  personalReminder?: boolean;
   title: string;
   type: string;
   status: string;
@@ -166,6 +167,11 @@ export type AppointmentDraft = {
   lead_id: string | null;
   partnership_id: string | null;
 };
+
+export function isPersonalSellerReminder(item: Pick<SellerAppointment, "source" | "type" | "lead_id" | "partnership_id" | "sdr_id" | "assigned_closer_id">) {
+  return item.source === "manual" && item.type === "follow_up"
+    && !item.lead_id && !item.partnership_id && !item.sdr_id && !item.assigned_closer_id;
+}
 
 export const AGENDA_TYPES = [
   { value: "reuniao", label: "Reunião" },
@@ -381,6 +387,9 @@ export async function fetchSellerAgenda(
 }
 
 export async function saveSellerAppointment(sellerId: string, draft: AppointmentDraft) {
+  if (draft.personalReminder && (draft.type !== "follow_up" || draft.lead_id || draft.partnership_id)) {
+    throw new Error("O lembrete pessoal deve ser um follow-up sem destinatários ou vínculos.");
+  }
   const payload = {
     seller_id: sellerId,
     lead_id: draft.lead_id || null,
@@ -394,13 +403,16 @@ export async function saveSellerAppointment(sellerId: string, draft: Appointment
     notes: draft.notes?.trim() || null,
   };
 
+  const insertPayload: Record<string, string | number | null> = draft.personalReminder
+    ? { ...payload, source: "manual", sdr_id: null, assigned_closer_id: null }
+    : payload;
   const result = draft.id
     ? await supabase
         .from("seller_appointments" as any)
         .update(payload)
         .eq("id", draft.id)
         .eq("seller_id", sellerId)
-    : await supabase.from("seller_appointments" as any).insert(payload);
+    : await supabase.from("seller_appointments" as any).insert(insertPayload);
 
   if (result.error) throw result.error;
 }

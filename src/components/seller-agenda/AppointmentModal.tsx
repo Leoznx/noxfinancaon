@@ -15,6 +15,7 @@ import {
   AGENDA_STATUSES,
   AGENDA_TYPES,
   agendaTypeKey,
+  isPersonalSellerReminder,
   type AgendaClientOption,
   type AgendaLeadOption,
   type AppointmentDraft,
@@ -34,20 +35,20 @@ type FormState = {
   partnershipId: string | null;
 };
 
-function initialForm(initial: SellerAppointment | null, defaultDate: Date): FormState {
-  const date = initial ? new Date(initial.scheduled_at) : defaultDate;
+function initialForm(initial: SellerAppointment | null, defaultDate: Date, personalReminder: boolean): FormState {
+  const date = initial ? new Date(initial.scheduled_at) : new Date(defaultDate);
   if (!initial) date.setHours(9, 0, 0, 0);
   return {
     title: initial?.title ?? "",
-    type: initial ? agendaTypeKey(initial.type) : "reuniao",
+    type: personalReminder ? "follow_up" : initial ? agendaTypeKey(initial.type) : "reuniao",
     status: initial?.status === "concluido" || initial?.status === "cancelado" ? initial.status : "agendado",
     priority: initial?.priority ?? "normal",
     date: format(date, "yyyy-MM-dd"),
     time: format(date, "HH:mm"),
-    reminder: initial?.reminder_minutes?.toString() ?? "none",
+    reminder: initial?.reminder_minutes?.toString() ?? (personalReminder ? "30" : "none"),
     notes: initial?.notes ?? "",
-    leadId: initial?.lead_id ?? null,
-    partnershipId: initial?.partnership_id ?? null,
+    leadId: personalReminder ? null : initial?.lead_id ?? null,
+    partnershipId: personalReminder ? null : initial?.partnership_id ?? null,
   };
 }
 
@@ -134,6 +135,7 @@ export function AppointmentModal({
   onOpenChange,
   onSave,
   onDelete,
+  personalReminder = false,
 }: {
   open: boolean;
   initial: SellerAppointment | null;
@@ -143,18 +145,20 @@ export function AppointmentModal({
   onOpenChange: (open: boolean) => void;
   onSave: (draft: AppointmentDraft) => Promise<void>;
   onDelete?: (item: SellerAppointment) => void;
+  personalReminder?: boolean;
 }) {
-  const [form, setForm] = useState<FormState>(() => initialForm(initial, defaultDate));
+  const isPersonalReminder = personalReminder || (initial ? isPersonalSellerReminder(initial) : false);
+  const [form, setForm] = useState<FormState>(() => initialForm(initial, defaultDate, isPersonalReminder));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const lockMeetingSchedule = initial?.type === "reuniao";
 
   useEffect(() => {
     if (open) {
-      setForm(initialForm(initial, defaultDate));
+      setForm(initialForm(initial, defaultDate, isPersonalReminder));
       setError("");
     }
-  }, [open, initial, defaultDate]);
+  }, [open, initial, defaultDate, isPersonalReminder]);
 
   const clientOptions = useMemo(
     () =>
@@ -195,15 +199,16 @@ export function AppointmentModal({
     try {
       await onSave({
         id: initial?.id,
+        personalReminder: isPersonalReminder,
         title: form.title,
-        type: form.type,
+        type: isPersonalReminder ? "follow_up" : form.type,
         status: form.status,
         priority: form.priority,
         scheduled_at: scheduledAt.toISOString(),
         reminder_minutes: form.reminder === "none" ? null : Number(form.reminder),
         notes: form.notes || null,
-        lead_id: form.leadId,
-        partnership_id: form.partnershipId,
+        lead_id: isPersonalReminder ? null : form.leadId,
+        partnership_id: isPersonalReminder ? null : form.partnershipId,
       });
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Não foi possível salvar o compromisso.");
@@ -216,8 +221,8 @@ export function AppointmentModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[92vh] max-w-2xl overflow-y-auto p-0">
         <DialogHeader className="border-b border-neutral-100 px-5 py-4 sm:px-6">
-          <DialogTitle className="text-xl font-black">{initial ? "Editar compromisso" : "Novo compromisso"}</DialogTitle>
-          <p className="text-sm text-neutral-500">Organize o próximo contato com informações claras e lembrete automático.</p>
+          <DialogTitle className="text-xl font-black">{isPersonalReminder ? (initial ? "Editar lembrete" : "Criar lembrete") : initial ? "Editar compromisso" : "Novo compromisso"}</DialogTitle>
+          <p className="text-sm text-neutral-500">{isPersonalReminder ? "Follow-up particular: sem outros participantes e sem reservar horários de reunião." : "Organize o próximo contato com informações claras e lembrete automático."}</p>
         </DialogHeader>
 
         <div className="grid gap-4 px-5 py-5 sm:grid-cols-2 sm:px-6">
@@ -232,7 +237,7 @@ export function AppointmentModal({
             />
           </div>
 
-          <div className="space-y-1.5">
+          {!isPersonalReminder && <div className="space-y-1.5">
             <Label>Tipo *</Label>
             <Select value={form.type} onValueChange={(type) => setForm((current) => ({ ...current, type }))}>
               <SelectTrigger><SelectValue /></SelectTrigger>
@@ -240,8 +245,8 @@ export function AppointmentModal({
                 {AGENDA_TYPES.map((type) => <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>)}
               </SelectContent>
             </Select>
-          </div>
-          <div className="space-y-1.5">
+          </div>}
+          {!isPersonalReminder && <div className="space-y-1.5">
             <Label>Status</Label>
             <Select value={form.status} onValueChange={(status) => setForm((current) => ({ ...current, status }))}>
               <SelectTrigger><SelectValue /></SelectTrigger>
@@ -249,7 +254,7 @@ export function AppointmentModal({
                 {AGENDA_STATUSES.map((status) => <SelectItem key={status.value} value={status.value}>{status.label}</SelectItem>)}
               </SelectContent>
             </Select>
-          </div>
+          </div>}
 
           <div className="space-y-1.5">
             <Label htmlFor="agenda-date">Data *</Label>
@@ -261,7 +266,7 @@ export function AppointmentModal({
           </div>
           {lockMeetingSchedule ? <p className="rounded-xl border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs font-semibold text-yellow-900 sm:col-span-2">Para alterar a data ou o horário com validação da agenda do Closer, feche esta edição e use o botão <strong>Reagendar</strong>.</p> : null}
 
-          <SearchPicker
+          {!isPersonalReminder && <><SearchPicker
             label="Cliente parceiro"
             placeholder="Pesquisar cliente"
             emptyLabel="Sem cliente vinculado"
@@ -276,7 +281,7 @@ export function AppointmentModal({
             options={leadOptions}
             value={form.leadId}
             onChange={(leadId) => setForm((current) => ({ ...current, leadId }))}
-          />
+          /></>}
 
           <div className="space-y-1.5 sm:col-span-2">
             <Label>Lembrete</Label>
@@ -315,7 +320,7 @@ export function AppointmentModal({
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancelar</Button>
             <Button type="button" className="bg-yellow-400 font-extrabold text-black hover:bg-yellow-500" onClick={submit} disabled={saving}>
-              {saving ? "Salvando..." : "Salvar compromisso"}
+              {saving ? "Salvando..." : isPersonalReminder ? "Salvar lembrete" : "Salvar compromisso"}
             </Button>
           </div>
         </DialogFooter>

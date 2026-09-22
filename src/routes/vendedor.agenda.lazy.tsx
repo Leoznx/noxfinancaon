@@ -20,7 +20,7 @@ import { SharedSalesAgenda } from "@/components/seller-agenda/SharedSalesAgenda"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { appointmentMatchesFilter, buildShortNameValueMap, canEditSellerMeetingContact, completeCloserMeeting, deleteSellerAppointment, fetchSellerAgenda, getSharedMeetingMetadata, saveSellerAppointment, setSellerAppointmentStatus, type AgendaClientOption, type AgendaFilter, type AgendaLeadOption, type AgendaSummary, type AgendaViewMode, type AppointmentDraft, type SellerAppointment } from "@/lib/seller-agenda";
+import { appointmentMatchesFilter, buildShortNameValueMap, canEditSellerMeetingContact, completeCloserMeeting, deleteSellerAppointment, fetchSellerAgenda, getSharedMeetingMetadata, isPersonalSellerReminder, saveSellerAppointment, setSellerAppointmentStatus, type AgendaClientOption, type AgendaFilter, type AgendaLeadOption, type AgendaSummary, type AgendaViewMode, type AppointmentDraft, type SellerAppointment } from "@/lib/seller-agenda";
 import { getSellerContext } from "@/lib/vendedor-portal";
 
 export const Route = createLazyFileRoute("/vendedor/agenda")({
@@ -56,6 +56,7 @@ function AgendaPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
+  const [personalReminder, setPersonalReminder] = useState(false);
   const [editing, setEditing] = useState<SellerAppointment | null>(null);
   const [viewing, setViewing] = useState<SellerAppointment | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SellerAppointment | null>(null);
@@ -208,6 +209,13 @@ function AgendaPage() {
       return;
     }
     setEditing(null);
+    setPersonalReminder(false);
+    setModalOpen(true);
+  }
+
+  function openPersonalReminder() {
+    setEditing(null);
+    setPersonalReminder(true);
     setModalOpen(true);
   }
 
@@ -222,6 +230,7 @@ function AgendaPage() {
       return;
     }
     setEditing(item);
+    setPersonalReminder(isPersonalSellerReminder(item));
     setModalOpen(true);
   }
 
@@ -255,7 +264,7 @@ function AgendaPage() {
       throw new Error("Use a agenda compartilhada para que a reunião seja entregue automaticamente a um Closer.");
     }
     await saveSellerAppointment(sellerId, draft);
-    toast.success(draft.id ? "Compromisso atualizado com sucesso." : "Compromisso criado com sucesso.");
+    toast.success(draft.personalReminder ? (draft.id ? "Lembrete atualizado." : "Lembrete criado na sua agenda.") : draft.id ? "Compromisso atualizado com sucesso." : "Compromisso criado com sucesso.");
     setModalOpen(false);
     setEditing(null);
     setMonth(startOfMonth(new Date(draft.scheduled_at)));
@@ -360,6 +369,9 @@ function AgendaPage() {
             <Button type="button" variant="outline" className="h-9 gap-2 font-bold" onClick={() => load(true)} disabled={refreshing}>
               <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Atualizar
             </Button>
+            <Button type="button" variant="outline" className="h-9 gap-2 font-bold" onClick={openPersonalReminder} disabled={loading || !sellerType}>
+              <Plus className="h-4 w-4" /> Criar lembrete
+            </Button>
             <Button type="button" className="h-9 gap-2 bg-yellow-400 font-extrabold text-black hover:bg-yellow-500" onClick={() => openNew()} disabled={loading || !sellerType}>
               <Plus className="h-4 w-4" /> {sellerType === "sdr" ? "Agendar reunião" : "Novo compromisso"}
             </Button>
@@ -426,12 +438,13 @@ function AgendaPage() {
         <AppointmentModal
           open={modalOpen}
           initial={editing}
+          personalReminder={personalReminder}
           defaultDate={selectedDate}
           leads={leads}
           clients={clients}
           onOpenChange={(open) => {
             setModalOpen(open);
-            if (!open) setEditing(null);
+            if (!open) { setEditing(null); setPersonalReminder(false); }
           }}
           onSave={handleSave}
           onDelete={(item) => {
