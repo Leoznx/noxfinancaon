@@ -1,6 +1,6 @@
 BEGIN;
 
-SELECT plan(11);
+SELECT plan(12);
 
 SELECT has_function(
   'public',
@@ -60,6 +60,13 @@ SELECT volatility_is(
   ARRAY[]::text[],
   'stable',
   'seller portfolio listing is stable'
+);
+SELECT ok(
+  position(
+    'seller.status::text'
+    IN pg_get_functiondef(to_regprocedure('public.admin_list_seller_client_portfolios()'))
+  ) > 0,
+  'seller status enum is explicitly converted to the declared text result'
 );
 
 SELECT * FROM finish();

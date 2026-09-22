@@ -30,7 +30,7 @@ BEGIN
     coalesce(nullif(trim(seller.full_name), ''), seller.email, 'Vendedor NOX'),
     coalesce(seller.email, ''),
     seller.seller_type,
-    seller.status,
+    seller.status::text,
     count(credit.credit_id)::bigint
   FROM public.internal_users AS seller
   LEFT JOIN LATERAL public.seller_registration_credits_for(seller.id) AS credit ON true
