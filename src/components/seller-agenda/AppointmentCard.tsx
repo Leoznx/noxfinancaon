@@ -10,6 +10,7 @@ import {
   appointmentWhatsAppMessage,
   buildAppointmentWhatsAppUrl,
   canRescheduleSellerMeeting,
+  getAppointmentContact,
   getSharedMeetingMetadata,
   getVisibleAppointmentNotes,
   type SellerAppointment,
@@ -53,14 +54,14 @@ export function AppointmentCard({
   canComplete?: boolean;
 }) {
   const finished = ["concluido", "cancelado"].includes(item.status);
-  const relatedName = item.client_name || item.lead_name;
+  const contact = getAppointmentContact(item);
   const sharedMetadata = getSharedMeetingMetadata(item.notes);
   const visibleNotes = getVisibleAppointmentNotes(item);
   const sdrName = sharedMetadata.sdrName
     ? sdrNames?.get(sharedMetadata.sdrName) ?? sharedMetadata.sdrName.trim().split(/\s+/)[0]
     : null;
-  const whatsappUrl = item.source === "meeting_follow_up"
-    ? buildAppointmentWhatsAppUrl(item.contact_phone || item.lead_phone, appointmentWhatsAppMessage(item))
+  const whatsappUrl = item.source === "meeting_follow_up" && contact.phone
+    ? buildAppointmentWhatsAppUrl(contact.phone, appointmentWhatsAppMessage(item))
     : null;
 
   return (
@@ -90,12 +91,13 @@ export function AppointmentCard({
           </div>
           <h3 className={`mt-1.5 whitespace-normal break-words font-extrabold leading-snug text-neutral-950 [overflow-wrap:anywhere] ${compact ? "text-sm" : "text-base"}`}>{item.title}</h3>
           {item.source === "sdr_handoff" && (sharedMetadata.clientType || sdrName) && <p className="mt-0.5 truncate text-[10px] font-bold text-yellow-700">{sharedMetadata.clientType ?? "Cliente"}{sdrName ? ` · SDR ${sdrName}` : ""}</p>}
-          {relatedName && (
+          {contact.name && (
             <p className="mt-0.5 flex items-center gap-1 truncate text-[11px] font-medium text-neutral-500">
-              {item.client_name ? <Building2 className="h-3 w-3" /> : <UserRound className="h-3 w-3" />}
-              {relatedName}
+              {item.client_name && !item.contact_name ? <Building2 className="h-3 w-3" /> : <UserRound className="h-3 w-3" />}
+              {contact.name}
             </p>
           )}
+          {contact.phone && <p className="mt-0.5 truncate text-[10px] font-semibold text-neutral-400">{contact.phone}</p>}
           {!compact && visibleNotes && <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-neutral-500">{visibleNotes}</p>}
           {!compact && (
             <p className="mt-2 text-[10px] font-semibold capitalize text-neutral-400">

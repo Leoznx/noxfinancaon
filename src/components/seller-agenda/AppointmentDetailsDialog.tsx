@@ -5,7 +5,7 @@ import { MeetingSignupLinks } from "@/components/seller-agenda/MeetingSignupLink
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { AGENDA_REMINDERS, agendaStatusLabel, agendaTypeLabel, appointmentWhatsAppMessage, buildAppointmentWhatsAppUrl, canRescheduleSellerMeeting, getAppointmentContact, getSharedMeetingMetadata, getVisibleAppointmentNotes, type SellerAppointment } from "@/lib/seller-agenda";
+import { AGENDA_REMINDERS, agendaStatusLabel, agendaTypeLabel, appointmentWhatsAppMessage, buildAppointmentWhatsAppUrl, canRescheduleSellerMeeting, getAppointmentContact, getSharedMeetingMetadata, getVisibleAppointmentNotes, isPersonalSellerReminder, type SellerAppointment } from "@/lib/seller-agenda";
 import { formatBrazilianPhoneInput, normalizeBrazilianPhone } from "@/lib/seller-clients";
 
 const JOURNEY_COPY = {
@@ -62,13 +62,14 @@ export function AppointmentDetailsDialog({
   const contact = getAppointmentContact(item);
   const contactPhoneDigits = contact.phone ? normalizeBrazilianPhone(contact.phone) : "";
   const contactPhoneDisplay = contact.phone ? formatBrazilianPhoneInput(contact.phone) : null;
+  const showContact = !isPersonalSellerReminder(item) && item.source !== "admin";
   const reminder = AGENDA_REMINDERS.find((option) => option.value === item.reminder_minutes)?.label ?? "Sem lembrete";
   const metadata = getSharedMeetingMetadata(item.notes);
   const visibleNotes = getVisibleAppointmentNotes(item);
   const sdrName = metadata.sdrName
     ? sdrNames?.get(metadata.sdrName) ?? metadata.sdrName.trim().split(/\s+/)[0]
     : null;
-  const followUpWhatsAppUrl = item.source === "meeting_follow_up"
+  const followUpWhatsAppUrl = item.source === "meeting_follow_up" && contact.phone
     ? buildAppointmentWhatsAppUrl(contact.phone, appointmentWhatsAppMessage(item))
     : null;
   const journey = item.source === "meeting_follow_up" && item.journey
@@ -92,20 +93,20 @@ export function AppointmentDetailsDialog({
             <p className="flex items-center gap-2 font-semibold capitalize text-neutral-700 sm:col-span-2"><CalendarDays className="h-4 w-4 text-yellow-700" /> {format(new Date(item.scheduled_at), "EEEE, d 'de' MMMM", { locale: ptBR })}</p>
             <p className="flex items-center gap-2 font-semibold text-neutral-700 sm:col-span-2"><Bell className="h-4 w-4 text-yellow-700" /> {reminder}</p>
           </div>
-          {(contact.name || contactPhoneDisplay) && (
-            <div className="grid gap-2 rounded-xl border border-neutral-200 p-3 sm:grid-cols-2">
-              {contact.name && (
+          {showContact && (
+            <div className="rounded-xl border border-neutral-200 p-3">
+              <p className="mb-3 text-[10px] font-black uppercase tracking-[0.14em] text-neutral-400">Dados da pessoa</p>
+              <div className="grid gap-3 sm:grid-cols-2">
                 <div className="flex items-center gap-2.5 text-neutral-800">
                   {item.client_name && !item.contact_name ? <Building2 className="h-4 w-4 shrink-0 text-neutral-400" /> : <UserRound className="h-4 w-4 shrink-0 text-neutral-400" />}
-                  <div className="min-w-0"><p className="text-[10px] font-black uppercase tracking-wider text-neutral-400">Cliente</p><p className="truncate font-bold">{contact.name}</p></div>
+                  <div className="min-w-0"><p className="text-[10px] font-black uppercase tracking-wider text-neutral-400">Nome</p><p className="truncate font-bold">{contact.name ?? "Não informado"}</p></div>
                 </div>
-              )}
-              {contactPhoneDisplay && (
-                <a className="flex items-center gap-2.5 rounded-lg text-neutral-800 transition hover:text-neutral-950" href={`tel:+55${contactPhoneDigits}`} aria-label={`Ligar para ${contactPhoneDisplay}`}>
+                {contactPhoneDisplay ? <a className="flex items-center gap-2.5 rounded-lg text-neutral-800 transition hover:text-neutral-950" href={`tel:+55${contactPhoneDigits}`} aria-label={`Ligar para ${contactPhoneDisplay}`}>
                   <Phone className="h-4 w-4 shrink-0 text-neutral-400" />
                   <div><p className="text-[10px] font-black uppercase tracking-wider text-neutral-400">Telefone</p><p className="font-bold">{contactPhoneDisplay}</p></div>
-                </a>
-              )}
+                </a> : <div className="flex items-center gap-2.5 text-neutral-500"><Phone className="h-4 w-4 shrink-0 text-neutral-300" /><div><p className="text-[10px] font-black uppercase tracking-wider text-neutral-400">Telefone</p><p className="font-semibold">Não informado</p></div></div>}
+                {contact.email && <div className="min-w-0 sm:col-span-2"><p className="text-[10px] font-black uppercase tracking-wider text-neutral-400">E-mail</p><p className="truncate font-semibold text-neutral-700">{contact.email}</p></div>}
+              </div>
             </div>
           )}
           {item.type === "reuniao" && (metadata.clientType || sdrName) && <div className="grid gap-2 rounded-xl border border-yellow-200 bg-yellow-50 p-3 text-xs font-semibold text-neutral-700 sm:grid-cols-2">{metadata.clientType && <p><span className="text-neutral-500">Perfil:</span> {metadata.clientType}</p>}{sdrName && <p><span className="text-neutral-500">SDR:</span> {sdrName}</p>}</div>}

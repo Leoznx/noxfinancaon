@@ -166,6 +166,9 @@ export type AppointmentDraft = {
   notes: string | null;
   lead_id: string | null;
   partnership_id: string | null;
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
 };
 
 export function isPersonalSellerReminder(item: Pick<SellerAppointment, "source" | "type" | "lead_id" | "partnership_id" | "sdr_id" | "assigned_closer_id">) {
@@ -254,9 +257,17 @@ export function canEditSellerMeetingContact(
   return creatorId === sellerId;
 }
 
-export function getAppointmentContact(item: Pick<SellerAppointment, "contact_name" | "contact_phone" | "client_name" | "lead_name" | "lead_phone">) {
+function inferredContactNameFromTitle(title: string) {
+  const parts = title.split(/\s+[—–-]\s+/).map((part) => part.trim()).filter(Boolean);
+  if (parts.length < 2) return null;
+  const candidate = parts.at(-1) ?? "";
+  return /^(cliente|contato n[aã]o informado)$/i.test(candidate) ? null : candidate;
+}
+
+export function getAppointmentContact(item: Pick<SellerAppointment, "title" | "contact_name" | "contact_email" | "contact_phone" | "client_name" | "lead_name" | "lead_email" | "lead_phone">) {
   return {
-    name: item.contact_name || item.client_name || item.lead_name || null,
+    name: item.contact_name || item.client_name || item.lead_name || inferredContactNameFromTitle(item.title),
+    email: item.contact_email || item.lead_email || null,
     phone: item.contact_phone || item.lead_phone || null,
   };
 }
@@ -401,6 +412,9 @@ export async function saveSellerAppointment(sellerId: string, draft: Appointment
     scheduled_at: draft.scheduled_at,
     reminder_minutes: draft.reminder_minutes,
     notes: draft.notes?.trim() || null,
+    contact_name: draft.contact_name?.trim() || null,
+    contact_email: draft.contact_email?.trim().toLocaleLowerCase("pt-BR") || null,
+    contact_phone: draft.contact_phone?.trim() || null,
   };
 
   const insertPayload: Record<string, string | number | null> = draft.personalReminder

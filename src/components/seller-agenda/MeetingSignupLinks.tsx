@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   buildAppointmentWhatsAppUrl,
+  getAppointmentContact,
   registrationWhatsAppMessage,
   type SellerAppointment,
 } from "@/lib/seller-agenda";
@@ -18,9 +19,10 @@ export function MeetingSignupLinks({ item }: { item: SellerAppointment }) {
   const [links, setLinks] = useState<SellerSignupLink[]>([]);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const contact = getAppointmentContact(item);
   const url = links.length ? buildMeetingSignupSelectorUrl(links, item.id) : "";
   const message = url ? registrationWhatsAppMessage(item, "seu perfil", url) : "";
-  const whatsappUrl = url ? buildAppointmentWhatsAppUrl(item.contact_phone, message) : "";
+  const whatsappUrl = url && contact.phone ? buildAppointmentWhatsAppUrl(contact.phone, message) : "";
   const sourceSdrName = links.find((link) => link.sourceSdrName)?.sourceSdrName ?? null;
 
   async function prepare() {
@@ -99,7 +101,7 @@ export function MeetingSignupLinks({ item }: { item: SellerAppointment }) {
             {copied ? <Check className="mr-1.5 h-4 w-4" /> : <Copy className="mr-1.5 h-4 w-4" />}{" "}
             Copiar
           </Button>
-          <Button
+          {whatsappUrl ? <Button
             type="button"
             size="sm"
             className="bg-[#25D366] font-black text-white hover:bg-[#20bd5a]"
@@ -108,7 +110,7 @@ export function MeetingSignupLinks({ item }: { item: SellerAppointment }) {
             <a href={whatsappUrl} target="_blank" rel="noreferrer" onClick={registerWhatsAppSend}>
               <MessageCircle className="mr-1.5 h-4 w-4" /> WhatsApp
             </a>
-          </Button>
+          </Button> : <Button type="button" size="sm" variant="outline" disabled>Telefone não informado</Button>}
         </div>
       </div>
       <p className="break-all rounded-lg bg-white px-3 py-2 font-mono text-[10px] text-neutral-500">

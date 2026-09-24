@@ -197,6 +197,8 @@ export function AppointmentModal({
     setSaving(true);
     setError("");
     try {
+      const selectedLead = leads.find((lead) => lead.id === form.leadId) ?? null;
+      const selectedClient = clients.find((client) => client.id === form.partnershipId) ?? null;
       await onSave({
         id: initial?.id,
         personalReminder: isPersonalReminder,
@@ -209,6 +211,9 @@ export function AppointmentModal({
         notes: form.notes || null,
         lead_id: isPersonalReminder ? null : form.leadId,
         partnership_id: isPersonalReminder ? null : form.partnershipId,
+        contact_name: isPersonalReminder ? null : selectedLead?.full_name ?? selectedClient?.name ?? initial?.contact_name ?? null,
+        contact_email: isPersonalReminder ? null : selectedLead?.email ?? selectedClient?.email ?? initial?.contact_email ?? null,
+        contact_phone: isPersonalReminder ? null : selectedLead?.phone ?? initial?.contact_phone ?? null,
       });
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Não foi possível salvar o compromisso.");
@@ -272,7 +277,7 @@ export function AppointmentModal({
             emptyLabel="Sem cliente vinculado"
             options={clientOptions}
             value={form.partnershipId}
-            onChange={(partnershipId) => setForm((current) => ({ ...current, partnershipId }))}
+            onChange={(partnershipId) => setForm((current) => ({ ...current, partnershipId, leadId: partnershipId ? null : current.leadId }))}
           />
           <SearchPicker
             label="Lead"
@@ -280,7 +285,7 @@ export function AppointmentModal({
             emptyLabel="Sem lead vinculado"
             options={leadOptions}
             value={form.leadId}
-            onChange={(leadId) => setForm((current) => ({ ...current, leadId }))}
+            onChange={(leadId) => setForm((current) => ({ ...current, leadId, partnershipId: leadId ? null : current.partnershipId }))}
           /></>}
 
           <div className="space-y-1.5 sm:col-span-2">
