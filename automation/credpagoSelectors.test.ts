@@ -277,6 +277,37 @@ test("desliga coberturas ERP sem valor para liberar o formulário", async () => 
   await page.close();
 });
 
+test("ajusta switches internos do portal novo mesmo quando o campo de valor continua habilitado", async () => {
+  const url = "https://app.loft.com.br/erp/proposta/analise-de-credito";
+  const page = await pageWithHtml(
+    url,
+    `<main>
+      <label>Valor mensal do aluguel<input id="aluguel" placeholder="R$ 0.000,00" /></label>
+      <div data-testid="property-condominium-coverage-toggle">
+        Incluir cobertura de condomínio
+        <button id="condominio-toggle" type="button" role="switch" aria-checked="true"
+          onclick="this.setAttribute('aria-checked', String(this.getAttribute('aria-checked') !== 'true'))">Alternar</button>
+      </div>
+      <label>Condomínio<input data-testid="property-condominium-value" id="condominio" placeholder="R$ 0.000,00" /></label>
+      <div data-testid="property-iptu-coverage-toggle">
+        Incluir cobertura de IPTU
+        <button id="iptu-toggle" type="button" role="switch" aria-checked="true"
+          onclick="this.setAttribute('aria-checked', String(this.getAttribute('aria-checked') !== 'true'))">Alternar</button>
+      </div>
+      <label>IPTU<input data-testid="property-iptu-value" id="iptu" placeholder="R$ 0.000,00" /></label>
+    </main>`,
+  );
+
+  await fillValores(page, { aluguel: 1880, condominio: 0, taxas: 0 });
+
+  assert.equal(await page.locator("#aluguel").inputValue(), "1880,00");
+  assert.equal(await page.locator("#condominio-toggle").getAttribute("aria-checked"), "false");
+  assert.equal(await page.locator("#iptu-toggle").getAttribute("aria-checked"), "false");
+  assert.equal(await page.locator("#condominio").isEnabled(), true);
+  assert.equal(await page.locator("#iptu").isEnabled(), true);
+  await page.close();
+});
+
 test("só sinaliza envio quando o botão Fazer análise realmente será clicado", async () => {
   const url = "https://app.loft.com.br/erp/proposta/analise-de-credito";
   const page = await pageWithHtml(

@@ -171,10 +171,73 @@ async function clickButtonByText(
 async function fillCurrencyField(field: Locator, value: number): Promise<void> {
   const placeholder = await field.getAttribute("placeholder").catch(() => null);
   const usesBrazilianCurrencyMask = /R\$.*,[0#]{2}/i.test(placeholder ?? "");
-  const inputValue = usesBrazilianCurrencyMask
-    ? value.toFixed(2).replace(".", ",")
-    : String(value);
+  const inputValue = usesBrazilianCurrencyMask ? value.toFixed(2).replace(".", ",") : String(value);
   await field.fill(inputValue);
+}
+
+async function coverageSemanticState(root: Locator): Promise<boolean | null> {
+  const candidates = [
+    root,
+    root
+      .locator(
+        '[role="switch"], [role="checkbox"], input[type="checkbox"], [aria-checked], [data-state]',
+      )
+      .first(),
+  ];
+
+  for (const candidate of candidates) {
+    if ((await candidate.count().catch(() => 0)) === 0) continue;
+    const state = await candidate
+      .first()
+      .evaluate((element) => {
+        if (element instanceof HTMLInputElement && element.type === "checkbox") {
+          return element.checked;
+        }
+
+        const ariaChecked = element.getAttribute("aria-checked");
+        if (ariaChecked === "true" || ariaChecked === "false") return ariaChecked === "true";
+
+        const ariaPressed = element.getAttribute("aria-pressed");
+        if (ariaPressed === "true" || ariaPressed === "false") return ariaPressed === "true";
+
+        const dataState = element.getAttribute("data-state")?.toLowerCase();
+        if (dataState && ["checked", "on", "active", "enabled"].includes(dataState)) return true;
+        if (dataState && ["unchecked", "off", "inactive", "disabled"].includes(dataState))
+          return false;
+
+        return null;
+      })
+      .catch(() => null);
+    if (state !== null) return state;
+  }
+
+  return null;
+}
+
+async function coverageClickTarget(root: Locator): Promise<Locator> {
+  const rootIsInteractive = await root
+    .first()
+    .evaluate((element) =>
+      element.matches('button, input[type="checkbox"], [role="switch"], [role="checkbox"]'),
+    )
+    .catch(() => false);
+  if (rootIsInteractive) return root.first();
+
+  // O portal novo manteve o data-testid no contêiner, mas moveu o evento para
+  // um botão/role=switch interno. Clicar no centro do contêiner não altera mais
+  // o estado, por isso o alvo interativo precisa ser resolvido explicitamente.
+  const nested = root.locator(
+    '[role="switch"], [role="checkbox"], button, input[type="checkbox"], label',
+  );
+  const count = await nested.count().catch(() => 0);
+  for (let index = 0; index < count; index += 1) {
+    const candidate = nested.nth(index);
+    if (await candidate.isVisible().catch(() => false)) return candidate;
+  }
+
+  // Switches legados podem manter apenas um input visualmente oculto e delegar
+  // o clique ao label/contêiner. Nesse caso, o alvo original continua correto.
+  return root.first();
 }
 
 /**
@@ -182,8 +245,10 @@ async function fillCurrencyField(field: Locator, value: number): Promise<void> {
  * Quando uma cobertura está ligada, o respectivo valor passa a ser obrigatório
  * e o botão "Fazer análise" fica desabilitado enquanto ele estiver vazio.
  *
- * Clica no controle visual e confirma o estado pela habilitação do campo
- * monetário, que é o que a validação do formulário realmente considera.
+ * Clica no controle visual e confirma o estado tanto pelo switch semântico
+ * quanto pela habilitação do campo monetário. O portal novo mantém o campo
+ * montado/habilitado mesmo quando a cobertura está desligada, enquanto o
+ * componente antigo só refletia o estado funcional pelo `disabled` do campo.
  */
 async function setCoverageToggle(
   page: Page,
@@ -209,21 +274,40 @@ async function setCoverageToggle(
     throw new Error(`Campo da cobertura não é preenchível (${valueTestId}). O formulário mudou.`);
   }
 
-  // O Switch da biblioteca Copan mantém um input oculto cujo `checked` pode ficar
-  // dessincronizado do estado React (em produção ele dizia false enquanto o campo
-  // estava habilitado e a cobertura visualmente ligada). A habilitação do campo
-  // monetário é o estado funcional que a validação do formulário realmente usa.
-  if ((await valueField.isEnabled().catch(() => !enabled)) === enabled) return true;
+  const clickTarget = await coverageClickTarget(root);
+  let semanticTransitionObserved = false;
 
-  // Na versão atual do Copan, o primeiro clique pode apenas sincronizar o input
-  // oculto com o estado visual já ativo. Só um segundo clique efetivamente muda
-  // o estado React. Confirma pelo campo depois de cada clique e limita a três
-  // tentativas para nunca inverter uma cobertura que já chegou ao estado certo.
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    await root.first().click();
-    const deadline = Date.now() + 700;
+  // O Switch antigo da Copan podia iniciar com o input oculto dessincronizado
+  // do estado React. Por isso, se os dois sinais discordarem logo na entrada,
+  // fazemos um ciclo de reconciliação antes de confiar só no estado semântico.
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const fieldEnabled = await valueField.isEnabled().catch(() => !enabled);
+    const semanticState = await coverageSemanticState(root);
+    if (fieldEnabled === enabled && (semanticState === null || semanticState === enabled)) {
+      return true;
+    }
+    if (semanticTransitionObserved && semanticState === enabled) return true;
+
+    const semanticBeforeClick = semanticState;
+    await clickTarget.click();
+    const deadline = Date.now() + 900;
     do {
-      if ((await valueField.isEnabled().catch(() => !enabled)) === enabled) return true;
+      const currentFieldEnabled = await valueField.isEnabled().catch(() => !enabled);
+      const currentSemanticState = await coverageSemanticState(root);
+      if (
+        semanticBeforeClick !== null &&
+        currentSemanticState !== null &&
+        currentSemanticState !== semanticBeforeClick
+      ) {
+        semanticTransitionObserved = true;
+      }
+      if (
+        currentFieldEnabled === enabled &&
+        (currentSemanticState === null || currentSemanticState === enabled)
+      ) {
+        return true;
+      }
+      if (semanticTransitionObserved && currentSemanticState === enabled) return true;
       await page.waitForTimeout(FIND_POLL_MS);
     } while (Date.now() < deadline);
   }
@@ -383,9 +467,7 @@ export async function validateSimulationFormReady(page: Page): Promise<Record<st
     placeholder: /cep/i,
     role: { name: /cep/i },
   });
-  const simular = page
-    .getByRole("button", { name: SUBMIT_CREDIT_BUTTON_PATTERN })
-    .first();
+  const simular = page.getByRole("button", { name: SUBMIT_CREDIT_BUTTON_PATTERN }).first();
   const result = {
     documento: await documento.isVisible().catch(() => false),
     cep: await cep.isVisible().catch(() => false),
