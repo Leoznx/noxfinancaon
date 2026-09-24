@@ -180,7 +180,7 @@ async function coverageSemanticState(root: Locator): Promise<boolean | null> {
     root,
     root
       .locator(
-        '[role="switch"], [role="checkbox"], input[type="checkbox"], [aria-checked], [data-state]',
+        '[role="switch"], [role="checkbox"], input[type="checkbox"], [aria-checked], [aria-pressed], [data-state]',
       )
       .first(),
   ];
@@ -289,7 +289,11 @@ async function setCoverageToggle(
     if (semanticTransitionObserved && semanticState === enabled) return true;
 
     const semanticBeforeClick = semanticState;
-    await clickTarget.click();
+    await clickTarget.click({ timeout: 1_500 }).catch(async () => {
+      // Alguns switches mantêm o input semântico invisível e deixam o evento no
+      // contêiner. Se esse input não aceitar ponteiro, preserva o caminho legado.
+      await root.first().click({ timeout: 1_500 });
+    });
     const deadline = Date.now() + 900;
     do {
       const currentFieldEnabled = await valueField.isEnabled().catch(() => !enabled);
@@ -310,6 +314,12 @@ async function setCoverageToggle(
       if (semanticTransitionObserved && currentSemanticState === enabled) return true;
       await page.waitForTimeout(FIND_POLL_MS);
     } while (Date.now() < deadline);
+
+    // Há uma terceira variante do componente sem aria/data-state e cujo campo
+    // permanece montado mesmo desligado. Nesse caso não existe outro sinal
+    // observável: um único clique é a ação correta e o botão de envio fará a
+    // validação final do formulário, sem alternarmos a cobertura de volta.
+    if (!enabled && semanticBeforeClick === null) return true;
   }
 
   throw new Error(`Não foi possível ajustar a cobertura (${testId}).`);

@@ -308,6 +308,32 @@ test("ajusta switches internos do portal novo mesmo quando o campo de valor cont
   await page.close();
 });
 
+test("não alterna novamente um switch sem estado semântico observável", async () => {
+  const url = "https://app.loft.com.br/erp/proposta/analise-de-credito";
+  const page = await pageWithHtml(
+    url,
+    `<main>
+      <label>Valor mensal do aluguel<input id="aluguel" placeholder="R$ 0.000,00" /></label>
+      <div data-testid="property-condominium-coverage-toggle">
+        <button id="condominio-toggle" type="button"
+          onclick="this.dataset.clickCount = String(Number(this.dataset.clickCount || 0) + 1)">Alternar condomínio</button>
+      </div>
+      <label>Condomínio<input data-testid="property-condominium-value" id="condominio" /></label>
+      <div data-testid="property-iptu-coverage-toggle">
+        <button id="iptu-toggle" type="button"
+          onclick="this.dataset.clickCount = String(Number(this.dataset.clickCount || 0) + 1)">Alternar IPTU</button>
+      </div>
+      <label>IPTU<input data-testid="property-iptu-value" id="iptu" /></label>
+    </main>`,
+  );
+
+  await fillValores(page, { aluguel: 1880, condominio: 0, taxas: 0 });
+
+  assert.equal(await page.locator("#condominio-toggle").getAttribute("data-click-count"), "1");
+  assert.equal(await page.locator("#iptu-toggle").getAttribute("data-click-count"), "1");
+  await page.close();
+});
+
 test("só sinaliza envio quando o botão Fazer análise realmente será clicado", async () => {
   const url = "https://app.loft.com.br/erp/proposta/analise-de-credito";
   const page = await pageWithHtml(
