@@ -111,16 +111,18 @@ export async function fetchMyRoleGoalProgress() {
   return normalize(row as Record<string, unknown>);
 }
 
-export async function saveTeamGoals(
+export async function saveCompleteTeamGoals(
   sellerType: "sdr" | "closer",
   month: number,
   year: number,
   targets: {
     meetings: { daily: number; weekly: number; monthly: number };
     registrations: { daily: number; weekly: number; monthly: number };
+    callsDaily: number;
+    leadsContactedDaily: number;
   },
 ) {
-  const { error } = await (supabase.rpc as any)("upsert_seller_team_goals", {
+  const { data, error } = await (supabase.rpc as any)("upsert_seller_team_goals_complete", {
     p_seller_type: sellerType,
     p_month: month,
     p_year: year,
@@ -130,6 +132,9 @@ export async function saveTeamGoals(
     p_target_clients_daily: targets.registrations.daily,
     p_target_clients_weekly: targets.registrations.weekly,
     p_target_clients_monthly: targets.registrations.monthly,
+    p_target_calls_daily: targets.callsDaily,
+    p_target_leads_contacted_daily: targets.leadsContactedDaily,
   });
   if (error) throw error;
+  return data;
 }

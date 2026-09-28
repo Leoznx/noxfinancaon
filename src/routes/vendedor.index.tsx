@@ -57,7 +57,9 @@ function VendedorDashboard() {
       .on("postgres_changes", { event: "*", schema: "public", table: "seller_commercial_events" }, refresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "seller_contact_leads" }, refresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "seller_appointments" }, refresh)
-      .on("postgres_changes", { event: "*", schema: "public", table: "seller_signup_attributions" }, refresh).subscribe();
+      .on("postgres_changes", { event: "*", schema: "public", table: "seller_signup_attributions" }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "seller_team_goals" }, refresh)
+      .subscribe();
     window.addEventListener("focus", refresh);
     return () => { if (refreshTimer.current) clearTimeout(refreshTimer.current); window.removeEventListener("focus", refresh); void supabase.removeChannel(channel); };
   }, [load]);

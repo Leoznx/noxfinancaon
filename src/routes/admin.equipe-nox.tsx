@@ -63,7 +63,7 @@ import { formatMoney, formatDateTime, toDatetimeLocal } from "@/lib/vendedor-por
 import {
   fetchTeamGoalConfigs,
   fetchTeamGoalProgress,
-  saveTeamGoals,
+  saveCompleteTeamGoals,
   type TeamGoalConfig,
   type TeamGoalProgress,
 } from "@/lib/admin-team-goals";
@@ -73,9 +73,6 @@ import { TimeClockHistoryTab } from "@/components/admin/TimeClockHistoryTab";
 import { NoxEmployeeInviteCards } from "@/components/admin/NoxEmployeeInviteCards";
 import { SellerClientsAdminTab } from "@/components/admin/SellerClientsAdminTab";
 import { SellerCommercialReportTab } from "@/components/admin/SellerCommercialReportTab";
-import {
-  saveSellerControlGoals,
-} from "@/lib/seller-control";
 
 const VALID_TABS = [
   "metas",
@@ -269,6 +266,8 @@ type GoalPeriods = { daily: string; weekly: string; monthly: string };
 type SellerGoalEdit = {
   meetings: GoalPeriods;
   registrations: GoalPeriods;
+};
+type SharedControlGoalEdit = {
   callsDaily: string;
   leadsContactedDaily: string;
 };
@@ -305,9 +304,34 @@ function initialGoalEdit(
       weekly: String(config?.target_clients_weekly ?? row?.target_clients_weekly ?? ""),
       monthly: String(config?.target_clients_monthly ?? row?.target_clients_monthly ?? ""),
     },
-    callsDaily: String(config?.target_calls_daily ?? ""),
-    leadsContactedDaily: String(config?.target_leads_contacted_daily ?? ""),
   };
+}
+
+function initialSharedControlGoalEdit(
+  configs: Partial<Record<"sdr" | "closer", TeamGoalConfig>>,
+): SharedControlGoalEdit {
+  return {
+    callsDaily: String(
+      configs.sdr?.target_calls_daily ?? configs.closer?.target_calls_daily ?? "",
+    ),
+    leadsContactedDaily: String(
+      configs.sdr?.target_leads_contacted_daily ??
+        configs.closer?.target_leads_contacted_daily ??
+        "",
+    ),
+  };
+}
+
+function sharedControlGoalsDiverge(
+  configs: Partial<Record<"sdr" | "closer", TeamGoalConfig>>,
+) {
+  const sdr = configs.sdr;
+  const closer = configs.closer;
+  if (!sdr && !closer) return false;
+  return (
+    sdr?.target_calls_daily !== closer?.target_calls_daily ||
+    sdr?.target_leads_contacted_daily !== closer?.target_leads_contacted_daily
+  );
 }
 
 function TabMetas() {
@@ -319,6 +343,10 @@ function TabMetas() {
   const [configs, setConfigs] = useState<Partial<Record<"sdr" | "closer", TeamGoalConfig>>>({});
   const [team, setTeam] = useState<"sdr" | "closer">("sdr");
   const [edits, setEdits] = useState<Partial<Record<"sdr" | "closer", SellerGoalEdit>>>({});
+  const [sharedControlEdit, setSharedControlEdit] = useState<SharedControlGoalEdit>({
+    callsDaily: "",
+    leadsContactedDaily: "",
+  });
   const [loading, setLoading] = useState(true);
   const [salvando, setSalvando] = useState(false);
 
@@ -330,11 +358,11 @@ function TabMetas() {
         fetchTeamGoalConfigs(month, year),
       ]);
       setLinhas(progress);
-      setConfigs(
-        Object.fromEntries(goalConfigs.map((config) => [config.seller_type, config])) as Partial<
-          Record<"sdr" | "closer", TeamGoalConfig>
-        >,
-      );
+      const configsByTeam = Object.fromEntries(
+        goalConfigs.map((config) => [config.seller_type, config]),
+      ) as Partial<Record<"sdr" | "closer", TeamGoalConfig>>;
+      setConfigs(configsByTeam);
+      setSharedControlEdit(initialSharedControlGoalEdit(configsByTeam));
       setEdits({});
     } catch (error: any) {
       toast.error(error.message || "Não foi possível carregar as metas da equipe.");
@@ -349,6 +377,7 @@ function TabMetas() {
   const teamRows = linhas.filter((linha) => linha.seller_type === team);
   const teamConfig = configs[team];
   const edit = edits[team] ?? initialGoalEdit(team, teamConfig, teamRows[0]);
+  const hasDivergentSharedGoals = sharedControlGoalsDiverge(configs);
 
   useEffect(() => {
     const refresh = () => void carregar();
@@ -394,14 +423,14 @@ function TabMetas() {
     const rawValues = [
       ...Object.values(values.meetings),
       ...Object.values(values.registrations),
-      values.callsDaily,
-      values.leadsContactedDaily,
+      sharedControlEdit.callsDaily,
+      sharedControlEdit.leadsContactedDaily,
     ];
     const numericValues = [
       ...Object.values(targets.meetings),
       ...Object.values(targets.registrations),
-      Number(values.callsDaily),
-      Number(values.leadsContactedDaily),
+      Number(sharedControlEdit.callsDaily),
+      Number(sharedControlEdit.leadsContactedDaily),
     ];
     if (
       rawValues.some((value) => value.trim() === "") ||
@@ -412,13 +441,15 @@ function TabMetas() {
     }
     setSalvando(true);
     try {
-      await saveTeamGoals(team, month, year, targets);
-      await saveSellerControlGoals(
+      await saveCompleteTeamGoals(
         team,
         month,
         year,
-        Number(values.callsDaily),
-        Number(values.leadsContactedDaily),
+        {
+          ...targets,
+          callsDaily: Number(sharedControlEdit.callsDaily),
+          leadsContactedDaily: Number(sharedControlEdit.leadsContactedDaily),
+        },
       );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Não foi possível salvar.");
@@ -427,7 +458,7 @@ function TabMetas() {
     }
     setSalvando(false);
     toast.success(
-      `Metas da equipe ${team === "sdr" ? "Vendedor" : "Closer"} atualizadas para todos.`,
+      `Metas de ${team === "sdr" ? "Vendedor" : "Closer"} e metas comerciais compartilhadas atualizadas.`,
     );
     registrarAuditoria({
       actorUserId: user?.id,
@@ -438,8 +469,9 @@ function TabMetas() {
       before: teamConfig,
       after: {
         ...targets,
-        calls_daily: Number(values.callsDaily),
-        leads_contacted_daily: Number(values.leadsContactedDaily),
+        calls_daily: Number(sharedControlEdit.callsDaily),
+        leads_contacted_daily: Number(sharedControlEdit.leadsContactedDaily),
+        shared_seller_types: ["sdr", "closer"],
         seller_type: team,
         month,
         year,
@@ -466,12 +498,9 @@ function TabMetas() {
   };
 
   const updateControlEdit = (field: "callsDaily" | "leadsContactedDaily", value: string) => {
-    setEdits((current) => ({
+    setSharedControlEdit((current) => ({
       ...current,
-      [team]: {
-        ...(current[team] ?? initialGoalEdit(team, teamConfig, teamRows[0])),
-        [field]: value.replace(/\D/g, ""),
-      },
+      [field]: value.replace(/\D/g, ""),
     }));
   };
 
@@ -481,8 +510,8 @@ function TabMetas() {
         <div>
           <CardTitle>Metas da equipe</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Escolha Vendedor ou Closer. A mesma meta será aplicada automaticamente a todos os integrantes
-            ativos do time; os resultados continuam individuais e em tempo real.
+            Ligações e leads em contato são compartilhados por Vendedor e Closer. Reuniões e
+            cadastros continuam configurados separadamente para cada equipe.
           </p>
         </div>
         <SeletorMes
@@ -497,7 +526,7 @@ function TabMetas() {
       <CardContent className="space-y-4">
         <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4">
           <div className="space-y-2">
-            <Label>Equipe</Label>
+            <Label>Equipe para reuniões e cadastros</Label>
             <Select value={team} onValueChange={(value) => setTeam(value as "sdr" | "closer")}>
               <SelectTrigger>
                 <SelectValue />
@@ -517,7 +546,7 @@ function TabMetas() {
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="font-bold text-neutral-950">
-                    Configuração única da equipe {team === "sdr" ? "VENDEDOR" : "CLOSER"}
+                    Reuniões e cadastros da equipe {team === "sdr" ? "VENDEDOR" : "CLOSER"}
                   </p>
                   <Badge
                     variant="outline"
@@ -531,7 +560,7 @@ function TabMetas() {
                   </Badge>
                 </div>
                 <Button size="sm" disabled={salvando} onClick={salvar}>
-                  {salvando ? "Salvando…" : "Salvar para toda a equipe"}
+                  {salvando ? "Salvando…" : "Salvar equipe + compartilhadas"}
                 </Button>
               </div>
               <div>
@@ -557,6 +586,26 @@ function TabMetas() {
                 </div>
               </div>
               <div className="grid gap-3 rounded-2xl border border-violet-200 bg-violet-50 p-4 md:grid-cols-2">
+                <div className="md:col-span-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-sm font-black text-violet-950">
+                      Metas comerciais compartilhadas
+                    </h3>
+                    <Badge className="bg-violet-700 text-white hover:bg-violet-700">
+                      Vendedor + Closer
+                    </Badge>
+                  </div>
+                  <p className="mt-1 text-xs leading-5 text-violet-700">
+                    Estes dois valores são únicos para toda a operação comercial e serão aplicados
+                    às duas equipes ao salvar.
+                  </p>
+                  {hasDivergentSharedGoals && (
+                    <p className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
+                      As configurações antigas estavam diferentes entre as equipes. Ao salvar, os
+                      valores abaixo serão unificados para Vendedor e Closer.
+                    </p>
+                  )}
+                </div>
                 <div>
                   <h3 className="text-sm font-black text-violet-950">Ligações por dia</h3>
                   <p className="mt-1 text-xs text-violet-700">
@@ -565,7 +614,7 @@ function TabMetas() {
                   <div className="mt-3">
                     <TeamMetaEditor
                       label="Meta visual diária"
-                      value={edit.callsDaily}
+                      value={sharedControlEdit.callsDaily}
                       onChange={(value) => updateControlEdit("callsDaily", value)}
                     />
                   </div>
@@ -578,7 +627,7 @@ function TabMetas() {
                   <div className="mt-3">
                     <TeamMetaEditor
                       label="Meta acompanhada diária"
-                      value={edit.leadsContactedDaily}
+                      value={sharedControlEdit.leadsContactedDaily}
                       onChange={(value) => updateControlEdit("leadsContactedDaily", value)}
                     />
                   </div>
