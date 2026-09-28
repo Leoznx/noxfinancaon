@@ -43,6 +43,7 @@ import {
   CalendarRange,
   Wrench,
   Send,
+  PhoneCall,
   ChevronDown,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -298,6 +299,12 @@ const vendedorItems: MenuItem[] = [
     icon: Users2,
     label: "Clientes",
     href: "/vendedor/clientes",
+    sellerTypes: ["sdr", "closer"],
+  },
+  {
+    icon: PhoneCall,
+    label: "Leads do dia",
+    href: "/vendedor/leads-do-dia",
     sellerTypes: ["sdr", "closer"],
   },
   {

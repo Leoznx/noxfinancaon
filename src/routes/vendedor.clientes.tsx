@@ -16,9 +16,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SellerClientRegistrationFlow } from "@/components/seller-clients/SellerClientRegistrationFlow";
-import { SellerContactLeadsPanel } from "@/components/seller-clients/SellerContactLeadsPanel";
 import { supabase } from "@/integrations/supabase/client";
 import {
   fetchSellerLinkClientActivity,
@@ -191,24 +189,13 @@ function SellerClientsPage() {
           </div>
         </section>
 
-        <Tabs defaultValue="registered" className="space-y-4">
-          <TabsList className="h-auto w-full justify-start gap-1 rounded-2xl border border-neutral-200 bg-white p-1.5 shadow-sm">
-            <TabsTrigger value="registered" className="rounded-xl px-4 py-2.5 font-black data-[state=active]:bg-neutral-950 data-[state=active]:text-white">
-              Clientes cadastrados
-            </TabsTrigger>
-            <TabsTrigger value="leads" className="rounded-xl px-4 py-2.5 font-black data-[state=active]:bg-violet-600 data-[state=active]:text-white">
-              Leads do dia
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="registered" className="mt-0 space-y-4">
-            <section className="rounded-3xl border border-yellow-300 bg-white p-4 shadow-sm sm:p-5">
-              <div className="mb-4">
-                <Badge className="bg-yellow-400 font-black text-neutral-950 hover:bg-yellow-400">Cadastro manual</Badge>
-                <p className="mt-2 text-sm text-neutral-500">Localize pelo e-mail quem já criou uma conta NOX e confirme o vínculo com a sua carteira.</p>
-              </div>
-              <SellerClientRegistrationFlow mode="registration-only" />
-            </section>
+        <section className="rounded-3xl border border-yellow-300 bg-white p-4 shadow-sm sm:p-5">
+          <div className="mb-4">
+            <Badge className="bg-yellow-400 font-black text-neutral-950 hover:bg-yellow-400">Cadastro manual</Badge>
+            <p className="mt-2 text-sm text-neutral-500">Localize pelo e-mail quem já criou uma conta NOX e confirme o vínculo com a sua carteira.</p>
+          </div>
+          <SellerClientRegistrationFlow mode="registration-only" />
+        </section>
 
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <SummaryCard icon={UsersRound} label="Minha carteira" value={clients.length} detail="cadastros por link ou manual" />
@@ -294,12 +281,6 @@ function SellerClientsPage() {
             </>
           )}
         </section>
-          </TabsContent>
-
-          <TabsContent value="leads" className="mt-0">
-            <SellerContactLeadsPanel />
-          </TabsContent>
-        </Tabs>
       </main>
     </DashboardLayout>
   );
