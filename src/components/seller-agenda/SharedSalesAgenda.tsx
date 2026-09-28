@@ -214,7 +214,7 @@ function SdrScheduler({ sellerName, onRefresh }: { sellerName: string | null; on
     <section id="sdr-shared-sales-agenda" className="scroll-mt-4 overflow-hidden rounded-2xl border border-yellow-300 bg-[linear-gradient(135deg,#fffbea,#fff)] shadow-sm">
       <header className="flex flex-col gap-3 border-b border-yellow-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-yellow-700">Agenda compartilhada SDR → Closer</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-yellow-700">Agenda compartilhada Vendedor → Closer</p>
           <h2 className="mt-1 text-lg font-black text-neutral-950">{selected ? "Complete a marcação do cliente" : "Escolha o melhor dia e horário"}</h2>
           <p className="mt-1 text-xs font-medium text-neutral-600">
             {selected ? "O Closer continua sendo definido automaticamente pela disponibilidade da equipe." : "Abra um dia útil no calendário mensal para consultar os horários atualizados."}

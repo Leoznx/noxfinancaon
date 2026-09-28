@@ -180,7 +180,7 @@ function Ranking() {
   const periodLabel = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" })
     .format(new Date(period.year, period.month - 1, 1))
     .replace(/^./, (letter) => letter.toUpperCase());
-  const teamLabel = sellerType === "closer" ? "Closers" : "SDRs";
+  const teamLabel = sellerType === "closer" ? "Closers" : "Vendedores";
 
   function changeMonth(offset: number) {
     const next = new Date(period.year, period.month - 1 + offset, 1);

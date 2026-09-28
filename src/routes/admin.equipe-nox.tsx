@@ -52,6 +52,7 @@ import {
   AlertTriangle,
   UserRound,
   ContactRound,
+  BarChart3,
 } from "lucide-react";
 import { z } from "zod";
 import { addMonths, format } from "date-fns";
@@ -71,6 +72,10 @@ import { SellerRewardsTab } from "@/components/admin/SellerRewardsTab";
 import { TimeClockHistoryTab } from "@/components/admin/TimeClockHistoryTab";
 import { NoxEmployeeInviteCards } from "@/components/admin/NoxEmployeeInviteCards";
 import { SellerClientsAdminTab } from "@/components/admin/SellerClientsAdminTab";
+import { SellerCommercialReportTab } from "@/components/admin/SellerCommercialReportTab";
+import {
+  saveSellerControlGoals,
+} from "@/lib/seller-control";
 
 const VALID_TABS = [
   "metas",
@@ -82,6 +87,7 @@ const VALID_TABS = [
   "equipe-comercial",
   "historico-ponto",
   "clientes-vendedores",
+  "relatorio-comercial",
   "auditoria",
 ] as const;
 type TabKey = (typeof VALID_TABS)[number];
@@ -116,7 +122,9 @@ function EquipeNoxPage() {
     user?.role === "admin_master" ||
     user?.internalRole === "admin_master";
   const activeTab: VisibleTabKey =
-    normalizedTab === "clientes-vendedores" && !canManageTimeClock ? "metas" : normalizedTab;
+    (normalizedTab === "clientes-vendedores" || normalizedTab === "relatorio-comercial") && !canManageTimeClock
+      ? "metas"
+      : normalizedTab;
 
   return (
     <DashboardLayout>
@@ -169,6 +177,12 @@ function EquipeNoxPage() {
               Colaboradores
             </TabsTrigger>
             {canManageTimeClock && (
+              <TabsTrigger value="relatorio-comercial">
+                <BarChart3 className="mr-2 h-4 w-4" />
+                Relatório comercial
+              </TabsTrigger>
+            )}
+            {canManageTimeClock && (
               <TabsTrigger value="clientes-vendedores">
                 <ContactRound className="mr-2 h-4 w-4" />
                 Clientes dos vendedores
@@ -199,6 +213,11 @@ function EquipeNoxPage() {
             <NoxEmployeeInviteCards />
             <TabColaboradores />
           </TabsContent>
+          {canManageTimeClock && (
+            <TabsContent value="relatorio-comercial" className="mt-4">
+              <SellerCommercialReportTab />
+            </TabsContent>
+          )}
           {canManageTimeClock && (
             <TabsContent value="clientes-vendedores" className="mt-4">
               <SellerClientsAdminTab />
@@ -247,7 +266,12 @@ function SeletorMes({
 
 /* ===================== METAS ===================== */
 type GoalPeriods = { daily: string; weekly: string; monthly: string };
-type SellerGoalEdit = { meetings: GoalPeriods; registrations: GoalPeriods };
+type SellerGoalEdit = {
+  meetings: GoalPeriods;
+  registrations: GoalPeriods;
+  callsDaily: string;
+  leadsContactedDaily: string;
+};
 
 function initialGoalEdit(
   team: "sdr" | "closer",
@@ -281,6 +305,8 @@ function initialGoalEdit(
       weekly: String(config?.target_clients_weekly ?? row?.target_clients_weekly ?? ""),
       monthly: String(config?.target_clients_monthly ?? row?.target_clients_monthly ?? ""),
     },
+    callsDaily: String(config?.target_calls_daily ?? ""),
+    leadsContactedDaily: String(config?.target_leads_contacted_daily ?? ""),
   };
 }
 
@@ -365,28 +391,44 @@ function TabMetas() {
         monthly: Number(values.registrations.monthly),
       },
     };
-    const rawValues = [...Object.values(values.meetings), ...Object.values(values.registrations)];
+    const rawValues = [
+      ...Object.values(values.meetings),
+      ...Object.values(values.registrations),
+      values.callsDaily,
+      values.leadsContactedDaily,
+    ];
     const numericValues = [
       ...Object.values(targets.meetings),
       ...Object.values(targets.registrations),
+      Number(values.callsDaily),
+      Number(values.leadsContactedDaily),
     ];
     if (
       rawValues.some((value) => value.trim() === "") ||
       numericValues.some((value) => !Number.isInteger(value) || value < 0)
     ) {
-      toast.error("Preencha as seis metas da equipe com números inteiros.");
+      toast.error("Preencha todas as metas da equipe com números inteiros.");
       return;
     }
     setSalvando(true);
     try {
       await saveTeamGoals(team, month, year, targets);
+      await saveSellerControlGoals(
+        team,
+        month,
+        year,
+        Number(values.callsDaily),
+        Number(values.leadsContactedDaily),
+      );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Não foi possível salvar.");
       setSalvando(false);
       return;
     }
     setSalvando(false);
-    toast.success(`Metas da equipe ${team.toUpperCase()} atualizadas para todos.`);
+    toast.success(
+      `Metas da equipe ${team === "sdr" ? "Vendedor" : "Closer"} atualizadas para todos.`,
+    );
     registrarAuditoria({
       actorUserId: user?.id,
       actorRole: user?.internalRole || user?.role,
@@ -394,7 +436,14 @@ function TabMetas() {
       tableName: "seller_team_goals",
       recordId: `${team}-${year}-${month}`,
       before: teamConfig,
-      after: { ...targets, seller_type: team, month, year },
+      after: {
+        ...targets,
+        calls_daily: Number(values.callsDaily),
+        leads_contacted_daily: Number(values.leadsContactedDaily),
+        seller_type: team,
+        month,
+        year,
+      },
     });
     void carregar();
   };
@@ -416,13 +465,23 @@ function TabMetas() {
     }));
   };
 
+  const updateControlEdit = (field: "callsDaily" | "leadsContactedDaily", value: string) => {
+    setEdits((current) => ({
+      ...current,
+      [team]: {
+        ...(current[team] ?? initialGoalEdit(team, teamConfig, teamRows[0])),
+        [field]: value.replace(/\D/g, ""),
+      },
+    }));
+  };
+
   return (
     <Card>
       <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
         <div>
           <CardTitle>Metas da equipe</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Escolha SDR ou Closer. A mesma meta será aplicada automaticamente a todos os integrantes
+            Escolha Vendedor ou Closer. A mesma meta será aplicada automaticamente a todos os integrantes
             ativos do time; os resultados continuam individuais e em tempo real.
           </p>
         </div>
@@ -444,7 +503,7 @@ function TabMetas() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="sdr">SDR · reuniões agendadas</SelectItem>
+                <SelectItem value="sdr">Vendedor · reuniões agendadas</SelectItem>
                 <SelectItem value="closer">Closer · reuniões confirmadas</SelectItem>
               </SelectContent>
             </Select>
@@ -458,7 +517,7 @@ function TabMetas() {
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="font-bold text-neutral-950">
-                    Configuração única da equipe {team.toUpperCase()}
+                    Configuração única da equipe {team === "sdr" ? "VENDEDOR" : "CLOSER"}
                   </p>
                   <Badge
                     variant="outline"
@@ -495,6 +554,34 @@ function TabMetas() {
                     value={edit.meetings.monthly}
                     onChange={(value) => updateEdit("meetings", "monthly", value)}
                   />
+                </div>
+              </div>
+              <div className="grid gap-3 rounded-2xl border border-violet-200 bg-violet-50 p-4 md:grid-cols-2">
+                <div>
+                  <h3 className="text-sm font-black text-violet-950">Ligações por dia</h3>
+                  <p className="mt-1 text-xs text-violet-700">
+                    Meta somente visual; o sistema não contará ligações.
+                  </p>
+                  <div className="mt-3">
+                    <TeamMetaEditor
+                      label="Meta visual diária"
+                      value={edit.callsDaily}
+                      onChange={(value) => updateControlEdit("callsDaily", value)}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-violet-950">Leads em contato por dia</h3>
+                  <p className="mt-1 text-xs text-violet-700">
+                    Conta cada lead de nome e telefone cadastrado pelo vendedor.
+                  </p>
+                  <div className="mt-3">
+                    <TeamMetaEditor
+                      label="Meta acompanhada diária"
+                      value={edit.leadsContactedDaily}
+                      onChange={(value) => updateControlEdit("leadsContactedDaily", value)}
+                    />
+                  </div>
                 </div>
               </div>
               <div>

@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AGENDA_REMINDERS, agendaStatusLabel, agendaTypeLabel, appointmentWhatsAppMessage, buildAppointmentWhatsAppUrl, canRescheduleSellerMeeting, getAppointmentContact, getSharedMeetingMetadata, getVisibleAppointmentNotes, isPersonalSellerReminder, type SellerAppointment } from "@/lib/seller-agenda";
+import type { SellerLeadOutcome } from "@/lib/seller-control";
 import { formatBrazilianPhoneInput, normalizeBrazilianPhone } from "@/lib/seller-clients";
 
 const JOURNEY_COPY = {
@@ -43,6 +44,7 @@ export function AppointmentDetailsDialog({
   onReschedule,
   onComplete,
   onDelete,
+  onLeadOutcome,
   canEdit = true,
   canManageCloserMeeting = false,
   canComplete = true,
@@ -54,6 +56,7 @@ export function AppointmentDetailsDialog({
   onReschedule: (item: SellerAppointment) => void;
   onComplete: (item: SellerAppointment) => void;
   onDelete: (item: SellerAppointment) => void;
+  onLeadOutcome?: (item: SellerAppointment, outcome: SellerLeadOutcome) => void;
   canEdit?: boolean;
   canManageCloserMeeting?: boolean;
   canComplete?: boolean;
@@ -81,6 +84,9 @@ export function AppointmentDetailsDialog({
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <div className="mb-2 flex flex-wrap gap-2">
+            {item.source === "rotating_lead" && (
+              <Badge className="bg-violet-600 text-white hover:bg-violet-600">LEAD NOVO</Badge>
+            )}
             <Badge className="bg-neutral-950 text-white">{agendaTypeLabel(item.type)}</Badge>
             <Badge variant="outline">{agendaStatusLabel(item.status)}</Badge>
           </div>
@@ -109,7 +115,7 @@ export function AppointmentDetailsDialog({
               </div>
             </div>
           )}
-          {item.type === "reuniao" && (metadata.clientType || sdrName) && <div className="grid gap-2 rounded-xl border border-yellow-200 bg-yellow-50 p-3 text-xs font-semibold text-neutral-700 sm:grid-cols-2">{metadata.clientType && <p><span className="text-neutral-500">Perfil:</span> {metadata.clientType}</p>}{sdrName && <p><span className="text-neutral-500">SDR:</span> {sdrName}</p>}</div>}
+          {item.type === "reuniao" && (metadata.clientType || sdrName) && <div className="grid gap-2 rounded-xl border border-yellow-200 bg-yellow-50 p-3 text-xs font-semibold text-neutral-700 sm:grid-cols-2">{metadata.clientType && <p><span className="text-neutral-500">Perfil:</span> {metadata.clientType}</p>}{sdrName && <p><span className="text-neutral-500">Vendedor:</span> {sdrName}</p>}</div>}
           {journey && JourneyIcon && (
             <div className={`rounded-xl border p-3 ${journey.className}`}>
               <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wide">
@@ -134,8 +140,38 @@ export function AppointmentDetailsDialog({
               Reunião definida pela administração. O horário e a pauta são somente leitura e não podem ser reagendados ou excluídos.
             </div>
           )}
+          {item.source === "rotating_lead" && (
+            <div className="rounded-xl border border-violet-200 bg-violet-50 p-3 text-xs text-violet-950">
+              <p className="font-black">Lembrete inteligente · ciclo {item.contact_lead_cycle_number ?? 1}</p>
+              <p className="mt-1 leading-relaxed text-violet-800">
+                Este follow-up não ocupa horário da agenda. Confirme o resultado ainda hoje para manter o lead na sua carteira.
+              </p>
+            </div>
+          )}
           {visibleNotes && <p className="rounded-xl border border-neutral-200 p-3 leading-relaxed text-neutral-600">{visibleNotes}</p>}
           {item.meeting_feedback && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3"><p className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-emerald-800"><MessageSquareText className="h-3.5 w-3.5" /> Feedback da reunião</p><p className="mt-1 whitespace-pre-wrap leading-relaxed text-neutral-700">{item.meeting_feedback}</p></div>}
+          {item.source === "rotating_lead" && (
+            <div className="rounded-xl border border-neutral-200 p-3">
+              <p className="text-[10px] font-black uppercase tracking-[0.14em] text-neutral-400">Histórico do lead</p>
+              {item.contact_lead_history.length === 0 ? (
+                <p className="mt-2 text-xs text-neutral-500">Ainda não há movimentações anteriores.</p>
+              ) : (
+                <ol className="mt-2 space-y-2">
+                  {item.contact_lead_history.map((entry) => (
+                    <li key={entry.id} className="rounded-lg bg-neutral-50 p-2.5 text-xs">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <strong>{rotatingLeadHistoryLabel(entry.event, entry.label)}</strong>
+                        <time className="font-semibold text-neutral-400">
+                          {new Date(entry.occurred_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                        </time>
+                      </div>
+                      {entry.seller_name && <p className="mt-1 text-neutral-500">Vendedor: {entry.seller_name}</p>}
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
+          )}
           {item.type === "reuniao" && item.status === "concluido" && item.completed_at && (
             <div className="grid gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-neutral-800 sm:grid-cols-2">
               <div>
@@ -152,16 +188,34 @@ export function AppointmentDetailsDialog({
           {followUpWhatsAppUrl && <Button type="button" className="w-full bg-[#25D366] font-black text-white hover:bg-[#20bd5a]" asChild><a href={followUpWhatsAppUrl} target="_blank" rel="noreferrer"><MessageCircle className="mr-1.5 h-4 w-4" /> Abrir mensagem pronta no WhatsApp</a></Button>}
         </div>
         <DialogFooter className="flex-wrap">
-          {!["meeting_follow_up", "admin"].includes(item.source) && <Button variant="ghost" className="mr-auto text-red-600 hover:bg-red-50" onClick={() => onDelete(item)}><Trash2 className="mr-1.5 h-4 w-4" /> Excluir</Button>}
-          {!["meeting_follow_up", "admin"].includes(item.source) && canEdit && <Button variant="outline" onClick={() => onEdit(item)}><Edit3 className="mr-1.5 h-4 w-4" /> {item.type === "reuniao" ? "Editar dados" : "Editar"}</Button>}
+          {item.source === "rotating_lead" && onLeadOutcome && !["concluido", "cancelado"].includes(item.status) && (
+            <>
+              <Button variant="outline" className="border-amber-200 bg-amber-50 font-black text-amber-900 hover:bg-amber-100" onClick={() => onLeadOutcome(item, "sem_retorno")}>Sem retorno</Button>
+              <Button className="bg-emerald-600 font-black text-white hover:bg-emerald-700" onClick={() => onLeadOutcome(item, "em_contato")}><Check className="mr-1.5 h-4 w-4" /> Em contato</Button>
+            </>
+          )}
+          {!["meeting_follow_up", "admin", "rotating_lead"].includes(item.source) && <Button variant="ghost" className="mr-auto text-red-600 hover:bg-red-50" onClick={() => onDelete(item)}><Trash2 className="mr-1.5 h-4 w-4" /> Excluir</Button>}
+          {!["meeting_follow_up", "admin", "rotating_lead"].includes(item.source) && canEdit && <Button variant="outline" onClick={() => onEdit(item)}><Edit3 className="mr-1.5 h-4 w-4" /> {item.type === "reuniao" ? "Editar dados" : "Editar"}</Button>}
           {canRescheduleSellerMeeting(item) && <Button variant="outline" className="border-yellow-300 bg-yellow-50 text-yellow-900 hover:bg-yellow-100" onClick={() => onReschedule(item)}><CalendarClock className="mr-1.5 h-4 w-4" /> Reagendar</Button>}
-          {!["concluido", "cancelado"].includes(item.status) && canComplete && (
+          {item.source !== "rotating_lead" && !["concluido", "cancelado"].includes(item.status) && canComplete && (
             <Button className="bg-neutral-950 text-white hover:bg-neutral-800" onClick={() => onComplete(item)}><Check className="mr-1.5 h-4 w-4" /> Concluir</Button>
           )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
+}
+
+function rotatingLeadHistoryLabel(event: string, fallback: string) {
+  const labels: Record<string, string> = {
+    lead_created: "Lead cadastrado",
+    contact_confirmed: "Contato confirmado",
+    task_responded: "Lembrete respondido",
+    task_missed: "Lembrete não confirmado",
+    transferred: "Transferido para outro vendedor",
+    rotation_deferred: "Rotação adiada por novo contato",
+  };
+  return labels[event] ?? fallback;
 }
 
 function formatMeetingDuration(minutes: number | null) {

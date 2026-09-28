@@ -108,7 +108,7 @@ export function MeetingRescheduleDialog({
     try {
       await rescheduleSellerMeeting(item.id, selectedSlot.slot_start);
       const newDate = new Date(selectedSlot.slot_start);
-      toast.success("Reunião reagendada. As agendas do SDR e do Closer já foram atualizadas.");
+      toast.success("Reunião reagendada. As agendas do Vendedor e do Closer já foram atualizadas.");
       onClose();
       await onRescheduled(newDate);
     } catch (cause) {

@@ -134,7 +134,7 @@ export function SellerClientsAdminTab() {
               Clientes dos vendedores
             </h2>
             <p className="mt-1 text-sm text-neutral-500">
-              Selecione um SDR ou Closer para consultar sua carteira e corrigir vínculos feitos por
+              Selecione um Vendedor ou Closer para consultar sua carteira e corrigir vínculos feitos por
               engano.
             </p>
           </div>
@@ -158,7 +158,7 @@ export function SellerClientsAdminTab() {
               {loading ? (
                 <LoadingState label="Carregando vendedores..." />
               ) : visibleSellers.length === 0 ? (
-                <EmptyState label="Nenhum SDR ou Closer encontrado." />
+                <EmptyState label="Nenhum Vendedor ou Closer encontrado." />
               ) : (
                 visibleSellers.map((seller) => (
                   <button

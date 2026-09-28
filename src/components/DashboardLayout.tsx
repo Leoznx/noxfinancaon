@@ -176,6 +176,7 @@ const adminItems: MenuItem[] = [
       { label: "Distribuição de Leads", href: "/admin/distribuicao-leads" },
       { label: "Vagas abertas", href: "/admin/vagas" },
       { label: "Metas", href: "/admin/equipe-nox?tab=metas" },
+      { label: "Relatório comercial", href: "/admin/equipe-nox?tab=relatorio-comercial" },
       { label: "Recompensas", href: "/admin/equipe-nox?tab=recompensas" },
       { label: "Comissões e equipe comercial", href: "/admin/equipe-nox?tab=comissoes" },
       { label: "Colaboradores", href: "/admin/equipe-nox?tab=colaboradores" },
@@ -308,7 +309,7 @@ const vendedorItems: MenuItem[] = [
   },
   {
     icon: MonitorPlay,
-    label: "Contas demo",
+    label: "Contas Demonstração",
     href: "/vendedor/contas-demo",
     sellerTypes: ["sdr", "closer"],
   },

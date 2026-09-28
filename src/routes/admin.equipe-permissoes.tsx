@@ -70,7 +70,7 @@ const CARGOS_COLABORADORES = [
 ] as const;
 type CargoColaborador = (typeof CARGOS_COLABORADORES)[number];
 const CARGO_LABEL: Record<string, string> = {
-  sdr: "Vendedor SDR",
+  sdr: "Vendedor",
   closer: "Vendedor Closer",
   juridico: "Jurídico",
   financeiro: "Financeiro",
@@ -299,7 +299,7 @@ export function TabColaboradores() {
       <CardHeader>
         <CardTitle>Colaboradores Internos</CardTitle>
         <p className="text-sm text-muted-foreground">
-          Equipe interna — Vendedor SDR, Vendedor Closer, Jurídico, Financeiro, Marketing e Suporte.
+          Equipe interna — Vendedor, Vendedor Closer, Jurídico, Financeiro, Marketing e Suporte.
         </p>
       </CardHeader>
       <CardContent>

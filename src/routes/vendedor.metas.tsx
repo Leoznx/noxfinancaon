@@ -1,397 +1,101 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  AlertCircle,
-  Award,
-  CalendarDays,
-  CheckCircle2,
-  RefreshCw,
-  Target,
-  Trophy,
-} from "lucide-react";
+import { ArrowRight, Flame, PhoneCall, RefreshCw, Sparkles, Target, Trophy, UsersRound } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
-import { defaultAvatarForName } from "@/lib/gender-avatar";
-import { sellerGoalPercentage } from "@/lib/seller-goals-dashboard";
+import { fetchMySellerControlDashboard, type SellerControlDashboard } from "@/lib/seller-control";
 import { fetchMySellerMonthlyProgress, type SellerMonthlyProgress } from "@/lib/seller-progress";
 import { fetchMyRoleGoalProgress, type TeamGoalProgress } from "@/lib/admin-team-goals";
 
 export const Route = createFileRoute("/vendedor/metas")({
-  component: () => (
-    <ProtectedRoute roles={["vendedor", "admin_master", "admin"]} moduleKey="metas">
-      <Goals />
-    </ProtectedRoute>
-  ),
+  component: () => <ProtectedRoute roles={["vendedor", "admin_master", "admin"]} moduleKey="metas"><Goals /></ProtectedRoute>,
 });
-
-type RankingRow = {
-  id: string;
-  name: string;
-  avatarUrl: string | null;
-  registrations: number;
-  position: number;
-};
-const MONTHS = [
-  "Janeiro",
-  "Fevereiro",
-  "Março",
-  "Abril",
-  "Maio",
-  "Junho",
-  "Julho",
-  "Agosto",
-  "Setembro",
-  "Outubro",
-  "Novembro",
-  "Dezembro",
-];
 
 function Goals() {
   const now = new Date();
   const month = now.getMonth() + 1;
   const year = now.getFullYear();
-  const [progress, setProgress] = useState<SellerMonthlyProgress | null>(null);
+  const [daily, setDaily] = useState<SellerControlDashboard | null>(null);
+  const [monthly, setMonthly] = useState<SellerControlDashboard | null>(null);
   const [roleProgress, setRoleProgress] = useState<TeamGoalProgress | null>(null);
-  const [ranking, setRanking] = useState<RankingRow[]>([]);
+  const [legacyMonthly, setLegacyMonthly] = useState<SellerMonthlyProgress | null>(null);
+  const [ranking, setRanking] = useState<Array<{ id: string; name: string; registrations: number; position: number }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-
   const load = useCallback(async () => {
-    setLoading(true);
-    setError("");
+    setLoading(true); setError("");
     try {
-      const [progressData, roleData, response] = await Promise.all([
-        fetchMySellerMonthlyProgress(month, year),
+      const [day, monthData, sharedProgress, monthlyProgress, rankingResponse] = await Promise.all([
+        fetchMySellerControlDashboard("daily"),
+        fetchMySellerControlDashboard("monthly"),
         fetchMyRoleGoalProgress(),
+        fetchMySellerMonthlyProgress(month, year),
         (supabase as any).rpc("ranking_vendedores", { p_month: month, p_year: year }),
       ]);
-      if (response.error) throw response.error;
-      setProgress(progressData);
-      setRoleProgress(roleData);
-      setRanking(
-        ((response.data as Record<string, unknown>[] | null) ?? [])
-          .map((row) => ({
-            id: String(row.vendedor_id),
-            name: String(row.nome || "Vendedor"),
-            avatarUrl: row.avatar_url ? String(row.avatar_url) : null,
-            registrations: Number(row.total_leads ?? 0),
-            position: Number(row.posicao ?? 0),
-          }))
-          .sort((a, b) => a.position - b.position),
-      );
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Não foi possível carregar sua meta.");
-    } finally {
-      setLoading(false);
-    }
+      if (rankingResponse.error) throw rankingResponse.error;
+      setDaily(day); setMonthly(monthData); setRoleProgress(sharedProgress); setLegacyMonthly(monthlyProgress);
+      setRanking((((rankingResponse.data as Record<string, unknown>[] | null) ?? []).map((row) => ({ id: String(row.vendedor_id), name: String(row.nome || "Vendedor"), registrations: Number(row.total_leads ?? 0), position: Number(row.posicao ?? 0) })).sort((a, b) => a.position - b.position)));
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível carregar suas metas."); }
+    finally { setLoading(false); }
   }, [month, year]);
+  useEffect(() => { void load(); const refresh = () => void load(); const channel = supabase.channel("seller-goals-live").on("postgres_changes", { event: "*", schema: "public", table: "seller_contact_leads" }, refresh).on("postgres_changes", { event: "*", schema: "public", table: "seller_team_goals" }, refresh).on("postgres_changes", { event: "*", schema: "public", table: "seller_commercial_events" }, refresh).on("postgres_changes", { event: "*", schema: "public", table: "seller_signup_attributions" }, refresh).on("postgres_changes", { event: "*", schema: "public", table: "seller_client_partnerships" }, refresh).on("postgres_changes", { event: "*", schema: "public", table: "seller_appointments" }, refresh).subscribe(); return () => { void supabase.removeChannel(channel); }; }, [load]);
 
-  useEffect(() => {
-    void load();
-    const channel = supabase
-      .channel("seller-registration-goal")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "seller_team_goals" },
-        () => void load(),
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "seller_goals" },
-        () => void load(),
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "seller_client_partnerships" },
-        () => void load(),
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "seller_signup_attributions" },
-        () => void load(),
-      )
-      .subscribe();
-    return () => void supabase.removeChannel(channel);
-  }, [load]);
+  const leadsPercent = useMemo(() => daily?.target_leads_contacted_daily ? Math.min(100, Math.round((daily.leads_contacted / daily.target_leads_contacted_daily) * 100)) : 0, [daily]);
+  const remaining = daily?.target_leads_contacted_daily == null ? null : Math.max(0, daily.target_leads_contacted_daily - daily.leads_contacted);
 
-  const percentage = progress
-    ? sellerGoalPercentage(progress.clients_registered, progress.target_clients)
-    : 0;
-  const remaining =
-    progress?.target_clients == null
-      ? null
-      : Math.max(0, progress.target_clients - progress.clients_registered);
-  const position = ranking.find((row) => row.id === progress?.seller_id)?.position;
-  const teamTotal = useMemo(
-    () => ranking.reduce((sum, row) => sum + row.registrations, 0),
-    [ranking],
-  );
+  return <DashboardLayout>
+    <main className="mx-auto w-full max-w-[1400px] space-y-4 pb-8 text-neutral-950">
+      <section className="relative overflow-hidden rounded-[28px] border border-yellow-300 bg-[radial-gradient(circle_at_90%_15%,rgba(250,204,21,.45),transparent_27%),linear-gradient(115deg,#fff_0%,#fffbed_65%,#ffef91_100%)] p-6 shadow-sm sm:p-8">
+        <div className="relative flex flex-col gap-5 md:flex-row md:items-end md:justify-between"><div><span className="inline-flex items-center gap-2 rounded-full bg-neutral-950 px-3 py-1 text-[10px] font-black uppercase tracking-[.16em] text-yellow-300"><Sparkles className="h-3.5 w-3.5" /> Metas que movimentam</span><h1 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl">Um passo por vez. Todo dia.</h1><p className="mt-2 max-w-2xl text-sm font-medium text-neutral-600">Use a meta de ligações como ritmo visual e registre somente os leads que realmente responderam.</p></div><Button variant="outline" className="gap-2 border-yellow-400 bg-white/80 font-bold" onClick={() => void load()} disabled={loading}><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Atualizar</Button></div>
+      </section>
 
-  return (
-    <DashboardLayout lockDesktopViewport>
-      <main className="flex min-h-0 flex-col gap-2 text-neutral-950 xl:h-full xl:overflow-hidden">
-        <section className="relative shrink-0 overflow-hidden rounded-[18px] border border-yellow-300 bg-[radial-gradient(circle_at_92%_20%,rgba(250,204,21,0.25),transparent_24%),linear-gradient(115deg,#fff_0%,#fffef8_60%,#fff4b3_100%)] px-4 py-2.5 shadow-sm sm:px-5">
-          <div className="relative flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-yellow-400 bg-white/80 px-2.5 py-0.5 text-[8px] font-black uppercase tracking-[0.18em] text-yellow-700">
-                <CalendarDays className="h-3 w-3" />
-                {MONTHS[month - 1]} de {year}
-              </span>
-              <h1 className="mt-1 text-xl font-black sm:text-2xl">
-                Minha meta de <span className="text-yellow-500">cadastros</span>
-              </h1>
-              <p className="mt-0.5 text-[11px] font-medium text-neutral-600 sm:text-xs">
-                Sua prioridade comercial é cadastrar novas imobiliárias e corretores parceiros.
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              {position && (
-                <Badge className="border border-yellow-300 bg-white px-3 py-2 text-neutral-950">
-                  {position}º no ranking
-                </Badge>
-              )}
-              <Button
-                variant="outline"
-                size="icon"
-                className="rounded-xl border-yellow-300"
-                onClick={load}
-                disabled={loading}
-                aria-label="Atualizar meta"
-              >
-                <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-              </Button>
-            </div>
-          </div>
+      {error ? <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm font-semibold text-red-800">{error}</div> : loading && !daily ? <div className="h-80 animate-pulse rounded-3xl bg-neutral-100" /> : daily && monthly && <>
+        <section className="grid gap-4 lg:grid-cols-2">
+          <article className="group overflow-hidden rounded-[24px] bg-neutral-950 p-6 text-white shadow-lg"><div className="flex items-start justify-between gap-4"><div><p className="text-[10px] font-black uppercase tracking-[.18em] text-yellow-300">Ritmo visual · hoje</p><h2 className="mt-2 text-2xl font-black">Ligações</h2></div><span className="grid h-12 w-12 place-items-center rounded-2xl bg-yellow-400 text-black transition group-hover:rotate-6"><PhoneCall className="h-6 w-6" /></span></div><strong className="mt-10 block text-6xl font-black tracking-[-.06em]">{daily.target_calls_daily ?? "—"}</strong><p className="mt-3 max-w-sm text-sm leading-6 text-neutral-300">Meta de referência. O sistema não monitora nem conta suas ligações.</p></article>
+          <article className="overflow-hidden rounded-[24px] border border-violet-200 bg-violet-50 p-6 shadow-sm"><div className="flex items-start justify-between gap-4"><div><p className="text-[10px] font-black uppercase tracking-[.18em] text-violet-600">Resultado acompanhado · hoje</p><h2 className="mt-2 text-2xl font-black">Leads em contato</h2></div><span className="grid h-12 w-12 place-items-center rounded-2xl bg-violet-600 text-white"><UsersRound className="h-6 w-6" /></span></div><div className="mt-8 flex items-end justify-between gap-4"><strong className="text-5xl font-black tracking-[-.05em]">{daily.leads_contacted}<span className="ml-2 text-lg text-violet-400">/ {daily.target_leads_contacted_daily ?? "—"}</span></strong><span className="rounded-full bg-white px-3 py-1 text-sm font-black text-violet-700">{leadsPercent}%</span></div><Progress value={leadsPercent} className="mt-5 h-3 bg-white" /><p className="mt-3 text-sm font-semibold text-violet-800/70">{remaining == null ? "A administração ainda não definiu esta meta." : remaining === 0 ? "Meta do dia concluída. Excelente!" : `Faltam ${remaining} ${remaining === 1 ? "lead" : "leads"} em contato.`}</p></article>
         </section>
 
-        {error ? (
-          <State title="Não foi possível carregar sua meta" description={error} error />
-        ) : loading ? (
-          <div className="h-64 animate-pulse rounded-[22px] bg-neutral-100" />
-        ) : progress ? (
-          <div
-            className={`grid min-h-0 flex-1 gap-2 lg:grid-cols-[1.2fr_0.8fr] xl:overflow-hidden ${
-              roleProgress ? "xl:grid-rows-[minmax(0,1.08fr)_minmax(0,0.92fr)]" : "xl:grid-rows-1"
-            }`}
-          >
-            {roleProgress && (
-              <Card className="flex min-h-0 flex-col overflow-hidden border-yellow-300 shadow-sm lg:col-span-2">
-                <CardHeader className="shrink-0 px-4 py-2.5">
-                  <CardTitle className="flex items-center gap-2 text-sm">
-                    <CalendarDays className="h-4 w-4 text-yellow-600" />{" "}
-                    {roleProgress.seller_type === "sdr"
-                      ? "Reuniões marcadas"
-                      : "Reuniões confirmadas"}{" "}
-                    e cadastros · metas da equipe
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="grid min-h-0 flex-1 grid-rows-2 gap-2 px-4 pb-3 pt-0">
-                  {(["meetings", "registrations"] as const).map((metric) => (
-                    <div key={metric} className="flex min-h-0 flex-col">
-                      <p className="mb-1 text-[10px] font-black uppercase tracking-wide text-neutral-500">
-                        {metric === "registrations"
-                          ? "Cadastros realizados"
-                          : roleProgress.seller_type === "sdr"
-                            ? "Reuniões agendadas"
-                            : "Reuniões confirmadas"}
-                      </p>
-                      <div className="grid min-h-0 flex-1 gap-2 sm:grid-cols-3">
-                        {(["daily", "weekly", "monthly"] as const).map((period) => {
-                          const scheduled = roleProgress.seller_type === "sdr";
-                          const current =
-                            metric === "registrations"
-                              ? roleProgress[`clients_registered_${period}`]
-                              : scheduled
-                                ? roleProgress[`meetings_scheduled_${period}`]
-                                : roleProgress[`meetings_completed_${period}`];
-                          const target =
-                            metric === "registrations"
-                              ? roleProgress[`target_clients_${period}`]
-                              : scheduled
-                                ? roleProgress[`target_meetings_scheduled_${period}`]
-                                : roleProgress[`target_meetings_completed_${period}`];
-                          const labels = {
-                            daily: "Hoje",
-                            weekly: "Esta semana",
-                            monthly: "Este mês",
-                          };
-                          const pct = target
-                            ? Math.min(100, Math.round((current / target) * 100))
-                            : 0;
-                          return (
-                            <div
-                              key={period}
-                              className="flex min-h-0 flex-col justify-center rounded-xl bg-neutral-50 px-3 py-2"
-                            >
-                              <p className="text-[10px] font-black uppercase text-neutral-400">
-                                {labels[period]}
-                              </p>
-                              <p className="mt-0.5 text-2xl font-black leading-none">
-                                {current}
-                                <span className="text-xs text-neutral-400"> / {target ?? "—"}</span>
-                              </p>
-                              <ProgressBar value={pct} />
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            )}
-            <Card className="flex min-h-0 flex-col overflow-hidden border-yellow-300 shadow-sm">
-              <CardHeader className="shrink-0 border-b border-yellow-100 bg-yellow-50 px-4 py-2.5">
-                <CardTitle className="flex items-center gap-2 text-sm">
-                  <Target className="h-4 w-4 text-yellow-600" /> Cadastros realizados no mês
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="flex min-h-0 flex-1 flex-col justify-center p-3 sm:p-4">
-                {progress.target_clients == null ? (
-                  <State
-                    title="Meta ainda não definida"
-                    description="O administrador precisa definir a meta de cadastros da sua equipe neste mês."
-                  />
-                ) : (
-                  <>
-                    <div className="flex items-end justify-between gap-4">
-                      <div>
-                        <strong className="text-4xl font-black leading-none text-neutral-950">
-                          {progress.clients_registered}
-                        </strong>
-                        <span className="ml-2 text-lg font-bold text-neutral-400">
-                          / {progress.target_clients}
-                        </span>
-                        <p className="mt-0.5 text-xs font-semibold text-neutral-500">
-                          novos parceiros cadastrados
-                        </p>
-                      </div>
-                      <strong className="text-2xl font-black text-yellow-600">{percentage}%</strong>
-                    </div>
-                    <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-neutral-100">
-                      <div
-                        className="h-full rounded-full bg-gradient-to-r from-yellow-500 to-yellow-300 transition-all"
-                        style={{ width: `${percentage}%` }}
-                      />
-                    </div>
-                    <div className="mt-3 flex items-center gap-2 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2">
-                      {remaining === 0 ? (
-                        <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                      ) : (
-                        <Target className="h-5 w-5 text-yellow-600" />
-                      )}
-                      <div>
-                        <p className="text-sm font-black leading-tight">
-                          {remaining === 0
-                            ? "Meta concluída!"
-                            : `Faltam ${remaining} cadastro${remaining === 1 ? "" : "s"}`}
-                        </p>
-                        <p className="text-[10px] leading-tight text-neutral-500">
-                          Cada novo cadastro válido entra automaticamente nesta contagem.
-                        </p>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </CardContent>
-            </Card>
+        <section className="grid gap-3 sm:grid-cols-3">
+          <MiniStat icon={Flame} label="Leads no mês" value={monthly.leads_contacted} color="text-orange-600 bg-orange-100" />
+          <MiniStat icon={ArrowRight} label="Links enviados" value={monthly.links_generated} color="text-sky-700 bg-sky-100" />
+          <MiniStat icon={Trophy} label="Cadastros no mês" value={monthly.registrations} color="text-emerald-700 bg-emerald-100" />
+        </section>
 
-            <Card className="flex min-h-0 flex-col overflow-hidden border-neutral-200 shadow-sm">
-              <CardHeader className="shrink-0 border-b border-neutral-100 px-4 py-2.5">
-                <CardTitle className="flex items-center justify-between gap-2 text-sm">
-                  <span className="flex items-center gap-2">
-                    <Award className="h-4 w-4 text-yellow-600" /> Sua equipe
-                  </span>
-                  <Badge variant="outline">{teamTotal} cadastros</Badge>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="min-h-0 flex-1 overflow-hidden p-0">
-                {ranking.length === 0 ? (
-                  <div className="p-4">
-                    <State
-                      title="Sem resultados ainda"
-                      description="O ranking aparecerá após o primeiro cadastro."
-                    />
-                  </div>
-                ) : (
-                  <ol
-                    className={`grid h-full min-h-0 auto-rows-fr gap-px bg-neutral-100 ${
-                      ranking.length > 8
-                        ? "sm:grid-cols-2 xl:grid-cols-3"
-                        : ranking.length > 4
-                          ? "sm:grid-cols-2"
-                          : "grid-cols-1"
-                    }`}
-                  >
-                    {ranking.map((row) => (
-                      <TeamRow key={row.id} row={row} current={row.id === progress.seller_id} />
-                    ))}
-                  </ol>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        ) : null}
-      </main>
-    </DashboardLayout>
-  );
+        {roleProgress && (
+          <section className="rounded-[24px] border border-neutral-200 bg-white p-5 shadow-sm">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+              <div><p className="text-[10px] font-black uppercase tracking-[.16em] text-yellow-700">Metas compartilhadas da equipe</p><h2 className="mt-1 text-xl font-black">Reuniões e cadastros</h2></div>
+              <span className="rounded-full bg-neutral-950 px-3 py-1 text-[10px] font-black uppercase text-white">{roleProgress.seller_type === "closer" ? "Closer" : "Vendedor"}</span>
+            </div>
+            <div className="mt-4 grid gap-3 lg:grid-cols-2">
+              <SharedGoalGroup title={roleProgress.seller_type === "closer" ? "Reuniões confirmadas" : "Reuniões agendadas"} values={roleProgress.seller_type === "closer" ? [roleProgress.meetings_completed_daily, roleProgress.meetings_completed_weekly, roleProgress.meetings_completed_monthly] : [roleProgress.meetings_scheduled_daily, roleProgress.meetings_scheduled_weekly, roleProgress.meetings_scheduled_monthly]} targets={roleProgress.seller_type === "closer" ? [roleProgress.target_meetings_completed_daily, roleProgress.target_meetings_completed_weekly, roleProgress.target_meetings_completed_monthly] : [roleProgress.target_meetings_scheduled_daily, roleProgress.target_meetings_scheduled_weekly, roleProgress.target_meetings_scheduled_monthly]} />
+              <SharedGoalGroup title="Cadastros realizados" values={[roleProgress.clients_registered_daily, roleProgress.clients_registered_weekly, roleProgress.clients_registered_monthly]} targets={[roleProgress.target_clients_daily, roleProgress.target_clients_weekly, roleProgress.target_clients_monthly]} />
+            </div>
+          </section>
+        )}
+
+        <section className="grid gap-4 lg:grid-cols-[.8fr_1.2fr]">
+          <article className="rounded-[24px] border border-yellow-300 bg-yellow-50 p-5 shadow-sm">
+            <p className="text-[10px] font-black uppercase tracking-[.16em] text-yellow-800">Meta individual do mês</p>
+            <div className="mt-3 flex items-end justify-between gap-3"><strong className="text-4xl font-black">{legacyMonthly?.clients_registered ?? 0}<span className="ml-1 text-base text-yellow-700/60">/ {legacyMonthly?.target_clients ?? "—"}</span></strong><Trophy className="h-8 w-8 text-yellow-600" /></div>
+            <Progress value={legacyMonthly?.target_clients ? Math.min(100, Math.round((legacyMonthly.clients_registered / legacyMonthly.target_clients) * 100)) : 0} className="mt-4 h-2 bg-white" />
+          </article>
+          <article className="rounded-[24px] border border-neutral-200 bg-white p-5 shadow-sm"><div className="flex items-center justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-[.16em] text-neutral-400">Ranking preservado</p><h2 className="mt-1 text-lg font-black">Cadastros do mês</h2></div><Trophy className="h-6 w-6 text-yellow-600" /></div>{ranking.length === 0 ? <p className="mt-5 text-sm text-neutral-500">Ainda não há posições neste mês.</p> : <ol className="mt-4 grid gap-2 sm:grid-cols-2">{ranking.slice(0, 6).map((row) => <li key={row.id} className={`flex items-center gap-3 rounded-xl p-3 ${row.id === legacyMonthly?.seller_id ? "bg-yellow-50 ring-1 ring-yellow-300" : "bg-neutral-50"}`}><span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-neutral-950 text-xs font-black text-white">{row.position}º</span><div className="min-w-0 flex-1"><p className="truncate text-sm font-black">{row.name}</p><p className="text-[11px] font-semibold text-neutral-500">{row.registrations} cadastro(s)</p></div></li>)}</ol>}</article>
+        </section>
+
+        <section className="rounded-[24px] border border-neutral-200 bg-white p-5 shadow-sm"><div className="flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-yellow-100 text-yellow-700"><Target className="h-5 w-5" /></span><div><h2 className="font-black">Como um lead entra na meta?</h2><p className="mt-1 text-sm leading-6 text-neutral-500">Cadastre nome e telefone na aba Clientes. O lead passa a contar imediatamente e os lembretes de acompanhamento são criados automaticamente na agenda.</p></div></div></section>
+      </>}
+    </main>
+  </DashboardLayout>;
 }
 
-function TeamRow({ row, current }: { row: RankingRow; current: boolean }) {
-  return (
-    <li
-      className={`grid min-h-0 grid-cols-[22px_auto_minmax(0,1fr)_auto] items-center gap-2 px-3 py-1.5 ${current ? "bg-yellow-50" : "bg-white"}`}
-    >
-      <span className="text-right text-sm font-black text-neutral-400">{row.position}.</span>
-      <Avatar className="h-7 w-7">
-        <AvatarImage src={row.avatarUrl || defaultAvatarForName(row.name)} />
-        <AvatarFallback>{row.name.slice(0, 2).toUpperCase()}</AvatarFallback>
-      </Avatar>
-      <div className="min-w-0">
-        <p className="truncate text-[11px] font-black leading-tight">
-          {row.name}
-          {current && <span className="ml-2 text-[8px] uppercase text-yellow-600">Você</span>}
-        </p>
-        <p className="text-[8px] leading-tight text-neutral-400">cadastros realizados</p>
-      </div>
-      <strong className="text-base font-black text-yellow-600">{row.registrations}</strong>
-    </li>
-  );
+function MiniStat({ icon: Icon, label, value, color }: { icon: typeof Flame; label: string; value: number; color: string }) {
+  return <article className="flex items-center gap-4 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm"><span className={`grid h-11 w-11 place-items-center rounded-xl ${color}`}><Icon className="h-5 w-5" /></span><div><strong className="text-2xl font-black">{value}</strong><p className="text-xs font-bold text-neutral-500">{label}</p></div></article>;
 }
 
-function State({
-  title,
-  description,
-  error = false,
-}: {
-  title: string;
-  description: string;
-  error?: boolean;
-}) {
-  return (
-    <div
-      className={`rounded-2xl border p-6 text-center ${error ? "border-red-200 bg-red-50" : "border-dashed border-neutral-300 bg-neutral-50"}`}
-    >
-      {error ? (
-        <AlertCircle className="mx-auto mb-2 h-5 w-5 text-red-500" />
-      ) : (
-        <Trophy className="mx-auto mb-2 h-5 w-5 text-yellow-500" />
-      )}
-      <p className="font-black">{title}</p>
-      <p className="mt-1 text-xs text-neutral-500">{description}</p>
-    </div>
-  );
-}
-
-function ProgressBar({ value }: { value: number }) {
-  return (
-    <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-neutral-200">
-      <div className="h-full rounded-full bg-yellow-400" style={{ width: `${value}%` }} />
-    </div>
-  );
+function SharedGoalGroup({ title, values, targets }: { title: string; values: number[]; targets: Array<number | null> }) {
+  return <div className="rounded-2xl bg-neutral-50 p-4"><h3 className="text-sm font-black">{title}</h3><div className="mt-3 grid grid-cols-3 gap-2">{["Hoje", "Semana", "Mês"].map((label, index) => { const pct = targets[index] ? Math.min(100, Math.round((values[index] / targets[index]!) * 100)) : 0; return <div key={label} className="rounded-xl border border-neutral-200 bg-white p-2.5"><p className="text-[9px] font-black uppercase text-neutral-400">{label}</p><p className="mt-1 text-lg font-black">{values[index]}<span className="text-[10px] text-neutral-400"> / {targets[index] ?? "—"}</span></p><Progress value={pct} className="mt-2 h-1.5 bg-neutral-100" /></div>; })}</div></div>;
 }

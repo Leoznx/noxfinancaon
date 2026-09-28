@@ -36,7 +36,7 @@ export function MeetingFeedbackDialog({ item, onClose, onSubmit }: { item: Selle
           <DialogTitle className="text-xl font-black">Feedback obrigatório da reunião</DialogTitle>
         </DialogHeader>
         <div>
-          <p className="mb-3 text-sm text-neutral-600">Registre o resultado de “{item.title}”, as dúvidas do cliente e o próximo passo combinado. Ao concluir, os follow-ups de 1, 4, 15 e 30 dias serão criados somente para o SDR que marcou a reunião ou, em reuniões diretas, para o Closer. Todos ficam às 10h do próximo dia útil.</p>
+          <p className="mb-3 text-sm text-neutral-600">Registre o resultado de “{item.title}”, as dúvidas do cliente e o próximo passo combinado. Ao concluir, os follow-ups de 1, 4, 15 e 30 dias serão criados somente para o Vendedor que marcou a reunião ou, em reuniões diretas, para o Closer. Todos ficam às 10h do próximo dia útil.</p>
           <Textarea autoFocus value={feedback} onChange={(event) => setFeedback(event.target.value)} placeholder="Ex.: Cliente interessado, vai concluir o cadastro hoje e pediu retorno sobre integração..." className="min-h-32 resize-y" maxLength={2000} />
           <p className={`mt-1 text-right text-[11px] font-semibold ${valid ? "text-emerald-700" : "text-neutral-400"}`}>{feedback.trim().length}/2000 · mínimo 10 caracteres</p>
         </div>

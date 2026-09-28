@@ -43,7 +43,7 @@ export async function fetchSignupLinkSdrs() {
   if (error) throw error;
   return ((data as Record<string, unknown>[] | null) ?? []).map((row) => ({
     id: String(row.sdr_id),
-    name: String(row.sdr_name || "SDR"),
+    name: String(row.sdr_name || "Vendedor"),
   })) satisfies SignupLinkSdr[];
 }
 

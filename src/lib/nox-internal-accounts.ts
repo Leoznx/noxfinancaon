@@ -3,16 +3,16 @@ export type SellerType = "sdr" | "closer";
 
 export const noxInternalAccounts = {
   sdr: {
-    label: "Vendedor SDR",
-    route: "/login/sdrnox",
+    label: "Vendedor",
+    route: "/login/vendedornox",
     dashboardRoute: "/vendedor",
     internalRole: "vendedor",
     sellerType: "sdr",
     cardDescription: "Prospecção, pré-atendimento, qualificação e agendamento para Closers.",
-    formTitle: "Criar conta de Vendedor SDR",
+    formTitle: "Criar conta de Vendedor",
     formDescription:
       "Cadastre-se para prospectar parceiros e distribuir reuniões para a equipe de fechamento.",
-    badge: "Equipe comercial NOX — SDR",
+    badge: "Equipe comercial NOX — Vendedor",
   },
   closer: {
     label: "Vendedor Closer",

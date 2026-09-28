@@ -16,7 +16,6 @@ import {
 import { toast } from "sonner";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { SellerClientRegistrationFlow } from "@/components/seller-clients/SellerClientRegistrationFlow";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -196,11 +195,11 @@ function EnviarLinkPage() {
                   </span>
                   <div>
                     <h2 className="font-black text-neutral-950">
-                      Este cliente veio de reunião de um SDR?
+                      Este cliente veio de reunião de um Vendedor?
                     </h2>
                     <p className="mt-1 max-w-2xl text-sm text-neutral-600">
                       Ative antes de copiar o link. O cadastro será contabilizado uma vez para você
-                      e uma vez para o SDR que encaminhou a reunião.
+                      e uma vez para o Vendedor que encaminhou a reunião.
                     </p>
                   </div>
                 </div>
@@ -210,7 +209,7 @@ function EnviarLinkPage() {
                     checked={sharedWithSdr}
                     onCheckedChange={changeSharedMode}
                     className="data-[state=checked]:bg-yellow-400"
-                    aria-label="Compartilhar cadastro com SDR"
+                    aria-label="Compartilhar cadastro com Vendedor"
                   />
                 </div>
               </div>
@@ -218,12 +217,12 @@ function EnviarLinkPage() {
               {sharedWithSdr && (
                 <div className="mt-5 max-w-xl">
                   <label className="mb-2 block text-xs font-black uppercase tracking-wider text-neutral-700">
-                    SDR que encaminhou a reunião
+                    Vendedor que encaminhou a reunião
                   </label>
                   {sdrs.length > 0 ? (
                     <Select value={selectedSdrId} onValueChange={selectSdr}>
                       <SelectTrigger className="h-12 rounded-xl border-yellow-300 bg-white">
-                        <SelectValue placeholder="Selecione o SDR de origem" />
+                        <SelectValue placeholder="Selecione o Vendedor de origem" />
                       </SelectTrigger>
                       <SelectContent>
                         {sdrs.map((sdr) => (
@@ -235,7 +234,7 @@ function EnviarLinkPage() {
                     </Select>
                   ) : (
                     <p className="rounded-xl border border-dashed border-yellow-400 bg-white p-3 text-sm text-neutral-600">
-                      Ainda não há reunião de SDR encaminhada para você. Use seus links individuais
+                      Ainda não há reunião de Vendedor encaminhada para você. Use seus links individuais
                       abaixo.
                     </p>
                   )}
@@ -262,7 +261,7 @@ function EnviarLinkPage() {
           <section className="rounded-[22px] border border-dashed border-yellow-400 bg-white p-10 text-center">
             <Link2 className="mx-auto h-8 w-8 text-yellow-500" />
             <h2 className="mt-3 text-lg font-black">
-              Selecione o SDR para liberar os links compartilhados
+              Selecione o Vendedor para liberar os links compartilhados
             </h2>
             <p className="mt-1 text-sm text-neutral-500">
               Assim o sistema registra corretamente os dois responsáveis.
@@ -341,18 +340,6 @@ function EnviarLinkPage() {
           </section>
         )}
 
-        <section className="rounded-[22px] border border-neutral-200 bg-white p-5 shadow-sm sm:p-6">
-          <div className="mb-4">
-            <Badge className="border-0 bg-yellow-400 px-3 py-1.5 font-black text-neutral-950">
-              Cadastro manual
-            </Badge>
-            <p className="mt-3 text-sm text-neutral-500">
-              Informe o e-mail usado no login da NOX. O sistema busca automaticamente qualquer conta
-              ativa de cliente e registra o crédito sem exigir um link.
-            </p>
-          </div>
-          <SellerClientRegistrationFlow mode="registration-only" />
-        </section>
       </main>
     </DashboardLayout>
   );

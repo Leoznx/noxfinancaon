@@ -1,6 +1,14 @@
 import { addDays, endOfMonth, endOfWeek, startOfMonth, startOfWeek } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
-import { fetchSellerClients, type SellerClient } from "@/lib/seller-clients";
+import {
+  fetchSellerClients,
+  normalizeBrazilianPhone,
+  type SellerClient,
+} from "@/lib/seller-clients";
+import {
+  fetchMySellerContactLeads,
+  type SellerContactLeadHistory,
+} from "@/lib/seller-control";
 
 export type AgendaViewMode = "calendario" | "lista";
 export type AgendaFilter = "todos" | "reuniao" | "follow_up" | "visita" | "call" | "retorno" | "outro" | "concluido" | "pendente";
@@ -51,7 +59,16 @@ export type SellerAppointment = {
   scheduled_at: string;
   reminder_minutes: number | null;
   notes: string | null;
-  source: "manual" | "admin" | "lead_follow_up" | "sdr_handoff" | "meeting_follow_up";
+  source:
+    | "manual"
+    | "admin"
+    | "lead_follow_up"
+    | "sdr_handoff"
+    | "meeting_follow_up"
+    | "rotating_lead";
+  contact_lead_task_id: string | null;
+  contact_lead_history: SellerContactLeadHistory[];
+  contact_lead_cycle_number: number | null;
   sdr_id: string | null;
   assigned_closer_id: string | null;
   duration_minutes: number;
@@ -305,10 +322,10 @@ export async function fetchSellerAgenda(
   clients: AgendaClientOption[];
 }> {
   const { start, end } = sellerAgendaRange(month);
-  const [appointmentsResult, leadsResult, sellerClients] = await Promise.all([
+  const [appointmentsResult, leadsResult, sellerClients, contactLeads] = await Promise.all([
     supabase
       .from("seller_appointments" as any)
-      .select("id, seller_id, sdr_id, assigned_closer_id, lead_id, partnership_id, title, type, status, priority, scheduled_at, reminder_minutes, notes, source, completed_at, actual_duration_minutes, duration_minutes, contact_name, contact_email, contact_phone, origin_appointment_id, follow_up_offset_days, follow_up_owner_type, follow_up_message_key, meeting_feedback, feedback_submitted_at, tracked_profile_id, visible_from, created_at, updated_at, sales_leads(full_name, email, phone)")
+      .select("id, seller_id, sdr_id, assigned_closer_id, lead_id, partnership_id, title, type, status, priority, scheduled_at, reminder_minutes, notes, source, contact_lead_task_id, completed_at, actual_duration_minutes, duration_minutes, contact_name, contact_email, contact_phone, origin_appointment_id, follow_up_offset_days, follow_up_owner_type, follow_up_message_key, meeting_feedback, feedback_submitted_at, tracked_profile_id, visible_from, created_at, updated_at, sales_leads(full_name, email, phone)")
       .or(`seller_id.eq.${sellerId},sdr_id.eq.${sellerId},assigned_closer_id.eq.${sellerId}`)
       .gte("scheduled_at", start.toISOString())
       .lt("scheduled_at", end.toISOString())
@@ -319,6 +336,7 @@ export async function fetchSellerAgenda(
       .eq("assigned_seller_id", sellerId)
       .order("full_name", { ascending: true }),
     fetchSellerClients(),
+    fetchMySellerContactLeads(""),
   ]);
 
   if (appointmentsResult.error) throw appointmentsResult.error;
@@ -326,6 +344,9 @@ export async function fetchSellerAgenda(
 
   const clients = clientsToOptions(sellerClients);
   const clientsById = new Map(clients.map((client) => [client.id, client]));
+  const contactLeadsByPhone = new Map(
+    contactLeads.map((lead) => [normalizeBrazilianPhone(lead.phone), lead]),
+  );
   const appointmentRows = (appointmentsResult.data as any[]) ?? [];
   const journeyAppointmentIds = appointmentRows.filter((row) => row.source === "meeting_follow_up").map((row) => String(row.id));
   const journeyByAppointment = new Map<string, FollowUpJourney>();
@@ -343,18 +364,26 @@ export async function fetchSellerAgenda(
   }
 
   const appointments = appointmentRows
-    .map((row): SellerAppointment => ({
+    .map((row): SellerAppointment => {
+      const rotatingLead =
+        row.source === "rotating_lead"
+          ? contactLeadsByPhone.get(normalizeBrazilianPhone(String(row.contact_phone ?? "")))
+          : undefined;
+      return ({
       ...row,
       partnership_id: row.partnership_id ?? null,
       source: row.source ?? "manual",
+      contact_lead_task_id: row.contact_lead_task_id ?? null,
+      contact_lead_history: rotatingLead?.history ?? [],
+      contact_lead_cycle_number: rotatingLead?.cycle_number ?? null,
       completed_at: row.completed_at ?? null,
       actual_duration_minutes: row.actual_duration_minutes == null ? null : Number(row.actual_duration_minutes),
       sdr_id: row.sdr_id ?? null,
       assigned_closer_id: row.assigned_closer_id ?? null,
       duration_minutes: Number(row.duration_minutes ?? SHARED_MEETING_DURATION_MINUTES),
-      contact_name: row.contact_name ?? null,
+      contact_name: row.contact_name ?? rotatingLead?.name ?? null,
       contact_email: row.contact_email ?? null,
-      contact_phone: row.contact_phone ?? null,
+      contact_phone: row.contact_phone ?? rotatingLead?.phone ?? null,
       origin_appointment_id: row.origin_appointment_id ?? null,
       follow_up_offset_days: row.follow_up_offset_days ?? null,
       follow_up_owner_type: row.follow_up_owner_type ?? null,
@@ -368,7 +397,7 @@ export async function fetchSellerAgenda(
       lead_email: row.sales_leads?.email ?? null,
       lead_phone: row.sales_leads?.phone ?? null,
       client_name: row.partnership_id ? (clientsById.get(row.partnership_id)?.name ?? null) : null,
-    }))
+    }); })
     .filter((item) => !item.visible_from || new Date(item.visible_from).getTime() <= Date.now());
 
   const now = new Date();

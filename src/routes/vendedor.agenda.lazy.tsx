@@ -21,6 +21,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { appointmentMatchesFilter, buildShortNameValueMap, canEditSellerMeetingContact, completeCloserMeeting, deleteSellerAppointment, fetchSellerAgenda, getSharedMeetingMetadata, isPersonalSellerReminder, saveSellerAppointment, setSellerAppointmentStatus, type AgendaClientOption, type AgendaFilter, type AgendaLeadOption, type AgendaSummary, type AgendaViewMode, type AppointmentDraft, type SellerAppointment } from "@/lib/seller-agenda";
+import { respondToMySellerContactLeadTask, type SellerLeadOutcome } from "@/lib/seller-control";
 import { getSellerContext } from "@/lib/vendedor-portal";
 
 export const Route = createLazyFileRoute("/vendedor/agenda")({
@@ -235,6 +236,7 @@ function AgendaPage() {
   }
 
   function canEditAppointment(item: SellerAppointment) {
+    if (item.source === "rotating_lead") return false;
     if (item.type === "reuniao") return canEditSellerMeetingContact(item, sellerId);
     return item.source !== "meeting_follow_up" && item.seller_id === sellerId;
   }
@@ -274,6 +276,10 @@ function AgendaPage() {
 
   async function complete(item: SellerAppointment) {
     if (!sellerId) return;
+    if (item.source === "rotating_lead") {
+      toast.info("Use “Em contato” ou “Sem retorno” para responder este lead.");
+      return;
+    }
     if (item.type === "reuniao") {
       if (!canCompleteAppointment(item)) {
         toast.error("Somente o Closer responsável pode concluir esta reunião.");
@@ -298,6 +304,7 @@ function AgendaPage() {
 
   function canCompleteAppointment(item: SellerAppointment) {
     if (["concluido", "cancelado"].includes(item.status)) return false;
+    if (item.source === "rotating_lead") return false;
     if (item.type !== "reuniao") return true;
     return sellerType === "closer"
       && (item.assigned_closer_id === sellerId
@@ -309,7 +316,7 @@ function AgendaPage() {
     try {
       await completeCloserMeeting(feedbackTarget.id, feedback);
       setFeedbackTarget(null);
-      toast.success(feedbackTarget.sdr_id ? "Feedback salvo. Follow-ups de 1, 4, 15 e 30 dias criados somente para o SDR, às 10h." : "Feedback salvo. Follow-ups de 1, 4, 15 e 30 dias criados somente para o Closer, às 10h.");
+      toast.success(feedbackTarget.sdr_id ? "Feedback salvo. Follow-ups de 1, 4, 15 e 30 dias criados somente para o Vendedor, às 10h." : "Feedback salvo. Follow-ups de 1, 4, 15 e 30 dias criados somente para o Closer, às 10h.");
       await load(true);
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "Não foi possível concluir a reunião.");
@@ -318,6 +325,11 @@ function AgendaPage() {
 
   async function confirmDelete() {
     if (!sellerId || !deleteTarget) return;
+    if (deleteTarget.source === "rotating_lead") {
+      setDeleteTarget(null);
+      toast.error("Lembretes de lead são automáticos e não podem ser excluídos.");
+      return;
+    }
     const target = deleteTarget;
     const previous = appointments;
     setAppointments((current) => current.filter((item) => item.id !== target.id));
@@ -328,13 +340,28 @@ function AgendaPage() {
       await deleteSellerAppointment(sellerId, target.id);
       toast.success(
         target.type === "reuniao"
-          ? "Reunião removida das agendas do SDR e do Closer. O horário já está disponível novamente."
+          ? "Reunião removida das agendas do Vendedor e do Closer. O horário já está disponível novamente."
           : "Compromisso excluído com sucesso.",
       );
       await load(true);
     } catch (deleteError) {
       setAppointments(previous);
       toast.error(deleteError instanceof Error ? deleteError.message : "Não foi possível excluir o compromisso.");
+    }
+  }
+
+  async function respondToRotatingLead(item: SellerAppointment, outcome: SellerLeadOutcome) {
+    try {
+      await respondToMySellerContactLeadTask(item.id, outcome);
+      setViewing(null);
+      toast.success(
+        outcome === "em_contato"
+          ? "Contato confirmado. O lead permanece na sua carteira por mais 30 dias."
+          : "Sem retorno registrado. O sistema cuidará do próximo passo automaticamente.",
+      );
+      await load(true);
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Não foi possível responder este lead.");
     }
   }
 
@@ -452,8 +479,8 @@ function AgendaPage() {
             setModalOpen(false);
           }}
         />
-        <AppointmentDetailsDialog item={viewing} sdrNames={sdrNames} onClose={() => setViewing(null)} onEdit={openEdit} onReschedule={openReschedule} onComplete={complete} onDelete={setDeleteTarget} canEdit={!!viewing && canEditAppointment(viewing)} canManageCloserMeeting={sellerType === "closer" && !!viewing && (viewing.assigned_closer_id === sellerId || (!viewing.assigned_closer_id && viewing.seller_id === sellerId))} canComplete={!!viewing && canCompleteAppointment(viewing)} />
-        <MeetingContactEditDialog item={contactEditTarget} onClose={() => setContactEditTarget(null)} onSaved={async () => { toast.success("Dados da reunião atualizados para o SDR e o Closer."); await load(true); }} />
+        <AppointmentDetailsDialog item={viewing} sdrNames={sdrNames} onClose={() => setViewing(null)} onEdit={openEdit} onReschedule={openReschedule} onComplete={complete} onDelete={setDeleteTarget} onLeadOutcome={respondToRotatingLead} canEdit={!!viewing && canEditAppointment(viewing)} canManageCloserMeeting={sellerType === "closer" && !!viewing && (viewing.assigned_closer_id === sellerId || (!viewing.assigned_closer_id && viewing.seller_id === sellerId))} canComplete={!!viewing && canCompleteAppointment(viewing)} />
+        <MeetingContactEditDialog item={contactEditTarget} onClose={() => setContactEditTarget(null)} onSaved={async () => { toast.success("Dados da reunião atualizados para o Vendedor e o Closer."); await load(true); }} />
         <MeetingRescheduleDialog item={rescheduleTarget} onClose={() => setRescheduleTarget(null)} onRescheduled={refreshAgenda} />
         <MeetingFeedbackDialog item={feedbackTarget} onClose={() => setFeedbackTarget(null)} onSubmit={submitMeetingFeedback} />
         <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>

@@ -474,7 +474,7 @@ function UsuariosUnificadosPage() {
                 {excluindo?.nome || excluindo?.email}
               </span>
               <span className="block">
-                A conta, os arquivos e todos os vínculos deste usuário — inclusive SDR, Closer,
+                A conta, os arquivos e todos os vínculos deste usuário — inclusive Vendedor, Closer,
                 agenda, carteira e ranking — serão removidos. Esta ação não pode ser desfeita.
               </span>
             </DialogDescription>

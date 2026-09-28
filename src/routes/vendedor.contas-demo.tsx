@@ -131,13 +131,13 @@ function DemoAccountsPage() {
         <section className="grid shrink-0 overflow-hidden rounded-[22px] border border-neutral-200 bg-white shadow-[0_10px_32px_rgba(0,0,0,0.045)] lg:grid-cols-[minmax(0,1fr)_230px]">
           <div className="px-5 py-5 sm:px-6">
             <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">
-              <KeyRound className="h-4 w-4 text-yellow-600" /> Central de demonstração
+              <KeyRound className="h-4 w-4 text-yellow-600" /> Experimente, apresente, encante
             </div>
             <h1 className="mt-2.5 max-w-4xl text-2xl font-black leading-[1.02] tracking-[-0.045em] text-neutral-950 sm:text-3xl xl:text-[34px]">
-              Entre no produto pelos olhos de cada cliente.
+              Contas Demonstração
             </h1>
             <p className="mt-2 max-w-3xl text-xs font-medium leading-5 text-neutral-600">
-              Escolha um perfil e apresente todo o fluxo sem cadastro ou consulta real.
+              Escolha uma jornada, abra em uma nova aba e conduza uma apresentação completa sem cadastro ou consulta real.
             </p>
           </div>
 
@@ -146,7 +146,7 @@ function DemoAccountsPage() {
               <span className="text-[9px] font-black uppercase tracking-[0.18em] text-neutral-800">
                 Acesso do vendedor
               </span>
-              <ShieldCheck className="h-5 w-5 text-neutral-950" />
+              <span className="relative"><span className="absolute inset-0 animate-ping rounded-full bg-white/50" /><ShieldCheck className="relative h-5 w-5 text-neutral-950" /></span>
             </div>
             <div className="flex items-end gap-2.5">
               <span className="text-5xl font-black leading-none tracking-[-0.08em] text-neutral-950">4</span>

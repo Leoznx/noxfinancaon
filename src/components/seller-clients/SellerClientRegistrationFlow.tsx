@@ -222,7 +222,7 @@ export function SellerClientRegistrationFlow({
 
       {mode === "full" && (
         <div className="rounded-2xl border border-neutral-200 bg-neutral-950 px-5 py-4 text-sm text-white lg:col-span-2">
-          <strong className="text-yellow-300">Contabilização imediata:</strong> cada SDR e cada
+          <strong className="text-yellow-300">Contabilização imediata:</strong> cada Vendedor e cada
           Closer pode confirmar o próprio vínculo com o mesmo cliente. A confirmação entra
           automaticamente no ranking da respectiva função como cadastro realizado.
         </div>

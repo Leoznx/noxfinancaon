@@ -7,6 +7,8 @@ export type TeamGoalProgress = {
   target_clients_daily: number | null;
   target_clients_weekly: number | null;
   target_clients_monthly: number | null;
+  target_calls_daily: number | null;
+  target_leads_contacted_daily: number | null;
   target_meetings_scheduled_daily: number | null;
   target_meetings_scheduled_weekly: number | null;
   target_meetings_scheduled_monthly: number | null;
@@ -34,6 +36,8 @@ export type TeamGoalConfig = {
   target_clients_daily: number | null;
   target_clients_weekly: number | null;
   target_clients_monthly: number | null;
+  target_calls_daily: number | null;
+  target_leads_contacted_daily: number | null;
 };
 
 function numberOrNull(value: unknown) {
@@ -47,6 +51,8 @@ function normalize(row: Record<string, unknown>): TeamGoalProgress {
     target_clients_daily: numberOrNull(row.target_clients_daily),
     target_clients_weekly: numberOrNull(row.target_clients_weekly),
     target_clients_monthly: numberOrNull(row.target_clients_monthly),
+    target_calls_daily: numberOrNull(row.target_calls_daily),
+    target_leads_contacted_daily: numberOrNull(row.target_leads_contacted_daily),
     target_meetings_scheduled_daily: numberOrNull(row.target_meetings_scheduled_daily),
     target_meetings_scheduled_weekly: numberOrNull(row.target_meetings_scheduled_weekly),
     target_meetings_scheduled_monthly: numberOrNull(row.target_meetings_scheduled_monthly),
@@ -77,7 +83,7 @@ export async function fetchTeamGoalProgress(month: number, year: number) {
 export async function fetchTeamGoalConfigs(month: number, year: number) {
   const { data, error } = await (supabase.from("seller_team_goals" as any) as any)
     .select(
-      "seller_type,month,year,target_meetings_daily,target_meetings_weekly,target_meetings_monthly,target_clients_daily,target_clients_weekly,target_clients_monthly",
+      "seller_type,month,year,target_meetings_daily,target_meetings_weekly,target_meetings_monthly,target_clients_daily,target_clients_weekly,target_clients_monthly,target_calls_daily,target_leads_contacted_daily",
     )
     .eq("month", month)
     .eq("year", year);
@@ -92,6 +98,8 @@ export async function fetchTeamGoalConfigs(month: number, year: number) {
     target_clients_daily: numberOrNull(row.target_clients_daily),
     target_clients_weekly: numberOrNull(row.target_clients_weekly),
     target_clients_monthly: numberOrNull(row.target_clients_monthly),
+    target_calls_daily: numberOrNull(row.target_calls_daily),
+    target_leads_contacted_daily: numberOrNull(row.target_leads_contacted_daily),
   }));
 }
 

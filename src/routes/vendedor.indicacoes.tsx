@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Copy, Gift, Link2, MessageCircle, Plus, RefreshCw, Users } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/components/AuthProvider";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { Badge } from "@/components/ui/badge";
@@ -32,6 +33,7 @@ type Invite = {
 type Reward = { invite_id: string; amount: number; status: string };
 
 function SellerReferralPage() {
+  const { user } = useAuth();
   const [invites, setInvites] = useState<Invite[]>([]);
   const [rewards, setRewards] = useState<Reward[]>([]);
   const [name, setName] = useState("");
@@ -77,6 +79,7 @@ function SellerReferralPage() {
     available: rewards.filter((item) => item.status === "disponivel").reduce((sum, item) => sum + Number(item.amount), 0),
     paid: rewards.filter((item) => item.status === "paga").reduce((sum, item) => sum + Number(item.amount), 0),
   }), [rewards]);
+  const sellerLabel = user?.sellerType === "closer" ? "Closer" : "Vendedor";
 
   function inviteLink(token: string) {
     const origin = typeof window === "undefined" ? "https://noxfianca.com" : window.location.origin;
@@ -92,9 +95,9 @@ function SellerReferralPage() {
     <DashboardLayout>
       <main className="space-y-5">
         <section className="overflow-hidden rounded-[22px] bg-neutral-950 p-5 text-white shadow-lg sm:p-7">
-          <Badge className="border-0 bg-yellow-400 text-neutral-950"><Gift className="mr-1.5 h-4 w-4" />Plano de indicação SDR</Badge>
+          <Badge className="border-0 bg-yellow-400 text-neutral-950"><Gift className="mr-1.5 h-4 w-4" />Plano de indicação {sellerLabel}</Badge>
           <h1 className="mt-4 text-3xl font-black tracking-tight">Organize seus indicadores e acompanhe <span className="text-yellow-400">R$ 50 por contrato</span></h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-neutral-300">Cadastre primeiro o nome e o telefone da pessoa que fará a indicação. O link gerado é exclusivo, vincula os cadastros ao seu perfil de SDR e libera R$ 50,00 para o indicador por contrato após o pagamento da segunda parcela.</p>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-neutral-300">Cadastre primeiro o nome e o telefone da pessoa que fará a indicação. O link gerado é exclusivo, vincula os cadastros ao seu perfil de {sellerLabel} e libera R$ 50,00 para o indicador por contrato após o pagamento da segunda parcela.</p>
         </section>
 
         <section className="grid gap-3 sm:grid-cols-3">

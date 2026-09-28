@@ -315,7 +315,7 @@ function CloserAgendaPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <CalendarCheck2 className="h-5 w-5 text-yellow-600" /> Desempenho dos SDRs
+              <CalendarCheck2 className="h-5 w-5 text-yellow-600" /> Desempenho dos Vendedores
             </CardTitle>
             <p className="text-sm text-muted-foreground">
               Reuniões marcadas, links enviados e cadastros concluídos no mês selecionado.
@@ -323,7 +323,7 @@ function CloserAgendaPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-3">
-              <Metric title="Reuniões marcadas" value={sdrMeetings.length} subtitle="pelos SDRs" />
+              <Metric title="Reuniões marcadas" value={sdrMeetings.length} subtitle="pelos Vendedores" />
               <Metric
                 title="Links enviados"
                 value={
@@ -349,9 +349,9 @@ function CloserAgendaPage() {
                 >
                   <div className="flex items-center justify-between gap-2">
                     <strong className="truncate text-sm">
-                      {item.sdr.full_name || item.sdr.email || "SDR"}
+                      {item.sdr.full_name || item.sdr.email || "Vendedor"}
                     </strong>
-                    <Badge variant="outline">SDR</Badge>
+                    <Badge variant="outline">Vendedor</Badge>
                   </div>
                   <div className="mt-4 grid grid-cols-3 gap-2 text-center">
                     <SdrCount label="Reuniões" value={item.meetings.length} />
@@ -362,7 +362,7 @@ function CloserAgendaPage() {
               ))}
               {sdrPerformance.length === 0 && (
                 <p className="col-span-full py-6 text-center text-sm text-muted-foreground">
-                  Nenhum SDR ativo encontrado.
+                  Nenhum Vendedor ativo encontrado.
                 </p>
               )}
             </div>
@@ -375,7 +375,7 @@ function CloserAgendaPage() {
                       Detalhamento individual
                     </p>
                     <h3 className="mt-1 text-lg font-black">
-                      {selectedSdr.sdr.full_name || selectedSdr.sdr.email || "SDR"}
+                      {selectedSdr.sdr.full_name || selectedSdr.sdr.email || "Vendedor"}
                     </h3>
                   </div>
                   <Button variant="outline" size="sm" onClick={() => setSelectedSdrId(null)}>

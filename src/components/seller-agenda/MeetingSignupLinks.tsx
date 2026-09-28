@@ -64,7 +64,7 @@ export function MeetingSignupLinks({ item }: { item: SellerAppointment }) {
     return (
       <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-3">
         <p className="text-xs font-bold text-neutral-700">
-          Gere o cadastro pela própria reunião. Se ela veio de um SDR, o vínculo, o ranking e as
+          Gere o cadastro pela própria reunião. Se ela veio de um Vendedor, o vínculo, o ranking e as
           comissões futuras serão atribuídos automaticamente aos dois responsáveis.
         </p>
         <Button
@@ -118,7 +118,7 @@ export function MeetingSignupLinks({ item }: { item: SellerAppointment }) {
       </p>
       <p className="text-[11px] font-semibold text-neutral-600">
         {sourceSdrName
-          ? `Link permanente: os cadastros profissionais contam para este Closer e para o SDR ${sourceSdrName}.`
+          ? `Link permanente: os cadastros profissionais contam para este Closer e para o Vendedor ${sourceSdrName}.`
           : "Link permanente: cada cadastro conta somente para este Closer."}
       </p>
     </div>
