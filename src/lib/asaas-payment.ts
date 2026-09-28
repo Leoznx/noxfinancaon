@@ -32,6 +32,28 @@ type EdgeFunctionErrorPayload = {
   message?: unknown;
 };
 
+function edgeErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message.trim();
+  return "";
+}
+
+function hasResponseContext(error: unknown): boolean {
+  const context = (error as { context?: unknown } | null)?.context;
+  return typeof Response !== "undefined" && context instanceof Response;
+}
+
+/**
+ * O SDK diferencia uma resposta HTTP recusada de uma desconexao antes da
+ * resposta. Essa deteccao evita exibir a mensagem tecnica em ingles ao usuario.
+ */
+export function isEdgeFunctionNetworkError(error: unknown): boolean {
+  if (!error || hasResponseContext(error)) return false;
+  const message = edgeErrorMessage(error);
+  return /failed to send a request to the edge function|failed to fetch|network request failed|networkerror|load failed|timed?\s*out|aborterror/i.test(
+    message,
+  );
+}
+
 /**
  * Extrai a mensagem enviada pela Edge Function. O cliente do Supabase usa uma
  * mensagem generica para respostas HTTP 4xx/5xx, mas preserva o Response real
@@ -53,6 +75,7 @@ export async function getEdgeFunctionErrorMessage(
     }
   }
 
+  if (isEdgeFunctionNetworkError(error)) return fallback;
   if (error instanceof Error && error.message.trim()) return error.message.trim();
   return fallback;
 }
@@ -82,6 +105,9 @@ export async function getEdgeFunctionErrorDetails(
   const detail = payload?.error ?? payload?.message;
   if (typeof detail === "string" && detail.trim()) {
     return { message: detail.trim(), payload, status };
+  }
+  if (isEdgeFunctionNetworkError(error)) {
+    return { message: fallback, payload, status };
   }
   if (error instanceof Error && error.message.trim()) {
     return { message: error.message.trim(), payload, status };

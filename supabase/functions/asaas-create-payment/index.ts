@@ -15,6 +15,7 @@ import {
   refetchPixQrCode,
   requireUser,
   resolvePaymentRecipient,
+  runInBackground,
   sanitizeAsaasResponse,
   sendPaymentEmail,
   sendPaymentSms,
@@ -325,44 +326,53 @@ serve(async (req) => {
         paymentResponsible: recipient.paymentResponsible,
       });
     }
-    // Aguarda os envios (sem deixar falha de notificacao derrubar a resposta
-    // do pagamento) - Edge Functions no Deno Deploy podem encerrar tarefas em
-    // background apos a resposta ser enviada, entao "fire-and-forget" aqui
-    // arriscaria nunca enviar. O try/catch de cada helper ja garante que uma
-    // falha de e-mail/SMS nunca derruba o restante do fluxo.
-    if (destinatarioEmail) {
-      await sendPaymentEmail({
-        to: destinatarioEmail,
-        nome: destinatarioNome,
-        tipo: "criado",
-        valor: expectedAmount,
-        metodo: paymentMethod,
-        vencimento: dueDate,
-        pixCopyPaste: pixCopyPaste,
-        boletoUrl: localPayment.boleto_url,
-        boletoBarcode: localPayment.boleto_barcode,
-        contratoRef: String(proposalId).slice(0, 8).toUpperCase(),
-      }).catch((error) =>
-        console.error("[asaas-create-payment] falha ao notificar por e-mail", {
-          proposalId,
-          message: error instanceof Error ? error.message : String(error),
-        }),
-      );
-    }
-    if (destinatarioTelefone) {
-      const valorFmt = expectedAmount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-      const metodoLabel =
-        paymentMethod === "pix" ? "Pix" : paymentMethod === "boleto" ? "boleto" : "cartão";
-      await sendPaymentSms({
-        to: destinatarioTelefone,
-        mensagem: `NOX Fiança: seu pagamento de ${valorFmt} via ${metodoLabel} foi gerado. Acesse sua conta para concluir o pagamento.`,
-      }).catch((error) =>
-        console.error("[asaas-create-payment] falha ao notificar por SMS", {
-          proposalId,
-          message: error instanceof Error ? error.message : String(error),
-        }),
-      );
-    }
+    // A cobranca ja esta persistida. E-mail e SMS seguem em background pelo
+    // waitUntil do Edge Runtime para que uma lentidao externa nao desconecte o
+    // navegador antes de ele receber o boleto/Pix/cartao criado.
+    runInBackground(`notificar pagamento ${proposalId}`, async () => {
+      const notificacoes: Promise<unknown>[] = [];
+      if (destinatarioEmail) {
+        notificacoes.push(
+          sendPaymentEmail({
+            to: destinatarioEmail,
+            nome: destinatarioNome,
+            tipo: "criado",
+            valor: expectedAmount,
+            metodo: paymentMethod,
+            vencimento: dueDate,
+            pixCopyPaste: pixCopyPaste,
+            boletoUrl: localPayment.boleto_url,
+            boletoBarcode: localPayment.boleto_barcode,
+            contratoRef: String(proposalId).slice(0, 8).toUpperCase(),
+          }).catch((error) =>
+            console.error("[asaas-create-payment] falha ao notificar por e-mail", {
+              proposalId,
+              message: error instanceof Error ? error.message : String(error),
+            }),
+          ),
+        );
+      }
+      if (destinatarioTelefone) {
+        const valorFmt = expectedAmount.toLocaleString("pt-BR", {
+          style: "currency",
+          currency: "BRL",
+        });
+        const metodoLabel =
+          paymentMethod === "pix" ? "Pix" : paymentMethod === "boleto" ? "boleto" : "cartão";
+        notificacoes.push(
+          sendPaymentSms({
+            to: destinatarioTelefone,
+            mensagem: `NOX Fiança: seu pagamento de ${valorFmt} via ${metodoLabel} foi gerado. Acesse sua conta para concluir o pagamento.`,
+          }).catch((error) =>
+            console.error("[asaas-create-payment] falha ao notificar por SMS", {
+              proposalId,
+              message: error instanceof Error ? error.message : String(error),
+            }),
+          ),
+        );
+      }
+      await Promise.allSettled(notificacoes);
+    });
 
     return jsonResponse(req, normalizedPaymentResponse(raw, localPayment));
   } catch (error) {

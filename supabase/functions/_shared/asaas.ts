@@ -25,6 +25,27 @@ export function jsonResponse(req: Request, body: JsonBody, status = 200) {
   });
 }
 
+type EdgeRuntimeWithWaitUntil = typeof globalThis & {
+  EdgeRuntime?: { waitUntil(task: Promise<unknown>): void };
+};
+
+/**
+ * Mantem tarefas secundarias vivas depois que a resposta HTTP foi entregue.
+ * Notificacoes nunca devem atrasar ou derrubar a resposta de uma cobranca ja
+ * criada; no ambiente local, o fallback ainda executa a tarefa protegida.
+ */
+export function runInBackground(label: string, task: () => Promise<unknown>) {
+  const guardedTask = Promise.resolve()
+    .then(task)
+    .catch((error) =>
+      console.error(`[asaas] falha na tarefa em background: ${label}`, {
+        message: error instanceof Error ? error.message : String(error),
+      }),
+    );
+  const edgeRuntime = (globalThis as EdgeRuntimeWithWaitUntil).EdgeRuntime;
+  if (edgeRuntime?.waitUntil) edgeRuntime.waitUntil(guardedTask);
+}
+
 export function supabaseAdmin() {
   return createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), {
     auth: { persistSession: false, autoRefreshToken: false },

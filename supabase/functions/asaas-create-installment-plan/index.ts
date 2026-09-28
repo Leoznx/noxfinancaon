@@ -16,6 +16,7 @@ import {
   mapAsaasStatus,
   requireUser,
   resolvePaymentRecipient,
+  runInBackground,
   sanitizeAsaasResponse,
   sendInstallmentScheduleEmail,
   sendInstallmentScheduleSms,
@@ -92,11 +93,19 @@ serve(async (req) => {
 
     const monthlyValue = calculateMonthlyInstallmentValue(consulta);
     if (monthlyValue <= 0)
-      return jsonResponse(req, { ok: false, error: "Nao foi possivel calcular o valor da mensalidade." }, 400);
+      return jsonResponse(
+        req,
+        { ok: false, error: "Nao foi possivel calcular o valor da mensalidade." },
+        400,
+      );
     if (body.amount != null && Math.abs(toMoney(body.amount) - monthlyValue) > 0.02) {
       return jsonResponse(
         req,
-        { ok: false, error: "O valor da mensalidade mudou. Atualize a pagina e tente novamente.", expectedAmount: monthlyValue },
+        {
+          ok: false,
+          error: "O valor da mensalidade mudou. Atualize a pagina e tente novamente.",
+          expectedAmount: monthlyValue,
+        },
         409,
       );
     }
@@ -108,7 +117,9 @@ serve(async (req) => {
       .order("numero_parcela", { ascending: true });
     if (existentesError) throw existentesError;
 
-    const jaCriadas = new Map<number, any>((existentes ?? []).map((f: any) => [f.numero_parcela, f]));
+    const jaCriadas = new Map<number, any>(
+      (existentes ?? []).map((f: any) => [f.numero_parcela, f]),
+    );
 
     if (jaCriadas.size >= INSTALLMENT_COUNT) {
       return jsonResponse(req, buildResponse([...jaCriadas.values()], recipient));
@@ -255,87 +266,85 @@ serve(async (req) => {
       criadas.push({ ...fatura, asaas_payment: pagamento });
     }
 
-    // So dispara o e-mail/SMS consolidados quando as 12 estao completas -
-    // idempotente via financial_notifications, entao uma re-chamada que so
-    // retoma parcelas faltando nunca reenvia.
-    if (criadas.length >= INSTALLMENT_COUNT && recipient.recipientEmail) {
-      const jaEnviadoEmail = await wasNotificationSent(supabase, {
-        invoiceId: criadas[0]?.id,
-        channel: "email",
-        notificationType: "billing_schedule_created",
-      });
-      if (!jaEnviadoEmail) {
-        const resultado = await sendInstallmentScheduleEmail({
-          to: recipient.recipientEmail,
-          nome: recipient.recipientName || "cliente",
-          installments: criadas.map((f) => ({
-            installmentNumber: f.numero_parcela,
-            dueDate: f.vencimento,
-            referenceMonth: Number(String(f.vencimento).split("-")[1]),
-            referenceYear: Number(String(f.vencimento).split("-")[0]),
-            value: Number(f.valor),
-          })),
-        });
-        await logFinancialNotification(supabase, {
+    // O cronograma ja esta persistido. Notificacoes consolidadas continuam
+    // idempotentes, mas nao bloqueiam mais a resposta que libera o pagamento.
+    runInBackground(`notificar cronograma ${proposalId}`, async () => {
+      if (criadas.length >= INSTALLMENT_COUNT && recipient.recipientEmail) {
+        const jaEnviadoEmail = await wasNotificationSent(supabase, {
           invoiceId: criadas[0]?.id,
-          recipientType: recipient.recipientType,
-          recipientId: recipient.recipientTenantId || recipient.recipientUserId,
           channel: "email",
           notificationType: "billing_schedule_created",
-          result: resultado,
         });
-      }
-    }
-    if (criadas.length >= INSTALLMENT_COUNT && recipient.recipientPhone) {
-      const jaEnviadoSms = await wasNotificationSent(supabase, {
-        invoiceId: criadas[0]?.id,
-        channel: "sms",
-        notificationType: "billing_schedule_created",
-      });
-      if (!jaEnviadoSms) {
-        const resultado = await sendInstallmentScheduleSms({
-          to: recipient.recipientPhone,
-          installments: criadas.map((f) => ({
-            installmentNumber: f.numero_parcela,
-            dueDate: f.vencimento,
-            referenceMonth: Number(String(f.vencimento).split("-")[1]),
-            referenceYear: Number(String(f.vencimento).split("-")[0]),
-            value: Number(f.valor),
-          })),
-        });
-        await logFinancialNotification(supabase, {
-          invoiceId: criadas[0]?.id,
-          recipientType: recipient.recipientType,
-          recipientId: recipient.recipientTenantId || recipient.recipientUserId,
-          channel: "sms",
-          notificationType: "billing_schedule_created",
-          result: resultado,
-        });
-        // WhatsApp segue o mesmo gate de idempotencia - so tenta enviar (e so
-        // funciona de verdade quando WHATSAPP_API_KEY/WHATSAPP_PROVIDER_URL
-        // existirem; ate la so registra "not_configured").
-        const jaEnviadoWhatsapp = await wasNotificationSent(supabase, {
-          invoiceId: criadas[0]?.id,
-          channel: "whatsapp",
-          notificationType: "billing_schedule_created",
-        });
-        if (!jaEnviadoWhatsapp) {
-          const primeira = criadas[0];
-          const resultadoWpp = await sendPaymentWhatsapp({
-            to: recipient.recipientPhone,
-            mensagem: `Olá, ${recipient.recipientName || "cliente"}. Os ${INSTALLMENT_COUNT} boletos mensais da NOX Fiança foram gerados. Primeira mensalidade: ${formatBRL(Number(primeira.valor))}, vencimento ${formatDateBr(primeira.vencimento)}. Acesse sua conta para visualizar ou pagar o boleto.`,
+        if (!jaEnviadoEmail) {
+          const resultado = await sendInstallmentScheduleEmail({
+            to: recipient.recipientEmail,
+            nome: recipient.recipientName || "cliente",
+            installments: criadas.map((f) => ({
+              installmentNumber: f.numero_parcela,
+              dueDate: f.vencimento,
+              referenceMonth: Number(String(f.vencimento).split("-")[1]),
+              referenceYear: Number(String(f.vencimento).split("-")[0]),
+              value: Number(f.valor),
+            })),
           });
           await logFinancialNotification(supabase, {
             invoiceId: criadas[0]?.id,
             recipientType: recipient.recipientType,
             recipientId: recipient.recipientTenantId || recipient.recipientUserId,
-            channel: "whatsapp",
+            channel: "email",
             notificationType: "billing_schedule_created",
-            result: resultadoWpp,
+            result: resultado,
           });
         }
       }
-    }
+      if (criadas.length >= INSTALLMENT_COUNT && recipient.recipientPhone) {
+        const jaEnviadoSms = await wasNotificationSent(supabase, {
+          invoiceId: criadas[0]?.id,
+          channel: "sms",
+          notificationType: "billing_schedule_created",
+        });
+        if (!jaEnviadoSms) {
+          const resultado = await sendInstallmentScheduleSms({
+            to: recipient.recipientPhone,
+            installments: criadas.map((f) => ({
+              installmentNumber: f.numero_parcela,
+              dueDate: f.vencimento,
+              referenceMonth: Number(String(f.vencimento).split("-")[1]),
+              referenceYear: Number(String(f.vencimento).split("-")[0]),
+              value: Number(f.valor),
+            })),
+          });
+          await logFinancialNotification(supabase, {
+            invoiceId: criadas[0]?.id,
+            recipientType: recipient.recipientType,
+            recipientId: recipient.recipientTenantId || recipient.recipientUserId,
+            channel: "sms",
+            notificationType: "billing_schedule_created",
+            result: resultado,
+          });
+          const jaEnviadoWhatsapp = await wasNotificationSent(supabase, {
+            invoiceId: criadas[0]?.id,
+            channel: "whatsapp",
+            notificationType: "billing_schedule_created",
+          });
+          if (!jaEnviadoWhatsapp) {
+            const primeira = criadas[0];
+            const resultadoWpp = await sendPaymentWhatsapp({
+              to: recipient.recipientPhone,
+              mensagem: `Olá, ${recipient.recipientName || "cliente"}. Os ${INSTALLMENT_COUNT} boletos mensais da NOX Fiança foram gerados. Primeira mensalidade: ${formatBRL(Number(primeira.valor))}, vencimento ${formatDateBr(primeira.vencimento)}. Acesse sua conta para visualizar ou pagar o boleto.`,
+            });
+            await logFinancialNotification(supabase, {
+              invoiceId: criadas[0]?.id,
+              recipientType: recipient.recipientType,
+              recipientId: recipient.recipientTenantId || recipient.recipientUserId,
+              channel: "whatsapp",
+              notificationType: "billing_schedule_created",
+              result: resultadoWpp,
+            });
+          }
+        }
+      }
+    });
 
     return jsonResponse(req, buildResponse(criadas, recipient));
   } catch (error) {

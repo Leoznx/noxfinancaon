@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { getEdgeFunctionErrorDetails, getEdgeFunctionErrorMessage } from "../src/lib/asaas-payment";
+import {
+  getEdgeFunctionErrorDetails,
+  getEdgeFunctionErrorMessage,
+  isEdgeFunctionNetworkError,
+} from "../src/lib/asaas-payment";
 
 test("exibe o erro util devolvido pela Edge Function", async () => {
   const error = Object.assign(new Error("Edge Function returned a non-2xx status code"), {
@@ -24,6 +28,24 @@ test("preserva a mensagem de rede quando nao ha resposta JSON", async () => {
     await getEdgeFunctionErrorMessage(error, "Falha no pagamento."),
     "Falha de conexao com o gateway.",
   );
+});
+
+test("identifica desconexao da Edge Function e oculta a mensagem tecnica", async () => {
+  const error = new Error("Failed to send a request to the Edge Function");
+
+  assert.equal(isEdgeFunctionNetworkError(error), true);
+  assert.equal(
+    await getEdgeFunctionErrorMessage(error, "Nao foi possivel gerar o pagamento agora."),
+    "Nao foi possivel gerar o pagamento agora.",
+  );
+});
+
+test("diferencia erro HTTP devolvido pela Edge Function", () => {
+  const error = Object.assign(new Error("Edge Function returned a non-2xx status code"), {
+    context: new Response(JSON.stringify({ error: "Acesso nao autorizado." }), { status: 403 }),
+  });
+
+  assert.equal(isEdgeFunctionNetworkError(error), false);
 });
 
 test("usa uma mensagem segura para erros desconhecidos", async () => {
