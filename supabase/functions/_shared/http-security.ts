@@ -1,6 +1,13 @@
 const DEFAULT_ALLOWED_ORIGINS = [
   "https://noxfianca.com",
   "https://www.noxfianca.com",
+  "https://noxfianca.com.br",
+  "https://www.noxfianca.com.br",
+  // Dominios com cedilha sao enviados pelo navegador em punycode. Estes sao
+  // aliases oficiais do projeto na Vercel e precisam receber os mesmos
+  // cabecalhos CORS do dominio principal para que o POST chegue às funcoes.
+  "https://xn--noxfiana-y0a.com.br",
+  "https://www.xn--noxfiana-y0a.com.br",
   "https://noxfinancaon.vercel.app",
 ];
 
