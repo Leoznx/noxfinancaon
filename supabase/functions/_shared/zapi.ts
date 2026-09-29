@@ -50,11 +50,19 @@ export async function getZApiConnectionStatus() {
       { method: "GET", headers },
     );
     if (!response.ok) {
+      const rawBody = await response.text().catch(() => "");
+      let body: unknown = rawBody;
+      try {
+        body = rawBody ? JSON.parse(rawBody) : {};
+      } catch {
+        // Mantém a resposta textual para gerar um diagnóstico seguro.
+      }
       return {
         configured: true,
         connected: false,
         smartphoneConnected: false,
         status: response.status,
+        reason: providerReason(body, response.status),
       };
     }
     const data = await response.json();
@@ -131,7 +139,11 @@ function providerReason(body: unknown, status: number) {
     ? (body as Record<string, unknown>)
     : {};
   const code = String(
-    record.error || record.message || record.code || `http_${status}`,
+    (typeof body === "string" ? body : "") ||
+      record.error ||
+      record.message ||
+      record.code ||
+      `http_${status}`,
   )
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
