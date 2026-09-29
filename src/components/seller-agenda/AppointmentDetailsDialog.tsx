@@ -1,12 +1,13 @@
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useEffect, useState } from "react";
 import { Activity, Bell, Building2, CalendarClock, CalendarDays, Check, CheckCircle2, Clock3, Edit3, MessageCircle, MessageSquareText, Phone, Search, Trash2, UserRound } from "lucide-react";
 import { MeetingSignupLinks } from "@/components/seller-agenda/MeetingSignupLinks";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AGENDA_REMINDERS, agendaStatusLabel, agendaTypeLabel, appointmentWhatsAppMessage, buildAppointmentWhatsAppUrl, canRescheduleSellerMeeting, getAppointmentContact, getSharedMeetingMetadata, getVisibleAppointmentNotes, isPersonalSellerReminder, type SellerAppointment } from "@/lib/seller-agenda";
-import type { SellerLeadOutcome } from "@/lib/seller-control";
+import { SELLER_LEAD_NEXT_STEPS, type SellerLeadNextStep, type SellerLeadOutcome } from "@/lib/seller-control";
 import { formatBrazilianPhoneInput, normalizeBrazilianPhone } from "@/lib/seller-clients";
 
 const JOURNEY_COPY = {
@@ -56,11 +57,15 @@ export function AppointmentDetailsDialog({
   onReschedule: (item: SellerAppointment) => void;
   onComplete: (item: SellerAppointment) => void;
   onDelete: (item: SellerAppointment) => void;
-  onLeadOutcome?: (item: SellerAppointment, outcome: SellerLeadOutcome) => void;
+  onLeadOutcome?: (item: SellerAppointment, outcome: SellerLeadOutcome, nextStep: SellerLeadNextStep, notes: string) => void;
   canEdit?: boolean;
   canManageCloserMeeting?: boolean;
   canComplete?: boolean;
 }) {
+  const [leadOutcome, setLeadOutcome] = useState<SellerLeadOutcome | null>(null);
+  const [leadNextStep, setLeadNextStep] = useState<SellerLeadNextStep | null>(null);
+  const [leadNotes, setLeadNotes] = useState("");
+  useEffect(() => { setLeadOutcome(null); setLeadNextStep(null); setLeadNotes(""); }, [item?.id]);
   if (!item) return null;
   const contact = getAppointmentContact(item);
   const contactPhoneDigits = contact.phone ? normalizeBrazilianPhone(contact.phone) : "";
@@ -85,7 +90,7 @@ export function AppointmentDetailsDialog({
         <DialogHeader>
           <div className="mb-2 flex flex-wrap gap-2">
             {item.source === "rotating_lead" && (
-              <Badge className="bg-violet-600 text-white hover:bg-violet-600">LEAD NOVO</Badge>
+              <Badge className="bg-violet-600 text-white hover:bg-violet-600">{item.contact_lead_category_label?.toLocaleUpperCase("pt-BR") ?? "LEAD NOVO"}</Badge>
             )}
             <Badge className="bg-neutral-950 text-white">{agendaTypeLabel(item.type)}</Badge>
             <Badge variant="outline">{agendaStatusLabel(item.status)}</Badge>
@@ -142,10 +147,21 @@ export function AppointmentDetailsDialog({
           )}
           {item.source === "rotating_lead" && (
             <div className="rounded-xl border border-violet-200 bg-violet-50 p-3 text-xs text-violet-950">
-              <p className="font-black">Lembrete inteligente · ciclo {item.contact_lead_cycle_number ?? 1}</p>
+              <p className="font-black">{item.contact_lead_category_label ?? "Lembrete inteligente"} · ciclo {item.contact_lead_cycle_number ?? 1}</p>
               <p className="mt-1 leading-relaxed text-violet-800">
-                Este follow-up não ocupa horário da agenda. Confirme o resultado ainda hoje para manter o lead na sua carteira.
+                Este follow-up não ocupa horário. Registre o resultado e escolha obrigatoriamente o próximo passo para a automação continuar.
               </p>
+              <p className="mt-2 font-bold text-violet-900">{item.contact_lead_rotation_locked ? "Responsável fixo: este lead não gira entre vendedores." : `Cadência atual: até ${item.contact_lead_follow_up_limit ?? 2} contato(s) antes da rotação.`}</p>
+            </div>
+          )}
+          {item.source === "rotating_lead" && onLeadOutcome && leadOutcome && !["concluido", "cancelado"].includes(item.status) && (
+            <div className="space-y-3 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
+              <div><p className="text-xs font-black uppercase tracking-[.12em] text-neutral-500">Resultado: {leadOutcome === "em_contato" ? "Em contato" : "Sem retorno"}</p><p className="mt-1 text-sm font-black text-neutral-950">Qual é o próximo passo?</p></div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {SELLER_LEAD_NEXT_STEPS.map((step) => <button key={step.value} type="button" onClick={() => setLeadNextStep(step.value)} className={`rounded-xl border p-3 text-left transition ${leadNextStep === step.value ? "border-violet-500 bg-violet-50 ring-2 ring-violet-100" : "border-neutral-200 hover:bg-neutral-50"}`}><strong className="block text-xs font-black">{step.label}</strong><span className="mt-1 block text-[11px] leading-4 text-neutral-500">{step.description}</span></button>)}
+              </div>
+              <textarea value={leadNotes} onChange={(event) => setLeadNotes(event.target.value)} rows={3} maxLength={500} placeholder="Observação do contato (opcional)" className="w-full resize-none rounded-xl border border-neutral-200 px-3 py-2 text-sm outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-100" />
+              <div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="outline" onClick={() => { setLeadOutcome(null); setLeadNextStep(null); }}>Voltar</Button><Button type="button" disabled={!leadNextStep} className="bg-violet-600 font-black text-white hover:bg-violet-700" onClick={() => leadNextStep && onLeadOutcome(item, leadOutcome, leadNextStep, leadNotes)}>Confirmar próximo passo</Button></div>
             </div>
           )}
           {visibleNotes && <p className="rounded-xl border border-neutral-200 p-3 leading-relaxed text-neutral-600">{visibleNotes}</p>}
@@ -189,10 +205,7 @@ export function AppointmentDetailsDialog({
         </div>
         <DialogFooter className="flex-wrap">
           {item.source === "rotating_lead" && onLeadOutcome && !["concluido", "cancelado"].includes(item.status) && (
-            <>
-              <Button variant="outline" className="border-amber-200 bg-amber-50 font-black text-amber-900 hover:bg-amber-100" onClick={() => onLeadOutcome(item, "sem_retorno")}>Sem retorno</Button>
-              <Button className="bg-emerald-600 font-black text-white hover:bg-emerald-700" onClick={() => onLeadOutcome(item, "em_contato")}><Check className="mr-1.5 h-4 w-4" /> Em contato</Button>
-            </>
+            <>{!leadOutcome && <><Button variant="outline" className="border-amber-200 bg-amber-50 font-black text-amber-900 hover:bg-amber-100" onClick={() => setLeadOutcome("sem_retorno")}>Sem retorno</Button><Button className="bg-emerald-600 font-black text-white hover:bg-emerald-700" onClick={() => setLeadOutcome("em_contato")}><Check className="mr-1.5 h-4 w-4" /> Em contato</Button></>}</>
           )}
           {!["meeting_follow_up", "admin", "rotating_lead"].includes(item.source) && <Button variant="ghost" className="mr-auto text-red-600 hover:bg-red-50" onClick={() => onDelete(item)}><Trash2 className="mr-1.5 h-4 w-4" /> Excluir</Button>}
           {!["meeting_follow_up", "admin", "rotating_lead"].includes(item.source) && canEdit && <Button variant="outline" onClick={() => onEdit(item)}><Edit3 className="mr-1.5 h-4 w-4" /> {item.type === "reuniao" ? "Editar dados" : "Editar"}</Button>}
@@ -214,6 +227,7 @@ function rotatingLeadHistoryLabel(event: string, fallback: string) {
     task_missed: "Lembrete não confirmado",
     transferred: "Transferido para outro vendedor",
     rotation_deferred: "Rotação adiada por novo contato",
+    category_changed: "Jornada do lead alterada",
   };
   return labels[event] ?? fallback;
 }

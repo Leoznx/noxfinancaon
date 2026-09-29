@@ -21,7 +21,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { appointmentMatchesFilter, buildShortNameValueMap, canEditSellerMeetingContact, completeCloserMeeting, deleteSellerAppointment, fetchSellerAgenda, getSharedMeetingMetadata, isPersonalSellerReminder, saveSellerAppointment, setSellerAppointmentStatus, type AgendaClientOption, type AgendaFilter, type AgendaLeadOption, type AgendaSummary, type AgendaViewMode, type AppointmentDraft, type SellerAppointment } from "@/lib/seller-agenda";
-import { respondToMySellerContactLeadTask, type SellerLeadOutcome } from "@/lib/seller-control";
+import { SELLER_LEAD_NEXT_STEPS, respondToMySellerContactLeadTask, type SellerLeadNextStep, type SellerLeadOutcome } from "@/lib/seller-control";
 import { getSellerContext } from "@/lib/vendedor-portal";
 
 export const Route = createLazyFileRoute("/vendedor/agenda")({
@@ -350,15 +350,12 @@ function AgendaPage() {
     }
   }
 
-  async function respondToRotatingLead(item: SellerAppointment, outcome: SellerLeadOutcome) {
+  async function respondToRotatingLead(item: SellerAppointment, outcome: SellerLeadOutcome, nextStep: SellerLeadNextStep, notes: string) {
     try {
-      await respondToMySellerContactLeadTask(item.id, outcome);
+      await respondToMySellerContactLeadTask(item.id, outcome, nextStep, notes);
       setViewing(null);
-      toast.success(
-        outcome === "em_contato"
-          ? "Contato confirmado. O lead permanece na sua carteira por mais 30 dias."
-          : "Sem retorno registrado. O sistema cuidará do próximo passo automaticamente.",
-      );
+      const label = SELLER_LEAD_NEXT_STEPS.find((step) => step.value === nextStep)?.label ?? "Próximo passo salvo";
+      toast.success(`${outcome === "em_contato" ? "Contato confirmado" : "Sem retorno registrado"}. ${label}.`);
       await load(true);
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "Não foi possível responder este lead.");

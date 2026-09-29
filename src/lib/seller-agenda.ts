@@ -7,6 +7,7 @@ import {
 } from "@/lib/seller-clients";
 import {
   fetchMySellerContactLeads,
+  type SellerLeadCategory,
   type SellerContactLeadHistory,
 } from "@/lib/seller-control";
 
@@ -69,6 +70,10 @@ export type SellerAppointment = {
   contact_lead_task_id: string | null;
   contact_lead_history: SellerContactLeadHistory[];
   contact_lead_cycle_number: number | null;
+  contact_lead_category: SellerLeadCategory | null;
+  contact_lead_category_label: string | null;
+  contact_lead_follow_up_limit: number | null;
+  contact_lead_rotation_locked: boolean;
   sdr_id: string | null;
   assigned_closer_id: string | null;
   duration_minutes: number;
@@ -376,6 +381,10 @@ export async function fetchSellerAgenda(
       contact_lead_task_id: row.contact_lead_task_id ?? null,
       contact_lead_history: rotatingLead?.history ?? [],
       contact_lead_cycle_number: rotatingLead?.cycle_number ?? null,
+      contact_lead_category: rotatingLead?.category ?? null,
+      contact_lead_category_label: rotatingLead?.category_label ?? null,
+      contact_lead_follow_up_limit: rotatingLead?.follow_up_limit ?? null,
+      contact_lead_rotation_locked: rotatingLead?.rotation_locked ?? false,
       completed_at: row.completed_at ?? null,
       actual_duration_minutes: row.actual_duration_minutes == null ? null : Number(row.actual_duration_minutes),
       sdr_id: row.sdr_id ?? null,

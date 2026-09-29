@@ -3,6 +3,36 @@ import { supabase } from "@/integrations/supabase/client";
 export type SellerControlPeriod = "daily" | "weekly" | "monthly";
 export type SellerType = "sdr" | "closer";
 export type SellerLeadOutcome = "em_contato" | "sem_retorno";
+export type SellerLeadCategory = "cold" | "meeting_scheduled" | "potential";
+export type SellerLeadNextStep =
+  | "continue_follow_up"
+  | SellerLeadCategory
+  | "converted"
+  | "not_interested";
+
+export const SELLER_LEAD_CATEGORIES: readonly {
+  value: SellerLeadCategory;
+  label: string;
+  shortLabel: string;
+  description: string;
+}[] = [
+  { value: "cold", label: "Lead frio", shortLabel: "Frio", description: "2 follow-ups em 30 dias; sem retorno, segue para outro vendedor." },
+  { value: "meeting_scheduled", label: "Lead marcou reunião", shortLabel: "Reunião marcada", description: "Follow-up exclusivo com você a cada 15 dias, sem rotação." },
+  { value: "potential", label: "Lead em potencial", shortLabel: "Em potencial", description: "4 follow-ups em 30 dias; depois gira se continuar sem retorno." },
+] as const;
+
+export const SELLER_LEAD_NEXT_STEPS: readonly {
+  value: SellerLeadNextStep;
+  label: string;
+  description: string;
+}[] = [
+  { value: "continue_follow_up", label: "Continuar acompanhamento", description: "Mantém a jornada atual e agenda o próximo contato." },
+  { value: "meeting_scheduled", label: "Marcou reunião", description: "Fixa o lead com você e acompanha a cada 15 dias." },
+  { value: "potential", label: "Virou lead em potencial", description: "Inicia 4 follow-ups em até 30 dias." },
+  { value: "cold", label: "Voltou a lead frio", description: "Inicia 2 follow-ups em até 30 dias." },
+  { value: "converted", label: "Converteu em cliente", description: "Encerra os lembretes porque o lead avançou." },
+  { value: "not_interested", label: "Sem interesse / encerrar", description: "Arquiva o acompanhamento deste lead." },
+] as const;
 
 export type SellerControlMetrics = {
   meetings_rescheduled: number;
@@ -46,6 +76,10 @@ export type SellerContactLead = {
   current_seller_name: string | null;
   attempts_in_cycle: number;
   cycle_number: number;
+  category: SellerLeadCategory;
+  category_label: string;
+  follow_up_limit: number;
+  rotation_locked: boolean;
   summary: Record<string, unknown>;
   history: SellerContactLeadHistory[];
 };
@@ -95,6 +129,14 @@ function numberValue(value: unknown, fallback = 0) {
   const normalized = typeof value === "string" ? value.replace(",", ".") : value;
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function booleanValue(value: unknown) {
+  return value === true || value === "true" || value === 1 || value === "1";
+}
+
+function leadCategory(value: unknown): SellerLeadCategory {
+  return value === "meeting_scheduled" || value === "potential" ? value : "cold";
 }
 
 function nullableNumber(value: unknown) {
@@ -204,6 +246,7 @@ export function normalizeSellerContactLead(value: unknown): SellerContactLead {
   const row = firstRecord(value);
   const lead = isRecord(row.lead) ? row.lead : {};
   const source = { ...row, ...lead };
+  const category = leadCategory(pick(source, ["lead_category", "category"]));
   return {
     id: stringValue(pick(source, ["id", "lead_id", "contact_lead_id"])),
     name: stringValue(pick(source, ["name", "lead_name", "contact_name", "nome"]), "Lead"),
@@ -225,6 +268,16 @@ export function normalizeSellerContactLead(value: unknown): SellerContactLead {
       pick(source, ["no_response_count", "attempts_in_cycle", "attempt_count", "tentativas"]),
     ),
     cycle_number: numberValue(pick(source, ["cycle_number", "cycle"]), 1),
+    category,
+    category_label: stringValue(
+      pick(source, ["category_label", "lead_category_label"]),
+      SELLER_LEAD_CATEGORIES.find((item) => item.value === category)?.label ?? "Lead frio",
+    ),
+    follow_up_limit: numberValue(
+      pick(source, ["follow_up_limit", "attempt_limit"]),
+      category === "potential" ? 4 : category === "meeting_scheduled" ? 1 : 2,
+    ),
+    rotation_locked: booleanValue(pick(source, ["rotation_locked", "fixed_owner"])),
     summary: isRecord(source.summary) ? source.summary : {},
     history: normalizeHistory(pick(source, ["history", "lead_history", "contact_history", "historico"])),
   };
@@ -276,10 +329,15 @@ export async function saveSellerControlGoals(
   if (error) throw error;
 }
 
-export async function createMySellerContactLead(name: string, phone: string) {
-  const { data, error } = await (supabase.rpc as any)("create_my_seller_contact_lead", {
+export async function createMySellerContactLead(
+  name: string,
+  phone: string,
+  category: SellerLeadCategory,
+) {
+  const { data, error } = await (supabase.rpc as any)("create_my_qualified_seller_contact_lead", {
     p_name: name.trim(),
     p_phone: phone,
+    p_category: category,
   });
   if (error) throw error;
   const result = Array.isArray(data) ? data[0] : data;
@@ -290,7 +348,7 @@ export async function createMySellerContactLead(name: string, phone: string) {
 }
 
 export async function fetchMySellerContactLeads(search = "") {
-  const { data, error } = await (supabase.rpc as any)("get_my_seller_contact_leads", {
+  const { data, error } = await (supabase.rpc as any)("get_my_qualified_seller_contact_leads", {
     p_search: search.trim() || null,
   });
   if (error) throw error;
@@ -300,10 +358,14 @@ export async function fetchMySellerContactLeads(search = "") {
 export async function respondToMySellerContactLeadTask(
   appointmentId: string,
   outcome: SellerLeadOutcome,
+  nextStep: SellerLeadNextStep,
+  notes = "",
 ) {
-  const { data, error } = await (supabase.rpc as any)("respond_to_my_seller_contact_lead_task", {
+  const { data, error } = await (supabase.rpc as any)("respond_to_my_qualified_seller_contact_lead_task", {
     p_appointment_id: appointmentId,
     p_outcome: outcome,
+    p_next_step: nextStep,
+    p_notes: notes.trim() || null,
   });
   if (error) throw error;
   return data;
