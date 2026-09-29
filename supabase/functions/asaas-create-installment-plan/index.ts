@@ -21,13 +21,32 @@ import {
   sendInstallmentScheduleEmail,
   sendInstallmentScheduleSms,
   sendPaymentWhatsapp,
+  supabaseAdmin,
   toMoney,
   wasNotificationSent,
 } from "../_shared/asaas.ts";
 import { ensureAsaasCustomer } from "../_shared/asaas-customer.ts";
 import { asaasLateFeePayload, nextMonthlyDueDate } from "../_shared/billing-automation.ts";
+import { dispatchD4SignContract } from "../_shared/d4sign.ts";
 
 const INSTALLMENT_COUNT = 12;
+
+function queueContractDispatch(proposalId: string) {
+  runInBackground(`enviar contrato D4Sign ${proposalId}`, async () => {
+    const result = await dispatchD4SignContract(
+      supabaseAdmin(),
+      proposalId,
+      { allowPendingPayment: true },
+    );
+    if (!result.ok) {
+      console.error("[asaas-create-installment-plan] falha ao despachar contrato D4Sign", {
+        proposalId,
+        signatureId: result.signatureId || null,
+        error: result.error || result.status || "unknown",
+      });
+    }
+  });
+}
 
 type Body = {
   proposalId?: string;
@@ -122,6 +141,7 @@ serve(async (req) => {
     );
 
     if (jaCriadas.size >= INSTALLMENT_COUNT) {
+      queueContractDispatch(proposalId);
       return jsonResponse(req, buildResponse([...jaCriadas.values()], recipient));
     }
 
@@ -345,6 +365,8 @@ serve(async (req) => {
         }
       }
     });
+
+    queueContractDispatch(proposalId);
 
     return jsonResponse(req, buildResponse(criadas, recipient));
   } catch (error) {

@@ -1,6 +1,10 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { jsonResponse, supabaseAdmin } from "../_shared/asaas.ts";
-import { finalizeD4SignContract, hashWebhookPayload } from "../_shared/d4sign.ts";
+import {
+  finalizeD4SignContract,
+  hashWebhookPayload,
+  isPaidStatus,
+} from "../_shared/d4sign.ts";
 import { hasOversizedBody } from "../_shared/http-security.ts";
 
 function safeEqual(left: string, right: string) {
@@ -97,19 +101,53 @@ serve(async (req) => {
   if (!finished) return jsonResponse(req, { ok: true, recorded: true });
 
   try {
+    const signedAt = new Date().toISOString();
     await supabase
       .from("contract_signatures")
       .update({
         status: "signed",
-        signed_at: new Date().toISOString(),
+        signed_at: signedAt,
         error_code: null,
         error_message: null,
       })
       .eq("id", signature.id);
+
+    const { data: consultation, error: consultationError } = await supabase
+      .from("consultas_credito")
+      .select("payment_status")
+      .eq("id", signature.consultation_id)
+      .single();
+    if (consultationError) throw consultationError;
+
+    if (!isPaidStatus(consultation?.payment_status)) {
+      await supabase
+        .from("consultas_credito")
+        .update({
+          status: "aguardando_ativacao",
+          substatus: "assinatura_concluida_aguardando_pagamento",
+          activation_status: "aguardando_pagamento",
+          contract_accepted: true,
+          contract_accepted_at: signedAt,
+        })
+        .eq("id", signature.consultation_id);
+      await supabase.from("proposta_historico").insert({
+        consulta_id: signature.consultation_id,
+        tipo_evento: "contrato_d4sign_assinado_aguardando_pagamento",
+        descricao:
+          "Contrato assinado na D4Sign. Ativacao aguardando confirmacao do primeiro pagamento no Asaas.",
+      });
+      return jsonResponse(req, {
+        ok: true,
+        signed: true,
+        activated: false,
+        waitingPayment: true,
+      });
+    }
+
     const result = await finalizeD4SignContract(supabase, {
       ...signature,
       status: "signed",
-      signed_at: new Date().toISOString(),
+      signed_at: signedAt,
     });
     return jsonResponse(req, result as Record<string, unknown>);
   } catch (finalizeError) {

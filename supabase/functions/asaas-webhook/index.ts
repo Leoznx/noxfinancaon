@@ -14,7 +14,10 @@ import {
   toMoney,
   wasNotificationSent,
 } from "../_shared/asaas.ts";
-import { dispatchD4SignContract } from "../_shared/d4sign.ts";
+import {
+  dispatchD4SignContract,
+  finalizeD4SignContract,
+} from "../_shared/d4sign.ts";
 import { hasOversizedBody, safeEqualSecret } from "../_shared/http-security.ts";
 
 serve(async (req) => {
@@ -317,13 +320,20 @@ serve(async (req) => {
       }
     }
 
-    // O contrato só é enviado depois de o Asaas confirmar o primeiro
-    // pagamento. A função compartilhada é idempotente: se o Asaas enviar
-    // PAYMENT_CONFIRMED e depois PAYMENT_RECEIVED, o mesmo documento não é
-    // criado duas vezes na D4Sign.
+    // O documento pode ter sido assinado antes do primeiro pagamento. Nesse
+    // caso, a baixa do Asaas e o segundo requisito que faltava para ativar a
+    // apolice. Se ainda aguarda assinatura, a chamada idempotente apenas
+    // garante que o convite continue disponivel.
     const isFirstPayment = !faturaVinculada || Number(faturaVinculada.numero_parcela) === 1;
     if (isFirstPayment && (eventType === "PAYMENT_CONFIRMED" || eventType === "PAYMENT_RECEIVED")) {
-      const contractResult = await dispatchD4SignContract(supabase, localPayment.consultation_id);
+      const { data: existingSignature } = await supabase
+        .from("contract_signatures")
+        .select("*")
+        .eq("consultation_id", localPayment.consultation_id)
+        .maybeSingle();
+      const contractResult = existingSignature?.status === "signed"
+        ? await finalizeD4SignContract(supabase, existingSignature)
+        : await dispatchD4SignContract(supabase, localPayment.consultation_id);
       if (!contractResult.ok) {
         // O evento financeiro continua processado: o pagamento não pode ser
         // refeito por uma indisponibilidade externa. A tentativa fica salva

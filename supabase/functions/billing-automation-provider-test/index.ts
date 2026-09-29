@@ -12,6 +12,7 @@ import {
   sendZApiText,
   updateZApiContractWebhooks,
 } from "../_shared/zapi.ts";
+import { dispatchD4SignContract } from "../_shared/d4sign.ts";
 
 async function getD4SignConnectionStatus() {
   const token = Deno.env.get("D4SIGN_TOKEN_API")?.trim() || "";
@@ -369,6 +370,22 @@ Deno.serve(async (request) => {
       );
     }
     return jsonResponse(request, { ok: true, report: result.report });
+  }
+  if (
+    body?.action === "dispatch_d4sign_contract" &&
+    body?.confirmation === "DISPATCH_D4SIGN_CONTRACT" &&
+    typeof body?.consultationId === "string"
+  ) {
+    const result = await dispatchD4SignContract(
+      supabaseAdmin(),
+      body.consultationId,
+      { allowPendingPayment: true },
+    );
+    return jsonResponse(
+      request,
+      { ok: result.ok, contract: result },
+      result.ok ? 200 : 502,
+    );
   }
   const phone = normalizeWhatsappPhone(body?.phone);
   if (!phone || body?.confirmation !== "SEND_PROVIDER_TEST") {

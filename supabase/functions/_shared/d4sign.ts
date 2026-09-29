@@ -748,11 +748,20 @@ async function getConsultation(supabase: any, consultationId: string) {
   return { ...data, administrador };
 }
 
-function isPaidStatus(status: unknown) {
+export function isPaidStatus(status: unknown) {
   return ["confirmed", "paid", "received", "aprovado"].includes(
     String(status || "").toLowerCase(),
   );
 }
+
+type DispatchD4SignOptions = {
+  /**
+   * Permite preparar o documento e colher a assinatura antes da baixa da
+   * primeira parcela. A apolice continua bloqueada ate o pagamento ser
+   * confirmado pelo Asaas.
+   */
+  allowPendingPayment?: boolean;
+};
 
 async function createSignatureRow(
   supabase: any,
@@ -800,11 +809,13 @@ async function createSignatureRow(
 export async function dispatchD4SignContract(
   supabase: any,
   consultationId: string,
+  options: DispatchD4SignOptions = {},
 ): Promise<DispatchResult> {
   let signature: any = null;
   try {
     const consulta = await getConsultation(supabase, consultationId);
-    if (!isPaidStatus(consulta.payment_status)) {
+    const paymentConfirmed = isPaidStatus(consulta.payment_status);
+    if (!paymentConfirmed && !options.allowPendingPayment) {
       return {
         ok: false,
         status: "waiting_payment",
@@ -943,9 +954,13 @@ export async function dispatchD4SignContract(
       .from("consultas_credito")
       .update({
         status: "aguardando_ativacao",
-        substatus: "aguardando_assinatura_d4sign",
+        substatus: paymentConfirmed
+          ? "aguardando_assinatura_d4sign"
+          : "aguardando_pagamento_e_assinatura_d4sign",
         proposta_enviada_em: now,
-        activation_status: "aguardando_assinatura",
+        activation_status: paymentConfirmed
+          ? "aguardando_assinatura"
+          : "aguardando_pagamento_e_assinatura",
       })
       .eq("id", consultationId);
     await supabase.from("proposta_historico").insert({
@@ -1670,6 +1685,9 @@ export async function finalizeD4SignContract(supabase: any, signature: any) {
   }
 
   const consulta = await getConsultation(supabase, signature.consultation_id);
+  if (!isPaidStatus(consulta.payment_status)) {
+    throw new Error("payment_not_confirmed");
+  }
   const tenantUserId = signature.tenant_user_id ||
     (await ensureTenantAccount(supabase, consulta));
   const downloaded = await downloadSignedPdf(signature.d4sign_document_uuid);
