@@ -38,6 +38,11 @@ import {
   resendVerificationEmail,
 } from "@/lib/auth-signup.functions";
 import { claimSellerReferralAfterSignup } from "@/lib/seller-referrals.functions";
+import {
+  BRAZILIAN_STATES,
+  fetchBrazilianCities,
+  type BrazilianCity,
+} from "@/lib/brazilian-locations";
 
 const cadastroSearchSchema = z.object({
   returnTo: z.string().optional(),
@@ -183,35 +188,107 @@ const proprietarioSchema = z
     path: ["confirmarSenha"],
   });
 
-const UFS = [
-  "AC",
-  "AL",
-  "AP",
-  "AM",
-  "BA",
-  "CE",
-  "DF",
-  "ES",
-  "GO",
-  "MA",
-  "MT",
-  "MS",
-  "MG",
-  "PA",
-  "PB",
-  "PR",
-  "PE",
-  "PI",
-  "RJ",
-  "RN",
-  "RS",
-  "RO",
-  "RR",
-  "SC",
-  "SP",
-  "SE",
-  "TO",
-];
+function LocationFields({
+  stateCode,
+  cityName,
+  stateError,
+  cityError,
+  onStateChange,
+  onCityChange,
+}: {
+  stateCode: string;
+  cityName: string;
+  stateError?: string;
+  cityError?: string;
+  onStateChange: (value: string) => void;
+  onCityChange: (value: string) => void;
+}) {
+  const [cities, setCities] = useState<BrazilianCity[]>([]);
+  const [isLoadingCities, setIsLoadingCities] = useState(false);
+  const [citiesLoadError, setCitiesLoadError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    setCities([]);
+    setCitiesLoadError("");
+    if (!stateCode) return;
+
+    const controller = new AbortController();
+    setIsLoadingCities(true);
+    void fetchBrazilianCities(stateCode, controller.signal)
+      .then(setCities)
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setCitiesLoadError("Não foi possível carregar as cidades do IBGE.");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setIsLoadingCities(false);
+      });
+
+    return () => controller.abort();
+  }, [stateCode, reloadKey]);
+
+  const cityPlaceholder = !stateCode
+    ? "Selecione o estado primeiro"
+    : isLoadingCities
+      ? "Carregando cidades..."
+      : "Selecione a cidade";
+
+  return (
+    <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2">
+      <div className="space-y-1">
+        <Label className="text-xs font-medium text-neutral-700">Estado</Label>
+        <Select value={stateCode || undefined} onValueChange={onStateChange}>
+          <SelectTrigger className="h-9 rounded-lg">
+            <SelectValue placeholder="Selecione o estado" />
+          </SelectTrigger>
+          <SelectContent className="max-h-72">
+            {BRAZILIAN_STATES.map((state) => (
+              <SelectItem key={state.code} value={state.code}>
+                {state.name} ({state.code})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {stateError ? <p className="text-[10px] text-red-500">{stateError}</p> : null}
+      </div>
+
+      <div className="space-y-1">
+        <Label className="text-xs font-medium text-neutral-700">Cidade</Label>
+        <Select
+          value={cityName || undefined}
+          onValueChange={onCityChange}
+          disabled={!stateCode || isLoadingCities || !!citiesLoadError}
+        >
+          <SelectTrigger className="h-9 rounded-lg">
+            <SelectValue placeholder={cityPlaceholder} />
+          </SelectTrigger>
+          <SelectContent className="max-h-72">
+            {cities.map((city) => (
+              <SelectItem key={city.id} value={city.name}>
+                {city.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {cityError ? <p className="text-[10px] text-red-500">{cityError}</p> : null}
+      </div>
+
+      {citiesLoadError ? (
+        <div className="flex items-center justify-between gap-3 sm:col-span-2">
+          <p className="text-[10px] text-red-500">{citiesLoadError}</p>
+          <button
+            type="button"
+            className="text-[10px] font-semibold text-amber-700 underline underline-offset-2"
+            onClick={() => setReloadKey((current) => current + 1)}
+          >
+            Tentar novamente
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil }) {
   const search = useSearch({ strict: false }) as z.infer<typeof cadastroSearchSchema>;
@@ -1018,36 +1095,28 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
                                   </p>
                                 )}
 
-                                <div className="grid grid-cols-3 gap-2">
-                                  <div className="col-span-2">
-                                    <Input
-                                      label="Cidade"
-                                      {...formImobiliaria.register("cidade")}
-                                      placeholder="Cidade"
-                                    />
-                                  </div>
-                                  <div className="space-y-1">
-                                    <Label className="text-xs font-medium text-neutral-700">
-                                      UF
-                                    </Label>
-                                    <Select
-                                      onValueChange={(val) =>
-                                        formImobiliaria.setValue("estado", val)
-                                      }
-                                    >
-                                      <SelectTrigger className="h-9">
-                                        <SelectValue placeholder="UF" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        {UFS.map((uf) => (
-                                          <SelectItem key={uf} value={uf}>
-                                            {uf}
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
-                                </div>
+                                <LocationFields
+                                  stateCode={formImobiliaria.watch("estado")}
+                                  cityName={formImobiliaria.watch("cidade")}
+                                  stateError={errors.estado?.message}
+                                  cityError={errors.cidade?.message}
+                                  onStateChange={(value) => {
+                                    formImobiliaria.setValue("estado", value, {
+                                      shouldDirty: true,
+                                      shouldValidate: true,
+                                    });
+                                    formImobiliaria.setValue("cidade", "", {
+                                      shouldDirty: true,
+                                      shouldValidate: true,
+                                    });
+                                  }}
+                                  onCityChange={(value) =>
+                                    formImobiliaria.setValue("cidade", value, {
+                                      shouldDirty: true,
+                                      shouldValidate: true,
+                                    })
+                                  }
+                                />
                               </>
                             ) : accountType === "corretor" ? (
                               <>
@@ -1112,67 +1181,53 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
                                   </p>
                                 )}
 
-                                <div className="grid grid-cols-3 gap-2">
-                                  <div className="col-span-2">
-                                    <Input
-                                      label="Cidade"
-                                      {...formCorretor.register("cidade")}
-                                      placeholder="Cidade"
-                                    />
-                                  </div>
-                                  <div className="space-y-1">
-                                    <Label className="text-xs font-medium text-neutral-700">
-                                      UF
-                                    </Label>
-                                    <Select
-                                      onValueChange={(val) => formCorretor.setValue("estado", val)}
-                                    >
-                                      <SelectTrigger className="h-9">
-                                        <SelectValue placeholder="UF" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        {UFS.map((uf) => (
-                                          <SelectItem key={uf} value={uf}>
-                                            {uf}
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
-                                </div>
+                                <LocationFields
+                                  stateCode={formCorretor.watch("estado")}
+                                  cityName={formCorretor.watch("cidade")}
+                                  stateError={errors.estado?.message}
+                                  cityError={errors.cidade?.message}
+                                  onStateChange={(value) => {
+                                    formCorretor.setValue("estado", value, {
+                                      shouldDirty: true,
+                                      shouldValidate: true,
+                                    });
+                                    formCorretor.setValue("cidade", "", {
+                                      shouldDirty: true,
+                                      shouldValidate: true,
+                                    });
+                                  }}
+                                  onCityChange={(value) =>
+                                    formCorretor.setValue("cidade", value, {
+                                      shouldDirty: true,
+                                      shouldValidate: true,
+                                    })
+                                  }
+                                />
                               </>
                             ) : (
                               <>
-                                <div className="grid grid-cols-3 gap-2">
-                                  <div className="col-span-2">
-                                    <Input
-                                      label="Cidade"
-                                      {...formProprietario.register("cidade")}
-                                      placeholder="Cidade"
-                                    />
-                                  </div>
-                                  <div className="space-y-1">
-                                    <Label className="text-xs font-medium text-neutral-700">
-                                      UF
-                                    </Label>
-                                    <Select
-                                      onValueChange={(val) =>
-                                        formProprietario.setValue("estado", val)
-                                      }
-                                    >
-                                      <SelectTrigger className="h-9">
-                                        <SelectValue placeholder="UF" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        {UFS.map((uf) => (
-                                          <SelectItem key={uf} value={uf}>
-                                            {uf}
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
-                                </div>
+                                <LocationFields
+                                  stateCode={formProprietario.watch("estado")}
+                                  cityName={formProprietario.watch("cidade")}
+                                  stateError={errors.estado?.message}
+                                  cityError={errors.cidade?.message}
+                                  onStateChange={(value) => {
+                                    formProprietario.setValue("estado", value, {
+                                      shouldDirty: true,
+                                      shouldValidate: true,
+                                    });
+                                    formProprietario.setValue("cidade", "", {
+                                      shouldDirty: true,
+                                      shouldValidate: true,
+                                    });
+                                  }}
+                                  onCityChange={(value) =>
+                                    formProprietario.setValue("cidade", value, {
+                                      shouldDirty: true,
+                                      shouldValidate: true,
+                                    })
+                                  }
+                                />
 
                                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-xs text-neutral-700 mt-2">
                                   <p className="font-semibold mb-1">Informação:</p>
