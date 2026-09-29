@@ -9,6 +9,7 @@ import {
   zipSync,
 } from "https://esm.sh/fflate@0.8.2";
 import { escapeEmailHtml, renderNoxEmail } from "./email-branding.ts";
+import { sendZApiText } from "./zapi.ts";
 
 const D4SIGN_API_DEFAULT = "https://secure.d4sign.com.br/api/v1";
 const SIGNED_CONTRACTS_BUCKET = "contratos-assinados";
@@ -118,10 +119,7 @@ export function buildD4SignSendPayload(
   } as const;
 }
 
-export function extractD4SignSignerKey(
-  response: any,
-  signerEmail: string,
-) {
+export function extractD4SignSignerKey(response: any, signerEmail: string) {
   const signers: any[] = [];
   const visited = new Set<unknown>();
   const collect = (value: any, depth: number) => {
@@ -144,10 +142,12 @@ export function extractD4SignSignerKey(
   };
   collect(response, 0);
   const normalizedEmail = signerEmail.trim().toLowerCase();
-  const signer =
-    signers.find((candidate: any) =>
-      String(candidate?.email || "").trim().toLowerCase() === normalizedEmail
-    ) || (signers.length === 1 ? signers[0] : null);
+  const signer = signers.find(
+    (candidate: any) =>
+      String(candidate?.email || "")
+        .trim()
+        .toLowerCase() === normalizedEmail,
+  ) || (signers.length === 1 ? signers[0] : null);
   return signer?.key_signer || signer?.keySigner || null;
 }
 
@@ -238,7 +238,9 @@ function calculatePackageValue(consulta: any) {
   const imovel = consulta?.imoveis || {};
   return (
     Number(
-      imovel.valor_aluguel ?? consulta?.valor_aluguel ?? consulta?.rent_value ??
+      imovel.valor_aluguel ??
+        consulta?.valor_aluguel ??
+        consulta?.rent_value ??
         0,
     ) +
     Number(imovel.valor_condominio ?? consulta?.valor_condominio ?? 0) +
@@ -282,7 +284,9 @@ function personalizeDocumentXml(
   );
   const paintingValue = paintingEnabled
     ? Number(
-      consulta?.external_painting_total ?? extras?.external_painting_total ?? 0,
+      consulta?.external_painting_total ??
+        extras?.external_painting_total ??
+        0,
     )
     : 0;
   const observations = [
@@ -346,7 +350,8 @@ function personalizeDocumentXml(
         formatCpfCnpj(administrador.documento)
       }`;
     } else if (
-      current.startsWith("COM ENDEREÇO NA:") && administrador.endereco
+      current.startsWith("COM ENDEREÇO NA:") &&
+      administrador.endereco
     ) {
       next = `COM ENDEREÇO NA: ${administrador.endereco}`;
     } else if (current === "TIPO IMÓVEL:") {
@@ -414,7 +419,12 @@ function personalizeDocumentXml(
     } else if (current.startsWith("CONTRATO ATIVADO PELA NOX FIANÇA LTDA EM")) {
       const now = new Date();
       next = `CONTRATO EMITIDO PELA NOX FIANÇA LTDA EM ${
-        now.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })
+        now.toLocaleDateString(
+          "pt-BR",
+          {
+            timeZone: "America/Sao_Paulo",
+          },
+        )
       } ÀS ${
         now.toLocaleTimeString("pt-BR", {
           timeZone: "America/Sao_Paulo",
@@ -449,8 +459,9 @@ export async function buildContractDocx(
 }
 
 function d4SignUrl(path: string) {
-  const base = (Deno.env.get("D4SIGN_API_BASE_URL") || D4SIGN_API_DEFAULT)
-    .replace(/\/$/, "");
+  const base = (
+    Deno.env.get("D4SIGN_API_BASE_URL") || D4SIGN_API_DEFAULT
+  ).replace(/\/$/, "");
   const url = new URL(`${base}${path.startsWith("/") ? path : `/${path}`}`);
   url.searchParams.set("tokenAPI", env("D4SIGN_TOKEN_API"));
   url.searchParams.set("cryptKey", env("D4SIGN_CRYPT_KEY"));
@@ -491,10 +502,7 @@ function decodeD4SignSignerId(signerKey: string) {
   return decoded;
 }
 
-async function getD4SignSignatureLink(
-  documentUuid: string,
-  signerKey: string,
-) {
+async function getD4SignSignatureLink(documentUuid: string, signerKey: string) {
   const signerId = decodeD4SignSignerId(signerKey);
   const result = await d4SignRequest(
     `/documents/${encodeURIComponent(documentUuid)}/signaturelink/${
@@ -529,7 +537,10 @@ function buildWebhookUrl() {
 
 function contractNumber(consultationId: string) {
   return `NOX-${new Date().getUTCFullYear()}-${
-    consultationId.replace(/-/g, "").slice(0, 10).toUpperCase()
+    consultationId
+      .replace(/-/g, "")
+      .slice(0, 10)
+      .toUpperCase()
   }`;
 }
 
@@ -613,8 +624,10 @@ async function ensureTenantAccount(supabase: any, consulta: any) {
     {
       id: tenantUserId,
       email: existingProfile?.email || email,
-      nome: existingProfile?.nome || consulta?.tenant_name ||
-        consulta?.inquilinos?.nome || "Inquilino",
+      nome: existingProfile?.nome ||
+        consulta?.tenant_name ||
+        consulta?.inquilinos?.nome ||
+        "Inquilino",
       telefone: existingProfile?.telefone || consulta?.tenant_telefone || null,
       role: "inquilino",
       status: "ativo",
@@ -758,7 +771,8 @@ async function createSignatureRow(
     consultation_id: consulta.id,
     tenant_user_id: tenantUserId,
     plan_name: consulta?.planos?.nome ||
-      consulta?.documentos?.plano_calculado?.nome || templateKey,
+      consulta?.documentos?.plano_calculado?.nome ||
+      templateKey,
     template_file: TEMPLATE_BY_PLAN[templateKey],
     status: "processing",
     send_attempts: 0,
@@ -876,18 +890,13 @@ export async function dispatchD4SignContract(
       signerKey = extractD4SignSignerKey(listed, signerPayload.email);
     }
     if (!signerKey) {
-      await d4SignRequest(
-        `/documents/${documentUuid}/createlist`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            signers: [
-              signerPayload,
-            ],
-          }),
-        },
-      );
+      await d4SignRequest(`/documents/${documentUuid}/createlist`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          signers: [signerPayload],
+        }),
+      });
       for (let attempt = 0; attempt < 3 && !signerKey; attempt += 1) {
         if (attempt > 0) {
           await new Promise((resolve) => setTimeout(resolve, attempt * 1200));
@@ -916,9 +925,7 @@ export async function dispatchD4SignContract(
     await d4SignRequest(`/documents/${documentUuid}/sendtosigner`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(
-        buildD4SignSendPayload(consulta, planName, token),
-      ),
+      body: JSON.stringify(buildD4SignSendPayload(consulta, planName, token)),
     });
 
     const now = new Date().toISOString();
@@ -1008,7 +1015,9 @@ async function downloadSignedPdf(documentUuid: string) {
   if (!response.ok) throw new Error(`d4sign_download_error:${response.status}`);
   const bytes = new Uint8Array(await response.arrayBuffer());
   if (
-    bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 &&
+    bytes[0] === 0x25 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x44 &&
     bytes[3] === 0x46
   ) {
     return { bytes, name: result.name || "contrato-assinado.pdf" };
@@ -1028,10 +1037,10 @@ async function createOrGetPolicy(supabase: any, consulta: any) {
     .limit(1);
   if (existing?.[0]) {
     if (existing[0].status !== "ativa") {
-      await supabase.from("apolices").update({ status: "ativa" }).eq(
-        "id",
-        existing[0].id,
-      );
+      await supabase
+        .from("apolices")
+        .update({ status: "ativa" })
+        .eq("id", existing[0].id);
     }
     return { ...existing[0], status: "ativa" };
   }
@@ -1078,8 +1087,9 @@ async function tenantAccessLink(
   const safeReturnTo = returnTo === "/inquilino/documentos"
     ? returnTo
     : "/inquilino/painel";
-  const frontend = (Deno.env.get("FRONTEND_URL") || "https://noxfianca.com")
-    .replace(/\/$/, "");
+  const frontend = (
+    Deno.env.get("FRONTEND_URL") || "https://noxfianca.com"
+  ).replace(/\/$/, "");
   const fallback = `${frontend}/login?returnTo=${
     encodeURIComponent(safeReturnTo)
   }`;
@@ -1119,7 +1129,7 @@ async function notificationWasSent(
     .eq("contract_signature_id", signatureId)
     .eq("channel", channel)
     .eq("notification_type", notificationType)
-    .eq("status", "sent")
+    .in("status", ["queued", "sent", "delivered", "read"])
     .maybeSingle();
   return !!data;
 }
@@ -1148,12 +1158,13 @@ async function logNotification(
       channel,
       notification_type: notificationType,
       status: result.sent
-        ? "sent"
+        ? channel === "whatsapp" && result.providerMessageId ? "queued" : "sent"
         : result.reason === "not_configured"
         ? "not_configured"
         : "failed",
       attempts: Number(previous?.attempts || 0) + 1,
       last_error: result.sent ? null : result.reason || "provider_error",
+      provider_message_id: result.providerMessageId || null,
       sent_at: result.sent ? new Date().toISOString() : null,
     },
     { onConflict: "contract_signature_id,channel,notification_type" },
@@ -1208,8 +1219,12 @@ async function sendActiveEmail(params: {
             <li style="margin-bottom:14px">para visualizar seus documentos acesso o site da <strong>NOX FIANÇA</strong></li>
             <li>caso nao tenha crie um acesso com suas informações no site da <strong>NOX FIANÇA</strong> para visualizar seus documentos</li>
           </ul>
-          <p style="margin:28px 0 12px"><a href="${escapeEmailHtml(params.dashboardUrl)}" style="display:inline-block;background:#ffd21c;color:#171717;text-decoration:none;font-weight:700;padding:14px 22px;border-radius:10px">Ver Documentos (Site)</a></p>
-          <p style="margin:0"><a href="${escapeEmailHtml(appDocumentsUrl)}" style="display:inline-block;background:#171717;color:#ffffff;text-decoration:none;font-weight:700;padding:14px 22px;border-radius:10px">Ver Documentos (Aplicativo)</a></p>
+          <p style="margin:28px 0 12px"><a href="${
+          escapeEmailHtml(params.dashboardUrl)
+        }" style="display:inline-block;background:#ffd21c;color:#171717;text-decoration:none;font-weight:700;padding:14px 22px;border-radius:10px">Ver Documentos (Site)</a></p>
+          <p style="margin:0"><a href="${
+          escapeEmailHtml(appDocumentsUrl)
+        }" style="display:inline-block;background:#171717;color:#ffffff;text-decoration:none;font-weight:700;padding:14px 22px;border-radius:10px">Ver Documentos (Aplicativo)</a></p>
         `,
         "Parabéns, seu contrato da NOX Fiança está ativo.",
       ),
@@ -1259,7 +1274,8 @@ export function buildSignatureInviteZApiPayload(params: {
     phone: phone.replace(/^\+/, ""),
     message: `Olá, *${params.name}*! 👋\n\n` +
       `• Seu contrato *${params.planName}*, da *NOX Fiança*, já está pronto para assinatura. 📝\n\n` +
-      "• Clique no botão *Assinar contrato*, confira todas as informações e finalize a assinatura. ✅\n\n" +
+      "• Abra o link abaixo, confira todas as informações e finalize a assinatura. ✅\n" +
+      `${signatureUrl.toString()}\n\n` +
       "*NOX Fiança — segurança e praticidade para o seu aluguel.* 🌙",
     buttonActions: [
       {
@@ -1290,13 +1306,11 @@ export function buildInsuranceActiveZApiPayload(params: {
   if (dashboardUrl.protocol !== "https:") {
     throw new Error("invalid_dashboard_protocol");
   }
-  const isFirstAccess =
-    dashboardUrl.pathname === "/acesso-inquilino" &&
+  const isFirstAccess = dashboardUrl.pathname === "/acesso-inquilino" &&
     !!dashboardUrl.searchParams.get("token_hash") &&
     dashboardUrl.searchParams.get("type") === "magiclink" &&
     dashboardUrl.searchParams.get("returnTo") === "/inquilino/documentos";
-  const isExistingAccount =
-    dashboardUrl.pathname === "/inquilino/documentos";
+  const isExistingAccount = dashboardUrl.pathname === "/inquilino/documentos";
   if (!isFirstAccess && !isExistingAccount) {
     throw new Error("invalid_documents_destination");
   }
@@ -1304,9 +1318,10 @@ export function buildInsuranceActiveZApiPayload(params: {
   return {
     phone: phone.replace(/^\+/, ""),
     message: "🎉 Parabéns,seu contrato está ativo!  🌙\n\n" +
-      "• para visualizar seus documentos acesso o site da *NOX FIANÇA*\n\n" +
-      "• caso nao tenha crie um acesso com suas informações no site da " +
-      "*NOX FIANÇA* para visualizar seus documentos",
+      "• Para visualizar seus documentos, acesse a *NOX FIANÇA*:\n" +
+      `${dashboardUrl.toString()}\n\n` +
+      "• Pelo aplicativo, use este acesso:\n" +
+      buildAppDocumentsBridgeUrl(dashboardUrl.toString()),
     buttonActions: [
       {
         id: "ver-documentos-site",
@@ -1358,7 +1373,9 @@ async function sendSignatureInviteWhatsapp(params: {
   if (clientToken) headers["Client-Token"] = clientToken;
   const response = await fetch(
     `https://api.z-api.io/instances/${encodeURIComponent(instanceId)}/token/${
-      encodeURIComponent(instanceToken)
+      encodeURIComponent(
+        instanceToken,
+      )
     }/send-button-actions`,
     {
       method: "POST",
@@ -1370,16 +1387,35 @@ async function sendSignatureInviteWhatsapp(params: {
     const body = await response.json().catch(() => ({}));
     const errorCode = String(
       body?.error || body?.message || body?.code || "unknown",
-    ).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 60);
-    return {
+    )
+      .replace(/[^a-zA-Z0-9_-]/g, "")
+      .slice(0, 60);
+    const fallback = await sendZApiText({
+      to: payload.phone,
+      message: payload.message,
+    });
+    return fallback.sent ? fallback : {
       sent: false,
-      reason: `zapi_${response.status}_${errorCode}`.slice(0, 120),
+      reason: `zapi_${response.status}_${errorCode}_fallback_${
+        fallback.reason || "failed"
+      }`.slice(0, 160),
     };
   }
   const body = await response.json().catch(() => ({}));
   const providerMessageId = body?.messageId || body?.zaapId || body?.id;
   if (!providerMessageId) {
-    return { sent: false, reason: "zapi_missing_message_id" };
+    const fallback = await sendZApiText({
+      to: payload.phone,
+      message: payload.message,
+    });
+    return fallback.sent ? fallback : {
+      sent: false,
+      reason: `zapi_missing_message_id_fallback_${fallback.reason || "failed"}`
+        .slice(
+          0,
+          160,
+        ),
+    };
   }
   return { sent: true, providerMessageId: String(providerMessageId) };
 }
@@ -1420,7 +1456,9 @@ async function sendActiveWhatsapp(params: {
 
   const response = await fetch(
     `https://api.z-api.io/instances/${encodeURIComponent(instanceId)}/token/${
-      encodeURIComponent(instanceToken)
+      encodeURIComponent(
+        instanceToken,
+      )
     }/send-button-actions`,
     {
       method: "POST",
@@ -1432,23 +1470,39 @@ async function sendActiveWhatsapp(params: {
     const body = await response.json().catch(() => ({}));
     const errorCode = String(
       body?.error || body?.message || body?.code || "unknown",
-    ).replace(
-      /[^a-zA-Z0-9_-]/g,
-      "",
-    ).slice(0, 60);
+    )
+      .replace(/[^a-zA-Z0-9_-]/g, "")
+      .slice(0, 60);
     console.error("[d4sign] falha ao enviar WhatsApp pela Z-API", {
       status: response.status,
       errorCode,
     });
-    return {
+    const fallback = await sendZApiText({
+      to: payload.phone,
+      message: payload.message,
+    });
+    return fallback.sent ? fallback : {
       sent: false,
-      reason: `zapi_${response.status}_${errorCode}`.slice(0, 120),
+      reason: `zapi_${response.status}_${errorCode}_fallback_${
+        fallback.reason || "failed"
+      }`.slice(0, 160),
     };
   }
   const body = await response.json().catch(() => ({}));
   const providerMessageId = body?.messageId || body?.zaapId || body?.id;
   if (!providerMessageId) {
-    return { sent: false, reason: "zapi_missing_message_id" };
+    const fallback = await sendZApiText({
+      to: payload.phone,
+      message: payload.message,
+    });
+    return fallback.sent ? fallback : {
+      sent: false,
+      reason: `zapi_missing_message_id_fallback_${fallback.reason || "failed"}`
+        .slice(
+          0,
+          160,
+        ),
+    };
   }
   return { sent: true, providerMessageId: String(providerMessageId) };
 }
@@ -1526,7 +1580,9 @@ async function notifyInsuranceActive(
     .toLowerCase();
   const name = consulta.tenant_name || consulta?.inquilinos?.nome || "cliente";
   let dashboardUrl = `${
-    (Deno.env.get("FRONTEND_URL") || "https://noxfianca.com").replace(/\/$/, "")
+    (
+      Deno.env.get("FRONTEND_URL") || "https://noxfianca.com"
+    ).replace(/\/$/, "")
   }/login`;
   const emailWasSent = await notificationWasSent(
     supabase,
@@ -1648,14 +1704,14 @@ export async function finalizeD4SignContract(supabase: any, signature: any) {
     .eq("contract_signature_id", signature.id)
     .maybeSingle();
   if (existingDoc?.id) {
-    await supabase.from("documentos_proposta").update(documentPayload).eq(
-      "id",
-      existingDoc.id,
-    );
+    await supabase
+      .from("documentos_proposta")
+      .update(documentPayload)
+      .eq("id", existingDoc.id);
   } else {
-    const { error } = await supabase.from("documentos_proposta").insert(
-      documentPayload,
-    );
+    const { error } = await supabase
+      .from("documentos_proposta")
+      .insert(documentPayload);
     if (error) throw new Error(`signed_contract_record_error:${error.message}`);
   }
 

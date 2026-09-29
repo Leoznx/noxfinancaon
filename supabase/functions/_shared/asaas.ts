@@ -40,7 +40,7 @@ export function runInBackground(label: string, task: () => Promise<unknown>) {
     .catch((error) =>
       console.error(`[asaas] falha na tarefa em background: ${label}`, {
         message: error instanceof Error ? error.message : String(error),
-      }),
+      })
     );
   const edgeRuntime = (globalThis as EdgeRuntimeWithWaitUntil).EdgeRuntime;
   if (edgeRuntime?.waitUntil) edgeRuntime.waitUntil(guardedTask);
@@ -96,11 +96,15 @@ export function describePaymentError(error: unknown, fallback: string): string {
   if (error instanceof HttpError) return error.publicMessage;
 
   if (error instanceof AsaasApiError) {
-    const response = error.response as { errors?: { description?: unknown }[] } | null;
+    const response = error.response as {
+      errors?: { description?: unknown }[];
+    } | null;
     const descricoes = Array.isArray(response?.errors)
       ? response!.errors
-          .map((item) => (typeof item?.description === "string" ? item.description.trim() : ""))
-          .filter(Boolean)
+        .map((item) =>
+          typeof item?.description === "string" ? item.description.trim() : ""
+        )
+        .filter(Boolean)
       : [];
     if (descricoes.length && error.status < 500) return descricoes.join(" ");
     return fallback;
@@ -122,7 +126,12 @@ export function describePaymentError(error: unknown, fallback: string): string {
 export function paymentErrorStatus(error: unknown, fallback = 500): number {
   if (error instanceof HttpError) return error.status;
   if (error instanceof AsaasApiError) return error.status >= 500 ? 502 : 400;
-  if (error instanceof Error && /^Missing environment variable/.test(error.message)) return 500;
+  if (
+    error instanceof Error &&
+    /^Missing environment variable/.test(error.message)
+  ) {
+    return 500;
+  }
   if (error instanceof Error && error.message.trim()) return 400;
   return fallback;
 }
@@ -155,7 +164,10 @@ export function todayDate() {
   return new Date().toISOString().slice(0, 10);
 }
 
-export function calcularPercentualIncendio(tipo: "residencial" | "comercial", aluguel: number) {
+export function calcularPercentualIncendio(
+  tipo: "residencial" | "comercial",
+  aluguel: number,
+) {
   if (tipo === "comercial") {
     if (aluguel <= 3000) return 5;
     if (aluguel <= 8000) return 8;
@@ -168,10 +180,13 @@ export function calcularPercentualIncendio(tipo: "residencial" | "comercial", al
 
 export function calculateExpectedPayment(consulta: any, fireMode: FireMode) {
   const imovel = consulta?.imoveis || {};
-  const docs =
-    typeof consulta?.documentos === "object" && consulta?.documentos ? consulta.documentos : {};
+  const docs = typeof consulta?.documentos === "object" && consulta?.documentos
+    ? consulta.documentos
+    : {};
   const extras = docs.extras || {};
-  const aluguel = toMoney(imovel.valor_aluguel || consulta?.rent_value || consulta?.valor_aluguel);
+  const aluguel = toMoney(
+    imovel.valor_aluguel || consulta?.rent_value || consulta?.valor_aluguel,
+  );
   const premioMensal = toMoney(consulta?.valor_premio_mensal);
   const taxaAtivacao =
     (consulta?.activation_fee_enabled ?? extras.activation_fee_enabled)
@@ -179,25 +194,36 @@ export function calculateExpectedPayment(consulta: any, fireMode: FireMode) {
       : 0;
   const pinturaTotal =
     (consulta?.external_painting_enabled ?? extras.external_painting_enabled)
-      ? toMoney(consulta?.external_painting_total ?? extras.external_painting_total)
+      ? toMoney(
+        consulta?.external_painting_total ?? extras.external_painting_total,
+      )
       : 0;
   const pinturaMensal =
     (consulta?.external_painting_enabled ?? extras.external_painting_enabled)
-      ? toMoney(consulta?.external_painting_installment ?? extras.external_painting_installment) ||
-        (pinturaTotal > 0 ? toMoney(pinturaTotal / 3) : 0)
+      ? toMoney(
+        consulta?.external_painting_installment ??
+          extras.external_painting_installment,
+      ) || (pinturaTotal > 0 ? toMoney(pinturaTotal / 3) : 0)
       : 0;
-  const subtipo = String(consulta?.imovel_subtipo || imovel.tipo || "").toLowerCase();
+  const subtipo = String(
+    consulta?.imovel_subtipo || imovel.tipo || "",
+  ).toLowerCase();
   const tipoImovel: "residencial" | "comercial" =
-    /comercial|consult|clinica|cl[ií]nica|industria|ind[uú]stria|servico|servi[cç]o|armazem|armaz[eé]m/.test(
-      subtipo,
-    )
+    /comercial|consult|clinica|cl[ií]nica|industria|ind[uú]stria|servico|servi[cç]o|armazem|armaz[eé]m/
+        .test(
+          subtipo,
+        )
       ? "comercial"
       : "residencial";
-  const incendioAnual = toMoney(aluguel * (calcularPercentualIncendio(tipoImovel, aluguel) / 100));
+  const incendioAnual = toMoney(
+    aluguel * (calcularPercentualIncendio(tipoImovel, aluguel) / 100),
+  );
   const incendioMensal = toMoney(incendioAnual / 12);
-  const mensalidadeFinal =
-    premioMensal + pinturaMensal + (fireMode === "embutido" ? incendioMensal : 0);
-  const pagamentoInicial = taxaAtivacao + (fireMode === "avista" ? incendioAnual : 0);
+  const mensalidadeFinal = premioMensal +
+    pinturaMensal +
+    (fireMode === "embutido" ? incendioMensal : 0);
+  const pagamentoInicial = taxaAtivacao +
+    (fireMode === "avista" ? incendioAnual : 0);
   return toMoney(mensalidadeFinal + pagamentoInicial);
 }
 
@@ -207,7 +233,9 @@ export function buildExternalReference(params: {
   fireMode: FireMode;
   amount: number;
 }) {
-  return `nox:consulta:${params.consultationId}:${params.paymentMethod}:${params.fireMode}:${Math.round(params.amount * 100)}`;
+  return `nox:consulta:${params.consultationId}:${params.paymentMethod}:${params.fireMode}:${
+    Math.round(params.amount * 100)
+  }`;
 }
 
 export async function asaasFetch(path: string, init: RequestInit = {}) {
@@ -333,8 +361,7 @@ export type PaymentRecipient = {
 };
 
 export function resolvePaymentRecipient(consulta: any): PaymentRecipient {
-  const isAgency =
-    consulta?.payment_type === "imobiliaria" ||
+  const isAgency = consulta?.payment_type === "imobiliaria" ||
     consulta?.billing_responsible_role === "imobiliaria";
 
   if (isAgency) {
@@ -367,9 +394,13 @@ export function resolvePaymentRecipient(consulta: any): PaymentRecipient {
 // cobranca nova, so tenta buscar de novo os dados que faltaram.
 export async function refetchPixQrCode(supabase: any, localPayment: any) {
   if (!localPayment?.asaas_payment_id) return localPayment;
-  if (localPayment.pix_qr_code || localPayment.pix_copy_paste) return localPayment;
+  if (localPayment.pix_qr_code || localPayment.pix_copy_paste) {
+    return localPayment;
+  }
   try {
-    const pix = await asaasFetch(`/payments/${localPayment.asaas_payment_id}/pixQrCode`);
+    const pix = await asaasFetch(
+      `/payments/${localPayment.asaas_payment_id}/pixQrCode`,
+    );
     const pixQrCode = pix?.encodedImage || null;
     const pixCopyPaste = pix?.payload || null;
     const pixExpiresAt = pix?.expirationDate || null;
@@ -422,41 +453,77 @@ export async function sendPaymentEmail(params: {
       reason: !apiKey ? "RESEND_API_KEY ausente" : "destinatario ausente",
       tipo: params.tipo,
     });
-    return { sent: false, reason: !apiKey ? "not_configured" : "missing_recipient" };
+    return {
+      sent: false,
+      reason: !apiKey ? "not_configured" : "missing_recipient",
+    };
   }
 
-  const from = Deno.env.get("RESEND_FROM_EMAIL") || "NOX FIANÇA <financeiro@noxfianca.com>";
-  const valorFmt = params.valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-  const metodoLabel =
-    params.metodo === "pix" ? "Pix" : params.metodo === "boleto" ? "Boleto" : "Cartão de crédito";
+  const from = Deno.env.get("RESEND_FROM_EMAIL") ||
+    "NOX FIANÇA <financeiro@noxfianca.com>";
+  const valorFmt = params.valor.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
+  const metodoLabel = params.metodo === "pix"
+    ? "Pix"
+    : params.metodo === "boleto"
+    ? "Boleto"
+    : "Cartão de crédito";
 
-  const assunto =
-    params.tipo === "criado"
-      ? "Pagamento gerado — NOX Fiança"
-      : "Pagamento confirmado — NOX Fiança";
+  const assunto = params.tipo === "criado"
+    ? "Pagamento gerado — NOX Fiança"
+    : "Pagamento confirmado — NOX Fiança";
 
-  const conteudo =
-    params.tipo === "criado"
-      ? `
+  const conteudo = params.tipo === "criado"
+    ? `
         <p>Olá, ${params.nome}.</p>
         <p>Seu pagamento da NOX Fiança foi gerado com sucesso.</p>
         <p>
-          ${params.contratoRef ? `<strong>Contrato:</strong> ${params.contratoRef}<br/>` : ""}
+          ${
+      params.contratoRef
+        ? `<strong>Contrato:</strong> ${params.contratoRef}<br/>`
+        : ""
+    }
           <strong>Forma de pagamento:</strong> ${metodoLabel}<br/>
           <strong>Valor:</strong> ${valorFmt}<br/>
-          ${params.vencimento ? `<strong>Vencimento:</strong> ${params.vencimento}<br/>` : ""}
+          ${
+      params.vencimento
+        ? `<strong>Vencimento:</strong> ${params.vencimento}<br/>`
+        : ""
+    }
           <strong>Status:</strong> Aguardando pagamento
         </p>
-        ${params.pixCopyPaste ? `<p><strong>Código Pix copia e cola:</strong><br/><code>${params.pixCopyPaste}</code></p>` : ""}
-        ${params.boletoBarcode ? `<p><strong>Linha digitável:</strong><br/><code>${params.boletoBarcode}</code></p>` : ""}
-        ${params.boletoUrl ? `<p><a href="${params.boletoUrl}">Visualizar boleto</a></p>` : ""}
+        ${
+      params.pixCopyPaste
+        ? `<p><strong>Código Pix copia e cola:</strong><br/><code>${params.pixCopyPaste}</code></p>`
+        : ""
+    }
+        ${
+      params.boletoBarcode
+        ? `<p><strong>Linha digitável:</strong><br/><code>${params.boletoBarcode}</code></p>`
+        : ""
+    }
+        ${
+      params.boletoUrl
+        ? `<p><a href="${params.boletoUrl}">Visualizar boleto</a></p>`
+        : ""
+    }
         <p>Para acompanhar o pagamento, acesse sua conta na NOX Fiança.</p>
       `
-      : `
+    : `
         <p>Olá, ${params.nome}.</p>
-        <p>Recebemos o pagamento${params.contratoRef ? ` da ${params.contratoRef}` : ""} do seu contrato da NOX Fiança.</p>
+        <p>Recebemos o pagamento${
+      params.contratoRef ? ` da ${params.contratoRef}` : ""
+    } do seu contrato da NOX Fiança.</p>
         <p>
-          ${params.vencimento ? `<strong>Mês de referência:</strong> ${mesReferenciaLabel(params.vencimento)}<br/>` : ""}
+          ${
+      params.vencimento
+        ? `<strong>Mês de referência:</strong> ${
+          mesReferenciaLabel(params.vencimento)
+        }<br/>`
+        : ""
+    }
           <strong>Valor:</strong> ${valorFmt}<br/>
           <strong>Forma de pagamento:</strong> ${metodoLabel}<br/>
           <strong>Status:</strong> Pago
@@ -467,7 +534,10 @@ export async function sendPaymentEmail(params: {
   try {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({
         from,
         to: [params.to],
@@ -506,21 +576,30 @@ export async function sendCollectionEmail(params: {
 }) {
   const apiKey = Deno.env.get("RESEND_API_KEY");
   if (!apiKey || !params.to) {
-    return { sent: false, reason: !apiKey ? "not_configured" : "missing_recipient" };
+    return {
+      sent: false,
+      reason: !apiKey ? "not_configured" : "missing_recipient",
+    };
   }
-  const from = Deno.env.get("RESEND_FROM_EMAIL") || "NOX FIANÇA <financeiro@noxfianca.com>";
+  const from = Deno.env.get("RESEND_FROM_EMAIL") ||
+    "NOX FIANÇA <financeiro@noxfianca.com>";
   const paragraphs = params.message
     .split("\n")
     .filter(Boolean)
     .map((line) => `<p>${escapeEmailHtml(line)}</p>`)
     .join("");
   const action = params.paymentUrl
-    ? `<p><a href="${escapeEmailHtml(params.paymentUrl)}">Acessar cobrança atualizada</a></p>`
+    ? `<p><a href="${
+      escapeEmailHtml(params.paymentUrl)
+    }">Acessar cobrança atualizada</a></p>`
     : `<p>Acesse sua conta NOX Fiança para gerar o boleto atualizado ou o Pix.</p>`;
   try {
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({
         from,
         to: [params.to],
@@ -528,9 +607,14 @@ export async function sendCollectionEmail(params: {
         html: renderNoxEmail(`${paragraphs}${action}`, params.subject),
       }),
     });
-    if (!response.ok) return { sent: false, reason: `provider_http_${response.status}` };
+    if (!response.ok) {
+      return { sent: false, reason: `provider_http_${response.status}` };
+    }
     const data = await response.json();
-    return { sent: true, providerMessageId: data?.id ? String(data.id) : undefined };
+    return {
+      sent: true,
+      providerMessageId: data?.id ? String(data.id) : undefined,
+    };
   } catch {
     return { sent: false, reason: "provider_unavailable" };
   }
@@ -554,7 +638,9 @@ export async function sendPaymentSms(params: { to: string; mensagem: string }) {
   const apiKey = Deno.env.get("SMS_API_KEY");
   const providerUrl = Deno.env.get("SMS_PROVIDER_URL");
   const digits = String(params.to || "").replace(/\D/g, "");
-  const normalizedPhone = digits ? (digits.startsWith("55") ? `+${digits}` : `+55${digits}`) : "";
+  const normalizedPhone = digits
+    ? digits.startsWith("55") ? `+${digits}` : `+55${digits}`
+    : "";
 
   if (!apiKey || !providerUrl) {
     console.error(
@@ -570,7 +656,10 @@ export async function sendPaymentSms(params: { to: string; mensagem: string }) {
   try {
     const res = await fetch(providerUrl, {
       method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({ to: normalizedPhone, message: params.mensagem }),
     });
     if (!res.ok) {
@@ -641,28 +730,40 @@ export function formatDateBr(isoDate: string) {
 // valor avulso, nao deve ser diluida nas parcelas recorrentes.
 export function calculateMonthlyInstallmentValue(consulta: any) {
   const imovel = consulta?.imoveis || {};
-  const docs =
-    typeof consulta?.documentos === "object" && consulta?.documentos ? consulta.documentos : {};
+  const docs = typeof consulta?.documentos === "object" && consulta?.documentos
+    ? consulta.documentos
+    : {};
   const extras = docs.extras || {};
-  const aluguel = toMoney(imovel.valor_aluguel || consulta?.rent_value || consulta?.valor_aluguel);
+  const aluguel = toMoney(
+    imovel.valor_aluguel || consulta?.rent_value || consulta?.valor_aluguel,
+  );
   const premioMensal = toMoney(consulta?.valor_premio_mensal);
   const pinturaTotal =
     (consulta?.external_painting_enabled ?? extras.external_painting_enabled)
-      ? toMoney(consulta?.external_painting_total ?? extras.external_painting_total)
+      ? toMoney(
+        consulta?.external_painting_total ?? extras.external_painting_total,
+      )
       : 0;
   const pinturaMensal =
     (consulta?.external_painting_enabled ?? extras.external_painting_enabled)
-      ? toMoney(consulta?.external_painting_installment ?? extras.external_painting_installment) ||
-        (pinturaTotal > 0 ? toMoney(pinturaTotal / 3) : 0)
+      ? toMoney(
+        consulta?.external_painting_installment ??
+          extras.external_painting_installment,
+      ) || (pinturaTotal > 0 ? toMoney(pinturaTotal / 3) : 0)
       : 0;
-  const subtipo = String(consulta?.imovel_subtipo || imovel.tipo || "").toLowerCase();
+  const subtipo = String(
+    consulta?.imovel_subtipo || imovel.tipo || "",
+  ).toLowerCase();
   const tipoImovel: "residencial" | "comercial" =
-    /comercial|consult|clinica|cl[ií]nica|industria|ind[uú]stria|servico|servi[cç]o|armazem|armaz[eé]m/.test(
-      subtipo,
-    )
+    /comercial|consult|clinica|cl[ií]nica|industria|ind[uú]stria|servico|servi[cç]o|armazem|armaz[eé]m/
+        .test(
+          subtipo,
+        )
       ? "comercial"
       : "residencial";
-  const incendioAnual = toMoney(aluguel * (calcularPercentualIncendio(tipoImovel, aluguel) / 100));
+  const incendioAnual = toMoney(
+    aluguel * (calcularPercentualIncendio(tipoImovel, aluguel) / 100),
+  );
   const incendioMensal = toMoney(incendioAnual / 12);
   return toMoney(premioMensal + pinturaMensal + incendioMensal);
 }
@@ -691,7 +792,9 @@ export function generateInstallmentSchedule(params: {
     const day = Math.min(d0, lastDay);
     items.push({
       installmentNumber: i + 1,
-      dueDate: `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
+      dueDate: `${year}-${String(month).padStart(2, "0")}-${
+        String(day).padStart(2, "0")
+      }`,
       referenceMonth: month,
       referenceYear: year,
     });
@@ -713,15 +816,23 @@ export async function sendInstallmentScheduleEmail(params: {
     console.error("[asaas] e-mail de cronograma nao enviado", {
       reason: !apiKey ? "RESEND_API_KEY ausente" : "destinatario ausente",
     });
-    return { sent: false, reason: !apiKey ? "not_configured" : "missing_recipient" };
+    return {
+      sent: false,
+      reason: !apiKey ? "not_configured" : "missing_recipient",
+    };
   }
-  const from = Deno.env.get("RESEND_FROM_EMAIL") || "NOX FIANÇA <financeiro@noxfianca.com>";
+  const from = Deno.env.get("RESEND_FROM_EMAIL") ||
+    "NOX FIANÇA <financeiro@noxfianca.com>";
   const primeira = params.installments[0];
   const ultima = params.installments[params.installments.length - 1];
   const linhas = params.installments
     .map(
       (p) =>
-        `<li>Mês ${p.installmentNumber} — ${MESES_PT[p.referenceMonth - 1]} de ${p.referenceYear} — Vencimento ${formatDateBr(p.dueDate)} — ${formatBRL(p.value)}</li>`,
+        `<li>Mês ${p.installmentNumber} — ${
+          MESES_PT[p.referenceMonth - 1]
+        } de ${p.referenceYear} — Vencimento ${formatDateBr(p.dueDate)} — ${
+          formatBRL(p.value)
+        }</li>`,
     )
     .join("");
   const conteudo = `
@@ -739,11 +850,15 @@ export async function sendInstallmentScheduleEmail(params: {
   try {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({
         from,
         to: [params.to],
-        subject: `Seus ${params.installments.length} boletos foram gerados — NOX Fiança`,
+        subject:
+          `Seus ${params.installments.length} boletos foram gerados — NOX Fiança`,
         html: renderNoxEmail(
           conteudo,
           `Seus ${params.installments.length} boletos da NOX Fiança foram gerados.`,
@@ -774,16 +889,29 @@ export async function sendInstallmentScheduleSms(params: {
   const primeira = params.installments[0];
   return sendPaymentSms({
     to: params.to,
-    mensagem: `NOX Fiança: seus ${params.installments.length} boletos foram gerados. A 1ª mensalidade de ${formatBRL(primeira.value)} vence em ${formatDateBr(primeira.dueDate)}. Consulte todos os meses na aba Minhas Faturas.`,
+    mensagem:
+      `NOX Fiança: seus ${params.installments.length} boletos foram gerados. A 1ª mensalidade de ${
+        formatBRL(primeira.value)
+      } vence em ${
+        formatDateBr(primeira.dueDate)
+      }. Consulte todos os meses na aba Minhas Faturas.`,
   });
 }
 
 // Integracao financeira oficial com a instancia Z-API. As credenciais sao
 // lidas exclusivamente das secrets das Edge Functions e nunca do cliente.
-export async function sendPaymentWhatsapp(params: { to: string; mensagem: string }) {
-  const result = await sendZApiText({ to: params.to, message: params.mensagem });
+export async function sendPaymentWhatsapp(params: {
+  to: string;
+  mensagem: string;
+}) {
+  const result = await sendZApiText({
+    to: params.to,
+    message: params.mensagem,
+  });
   if (!result.sent) {
-    console.error("[asaas] WhatsApp financeiro nao enviado", { reason: result.reason });
+    console.error("[asaas] WhatsApp financeiro nao enviado", {
+      reason: result.reason,
+    });
   }
   return result;
 }
@@ -805,7 +933,7 @@ export async function wasNotificationSent(
     .select("id")
     .eq("channel", params.channel)
     .eq("notification_type", params.notificationType)
-    .eq("status", "sent");
+    .in("status", ["queued", "sent", "delivered", "read"]);
   query = params.invoiceId
     ? query.eq("invoice_id", params.invoiceId)
     : query.eq("batch_id", params.batchId);
@@ -836,10 +964,12 @@ export async function logFinancialNotification(
   const { data: existing } = await existingQuery.maybeSingle();
 
   const status = params.result.sent
-    ? "sent"
+    ? params.channel === "whatsapp" && params.result.providerMessageId
+      ? "queued"
+      : "sent"
     : params.result.reason === "not_configured"
-      ? "not_configured"
-      : "failed";
+    ? "not_configured"
+    : "failed";
   const { error } = await supabase.from("financial_notifications").upsert(
     {
       invoice_id: params.invoiceId || null,
@@ -887,48 +1017,54 @@ export async function cancelAsaasPayment(paymentId: string) {
       paymentId,
       message: error instanceof Error ? error.message : String(error),
     });
-    return { cancelled: false, error: error instanceof Error ? error.message : String(error) };
+    return {
+      cancelled: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
   }
 }
 
 export function normalizedPaymentResponse(payment: any, local: any = {}) {
-  const method = local.payment_method || local.paymentMethod || payment?.billingType;
+  const method = local.payment_method || local.paymentMethod ||
+    payment?.billingType;
   return {
     success: true,
     paymentId: local.asaas_payment_id || payment?.id || null,
-    externalReference: local.external_reference || payment?.externalReference || null,
+    externalReference: local.external_reference || payment?.externalReference ||
+      null,
     status: local.status || mapAsaasStatus(payment?.status),
     paymentMethod: String(method || "").toLowerCase(),
     amount: toMoney(local.value ?? payment?.value),
     dueDate: local.due_date || payment?.dueDate || null,
-    invoiceUrl: payment?.invoiceUrl || payment?.bankSlipUrl || local.boleto_url || null,
-    pix:
-      local.pix_copy_paste || local.pix_qr_code
-        ? {
-            qrCode: local.pix_copy_paste || "",
-            qrCodeBase64: local.pix_qr_code || "",
-            expiresAt: local.pix_expires_at || null,
-          }
-        : null,
-    boleto:
-      local.boleto_barcode ||
-      local.boleto_url ||
-      payment?.identificationField ||
-      payment?.bankSlipUrl
-        ? {
-            barcode: local.boleto_barcode || payment?.identificationField || "",
-            pdfUrl: local.boleto_url || payment?.bankSlipUrl || payment?.invoiceUrl || "",
-            dueDate: local.due_date || payment?.dueDate || null,
-          }
-        : null,
-    recipient:
-      local.payment_responsible || local.recipient_type
-        ? {
-            responsible: local.payment_responsible || null,
-            type: local.recipient_type || null,
-            emailMasked: maskEmail(local.recipient_email),
-            phoneMasked: maskPhone(local.recipient_phone),
-          }
-        : null,
+    invoiceUrl: payment?.invoiceUrl || payment?.bankSlipUrl ||
+      local.boleto_url || null,
+    pix: local.pix_copy_paste || local.pix_qr_code
+      ? {
+        qrCode: local.pix_copy_paste || "",
+        qrCodeBase64: local.pix_qr_code || "",
+        expiresAt: local.pix_expires_at || null,
+      }
+      : null,
+    boleto: local.boleto_barcode ||
+        local.boleto_url ||
+        payment?.identificationField ||
+        payment?.bankSlipUrl
+      ? {
+        barcode: local.boleto_barcode || payment?.identificationField || "",
+        pdfUrl: local.boleto_url ||
+          payment?.bankSlipUrl ||
+          payment?.invoiceUrl ||
+          "",
+        dueDate: local.due_date || payment?.dueDate || null,
+      }
+      : null,
+    recipient: local.payment_responsible || local.recipient_type
+      ? {
+        responsible: local.payment_responsible || null,
+        type: local.recipient_type || null,
+        emailMasked: maskEmail(local.recipient_email),
+        phoneMasked: maskPhone(local.recipient_phone),
+      }
+      : null,
   };
 }

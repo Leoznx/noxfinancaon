@@ -129,70 +129,79 @@ Deno.test("usa exatamente o e-mail e o telefone do inquilino na D4Sign", () => {
   assert(sendPayload.message.includes("NOX Up"));
 });
 
-Deno.test("mantém o e-mail na D4Sign e envia o mesmo contrato pelo WhatsApp", () => {
-  const payload = buildSignatureInviteZApiPayload({
-    to: "(11) 99999-8888",
-    name: "Maria da Silva",
-    planName: "NOX Up",
-    signatureUrl: "https://secure.d4sign.com.br/w/i/documento/assinatura/123",
-  });
-
-  assertEquals(payload, {
-    phone: "5511999998888",
-    message: "Olá, *Maria da Silva*! 👋\n\n" +
-      "• Seu contrato *NOX Up*, da *NOX Fiança*, já está pronto para assinatura. 📝\n\n" +
-      "• Clique no botão *Assinar contrato*, confira todas as informações e finalize a assinatura. ✅\n\n" +
-      "*NOX Fiança — segurança e praticidade para o seu aluguel.* 🌙",
-    buttonActions: [
-      {
-        id: "assinar-contrato-d4sign",
-        type: "URL",
-        label: "Assinar contrato",
-        url: "https://secure.d4sign.com.br/w/i/documento/assinatura/123",
-      },
-    ],
-  });
-  assertThrows(() =>
-    buildSignatureInviteZApiPayload({
+Deno.test(
+  "mantém o e-mail na D4Sign e envia o mesmo contrato pelo WhatsApp",
+  () => {
+    const payload = buildSignatureInviteZApiPayload({
       to: "(11) 99999-8888",
-      name: "Maria",
+      name: "Maria da Silva",
       planName: "NOX Up",
-      signatureUrl: "https://example.com/contrato",
-    })
-  );
-});
+      signatureUrl: "https://secure.d4sign.com.br/w/i/documento/assinatura/123",
+    });
 
-Deno.test("extrai a chave do signatário retornada pelo endpoint list da D4Sign", () => {
-  assertEquals(
-    extractD4SignSignerKey(
-      {
-        uuidDoc: "documento-teste",
-        list: {
-          key_signer: "NwYj=",
-          email: "leoleosilva04@gmail.com",
+    assertEquals(payload, {
+      phone: "5511999998888",
+      message: "Olá, *Maria da Silva*! 👋\n\n" +
+        "• Seu contrato *NOX Up*, da *NOX Fiança*, já está pronto para assinatura. 📝\n\n" +
+        "• Abra o link abaixo, confira todas as informações e finalize a assinatura. ✅\n" +
+        "https://secure.d4sign.com.br/w/i/documento/assinatura/123\n\n" +
+        "*NOX Fiança — segurança e praticidade para o seu aluguel.* 🌙",
+      buttonActions: [
+        {
+          id: "assinar-contrato-d4sign",
+          type: "URL",
+          label: "Assinar contrato",
+          url: "https://secure.d4sign.com.br/w/i/documento/assinatura/123",
         },
-      },
-      "LEOLEOSILVA04@GMAIL.COM",
-    ),
-    "NwYj=",
-  );
-  assertEquals(
-    extractD4SignSignerKey(
-      {
-        data: [{
-          document: {
-            list: [
-              { key_signer: "outro", email: "outro@example.com" },
-              { key_signer: "correto", email: "leoleosilva04@gmail.com" },
-            ],
+      ],
+    });
+    assertThrows(() =>
+      buildSignatureInviteZApiPayload({
+        to: "(11) 99999-8888",
+        name: "Maria",
+        planName: "NOX Up",
+        signatureUrl: "https://example.com/contrato",
+      })
+    );
+  },
+);
+
+Deno.test(
+  "extrai a chave do signatário retornada pelo endpoint list da D4Sign",
+  () => {
+    assertEquals(
+      extractD4SignSignerKey(
+        {
+          uuidDoc: "documento-teste",
+          list: {
+            key_signer: "NwYj=",
+            email: "leoleosilva04@gmail.com",
           },
-        }],
-      },
-      "leoleosilva04@gmail.com",
-    ),
-    "correto",
-  );
-});
+        },
+        "LEOLEOSILVA04@GMAIL.COM",
+      ),
+      "NwYj=",
+    );
+    assertEquals(
+      extractD4SignSignerKey(
+        {
+          data: [
+            {
+              document: {
+                list: [
+                  { key_signer: "outro", email: "outro@example.com" },
+                  { key_signer: "correto", email: "leoleosilva04@gmail.com" },
+                ],
+              },
+            },
+          ],
+        },
+        "leoleosilva04@gmail.com",
+      ),
+      "correto",
+    );
+  },
+);
 
 Deno.test("bloqueia envio com e-mail ou telefone inválido", () => {
   assertThrows(() =>
@@ -220,9 +229,10 @@ Deno.test("monta mensagem da Z-API com botões para site e aplicativo", () => {
   assertEquals(
     payload.message,
     "🎉 Parabéns,seu contrato está ativo!  🌙\n\n" +
-      "• para visualizar seus documentos acesso o site da *NOX FIANÇA*\n\n" +
-      "• caso nao tenha crie um acesso com suas informações no site da " +
-      "*NOX FIANÇA* para visualizar seus documentos",
+      "• Para visualizar seus documentos, acesse a *NOX FIANÇA*:\n" +
+      "https://noxfianca.com/acesso-inquilino?type=magiclink&token_hash=hash-seguro-ativo&returnTo=%2Finquilino%2Fdocumentos\n\n" +
+      "• Pelo aplicativo, use este acesso:\n" +
+      "https://noxfianca.com/abrir-app/documentos?token_hash=hash-seguro-ativo&type=magiclink&returnTo=%2Finquilino%2Fdocumentos",
   );
   assertEquals(payload.buttonActions, [
     {

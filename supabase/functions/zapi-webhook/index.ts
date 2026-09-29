@@ -1,6 +1,11 @@
 import { jsonResponse, supabaseAdmin } from "../_shared/asaas.ts";
 import { hashWebhookPayload } from "../_shared/d4sign.ts";
-import { normalizeWhatsappPhone, sendZApiText } from "../_shared/zapi.ts";
+import {
+  normalizeWhatsappPhone,
+  resolveZApiDeliveryStatus,
+  sendZApiText,
+  type ZApiDeliveryStatus,
+} from "../_shared/zapi.ts";
 import {
   parseWhatsappBillingCommand,
   receivedWhatsappText,
@@ -38,11 +43,16 @@ function messageIds(payload: Record<string, unknown>) {
     payload.id,
     ...(Array.isArray(payload.ids) ? payload.ids : []),
   ];
-  return Array.from(new Set(values.map((value) => String(value || "").trim()).filter(Boolean)));
+  return Array.from(
+    new Set(values.map((value) => String(value || "").trim()).filter(Boolean)),
+  );
 }
 
 async function sha256(value: string) {
-  const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  const bytes = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(value),
+  );
   return Array.from(new Uint8Array(bytes))
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
@@ -57,7 +67,9 @@ function money(value: unknown) {
 
 async function sendSafeReply(phone: string, message: string) {
   const result = await sendZApiText({ to: phone, message });
-  return result.sent ? { sent: true } : { sent: false, reason: result.reason || "send_failed" };
+  return result.sent
+    ? { sent: true }
+    : { sent: false, reason: result.reason || "send_failed" };
 }
 
 async function handleBillingCommand(
@@ -96,7 +108,8 @@ async function handleBillingCommand(
   }
 
   const ids = messageIds(payload);
-  const providerMessageId = ids[0] || `payload:${await hashWebhookPayload(payload)}`;
+  const providerMessageId = ids[0] ||
+    `payload:${await hashWebhookPayload(payload)}`;
   const phoneHash = await sha256(phone);
   const { data: audit, error: auditError } = await admin
     .from("whatsapp_billing_requests")
@@ -112,7 +125,11 @@ async function handleBillingCommand(
     return jsonResponse(request, { ok: true, duplicate: true });
   }
   if (auditError || !audit?.id) {
-    return jsonResponse(request, { ok: false, error: "audit_unavailable" }, 503);
+    return jsonResponse(
+      request,
+      { ok: false, error: "audit_unavailable" },
+      503,
+    );
   }
 
   const [{ data: batches }, { data: invoices }] = await Promise.all([
@@ -133,7 +150,9 @@ async function handleBillingCommand(
 
   const candidates: WhatsappBillingCandidate[] = [];
   for (const batch of batches ?? []) {
-    const profile = Array.isArray(batch.profile) ? batch.profile[0] : batch.profile;
+    const profile = Array.isArray(batch.profile)
+      ? batch.profile[0]
+      : batch.profile;
     if (normalizeWhatsappPhone(profile?.telefone) !== phone) continue;
     candidates.push({
       actorId: batch.agency_user_id,
@@ -148,8 +167,9 @@ async function handleBillingCommand(
     if (!payment || normalizeWhatsappPhone(payment.recipient_phone) !== phone) {
       continue;
     }
-    const actorId =
-      invoice.recipient_user_id || invoice.tenant_user_id || payment.recipient_user_id;
+    const actorId = invoice.recipient_user_id ||
+      invoice.tenant_user_id ||
+      payment.recipient_user_id;
     if (!actorId) continue;
     candidates.push({
       actorId,
@@ -160,15 +180,16 @@ async function handleBillingCommand(
 
   const selection = selectWhatsappBillingCandidate(candidates);
   if (!selection.candidate) {
-    const status = selection.reason === "ambiguous_phone" ? "ambiguous_phone" : "not_found";
+    const status = selection.reason === "ambiguous_phone"
+      ? "ambiguous_phone"
+      : "not_found";
     await admin
       .from("whatsapp_billing_requests")
       .update({ status, completed_at: new Date().toISOString() })
       .eq("id", audit.id);
-    const message =
-      selection.reason === "ambiguous_phone"
-        ? "Por segurança, este número está associado a mais de um cadastro. Acesse sua conta NOX para emitir a cobrança atualizada."
-        : "Não localizei uma cobrança em aberto para este número. Confira o telefone do cadastro ou acesse sua conta NOX.";
+    const message = selection.reason === "ambiguous_phone"
+      ? "Por segurança, este número está associado a mais de um cadastro. Acesse sua conta NOX para emitir a cobrança atualizada."
+      : "Não localizei uma cobrança em aberto para este número. Confira o telefone do cadastro ou acesse sua conta NOX.";
     const reply = await sendSafeReply(phone, message);
     return jsonResponse(request, { ok: true, handled: true, status, reply });
   }
@@ -247,23 +268,22 @@ async function handleBillingCommand(
     });
   }
 
-  const responseMessage =
-    method === "pix"
-      ? [
-          "Pix atualizado — NOX Fiança",
-          `Valor: ${money(result.amount)}`,
-          `Vencimento: ${result.dueDate}`,
-          `Pix Copia e Cola: ${result.pix?.copyPaste || "consulte no portal NOX"}`,
-        ].join("\n")
-      : [
-          "Boleto atualizado — NOX Fiança",
-          `Valor: ${money(result.amount)}`,
-          `Vencimento: ${result.dueDate}`,
-          `Linha digitável: ${result.boleto?.barcode || "consulte no portal NOX"}`,
-          result.boleto?.pdfUrl ? `Boleto: ${result.boleto.pdfUrl}` : "",
-        ]
-          .filter(Boolean)
-          .join("\n");
+  const responseMessage = method === "pix"
+    ? [
+      "Pix atualizado — NOX Fiança",
+      `Valor: ${money(result.amount)}`,
+      `Vencimento: ${result.dueDate}`,
+      `Pix Copia e Cola: ${result.pix?.copyPaste || "consulte no portal NOX"}`,
+    ].join("\n")
+    : [
+      "Boleto atualizado — NOX Fiança",
+      `Valor: ${money(result.amount)}`,
+      `Vencimento: ${result.dueDate}`,
+      `Linha digitável: ${result.boleto?.barcode || "consulte no portal NOX"}`,
+      result.boleto?.pdfUrl ? `Boleto: ${result.boleto.pdfUrl}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
   const reply = await sendSafeReply(phone, responseMessage);
   await admin
     .from("whatsapp_billing_requests")
@@ -280,12 +300,106 @@ async function handleBillingCommand(
   });
 }
 
+const DELIVERY_RANK: Record<string, number> = {
+  not_configured: 0,
+  failed: 0,
+  pending: 1,
+  queued: 1,
+  sent: 2,
+  delivered: 3,
+  read: 4,
+};
+
+function canAdvanceDelivery(current: unknown, next: ZApiDeliveryStatus) {
+  if (next === "failed") return true;
+  return (
+    (DELIVERY_RANK[next] || 0) >= (DELIVERY_RANK[String(current || "")] || 0)
+  );
+}
+
+function deliveryUpdate(status: ZApiDeliveryStatus, error: string | null) {
+  const now = new Date().toISOString();
+  return {
+    status,
+    last_error: error ? `zapi_delivery:${error}`.slice(0, 500) : null,
+    ...(status === "sent" || status === "delivered" || status === "read"
+      ? { sent_at: now }
+      : {}),
+    ...(status === "delivered" || status === "read"
+      ? { delivered_at: now }
+      : {}),
+    ...(status === "read" ? { read_at: now } : {}),
+  };
+}
+
+async function findContractDelivery(supabase: any, ids: string[]) {
+  for (const id of ids) {
+    const { data } = await supabase
+      .from("contract_notification_deliveries")
+      .select("id, contract_signature_id, notification_type, status")
+      .eq("channel", "whatsapp")
+      .eq("provider_message_id", id)
+      .limit(1)
+      .maybeSingle();
+    if (data) return { ...data, providerMessageId: id };
+  }
+
+  // Compatibilidade com mensagens geradas antes de provider_message_id passar
+  // a ser salvo diretamente na entrega.
+  const { data: sentEvents } = await supabase
+    .from("contract_signature_events")
+    .select("contract_signature_id, event_type, payload")
+    .in("event_type", ["zapi_message_sent", "zapi_signature_invite_sent"])
+    .order("created_at", { ascending: false })
+    .limit(500);
+  const matched = (sentEvents || []).find((event: any) =>
+    ids.includes(String(event?.payload?.provider_message_id || ""))
+  );
+  if (!matched?.contract_signature_id) return null;
+  const notificationType = String(
+    matched?.payload?.notification_type ||
+      (matched.event_type === "zapi_signature_invite_sent"
+        ? "signature_invite"
+        : "insurance_active"),
+  );
+  const { data } = await supabase
+    .from("contract_notification_deliveries")
+    .select("id, contract_signature_id, notification_type, status")
+    .eq("contract_signature_id", matched.contract_signature_id)
+    .eq("channel", "whatsapp")
+    .eq("notification_type", notificationType)
+    .maybeSingle();
+  return data ? { ...data, providerMessageId: ids[0] } : null;
+}
+
+async function findFinancialDelivery(supabase: any, ids: string[]) {
+  for (const id of ids) {
+    const { data } = await supabase
+      .from("financial_notifications")
+      .select("id, status")
+      .eq("channel", "whatsapp")
+      .eq("provider_message_id", id)
+      .limit(1)
+      .maybeSingle();
+    if (data) return { ...data, providerMessageId: id };
+  }
+  return null;
+}
+
 Deno.serve(async (request) => {
   if (request.method !== "POST") {
-    return jsonResponse(request, { ok: false, error: "method_not_allowed" }, 405);
+    return jsonResponse(
+      request,
+      { ok: false, error: "method_not_allowed" },
+      405,
+    );
   }
   if (hasOversizedBody(request)) {
-    return jsonResponse(request, { ok: false, error: "payload_too_large" }, 413);
+    return jsonResponse(
+      request,
+      { ok: false, error: "payload_too_large" },
+      413,
+    );
   }
   const expectedSecret = Deno.env.get("ZAPI_WEBHOOK_SECRET")?.trim() || "";
   const receivedSecret = new URL(request.url).searchParams.get("secret") || "";
@@ -313,16 +427,11 @@ Deno.serve(async (request) => {
   }
 
   const supabase = supabaseAdmin();
-  const { data: sentEvents } = await supabase
-    .from("contract_signature_events")
-    .select("contract_signature_id, payload")
-    .eq("event_type", "zapi_message_sent")
-    .order("created_at", { ascending: false })
-    .limit(200);
-  const matched = (sentEvents || []).find((event) =>
-    ids.includes(String(event?.payload?.provider_message_id || "")),
-  );
-  if (!matched?.contract_signature_id) {
+  const [contractDelivery, financialDelivery] = await Promise.all([
+    findContractDelivery(supabase, ids),
+    findFinancialDelivery(supabase, ids),
+  ]);
+  if (!contractDelivery && !financialDelivery) {
     return jsonResponse(request, {
       ok: true,
       ignored: true,
@@ -330,36 +439,47 @@ Deno.serve(async (request) => {
     });
   }
 
-  const status = String(record.status || "")
+  const resolved = resolveZApiDeliveryStatus(record);
+  const providerStatus = String(record.status || "")
     .trim()
     .toUpperCase();
-  const error = String(record.error || "").trim();
-  const payloadHash = await hashWebhookPayload(payload);
-  await supabase.from("contract_signature_events").upsert(
-    {
-      contract_signature_id: matched.contract_signature_id,
-      event_key: `zapi:status:${ids[0]}:${status || "DELIVERY"}:${payloadHash}`,
-      event_type: status ? `zapi_${status.toLowerCase()}` : "zapi_delivery",
-      message: error || (status ? `WhatsApp: ${status}` : "Retorno de envio da Z-API."),
-      payload,
-    },
-    { onConflict: "event_key", ignoreDuplicates: true },
-  );
-  if (error) {
+  if (
+    contractDelivery &&
+    canAdvanceDelivery(contractDelivery.status, resolved.status)
+  ) {
+    const payloadHash = await hashWebhookPayload(payload);
+    await supabase.from("contract_signature_events").upsert(
+      {
+        contract_signature_id: contractDelivery.contract_signature_id,
+        event_key: `zapi:status:${contractDelivery.providerMessageId}:${
+          providerStatus || "DELIVERY"
+        }:${payloadHash}`,
+        event_type: `zapi_${resolved.status}`,
+        message: resolved.error || `WhatsApp: ${resolved.status}`,
+        payload,
+      },
+      { onConflict: "event_key", ignoreDuplicates: true },
+    );
     await supabase
       .from("contract_notification_deliveries")
-      .update({
-        status: "failed",
-        last_error: `zapi_delivery:${error}`.slice(0, 500),
-      })
-      .eq("contract_signature_id", matched.contract_signature_id)
-      .eq("channel", "whatsapp")
-      .eq("notification_type", "insurance_active");
+      .update(deliveryUpdate(resolved.status, resolved.error))
+      .eq("id", contractDelivery.id);
+  }
+  if (
+    financialDelivery &&
+    canAdvanceDelivery(financialDelivery.status, resolved.status)
+  ) {
+    await supabase
+      .from("financial_notifications")
+      .update(deliveryUpdate(resolved.status, resolved.error))
+      .eq("id", financialDelivery.id);
   }
 
   return jsonResponse(request, {
     ok: true,
     tracked: true,
-    status: status || null,
+    status: resolved.status,
+    contract: !!contractDelivery,
+    financial: !!financialDelivery,
   });
 });
