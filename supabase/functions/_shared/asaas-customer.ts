@@ -1,10 +1,17 @@
 import { asaasFetch, normalizeDocumento, normalizePhone, sanitizeAsaasResponse } from "./asaas.ts";
+import { recoverStoredAsaasCustomer } from "./asaas-customer-recovery.ts";
 
 export async function ensureAsaasCustomer(supabase: any, consulta: any) {
   const inquilino = consulta?.inquilinos || {};
   const imovel = consulta?.imoveis || {};
   const existing = consulta?.asaas_customer_id || inquilino?.asaas_customer_id;
-  if (existing) return existing;
+  if (existing) {
+    const recovered = await recoverStoredAsaasCustomer(String(existing), asaasFetch);
+    if (recovered) return recovered;
+    console.warn("[asaas-customer] vinculo antigo indisponivel; buscando cadastro pelo documento", {
+      consultationId: consulta?.id || null,
+    });
+  }
 
   const cpfCnpj = normalizeDocumento(consulta?.tenant_document || inquilino.cpf || inquilino.cnpj);
   const name = consulta?.tenant_name || inquilino.nome || inquilino.razao_social;
@@ -16,9 +23,16 @@ export async function ensureAsaasCustomer(supabase: any, consulta: any) {
   }
 
   const found = await asaasFetch(`/customers?cpfCnpj=${encodeURIComponent(cpfCnpj)}`);
-  const customer = Array.isArray(found?.data) && found.data.length ? found.data[0] : null;
+  const customers = Array.isArray(found?.data) ? found.data : [];
+  const activeCustomer = customers.find((item: any) => item?.id && item.deleted !== true);
+  const removedCustomer = customers.find((item: any) => item?.id && item.deleted === true);
+  const recoveredListedCustomer = removedCustomer?.id
+    ? await recoverStoredAsaasCustomer(String(removedCustomer.id), asaasFetch)
+    : null;
   const customerId =
-    customer?.id || (await createCustomer({ consulta, imovel, name, email, phone, cpfCnpj })).id;
+    activeCustomer?.id ||
+    recoveredListedCustomer ||
+    (await createCustomer({ consulta, imovel, name, email, phone, cpfCnpj })).id;
 
   await Promise.all([
     supabase
