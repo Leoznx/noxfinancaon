@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { resolveZApiDeliveryStatus } from "../supabase/functions/_shared/zapi.ts";
+import {
+  resolveZApiDeliveryStatus,
+  shouldRetryZApiWithoutClientToken,
+} from "../supabase/functions/_shared/zapi.ts";
 
 test("classifica o retorno de fila da Z-API", () => {
   assert.deepEqual(resolveZApiDeliveryStatus({ type: "QueueCallback" }), {
@@ -40,5 +43,26 @@ test("classifica falha explícita da Z-API", () => {
       status: "failed",
       error: "número inválido",
     },
+  );
+});
+
+test("repete sem Client-Token somente quando a instância não permite", () => {
+  assert.equal(
+    shouldRetryZApiWithoutClientToken(
+      403,
+      '{"message":"Client-Token not allowed"}',
+    ),
+    true,
+  );
+  assert.equal(
+    shouldRetryZApiWithoutClientToken(403, '{"message":"Unauthorized"}'),
+    false,
+  );
+  assert.equal(
+    shouldRetryZApiWithoutClientToken(
+      400,
+      '{"message":"Client-Token not allowed"}',
+    ),
+    false,
   );
 });

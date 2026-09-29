@@ -35,6 +35,33 @@ function credentials() {
   return { instanceId, instanceToken, clientToken };
 }
 
+export function shouldRetryZApiWithoutClientToken(
+  status: number,
+  body: string,
+) {
+  return status === 403 && /client-?token[^\n]*not allowed/i.test(body);
+}
+
+async function zApiFetch(
+  url: string,
+  init: RequestInit,
+  clientToken: string,
+) {
+  const headers = new Headers(init.headers);
+  if (clientToken) headers.set("Client-Token", clientToken);
+  let response = await fetch(url, { ...init, headers });
+  if (!clientToken || response.status !== 403) return response;
+
+  const body = await response.clone().text().catch(() => "");
+  if (!shouldRetryZApiWithoutClientToken(response.status, body)) {
+    return response;
+  }
+
+  headers.delete("Client-Token");
+  response = await fetch(url, { ...init, headers });
+  return response;
+}
+
 export async function getZApiConnectionStatus() {
   const auth = credentials();
   if (!auth) {
@@ -43,11 +70,11 @@ export async function getZApiConnectionStatus() {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
-  if (auth.clientToken) headers["Client-Token"] = auth.clientToken;
   try {
-    const response = await fetch(
+    const response = await zApiFetch(
       `https://api.z-api.io/instances/${auth.instanceId}/token/${auth.instanceToken}/status`,
       { method: "GET", headers },
+      auth.clientToken,
     );
     if (!response.ok) {
       const rawBody = await response.text().catch(() => "");
@@ -92,13 +119,13 @@ async function updateZApiWebhook(kind: ZApiWebhookKind, value: string) {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
-  if (auth.clientToken) headers["Client-Token"] = auth.clientToken;
   try {
-    const response = await fetch(
+    const response = await zApiFetch(
       `https://api.z-api.io/instances/${auth.instanceId}/token/${auth.instanceToken}/${
         WEBHOOK_ENDPOINTS[kind]
       }`,
       { method: "PUT", headers, body: JSON.stringify({ value }) },
+      auth.clientToken,
     );
     if (!response.ok) {
       return {
@@ -204,16 +231,15 @@ export async function sendZApiText(params: {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
-  if (auth.clientToken) headers["Client-Token"] = auth.clientToken;
-
   try {
-    const response = await fetch(
+    const response = await zApiFetch(
       `https://api.z-api.io/instances/${auth.instanceId}/token/${auth.instanceToken}/send-text`,
       {
         method: "POST",
         headers,
         body: JSON.stringify({ phone, message: params.message }),
       },
+      auth.clientToken,
     );
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
