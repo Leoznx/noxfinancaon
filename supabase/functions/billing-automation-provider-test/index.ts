@@ -1,6 +1,8 @@
 import {
+  asaasFetch,
   corsHeaders,
   jsonResponse,
+  mapAsaasStatus,
   requireUser,
   supabaseAdmin,
 } from "../_shared/asaas.ts";
@@ -64,6 +66,122 @@ function safeEqual(left: string, right: string) {
     result |= a[index] ^ b[index];
   }
   return result === 0;
+}
+
+async function auditAsaasPayments() {
+  const admin = supabaseAdmin();
+  const { data: payments, error } = await admin
+    .from("asaas_payments")
+    .select("id, asaas_payment_id, consultation_id, status, created_at")
+    .not("asaas_payment_id", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(100);
+  if (error) throw error;
+
+  const webhookResponse = await asaasFetch("/webhooks");
+  const webhooks = (webhookResponse?.data || []).map((webhook: any) => ({
+    id: webhook.id,
+    name: webhook.name,
+    url: webhook.url,
+    enabled: webhook.enabled,
+    interrupted: webhook.interrupted,
+    sendType: webhook.sendType,
+    events: Array.isArray(webhook.events) ? webhook.events : [],
+  }));
+
+  const rows: Array<Record<string, unknown>> = [];
+  for (const payment of payments || []) {
+    try {
+      const provider = await asaasFetch(
+        `/payments/${encodeURIComponent(payment.asaas_payment_id)}`,
+      );
+      const providerStatus = mapAsaasStatus(provider?.status);
+      rows.push({
+        paymentId: payment.id,
+        consultationId: payment.consultation_id,
+        createdAt: payment.created_at,
+        localStatus: payment.status,
+        providerStatus,
+        providerRawStatus: String(provider?.status || "unknown"),
+        divergent: String(payment.status || "").toLowerCase() !==
+          String(providerStatus || "").toLowerCase(),
+      });
+    } catch (error) {
+      rows.push({
+        paymentId: payment.id,
+        consultationId: payment.consultation_id,
+        createdAt: payment.created_at,
+        localStatus: payment.status,
+        providerStatus: "unavailable",
+        providerRawStatus: "unavailable",
+        divergent: false,
+        error: error instanceof Error
+          ? error.message.slice(0, 160)
+          : "provider_error",
+      });
+    }
+  }
+
+  const byProviderStatus = rows.reduce<Record<string, number>>(
+    (summary, row) => {
+      const status = String(row.providerStatus || "unknown");
+      summary[status] = (summary[status] || 0) + 1;
+      return summary;
+    },
+    {},
+  );
+  const divergent = rows.filter((row) => row.divergent === true);
+  return {
+    webhooks,
+    checked: rows.length,
+    byProviderStatus,
+    divergentCount: divergent.length,
+    divergent,
+    payments: rows,
+  };
+}
+
+async function configureAsaasWebhook() {
+  const webhookToken = Deno.env.get("ASAAS_WEBHOOK_TOKEN")?.trim() || "";
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")?.replace(/\/$/, "") || "";
+  if (webhookToken.length < 32 || !supabaseUrl) {
+    throw new Error("asaas_webhook_secret_not_configured");
+  }
+
+  const webhookResponse = await asaasFetch("/webhooks");
+  const webhooks = Array.isArray(webhookResponse?.data)
+    ? webhookResponse.data
+    : [];
+  const existing = webhooks.find((webhook: any) =>
+    String(webhook?.url || "").includes("/functions/v1/asaas-webhook") ||
+    /nox\s*fian[cç]a/i.test(String(webhook?.name || ""))
+  );
+  if (!existing?.id) throw new Error("asaas_webhook_not_found");
+
+  const result = await asaasFetch(
+    "/webhooks/" + encodeURIComponent(existing.id),
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        name: existing.name || "NOX Fiança",
+        url: supabaseUrl + "/functions/v1/asaas-webhook",
+        enabled: true,
+        interrupted: false,
+        sendType: existing.sendType || "SEQUENTIALLY",
+        authToken: webhookToken,
+        events: Array.isArray(existing.events) ? existing.events : [],
+      }),
+    },
+  );
+  return {
+    id: result?.id || existing.id,
+    name: result?.name || existing.name,
+    url: result?.url || supabaseUrl + "/functions/v1/asaas-webhook",
+    enabled: result?.enabled === true,
+    interrupted: result?.interrupted === true,
+    sendType: result?.sendType || existing.sendType,
+    events: Array.isArray(result?.events) ? result.events : existing.events,
+  };
 }
 
 Deno.serve(async (request) => {
@@ -130,6 +248,49 @@ Deno.serve(async (request) => {
       zapi,
       d4sign,
     });
+  }
+  if (body?.action === "audit_asaas_payments") {
+    try {
+      return jsonResponse(request, {
+        ok: true,
+        audit: await auditAsaasPayments(),
+      });
+    } catch (error) {
+      console.error(
+        "[billing-automation-provider-test] falha ao auditar Asaas",
+        {
+          message: error instanceof Error ? error.message : String(error),
+        },
+      );
+      return jsonResponse(
+        request,
+        { ok: false, error: "asaas_audit_failed" },
+        502,
+      );
+    }
+  }
+  if (
+    body?.action === "configure_asaas_webhook" &&
+    body?.confirmation === "CONFIGURE_ASAAS_WEBHOOK"
+  ) {
+    try {
+      return jsonResponse(request, {
+        ok: true,
+        webhook: await configureAsaasWebhook(),
+      });
+    } catch (error) {
+      console.error(
+        "[billing-automation-provider-test] falha ao configurar webhook Asaas",
+        {
+          message: error instanceof Error ? error.message : String(error),
+        },
+      );
+      return jsonResponse(
+        request,
+        { ok: false, error: "asaas_webhook_configuration_failed" },
+        502,
+      );
+    }
   }
   if (
     ["configure_received_webhook", "configure_contract_webhooks"].includes(
