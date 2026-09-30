@@ -35,12 +35,12 @@ SELECT matches(
   'busca aceita contas NOX ativas alem dos tres perfis comerciais'
 );
 SELECT matches(
-  pg_get_functiondef('public.register_my_seller_client(text)'::regprocedure),
+  pg_get_functiondef('public.register_my_manual_seller_client(text,text)'::regprocedure),
   'seller_signup_attributions',
   'cadastro manual alimenta a fonte de metas e ranking'
 );
 SELECT matches(
-  pg_get_functiondef('public.register_my_seller_client(text)'::regprocedure),
+  pg_get_functiondef('public.register_my_manual_seller_client(text,text)'::regprocedure),
   '''manual''',
   'cadastro grava a origem manual'
 );

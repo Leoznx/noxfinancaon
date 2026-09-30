@@ -8,19 +8,31 @@ import {
   Phone,
   RefreshCw,
   Search,
+  Send,
   UserRound,
+  UserRoundPlus,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   claimSellerClientPhone,
   formatBrazilianPhoneInput,
   isValidBrazilianPhone,
   lookupSellerClientByEmail,
   registerSellerClient,
+  type SellerClientAttributionKind,
   type SellerClientLookup,
   type SellerClientPhoneClaim,
 } from "@/lib/seller-clients";
@@ -45,6 +57,8 @@ export function SellerClientRegistrationFlow({
   const [checkingEmail, setCheckingEmail] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [confirmedNow, setConfirmedNow] = useState(false);
+  const [registrationStep, setRegistrationStep] = useState<"confirm" | "relationship" | null>(null);
+  const [attributionKind, setAttributionKind] = useState<SellerClientAttributionKind | null>(null);
   const lookupRequest = useRef(0);
 
   const normalizedEmail = email.trim().toLowerCase();
@@ -55,6 +69,8 @@ export function SellerClientRegistrationFlow({
     setClient(null);
     setLookupError(null);
     setConfirmedNow(false);
+    setRegistrationStep(null);
+    setAttributionKind(null);
 
     if (!validEmail) {
       setCheckingEmail(false);
@@ -101,15 +117,20 @@ export function SellerClientRegistrationFlow({
   }
 
   async function confirmClient() {
-    if (!client || client.link_status !== "available") return;
+    if (!client || client.link_status === "already_mine" || !attributionKind) return;
     setSubmitting(true);
     try {
-      await registerSellerClient(client.email);
+      await registerSellerClient(client.email, attributionKind);
       setClient((current) =>
         current ? { ...current, link_status: "already_mine", linked_seller_name: null } : current,
       );
       setConfirmedNow(true);
-      toast.success("Cliente confirmado e cadastro contabilizado no seu ranking.");
+      setRegistrationStep(null);
+      toast.success(
+        attributionKind === "apresentou"
+          ? "Cliente apresentado e contabilizado no seu ranking."
+          : "Cliente captado e contabilizado no seu ranking.",
+      );
       onRegistered?.();
     } catch (caught) {
       toast.error(
@@ -215,10 +236,94 @@ export function SellerClientRegistrationFlow({
             client={client}
             confirmedNow={confirmedNow}
             submitting={submitting}
-            onConfirm={() => void confirmClient()}
+            onConfirm={() => setRegistrationStep("confirm")}
           />
         )}
       </section>
+
+      <Dialog
+        open={registrationStep !== null}
+        onOpenChange={(open) => {
+          if (!open && !submitting) {
+            setRegistrationStep(null);
+            setAttributionKind(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-md rounded-2xl">
+          {registrationStep === "confirm" ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>Tem certeza de que deseja adicionar este cliente?</DialogTitle>
+                <DialogDescription>
+                  {client?.link_status === "linked_to_other"
+                    ? "Ele já possui vínculo com outro profissional desta função. O vínculo atual será mantido e um novo será criado para você."
+                    : "O cliente será incluído na sua carteira sem alterar os demais dados do cadastro."}
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setRegistrationStep(null)}>
+                  Não, cancelar
+                </Button>
+                <Button
+                  type="button"
+                  className="bg-neutral-950 text-white hover:bg-neutral-800"
+                  onClick={() => setRegistrationStep("relationship")}
+                >
+                  Sim, continuar
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle>Você apresentou ou captou o cliente?</DialogTitle>
+                <DialogDescription>
+                  Selecione como esse relacionamento começou. A informação ficará registrada junto
+                  ao vínculo manual.
+                </DialogDescription>
+              </DialogHeader>
+              <RadioGroup
+                value={attributionKind ?? ""}
+                onValueChange={(value) => setAttributionKind(value as SellerClientAttributionKind)}
+                className="gap-3"
+              >
+                <AttributionOption
+                  value="apresentou"
+                  title="Apresentei o cliente"
+                  description="Você realizou a apresentação ou conectou o cliente à NOX."
+                  icon={Send}
+                />
+                <AttributionOption
+                  value="captou"
+                  title="Captei o cliente"
+                  description="Você prospectou e trouxe o cliente para a sua carteira."
+                  icon={UserRoundPlus}
+                />
+              </RadioGroup>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={submitting}
+                  onClick={() => setRegistrationStep("confirm")}
+                >
+                  Voltar
+                </Button>
+                <Button
+                  type="button"
+                  className="gap-2 bg-neutral-950 text-white hover:bg-neutral-800"
+                  disabled={!attributionKind || submitting}
+                  onClick={() => void confirmClient()}
+                >
+                  {submitting && <RefreshCw className="h-4 w-4 animate-spin" />}
+                  {submitting ? "Cadastrando" : "Confirmar cadastro"}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {mode === "full" && (
         <div className="rounded-2xl border border-neutral-200 bg-neutral-950 px-5 py-4 text-sm text-white lg:col-span-2">
@@ -242,7 +347,7 @@ function ClientLookupCard({
   submitting: boolean;
   onConfirm: () => void;
 }) {
-  const blocked = client.link_status === "linked_to_other";
+  const linkedElsewhere = client.link_status === "linked_to_other";
   const mine = client.link_status === "already_mine";
   const typeLabel =
     client.partner_type === "proprietario"
@@ -255,11 +360,11 @@ function ClientLookupCard({
 
   return (
     <div
-      className={`mt-4 rounded-2xl border p-4 ${blocked ? "border-red-200 bg-red-50" : mine ? "border-emerald-200 bg-emerald-50" : "border-yellow-300 bg-white"}`}
+      className={`mt-4 rounded-2xl border p-4 ${linkedElsewhere ? "border-amber-200 bg-amber-50" : mine ? "border-emerald-200 bg-emerald-50" : "border-yellow-300 bg-white"}`}
     >
       <div className="flex items-start gap-3">
-        {blocked ? (
-          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
+        {linkedElsewhere ? (
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
         ) : (
           <CheckCircle2
             className={`mt-0.5 h-5 w-5 shrink-0 ${mine ? "text-emerald-600" : "text-yellow-600"}`}
@@ -267,15 +372,15 @@ function ClientLookupCard({
         )}
         <div>
           <p className="text-sm font-black text-neutral-950">
-            {blocked
+            {linkedElsewhere
               ? "Cliente já vinculado nesta função"
               : mine
                 ? "Cliente já confirmado"
                 : "Cliente encontrado"}
           </p>
           <p className="mt-1 text-xs leading-5 text-neutral-600">
-            {blocked
-              ? `Este cadastro já pertence a ${client.linked_seller_name ?? "outro vendedor"} nesta mesma função.`
+            {linkedElsewhere
+              ? `Este cadastro já pertence a ${client.linked_seller_name ?? "outro vendedor"} nesta mesma função. Você pode adicioná-lo também à sua carteira sem remover o vínculo existente.`
               : mine
                 ? confirmedNow
                   ? "O vínculo foi confirmado e já entrou no seu ranking."
@@ -294,7 +399,7 @@ function ClientLookupCard({
         {client.city && <LookupField icon={MapPin} label="Cidade" value={client.city} />}
       </div>
 
-      {client.link_status === "available" && (
+      {!mine && (
         <Button
           type="button"
           className="mt-4 h-11 w-full gap-2 bg-neutral-950 font-bold text-white hover:bg-neutral-800"
@@ -306,10 +411,42 @@ function ClientLookupCard({
           ) : (
             <CheckCircle2 className="h-4 w-4" />
           )}
-          {submitting ? "Confirmando vínculo" : "Confirmar que este cliente é meu"}
+          {submitting
+            ? "Confirmando vínculo"
+            : linkedElsewhere
+              ? "Adicionar também à minha carteira"
+              : "Adicionar cliente à minha carteira"}
         </Button>
       )}
     </div>
+  );
+}
+
+function AttributionOption({
+  value,
+  title,
+  description,
+  icon: Icon,
+}: {
+  value: SellerClientAttributionKind;
+  title: string;
+  description: string;
+  icon: typeof Send;
+}) {
+  return (
+    <Label
+      htmlFor={`attribution-${value}`}
+      className="flex cursor-pointer items-start gap-3 rounded-xl border border-neutral-200 p-4 transition-colors hover:border-yellow-400 hover:bg-yellow-50"
+    >
+      <RadioGroupItem id={`attribution-${value}`} value={value} className="mt-1" />
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-yellow-300 text-neutral-950">
+        <Icon className="h-4 w-4" />
+      </span>
+      <span>
+        <span className="block text-sm font-black text-neutral-950">{title}</span>
+        <span className="mt-1 block text-xs leading-5 text-neutral-500">{description}</span>
+      </span>
+    </Label>
   );
 }
 

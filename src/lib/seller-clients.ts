@@ -81,6 +81,8 @@ export type SellerClientLookup = {
   linked_seller_name: string | null;
 };
 
+export type SellerClientAttributionKind = "apresentou" | "captou";
+
 export type SellerLinkClientActivity = {
   attribution_id: string;
   profile_id: string;
@@ -149,7 +151,7 @@ export async function fetchSellerClientPhoneHistory(): Promise<SellerClientPhone
 
 export async function lookupSellerClientByEmail(email: string): Promise<SellerClientLookup> {
   const { data, error } = await supabase.rpc(
-    "lookup_seller_client_by_email" as never,
+    "lookup_manual_seller_client_by_email" as never,
     { p_email: email.trim().toLowerCase() } as never,
   );
 
@@ -159,10 +161,16 @@ export async function lookupSellerClientByEmail(email: string): Promise<SellerCl
   return result;
 }
 
-export async function registerSellerClient(email: string): Promise<string> {
+export async function registerSellerClient(
+  email: string,
+  attributionKind: SellerClientAttributionKind,
+): Promise<string> {
   const { data, error } = await supabase.rpc(
-    "register_my_seller_client" as never,
-    { p_email: email.trim().toLowerCase() } as never,
+    "register_my_manual_seller_client" as never,
+    {
+      p_email: email.trim().toLowerCase(),
+      p_relationship: attributionKind,
+    } as never,
   );
 
   if (error) throw new Error(error.message || "Não foi possível confirmar o cliente.");

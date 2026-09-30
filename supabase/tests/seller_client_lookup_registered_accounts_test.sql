@@ -39,7 +39,7 @@ SELECT matches(
   'busca publica usa o resolvedor central'
 );
 SELECT matches(
-  pg_get_functiondef('public.register_my_seller_client(text)'::regprocedure),
+  pg_get_functiondef('public.register_my_manual_seller_client(text,text)'::regprocedure),
   'resolve_seller_client_profile_id',
   'cadastro manual usa a mesma regra da busca'
 );
