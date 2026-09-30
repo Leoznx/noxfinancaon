@@ -26,18 +26,12 @@ services:
     ports:
       - "127.0.0.1:3000:3000"
       - "127.0.0.1:3001:3001"
-    shm_size: "2gb" # Chromium precisa de /dev/shm maior que o padrão de 64MB do Docker;
-                     # dobrado junto com o limite de memória abaixo (mais abas = mais /dev/shm).
+    shm_size: "2gb" # Chromium precisa de /dev/shm maior que o padrão de 64MB do Docker.
     deploy:
       resources:
         limits:
-          # 2g era dimensionado para MAX_CONCURRENT_CONSULTAS=3. Com o padrão subindo pra
-          # 10 (env.ts), até 10 abas do Chromium rodam ao mesmo tempo no mesmo container —
-          # 2g arrisca o container ser morto por falta de memória (OOM) bem no pico de uso.
-          # 4g é uma estimativa conservadora (não testada em produção): confirme que a VPS
-          # tem RAM sobrando pra isso (o ideal é uns 5-6g livres, sobrando margem pro
-          # Nginx/SO) antes de subir — se a VPS for menor, ajuste este valor E/OU
-          # MAX_CONCURRENT_CONSULTAS no automation/.env pra um número que caiba.
+          # O limite mantém margem para o Chromium e para a recuperação automática.
+          # As análises são serializadas porque o portal compartilha estado por sessão.
           memory: 4g
         reservations:
           memory: 1g

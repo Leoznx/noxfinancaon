@@ -31,6 +31,7 @@ const PROCESSING_TIMEOUT_MS = 150000;
 const POLL_INTERVAL_MS = 1000;
 const PROCESSING_REGEX =
   /(estamos\s+fazendo\s+a\s+an[aá]lise\s+de\s+cr[ée]dito|an[aá]lise\s+de\s+cr[ée]dito\s+em\s+andamento|analisando\s+cr[ée]dito|consultando\s+hist[oó]rico[^\n]{0,80}(?:pagamento|cliente)|aguarde[^\n]{0,80}an[aá]lise\s+de\s+cr[ée]dito)/i;
+const IDLE_FORM_REGEX = /(fazer\s+an[aá]lise|simular\s+cr[ée]dito)/i;
 /**
  * Se a página ficar com o texto EXATAMENTE igual por esse tempo depois do clique em
  * de envio (nem um spinner, nem uma navegação, nada), assumimos que o clique
@@ -39,6 +40,7 @@ const PROCESSING_REGEX =
  */
 const RETRY_APOS_MS = 7000;
 const MAX_RECLIQUES = 2;
+const PROVIDER_RESET_STABLE_MS = 3000;
 
 export interface ParseResultadoOpts {
   /** Chamado quando a página parece travada (sem nenhuma mudança) após o envio — deve reenviar o clique. */
@@ -51,6 +53,8 @@ export interface ParseResultadoOpts {
   pollIntervalMs?: number;
   retryAfterMs?: number;
   maxRetryClicks?: number;
+  /** Tempo de estabilidade do formulário após uma análise já confirmada. */
+  providerResetStableMs?: number;
 }
 
 /**
@@ -74,6 +78,7 @@ export async function parseResultado(
   const pollInterval = opts.pollIntervalMs ?? POLL_INTERVAL_MS;
   const retryAfter = opts.retryAfterMs ?? RETRY_APOS_MS;
   const maxRetryClicks = opts.maxRetryClicks ?? MAX_RECLIQUES;
+  const providerResetStableMs = opts.providerResetStableMs ?? PROVIDER_RESET_STABLE_MS;
   let bodyText = "";
   let baseline = await page
     .locator("body")
@@ -89,6 +94,7 @@ export async function parseResultado(
   }
   let ultimoReclique = Date.now();
   let tentativasReclique = 0;
+  let retornoAoFormularioDesde: number | null = null;
 
   while (Date.now() < deadline) {
     bodyText = await page
@@ -119,6 +125,33 @@ export async function parseResultado(
       opts.onLog?.(
         `Análise confirmada no portal — aguardando o resultado por até ${Math.round(timeoutProcessando / 1000)}s, sem reenviar a simulação.`,
       );
+    }
+
+    // Depois que o portal confirmou a análise, voltar ao formulário com o botão de
+    // envio significa que o fluxo foi abandonado sem resultado (observado quando
+    // duas abas da mesma sessão disputavam o estado da SPA). Não esperamos os 150s
+    // restantes nem reenviamos automaticamente uma consulta de crédito real.
+    const voltouAoFormulario =
+      processamentoDetectado && !processamentoAtivo && IDLE_FORM_REGEX.test(bodyText);
+    if (voltouAoFormulario) {
+      retornoAoFormularioDesde ??= Date.now();
+      if (Date.now() - retornoAoFormularioDesde >= providerResetStableMs) {
+        opts.onLog?.(
+          "O portal voltou ao formulário depois de iniciar a análise; encerrando sem reenviar para evitar duplicidade.",
+        );
+        return {
+          status: "erro",
+          mensagem:
+            "O parceiro encerrou a análise sem devolver um resultado. Tente novamente; seus dados foram preservados.",
+          clienteNome: null,
+          clienteDocumento: null,
+          rawSummary: buildSummary(page, bodyText, {
+            motivoTecnico: "provider_returned_to_form",
+          }),
+        };
+      }
+    } else {
+      retornoAoFormularioDesde = null;
     }
 
     // Nada mudou desde a última "foto" (nem um spinner, nem uma navegação) — sinal
@@ -161,11 +194,16 @@ export async function parseResultado(
   };
 }
 
-function buildSummary(page: Page, bodyText: string): Record<string, unknown> {
+function buildSummary(
+  page: Page,
+  bodyText: string,
+  extra: Record<string, unknown> = {},
+): Record<string, unknown> {
   return {
     url: sanitizeUrl(page.url()),
     textoCapturado: redactSensitiveText(bodyText, 4000),
     capturadoEm: new Date().toISOString(),
+    ...extra,
   };
 }
 

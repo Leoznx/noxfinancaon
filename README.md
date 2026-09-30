@@ -106,18 +106,18 @@ Login na CredPago é sempre **manual** — a automação nunca preenche usuário
 tenta contornar captcha. O perfil do Chrome (`automation/chrome-profile-credpago/`) mantém a
 sessão entre execuções, então o login só é pedido na primeira vez.
 
-### Múltiplos corretores consultando ao mesmo tempo
+### Múltiplos corretores enviando consultas
 
-O worker roda **um único** navegador/contexto persistente (`chromium.launchPersistentContext`)
-por processo, e cada consulta abre sua **própria aba** (`context.newPage()`) dentro desse
-mesmo contexto — nunca reaproveita a aba de outra consulta, nunca lança um segundo processo de
-Chrome apontando pro mesmo perfil. Isso permite processar várias consultas em paralelo sem
-misturar dados nem arriscar corromper o perfil.
+O worker roda **um único** navegador/contexto autenticado por processo. Site e aplicativo podem
+enviar várias consultas ao mesmo tempo, mas elas ficam na fila do Supabase e são entregues ao
+portal **uma por vez**. O portal compartilha o andamento da proposta no storage da sessão;
+abrir duas análises em abas paralelas faz uma sobrescrever a outra e pode devolver ambas ao
+formulário sem resultado.
 
-- **Fila com limite de concorrência** (`MAX_CONCURRENT_CONSULTAS`, padrão `10`): se chegarem
-  mais consultas do que o limite, as excedentes esperam e começam automaticamente assim que uma
-  aba libera.
-- **Isolamento por consulta**: cada consulta tem sua própria aba, seus próprios dados (vindos
+- **Fila serializada** (`MAX_CONCURRENT_CONSULTAS=1`): as consultas excedentes esperam e começam
+  automaticamente assim que a análise anterior termina. Valores maiores são limitados a `1`
+  pelo próprio worker para proteger a sessão compartilhada.
+- **Isolamento por consulta**: cada consulta recebe uma aba limpa, seus próprios dados (vindos
   da linha do Supabase) e seu próprio bloco de log prefixado com os 8 primeiros caracteres do
   `id` (ex.: `[4dfbfa8f] Preenchendo dados`) — dá pra acompanhar várias consultas ao mesmo tempo
   no terminal sem confundir uma com a outra.
@@ -126,19 +126,18 @@ misturar dados nem arriscar corromper o perfil.
   só uma consegue: a outra recebe zero linhas afetadas e segue para a próxima. Isso é o que
   garante que o resultado nunca vai parar na consulta errada.
 - **Timeout por consulta** (`CONSULTA_TIMEOUT_MS`, padrão `180000` = 180s): se uma consulta travar
-  na CredPago, só ela é marcada como `erro` — as outras continuam rodando normalmente.
+  no portal, só ela é marcada como `erro`; a próxima começa automaticamente. Se o portal voltar
+  ao formulário depois de confirmar o processamento, o worker encerra em poucos segundos sem
+  reenviar e sem arriscar duplicidade.
 - **Fechamento seguro**: só a aba da consulta que terminou é fechada (`page.close()`). O
   navegador/contexto inteiro só fecha quando o worker inteiro é encerrado (Ctrl+C ou fim do
   `--once`), e mesmo aí ele espera todas as consultas em andamento terminarem antes de fechar.
-- **Login compartilhado**: se várias abas detectarem "não logado" ao mesmo tempo (típico só na
-  primeiríssima execução, com o perfil ainda vazio), o worker mostra o prompt de login **uma
-  única vez** no terminal — as outras abas esperam essa mesma confirmação e depois recarregam
-  sozinhas para herdar a sessão (cookies são por contexto, não por aba).
+- **Login compartilhado**: a sessão é validada antes de retirar uma consulta da fila e é renovada
+  uma única vez quando necessário.
 
 ⚠️ **Não rode `npm run automation:credpago` duas vezes ao mesmo tempo** (dois terminais, dois
-processos) apontando para o mesmo `CREDPAGO_PROFILE_DIR` — isso sim arrisca conflito no perfil
-do Chrome. Se precisar de mais capacidade, aumente `MAX_CONCURRENT_CONSULTAS` em vez de abrir um
-segundo processo.
+processos) apontando para o mesmo `CREDPAGO_PROFILE_DIR` — isso arrisca conflito no perfil e no
+estado da análise. Escale a fila, não a quantidade de análises simultâneas na mesma conta.
 
 Modo headless (`HEADLESS=true`) mantém tudo isso funcionando, só sem janela visível — útil para
 rodar em produção depois que a sessão já está logada (o login manual exige janela visível; se
@@ -166,7 +165,7 @@ automation/                     # worker local — processo Node separado do fro
   supabaseAdmin.ts       # client Supabase com service role key (uso local apenas)
   credpagoSelectors.ts   # seletores tolerantes (label/placeholder/role/texto)
   credpagoParser.ts      # interpreta o texto da página e classifica o resultado
-  credpagoWorker.ts       # loop com fila de concorrência: N abas em paralelo, timeout e claim atômico por consulta
+  credpagoWorker.ts       # fila serializada, timeout e claim atômico por consulta
   chrome-profile-credpago/ # perfil persistente do Chrome (gitignored — contém sua sessão)
 
 supabase/migrations/
@@ -202,7 +201,7 @@ Preencha:
 | `CREDPAGO_PROFILE_DIR` | Pasta do perfil do Chrome (padrão: `./automation/chrome-profile-credpago`) |
 | `AUTOMATION_POLL_INTERVAL_MS` | Intervalo de verificação de novas consultas (padrão: `5000`) |
 | `CREDPAGO_URL` | `https://app.loft.com.br/erp/proposta/analise-de-credito` |
-| `MAX_CONCURRENT_CONSULTAS` | Quantas consultas rodam em paralelo, cada uma em sua aba (padrão: `10`) |
+| `MAX_CONCURRENT_CONSULTAS` | Concorrência pedida; limitada a `1` pela sessão do parceiro (padrão: `1`) |
 | `CONSULTA_TIMEOUT_MS` | Tempo máximo por consulta antes de marcar erro (padrão: `180000`) |
 | `STALE_CONSULTA_MS` | Recupera consultas interrompidas; deve ser maior que o timeout (padrão: `360000`) |
 | `HEADLESS` | `true` para rodar sem janela visível (requer sessão já logada) — padrão `false` |
@@ -275,7 +274,7 @@ Passo a passo:
    inquilino/imóvel, valores informados e os botões **Nova Consulta** / **Ver minhas
    consultas**.
 
-### Testar com 2 ou 3 consultas simultâneas
+### Testar a fila com 2 ou 3 consultas simultâneas
 
 1. Deixe `npm run dev` e `npm run automation:credpago` rodando normalmente.
 2. Abra o NOX FINANÇA em **duas ou três abas/janelas diferentes** do navegador (pode ser a
@@ -283,25 +282,23 @@ Passo a passo:
 3. Em cada aba, vá em **Nova Consulta**, preencha dados de um cliente fictício diferente (CPF,
    CEP e aluguel diferentes em cada aba) e clique em **Simular crédito** — o mais próximo
    possível umas das outras no tempo, pra forçar a concorrência.
-4. No terminal do worker, você deve ver logs entrelaçados com prefixos diferentes, um por
-   consulta, por exemplo:
+4. No terminal do worker, você deve ver a primeira consulta terminar antes da próxima começar:
    ```
    [4dfbfa8f] Consulta recebida (documento 111.***.***-35)
-   [8b3a1539] Consulta recebida (documento 039.***.***-35)
    [4dfbfa8f] Abrindo CredPago
-   [8b3a1539] Abrindo CredPago
    [4dfbfa8f] Preenchendo dados
-   [8b3a1539] Preenchendo dados
    [4dfbfa8f] Resultado identificado: aprovado
+   [8b3a1539] Consulta recebida (documento 039.***.***-35)
+   [8b3a1539] Abrindo CredPago
+   [8b3a1539] Preenchendo dados
    [8b3a1539] Resultado identificado: em_analise
    ```
-5. Na janela do Chrome, você verá **abas separadas** (uma por consulta) preenchendo e enviando
-   ao mesmo tempo, sem uma interferir na outra.
+5. Na janela do Chrome, haverá somente uma análise ativa por vez; a seguinte abre depois que a
+   anterior termina.
 6. Cada aba do NOX FINANÇA deve fechar seu próprio modal e redirecionar para o `/status` da
    **sua própria** consulta, com o status correto — nunca o de outra aba.
-7. Para testar o limite da fila, ajuste `MAX_CONCURRENT_CONSULTAS=1` no `automation/.env`,
-   reinicie o worker e dispare 2 consultas — a segunda deve ficar visivelmente "pendente" (sem
-   abrir aba nova) até a primeira terminar, e só então começar sozinha.
+7. A segunda deve ficar visivelmente `pendente` (sem abrir aba nova) até a primeira terminar,
+   e só então começar sozinha.
 
 ### Segurança
 
@@ -331,7 +328,7 @@ Isso aplica (idempotentemente):
 
 O frontend da Vercel não executa o Playwright. Em produção, o worker roda continuamente na
 VPS pelo `automation/docker-compose.yml`, com `restart: unless-stopped`, uma aba isolada por
-consulta e `MAX_CONCURRENT_CONSULTAS` vagas simultâneas.
+consulta e processamento serializado para preservar o estado da sessão do parceiro.
 
 As proteções contra fila travada são complementares:
 
@@ -364,7 +361,7 @@ que a sessão válida é carregada.
 | `npm run dev` | Sobe o frontend (Vite dev server) |
 | `npm run build` | Build de produção |
 | `npm run automation:credpago` | Inicia o worker local em loop contínuo |
-| `npm run automation:once` | Processa as consultas pendentes disponíveis (até `MAX_CONCURRENT_CONSULTAS`) e encerra |
+| `npm run automation:once` | Processa uma consulta pendente e encerra |
 | `npm run automation:install-browsers` | Baixa o Chromium do Playwright |
 | `npm run automation:interactive-login` | Renova a sessão com janela visível quando houver CAPTCHA/OTP |
 | `npm run test:automation` | Testa detecção de login/sessão sem acessar dados reais de clientes |

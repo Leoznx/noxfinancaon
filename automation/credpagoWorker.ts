@@ -1025,6 +1025,8 @@ function iniciarServidorHealth(): http.Server {
           totalFailed: runtimeState.totalFailed,
           lastSuccessfulSimulationAt: runtimeState.lastSuccessfulSimulationAt,
           averageDurationMs: runtimeState.averageDurationMs,
+          configuredConcurrency: env.requestedMaxConcurrentConsultas,
+          effectiveConcurrency: env.maxConcurrentConsultas,
           automationVersion: env.automationVersion,
         }),
       );
@@ -1063,6 +1065,11 @@ async function loop(once: boolean): Promise<void> {
   log(
     `Limite de consultas simultâneas: ${env.maxConcurrentConsultas} | timeout por consulta: ${env.consultaTimeoutMs}ms`,
   );
+  if (env.requestedMaxConcurrentConsultas !== env.maxConcurrentConsultas) {
+    log(
+      `MAX_CONCURRENT_CONSULTAS=${env.requestedMaxConcurrentConsultas} foi reduzido para ${env.maxConcurrentConsultas}: o portal compartilha o estado da análise entre abas da mesma sessão.`,
+    );
+  }
   log(
     `Autenticação preventiva a cada ${env.authCheckIntervalMs}ms | renovação automática: ${
       env.credpagoLogin ? "configurada" : "não configurada"

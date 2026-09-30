@@ -56,6 +56,13 @@ const usesLegacyCreditSimulationUrl =
     configuredCreditSimulationUrl,
   );
 
+// O portal mantém o andamento da análise no storage da sessão autenticada. Abas
+// paralelas no mesmo BrowserContext sobrescrevem esse estado e podem devolver ambas
+// ao formulário sem resultado. A fila da NOX continua aceitando qualquer volume,
+// mas a conta compartilhada do parceiro precisa ser consumida sequencialmente.
+const requestedMaxConcurrentConsultas = positiveNumber("MAX_CONCURRENT_CONSULTAS", 1);
+const SAFE_PROVIDER_CONCURRENCY = 1;
+
 export const env = {
   supabaseUrl: required("SUPABASE_URL"),
   supabaseServiceRoleKey: required("SUPABASE_SERVICE_ROLE_KEY"),
@@ -109,14 +116,16 @@ export const env = {
   /** Reinicia contexto+navegador depois de falhas seguidas, sem derrubar o processo. */
   authFailuresBeforeBrowserRestart: positiveNumber("AUTH_FAILURES_BEFORE_BROWSER_RESTART", 2),
   keepBrowserOpen: process.env.AUTOMATION_KEEP_BROWSER_OPEN === "true",
+  /** Valor informado no ambiente, exposto apenas para diagnóstico operacional. */
+  requestedMaxConcurrentConsultas,
   /**
-   * Quantas consultas podem rodar em paralelo, cada uma na sua própria aba do mesmo
-   * perfil/contexto. Padrão 10 — dá pra 10 corretores simularem ao mesmo tempo sem fila.
-   * Suba com cautela: cada aba é uma sessão real batendo no site da Loft com o mesmo login;
-   * um valor muito alto pode esbarrar em limites do próprio site ou nos recursos da máquina
-   * que roda o worker antes de qualquer coisa no código.
+   * A conta do parceiro compartilha o estado da proposta entre abas. Por segurança,
+   * somente uma análise é enviada por vez; as demais permanecem na fila do Supabase.
    */
-  maxConcurrentConsultas: positiveNumber("MAX_CONCURRENT_CONSULTAS", 10),
+  maxConcurrentConsultas: Math.min(
+    requestedMaxConcurrentConsultas,
+    SAFE_PROVIDER_CONCURRENCY,
+  ),
   /** Tempo máximo (ms) para uma consulta individual antes de ser marcada como erro. */
   consultaTimeoutMs: positiveNumber("CONSULTA_TIMEOUT_MS", 180_000, 10_000),
   /** Recupera leases "processando" deixados por queda/reinício do worker. */

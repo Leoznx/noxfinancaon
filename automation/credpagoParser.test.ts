@@ -93,3 +93,32 @@ test("mantém o reclique de recuperação quando o formulário realmente fica pa
   assert.ok(recliques >= 1);
   await page.close();
 });
+
+test("encerra rápido quando o portal volta ao formulário após confirmar a análise", async () => {
+  const page = await browser.newPage();
+  await page.setContent("<main>Analisando crédito</main>");
+  await page.evaluate(() => {
+    setTimeout(() => {
+      document.body.innerHTML = "<main><button>Fazer análise</button></main>";
+    }, 30);
+  });
+
+  let recliques = 0;
+  const inicio = Date.now();
+  const resultado = await parseResultado(page, {
+    timeoutMs: 60,
+    processingTimeoutMs: 500,
+    pollIntervalMs: 10,
+    providerResetStableMs: 30,
+    onRetryClick: async () => {
+      recliques += 1;
+    },
+  });
+
+  assert.equal(resultado.status, "erro");
+  assert.match(resultado.mensagem, /encerrou a análise/i);
+  assert.equal(resultado.rawSummary.motivoTecnico, "provider_returned_to_form");
+  assert.equal(recliques, 0);
+  assert.ok(Date.now() - inicio < 250);
+  await page.close();
+});
