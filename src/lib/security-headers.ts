@@ -8,7 +8,7 @@ const CONTENT_SECURITY_POLICY = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https:",
   "font-src 'self' data:",
-  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://viacep.com.br https://api.cakto.com.br https://www.google-analytics.com https://region1.google-analytics.com https://www.googleadservices.com https://stats.g.doubleclick.net https://www.facebook.com",
+  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://viacep.com.br https://servicodados.ibge.gov.br https://api.cakto.com.br https://www.google-analytics.com https://region1.google-analytics.com https://www.googleadservices.com https://stats.g.doubleclick.net https://www.facebook.com",
   "worker-src 'self' blob:",
   "frame-src 'self' https://www.facebook.com",
   "manifest-src 'self'",

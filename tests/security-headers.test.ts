@@ -7,7 +7,9 @@ test("adiciona cabeçalhos de defesa e bloqueia cache em áreas privadas", () =>
     new Request("https://noxfianca.com/admin/conta-nox"),
     new Response("ok"),
   );
-  assert.match(response.headers.get("content-security-policy") || "", /frame-ancestors 'none'/);
+  const contentSecurityPolicy = response.headers.get("content-security-policy") || "";
+  assert.match(contentSecurityPolicy, /frame-ancestors 'none'/);
+  assert.match(contentSecurityPolicy, /https:\/\/servicodados\.ibge\.gov\.br/);
   assert.equal(response.headers.get("x-content-type-options"), "nosniff");
   assert.equal(response.headers.get("x-frame-options"), "DENY");
   assert.match(response.headers.get("cache-control") || "", /no-store/);
