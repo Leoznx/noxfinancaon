@@ -337,6 +337,8 @@ As proteções contra fila travada são complementares:
 - após falhas consecutivas, contexto e navegador são recriados sem reiniciar a VPS;
 - indisponibilidade temporária do portal antes do envio devolve a consulta à fila em vez de
   registrar uma reprovação/erro definitivo;
+- a resposta explícita de erro interno do portal após o envio aciona uma única recuperação
+  automática (novo carregamento, novo preenchimento e novo envio), sem ciclo infinito;
 - falhas do Supabase têm retentativa, não encerram o processo e preservam um resultado já lido;
 - uma aba que excede o timeout é fechada antes de liberar a vaga, impedindo envio duplicado;
 - linhas antigas em `processando` voltam automaticamente à fila após queda/reinício;

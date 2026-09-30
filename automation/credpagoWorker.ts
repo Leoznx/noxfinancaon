@@ -644,53 +644,66 @@ async function processarConsulta(
     }
     await assertCreditSimulationAvailable(page);
 
-    log(`[${cid}] Preenchendo dados`);
-    await atualizarStep(consulta.id, "preenchendo");
-    await fillPessoa(page, consulta.tipo_pessoa || "PF");
-    await fillDocumento(page, consulta.documento || "", consulta.tipo_pessoa || "PF");
-    await fillTipoImovel(
-      page,
-      (consulta.tipo_imovel as "Residencial" | "Comercial") || "Residencial",
-    );
-    // O CEP permanece obrigatório na nova rota ERP, embora fique abaixo da dobra
-    // em telas menores. Sem preenchê-lo, o botão de simulação continua desabilitado.
-    await fillCep(page, consulta.cep || "");
-    // A rota ERP atual inicia as coberturas de condomínio e IPTU ligadas e exige
-    // um valor positivo em cada campo ativo. Enviar o total apenas em "Aluguel"
-    // deixava esses campos vazios e o botão "Fazer análise" desabilitado. Mantém
-    // agora cada parcela em seu campo; fillValores desliga a cobertura quando o
-    // valor correspondente for zero, preservando o mesmo compromisso mensal.
-    await fillValores(page, {
-      aluguel: Number(consulta.valor_aluguel) || 0,
-      condominio: Number(consulta.valor_condominio) || 0,
-      taxas: Number(consulta.valor_taxas) || 0,
-    });
-    estado.lastSuccessfulStep = "form-filled";
+    const executarTentativa = async (tentativa: number) => {
+      log(
+        `[${cid}] Preenchendo dados${tentativa > 1 ? ` (recuperação ${tentativa - 1}/1)` : ""}`,
+      );
+      await atualizarStep(consulta.id, tentativa > 1 ? "recuperando_portal" : "preenchendo");
+      await fillPessoa(page, consulta.tipo_pessoa || "PF");
+      await fillDocumento(page, consulta.documento || "", consulta.tipo_pessoa || "PF");
+      await fillTipoImovel(
+        page,
+        (consulta.tipo_imovel as "Residencial" | "Comercial") || "Residencial",
+      );
+      // O CEP permanece obrigatório na nova rota ERP, embora fique abaixo da dobra.
+      await fillCep(page, consulta.cep || "");
+      await fillValores(page, {
+        aluguel: Number(consulta.valor_aluguel) || 0,
+        condominio: Number(consulta.valor_condominio) || 0,
+        taxas: Number(consulta.valor_taxas) || 0,
+      });
+      estado.lastSuccessfulStep = tentativa > 1 ? "recovery-form-filled" : "form-filled";
 
-    log(`[${cid}] Enviando simulação`);
-    await atualizarStep(consulta.id, "enviando");
-    // Só marca a simulação como enviada imediatamente antes do clique real. Antes,
-    // um botão desabilitado já ativava essa trava e escondia os artefatos seguros
-    // de diagnóstico, embora nenhum dado tivesse sido submetido ao parceiro.
-    await submitSimulation(page, {
-      onBeforeClick: () => {
-        simulacaoEnviada = true;
-        estado.simulationSubmitted = true;
-      },
-    });
-    estado.lastSuccessfulStep = "simulation-submitted";
+      log(`[${cid}] Enviando simulação${tentativa > 1 ? " novamente" : ""}`);
+      await atualizarStep(consulta.id, tentativa > 1 ? "reenviando" : "enviando");
+      await submitSimulation(page, {
+        onBeforeClick: () => {
+          simulacaoEnviada = true;
+          estado.simulationSubmitted = true;
+        },
+      });
+      estado.lastSuccessfulStep =
+        tentativa > 1 ? "recovery-simulation-submitted" : "simulation-submitted";
 
-    log(`[${cid}] Aguardando resultado`);
-    await atualizarStep(consulta.id, "aguardando_resultado");
-    const resultPage = page;
-    const resultado = await parseResultado(page, {
-      onLog: (msg) => log(`[${cid}] ${msg}`),
-      // Causa raiz observada em produção: o clique em "Simular Crédito" às vezes não
-      // registra (nada na página muda por dezenas de segundos). Reenviar o mesmo clique
-      // resolve sem precisar preencher tudo de novo — só reclicamos quando a página está
-      // 100% parada (ver heurística em parseResultado), nunca durante progresso real.
-      onRetryClick: () => submitSimulation(resultPage),
-    });
+      log(`[${cid}] Aguardando resultado`);
+      await atualizarStep(consulta.id, "aguardando_resultado");
+      return parseResultado(page, {
+        onLog: (msg) => log(`[${cid}] ${msg}`),
+        // Só reclica quando o envio não causou mudança alguma; nunca durante uma
+        // análise confirmada ou depois de uma resposta do portal.
+        onRetryClick: () => submitSimulation(page),
+      });
+    };
+
+    let resultado = await executarTentativa(1);
+    if (
+      resultado.status === "erro" &&
+      resultado.rawSummary.motivoTecnico === "provider_internal_error"
+    ) {
+      log(
+        `[${cid}] O portal informou erro interno — aguardando 5s e refazendo a análise uma única vez.`,
+      );
+      await atualizarStep(consulta.id, "aguardando_recuperacao_portal");
+      await page.waitForTimeout(5_000);
+      await navegarParaPortal(page);
+      await ensureLoggedIn(cid, page, persistirSessao);
+      await assertCreditSimulationAvailable(page);
+      resultado = await executarTentativa(2);
+      resultado.rawSummary = {
+        ...resultado.rawSummary,
+        recuperacaoAutomaticaTentada: true,
+      };
+    }
     resultadoObtido = true;
     estado.lastSuccessfulStep = "result-read";
     log(`[${cid}] Resultado identificado: ${resultado.status}`);

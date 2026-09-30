@@ -122,3 +122,21 @@ test("encerra rápido quando o portal volta ao formulário após confirmar a an�
   assert.ok(Date.now() - inicio < 250);
   await page.close();
 });
+
+test("identifica o erro interno do parceiro para permitir uma recuperação controlada", async () => {
+  const page = await browser.newPage();
+  await page.setContent(
+    "<main><button>Fazer análise</button><p>Ocorreu um erro interno. Por favor, tente novamente mais tarde.</p></main>",
+  );
+
+  const resultado = await parseResultado(page, {
+    timeoutMs: 200,
+    processingTimeoutMs: 200,
+    pollIntervalMs: 10,
+  });
+
+  assert.equal(resultado.status, "erro");
+  assert.equal(resultado.rawSummary.motivoTecnico, "provider_internal_error");
+  assert.match(resultado.mensagem, /instabilidade interna/i);
+  await page.close();
+});

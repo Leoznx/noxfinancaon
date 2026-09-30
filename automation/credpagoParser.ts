@@ -32,6 +32,8 @@ const POLL_INTERVAL_MS = 1000;
 const PROCESSING_REGEX =
   /(estamos\s+fazendo\s+a\s+an[aá]lise\s+de\s+cr[ée]dito|an[aá]lise\s+de\s+cr[ée]dito\s+em\s+andamento|analisando\s+cr[ée]dito|consultando\s+hist[oó]rico[^\n]{0,80}(?:pagamento|cliente)|aguarde[^\n]{0,80}an[aá]lise\s+de\s+cr[ée]dito)/i;
 const IDLE_FORM_REGEX = /(fazer\s+an[aá]lise|simular\s+cr[ée]dito)/i;
+const PROVIDER_INTERNAL_ERROR_REGEX =
+  /(ocorreu\s+um\s+erro\s+interno|erro\s+interno[^\n]{0,100}tente\s+novamente|tente\s+novamente\s+mais\s+tarde)/i;
 /**
  * Se a página ficar com o texto EXATAMENTE igual por esse tempo depois do clique em
  * de envio (nem um spinner, nem uma navegação, nada), assumimos que o clique
@@ -101,6 +103,22 @@ export async function parseResultado(
       .locator("body")
       .innerText()
       .catch(() => "");
+
+    // O portal pode iniciar a análise e, alguns segundos depois, voltar ao
+    // formulário exibindo esta falha transitória. Identificá-la antes do fallback
+    // genérico permite que o worker faça uma única recuperação controlada.
+    if (PROVIDER_INTERNAL_ERROR_REGEX.test(bodyText)) {
+      return {
+        status: "erro",
+        mensagem:
+          "O parceiro de crédito apresentou uma instabilidade interna. A NOX tentou recuperar a consulta automaticamente.",
+        clienteNome: null,
+        clienteDocumento: null,
+        rawSummary: buildSummary(page, bodyText, {
+          motivoTecnico: "provider_internal_error",
+        }),
+      };
+    }
 
     for (const { status, regex } of PADROES) {
       if (regex.test(bodyText)) {
