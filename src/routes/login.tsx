@@ -318,7 +318,7 @@ function LoginComponent() {
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="Digite seu e-mail ou usuário"
                       autoComplete="email"
-                      className="h-12 rounded-xl border-neutral-300 bg-white pl-12 text-[15px] shadow-none placeholder:text-neutral-400 focus-visible:border-yellow-500 focus-visible:ring-yellow-400/30 lg:h-14"
+                      className="h-12 rounded-xl border-neutral-300 bg-white pl-12 text-base shadow-none placeholder:text-neutral-400 focus-visible:border-yellow-500 focus-visible:ring-yellow-400/30 lg:h-14"
                       required
                     />
                   </div>
@@ -341,7 +341,7 @@ function LoginComponent() {
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="Digite sua senha"
                       autoComplete="current-password"
-                      className="h-12 rounded-xl border-neutral-300 bg-white pl-12 pr-12 text-[15px] shadow-none placeholder:text-neutral-400 focus-visible:border-yellow-500 focus-visible:ring-yellow-400/30 lg:h-14"
+                      className="h-12 rounded-xl border-neutral-300 bg-white pl-12 pr-12 text-base shadow-none placeholder:text-neutral-400 focus-visible:border-yellow-500 focus-visible:ring-yellow-400/30 lg:h-14"
                       required
                     />
                     <button
