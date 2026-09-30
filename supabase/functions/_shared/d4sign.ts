@@ -714,116 +714,151 @@ function administratorFromAgency(imobiliaria: any) {
   };
 }
 
-const CONTRACT_ACCOUNT_ROLE_LABELS: Record<string, string> = {
-  admin: "Administrador",
-  analista: "Analista",
-  financeiro: "Financeiro",
-  corretor: "Corretor",
-  imobiliaria: "Imobiliária",
-  proprietario: "Proprietário",
-  inquilino: "Inquilino",
-  vendedor: "Vendedor",
-};
-
-export function resolveContractAccountData(input: {
-  profile?: any;
-  authMetadata?: any;
-  corretor?: any;
-  imobiliaria?: any;
-  proprietario?: any;
-  inquilino?: any;
-}) {
-  const profile = input.profile || {};
-  const metadata = input.authMetadata || {};
-  const role = String(profile.role || metadata.role || "").toLowerCase();
-  const source = role === "corretor"
-    ? input.corretor || {}
-    : role === "imobiliaria"
-    ? input.imobiliaria || {}
-    : role === "proprietario"
-    ? input.proprietario || {}
-    : role === "inquilino"
-    ? input.inquilino || {}
-    : {};
-  const metadataBirthDate = metadata.data_nascimento || metadata.nascimento ||
-    metadata.birth_date || metadata.birthdate || null;
-
-  return {
-    profile_id: profile.id || null,
-    nome: profile.nome || metadata.nome || metadata.full_name ||
-      source.nome || source.contato_nome || source.razao_social || null,
-    email: profile.email || source.email || source.contato_email || null,
-    telefone: profile.telefone || source.telefone ||
-      source.contato_telefone || metadata.telefone || null,
-    documento: source.cpf || source.cpf_cnpj || source.cnpj || profile.cnpj ||
-      metadata.cpf || metadata.cnpj || null,
-    data_nascimento: source.data_nascimento || metadataBirthDate,
-    creci: source.creci || metadata.creci || null,
-    perfil: CONTRACT_ACCOUNT_ROLE_LABELS[role] || role ||
-      "Não informado no cadastro",
-  };
+function contractRecord(value: unknown): Record<string, any> {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, any>;
+  }
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+        ? parsed as Record<string, any>
+        : {};
+    } catch {
+      return {};
+    }
+  }
+  return {};
 }
 
-async function getContractAccount(supabase: any, profileId: string | null) {
-  if (!profileId) return null;
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", profileId)
-    .maybeSingle();
-  if (!profile) return null;
-
-  let authMetadata: any = {};
-  try {
-    const { data: authData } = await supabase.auth.admin.getUserById(profileId);
-    authMetadata = authData?.user?.user_metadata || {};
-  } catch {
-    // Contratos antigos continuam sendo emitidos com os dados públicos da
-    // conta mesmo quando os metadados históricos do Auth não estão acessíveis.
+function contractValue(...values: unknown[]) {
+  for (const value of values) {
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (typeof value === "string" && value.trim()) return value.trim();
   }
+  return null;
+}
 
-  let corretor: any = null;
-  let imobiliaria: any = null;
-  let proprietario: any = null;
-  let inquilino: any = null;
-  if (profile.role === "corretor") {
-    const result = await supabase
-      .from("corretores")
-      .select("*")
-      .eq("profile_id", profileId)
-      .maybeSingle();
-    corretor = result.data;
-  } else if (profile.role === "imobiliaria") {
-    const result = await supabase
-      .from("imobiliarias")
-      .select("*")
-      .ilike("contato_email", profile.email)
-      .maybeSingle();
-    imobiliaria = result.data;
-  } else if (profile.role === "proprietario") {
-    const result = await supabase
-      .from("proprietarios")
-      .select("*")
-      .eq("profile_id", profileId)
-      .maybeSingle();
-    proprietario = result.data;
-  } else if (profile.role === "inquilino") {
-    const result = await supabase
-      .from("inquilinos")
-      .select("*")
-      .eq("profile_id", profileId)
-      .maybeSingle();
-    inquilino = result.data;
-  }
+export function resolveContractPropertyOwnerData(input: {
+  proprietario?: any;
+  profile?: any;
+  consultation?: any;
+}) {
+  const proprietario = contractRecord(input.proprietario);
+  const profile = contractRecord(input.profile);
+  const consultation = contractRecord(input.consultation);
+  const documents = contractRecord(consultation.documentos);
+  const documentOwner = {
+    ...contractRecord(documents.owner),
+    ...contractRecord(documents.locador),
+    ...contractRecord(documents.proprietario),
+    ...contractRecord(documents.proprietaria),
+  };
+  const stored = contractRecord(proprietario.banco_dados);
+  const storedOwner = {
+    ...stored,
+    ...contractRecord(stored.dados_pessoais),
+    ...contractRecord(stored.owner),
+    ...contractRecord(stored.proprietario),
+    ...contractRecord(stored.proprietaria),
+  };
+  const address = {
+    ...contractRecord(stored.address),
+    ...contractRecord(stored.endereco),
+    ...contractRecord(stored.dados_endereco),
+    ...contractRecord(documentOwner.address),
+    ...contractRecord(documentOwner.endereco),
+    ...contractRecord(documentOwner.dados_endereco),
+  };
 
-  return resolveContractAccountData({
-    profile,
-    authMetadata,
-    corretor,
-    imobiliaria,
-    proprietario,
-    inquilino,
-  });
+  return {
+    id: proprietario.id || null,
+    profile_id: proprietario.profile_id || profile.id || null,
+    nome: contractValue(
+      proprietario.nome,
+      documentOwner.nome,
+      documentOwner.nome_completo,
+      storedOwner.nome,
+      storedOwner.nome_completo,
+      profile.nome,
+      consultation.proprietario_nome,
+    ),
+    documento: contractValue(
+      proprietario.cpf_cnpj,
+      proprietario.cpf,
+      proprietario.cnpj,
+      documentOwner.cpf_cnpj,
+      documentOwner.cpf,
+      documentOwner.cnpj,
+      storedOwner.cpf_cnpj,
+      storedOwner.cpf,
+      storedOwner.cnpj,
+      consultation.proprietario_documento,
+    ),
+    email: contractValue(
+      proprietario.email,
+      documentOwner.email,
+      storedOwner.email,
+      profile.email,
+    ),
+    telefone: contractValue(
+      proprietario.telefone,
+      documentOwner.telefone,
+      storedOwner.telefone,
+      profile.telefone,
+    ),
+    endereco: contractValue(
+      proprietario.logradouro,
+      typeof proprietario.endereco === "string" ? proprietario.endereco : null,
+      documentOwner.logradouro,
+      typeof documentOwner.endereco === "string"
+        ? documentOwner.endereco
+        : null,
+      address.logradouro,
+      address.rua,
+      typeof storedOwner.endereco === "string" ? storedOwner.endereco : null,
+    ),
+    numero: contractValue(
+      proprietario.numero,
+      documentOwner.numero,
+      address.numero,
+      storedOwner.numero,
+    ),
+    complemento: contractValue(
+      proprietario.complemento,
+      documentOwner.complemento,
+      address.complemento,
+      storedOwner.complemento,
+    ),
+    bairro: contractValue(
+      proprietario.bairro,
+      documentOwner.bairro,
+      address.bairro,
+      storedOwner.bairro,
+    ),
+    cidade: contractValue(
+      proprietario.cidade,
+      documentOwner.cidade,
+      address.cidade,
+      storedOwner.cidade,
+    ),
+    estado: contractValue(
+      proprietario.estado,
+      proprietario.uf,
+      documentOwner.estado,
+      documentOwner.uf,
+      address.estado,
+      address.uf,
+      storedOwner.estado,
+      storedOwner.uf,
+    ),
+    cep: contractValue(
+      proprietario.cep,
+      documentOwner.cep,
+      address.cep,
+      storedOwner.cep,
+    ),
+  };
 }
 
 async function getConsultation(supabase: any, consultationId: string) {
@@ -900,12 +935,47 @@ async function getConsultation(supabase: any, consultationId: string) {
       : null;
   }
 
-  const conta = await getContractAccount(
-    supabase,
-    data?.profile_id_solicitante || data?.billing_responsible_user_id || null,
-  );
+  let proprietario: any = null;
+  let proprietarioProfile: any = null;
+  const proprietarioId = data?.imoveis?.proprietario_id || null;
+  if (proprietarioId) {
+    const result = await supabase
+      .from("proprietarios")
+      .select("*")
+      .eq("id", proprietarioId)
+      .maybeSingle();
+    proprietario = result.data;
+  } else if (
+    data?.role_solicitante === "proprietario" &&
+    data?.profile_id_solicitante
+  ) {
+    const result = await supabase
+      .from("proprietarios")
+      .select("*")
+      .eq("profile_id", data.profile_id_solicitante)
+      .maybeSingle();
+    proprietario = result.data;
+  }
+  if (proprietario?.profile_id) {
+    const profileResult = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", proprietario.profile_id)
+      .maybeSingle();
+    proprietarioProfile = profileResult.data;
+  }
 
-  return { ...data, administrador, conta };
+  const proprietarioLocacao = resolveContractPropertyOwnerData({
+    proprietario,
+    profile: proprietarioProfile,
+    consultation: data,
+  });
+
+  return {
+    ...data,
+    administrador,
+    proprietario_locacao: proprietarioLocacao,
+  };
 }
 
 export function isPaidStatus(status: unknown) {

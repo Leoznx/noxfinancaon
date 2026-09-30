@@ -17,9 +17,10 @@ const LIGHT = rgb(0.965, 0.965, 0.965);
 const BORDER = rgb(0.86, 0.86, 0.86);
 const YELLOW = rgb(1, 0.8, 0);
 
-export const CONTRACT_PDF_LAYOUT_VERSION = "nox-contract-2026-v3";
+export const CONTRACT_PDF_LAYOUT_VERSION = "nox-contract-2026-v4";
 export const CONTRACT_PDF_INCLUDES_ADMINISTRATOR_SECTION = false;
-export const CONTRACT_PDF_INCLUDES_ACCOUNT_SECTION = true;
+export const CONTRACT_PDF_INCLUDES_ACCOUNT_SECTION = false;
+export const CONTRACT_PDF_INCLUDES_PROPERTY_OWNER_SECTION = true;
 export const CONTRACT_PDF_INCLUDES_STATUS_SECTION = false;
 export const CONTRACT_PDF_SIGNATURE_ROLES = ["tenant"] as const;
 
@@ -248,9 +249,9 @@ function drawSectionTitle(
 
 export async function buildStyledContractPdf(input: ContractPdfInput) {
   const { consulta, contractNumber, planName, legalParagraphs } = input;
-  const conta = consulta?.conta || {};
   const inquilino = consulta?.inquilinos || {};
   const imovel = consulta?.imoveis || {};
+  const proprietario = consulta?.proprietario_locacao || {};
   const plan = consulta?.planos || {};
   const calculated = consulta?.documentos?.plano_calculado || {};
   const extras = consulta?.documentos?.extras || {};
@@ -383,57 +384,6 @@ export async function buildStyledContractPdf(input: ContractPdfInput) {
 
   y -= 8;
 
-  y = drawSectionTitle(summary, "DADOS DA CONTA", y, bold);
-  y = drawGrid(
-    summary,
-    [
-      [
-        {
-          label: "Nome da conta",
-          value: conta.nome || "Não informado no cadastro",
-        },
-        {
-          label: "Perfil",
-          value: conta.perfil || consulta?.role_solicitante ||
-            "Não informado no cadastro",
-        },
-      ],
-      [
-        {
-          label: "CPF/CNPJ",
-          value: formatCpfCnpj(conta.documento),
-        },
-        {
-          label: "Nascimento",
-          value: formatDate(conta.data_nascimento),
-        },
-      ],
-      [
-        {
-          label: "E-mail",
-          value: conta.email || "Não informado no cadastro",
-        },
-        {
-          label: "Telefone",
-          value: formatPhone(conta.telefone),
-        },
-      ],
-      [
-        {
-          label: "CRECI",
-          value: conta.creci || "Não se aplica / não informado",
-        },
-        {
-          label: "Vínculo",
-          value: "Titular da conta que contratou o plano",
-        },
-      ],
-    ],
-    y,
-    regular,
-    bold,
-  ) - 12;
-
   y = drawSectionTitle(summary, "DADOS DA LOCATÁRIA", y, bold);
   y = drawGrid(
     summary,
@@ -475,11 +425,73 @@ export async function buildStyledContractPdf(input: ContractPdfInput) {
             : "Inquilina - pessoa física",
         },
       ],
+      [
+        {
+          label: "Cidade/UF",
+          value: [
+            consulta?.tenant_cidade || consulta?.cidade,
+            consulta?.tenant_estado || consulta?.estado,
+          ].filter(Boolean).join("/") || "Não informado no cadastro",
+        },
+        {
+          label: "CEP",
+          value: formatCep(consulta?.tenant_cep || consulta?.cep),
+        },
+      ],
     ],
     y,
     regular,
     bold,
-  ) - 15;
+  ) - 12;
+
+  const ownerAddress = [
+    proprietario.endereco || proprietario.logradouro,
+    proprietario.numero ? `nº ${proprietario.numero}` : null,
+  ].filter(Boolean).join(", ");
+  y = drawSectionTitle(summary, "DADOS DO PROPRIETÁRIO", y, bold);
+  y = drawGrid(
+    summary,
+    [
+      [
+        {
+          label: "Nome completo",
+          value: proprietario.nome || "Não informado no cadastro",
+        },
+        {
+          label: "CPF/CNPJ",
+          value: formatCpfCnpj(proprietario.documento),
+        },
+      ],
+      [
+        {
+          label: "Endereço",
+          value: ownerAddress || "Não informado no cadastro",
+        },
+        {
+          label: "Complemento",
+          value: proprietario.complemento || "Sem complemento",
+        },
+      ],
+      [
+        {
+          label: "Bairro",
+          value: proprietario.bairro || "Não informado no cadastro",
+        },
+        {
+          label: "Cidade/UF e CEP",
+          value: [
+            [proprietario.cidade, proprietario.estado].filter(Boolean).join(
+              "/",
+            ),
+            proprietario.cep ? `CEP ${formatCep(proprietario.cep)}` : null,
+          ].filter(Boolean).join(" - ") || "Não informado no cadastro",
+        },
+      ],
+    ],
+    y,
+    regular,
+    bold,
+  ) - 12;
 
   const address = [
     consulta?.imovel_endereco || imovel.endereco || imovel.logradouro,
@@ -529,11 +541,18 @@ export async function buildStyledContractPdf(input: ContractPdfInput) {
     y,
     regular,
     bold,
-  ) - 15;
+  );
 
-  y = drawSectionTitle(summary, "RESUMO DA CONTRATAÇÃO", y, bold);
-  y = drawGrid(
-    summary,
+  const summaryDetails = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+  let summaryY = PAGE_HEIGHT - 57;
+  summaryY = drawSectionTitle(
+    summaryDetails,
+    "RESUMO DA CONTRATAÇÃO",
+    summaryY,
+    bold,
+  );
+  summaryY = drawGrid(
+    summaryDetails,
     [
       [
         { label: "Plano", value: planName },
@@ -577,12 +596,29 @@ export async function buildStyledContractPdf(input: ContractPdfInput) {
         },
       ],
     ],
-    y,
+    summaryY,
     regular,
     bold,
   );
 
-  const pages: PDFPage[] = [summary];
+  summaryY -= 12;
+  const summaryNote = safeText(
+    `Os valores acima foram preenchidos a partir do cadastro aprovado no sistema NOX. A cobertura total considera o pacote locatício de ${
+      formatCurrency(packageValue)
+    } multiplicado por ${multiplier || 0}, conforme o plano ${planName}.`,
+  );
+  drawLines(
+    summaryDetails,
+    wrapText(regular, summaryNote, 7.4, CONTENT_WIDTH),
+    MARGIN,
+    summaryY,
+    regular,
+    7.4,
+    9.2,
+    MUTED,
+  );
+
+  const pages: PDFPage[] = [summary, summaryDetails];
   let page = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
   pages.push(page);
   let pageY = PAGE_HEIGHT - 57;

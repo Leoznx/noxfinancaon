@@ -13,13 +13,14 @@ import {
   buildInsuranceActiveZApiPayload,
   buildSignatureInviteZApiPayload,
   extractD4SignSignerKey,
-  resolveContractAccountData,
+  resolveContractPropertyOwnerData,
   resolveContractTemplate,
   type TemplateKey,
 } from "./d4sign.ts";
 import {
   CONTRACT_PDF_INCLUDES_ACCOUNT_SECTION,
   CONTRACT_PDF_INCLUDES_ADMINISTRATOR_SECTION,
+  CONTRACT_PDF_INCLUDES_PROPERTY_OWNER_SECTION,
   CONTRACT_PDF_INCLUDES_STATUS_SECTION,
   CONTRACT_PDF_LAYOUT_VERSION,
   CONTRACT_PDF_SIGNATURE_ROLES,
@@ -71,14 +72,16 @@ const consulta = {
     telefone: "1133334444",
     email: "contato@imobiliariacentral.com.br",
   },
-  conta: {
-    nome: "Leonardo José da Silva",
+  proprietario_locacao: {
+    nome: "João da Silva",
     documento: "98765432100",
-    data_nascimento: "1988-09-21",
-    email: "leonardo@example.com",
-    telefone: "11911112222",
-    creci: "123456-F",
-    perfil: "Corretor",
+    endereco: "Rua do Proprietário",
+    numero: "310",
+    complemento: "Casa 2",
+    bairro: "Novo Campinho",
+    cidade: "São Paulo",
+    estado: "SP",
+    cep: "01001000",
   },
 };
 
@@ -113,36 +116,56 @@ for (
   });
 }
 
-Deno.test("novo layout PDF usa dados da conta e omite status e administrador", () => {
-  assertEquals(CONTRACT_PDF_LAYOUT_VERSION, "nox-contract-2026-v3");
+Deno.test("novo layout PDF usa locatário, proprietário e imóvel", () => {
+  assertEquals(CONTRACT_PDF_LAYOUT_VERSION, "nox-contract-2026-v4");
   assertEquals(CONTRACT_PDF_INCLUDES_ADMINISTRATOR_SECTION, false);
-  assertEquals(CONTRACT_PDF_INCLUDES_ACCOUNT_SECTION, true);
+  assertEquals(CONTRACT_PDF_INCLUDES_ACCOUNT_SECTION, false);
+  assertEquals(CONTRACT_PDF_INCLUDES_PROPERTY_OWNER_SECTION, true);
   assertEquals(CONTRACT_PDF_INCLUDES_STATUS_SECTION, false);
   assertEquals(CONTRACT_PDF_SIGNATURE_ROLES, ["tenant"]);
 });
 
-Deno.test("monta os dados da conta do titular com CPF, nascimento e CRECI", () => {
+Deno.test("monta os dados do proprietário vinculado ao imóvel", () => {
   assertEquals(
-    resolveContractAccountData({
-      profile: {
-        id: "conta-1",
-        nome: "Leonardo José da Silva",
-        email: "leonardo@example.com",
+    resolveContractPropertyOwnerData({
+      proprietario: {
+        id: "proprietario-1",
+        profile_id: "perfil-1",
+        nome: "Gisely Duarte Vidal",
+        cpf_cnpj: "07073655623",
+        email: "gisely@example.com",
         telefone: "11911112222",
-        role: "corretor",
+        banco_dados: {
+          endereco: {
+            logradouro: "Rua Dona Flora Gomes",
+            numero: "310",
+            complemento: "Casa 02",
+            bairro: "Novo Campinho",
+            cidade: "Pedro Leopoldo",
+            uf: "MG",
+            cep: "33254094",
+          },
+        },
       },
-      authMetadata: { data_nascimento: "1988-09-21" },
-      corretor: { cpf: "98765432100", creci: "123456-F" },
+      profile: {
+        id: "perfil-1",
+        nome: "Gisely Duarte Vidal",
+      },
     }),
     {
-      profile_id: "conta-1",
-      nome: "Leonardo José da Silva",
-      email: "leonardo@example.com",
+      id: "proprietario-1",
+      profile_id: "perfil-1",
+      nome: "Gisely Duarte Vidal",
+      documento: "07073655623",
+      email: "gisely@example.com",
       telefone: "11911112222",
-      documento: "98765432100",
-      data_nascimento: "1988-09-21",
-      creci: "123456-F",
-      perfil: "Corretor",
+      endereco: "Rua Dona Flora Gomes",
+      numero: "310",
+      complemento: "Casa 02",
+      bairro: "Novo Campinho",
+      cidade: "Pedro Leopoldo",
+      estado: "MG",
+      cep: "33254094",
     },
   );
 });
