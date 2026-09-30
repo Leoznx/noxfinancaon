@@ -104,22 +104,6 @@ export async function parseResultado(
       .innerText()
       .catch(() => "");
 
-    // O portal pode iniciar a análise e, alguns segundos depois, voltar ao
-    // formulário exibindo esta falha transitória. Identificá-la antes do fallback
-    // genérico permite que o worker faça uma única recuperação controlada.
-    if (PROVIDER_INTERNAL_ERROR_REGEX.test(bodyText)) {
-      return {
-        status: "erro",
-        mensagem:
-          "O parceiro de crédito apresentou uma instabilidade interna. A NOX tentou recuperar a consulta automaticamente.",
-        clienteNome: null,
-        clienteDocumento: null,
-        rawSummary: buildSummary(page, bodyText, {
-          motivoTecnico: "provider_internal_error",
-        }),
-      };
-    }
-
     for (const { status, regex } of PADROES) {
       if (regex.test(bodyText)) {
         const { nome, documento } = extrairClienteInfo(bodyText);
@@ -131,6 +115,22 @@ export async function parseResultado(
           rawSummary: buildSummary(page, bodyText),
         };
       }
+    }
+
+    // O portal pode iniciar a análise e, alguns segundos depois, voltar ao
+    // formulário exibindo esta falha transitória. Resultados de crédito reais têm
+    // precedência caso algum aviso antigo ainda permaneça visível na página.
+    if (PROVIDER_INTERNAL_ERROR_REGEX.test(bodyText)) {
+      return {
+        status: "erro",
+        mensagem:
+          "O parceiro de crédito apresentou uma instabilidade interna. A NOX tentou recuperar a consulta automaticamente.",
+        clienteNome: null,
+        clienteDocumento: null,
+        rawSummary: buildSummary(page, bodyText, {
+          motivoTecnico: "provider_internal_error",
+        }),
+      };
     }
 
     // A Loft pode manter esta mensagem estática por mais de 30 segundos enquanto
