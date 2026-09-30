@@ -4,8 +4,10 @@ import {
   assertThrows,
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { strFromU8, unzipSync } from "https://esm.sh/fflate@0.8.2";
+import { PDFDocument } from "https://esm.sh/pdf-lib@1.17.1?target=deno";
 import {
   buildContractDocx,
+  buildContractPdf,
   buildD4SignSendPayload,
   buildD4SignSigner,
   buildInsuranceActiveZApiPayload,
@@ -14,6 +16,11 @@ import {
   resolveContractTemplate,
   type TemplateKey,
 } from "./d4sign.ts";
+import {
+  CONTRACT_PDF_INCLUDES_ADMINISTRATOR_SECTION,
+  CONTRACT_PDF_LAYOUT_VERSION,
+  CONTRACT_PDF_SIGNATURE_ROLES,
+} from "./contract-pdf.ts";
 
 const consulta = {
   id: "11111111-2222-3333-4444-555555555555",
@@ -91,6 +98,49 @@ for (
         documentXml.includes("R$ 57.000,00"),
     );
     assertEquals(built.fileName.endsWith(".docx"), true);
+  });
+}
+
+Deno.test("novo layout PDF omite administrador e assinatura da NOX", () => {
+  assertEquals(CONTRACT_PDF_LAYOUT_VERSION, "nox-contract-2026-v2");
+  assertEquals(CONTRACT_PDF_INCLUDES_ADMINISTRATOR_SECTION, false);
+  assertEquals(CONTRACT_PDF_SIGNATURE_ROLES, ["tenant"]);
+});
+
+for (
+  const template of [
+    "fit",
+    "fit_plus",
+    "smart",
+    "smart_plus",
+    "up",
+  ] as TemplateKey[]
+) {
+  Deno.test(`gera contrato PDF estático e preenchido para ${template}`, async () => {
+    const planNameByTemplate: Record<TemplateKey, string> = {
+      fit: "NOX Fit",
+      fit_plus: "NOX Fit+",
+      smart: "NOX Smart",
+      smart_plus: "NOX Smart+",
+      up: "NOX Up",
+    };
+    const built = await buildContractPdf(
+      template,
+      {
+        ...consulta,
+        planos: {
+          ...consulta.planos,
+          nome: planNameByTemplate[template],
+        },
+      },
+      "NOX-TESTE-001",
+    );
+    const pdf = await PDFDocument.load(built.bytes);
+    assert(pdf.getPageCount() >= 10);
+    assertEquals(pdf.getForm().getFields().length, 0);
+    assertEquals(built.mimeType, "application/pdf");
+    assertEquals(built.fileName.endsWith(".pdf"), true);
+    assert(pdf.getTitle()?.includes(planNameByTemplate[template]));
   });
 }
 
