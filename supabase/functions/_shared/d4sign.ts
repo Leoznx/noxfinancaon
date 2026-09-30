@@ -714,6 +714,118 @@ function administratorFromAgency(imobiliaria: any) {
   };
 }
 
+const CONTRACT_ACCOUNT_ROLE_LABELS: Record<string, string> = {
+  admin: "Administrador",
+  analista: "Analista",
+  financeiro: "Financeiro",
+  corretor: "Corretor",
+  imobiliaria: "Imobiliária",
+  proprietario: "Proprietário",
+  inquilino: "Inquilino",
+  vendedor: "Vendedor",
+};
+
+export function resolveContractAccountData(input: {
+  profile?: any;
+  authMetadata?: any;
+  corretor?: any;
+  imobiliaria?: any;
+  proprietario?: any;
+  inquilino?: any;
+}) {
+  const profile = input.profile || {};
+  const metadata = input.authMetadata || {};
+  const role = String(profile.role || metadata.role || "").toLowerCase();
+  const source = role === "corretor"
+    ? input.corretor || {}
+    : role === "imobiliaria"
+    ? input.imobiliaria || {}
+    : role === "proprietario"
+    ? input.proprietario || {}
+    : role === "inquilino"
+    ? input.inquilino || {}
+    : {};
+  const metadataBirthDate = metadata.data_nascimento || metadata.nascimento ||
+    metadata.birth_date || metadata.birthdate || null;
+
+  return {
+    profile_id: profile.id || null,
+    nome: profile.nome || metadata.nome || metadata.full_name ||
+      source.nome || source.contato_nome || source.razao_social || null,
+    email: profile.email || source.email || source.contato_email || null,
+    telefone: profile.telefone || source.telefone ||
+      source.contato_telefone || metadata.telefone || null,
+    documento: source.cpf || source.cpf_cnpj || source.cnpj || profile.cnpj ||
+      metadata.cpf || metadata.cnpj || null,
+    data_nascimento: source.data_nascimento || metadataBirthDate,
+    creci: source.creci || metadata.creci || null,
+    perfil: CONTRACT_ACCOUNT_ROLE_LABELS[role] || role ||
+      "Não informado no cadastro",
+  };
+}
+
+async function getContractAccount(supabase: any, profileId: string | null) {
+  if (!profileId) return null;
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", profileId)
+    .maybeSingle();
+  if (!profile) return null;
+
+  let authMetadata: any = {};
+  try {
+    const { data: authData } = await supabase.auth.admin.getUserById(profileId);
+    authMetadata = authData?.user?.user_metadata || {};
+  } catch {
+    // Contratos antigos continuam sendo emitidos com os dados públicos da
+    // conta mesmo quando os metadados históricos do Auth não estão acessíveis.
+  }
+
+  let corretor: any = null;
+  let imobiliaria: any = null;
+  let proprietario: any = null;
+  let inquilino: any = null;
+  if (profile.role === "corretor") {
+    const result = await supabase
+      .from("corretores")
+      .select("*")
+      .eq("profile_id", profileId)
+      .maybeSingle();
+    corretor = result.data;
+  } else if (profile.role === "imobiliaria") {
+    const result = await supabase
+      .from("imobiliarias")
+      .select("*")
+      .ilike("contato_email", profile.email)
+      .maybeSingle();
+    imobiliaria = result.data;
+  } else if (profile.role === "proprietario") {
+    const result = await supabase
+      .from("proprietarios")
+      .select("*")
+      .eq("profile_id", profileId)
+      .maybeSingle();
+    proprietario = result.data;
+  } else if (profile.role === "inquilino") {
+    const result = await supabase
+      .from("inquilinos")
+      .select("*")
+      .eq("profile_id", profileId)
+      .maybeSingle();
+    inquilino = result.data;
+  }
+
+  return resolveContractAccountData({
+    profile,
+    authMetadata,
+    corretor,
+    imobiliaria,
+    proprietario,
+    inquilino,
+  });
+}
+
 async function getConsultation(supabase: any, consultationId: string) {
   const { data, error } = await supabase
     .from("consultas_credito")
@@ -788,7 +900,12 @@ async function getConsultation(supabase: any, consultationId: string) {
       : null;
   }
 
-  return { ...data, administrador };
+  const conta = await getContractAccount(
+    supabase,
+    data?.profile_id_solicitante || data?.billing_responsible_user_id || null,
+  );
+
+  return { ...data, administrador, conta };
 }
 
 export function isPaidStatus(status: unknown) {

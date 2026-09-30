@@ -13,11 +13,14 @@ import {
   buildInsuranceActiveZApiPayload,
   buildSignatureInviteZApiPayload,
   extractD4SignSignerKey,
+  resolveContractAccountData,
   resolveContractTemplate,
   type TemplateKey,
 } from "./d4sign.ts";
 import {
+  CONTRACT_PDF_INCLUDES_ACCOUNT_SECTION,
   CONTRACT_PDF_INCLUDES_ADMINISTRATOR_SECTION,
+  CONTRACT_PDF_INCLUDES_STATUS_SECTION,
   CONTRACT_PDF_LAYOUT_VERSION,
   CONTRACT_PDF_SIGNATURE_ROLES,
 } from "./contract-pdf.ts";
@@ -68,6 +71,15 @@ const consulta = {
     telefone: "1133334444",
     email: "contato@imobiliariacentral.com.br",
   },
+  conta: {
+    nome: "Leonardo José da Silva",
+    documento: "98765432100",
+    data_nascimento: "1988-09-21",
+    email: "leonardo@example.com",
+    telefone: "11911112222",
+    creci: "123456-F",
+    perfil: "Corretor",
+  },
 };
 
 for (
@@ -101,10 +113,38 @@ for (
   });
 }
 
-Deno.test("novo layout PDF omite administrador e assinatura da NOX", () => {
-  assertEquals(CONTRACT_PDF_LAYOUT_VERSION, "nox-contract-2026-v2");
+Deno.test("novo layout PDF usa dados da conta e omite status e administrador", () => {
+  assertEquals(CONTRACT_PDF_LAYOUT_VERSION, "nox-contract-2026-v3");
   assertEquals(CONTRACT_PDF_INCLUDES_ADMINISTRATOR_SECTION, false);
+  assertEquals(CONTRACT_PDF_INCLUDES_ACCOUNT_SECTION, true);
+  assertEquals(CONTRACT_PDF_INCLUDES_STATUS_SECTION, false);
   assertEquals(CONTRACT_PDF_SIGNATURE_ROLES, ["tenant"]);
+});
+
+Deno.test("monta os dados da conta do titular com CPF, nascimento e CRECI", () => {
+  assertEquals(
+    resolveContractAccountData({
+      profile: {
+        id: "conta-1",
+        nome: "Leonardo José da Silva",
+        email: "leonardo@example.com",
+        telefone: "11911112222",
+        role: "corretor",
+      },
+      authMetadata: { data_nascimento: "1988-09-21" },
+      corretor: { cpf: "98765432100", creci: "123456-F" },
+    }),
+    {
+      profile_id: "conta-1",
+      nome: "Leonardo José da Silva",
+      email: "leonardo@example.com",
+      telefone: "11911112222",
+      documento: "98765432100",
+      data_nascimento: "1988-09-21",
+      creci: "123456-F",
+      perfil: "Corretor",
+    },
+  );
 });
 
 for (

@@ -16,10 +16,11 @@ const MUTED = rgb(0.43, 0.43, 0.43);
 const LIGHT = rgb(0.965, 0.965, 0.965);
 const BORDER = rgb(0.86, 0.86, 0.86);
 const YELLOW = rgb(1, 0.8, 0);
-const PALE_YELLOW = rgb(1, 0.974, 0.79);
 
-export const CONTRACT_PDF_LAYOUT_VERSION = "nox-contract-2026-v2";
+export const CONTRACT_PDF_LAYOUT_VERSION = "nox-contract-2026-v3";
 export const CONTRACT_PDF_INCLUDES_ADMINISTRATOR_SECTION = false;
+export const CONTRACT_PDF_INCLUDES_ACCOUNT_SECTION = true;
+export const CONTRACT_PDF_INCLUDES_STATUS_SECTION = false;
 export const CONTRACT_PDF_SIGNATURE_ROLES = ["tenant"] as const;
 
 type ContractPdfInput = {
@@ -245,14 +246,9 @@ function drawSectionTitle(
   return y - 13;
 }
 
-function isPaidStatus(value: unknown) {
-  return ["confirmed", "paid", "received", "aprovado"].includes(
-    String(value || "").toLowerCase(),
-  );
-}
-
 export async function buildStyledContractPdf(input: ContractPdfInput) {
   const { consulta, contractNumber, planName, legalParagraphs } = input;
+  const conta = consulta?.conta || {};
   const inquilino = consulta?.inquilinos || {};
   const imovel = consulta?.imoveis || {};
   const plan = consulta?.planos || {};
@@ -385,45 +381,58 @@ export async function buildStyledContractPdf(input: ContractPdfInput) {
     rgb(0.3, 0.3, 0.3),
   ) - 7;
 
-  const statusHeight = 26;
-  summary.drawRectangle({
-    x: MARGIN,
-    y: y - statusHeight,
-    width: 115,
-    height: statusHeight,
-    color: YELLOW,
-    borderColor: rgb(0.87, 0.69, 0),
-    borderWidth: 0.6,
-  });
-  summary.drawRectangle({
-    x: MARGIN + 115,
-    y: y - statusHeight,
-    width: CONTENT_WIDTH - 115,
-    height: statusHeight,
-    color: PALE_YELLOW,
-    borderColor: rgb(0.87, 0.69, 0),
-    borderWidth: 0.6,
-  });
-  summary.drawText("STATUS ATUAL", {
-    x: MARGIN + 11,
-    y: y - 17,
-    font: bold,
-    size: 7.2,
-    color: DARK,
-  });
-  summary.drawText(
-    isPaidStatus(consulta?.payment_status)
-      ? "AGUARDANDO ASSINATURA"
-      : "AGUARDANDO PAGAMENTO E ASSINATURA",
-    {
-      x: MARGIN + 126,
-      y: y - 17,
-      font: bold,
-      size: 7.2,
-      color: DARK,
-    },
-  );
-  y -= statusHeight + 17;
+  y -= 8;
+
+  y = drawSectionTitle(summary, "DADOS DA CONTA", y, bold);
+  y = drawGrid(
+    summary,
+    [
+      [
+        {
+          label: "Nome da conta",
+          value: conta.nome || "Não informado no cadastro",
+        },
+        {
+          label: "Perfil",
+          value: conta.perfil || consulta?.role_solicitante ||
+            "Não informado no cadastro",
+        },
+      ],
+      [
+        {
+          label: "CPF/CNPJ",
+          value: formatCpfCnpj(conta.documento),
+        },
+        {
+          label: "Nascimento",
+          value: formatDate(conta.data_nascimento),
+        },
+      ],
+      [
+        {
+          label: "E-mail",
+          value: conta.email || "Não informado no cadastro",
+        },
+        {
+          label: "Telefone",
+          value: formatPhone(conta.telefone),
+        },
+      ],
+      [
+        {
+          label: "CRECI",
+          value: conta.creci || "Não se aplica / não informado",
+        },
+        {
+          label: "Vínculo",
+          value: "Titular da conta que contratou o plano",
+        },
+      ],
+    ],
+    y,
+    regular,
+    bold,
+  ) - 12;
 
   y = drawSectionTitle(summary, "DADOS DA LOCATÁRIA", y, bold);
   y = drawGrid(
