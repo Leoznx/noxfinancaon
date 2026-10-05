@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { formatBrazilianPhoneInput, isValidBrazilianPhone } from "@/lib/seller-clients";
 import { SELLER_LEAD_CATEGORIES, createMySellerContactLead, fetchMySellerContactLeads, type SellerContactLead, type SellerLeadCategory } from "@/lib/seller-control";
@@ -18,6 +19,7 @@ export function SellerContactLeadsPanel() {
   const [saving, setSaving] = useState(false);
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
   const [category, setCategory] = useState<SellerLeadCategory | null>(null);
+  const [notes, setNotes] = useState("");
   const [error, setError] = useState("");
   const searchRef = useRef("");
 
@@ -45,6 +47,7 @@ export function SellerContactLeadsPanel() {
     if (name.trim().length < 2) { toast.error("Informe o nome do lead."); return; }
     if (!isValidBrazilianPhone(phone)) { toast.error("Informe um telefone brasileiro válido."); return; }
     setCategory(null);
+    setNotes("");
     setCategoryPickerOpen(true);
   }
 
@@ -52,8 +55,8 @@ export function SellerContactLeadsPanel() {
     if (!category) { toast.error("Selecione como este lead deve ser acompanhado."); return; }
     setSaving(true);
     try {
-      await createMySellerContactLead(name, phone, category);
-      setName(""); setPhone(""); setSearch(""); searchRef.current = "";
+      await createMySellerContactLead(name, phone, category, notes);
+      setName(""); setPhone(""); setNotes(""); setSearch(""); searchRef.current = "";
       setCategoryPickerOpen(false);
       const selected = SELLER_LEAD_CATEGORIES.find((item) => item.value === category);
       toast.success(`${selected?.label ?? "Lead"} salvo. A agenda já foi organizada automaticamente.`);
@@ -85,7 +88,7 @@ export function SellerContactLeadsPanel() {
       {error ? <div className="m-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-800">{error}</div> : loading ? <div className="flex items-center justify-center gap-2 p-12 text-sm font-semibold text-neutral-500"><RefreshCw className="h-4 w-4 animate-spin" /> Carregando leads...</div> : leads.length === 0 ? <div className="grid min-h-56 place-items-center p-8 text-center"><div><UserRound className="mx-auto h-10 w-10 text-neutral-300" /><p className="mt-3 font-black">Nenhum lead encontrado</p><p className="mt-1 text-sm text-neutral-500">Cadastre o primeiro telefone ou ajuste a pesquisa.</p></div></div> : <div className="divide-y divide-neutral-100">{leads.map((lead) => <LeadRow key={lead.id} lead={lead} />)}</div>}
     </section>
     <Dialog open={categoryPickerOpen} onOpenChange={(open) => !saving && setCategoryPickerOpen(open)}>
-      <DialogContent className="max-w-xl">
+      <DialogContent className="max-h-[90vh] max-w-xl overflow-y-auto">
         <DialogHeader><DialogTitle className="text-2xl font-black">Como este lead deve entrar na carteira?</DialogTitle></DialogHeader>
         <p className="text-sm leading-6 text-neutral-500">Essa escolha define a quantidade de follow-ups, a rotação e quem continuará responsável.</p>
         <div className="grid gap-3 py-2">
@@ -97,6 +100,14 @@ export function SellerContactLeadsPanel() {
               <span><strong className="block text-sm font-black text-neutral-950">{option.label}</strong><span className="mt-1 block text-xs leading-5 text-neutral-500">{option.description}</span></span>
             </button>;
           })}
+        </div>
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between gap-3">
+            <Label htmlFor="lead-notes">Observação (opcional)</Label>
+            <span className="text-[11px] font-semibold text-neutral-400">{notes.length}/1000</span>
+          </div>
+          <Textarea id="lead-notes" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Ex.: prefere contato à tarde, veio por indicação..." className="min-h-24 resize-none" maxLength={1000} disabled={saving} />
+          <p className="text-xs leading-5 text-neutral-500">A observação ficará salva no histórico deste lead.</p>
         </div>
         <DialogFooter><Button type="button" variant="outline" disabled={saving} onClick={() => setCategoryPickerOpen(false)}>Cancelar</Button><Button type="button" disabled={saving || !category} onClick={() => void confirmCategory()} className="bg-violet-600 font-black text-white hover:bg-violet-700">{saving && <RefreshCw className="mr-2 h-4 w-4 animate-spin" />}Confirmar e automatizar</Button></DialogFooter>
       </DialogContent>
@@ -110,5 +121,5 @@ function LeadRow({ lead }: { lead: SellerContactLead }) {
 
 function Info({ icon: Icon, label, value }: { icon: typeof History; label: string; value: string }) { return <div className="flex items-start gap-2"><Icon className="mt-0.5 h-4 w-4 text-violet-600" /><div><p className="font-bold text-neutral-500">{label}</p><p className="mt-0.5 font-black text-neutral-800">{value}</p></div></div>; }
 function formatWhen(value: string | null) { return value ? new Date(value).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "A definir"; }
-function historyLabel(event: string, fallback: string) { const labels: Record<string, string> = { lead_created: "Lead cadastrado", contact_confirmed: "Contato confirmado", category_changed: "Jornada do lead alterada", task_responded: "Lembrete respondido e próximo passo definido", task_missed: "Lembrete não confirmado", transferred: "Transferido para outro vendedor", rotation_deferred: "Rotação adiada por novo contato" }; return labels[event] ?? fallback; }
+function historyLabel(event: string, fallback: string) { const labels: Record<string, string> = { lead_created: "Lead cadastrado", lead_observation: "Observação cadastrada", contact_confirmed: "Contato confirmado", category_changed: "Jornada do lead alterada", task_responded: "Lembrete respondido e próximo passo definido", task_missed: "Lembrete não confirmado", transferred: "Transferido para outro vendedor", rotation_deferred: "Rotação adiada por novo contato" }; return labels[event] ?? fallback; }
 function categoryClass(category: SellerLeadCategory) { return category === "potential" ? "bg-orange-100 text-orange-800" : category === "meeting_scheduled" ? "bg-emerald-100 text-emerald-800" : "bg-blue-100 text-blue-800"; }

@@ -333,11 +333,13 @@ export async function createMySellerContactLead(
   name: string,
   phone: string,
   category: SellerLeadCategory,
+  notes = "",
 ) {
   const { data, error } = await (supabase.rpc as any)("create_my_qualified_seller_contact_lead", {
     p_name: name.trim(),
     p_phone: phone,
     p_category: category,
+    p_notes: notes.trim() || null,
   });
   if (error) throw error;
   const result = Array.isArray(data) ? data[0] : data;
