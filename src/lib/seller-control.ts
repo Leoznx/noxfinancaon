@@ -335,7 +335,7 @@ export async function createMySellerContactLead(
   category: SellerLeadCategory,
   notes = "",
 ) {
-  const { data, error } = await (supabase.rpc as any)("create_my_qualified_seller_contact_lead", {
+  const { data, error } = await (supabase.rpc as any)("create_my_qualified_seller_contact_lead_with_notes", {
     p_name: name.trim(),
     p_phone: phone,
     p_category: category,

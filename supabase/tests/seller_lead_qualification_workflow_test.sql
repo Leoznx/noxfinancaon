@@ -3,17 +3,20 @@ BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET LOCAL search_path = public, extensions, pg_catalog;
 
-SELECT plan(24);
+SELECT plan(27);
 
 SELECT has_column('public', 'seller_contact_leads', 'lead_category', 'lead guarda a jornada escolhida');
 SELECT has_column('public', 'seller_contact_leads', 'rotation_locked', 'lead pode bloquear rotacao');
 SELECT has_column('public', 'seller_contact_lead_tasks', 'next_step', 'tarefa guarda o proximo passo');
 SELECT has_column('public', 'seller_contact_lead_tasks', 'response_notes', 'tarefa guarda observacao do contato');
-SELECT has_function('public', 'create_my_qualified_seller_contact_lead', ARRAY['text','text','text','text'], 'RPC qualificada de cadastro com observacao existe');
+SELECT has_function('public', 'create_my_qualified_seller_contact_lead', ARRAY['text','text','text'], 'RPC qualificada de cadastro existe');
+SELECT has_function('public', 'create_my_qualified_seller_contact_lead_with_notes', ARRAY['text','text','text','text'], 'RPC qualificada de cadastro com observacao existe');
 SELECT has_function('public', 'get_my_qualified_seller_contact_leads', ARRAY['text'], 'RPC qualificada de carteira existe');
 SELECT has_function('public', 'respond_to_my_qualified_seller_contact_lead_task', ARRAY['uuid','text','text','text'], 'RPC qualificada de resposta existe');
-SELECT ok(has_function_privilege('authenticated', 'public.create_my_qualified_seller_contact_lead(text,text,text,text)', 'EXECUTE'), 'authenticated cadastra lead qualificado');
-SELECT ok(NOT has_function_privilege('anon', 'public.create_my_qualified_seller_contact_lead(text,text,text,text)', 'EXECUTE'), 'anon nao cadastra lead qualificado');
+SELECT ok(has_function_privilege('authenticated', 'public.create_my_qualified_seller_contact_lead(text,text,text)', 'EXECUTE'), 'authenticated cadastra lead qualificado');
+SELECT ok(NOT has_function_privilege('anon', 'public.create_my_qualified_seller_contact_lead(text,text,text)', 'EXECUTE'), 'anon nao cadastra lead qualificado');
+SELECT ok(has_function_privilege('authenticated', 'public.create_my_qualified_seller_contact_lead_with_notes(text,text,text,text)', 'EXECUTE'), 'authenticated cadastra lead com observacao');
+SELECT ok(NOT has_function_privilege('anon', 'public.create_my_qualified_seller_contact_lead_with_notes(text,text,text,text)', 'EXECUTE'), 'anon nao cadastra lead com observacao');
 SELECT is(public.seller_contact_lead_attempt_limit('cold'), 2, 'lead frio usa duas tentativas');
 SELECT is(public.seller_contact_lead_attempt_limit('potential'), 4, 'lead potencial usa quatro tentativas');
 SELECT is(public.seller_contact_lead_attempt_limit('meeting_scheduled'), 1, 'reuniao agenda uma tarefa por ciclo');
@@ -40,7 +43,7 @@ CREATE TEMP TABLE _qualified_leads (
 ) ON COMMIT DROP;
 
 INSERT INTO _qualified_leads VALUES
-  ('cold', public.create_my_qualified_seller_contact_lead('Lead Frio Teste', '(11) 97777-1001', 'cold', 'Prefere contato no período da tarde.')),
+  ('cold', public.create_my_qualified_seller_contact_lead_with_notes('Lead Frio Teste', '(11) 97777-1001', 'cold', 'Prefere contato no período da tarde.')),
   ('potential', public.create_my_qualified_seller_contact_lead('Lead Potencial Teste', '(11) 97777-1002', 'potential')),
   ('meeting_scheduled', public.create_my_qualified_seller_contact_lead('Lead Reuniao Teste', '(11) 97777-1003', 'meeting_scheduled'));
 
