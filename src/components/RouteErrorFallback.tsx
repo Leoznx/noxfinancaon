@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Link } from "@tanstack/react-router";
 import { DashboardLayout } from "@/components/DashboardLayout";
 
-export function RouteErrorFallback({ error, reset, message }: { error: Error; reset: () => void; message?: string }) {
+export function RouteErrorFallback({ error, reset, message }: { error: unknown; reset: () => void; message?: string }) {
   console.error("[RouteError]", error);
   return (
     <DashboardLayout>
