@@ -6,8 +6,11 @@ import {
   appointmentMatchesFilter,
   appointmentWhatsAppMessage,
   buildAppointmentWhatsAppUrl,
+  DEPARTED_SELLER_LEAD_LABEL,
   formatSharedMeetingTitle,
   getAppointmentContact,
+  getVisibleAppointmentNotes,
+  hasDepartedSellerLeadLabel,
   sellerAgendaRange,
   type SellerAppointment,
 } from "../src/lib/seller-agenda";
@@ -74,34 +77,46 @@ test("consulta mensal inclui semanas adjacentes e usa fim exclusivo", () => {
 });
 
 test("detalhes priorizam nome e telefone informados na reunião compartilhada", () => {
-  const contact = getAppointmentContact(appointment({
-    contact_name: "Simone Ferreira",
-    contact_phone: "(11) 99999-8888",
-    lead_name: "Nome antigo",
-    lead_phone: "(11) 2222-3333",
-  }));
+  const contact = getAppointmentContact(
+    appointment({
+      contact_name: "Simone Ferreira",
+      contact_phone: "(11) 99999-8888",
+      lead_name: "Nome antigo",
+      lead_phone: "(11) 2222-3333",
+    }),
+  );
 
   assert.deepEqual(contact, {
     name: "Simone Ferreira",
+    email: null,
     phone: "(11) 99999-8888",
   });
 });
 
 test("detalhes usam os dados do lead quando a reunião não possui contato próprio", () => {
-  const contact = getAppointmentContact(appointment({
-    lead_name: "Cliente do lead",
-    lead_phone: "(47) 98888-7777",
-  }));
+  const contact = getAppointmentContact(
+    appointment({
+      lead_name: "Cliente do lead",
+      lead_phone: "(47) 98888-7777",
+    }),
+  );
 
   assert.deepEqual(contact, {
     name: "Cliente do lead",
+    email: null,
     phone: "(47) 98888-7777",
   });
 });
 
 test("título principal combina perfil e nome do cliente", () => {
-  assert.equal(formatSharedMeetingTitle("Corretor", "Simone Ferreira"), "Corretor — Simone Ferreira");
-  assert.equal(formatSharedMeetingTitle("Imobiliária", "Primmê Imóveis"), "Imobiliária — Primmê Imóveis");
+  assert.equal(
+    formatSharedMeetingTitle("Corretor", "Simone Ferreira"),
+    "Corretor — Simone Ferreira",
+  );
+  assert.equal(
+    formatSharedMeetingTitle("Imobiliária", "Primmê Imóveis"),
+    "Imobiliária — Primmê Imóveis",
+  );
 });
 
 test("follow-ups usam mensagens diferentes por etapa e personalizam o contato", () => {
@@ -129,4 +144,13 @@ test("follow-ups usam mensagens diferentes por etapa e personalizam o contato", 
 test("link do WhatsApp normaliza telefone brasileiro e codifica a mensagem", () => {
   const url = buildAppointmentWhatsAppUrl("(47) 99999-8888", "Olá, Simone!");
   assert.equal(url, "https://wa.me/5547999998888?text=Ol%C3%A1%2C%20Simone!");
+});
+
+test("lead transferido exibe o alerta separado das observações", () => {
+  const transferred = appointment({
+    notes: `Observação original\n${DEPARTED_SELLER_LEAD_LABEL}`,
+  });
+
+  assert.equal(hasDepartedSellerLeadLabel(transferred.notes), true);
+  assert.equal(getVisibleAppointmentNotes(transferred), "Observação original");
 });

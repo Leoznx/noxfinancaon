@@ -60,7 +60,7 @@ serve(async (req) => {
 
   const { data: employee, error: employeeError } = await admin
     .from("internal_users")
-    .select("id, auth_user_id, full_name, email, role, status")
+    .select("id, auth_user_id, full_name, email, role, status, seller_type")
     .eq("id", employeeId)
     .maybeSingle();
   if (employeeError)
@@ -77,6 +77,27 @@ serve(async (req) => {
       409,
     );
 
+  const { data: redistribution, error: redistributionError } = await admin.rpc(
+    "redistribute_departed_seller_workload",
+    { p_employee_id: employee.id },
+  );
+  if (redistributionError) {
+    console.error("[delete-nox-employee] workload redistribution", {
+      employeeId,
+      sellerType: employee.seller_type,
+      error: redistributionError.message,
+    });
+    return response(
+      {
+        ok: false,
+        error:
+          redistributionError.message ||
+          "Não foi possível redistribuir a agenda deste colaborador.",
+      },
+      409,
+    );
+  }
+
   await admin.from("internal_audit_logs").insert({
     actor_user_id: callerId,
     actor_role: String(callerProfile?.role ?? callerInternal?.role ?? "admin"),
@@ -89,8 +110,9 @@ serve(async (req) => {
       email: employee.email,
       role: employee.role,
       status: employee.status,
+      seller_type: employee.seller_type,
     },
-    after: null,
+    after: { redistribution },
   });
 
   // A exclusão lógica do Auth é irreversível e encerra o acesso, mas preserva
@@ -155,5 +177,6 @@ serve(async (req) => {
     deletedUserId: employee.auth_user_id,
     accessRemoved: true,
     recordsAnonymized: true,
+    redistribution,
   });
 });

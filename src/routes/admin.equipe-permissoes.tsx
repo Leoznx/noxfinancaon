@@ -254,14 +254,24 @@ export function TabColaboradores() {
     }
   };
   const excluirColaborador = async (employee: any) => {
+    const isSeller =
+      employee.role === "vendedor" && ["sdr", "closer"].includes(employee.seller_type);
+    const redistributionNotice = isSeller
+      ? `\n\nAntes do desligamento, todos os leads e compromissos comerciais ativos serão distribuídos, um por um, para outros ${employee.seller_type === "closer" ? "Closers" : "Vendedores"}. Os itens receberão o aviso vermelho “LEAD COLABORADOR QUE SAIU”.`
+      : "";
     const confirmed = window.confirm(
-      `Desativar e remover ${employee.full_name || employee.email} da equipe?\n\nO acesso será encerrado imediatamente e o cadastro sairá da lista de colaboradores. O histórico necessário para auditoria, comissões e operações será preservado sem os dados pessoais. Esta ação não pode ser desfeita.`,
+      `Desativar e remover ${employee.full_name || employee.email} da equipe?${redistributionNotice}\n\nO acesso será encerrado imediatamente e o cadastro sairá da lista de colaboradores. O histórico necessário para auditoria, comissões e operações será preservado sem os dados pessoais. Esta ação não pode ser desfeita.`,
     );
     if (!confirmed) return;
     setDeletingId(employee.id);
     try {
-      await deleteNoxEmployee(employee.id);
-      toast.success("Acesso desativado e colaborador removido da equipe.");
+      const result = await deleteNoxEmployee(employee.id);
+      const summary = result.redistribution;
+      toast.success(
+        summary?.eligible && summary.total_items > 0
+          ? `Acesso desativado. ${summary.total_items} item(ns) comercial(is) foram redistribuídos entre ${summary.recipient_count} colaborador(es).`
+          : "Acesso desativado e colaborador removido da equipe.",
+      );
       await carregar();
     } catch (error: any) {
       toast.error(error.message || "Não foi possível excluir o colaborador.");

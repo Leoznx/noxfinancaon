@@ -12,7 +12,16 @@ import {
 } from "@/lib/seller-control";
 
 export type AgendaViewMode = "calendario" | "lista";
-export type AgendaFilter = "todos" | "reuniao" | "follow_up" | "visita" | "call" | "retorno" | "outro" | "concluido" | "pendente";
+export type AgendaFilter =
+  | "todos"
+  | "reuniao"
+  | "follow_up"
+  | "visita"
+  | "call"
+  | "retorno"
+  | "outro"
+  | "concluido"
+  | "pendente";
 
 export type AgendaSummary = {
   today: number;
@@ -21,7 +30,8 @@ export type AgendaSummary = {
   scheduledMeetings: number;
 };
 
-export type FollowUpJourneyStatus = "registration_pending" | "no_consultations" | "consultation_in_progress" | "contract_closed";
+export type FollowUpJourneyStatus =
+  "registration_pending" | "no_consultations" | "consultation_in_progress" | "contract_closed";
 
 export type FollowUpJourney = {
   status: FollowUpJourneyStatus;
@@ -61,12 +71,7 @@ export type SellerAppointment = {
   reminder_minutes: number | null;
   notes: string | null;
   source:
-    | "manual"
-    | "admin"
-    | "lead_follow_up"
-    | "sdr_handoff"
-    | "meeting_follow_up"
-    | "rotating_lead";
+    "manual" | "admin" | "lead_follow_up" | "sdr_handoff" | "meeting_follow_up" | "rotating_lead";
   contact_lead_task_id: string | null;
   contact_lead_history: SellerContactLeadHistory[];
   contact_lead_cycle_number: number | null;
@@ -113,8 +118,25 @@ export const MEETING_CLIENT_PROFILES: readonly { value: MeetingClientProfile; la
   { value: "imobiliaria", label: "Imobiliária" },
 ];
 
+export const DEPARTED_SELLER_LEAD_LABEL = "LEAD COLABORADOR QUE SAIU";
+
+export function hasDepartedSellerLeadLabel(notes?: string | null) {
+  return String(notes ?? "")
+    .split(/\r?\n/)
+    .some((line) => line.trim().toLocaleUpperCase("pt-BR") === DEPARTED_SELLER_LEAD_LABEL);
+}
+
+export function withoutDepartedSellerLeadLabel(notes?: string | null) {
+  const visible = String(notes ?? "")
+    .split(/\r?\n/)
+    .filter((line) => line.trim().toLocaleUpperCase("pt-BR") !== DEPARTED_SELLER_LEAD_LABEL)
+    .join("\n")
+    .trim();
+  return visible || null;
+}
+
 export function getSharedMeetingMetadata(notes?: string | null): SharedMeetingMetadata {
-  const lines = String(notes ?? "")
+  const lines = String(withoutDepartedSellerLeadLabel(notes) ?? "")
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
@@ -123,37 +145,59 @@ export function getSharedMeetingMetadata(notes?: string | null): SharedMeetingMe
       .find((line) => line.toLocaleLowerCase("pt-BR").startsWith(prefix.toLocaleLowerCase("pt-BR")))
       ?.slice(prefix.length)
       .trim() || null;
-  const observationIndex = lines.findIndex((line) => line.toLocaleLowerCase("pt-BR").startsWith("observação:"));
+  const observationIndex = lines.findIndex((line) =>
+    line.toLocaleLowerCase("pt-BR").startsWith("observação:"),
+  );
   return {
     clientType: valueAfter("Tipo de cliente:"),
     sdrName: valueAfter("SDR responsável:"),
-    observation: observationIndex >= 0 ? [lines[observationIndex].slice("Observação:".length).trim(), ...lines.slice(observationIndex + 1)].filter(Boolean).join("\n") || null : null,
+    observation:
+      observationIndex >= 0
+        ? [
+            lines[observationIndex].slice("Observação:".length).trim(),
+            ...lines.slice(observationIndex + 1),
+          ]
+            .filter(Boolean)
+            .join("\n") || null
+        : null,
   };
 }
 
 export function getVisibleAppointmentNotes(item: Pick<SellerAppointment, "source" | "notes">) {
+  const notes = withoutDepartedSellerLeadLabel(item.notes);
   const metadata = getSharedMeetingMetadata(item.notes);
   if (item.source !== "sdr_handoff") {
-    if (!metadata.clientType) return item.notes;
-    return String(item.notes ?? "")
-      .split(/\r?\n/)
-      .filter((line) => !line.trim().toLocaleLowerCase("pt-BR").startsWith("tipo de cliente:"))
-      .join("\n")
-      .trim() || null;
+    if (!metadata.clientType) return notes;
+    return (
+      String(notes ?? "")
+        .split(/\r?\n/)
+        .filter((line) => !line.trim().toLocaleLowerCase("pt-BR").startsWith("tipo de cliente:"))
+        .join("\n")
+        .trim() || null
+    );
   }
-  return metadata.clientType || metadata.sdrName || metadata.observation ? metadata.observation : item.notes;
+  return metadata.clientType || metadata.sdrName || metadata.observation
+    ? metadata.observation
+    : notes;
 }
 
-export function getMeetingClientProfile(item: Pick<SellerAppointment, "notes" | "title">): MeetingClientProfile {
+export function getMeetingClientProfile(
+  item: Pick<SellerAppointment, "notes" | "title">,
+): MeetingClientProfile {
   const raw = getSharedMeetingMetadata(item.notes).clientType || item.title.split("—")[0] || "";
-  const normalized = raw.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
+  const normalized = raw
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("pt-BR");
   if (normalized.includes("imobili")) return "imobiliaria";
   if (normalized.includes("corret")) return "corretor";
   return "autonomo";
 }
 
 export function buildShortNameValueMap(names: Array<string | null>) {
-  const normalizedNames = [...new Set(names.filter(Boolean).map((name) => normalizePersonName(name!)))];
+  const normalizedNames = [
+    ...new Set(names.filter(Boolean).map((name) => normalizePersonName(name!))),
+  ];
   const firstNameCounts = new Map<string, number>();
   for (const name of normalizedNames) {
     const key = firstNameOnly(name).toLocaleLowerCase("pt-BR");
@@ -193,9 +237,20 @@ export type AppointmentDraft = {
   contact_phone: string | null;
 };
 
-export function isPersonalSellerReminder(item: Pick<SellerAppointment, "source" | "type" | "lead_id" | "partnership_id" | "sdr_id" | "assigned_closer_id">) {
-  return item.source === "manual" && item.type === "follow_up"
-    && !item.lead_id && !item.partnership_id && !item.sdr_id && !item.assigned_closer_id;
+export function isPersonalSellerReminder(
+  item: Pick<
+    SellerAppointment,
+    "source" | "type" | "lead_id" | "partnership_id" | "sdr_id" | "assigned_closer_id"
+  >,
+) {
+  return (
+    item.source === "manual" &&
+    item.type === "follow_up" &&
+    !item.lead_id &&
+    !item.partnership_id &&
+    !item.sdr_id &&
+    !item.assigned_closer_id
+  );
 }
 
 export const AGENDA_TYPES = [
@@ -233,7 +288,8 @@ export const AGENDA_FILTERS: Array<{ value: AgendaFilter; label: string }> = [
   { value: "pendente", label: "Pendente" },
 ];
 
-export const AGENDA_BUSINESS_HOURS_LABEL = "Segunda a quinta: 08:00–12:00 e 13:00–18:00. Sexta: 08:00–12:00 e 13:00–17:00.";
+export const AGENDA_BUSINESS_HOURS_LABEL =
+  "Segunda a quinta: 08:00–12:00 e 13:00–18:00. Sexta: 08:00–12:00 e 13:00–17:00.";
 
 const CANONICAL_TYPES = new Set(["reuniao", "follow_up", "visita", "call", "ligacao", "retorno"]);
 
@@ -264,31 +320,53 @@ export function appointmentMatchesFilter(item: SellerAppointment, filter: Agenda
 export function canRescheduleSellerMeeting(
   item: Pick<SellerAppointment, "type" | "status" | "source">,
 ) {
-  return item.type === "reuniao"
-    && item.source !== "meeting_follow_up"
-    && item.source !== "admin"
-    && !["concluido", "cancelado", "nao_compareceu"].includes(item.status);
+  return (
+    item.type === "reuniao" &&
+    item.source !== "meeting_follow_up" &&
+    item.source !== "admin" &&
+    !["concluido", "cancelado", "nao_compareceu"].includes(item.status)
+  );
 }
 
 export function canEditSellerMeetingContact(
   item: Pick<SellerAppointment, "type" | "source" | "seller_id" | "sdr_id">,
   sellerId: string | null,
 ) {
-  if (!sellerId || item.type !== "reuniao" || ["meeting_follow_up", "admin"].includes(item.source)) return false;
+  if (!sellerId || item.type !== "reuniao" || ["meeting_follow_up", "admin"].includes(item.source))
+    return false;
   const creatorId = item.source === "sdr_handoff" && item.sdr_id ? item.sdr_id : item.seller_id;
   return creatorId === sellerId;
 }
 
 function inferredContactNameFromTitle(title: string) {
-  const parts = title.split(/\s+[—–-]\s+/).map((part) => part.trim()).filter(Boolean);
+  const parts = title
+    .split(/\s+[—–-]\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
   if (parts.length < 2) return null;
   const candidate = parts.at(-1) ?? "";
   return /^(cliente|contato n[aã]o informado)$/i.test(candidate) ? null : candidate;
 }
 
-export function getAppointmentContact(item: Pick<SellerAppointment, "title" | "contact_name" | "contact_email" | "contact_phone" | "client_name" | "lead_name" | "lead_email" | "lead_phone">) {
+export function getAppointmentContact(
+  item: Pick<
+    SellerAppointment,
+    | "title"
+    | "contact_name"
+    | "contact_email"
+    | "contact_phone"
+    | "client_name"
+    | "lead_name"
+    | "lead_email"
+    | "lead_phone"
+  >,
+) {
   return {
-    name: item.contact_name || item.client_name || item.lead_name || inferredContactNameFromTitle(item.title),
+    name:
+      item.contact_name ||
+      item.client_name ||
+      item.lead_name ||
+      inferredContactNameFromTitle(item.title),
     email: item.contact_email || item.lead_email || null,
     phone: item.contact_phone || item.lead_phone || null,
   };
@@ -313,7 +391,10 @@ function clientsToOptions(clients: SellerClient[]): AgendaClientOption[] {
     email: client.partner_email,
     city: client.partner_city,
     type: client.partner_type,
-    searchText: [client.partner_name, client.partner_email, client.partner_city].filter(Boolean).join(" ").toLocaleLowerCase("pt-BR"),
+    searchText: [client.partner_name, client.partner_email, client.partner_city]
+      .filter(Boolean)
+      .join(" ")
+      .toLocaleLowerCase("pt-BR"),
   }));
 }
 
@@ -330,7 +411,9 @@ export async function fetchSellerAgenda(
   const [appointmentsResult, leadsResult, sellerClients, contactLeads] = await Promise.all([
     supabase
       .from("seller_appointments" as any)
-      .select("id, seller_id, sdr_id, assigned_closer_id, lead_id, partnership_id, title, type, status, priority, scheduled_at, reminder_minutes, notes, source, contact_lead_task_id, completed_at, actual_duration_minutes, duration_minutes, contact_name, contact_email, contact_phone, origin_appointment_id, follow_up_offset_days, follow_up_owner_type, follow_up_message_key, meeting_feedback, feedback_submitted_at, tracked_profile_id, visible_from, created_at, updated_at, sales_leads(full_name, email, phone)")
+      .select(
+        "id, seller_id, sdr_id, assigned_closer_id, lead_id, partnership_id, title, type, status, priority, scheduled_at, reminder_minutes, notes, source, contact_lead_task_id, completed_at, actual_duration_minutes, duration_minutes, contact_name, contact_email, contact_phone, origin_appointment_id, follow_up_offset_days, follow_up_owner_type, follow_up_message_key, meeting_feedback, feedback_submitted_at, tracked_profile_id, visible_from, created_at, updated_at, sales_leads(full_name, email, phone)",
+      )
       .or(`seller_id.eq.${sellerId},sdr_id.eq.${sellerId},assigned_closer_id.eq.${sellerId}`)
       .gte("scheduled_at", start.toISOString())
       .lt("scheduled_at", end.toISOString())
@@ -353,10 +436,15 @@ export async function fetchSellerAgenda(
     contactLeads.map((lead) => [normalizeBrazilianPhone(lead.phone), lead]),
   );
   const appointmentRows = (appointmentsResult.data as any[]) ?? [];
-  const journeyAppointmentIds = appointmentRows.filter((row) => row.source === "meeting_follow_up").map((row) => String(row.id));
+  const journeyAppointmentIds = appointmentRows
+    .filter((row) => row.source === "meeting_follow_up")
+    .map((row) => String(row.id));
   const journeyByAppointment = new Map<string, FollowUpJourney>();
   if (journeyAppointmentIds.length > 0) {
-    const { data: journeyRows, error: journeyError } = await (supabase as any).rpc("get_my_follow_up_journeys", { p_appointment_ids: journeyAppointmentIds });
+    const { data: journeyRows, error: journeyError } = await (supabase as any).rpc(
+      "get_my_follow_up_journeys",
+      { p_appointment_ids: journeyAppointmentIds },
+    );
     if (journeyError) throw journeyError;
     for (const row of (journeyRows as any[] | null) ?? []) {
       journeyByAppointment.set(String(row.appointment_id), {
@@ -374,39 +462,43 @@ export async function fetchSellerAgenda(
         row.source === "rotating_lead"
           ? contactLeadsByPhone.get(normalizeBrazilianPhone(String(row.contact_phone ?? "")))
           : undefined;
-      return ({
-      ...row,
-      partnership_id: row.partnership_id ?? null,
-      source: row.source ?? "manual",
-      contact_lead_task_id: row.contact_lead_task_id ?? null,
-      contact_lead_history: rotatingLead?.history ?? [],
-      contact_lead_cycle_number: rotatingLead?.cycle_number ?? null,
-      contact_lead_category: rotatingLead?.category ?? null,
-      contact_lead_category_label: rotatingLead?.category_label ?? null,
-      contact_lead_follow_up_limit: rotatingLead?.follow_up_limit ?? null,
-      contact_lead_rotation_locked: rotatingLead?.rotation_locked ?? false,
-      completed_at: row.completed_at ?? null,
-      actual_duration_minutes: row.actual_duration_minutes == null ? null : Number(row.actual_duration_minutes),
-      sdr_id: row.sdr_id ?? null,
-      assigned_closer_id: row.assigned_closer_id ?? null,
-      duration_minutes: Number(row.duration_minutes ?? SHARED_MEETING_DURATION_MINUTES),
-      contact_name: row.contact_name ?? rotatingLead?.name ?? null,
-      contact_email: row.contact_email ?? null,
-      contact_phone: row.contact_phone ?? rotatingLead?.phone ?? null,
-      origin_appointment_id: row.origin_appointment_id ?? null,
-      follow_up_offset_days: row.follow_up_offset_days ?? null,
-      follow_up_owner_type: row.follow_up_owner_type ?? null,
-      follow_up_message_key: row.follow_up_message_key ?? null,
-      meeting_feedback: row.meeting_feedback ?? null,
-      feedback_submitted_at: row.feedback_submitted_at ?? null,
-      tracked_profile_id: row.tracked_profile_id ?? null,
-      visible_from: row.visible_from ?? null,
-      journey: journeyByAppointment.get(String(row.id)) ?? null,
-      lead_name: row.sales_leads?.full_name ?? null,
-      lead_email: row.sales_leads?.email ?? null,
-      lead_phone: row.sales_leads?.phone ?? null,
-      client_name: row.partnership_id ? (clientsById.get(row.partnership_id)?.name ?? null) : null,
-    }); })
+      return {
+        ...row,
+        partnership_id: row.partnership_id ?? null,
+        source: row.source ?? "manual",
+        contact_lead_task_id: row.contact_lead_task_id ?? null,
+        contact_lead_history: rotatingLead?.history ?? [],
+        contact_lead_cycle_number: rotatingLead?.cycle_number ?? null,
+        contact_lead_category: rotatingLead?.category ?? null,
+        contact_lead_category_label: rotatingLead?.category_label ?? null,
+        contact_lead_follow_up_limit: rotatingLead?.follow_up_limit ?? null,
+        contact_lead_rotation_locked: rotatingLead?.rotation_locked ?? false,
+        completed_at: row.completed_at ?? null,
+        actual_duration_minutes:
+          row.actual_duration_minutes == null ? null : Number(row.actual_duration_minutes),
+        sdr_id: row.sdr_id ?? null,
+        assigned_closer_id: row.assigned_closer_id ?? null,
+        duration_minutes: Number(row.duration_minutes ?? SHARED_MEETING_DURATION_MINUTES),
+        contact_name: row.contact_name ?? rotatingLead?.name ?? null,
+        contact_email: row.contact_email ?? null,
+        contact_phone: row.contact_phone ?? rotatingLead?.phone ?? null,
+        origin_appointment_id: row.origin_appointment_id ?? null,
+        follow_up_offset_days: row.follow_up_offset_days ?? null,
+        follow_up_owner_type: row.follow_up_owner_type ?? null,
+        follow_up_message_key: row.follow_up_message_key ?? null,
+        meeting_feedback: row.meeting_feedback ?? null,
+        feedback_submitted_at: row.feedback_submitted_at ?? null,
+        tracked_profile_id: row.tracked_profile_id ?? null,
+        visible_from: row.visible_from ?? null,
+        journey: journeyByAppointment.get(String(row.id)) ?? null,
+        lead_name: row.sales_leads?.full_name ?? null,
+        lead_email: row.sales_leads?.email ?? null,
+        lead_phone: row.sales_leads?.phone ?? null,
+        client_name: row.partnership_id
+          ? (clientsById.get(row.partnership_id)?.name ?? null)
+          : null,
+      };
+    })
     .filter((item) => !item.visible_from || new Date(item.visible_from).getTime() <= Date.now());
 
   const now = new Date();
@@ -427,8 +519,12 @@ export async function fetchSellerAgenda(
         const date = new Date(item.scheduled_at);
         return date >= weekStart && date < weekEnd;
       }).length,
-      pendingFollowups: active.filter((item) => item.type === "follow_up" && !["concluido", "cancelado"].includes(item.status)).length,
-      scheduledMeetings: active.filter((item) => item.type === "reuniao" && !["concluido", "cancelado"].includes(item.status)).length,
+      pendingFollowups: active.filter(
+        (item) => item.type === "follow_up" && !["concluido", "cancelado"].includes(item.status),
+      ).length,
+      scheduledMeetings: active.filter(
+        (item) => item.type === "reuniao" && !["concluido", "cancelado"].includes(item.status),
+      ).length,
     },
     leads: ((leadsResult.data as any[]) ?? []) as AgendaLeadOption[],
     clients,
@@ -436,7 +532,10 @@ export async function fetchSellerAgenda(
 }
 
 export async function saveSellerAppointment(sellerId: string, draft: AppointmentDraft) {
-  if (draft.personalReminder && (draft.type !== "follow_up" || draft.lead_id || draft.partnership_id)) {
+  if (
+    draft.personalReminder &&
+    (draft.type !== "follow_up" || draft.lead_id || draft.partnership_id)
+  ) {
     throw new Error("O lembrete pessoal deve ser um follow-up sem destinatários ou vínculos.");
   }
   const payload = {
@@ -504,31 +603,54 @@ export async function updateSellerMeetingContact(input: {
 }
 
 const FOLLOW_UP_MESSAGES: Record<string, string> = {
-  cadence_1d: "Foi muito bom conversar com você. Ficou alguma dúvida sobre a parceria com a NOX Fiança?",
+  cadence_1d:
+    "Foi muito bom conversar com você. Ficou alguma dúvida sobre a parceria com a NOX Fiança?",
   cadence_4d: "Conseguiu avançar no cadastro? Estou à disposição para ajudar em qualquer etapa.",
   cadence_15d: "Como está o uso da plataforma NOX Fiança? Se precisar, estou por aqui para ajudar.",
-  cadence_30d: "Passando para saber como está a parceria com a NOX Fiança e se posso apoiar em algo.",
-  closer_24h: "Foi muito bom conversar com você. Ficou alguma dúvida sobre a parceria com a NOX Fiança?",
+  cadence_30d:
+    "Passando para saber como está a parceria com a NOX Fiança e se posso apoiar em algo.",
+  closer_24h:
+    "Foi muito bom conversar com você. Ficou alguma dúvida sobre a parceria com a NOX Fiança?",
   closer_3d: "Conseguiu avançar no cadastro? Estou à disposição para ajudar em qualquer etapa.",
   sdr_48h: "Como foi a conversa com nosso Closer? Posso ajudar em alguma dúvida sobre a parceria?",
   sdr_5d: "Como está o uso da plataforma NOX Fiança? Se precisar, estou por aqui para ajudar.",
 };
 
-const RECURRING_MESSAGES = ["Como está o uso da plataforma NOX Fiança? Ficou alguma dúvida em que eu possa ajudar?", "Passando para saber como está a parceria com a NOX Fiança e se posso apoiar em algo.", "Tudo bem por aí? Quero saber se a plataforma está atendendo bem e se existe alguma dúvida."];
+const RECURRING_MESSAGES = [
+  "Como está o uso da plataforma NOX Fiança? Ficou alguma dúvida em que eu possa ajudar?",
+  "Passando para saber como está a parceria com a NOX Fiança e se posso apoiar em algo.",
+  "Tudo bem por aí? Quero saber se a plataforma está atendendo bem e se existe alguma dúvida.",
+];
 
 function whatsappGreeting(name: string | null) {
   const normalized = name?.trim();
   return normalized ? `Olá, ${normalized}!` : "Olá!";
 }
 
-export function appointmentWhatsAppMessage(item: Pick<SellerAppointment, "contact_name" | "client_name" | "lead_name" | "follow_up_message_key" | "follow_up_offset_days">) {
+export function appointmentWhatsAppMessage(
+  item: Pick<
+    SellerAppointment,
+    "contact_name" | "client_name" | "lead_name" | "follow_up_message_key" | "follow_up_offset_days"
+  >,
+) {
   const name = item.contact_name || item.client_name || item.lead_name || null;
   const key = item.follow_up_message_key ?? "";
-  const body = FOLLOW_UP_MESSAGES[key] ?? (key === "sdr_27d" ? RECURRING_MESSAGES[Math.max(0, Math.floor((item.follow_up_offset_days ?? 27) / 27) - 1) % RECURRING_MESSAGES.length] : "Como você está? Posso ajudar em alguma dúvida sobre a NOX Fiança?");
+  const body =
+    FOLLOW_UP_MESSAGES[key] ??
+    (key === "sdr_27d"
+      ? RECURRING_MESSAGES[
+          Math.max(0, Math.floor((item.follow_up_offset_days ?? 27) / 27) - 1) %
+            RECURRING_MESSAGES.length
+        ]
+      : "Como você está? Posso ajudar em alguma dúvida sobre a NOX Fiança?");
   return `${whatsappGreeting(name)} ${body}`;
 }
 
-export function registrationWhatsAppMessage(item: Pick<SellerAppointment, "contact_name" | "client_name" | "lead_name">, roleLabel: string, url: string) {
+export function registrationWhatsAppMessage(
+  item: Pick<SellerAppointment, "contact_name" | "client_name" | "lead_name">,
+  roleLabel: string,
+  url: string,
+) {
   const name = item.contact_name || item.client_name || item.lead_name || null;
   return `${whatsappGreeting(name)} Para avançarmos, faça o cadastro de ${roleLabel} na NOX Fiança por este link exclusivo: ${url}`;
 }
@@ -571,7 +693,8 @@ export async function fetchCloserAvailability(fromDate: Date, days = 14) {
     p_days: days,
     p_duration_minutes: SHARED_MEETING_DURATION_MINUTES,
   });
-  if (error) throw new Error(error.message || "Não foi possível consultar os horários disponíveis.");
+  if (error)
+    throw new Error(error.message || "Não foi possível consultar os horários disponíveis.");
   return ((data as any[]) ?? []) as CloserAvailabilitySlot[];
 }
 
@@ -582,7 +705,14 @@ function formatLocalDate(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
-export async function scheduleSdrCloserMeeting(input: { slotStart: string; title: string; contactName: string; contactEmail?: string; contactPhone?: string; notes?: string }) {
+export async function scheduleSdrCloserMeeting(input: {
+  slotStart: string;
+  title: string;
+  contactName: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  notes?: string;
+}) {
   const { data, error } = await supabase.rpc("schedule_sdr_closer_meeting" as any, {
     p_slot_start: input.slotStart,
     p_title: input.title,
@@ -594,7 +724,8 @@ export async function scheduleSdrCloserMeeting(input: { slotStart: string; title
   });
   if (error) throw new Error(error.message || "Não foi possível agendar a reunião.");
   const meeting = (Array.isArray(data) ? data[0] : data) as ScheduledSharedMeeting | null;
-  if (!meeting?.id || !meeting.closer_id) throw new Error("O agendamento não retornou a reunião criada.");
+  if (!meeting?.id || !meeting.closer_id)
+    throw new Error("O agendamento não retornou a reunião criada.");
   return meeting;
 }
 
@@ -602,17 +733,14 @@ export async function rescheduleSharedMeeting(appointmentId: string, slotStart: 
   await rescheduleSellerMeeting(appointmentId, slotStart);
 }
 
-export async function fetchMeetingRescheduleSlots(
-  appointmentId: string,
-  fromDate: Date,
-  days = 1,
-) {
+export async function fetchMeetingRescheduleSlots(appointmentId: string, fromDate: Date, days = 1) {
   const { data, error } = await supabase.rpc("get_available_meeting_reschedule_slots" as any, {
     p_appointment_id: appointmentId,
     p_from_date: formatLocalDate(fromDate),
     p_days: days,
   });
-  if (error) throw new Error(error.message || "Não foi possível consultar os horários para reagendamento.");
+  if (error)
+    throw new Error(error.message || "Não foi possível consultar os horários para reagendamento.");
   return ((data as any[]) ?? []) as CloserAvailabilitySlot[];
 }
 

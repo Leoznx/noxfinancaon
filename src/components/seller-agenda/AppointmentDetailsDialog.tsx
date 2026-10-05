@@ -1,19 +1,60 @@
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useEffect, useState } from "react";
-import { Activity, Bell, Building2, CalendarClock, CalendarDays, Check, CheckCircle2, Clock3, Edit3, MessageCircle, MessageSquareText, Phone, Search, Trash2, UserRound } from "lucide-react";
+import {
+  Activity,
+  Bell,
+  Building2,
+  CalendarClock,
+  CalendarDays,
+  Check,
+  CheckCircle2,
+  Clock3,
+  Edit3,
+  MessageCircle,
+  MessageSquareText,
+  Phone,
+  Search,
+  Trash2,
+  UserRound,
+} from "lucide-react";
 import { MeetingSignupLinks } from "@/components/seller-agenda/MeetingSignupLinks";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { AGENDA_REMINDERS, agendaStatusLabel, agendaTypeLabel, appointmentWhatsAppMessage, buildAppointmentWhatsAppUrl, canRescheduleSellerMeeting, getAppointmentContact, getSharedMeetingMetadata, getVisibleAppointmentNotes, isPersonalSellerReminder, type SellerAppointment } from "@/lib/seller-agenda";
-import { SELLER_LEAD_NEXT_STEPS, type SellerLeadNextStep, type SellerLeadOutcome } from "@/lib/seller-control";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  AGENDA_REMINDERS,
+  agendaStatusLabel,
+  agendaTypeLabel,
+  appointmentWhatsAppMessage,
+  buildAppointmentWhatsAppUrl,
+  canRescheduleSellerMeeting,
+  DEPARTED_SELLER_LEAD_LABEL,
+  getAppointmentContact,
+  getSharedMeetingMetadata,
+  getVisibleAppointmentNotes,
+  hasDepartedSellerLeadLabel,
+  isPersonalSellerReminder,
+  type SellerAppointment,
+} from "@/lib/seller-agenda";
+import {
+  SELLER_LEAD_NEXT_STEPS,
+  type SellerLeadNextStep,
+  type SellerLeadOutcome,
+} from "@/lib/seller-control";
 import { formatBrazilianPhoneInput, normalizeBrazilianPhone } from "@/lib/seller-clients";
 
 const JOURNEY_COPY = {
   registration_pending: {
     label: "Cadastro ainda não concluído",
-    detail: "O link foi enviado pela reunião. A jornada começa assim que o cliente concluir o cadastro.",
+    detail:
+      "O link foi enviado pela reunião. A jornada começa assim que o cliente concluir o cadastro.",
     className: "border-neutral-200 bg-neutral-50 text-neutral-700",
     icon: Activity,
   },
@@ -57,7 +98,12 @@ export function AppointmentDetailsDialog({
   onReschedule: (item: SellerAppointment) => void;
   onComplete: (item: SellerAppointment) => void;
   onDelete: (item: SellerAppointment) => void;
-  onLeadOutcome?: (item: SellerAppointment, outcome: SellerLeadOutcome, nextStep: SellerLeadNextStep, notes: string) => void;
+  onLeadOutcome?: (
+    item: SellerAppointment,
+    outcome: SellerLeadOutcome,
+    nextStep: SellerLeadNextStep,
+    notes: string,
+  ) => void;
   canEdit?: boolean;
   canManageCloserMeeting?: boolean;
   canComplete?: boolean;
@@ -65,32 +111,46 @@ export function AppointmentDetailsDialog({
   const [leadOutcome, setLeadOutcome] = useState<SellerLeadOutcome | null>(null);
   const [leadNextStep, setLeadNextStep] = useState<SellerLeadNextStep | null>(null);
   const [leadNotes, setLeadNotes] = useState("");
-  useEffect(() => { setLeadOutcome(null); setLeadNextStep(null); setLeadNotes(""); }, [item?.id]);
+  useEffect(() => {
+    setLeadOutcome(null);
+    setLeadNextStep(null);
+    setLeadNotes("");
+  }, [item?.id]);
   if (!item) return null;
   const contact = getAppointmentContact(item);
   const contactPhoneDigits = contact.phone ? normalizeBrazilianPhone(contact.phone) : "";
   const contactPhoneDisplay = contact.phone ? formatBrazilianPhoneInput(contact.phone) : null;
   const showContact = !isPersonalSellerReminder(item) && item.source !== "admin";
-  const reminder = AGENDA_REMINDERS.find((option) => option.value === item.reminder_minutes)?.label ?? "Sem lembrete";
+  const reminder =
+    AGENDA_REMINDERS.find((option) => option.value === item.reminder_minutes)?.label ??
+    "Sem lembrete";
   const metadata = getSharedMeetingMetadata(item.notes);
   const visibleNotes = getVisibleAppointmentNotes(item);
+  const departedSellerLead = hasDepartedSellerLeadLabel(item.notes);
   const sdrName = metadata.sdrName
-    ? sdrNames?.get(metadata.sdrName) ?? metadata.sdrName.trim().split(/\s+/)[0]
+    ? (sdrNames?.get(metadata.sdrName) ?? metadata.sdrName.trim().split(/\s+/)[0])
     : null;
-  const followUpWhatsAppUrl = item.source === "meeting_follow_up" && contact.phone
-    ? buildAppointmentWhatsAppUrl(contact.phone, appointmentWhatsAppMessage(item))
-    : null;
-  const journey = item.source === "meeting_follow_up" && item.journey
-    ? JOURNEY_COPY[item.journey.status]
-    : null;
+  const followUpWhatsAppUrl =
+    item.source === "meeting_follow_up" && contact.phone
+      ? buildAppointmentWhatsAppUrl(contact.phone, appointmentWhatsAppMessage(item))
+      : null;
+  const journey =
+    item.source === "meeting_follow_up" && item.journey ? JOURNEY_COPY[item.journey.status] : null;
   const JourneyIcon = journey?.icon;
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <div className="mb-2 flex flex-wrap gap-2">
+            {departedSellerLead && (
+              <Badge className="border border-red-200 bg-red-50 text-red-700 hover:bg-red-50">
+                {DEPARTED_SELLER_LEAD_LABEL}
+              </Badge>
+            )}
             {item.source === "rotating_lead" && (
-              <Badge className="bg-violet-600 text-white hover:bg-violet-600">{item.contact_lead_category_label?.toLocaleUpperCase("pt-BR") ?? "LEAD NOVO"}</Badge>
+              <Badge className="bg-violet-600 text-white hover:bg-violet-600">
+                {item.contact_lead_category_label?.toLocaleUpperCase("pt-BR") ?? "LEAD NOVO"}
+              </Badge>
             )}
             <Badge className="bg-neutral-950 text-white">{agendaTypeLabel(item.type)}</Badge>
             <Badge variant="outline">{agendaStatusLabel(item.status)}</Badge>
@@ -99,28 +159,91 @@ export function AppointmentDetailsDialog({
         </DialogHeader>
         <div className="space-y-3 py-2 text-sm">
           <div className="grid gap-3 rounded-xl bg-neutral-50 p-4 sm:grid-cols-2">
-            <p className="flex items-center gap-2 font-semibold text-neutral-700"><CalendarDays className="h-4 w-4 text-yellow-700" /> {format(new Date(item.scheduled_at), "dd/MM/yyyy")}</p>
-            <p className="flex items-center gap-2 font-semibold text-neutral-700"><Clock3 className="h-4 w-4 text-yellow-700" /> {format(new Date(item.scheduled_at), "HH:mm")}</p>
-            <p className="flex items-center gap-2 font-semibold capitalize text-neutral-700 sm:col-span-2"><CalendarDays className="h-4 w-4 text-yellow-700" /> {format(new Date(item.scheduled_at), "EEEE, d 'de' MMMM", { locale: ptBR })}</p>
-            <p className="flex items-center gap-2 font-semibold text-neutral-700 sm:col-span-2"><Bell className="h-4 w-4 text-yellow-700" /> {reminder}</p>
+            <p className="flex items-center gap-2 font-semibold text-neutral-700">
+              <CalendarDays className="h-4 w-4 text-yellow-700" />{" "}
+              {format(new Date(item.scheduled_at), "dd/MM/yyyy")}
+            </p>
+            <p className="flex items-center gap-2 font-semibold text-neutral-700">
+              <Clock3 className="h-4 w-4 text-yellow-700" />{" "}
+              {format(new Date(item.scheduled_at), "HH:mm")}
+            </p>
+            <p className="flex items-center gap-2 font-semibold capitalize text-neutral-700 sm:col-span-2">
+              <CalendarDays className="h-4 w-4 text-yellow-700" />{" "}
+              {format(new Date(item.scheduled_at), "EEEE, d 'de' MMMM", { locale: ptBR })}
+            </p>
+            <p className="flex items-center gap-2 font-semibold text-neutral-700 sm:col-span-2">
+              <Bell className="h-4 w-4 text-yellow-700" /> {reminder}
+            </p>
           </div>
           {showContact && (
             <div className="rounded-xl border border-neutral-200 p-3">
-              <p className="mb-3 text-[10px] font-black uppercase tracking-[0.14em] text-neutral-400">Dados da pessoa</p>
+              <p className="mb-3 text-[10px] font-black uppercase tracking-[0.14em] text-neutral-400">
+                Dados da pessoa
+              </p>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="flex items-center gap-2.5 text-neutral-800">
-                  {item.client_name && !item.contact_name ? <Building2 className="h-4 w-4 shrink-0 text-neutral-400" /> : <UserRound className="h-4 w-4 shrink-0 text-neutral-400" />}
-                  <div className="min-w-0"><p className="text-[10px] font-black uppercase tracking-wider text-neutral-400">Nome</p><p className="truncate font-bold">{contact.name ?? "Não informado"}</p></div>
+                  {item.client_name && !item.contact_name ? (
+                    <Building2 className="h-4 w-4 shrink-0 text-neutral-400" />
+                  ) : (
+                    <UserRound className="h-4 w-4 shrink-0 text-neutral-400" />
+                  )}
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-neutral-400">
+                      Nome
+                    </p>
+                    <p className="truncate font-bold">{contact.name ?? "Não informado"}</p>
+                  </div>
                 </div>
-                {contactPhoneDisplay ? <a className="flex items-center gap-2.5 rounded-lg text-neutral-800 transition hover:text-neutral-950" href={`tel:+55${contactPhoneDigits}`} aria-label={`Ligar para ${contactPhoneDisplay}`}>
-                  <Phone className="h-4 w-4 shrink-0 text-neutral-400" />
-                  <div><p className="text-[10px] font-black uppercase tracking-wider text-neutral-400">Telefone</p><p className="font-bold">{contactPhoneDisplay}</p></div>
-                </a> : <div className="flex items-center gap-2.5 text-neutral-500"><Phone className="h-4 w-4 shrink-0 text-neutral-300" /><div><p className="text-[10px] font-black uppercase tracking-wider text-neutral-400">Telefone</p><p className="font-semibold">Não informado</p></div></div>}
-                {contact.email && <div className="min-w-0 sm:col-span-2"><p className="text-[10px] font-black uppercase tracking-wider text-neutral-400">E-mail</p><p className="truncate font-semibold text-neutral-700">{contact.email}</p></div>}
+                {contactPhoneDisplay ? (
+                  <a
+                    className="flex items-center gap-2.5 rounded-lg text-neutral-800 transition hover:text-neutral-950"
+                    href={`tel:+55${contactPhoneDigits}`}
+                    aria-label={`Ligar para ${contactPhoneDisplay}`}
+                  >
+                    <Phone className="h-4 w-4 shrink-0 text-neutral-400" />
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-wider text-neutral-400">
+                        Telefone
+                      </p>
+                      <p className="font-bold">{contactPhoneDisplay}</p>
+                    </div>
+                  </a>
+                ) : (
+                  <div className="flex items-center gap-2.5 text-neutral-500">
+                    <Phone className="h-4 w-4 shrink-0 text-neutral-300" />
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-wider text-neutral-400">
+                        Telefone
+                      </p>
+                      <p className="font-semibold">Não informado</p>
+                    </div>
+                  </div>
+                )}
+                {contact.email && (
+                  <div className="min-w-0 sm:col-span-2">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-neutral-400">
+                      E-mail
+                    </p>
+                    <p className="truncate font-semibold text-neutral-700">{contact.email}</p>
+                  </div>
+                )}
               </div>
             </div>
           )}
-          {item.type === "reuniao" && (metadata.clientType || sdrName) && <div className="grid gap-2 rounded-xl border border-yellow-200 bg-yellow-50 p-3 text-xs font-semibold text-neutral-700 sm:grid-cols-2">{metadata.clientType && <p><span className="text-neutral-500">Perfil:</span> {metadata.clientType}</p>}{sdrName && <p><span className="text-neutral-500">Vendedor:</span> {sdrName}</p>}</div>}
+          {item.type === "reuniao" && (metadata.clientType || sdrName) && (
+            <div className="grid gap-2 rounded-xl border border-yellow-200 bg-yellow-50 p-3 text-xs font-semibold text-neutral-700 sm:grid-cols-2">
+              {metadata.clientType && (
+                <p>
+                  <span className="text-neutral-500">Perfil:</span> {metadata.clientType}
+                </p>
+              )}
+              {sdrName && (
+                <p>
+                  <span className="text-neutral-500">Vendedor:</span> {sdrName}
+                </p>
+              )}
+            </div>
+          )}
           {journey && JourneyIcon && (
             <div className={`rounded-xl border p-3 ${journey.className}`}>
               <p className="flex items-center gap-2 text-xs font-black uppercase tracking-wide">
@@ -130,47 +253,125 @@ export function AppointmentDetailsDialog({
               <p className="mt-1 text-xs leading-relaxed opacity-80">{journey.detail}</p>
               {item.journey && item.journey.consultationCount > 0 && (
                 <p className="mt-2 text-[11px] font-bold">
-                  {item.journey.consultationCount} consulta(s) · {item.journey.contractCount} contrato(s)
+                  {item.journey.consultationCount} consulta(s) · {item.journey.contractCount}{" "}
+                  contrato(s)
                 </p>
               )}
             </div>
           )}
           {item.source === "meeting_follow_up" && item.status !== "concluido" && (
             <div className="rounded-xl border border-yellow-300 bg-yellow-50 p-3 text-xs font-bold text-yellow-900">
-              Conclusão obrigatória: este follow-up automático não pode ser editado, cancelado ou excluído.
+              Conclusão obrigatória: este follow-up automático não pode ser editado, cancelado ou
+              excluído.
             </div>
           )}
           {item.source === "admin" && item.status !== "cancelado" && (
             <div className="rounded-xl border border-yellow-300 bg-yellow-50 p-3 text-xs font-bold text-yellow-900">
-              Reunião definida pela administração. O horário e a pauta são somente leitura e não podem ser reagendados ou excluídos.
+              Reunião definida pela administração. O horário e a pauta são somente leitura e não
+              podem ser reagendados ou excluídos.
             </div>
           )}
           {item.source === "rotating_lead" && (
             <div className="rounded-xl border border-violet-200 bg-violet-50 p-3 text-xs text-violet-950">
-              <p className="font-black">{item.contact_lead_category_label ?? "Lembrete inteligente"} · ciclo {item.contact_lead_cycle_number ?? 1}</p>
-              <p className="mt-1 leading-relaxed text-violet-800">
-                Este follow-up não ocupa horário. Registre o resultado e escolha obrigatoriamente o próximo passo para a automação continuar.
+              <p className="font-black">
+                {item.contact_lead_category_label ?? "Lembrete inteligente"} · ciclo{" "}
+                {item.contact_lead_cycle_number ?? 1}
               </p>
-              <p className="mt-2 font-bold text-violet-900">{item.contact_lead_rotation_locked ? "Responsável fixo: este lead não gira entre vendedores." : `Cadência atual: até ${item.contact_lead_follow_up_limit ?? 2} contato(s) antes da rotação.`}</p>
+              <p className="mt-1 leading-relaxed text-violet-800">
+                Este follow-up não ocupa horário. Registre o resultado e escolha obrigatoriamente o
+                próximo passo para a automação continuar.
+              </p>
+              <p className="mt-2 font-bold text-violet-900">
+                {item.contact_lead_rotation_locked
+                  ? "Responsável fixo: este lead não gira entre vendedores."
+                  : `Cadência atual: até ${item.contact_lead_follow_up_limit ?? 2} contato(s) antes da rotação.`}
+              </p>
             </div>
           )}
-          {item.source === "rotating_lead" && onLeadOutcome && leadOutcome && !["concluido", "cancelado"].includes(item.status) && (
-            <div className="space-y-3 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
-              <div><p className="text-xs font-black uppercase tracking-[.12em] text-neutral-500">Resultado: {leadOutcome === "em_contato" ? "Em contato" : "Sem retorno"}</p><p className="mt-1 text-sm font-black text-neutral-950">Qual é o próximo passo?</p></div>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {SELLER_LEAD_NEXT_STEPS.map((step) => <button key={step.value} type="button" onClick={() => setLeadNextStep(step.value)} className={`rounded-xl border p-3 text-left transition ${leadNextStep === step.value ? "border-violet-500 bg-violet-50 ring-2 ring-violet-100" : "border-neutral-200 hover:bg-neutral-50"}`}><strong className="block text-xs font-black">{step.label}</strong><span className="mt-1 block text-[11px] leading-4 text-neutral-500">{step.description}</span></button>)}
+          {item.source === "rotating_lead" &&
+            onLeadOutcome &&
+            leadOutcome &&
+            !["concluido", "cancelado"].includes(item.status) && (
+              <div className="space-y-3 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[.12em] text-neutral-500">
+                    Resultado: {leadOutcome === "em_contato" ? "Em contato" : "Sem retorno"}
+                  </p>
+                  <p className="mt-1 text-sm font-black text-neutral-950">
+                    Qual é o próximo passo?
+                  </p>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {SELLER_LEAD_NEXT_STEPS.map((step) => (
+                    <button
+                      key={step.value}
+                      type="button"
+                      onClick={() => setLeadNextStep(step.value)}
+                      className={`rounded-xl border p-3 text-left transition ${leadNextStep === step.value ? "border-violet-500 bg-violet-50 ring-2 ring-violet-100" : "border-neutral-200 hover:bg-neutral-50"}`}
+                    >
+                      <strong className="block text-xs font-black">{step.label}</strong>
+                      <span className="mt-1 block text-[11px] leading-4 text-neutral-500">
+                        {step.description}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                <textarea
+                  value={leadNotes}
+                  onChange={(event) => setLeadNotes(event.target.value)}
+                  rows={3}
+                  maxLength={500}
+                  placeholder="Observação do contato (opcional)"
+                  className="w-full resize-none rounded-xl border border-neutral-200 px-3 py-2 text-sm outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
+                />
+                <div className="flex flex-wrap justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setLeadOutcome(null);
+                      setLeadNextStep(null);
+                    }}
+                  >
+                    Voltar
+                  </Button>
+                  <Button
+                    type="button"
+                    disabled={!leadNextStep}
+                    className="bg-violet-600 font-black text-white hover:bg-violet-700"
+                    onClick={() =>
+                      leadNextStep && onLeadOutcome(item, leadOutcome, leadNextStep, leadNotes)
+                    }
+                  >
+                    Confirmar próximo passo
+                  </Button>
+                </div>
               </div>
-              <textarea value={leadNotes} onChange={(event) => setLeadNotes(event.target.value)} rows={3} maxLength={500} placeholder="Observação do contato (opcional)" className="w-full resize-none rounded-xl border border-neutral-200 px-3 py-2 text-sm outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-100" />
-              <div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="outline" onClick={() => { setLeadOutcome(null); setLeadNextStep(null); }}>Voltar</Button><Button type="button" disabled={!leadNextStep} className="bg-violet-600 font-black text-white hover:bg-violet-700" onClick={() => leadNextStep && onLeadOutcome(item, leadOutcome, leadNextStep, leadNotes)}>Confirmar próximo passo</Button></div>
+            )}
+          {visibleNotes && (
+            <p className="rounded-xl border border-neutral-200 p-3 leading-relaxed text-neutral-600">
+              {visibleNotes}
+            </p>
+          )}
+          {item.meeting_feedback && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+              <p className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-emerald-800">
+                <MessageSquareText className="h-3.5 w-3.5" /> Feedback da reunião
+              </p>
+              <p className="mt-1 whitespace-pre-wrap leading-relaxed text-neutral-700">
+                {item.meeting_feedback}
+              </p>
             </div>
           )}
-          {visibleNotes && <p className="rounded-xl border border-neutral-200 p-3 leading-relaxed text-neutral-600">{visibleNotes}</p>}
-          {item.meeting_feedback && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3"><p className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-emerald-800"><MessageSquareText className="h-3.5 w-3.5" /> Feedback da reunião</p><p className="mt-1 whitespace-pre-wrap leading-relaxed text-neutral-700">{item.meeting_feedback}</p></div>}
           {item.source === "rotating_lead" && (
             <div className="rounded-xl border border-neutral-200 p-3">
-              <p className="text-[10px] font-black uppercase tracking-[0.14em] text-neutral-400">Histórico do lead</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.14em] text-neutral-400">
+                Histórico do lead
+              </p>
               {item.contact_lead_history.length === 0 ? (
-                <p className="mt-2 text-xs text-neutral-500">Ainda não há movimentações anteriores.</p>
+                <p className="mt-2 text-xs text-neutral-500">
+                  Ainda não há movimentações anteriores.
+                </p>
               ) : (
                 <ol className="mt-2 space-y-2">
                   {item.contact_lead_history.map((entry) => (
@@ -178,10 +379,17 @@ export function AppointmentDetailsDialog({
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <strong>{rotatingLeadHistoryLabel(entry.event, entry.label)}</strong>
                         <time className="font-semibold text-neutral-400">
-                          {new Date(entry.occurred_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                          {new Date(entry.occurred_at).toLocaleString("pt-BR", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
                         </time>
                       </div>
-                      {entry.seller_name && <p className="mt-1 text-neutral-500">Vendedor: {entry.seller_name}</p>}
+                      {entry.seller_name && (
+                        <p className="mt-1 text-neutral-500">Vendedor: {entry.seller_name}</p>
+                      )}
                     </li>
                   ))}
                 </ol>
@@ -191,28 +399,94 @@ export function AppointmentDetailsDialog({
           {item.type === "reuniao" && item.status === "concluido" && item.completed_at && (
             <div className="grid gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-neutral-800 sm:grid-cols-2">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-wider text-emerald-800">Encerramento real</p>
-                <p className="mt-1 font-bold">{format(new Date(item.completed_at), "dd/MM/yyyy 'às' HH:mm")}</p>
+                <p className="text-[10px] font-black uppercase tracking-wider text-emerald-800">
+                  Encerramento real
+                </p>
+                <p className="mt-1 font-bold">
+                  {format(new Date(item.completed_at), "dd/MM/yyyy 'às' HH:mm")}
+                </p>
               </div>
               <div>
-                <p className="text-[10px] font-black uppercase tracking-wider text-emerald-800">Duração realizada</p>
-                <p className="mt-1 font-bold">{formatMeetingDuration(item.actual_duration_minutes)}</p>
+                <p className="text-[10px] font-black uppercase tracking-wider text-emerald-800">
+                  Duração realizada
+                </p>
+                <p className="mt-1 font-bold">
+                  {formatMeetingDuration(item.actual_duration_minutes)}
+                </p>
               </div>
             </div>
           )}
           {canManageCloserMeeting && item.type === "reuniao" && <MeetingSignupLinks item={item} />}
-          {followUpWhatsAppUrl && <Button type="button" className="w-full bg-[#25D366] font-black text-white hover:bg-[#20bd5a]" asChild><a href={followUpWhatsAppUrl} target="_blank" rel="noreferrer"><MessageCircle className="mr-1.5 h-4 w-4" /> Abrir mensagem pronta no WhatsApp</a></Button>}
+          {followUpWhatsAppUrl && (
+            <Button
+              type="button"
+              className="w-full bg-[#25D366] font-black text-white hover:bg-[#20bd5a]"
+              asChild
+            >
+              <a href={followUpWhatsAppUrl} target="_blank" rel="noreferrer">
+                <MessageCircle className="mr-1.5 h-4 w-4" /> Abrir mensagem pronta no WhatsApp
+              </a>
+            </Button>
+          )}
         </div>
         <DialogFooter className="flex-wrap">
-          {item.source === "rotating_lead" && onLeadOutcome && !["concluido", "cancelado"].includes(item.status) && (
-            <>{!leadOutcome && <><Button variant="outline" className="border-amber-200 bg-amber-50 font-black text-amber-900 hover:bg-amber-100" onClick={() => setLeadOutcome("sem_retorno")}>Sem retorno</Button><Button className="bg-emerald-600 font-black text-white hover:bg-emerald-700" onClick={() => setLeadOutcome("em_contato")}><Check className="mr-1.5 h-4 w-4" /> Em contato</Button></>}</>
+          {item.source === "rotating_lead" &&
+            onLeadOutcome &&
+            !["concluido", "cancelado"].includes(item.status) && (
+              <>
+                {!leadOutcome && (
+                  <>
+                    <Button
+                      variant="outline"
+                      className="border-amber-200 bg-amber-50 font-black text-amber-900 hover:bg-amber-100"
+                      onClick={() => setLeadOutcome("sem_retorno")}
+                    >
+                      Sem retorno
+                    </Button>
+                    <Button
+                      className="bg-emerald-600 font-black text-white hover:bg-emerald-700"
+                      onClick={() => setLeadOutcome("em_contato")}
+                    >
+                      <Check className="mr-1.5 h-4 w-4" /> Em contato
+                    </Button>
+                  </>
+                )}
+              </>
+            )}
+          {!["meeting_follow_up", "admin", "rotating_lead"].includes(item.source) && (
+            <Button
+              variant="ghost"
+              className="mr-auto text-red-600 hover:bg-red-50"
+              onClick={() => onDelete(item)}
+            >
+              <Trash2 className="mr-1.5 h-4 w-4" /> Excluir
+            </Button>
           )}
-          {!["meeting_follow_up", "admin", "rotating_lead"].includes(item.source) && <Button variant="ghost" className="mr-auto text-red-600 hover:bg-red-50" onClick={() => onDelete(item)}><Trash2 className="mr-1.5 h-4 w-4" /> Excluir</Button>}
-          {!["meeting_follow_up", "admin", "rotating_lead"].includes(item.source) && canEdit && <Button variant="outline" onClick={() => onEdit(item)}><Edit3 className="mr-1.5 h-4 w-4" /> {item.type === "reuniao" ? "Editar dados" : "Editar"}</Button>}
-          {canRescheduleSellerMeeting(item) && <Button variant="outline" className="border-yellow-300 bg-yellow-50 text-yellow-900 hover:bg-yellow-100" onClick={() => onReschedule(item)}><CalendarClock className="mr-1.5 h-4 w-4" /> Reagendar</Button>}
-          {item.source !== "rotating_lead" && !["concluido", "cancelado"].includes(item.status) && canComplete && (
-            <Button className="bg-neutral-950 text-white hover:bg-neutral-800" onClick={() => onComplete(item)}><Check className="mr-1.5 h-4 w-4" /> Concluir</Button>
+          {!["meeting_follow_up", "admin", "rotating_lead"].includes(item.source) && canEdit && (
+            <Button variant="outline" onClick={() => onEdit(item)}>
+              <Edit3 className="mr-1.5 h-4 w-4" />{" "}
+              {item.type === "reuniao" ? "Editar dados" : "Editar"}
+            </Button>
           )}
+          {canRescheduleSellerMeeting(item) && (
+            <Button
+              variant="outline"
+              className="border-yellow-300 bg-yellow-50 text-yellow-900 hover:bg-yellow-100"
+              onClick={() => onReschedule(item)}
+            >
+              <CalendarClock className="mr-1.5 h-4 w-4" /> Reagendar
+            </Button>
+          )}
+          {item.source !== "rotating_lead" &&
+            !["concluido", "cancelado"].includes(item.status) &&
+            canComplete && (
+              <Button
+                className="bg-neutral-950 text-white hover:bg-neutral-800"
+                onClick={() => onComplete(item)}
+              >
+                <Check className="mr-1.5 h-4 w-4" /> Concluir
+              </Button>
+            )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

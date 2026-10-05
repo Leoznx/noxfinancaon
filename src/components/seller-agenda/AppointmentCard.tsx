@@ -1,6 +1,16 @@
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Building2, CalendarClock, Check, Clock3, Edit3, Eye, MessageCircle, Trash2, UserRound } from "lucide-react";
+import {
+  Building2,
+  CalendarClock,
+  Check,
+  Clock3,
+  Edit3,
+  Eye,
+  MessageCircle,
+  Trash2,
+  UserRound,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,9 +20,11 @@ import {
   appointmentWhatsAppMessage,
   buildAppointmentWhatsAppUrl,
   canRescheduleSellerMeeting,
+  DEPARTED_SELLER_LEAD_LABEL,
   getAppointmentContact,
   getSharedMeetingMetadata,
   getVisibleAppointmentNotes,
+  hasDepartedSellerLeadLabel,
   type SellerAppointment,
 } from "@/lib/seller-agenda";
 
@@ -57,12 +69,14 @@ export function AppointmentCard({
   const contact = getAppointmentContact(item);
   const sharedMetadata = getSharedMeetingMetadata(item.notes);
   const visibleNotes = getVisibleAppointmentNotes(item);
+  const departedSellerLead = hasDepartedSellerLeadLabel(item.notes);
   const sdrName = sharedMetadata.sdrName
-    ? sdrNames?.get(sharedMetadata.sdrName) ?? sharedMetadata.sdrName.trim().split(/\s+/)[0]
+    ? (sdrNames?.get(sharedMetadata.sdrName) ?? sharedMetadata.sdrName.trim().split(/\s+/)[0])
     : null;
-  const whatsappUrl = item.source === "meeting_follow_up" && contact.phone
-    ? buildAppointmentWhatsAppUrl(contact.phone, appointmentWhatsAppMessage(item))
-    : null;
+  const whatsappUrl =
+    item.source === "meeting_follow_up" && contact.phone
+      ? buildAppointmentWhatsAppUrl(contact.phone, appointmentWhatsAppMessage(item))
+      : null;
 
   return (
     <article
@@ -75,14 +89,26 @@ export function AppointmentCard({
           <Clock3 className="mx-auto mb-0.5 h-3.5 w-3.5 text-yellow-400" />
           <span className="text-xs font-black">{format(new Date(item.scheduled_at), "HH:mm")}</span>
         </div>
-        <button type="button" onClick={() => onView(item)} className="min-w-0 flex-1 text-left focus-visible:outline-none">
+        <button
+          type="button"
+          onClick={() => onView(item)}
+          className="min-w-0 flex-1 text-left focus-visible:outline-none"
+        >
           <div className="flex flex-wrap items-center gap-1.5">
+            {departedSellerLead && (
+              <Badge className="border border-red-200 bg-red-50 px-2 py-0.5 text-[9px] font-black text-red-700 hover:bg-red-50">
+                {DEPARTED_SELLER_LEAD_LABEL}
+              </Badge>
+            )}
             {item.source === "rotating_lead" && (
               <Badge className="border-0 bg-violet-600 px-2 py-0.5 text-[9px] font-black text-white hover:bg-violet-600">
                 LEAD NOVO
               </Badge>
             )}
-            <Badge variant="outline" className={`px-2 py-0.5 font-sans text-[10px] font-semibold tracking-normal ${TYPE_STYLE[agendaTypeKey(item.type)]}`}>
+            <Badge
+              variant="outline"
+              className={`px-2 py-0.5 font-sans text-[10px] font-semibold tracking-normal ${TYPE_STYLE[agendaTypeKey(item.type)]}`}
+            >
               {agendaTypeLabel(item.type)}
             </Badge>
             <Badge
@@ -94,16 +120,37 @@ export function AppointmentCard({
               {agendaStatusLabel(item.status)}
             </Badge>
           </div>
-          <h3 className={`mt-1.5 whitespace-normal break-words font-extrabold leading-snug text-neutral-950 [overflow-wrap:anywhere] ${compact ? "text-sm" : "text-base"}`}>{item.title}</h3>
-          {item.source === "sdr_handoff" && (sharedMetadata.clientType || sdrName) && <p className="mt-0.5 truncate text-[10px] font-bold text-yellow-700">{sharedMetadata.clientType ?? "Cliente"}{sdrName ? ` · Vendedor ${sdrName}` : ""}</p>}
+          <h3
+            className={`mt-1.5 whitespace-normal break-words font-extrabold leading-snug text-neutral-950 [overflow-wrap:anywhere] ${compact ? "text-sm" : "text-base"}`}
+          >
+            {item.title}
+          </h3>
+          {item.source === "sdr_handoff" && (sharedMetadata.clientType || sdrName) && (
+            <p className="mt-0.5 truncate text-[10px] font-bold text-yellow-700">
+              {sharedMetadata.clientType ?? "Cliente"}
+              {sdrName ? ` · Vendedor ${sdrName}` : ""}
+            </p>
+          )}
           {contact.name && (
             <p className="mt-0.5 flex items-center gap-1 truncate text-[11px] font-medium text-neutral-500">
-              {item.client_name && !item.contact_name ? <Building2 className="h-3 w-3" /> : <UserRound className="h-3 w-3" />}
+              {item.client_name && !item.contact_name ? (
+                <Building2 className="h-3 w-3" />
+              ) : (
+                <UserRound className="h-3 w-3" />
+              )}
               {contact.name}
             </p>
           )}
-          {contact.phone && <p className="mt-0.5 truncate text-[10px] font-semibold text-neutral-400">{contact.phone}</p>}
-          {!compact && visibleNotes && <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-neutral-500">{visibleNotes}</p>}
+          {contact.phone && (
+            <p className="mt-0.5 truncate text-[10px] font-semibold text-neutral-400">
+              {contact.phone}
+            </p>
+          )}
+          {!compact && visibleNotes && (
+            <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-neutral-500">
+              {visibleNotes}
+            </p>
+          )}
           {!compact && (
             <p className="mt-2 text-[10px] font-semibold capitalize text-neutral-400">
               {format(new Date(item.scheduled_at), "EEEE, d 'de' MMMM", { locale: ptBR })}
@@ -113,16 +160,55 @@ export function AppointmentCard({
       </div>
 
       <div className="mt-3 flex flex-wrap items-center justify-end gap-1 border-t border-neutral-100 pt-2.5">
-        {whatsappUrl && <Button type="button" size="sm" variant="ghost" className="h-7 gap-1 px-2 text-[10px] text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800" asChild><a href={whatsappUrl} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}><MessageCircle className="h-3.5 w-3.5" /> WhatsApp</a></Button>}
-        <Button type="button" size="sm" variant="ghost" className="h-7 gap-1 px-2 text-[10px]" onClick={() => onView(item)}>
+        {whatsappUrl && (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-7 gap-1 px-2 text-[10px] text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
+            asChild
+          >
+            <a
+              href={whatsappUrl}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <MessageCircle className="h-3.5 w-3.5" /> WhatsApp
+            </a>
+          </Button>
+        )}
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-7 gap-1 px-2 text-[10px]"
+          onClick={() => onView(item)}
+        >
           <Eye className="h-3.5 w-3.5" /> Detalhes
         </Button>
-        {item.source !== "meeting_follow_up" && canEdit && <Button type="button" size="sm" variant="ghost" className="h-7 gap-1 px-2 text-[10px]" onClick={() => onEdit(item)}>
-          <Edit3 className="h-3.5 w-3.5" /> {item.type === "reuniao" ? "Editar dados" : "Editar"}
-        </Button>}
-        {canRescheduleSellerMeeting(item) && <Button type="button" size="sm" variant="ghost" className="h-7 gap-1 px-2 text-[10px] text-yellow-800 hover:bg-yellow-50 hover:text-yellow-900" onClick={() => onReschedule(item)}>
-          <CalendarClock className="h-3.5 w-3.5" /> Reagendar
-        </Button>}
+        {item.source !== "meeting_follow_up" && canEdit && (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-7 gap-1 px-2 text-[10px]"
+            onClick={() => onEdit(item)}
+          >
+            <Edit3 className="h-3.5 w-3.5" /> {item.type === "reuniao" ? "Editar dados" : "Editar"}
+          </Button>
+        )}
+        {canRescheduleSellerMeeting(item) && (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-7 gap-1 px-2 text-[10px] text-yellow-800 hover:bg-yellow-50 hover:text-yellow-900"
+            onClick={() => onReschedule(item)}
+          >
+            <CalendarClock className="h-3.5 w-3.5" /> Reagendar
+          </Button>
+        )}
         {!finished && canComplete && (
           <Button
             type="button"
@@ -134,16 +220,18 @@ export function AppointmentCard({
             <Check className="h-3.5 w-3.5" /> Concluir
           </Button>
         )}
-        {!["meeting_follow_up", "rotating_lead"].includes(item.source) && <Button
-          type="button"
-          size="icon"
-          variant="ghost"
-          className="h-7 w-7 text-neutral-400 hover:bg-red-50 hover:text-red-600"
-          aria-label={`Excluir ${item.title}`}
-          onClick={() => onDelete(item)}
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </Button>}
+        {!["meeting_follow_up", "rotating_lead"].includes(item.source) && (
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="h-7 w-7 text-neutral-400 hover:bg-red-50 hover:text-red-600"
+            aria-label={`Excluir ${item.title}`}
+            onClick={() => onDelete(item)}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        )}
       </div>
     </article>
   );

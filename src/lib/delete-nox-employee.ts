@@ -37,11 +37,21 @@ async function authenticatedFunctionHeaders() {
 
 export async function deleteNoxEmployee(employeeId: string) {
   const headers = await authenticatedFunctionHeaders();
-  const { data, error } = await supabase.functions.invoke<{ ok: boolean; error?: string }>(
-    "delete-nox-employee",
-    { body: { employeeId }, headers },
-  );
+  const { data, error } = await supabase.functions.invoke<{
+    ok: boolean;
+    error?: string;
+    redistribution?: {
+      eligible: boolean;
+      seller_type: "sdr" | "closer" | null;
+      appointment_count: number;
+      contact_lead_count: number;
+      sales_lead_count: number;
+      recipient_count: number;
+      total_items: number;
+    };
+  }>("delete-nox-employee", { body: { employeeId }, headers });
   if (error) throw new Error(await edgeFunctionErrorMessage(error));
   if (!data?.ok)
     throw new Error(data?.error || "Não foi possível desativar o acesso do colaborador.");
+  return data;
 }
