@@ -66,7 +66,7 @@ BEGIN
 
   IF v_resolved_sdr_id IS NULL THEN
     SELECT CASE WHEN count(DISTINCT event.source_sdr_id) = 1
-      THEN min(event.source_sdr_id)
+      THEN min(event.source_sdr_id::text)::uuid
     END
     INTO v_resolved_sdr_id
     FROM public.seller_signup_link_send_events AS event
@@ -191,7 +191,7 @@ BEGIN
           OR (length(normalized.first_name) >= 4 AND strpos(v_context, ' ' || normalized.first_name || ' ') > 0)
         )
     )
-    SELECT CASE WHEN count(DISTINCT id) = 1 THEN min(id) END
+    SELECT CASE WHEN count(DISTINCT id) = 1 THEN min(id::text)::uuid END
     INTO v_resolved_sdr_id
     FROM matching_sdrs;
   END IF;
@@ -270,7 +270,7 @@ GRANT EXECUTE ON FUNCTION public.get_meeting_source_sdr_options(uuid)
 
 DROP FUNCTION IF EXISTS public.get_meeting_signup_links(uuid);
 
-CREATE FUNCTION public.get_meeting_signup_links(
+CREATE OR REPLACE FUNCTION public.get_meeting_signup_links(
   p_appointment_id uuid,
   p_source_sdr_id uuid DEFAULT NULL
 )
