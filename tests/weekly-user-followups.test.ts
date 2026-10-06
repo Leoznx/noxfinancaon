@@ -2,10 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  buildWeeklyFollowupInteractiveContent,
   buildWeeklyFollowupMessage,
   parseWeeklyFollowupPreference,
   saoPauloBusinessClock,
   WEEKLY_FOLLOWUP_MESSAGES,
+  WEEKLY_FOLLOWUP_SIMULATION_URL,
+  WEEKLY_FOLLOWUP_SITE_URL,
 } from "../supabase/functions/_shared/weekly-user-followups";
 
 test("mantém oito mensagens emocionais diferentes com emoji", () => {
@@ -18,6 +21,19 @@ test("mantém oito mensagens emocionais diferentes com emoji", () => {
     assert.match(message, /[😊💛👋🚀😄🤝]/u);
     assert.match(message, /responda SAIR/);
   }
+});
+
+test("monta CTA interativo com acesso ao site e simulacao", () => {
+  const content = buildWeeklyFollowupInteractiveContent({ name: "Leo", variant: 0 });
+  assert.equal(content.title, "NOX Fiança • acompanhamento semanal");
+  assert.equal(content.footer.includes("SAIR"), true);
+  assert.deepEqual(
+    content.buttonActions.map((button) => [button.type, button.label, button.url]),
+    [
+      ["URL", "Acessar o site", WEEKLY_FOLLOWUP_SITE_URL],
+      ["URL", "Fazer simulação", WEEKLY_FOLLOWUP_SIMULATION_URL],
+    ],
+  );
 });
 
 test("interpreta saída e reativação sem depender de acento ou pontuação", () => {

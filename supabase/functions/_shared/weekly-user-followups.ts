@@ -9,7 +9,10 @@ export const WEEKLY_FOLLOWUP_MESSAGES = [
   "E aí, {nome}! Passando com aquele lembrete amigo. 😄 Tá conseguindo simular certinho? Qualquer coisa, chama a NOX! 🤝",
 ] as const;
 
-const OPT_OUT_FOOTER = "\n\nSe preferir não receber estes lembretes, responda SAIR.";
+export const WEEKLY_FOLLOWUP_SITE_URL = "https://noxfianca.com/login";
+export const WEEKLY_FOLLOWUP_SIMULATION_URL = "https://noxfianca.com/simular";
+export const WEEKLY_FOLLOWUP_TITLE = "NOX Fiança • acompanhamento semanal";
+export const WEEKLY_FOLLOWUP_FOOTER = "Se preferir não receber estes lembretes, responda SAIR.";
 
 function firstName(value: string | null | undefined) {
   const clean =
@@ -23,8 +26,34 @@ export function buildWeeklyFollowupMessage(params: {
   name?: string | null;
   variant?: number | null;
 }) {
+  const content = buildWeeklyFollowupInteractiveContent(params);
+  return `${content.message}\n\n${content.footer}`;
+}
+
+export function buildWeeklyFollowupInteractiveContent(params: {
+  name?: string | null;
+  variant?: number | null;
+}) {
   const index = Math.abs(Math.trunc(Number(params.variant) || 0)) % WEEKLY_FOLLOWUP_MESSAGES.length;
-  return WEEKLY_FOLLOWUP_MESSAGES[index].replace("{nome}", firstName(params.name)) + OPT_OUT_FOOTER;
+  return {
+    message: WEEKLY_FOLLOWUP_MESSAGES[index].replace("{nome}", firstName(params.name)),
+    title: WEEKLY_FOLLOWUP_TITLE,
+    footer: WEEKLY_FOLLOWUP_FOOTER,
+    buttonActions: [
+      {
+        id: "acessar-site-nox",
+        type: "URL" as const,
+        label: "Acessar o site",
+        url: WEEKLY_FOLLOWUP_SITE_URL,
+      },
+      {
+        id: "fazer-simulacao-nox",
+        type: "URL" as const,
+        label: "Fazer simulação",
+        url: WEEKLY_FOLLOWUP_SIMULATION_URL,
+      },
+    ],
+  };
 }
 
 export type WeeklyFollowupPreference = "opt_out" | "opt_in" | null;

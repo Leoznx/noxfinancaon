@@ -1,4 +1,10 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
+import { buildWeeklyFollowupInteractiveContent } from "../_shared/weekly-user-followups.ts";
+import {
+  sendZApiButtonActions,
+  getZApiConnectionStatus,
+  normalizeWhatsappPhone,
+} from "../_shared/zapi.ts";
 
 type RunBody = {
   dryRun?: boolean;
@@ -12,17 +18,6 @@ type FollowupRow = {
   message_variant: number;
   attempts: number;
 };
-
-const WEEKLY_FOLLOWUP_MESSAGES = [
-  "E aí, {nome}! 😊 Tá conseguindo fazer as simulações certinho? Se precisar de ajuda, chama a gente por aqui! 💛",
-  "Oi, {nome}! Tudo bem por aí? 👋 Conseguiu fazer suas simulações direitinho? A equipe NOX está por aqui se precisar. 😊",
-  "Passando pra saber como estão as simulações, {nome}! 🚀 Tá conseguindo fazer tudo certinho? Conta com a NOX! 💛",
-  "E aí, {nome}! 😄 Como estão as simulações esta semana? Se surgir qualquer dúvida, pode falar com a gente! 🤝",
-  "Oi, {nome}! Só passando pra acompanhar você. 💛 As simulações estão saindo certinho? Estamos aqui pra ajudar! 😊",
-  "Fala, {nome}! 👋 Tá tudo certo com suas simulações? Se travar em alguma etapa, chama a NOX que a gente ajuda. 🚀",
-  "Como você está, {nome}? 😊 Conseguiu avançar nas simulações? Pode contar com a gente pra deixar tudo mais simples! 💛",
-  "E aí, {nome}! Passando com aquele lembrete amigo. 😄 Tá conseguindo simular certinho? Qualquer coisa, chama a NOX! 🤝",
-] as const;
 
 function jsonResponse(request: Request, body: Record<string, unknown>, status = 200) {
   const origin = request.headers.get("origin");
@@ -58,123 +53,6 @@ function safeEqualSecret(left: string, right: string) {
   return result === 0;
 }
 
-function normalizeWhatsappPhone(value: string | null | undefined) {
-  let digits = String(value || "").replace(/\D/g, "");
-  if (!digits) return "";
-  if (!digits.startsWith("55")) digits = `55${digits}`;
-  return digits.length >= 12 && digits.length <= 13 ? digits : "";
-}
-
-function zApiCredentials() {
-  const instanceId = Deno.env.get("ZAPI_INSTANCE_ID")?.trim() || "";
-  const instanceToken = Deno.env.get("ZAPI_INSTANCE_TOKEN")?.trim() || "";
-  const clientToken = Deno.env.get("ZAPI_CLIENT_TOKEN")?.trim() || "";
-  const valid = /^[A-Za-z0-9_-]+$/;
-  return valid.test(instanceId) && valid.test(instanceToken)
-    ? { instanceId, instanceToken, clientToken }
-    : null;
-}
-
-async function zApiFetch(url: string, init: RequestInit, clientToken: string) {
-  const headers = new Headers(init.headers);
-  if (clientToken) headers.set("Client-Token", clientToken);
-  let response = await fetch(url, { ...init, headers });
-  if (!clientToken || response.status !== 403) return response;
-  const body = await response.clone().text().catch(() => "");
-  if (!/client-?token[^\n]*not allowed/i.test(body)) return response;
-  headers.delete("Client-Token");
-  response = await fetch(url, { ...init, headers });
-  return response;
-}
-
-function providerReason(body: unknown, status: number) {
-  const record = body && typeof body === "object" ? body as Record<string, unknown> : {};
-  const code = String(
-    (typeof body === "string" ? body : "") || record.error || record.message || record.code || `http_${status}`,
-  )
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-zA-Z0-9_-]/g, "_")
-    .replace(/_+/g, "_")
-    .replace(/^_|_$/g, "")
-    .slice(0, 80);
-  return `provider_http_${status}${code ? `_${code}` : ""}`;
-}
-
-async function getZApiConnectionStatus() {
-  const auth = zApiCredentials();
-  if (!auth) return { configured: false, connected: false, smartphoneConnected: false };
-  try {
-    const response = await zApiFetch(
-      `https://api.z-api.io/instances/${auth.instanceId}/token/${auth.instanceToken}/status`,
-      { method: "GET", headers: { "Content-Type": "application/json" } },
-      auth.clientToken,
-    );
-    if (!response.ok) {
-      const rawBody = await response.text().catch(() => "");
-      let body: unknown = rawBody;
-      try {
-        body = rawBody ? JSON.parse(rawBody) : {};
-      } catch {
-        // Mantém o texto do provedor apenas para gerar um diagnóstico seguro.
-      }
-      return {
-        configured: true,
-        connected: false,
-        smartphoneConnected: false,
-        status: response.status,
-        reason: providerReason(body, response.status),
-      };
-    }
-    const data = await response.json();
-    return {
-      configured: true,
-      connected: data?.connected === true,
-      smartphoneConnected: data?.smartphoneConnected === true,
-    };
-  } catch {
-    return {
-      configured: true,
-      connected: false,
-      smartphoneConnected: false,
-      reason: "provider_unavailable",
-    };
-  }
-}
-
-async function sendZApiText(params: { to: string; message: string }) {
-  const auth = zApiCredentials();
-  if (!auth) return { sent: false, reason: "not_configured" };
-  const phone = normalizeWhatsappPhone(params.to);
-  if (!phone) return { sent: false, reason: "invalid_phone" };
-  try {
-    const response = await zApiFetch(
-      `https://api.z-api.io/instances/${auth.instanceId}/token/${auth.instanceToken}/send-text`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, message: params.message }),
-      },
-      auth.clientToken,
-    );
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) return { sent: false, reason: providerReason(data, response.status) };
-    const providerMessageId = data?.messageId || data?.zaapId || data?.id;
-    return providerMessageId
-      ? { sent: true, providerMessageId: String(providerMessageId) }
-      : { sent: false, reason: "provider_invalid_response" };
-  } catch {
-    return { sent: false, reason: "provider_unavailable" };
-  }
-}
-
-function buildWeeklyFollowupMessage(params: { name?: string | null; variant?: number | null }) {
-  const name = String(params.name || "").trim().split(/\s+/)[0].slice(0, 60) || "tudo bem";
-  const index = Math.abs(Math.trunc(Number(params.variant) || 0)) % WEEKLY_FOLLOWUP_MESSAGES.length;
-  return WEEKLY_FOLLOWUP_MESSAGES[index].replace("{nome}", name) +
-    "\n\nSe preferir não receber estes lembretes, responda SAIR.";
-}
-
 function saoPauloBusinessClock(now = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Sao_Paulo",
@@ -190,7 +68,13 @@ function saoPauloBusinessClock(now = new Date()) {
   const weekday = new Date(`${date}T12:00:00Z`).getUTCDay();
   const hour = Number(values.hour);
   const minute = Number(values.minute);
-  return { date, weekday, hour, minute, insideBusinessWindow: weekday >= 1 && weekday <= 5 && hour >= 9 && hour < 18 };
+  return {
+    date,
+    weekday,
+    hour,
+    minute,
+    insideBusinessWindow: weekday >= 1 && weekday <= 5 && hour >= 9 && hour < 18,
+  };
 }
 
 Deno.serve(async (request) => {
@@ -244,7 +128,7 @@ Deno.serve(async (request) => {
   }
 
   if (testPhone) {
-    const message = buildWeeklyFollowupMessage({ name: "Leo", variant: 0 });
+    const interactive = buildWeeklyFollowupInteractiveContent({ name: "Leo", variant: 0 });
     const weekStart = startOfSaoPauloWeek(clock.date);
     const { data: audit, error: auditError } = await admin
       .from("weekly_whatsapp_followups")
@@ -271,10 +155,13 @@ Deno.serve(async (request) => {
         test: true,
         dryRun: true,
         phone: maskPhone(testPhone),
-        message,
+        message: `${interactive.message}\n\n${interactive.footer}`,
       });
     }
-    const result = await sendZApiText({ to: testPhone, message });
+    const result = await sendZApiButtonActions({
+      to: testPhone,
+      ...interactive,
+    });
     await admin
       .from("weekly_whatsapp_followups")
       .update(
@@ -356,11 +243,11 @@ Deno.serve(async (request) => {
         .eq("id", row.id);
       continue;
     }
-    const message = buildWeeklyFollowupMessage({
+    const interactive = buildWeeklyFollowupInteractiveContent({
       name: row.recipient_name,
       variant: row.message_variant,
     });
-    const result = await sendZApiText({ to: phone, message });
+    const result = await sendZApiButtonActions({ to: phone, ...interactive });
     if (result.sent) {
       report.queued += 1;
       await admin

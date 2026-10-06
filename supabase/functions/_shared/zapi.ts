@@ -4,6 +4,14 @@ export type ZApiResult = {
   providerMessageId?: string;
 };
 
+export type ZApiButtonAction = {
+  id?: string;
+  type: "CALL" | "URL" | "REPLY";
+  label: string;
+  phone?: string;
+  url?: string;
+};
+
 export type ZApiDeliveryStatus =
   | "queued"
   | "sent"
@@ -253,5 +261,70 @@ export async function sendZApiText(params: {
     return { sent: true, providerMessageId: String(providerMessageId) };
   } catch {
     return { sent: false, reason: "provider_unavailable" };
+  }
+}
+
+export async function sendZApiButtonActions(params: {
+  to: string;
+  message: string;
+  title?: string;
+  footer?: string;
+  buttonActions: ZApiButtonAction[];
+}): Promise<ZApiResult> {
+  const auth = credentials();
+  if (!auth) return { sent: false, reason: "not_configured" };
+  const phone = normalizeWhatsappPhone(params.to);
+  if (!phone) return { sent: false, reason: "invalid_phone" };
+  if (!params.message.trim() || params.buttonActions.length === 0) {
+    return { sent: false, reason: "invalid_button_message" };
+  }
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  try {
+    const response = await zApiFetch(
+      `https://api.z-api.io/instances/${auth.instanceId}/token/${auth.instanceToken}/send-button-actions`,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          phone,
+          message: params.message,
+          ...(params.title ? { title: params.title } : {}),
+          ...(params.footer ? { footer: params.footer } : {}),
+          buttonActions: params.buttonActions,
+        }),
+      },
+      auth.clientToken,
+    );
+    const data = await response.json().catch(() => ({}));
+    if (response.ok) {
+      const providerMessageId = data?.messageId || data?.zaapId || data?.id;
+      if (providerMessageId) {
+        return { sent: true, providerMessageId: String(providerMessageId) };
+      }
+    }
+
+    // Mantém o follow-up funcional caso a conta/cliente não aceite botões.
+    const fallback = await sendZApiText({
+      to: phone,
+      message: `${params.message}\n\n${params.footer || ""}`.trim(),
+    });
+    if (fallback.sent) return fallback;
+    return {
+      sent: false,
+      reason: response.ok
+        ? "provider_invalid_response"
+        : providerReason(data, response.status),
+    };
+  } catch {
+    const fallback = await sendZApiText({
+      to: phone,
+      message: `${params.message}\n\n${params.footer || ""}`.trim(),
+    });
+    return fallback.sent
+      ? fallback
+      : { sent: false, reason: "provider_unavailable" };
   }
 }
