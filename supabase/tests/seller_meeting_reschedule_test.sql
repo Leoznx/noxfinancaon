@@ -3,7 +3,7 @@ BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET LOCAL search_path = public, extensions, pg_catalog;
 
-SELECT plan(7);
+SELECT plan(12);
 
 SELECT has_column(
   'public',
@@ -55,6 +55,46 @@ SELECT has_function(
   'reschedule_shared_sales_meeting',
   ARRAY['uuid', 'timestamp with time zone'],
   'contrato legado de reagendamento continua disponivel'
+);
+
+SELECT matches(
+  pg_get_functiondef(
+    'public.get_available_meeting_reschedule_slots(uuid,date,integer)'::regprocedure
+  ),
+  'get_available_closer_slots',
+  'reuniao sem Closer valido consulta a distribuicao compartilhada'
+);
+
+SELECT matches(
+  pg_get_functiondef(
+    'public.get_available_meeting_reschedule_slots(uuid,date,integer)'::regprocedure
+  ),
+  'exclude_from_commercial_metrics',
+  'Closer excluido das metricas tambem nao recebe reagendamento'
+);
+
+SELECT matches(
+  pg_get_functiondef(
+    'public.reschedule_seller_meeting(uuid,timestamp with time zone)'::regprocedure
+  ),
+  'SET seller_id = v_closer_id',
+  'confirmacao normaliza o dono e o Closer da reuniao'
+);
+
+SELECT matches(
+  pg_get_functiondef(
+    'public.reschedule_seller_meeting(uuid,timestamp with time zone)'::regprocedure
+  ),
+  'get_available_closer_slots',
+  'confirmacao recupera um Closer disponivel para reuniao legada'
+);
+
+SELECT matches(
+  pg_get_functiondef(
+    'public.reschedule_seller_meeting(uuid,timestamp with time zone)'::regprocedure
+  ),
+  'pg_advisory_xact_lock',
+  'recuperacao do Closer mantem a reserva atomica do horario'
 );
 
 SELECT * FROM finish();
