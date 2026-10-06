@@ -119,7 +119,7 @@ export function MeetingSignupLinks({ item }: { item: SellerAppointment }) {
       <p className="text-[11px] font-semibold text-neutral-600">
         {sourceSdrName
           ? `Link permanente: os cadastros profissionais contam para este Closer e para o Vendedor ${sourceSdrName}.`
-          : "Link permanente: cada cadastro conta somente para este Closer."}
+          : "Link permanente: o Closer recebe o cadastro e, se o telefone já estiver em Leads do Dia de um SDR, o sistema reconhece e credita os dois automaticamente."}
       </p>
     </div>
   );
