@@ -70,7 +70,7 @@ export function CommissionIncentives({ rewards, progress, rows }: CommissionInce
                 Entradas
               </CardTitle>
               <p className="mt-2 text-xs leading-5 text-neutral-500">
-                Comissões efetivamente liberadas ou pagas neste mês.
+                Contratos ativos e pagos contabilizados na folha deste mês.
               </p>
             </div>
             <span className="shrink-0 rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-[10px] font-black text-emerald-700">
@@ -81,7 +81,7 @@ export function CommissionIncentives({ rewards, progress, rows }: CommissionInce
         <CardContent className="flex flex-1 flex-col p-4">
           <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 px-3.5 py-2.5">
             <p className="text-[10px] font-black uppercase tracking-[0.12em] text-emerald-700">
-              Total recebido no mês
+              Total contabilizado no mês
             </p>
             <p className="mt-1 text-2xl font-black tracking-[-0.03em] text-neutral-950">
               {formatMoney(entriesTotal)}
@@ -122,7 +122,7 @@ export function CommissionIncentives({ rewards, progress, rows }: CommissionInce
             <EmptyColumn
               icon={ArrowDownToLine}
               title="Nenhuma entrada neste mês"
-              description="Quando uma comissão for liberada ou paga, ela aparecerá aqui automaticamente."
+              description="Quando o contrato estiver ativo e o plano for pago, ele aparecerá aqui automaticamente."
               tone="emerald"
             />
           )}
@@ -144,20 +144,20 @@ export function CommissionIncentives({ rewards, progress, rows }: CommissionInce
         <CardContent className="flex-1 space-y-2 p-4">
           <Tier
             title="1º ao 15º contrato"
-            value="R$ 35 cada"
+            value="R$ 25 cada"
             bonus="No 15º: + R$ 400"
             active={contracts <= 15}
           />
           <Tier
             title="16º ao 25º contrato"
-            value="R$ 55 cada"
+            value="R$ 35 cada"
             bonus="No 30º: + R$ 600"
             active={contracts >= 16 && contracts <= 25}
           />
           <Tier
             title="A partir do 26º"
-            value="R$ 75 cada"
-            bonus="Acima de 45: + R$ 1.200"
+            value="R$ 45 cada"
+            bonus="No 45º: + R$ 1.200"
             active={contracts >= 26}
           />
         </CardContent>

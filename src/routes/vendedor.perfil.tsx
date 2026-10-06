@@ -206,7 +206,7 @@ function Perfil() {
                   <CardTitle>Regra de comissão</CardTitle>
                 </CardHeader>
                 <CardContent className="text-sm text-neutral-500">
-                  R$ 35 do 1º ao 15º contrato, R$ 55 do 16º ao 25º e R$ 75 a partir do 26º. Bônus
+                  R$ 25 do 1º ao 15º contrato, R$ 35 do 16º ao 25º e R$ 45 a partir do 26º. Bônus
                   cumulativos de R$ 400 no 15º, R$ 600 no 30º e R$ 1.200 acima de 45 contratos. Sem
                   valor fixo.
                 </CardContent>

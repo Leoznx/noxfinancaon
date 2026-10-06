@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { CalendarDays, CheckCircle2, LockKeyhole, ReceiptText } from "lucide-react";
+import { CalendarDays, CheckCircle2, ReceiptText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -7,25 +7,19 @@ import {
   COMMISSION_PERIOD_OPTIONS,
   COMMISSION_STATUS_LABELS,
   filterCommissionHistory,
+  getCommissionCountedAt,
   getCommissionContractNumber,
   getCommissionCustomerName,
-  getCommissionType,
-  type CommissionHistoryFilter,
+  getCommissionEntryAmount,
   type CommissionPeriod,
   type SellerCommissionRow,
 } from "@/lib/seller-commissions-view";
-import { formatDateTime, formatMoney } from "@/lib/vendedor-portal";
+import { formatMoney } from "@/lib/vendedor-portal";
 
 type CommissionHistoryProps = { rows: SellerCommissionRow[] };
 
-const FILTERS: Array<{ value: CommissionHistoryFilter; label: string }> = [
-  { value: "all", label: "Todas" },
-  { value: "paid", label: "Pagas" },
-  { value: "retained", label: "Retidas" },
-];
-
 function statusClass(status: string) {
-  if (["liberada_parcial", "liberada_total", "paga", "pago"].includes(status)) {
+  if (["contabilizada", "liberada_parcial", "liberada_total", "paga", "pago"].includes(status)) {
     return "border-emerald-200 bg-emerald-50 text-emerald-700";
   }
   if (status === "retida") return "border-amber-200 bg-amber-50 text-amber-800";
@@ -34,11 +28,10 @@ function statusClass(status: string) {
 }
 
 export function CommissionHistory({ rows }: CommissionHistoryProps) {
-  const [filter, setFilter] = useState<CommissionHistoryFilter>("all");
   const [period, setPeriod] = useState<CommissionPeriod>("current");
   const filteredRows = useMemo(
-    () => filterCommissionHistory(rows, filter, period),
-    [filter, period, rows],
+    () => filterCommissionHistory(rows, "all", period),
+    [period, rows],
   );
 
   return (
@@ -46,25 +39,9 @@ export function CommissionHistory({ rows }: CommissionHistoryProps) {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h2 className="text-lg font-black tracking-[-0.015em] text-[#151515]">Histórico de comissões</h2>
-          <div className="mt-3 inline-flex rounded-xl border border-[#E3E3E3] bg-[#FAFAFA] p-0.5" role="tablist" aria-label="Filtrar histórico por situação">
-            {FILTERS.map((option) => {
-              const selected = filter === option.value;
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  role="tab"
-                  aria-selected={selected}
-                  onClick={() => setFilter(option.value)}
-                  className={`rounded-[9px] px-4 py-1.5 text-xs font-bold transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFD400] ${
-                    selected ? "bg-[#111] text-white shadow-sm" : "text-[#707070] hover:text-[#111]"
-                  }`}
-                >
-                  {option.label}
-                </button>
-              );
-            })}
-          </div>
+          <p className="mt-1 text-sm text-[#777]">
+            Cada linha entra automaticamente na folha quando o contrato fica ativo e o plano é pago.
+          </p>
         </div>
         <Select value={period} onValueChange={(value) => setPeriod(value as CommissionPeriod)}>
           <SelectTrigger className="h-10 w-full rounded-xl border-[#DEDEDE] bg-white text-sm font-semibold shadow-none sm:w-[180px]" aria-label="Selecionar período do histórico">
@@ -96,14 +73,15 @@ export function CommissionHistory({ rows }: CommissionHistoryProps) {
                   <CommissionStatus status={row.status} />
                 </div>
                 <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
-                  <HistoryValue label="Data" value={new Date(row.created_at).toLocaleDateString("pt-BR")} />
-                  <HistoryValue label="Tipo" value={getCommissionType(row)} />
+                  <HistoryValue label="Contabilizado em" value={new Date(getCommissionCountedAt(row)).toLocaleDateString("pt-BR")} />
+                  <HistoryValue label="Ordem no mês" value={row.contract_sequence ? `${row.contract_sequence}º contrato` : "—"} />
                   <HistoryValue label="Comissão" value={formatMoney(row.commission_amount)} strong />
                   <HistoryValue label="Bônus" value={formatMoney(row.bonus_amount)} strong />
                 </div>
-                <p className="mt-3 border-t border-[#E9E9E9] pt-3 text-[11px] text-[#777]">
-                  Liberação: {formatDateTime(row.released_at || row.reserve_release_at) || "—"}
-                </p>
+                <div className="mt-3 flex items-center justify-between gap-3 border-t border-[#E9E9E9] pt-3 text-xs">
+                  <span className="text-[#777]">Competência {String(row.month).padStart(2, "0")}/{row.year}</span>
+                  <strong className="text-[#111]">Total {formatMoney(getCommissionEntryAmount(row))}</strong>
+                </div>
               </article>
             ))}
           </div>
@@ -112,27 +90,29 @@ export function CommissionHistory({ rows }: CommissionHistoryProps) {
             <Table>
               <TableHeader>
                 <TableRow className="border-[#ECECEC] hover:bg-transparent">
-                  <TableHead>Data</TableHead>
+                  <TableHead>Contabilizado em</TableHead>
                   <TableHead>Cliente</TableHead>
                   <TableHead>Contrato</TableHead>
-                  <TableHead>Tipo</TableHead>
+                  <TableHead>Ordem</TableHead>
                   <TableHead>Comissão</TableHead>
                   <TableHead>Bônus</TableHead>
+                  <TableHead>Total</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Liberação</TableHead>
+                  <TableHead>Competência</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredRows.map((row) => (
                   <TableRow key={row.id} className="border-[#F0F0F0]">
-                    <TableCell className="whitespace-nowrap text-[#5F5F5F]">{new Date(row.created_at).toLocaleDateString("pt-BR")}</TableCell>
+                    <TableCell className="whitespace-nowrap text-[#5F5F5F]">{new Date(getCommissionCountedAt(row)).toLocaleDateString("pt-BR")}</TableCell>
                     <TableCell className="max-w-[180px] truncate font-bold text-[#1B1B1B]">{getCommissionCustomerName(row)}</TableCell>
                     <TableCell className="max-w-[145px] truncate">{getCommissionContractNumber(row)}</TableCell>
-                    <TableCell className="whitespace-nowrap text-[#5F5F5F]">{getCommissionType(row)}</TableCell>
+                    <TableCell className="whitespace-nowrap text-[#5F5F5F]">{row.contract_sequence ? `${row.contract_sequence}º` : "—"}</TableCell>
                     <TableCell className="font-bold text-[#171717]">{formatMoney(row.commission_amount)}</TableCell>
                     <TableCell className="font-bold text-[#171717]">{formatMoney(row.bonus_amount)}</TableCell>
+                    <TableCell className="font-black text-[#171717]">{formatMoney(getCommissionEntryAmount(row))}</TableCell>
                     <TableCell><CommissionStatus status={row.status} /></TableCell>
-                    <TableCell className="whitespace-nowrap text-[#5F5F5F]">{formatDateTime(row.released_at || row.reserve_release_at) || "—"}</TableCell>
+                    <TableCell className="whitespace-nowrap text-[#5F5F5F]">{String(row.month).padStart(2, "0")}/{row.year}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -146,10 +126,10 @@ export function CommissionHistory({ rows }: CommissionHistoryProps) {
 
 function CommissionStatus({ status }: { status: string }) {
   const normalized = String(status ?? "").toLowerCase();
-  const paid = ["liberada_parcial", "liberada_total", "paga", "pago"].includes(normalized);
+  const paid = ["contabilizada", "liberada_parcial", "liberada_total", "paga", "pago"].includes(normalized);
   return (
     <Badge variant="outline" className={`w-fit gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-bold ${statusClass(normalized)}`}>
-      {paid ? <CheckCircle2 className="h-3 w-3" aria-hidden="true" /> : normalized === "retida" ? <LockKeyhole className="h-3 w-3" aria-hidden="true" /> : null}
+      {paid ? <CheckCircle2 className="h-3 w-3" aria-hidden="true" /> : null}
       {COMMISSION_STATUS_LABELS[normalized] ?? status}
     </Badge>
   );
@@ -183,7 +163,7 @@ function CommissionEmptyState() {
         </div>
         <h3 className="mt-3 text-lg font-black text-[#111]">Nenhuma comissão registrada</h3>
         <p className="mt-2 text-sm font-medium text-[#888]">
-          Comissões aparecem após contrato vinculado e primeira parcela conforme o fluxo financeiro.
+          As comissões aparecem quando o contrato estiver ativo e a primeira parcela do plano estiver paga.
         </p>
       </div>
     </div>

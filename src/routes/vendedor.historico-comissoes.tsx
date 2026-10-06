@@ -97,7 +97,7 @@ function SellerCommissionHistoryPage() {
               </h1>
             </div>
             <p className="mt-1 text-sm text-[#6B6B6B]">
-              Consulte pagamentos, retenções e liberações por período.
+              Consulte os contratos contabilizados em cada competência mensal.
             </p>
           </div>
           <Button

@@ -4,11 +4,13 @@ import { AlertCircle } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { CommissionHistory } from "@/components/seller-commissions/CommissionHistory";
+import { CommissionProgressCard } from "@/components/seller-commissions/CommissionProgressCard";
 import { CommissionStatsGrid } from "@/components/seller-commissions/CommissionStatsGrid";
 import { CommissionsHeader } from "@/components/seller-commissions/CommissionsHeader";
 import { CommissionsSkeleton } from "@/components/seller-commissions/CommissionsSkeleton";
 import { supabase } from "@/integrations/supabase/client";
 import { summarizeCommissions, type SellerCommissionRow } from "@/lib/seller-commissions-view";
+import { calcularGanhoTotal, getNivelComissaoVendedor } from "@/lib/comissao-vendedor";
 import { getSellerContext } from "@/lib/vendedor-portal";
 
 export const Route = createFileRoute("/vendedor/comissoes")({
@@ -105,6 +107,8 @@ function CommissionsPage() {
   }, [load]);
 
   const summary = useMemo(() => summarizeCommissions(rows), [rows]);
+  const level = useMemo(() => getNivelComissaoVendedor(summary.contratos), [summary.contratos]);
+  const monthlyGain = useMemo(() => calcularGanhoTotal(summary.contratos), [summary.contratos]);
 
   return (
     <DashboardLayout>
@@ -131,6 +135,11 @@ function CommissionsPage() {
         ) : (
           <>
             <CommissionStatsGrid summary={summary} />
+            <CommissionProgressCard
+              contracts={summary.contratos}
+              level={level}
+              monthlyGain={monthlyGain}
+            />
             <CommissionHistory rows={rows} />
           </>
         )}

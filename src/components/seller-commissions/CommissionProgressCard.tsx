@@ -25,7 +25,7 @@ export function CommissionProgressCard({
               Nível {level.nome}
             </span>
             <span className="rounded-full border border-[#DEDEDE] bg-white px-4 py-2 text-sm font-bold text-[#272727] shadow-sm">
-              {contracts} {contracts === 1 ? "contrato fechado" : "contratos fechados"} no mês
+              {contracts} {contracts === 1 ? "contrato pago" : "contratos pagos"} no mês
             </span>
           </div>
 
@@ -38,13 +38,13 @@ export function CommissionProgressCard({
 
         </div>
 
-        <div className="grid grid-cols-2 gap-2.5" aria-label="Estimativa do mês">
+        <div className="grid grid-cols-2 gap-2.5" aria-label="Contagem do mês">
           <div className="rounded-xl border border-[#E8E1B9] bg-white px-3 py-3">
             <p className="text-[10px] font-black uppercase tracking-[0.1em] text-[#777]">Próximo contrato</p>
             <p className="mt-1 text-lg font-black text-[#111]">{formatMoney(level.valorPorProximoContrato)}</p>
           </div>
           <div className="rounded-xl border border-[#E8E1B9] bg-white px-3 py-3">
-            <p className="text-[10px] font-black uppercase tracking-[0.1em] text-[#777]">Estimativa do mês</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.1em] text-[#777]">Total na folha</p>
             <p className="mt-1 text-lg font-black text-[#B28E00]">{formatMoney(monthlyGain.total)}</p>
             <p className="mt-0.5 text-[10px] text-[#777]">
               {formatMoney(monthlyGain.comissao)} + {formatMoney(monthlyGain.bonus)} bônus

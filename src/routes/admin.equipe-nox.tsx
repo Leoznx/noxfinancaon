@@ -18,14 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -119,7 +112,8 @@ function EquipeNoxPage() {
     user?.role === "admin_master" ||
     user?.internalRole === "admin_master";
   const activeTab: VisibleTabKey =
-    (normalizedTab === "clientes-vendedores" || normalizedTab === "relatorio-comercial") && !canManageTimeClock
+    (normalizedTab === "clientes-vendedores" || normalizedTab === "relatorio-comercial") &&
+    !canManageTimeClock
       ? "metas"
       : normalizedTab;
 
@@ -135,15 +129,24 @@ function EquipeNoxPage() {
               </Badge>
               <h1 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl">Equipe NOX</h1>
               <p className="mt-2 max-w-xl text-sm leading-relaxed text-neutral-300 sm:text-base">
-                Controle colaboradores, metas, agenda, desempenho e jornada em uma experiência única, clara e atualizada em tempo real.
+                Controle colaboradores, metas, agenda, desempenho e jornada em uma experiência
+                única, clara e atualizada em tempo real.
               </p>
             </div>
             <div className="grid min-w-[240px] grid-cols-2 gap-2 text-xs font-bold">
-              <button type="button" onClick={() => setTab("reunioes")} className="rounded-2xl border border-white/10 bg-white/10 p-3 text-left transition hover:border-yellow-400/60 hover:bg-white/15">
+              <button
+                type="button"
+                onClick={() => setTab("reunioes")}
+                className="rounded-2xl border border-white/10 bg-white/10 p-3 text-left transition hover:border-yellow-400/60 hover:bg-white/15"
+              >
                 <CalendarDays className="mb-2 h-5 w-5 text-yellow-400" />
                 Reunião com a equipe
               </button>
-              <button type="button" onClick={() => void navigate({ to: "/admin/agenda-closers" })} className="rounded-2xl border border-white/10 bg-white/10 p-3 text-left transition hover:border-yellow-400/60 hover:bg-white/15">
+              <button
+                type="button"
+                onClick={() => void navigate({ to: "/admin/agenda-closers" })}
+                className="rounded-2xl border border-white/10 bg-white/10 p-3 text-left transition hover:border-yellow-400/60 hover:bg-white/15"
+              >
                 <Radio className="mb-2 h-5 w-5 text-emerald-400" />
                 Agenda em tempo real
               </button>
@@ -233,7 +236,6 @@ function EquipeNoxPage() {
     </DashboardLayout>
   );
 }
-
 function SeletorMes({
   month,
   year,
@@ -260,7 +262,6 @@ function SeletorMes({
     </div>
   );
 }
-
 /* ===================== METAS ===================== */
 type GoalPeriods = { daily: string; weekly: string; monthly: string };
 type SellerGoalEdit = {
@@ -311,9 +312,7 @@ function initialSharedControlGoalEdit(
   configs: Partial<Record<"sdr" | "closer", TeamGoalConfig>>,
 ): SharedControlGoalEdit {
   return {
-    callsDaily: String(
-      configs.sdr?.target_calls_daily ?? configs.closer?.target_calls_daily ?? "",
-    ),
+    callsDaily: String(configs.sdr?.target_calls_daily ?? configs.closer?.target_calls_daily ?? ""),
     leadsContactedDaily: String(
       configs.sdr?.target_leads_contacted_daily ??
         configs.closer?.target_leads_contacted_daily ??
@@ -322,9 +321,7 @@ function initialSharedControlGoalEdit(
   };
 }
 
-function sharedControlGoalsDiverge(
-  configs: Partial<Record<"sdr" | "closer", TeamGoalConfig>>,
-) {
+function sharedControlGoalsDiverge(configs: Partial<Record<"sdr" | "closer", TeamGoalConfig>>) {
   const sdr = configs.sdr;
   const closer = configs.closer;
   if (!sdr && !closer) return false;
@@ -441,16 +438,11 @@ function TabMetas() {
     }
     setSalvando(true);
     try {
-      await saveCompleteTeamGoals(
-        team,
-        month,
-        year,
-        {
-          ...targets,
-          callsDaily: Number(sharedControlEdit.callsDaily),
-          leadsContactedDaily: Number(sharedControlEdit.leadsContactedDaily),
-        },
-      );
+      await saveCompleteTeamGoals(team, month, year, {
+        ...targets,
+        callsDaily: Number(sharedControlEdit.callsDaily),
+        leadsContactedDaily: Number(sharedControlEdit.leadsContactedDaily),
+      });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Não foi possível salvar.");
       setSalvando(false);
@@ -853,7 +845,11 @@ function TabAgenda() {
     const refresh = () => void carregar();
     const channel = supabase
       .channel("admin-team-meetings-live")
-      .on("postgres_changes", { event: "*", schema: "public", table: "seller_appointments" }, refresh)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "seller_appointments" },
+        refresh,
+      )
       .on("postgres_changes", { event: "*", schema: "public", table: "internal_users" }, refresh)
       .subscribe();
     return () => {
@@ -927,7 +923,9 @@ function TabAgenda() {
       return;
     }
     if (busy.length > 0) {
-      toast.error(`Escolha outro horário. ${busy.map((row) => row.participant_name).join(", ")} já possui reunião.`);
+      toast.error(
+        `Escolha outro horário. ${busy.map((row) => row.participant_name).join(", ")} já possui reunião.`,
+      );
       setSalvando(false);
       return;
     }
@@ -946,7 +944,9 @@ function TabAgenda() {
     const result = Array.isArray(data) ? data[0] : data;
     const groupId = result?.meeting_group_id ?? "reuniao-equipe";
     const participantCount = Number(result?.participant_count ?? activeTargetCount);
-    toast.success(`Reunião agendada para ${participantCount} colaborador${participantCount === 1 ? "" : "es"}.`);
+    toast.success(
+      `Reunião agendada para ${participantCount} colaborador${participantCount === 1 ? "" : "es"}.`,
+    );
     registrarAuditoria({
       actorUserId: user?.id,
       actorRole: user?.internalRole || user?.role,
@@ -997,7 +997,8 @@ function TabAgenda() {
             <div>
               <CardTitle>Nova reunião com a equipe</CardTitle>
               <p className="mt-1 text-sm text-muted-foreground">
-                Selecione uma ou várias pessoas. O sistema confirma a disponibilidade de todos antes de reservar.
+                Selecione uma ou várias pessoas. O sistema confirma a disponibilidade de todos antes
+                de reservar.
               </p>
             </div>
           </div>
@@ -1030,12 +1031,22 @@ function TabAgenda() {
                     onClick={() => toggleSeller(v.id)}
                     className={`flex items-center gap-3 rounded-xl border p-3 text-left transition ${selected ? "border-yellow-400 bg-yellow-50" : "border-neutral-200 bg-white hover:border-yellow-300"}`}
                   >
-                    <span className={`grid h-8 w-8 place-items-center rounded-full ${selected ? "bg-yellow-400" : "bg-neutral-100"}`}>
-                      {selected ? <CheckCircle2 className="h-4 w-4" /> : <UserRound className="h-4 w-4 text-neutral-500" />}
+                    <span
+                      className={`grid h-8 w-8 place-items-center rounded-full ${selected ? "bg-yellow-400" : "bg-neutral-100"}`}
+                    >
+                      {selected ? (
+                        <CheckCircle2 className="h-4 w-4" />
+                      ) : (
+                        <UserRound className="h-4 w-4 text-neutral-500" />
+                      )}
                     </span>
                     <span className="min-w-0">
-                      <span className="block truncate text-sm font-bold">{v.full_name || "Vendedor"}</span>
-                      <span className="text-[10px] font-black uppercase tracking-wider text-neutral-400">{v.seller_type || "comercial"}</span>
+                      <span className="block truncate text-sm font-bold">
+                        {v.full_name || "Vendedor"}
+                      </span>
+                      <span className="text-[10px] font-black uppercase tracking-wider text-neutral-400">
+                        {v.seller_type || "comercial"}
+                      </span>
                     </span>
                   </button>
                 );
@@ -1057,24 +1068,37 @@ function TabAgenda() {
             value={notas}
             onChange={(e) => setNotas(e.target.value)}
           />
-          <div className={`rounded-xl border p-3 ${busy.length > 0 || availabilityError ? "border-red-200 bg-red-50" : "border-emerald-200 bg-emerald-50"}`}>
+          <div
+            className={`rounded-xl border p-3 ${busy.length > 0 || availabilityError ? "border-red-200 bg-red-50" : "border-emerald-200 bg-emerald-50"}`}
+          >
             {checking ? (
-              <p className="flex items-center gap-2 text-sm font-bold text-neutral-600"><Clock3 className="h-4 w-4 animate-pulse" /> Conferindo todas as agendas…</p>
+              <p className="flex items-center gap-2 text-sm font-bold text-neutral-600">
+                <Clock3 className="h-4 w-4 animate-pulse" /> Conferindo todas as agendas…
+              </p>
             ) : availabilityError ? (
-              <p className="flex items-center gap-2 text-sm font-bold text-red-800"><AlertTriangle className="h-4 w-4" /> {availabilityError}</p>
+              <p className="flex items-center gap-2 text-sm font-bold text-red-800">
+                <AlertTriangle className="h-4 w-4" /> {availabilityError}
+              </p>
             ) : activeTargetCount === 0 ? (
-              <p className="text-sm font-bold text-amber-800">Selecione os participantes para verificar o horário.</p>
+              <p className="text-sm font-bold text-amber-800">
+                Selecione os participantes para verificar o horário.
+              </p>
             ) : busy.length > 0 ? (
               <div className="text-sm text-red-800">
-                <p className="flex items-center gap-2 font-black"><AlertTriangle className="h-4 w-4" /> Horário indisponível</p>
+                <p className="flex items-center gap-2 font-black">
+                  <AlertTriangle className="h-4 w-4" /> Horário indisponível
+                </p>
                 {busy.map((row) => (
                   <p key={row.participant_id} className="mt-1 text-xs">
-                    {row.participant_name}: {row.conflict_title || "outra reunião"} às {formatDateTime(row.conflict_start)}
+                    {row.participant_name}: {row.conflict_title || "outra reunião"} às{" "}
+                    {formatDateTime(row.conflict_start)}
                   </p>
                 ))}
               </div>
             ) : (
-              <p className="flex items-center gap-2 text-sm font-black text-emerald-800"><CheckCircle2 className="h-4 w-4" /> Todos disponíveis neste horário</p>
+              <p className="flex items-center gap-2 text-sm font-black text-emerald-800">
+                <CheckCircle2 className="h-4 w-4" /> Todos disponíveis neste horário
+              </p>
             )}
           </div>
           <Button
@@ -1090,7 +1114,10 @@ function TabAgenda() {
       <Card className="border-neutral-200 shadow-sm">
         <CardHeader>
           <CardTitle>Agenda criada pela administração</CardTitle>
-          <p className="text-sm text-muted-foreground">Os participantes recebem um sino amarelo e não podem reagendar nem excluir estes compromissos.</p>
+          <p className="text-sm text-muted-foreground">
+            Os participantes recebem um sino amarelo e não podem reagendar nem excluir estes
+            compromissos.
+          </p>
         </CardHeader>
         <CardContent className="space-y-3">
           {loading ? (
@@ -1134,11 +1161,16 @@ function TabAgenda() {
                           ? (STATUS_LABEL[primeira.status] ?? primeira.status)
                           : "Misto"}
                       </Badge>
-                      {primeira.status !== "cancelado" && new Date(primeira.scheduled_at) > new Date() && (
-                        <Button size="sm" variant="outline" onClick={() => cancelarGrupo(grupo.id)}>
-                          Cancelar
-                        </Button>
-                      )}
+                      {primeira.status !== "cancelado" &&
+                        new Date(primeira.scheduled_at) > new Date() && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => cancelarGrupo(grupo.id)}
+                          >
+                            Cancelar
+                          </Button>
+                        )}
                     </div>
                   </div>
                 </div>
@@ -1190,6 +1222,7 @@ function TabComissoesEquipe({ initialView }: { initialView: "comissoes" | "equip
 }
 
 const STATUS_COMISSAO = [
+  { v: "contabilizada", l: "Contabilizada na folha" },
   { v: "aguardando_primeira_parcela", l: "Aguardando 1ª parcela" },
   { v: "pendente", l: "Pendente" },
   { v: "elegivel", l: "Elegível" },
@@ -1201,15 +1234,12 @@ const STATUS_COMISSAO = [
 ];
 
 function TabComissoes() {
-  const { user } = useAuth();
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
   const [vendedores, setVendedores] = useState<any[]>([]);
   const [linhas, setLinhas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [openNovo, setOpenNovo] = useState(false);
-  const [editando, setEditando] = useState<any | null>(null);
   const [detalheSellerId, setDetalheSellerId] = useState<string | null>(null);
 
   const carregar = useCallback(async () => {
@@ -1226,6 +1256,7 @@ function TabComissoes() {
         .select("*, internal_users(full_name, seller_type)")
         .eq("month", month)
         .eq("year", year)
+        .eq("status", "contabilizada")
         .order("created_at", { ascending: false }),
     ]);
     setVendedores((vs as any[]) ?? []);
@@ -1248,45 +1279,6 @@ function TabComissoes() {
       .subscribe();
     return () => void supabase.removeChannel(channel);
   }, [carregar]);
-
-  const salvar = async (form: any) => {
-    if (!form.seller_id) {
-      toast.error("Selecione o vendedor.");
-      return;
-    }
-    const payload = {
-      seller_id: form.seller_id,
-      month,
-      year,
-      commission_amount: Number(form.commission_amount || 0),
-      bonus_amount: Number(form.bonus_amount || 0),
-      reserve_amount: Number(form.reserve_amount || 0),
-      released_amount: Number(form.released_amount || 0),
-      status: form.status,
-    };
-    const result = form.id
-      ? await supabase
-          .from("seller_commissions" as any)
-          .update(payload)
-          .eq("id", form.id)
-      : await supabase.from("seller_commissions" as any).insert(payload);
-    if (result.error) {
-      toast.error(result.error.message);
-      return;
-    }
-    toast.success(form.id ? "Comissão atualizada." : "Comissão lançada.");
-    registrarAuditoria({
-      actorUserId: user?.id,
-      actorRole: user?.internalRole || user?.role,
-      action: form.id ? "editar_comissao_manual" : "lancar_comissao_manual",
-      tableName: "seller_commissions",
-      recordId: form.id ?? form.seller_id,
-      after: payload,
-    });
-    setOpenNovo(false);
-    setEditando(null);
-    carregar();
-  };
 
   const totalMes = linhas.reduce(
     (s, l) => s + Number(l.commission_amount ?? 0) + Number(l.bonus_amount ?? 0),
@@ -1327,7 +1319,8 @@ function TabComissoes() {
           <div>
             <CardTitle>Comissões da equipe</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Lance ou ajuste comissões manuais por vendedor. Total do mês: {formatMoney(totalMes)}
+              Fechamento automático de contratos ativos e pagos. Total da folha:{" "}
+              {formatMoney(totalMes)}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
@@ -1339,14 +1332,6 @@ function TabComissoes() {
                 setYear(y);
               }}
             />
-            <ComissaoFormDialog
-              open={openNovo}
-              setOpen={setOpenNovo}
-              vendedores={vendedores}
-              onSubmit={salvar}
-            >
-              <Button size="sm">Lançar comissão</Button>
-            </ComissaoFormDialog>
           </div>
         </CardHeader>
         <CardContent>
@@ -1368,18 +1353,9 @@ function TabComissoes() {
                     </Badge>
                   </div>
                   <div className="mt-1.5 text-xs text-neutral-500">
-                    Comissão {formatMoney(l.commission_amount)} · Bônus{" "}
-                    {formatMoney(l.bonus_amount)} · Reserva {formatMoney(l.reserve_amount)} ·
-                    Liberado {formatMoney(l.released_amount)}
+                    Cliente {l.client_name || "—"} · Comissão {formatMoney(l.commission_amount)} ·
+                    Bônus {formatMoney(l.bonus_amount)}
                   </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="mt-2"
-                    onClick={() => setEditando(l)}
-                  >
-                    Editar
-                  </Button>
                 </div>
               ))
             )}
@@ -1391,12 +1367,12 @@ function TabComissoes() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Vendedor</TableHead>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead>Ordem</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Comissão</TableHead>
                   <TableHead>Bônus</TableHead>
-                  <TableHead>Reserva</TableHead>
-                  <TableHead>Liberado</TableHead>
-                  <TableHead>Ações</TableHead>
+                  <TableHead>Total</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1421,6 +1397,8 @@ function TabComissoes() {
                       <TableCell className="font-medium">
                         {l.internal_users?.full_name ?? "—"}
                       </TableCell>
+                      <TableCell>{l.client_name || "—"}</TableCell>
+                      <TableCell>{l.contract_sequence ? `${l.contract_sequence}º` : "—"}</TableCell>
                       <TableCell>
                         <Badge variant="outline">
                           {STATUS_COMISSAO.find((s) => s.v === l.status)?.l ?? l.status}
@@ -1428,12 +1406,10 @@ function TabComissoes() {
                       </TableCell>
                       <TableCell>{formatMoney(l.commission_amount)}</TableCell>
                       <TableCell>{formatMoney(l.bonus_amount)}</TableCell>
-                      <TableCell>{formatMoney(l.reserve_amount)}</TableCell>
-                      <TableCell>{formatMoney(l.released_amount)}</TableCell>
-                      <TableCell>
-                        <Button size="sm" variant="outline" onClick={() => setEditando(l)}>
-                          Editar
-                        </Button>
+                      <TableCell className="font-bold">
+                        {formatMoney(
+                          Number(l.commission_amount || 0) + Number(l.bonus_amount || 0),
+                        )}
                       </TableCell>
                     </TableRow>
                   ))
@@ -1444,15 +1420,6 @@ function TabComissoes() {
         </CardContent>
       </Card>
 
-      {editando && (
-        <ComissaoFormDialog
-          open={!!editando}
-          setOpen={(v: boolean) => !v && setEditando(null)}
-          vendedores={vendedores}
-          initial={editando}
-          onSubmit={salvar}
-        />
-      )}
       <Dialog open={!!detalheSellerId} onOpenChange={(open) => !open && setDetalheSellerId(null)}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
@@ -1474,7 +1441,8 @@ function TabComissoes() {
                       {STATUS_COMISSAO.find((item) => item.v === linha.status)?.l || linha.status}
                     </p>
                     <p className="text-xs text-neutral-500">
-                      {formatDateTime(linha.created_at)} · contrato{" "}
+                      {linha.client_name || "Cliente sem nome"} ·{" "}
+                      {formatDateTime(linha.counted_at || linha.created_at)} · contrato{" "}
                       {linha.contract_id || "lançamento manual"}
                     </p>
                   </div>
@@ -1488,9 +1456,11 @@ function TabComissoes() {
                     </b>
                   </span>
                   <span>
-                    Liberado
+                    Competência
                     <br />
-                    <b>{formatMoney(linha.released_amount)}</b>
+                    <b>
+                      {String(linha.month).padStart(2, "0")}/{linha.year}
+                    </b>
                   </span>
                 </div>
               ))}
@@ -1503,131 +1473,5 @@ function TabComissoes() {
         </DialogContent>
       </Dialog>
     </div>
-  );
-}
-
-function ComissaoFormDialog({ open, setOpen, vendedores, initial, onSubmit, children }: any) {
-  const [form, setForm] = useState<any>(
-    () =>
-      initial ?? {
-        seller_id: "",
-        commission_amount: "",
-        bonus_amount: "",
-        reserve_amount: "",
-        released_amount: "",
-        status: "pendente",
-      },
-  );
-
-  useEffect(() => {
-    if (initial) {
-      setForm({
-        ...initial,
-        commission_amount: String(initial.commission_amount ?? 0),
-        bonus_amount: String(initial.bonus_amount ?? 0),
-        reserve_amount: String(initial.reserve_amount ?? 0),
-        released_amount: String(initial.released_amount ?? 0),
-      });
-    } else if (open) {
-      setForm({
-        seller_id: "",
-        commission_amount: "",
-        bonus_amount: "",
-        reserve_amount: "",
-        released_amount: "",
-        status: "pendente",
-      });
-    }
-  }, [initial, open]);
-
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      {children && <DialogTrigger asChild>{children}</DialogTrigger>}
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{initial ? "Editar comissão" : "Lançar comissão manual"}</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-3">
-          <div>
-            <Label>Vendedor</Label>
-            <Select
-              value={form.seller_id}
-              onValueChange={(v) => setForm({ ...form, seller_id: v })}
-              disabled={!!initial}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione" />
-              </SelectTrigger>
-              <SelectContent>
-                {vendedores.map((v: any) => (
-                  <SelectItem key={v.id} value={v.id}>
-                    {v.full_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label>Comissão (R$)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                value={form.commission_amount}
-                onChange={(e) => setForm({ ...form, commission_amount: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>Bônus (R$)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                value={form.bonus_amount}
-                onChange={(e) => setForm({ ...form, bonus_amount: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>Reserva (R$)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                value={form.reserve_amount}
-                onChange={(e) => setForm({ ...form, reserve_amount: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>Liberado (R$)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                value={form.released_amount}
-                onChange={(e) => setForm({ ...form, released_amount: e.target.value })}
-              />
-            </div>
-          </div>
-          <div>
-            <Label>Status</Label>
-            <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {STATUS_COMISSAO.map((s) => (
-                  <SelectItem key={s.v} value={s.v}>
-                    {s.l}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>
-            Cancelar
-          </Button>
-          <Button onClick={() => onSubmit(form)}>Salvar</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }

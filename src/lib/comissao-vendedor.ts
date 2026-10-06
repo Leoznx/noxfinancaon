@@ -3,15 +3,15 @@
 export const MARCOS_BONUS_VENDEDOR = [
   { contratos: 15, rotulo: "15", bonus: 400 },
   { contratos: 30, rotulo: "30", bonus: 600 },
-  { contratos: 46, rotulo: "45+", bonus: 1200 },
+  { contratos: 45, rotulo: "45", bonus: 1200 },
 ] as const;
 
 /** Comissão progressiva por contrato fechado no mês. */
 export function calcularComissaoContratos(contratos: number): number {
   const total = Math.max(0, Math.floor(contratos));
-  const primeiraFaixa = Math.min(total, 15) * 35;
-  const segundaFaixa = Math.min(Math.max(total - 15, 0), 10) * 55;
-  const terceiraFaixa = Math.max(total - 25, 0) * 75;
+  const primeiraFaixa = Math.min(total, 15) * 25;
+  const segundaFaixa = Math.min(Math.max(total - 15, 0), 10) * 35;
+  const terceiraFaixa = Math.max(total - 25, 0) * 45;
   return primeiraFaixa + segundaFaixa + terceiraFaixa;
 }
 
@@ -20,7 +20,7 @@ export function calcularBonus(contratos: number): number {
   let bonus = 0;
   if (contratos >= 15) bonus += 400;
   if (contratos >= 30) bonus += 600;
-  if (contratos > 45) bonus += 1200;
+  if (contratos >= 45) bonus += 1200;
   return bonus;
 }
 
@@ -48,7 +48,7 @@ export function getNivelComissaoVendedor(contratos: number): NivelComissaoVended
     const faltam = 15 - total;
     return {
       nome: "Arranque",
-      valorPorProximoContrato: 35,
+      valorPorProximoContrato: 25,
       proximoMarco: 15,
       mensagem: `Faltam ${faltam} ${faltam === 1 ? "contrato" : "contratos"} para liberar o bônus de R$ 400 e avançar de nível.`,
     };
@@ -57,34 +57,34 @@ export function getNivelComissaoVendedor(contratos: number): NivelComissaoVended
     const faltam = 25 - total;
     return {
       nome: "Aceleração",
-      valorPorProximoContrato: 55,
+      valorPorProximoContrato: 35,
       proximoMarco: 25,
-      mensagem: `Você já conquistou R$ 400 de bônus. Faltam ${faltam} ${faltam === 1 ? "contrato" : "contratos"} para chegar à faixa de R$ 75 por contrato.`,
+      mensagem: `Você já conquistou R$ 400 de bônus. Faltam ${faltam} ${faltam === 1 ? "contrato" : "contratos"} para chegar à faixa de R$ 45 por contrato.`,
     };
   }
   if (total < 30) {
     const faltam = 30 - total;
     return {
       nome: "Elite",
-      valorPorProximoContrato: 75,
+      valorPorProximoContrato: 45,
       proximoMarco: 30,
       mensagem: `Faixa máxima por contrato conquistada. Faltam ${faltam} ${faltam === 1 ? "contrato" : "contratos"} para somar mais R$ 600 de bônus.`,
     };
   }
-  if (total <= 45) {
-    const faltam = 46 - total;
+  if (total < 45) {
+    const faltam = 45 - total;
     return {
       nome: "Elite",
-      valorPorProximoContrato: 75,
-      proximoMarco: 46,
+      valorPorProximoContrato: 45,
+      proximoMarco: 45,
       mensagem: `Você já acumulou R$ 1.000 em bônus. Faltam ${faltam} ${faltam === 1 ? "contrato" : "contratos"} para somar mais R$ 1.200.`,
     };
   }
   return {
     nome: "Elite",
-    valorPorProximoContrato: 75,
+    valorPorProximoContrato: 45,
     proximoMarco: null,
-    mensagem: "Nível máximo alcançado: R$ 75 por novo contrato e R$ 2.200 em bônus acumulados.",
+    mensagem: "Nível máximo alcançado: R$ 45 por novo contrato e R$ 2.200 em bônus acumulados.",
   };
 }
 

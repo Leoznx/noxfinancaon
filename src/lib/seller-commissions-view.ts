@@ -8,6 +8,11 @@ export type SellerCommissionRow = {
   released_amount: number | null;
   status: string;
   created_at: string;
+  eligible_at: string | null;
+  client_name: string | null;
+  paid_at: string | null;
+  counted_at: string | null;
+  contract_sequence: number | null;
   released_at: string | null;
   reserve_release_at: string | null;
   apolice_id: string | null;
@@ -26,6 +31,7 @@ export type CommissionHistoryFilter = "all" | "paid" | "retained";
 export type CommissionPeriod = "current" | "previous" | "last3" | "last6" | "year";
 
 export const COMMISSION_STATUS_LABELS: Record<string, string> = {
+  contabilizada: "Contabilizada na folha",
   aguardando_primeira_parcela: "Aguardando 1ª parcela",
   pendente: "Pendente",
   elegivel: "Elegível",
@@ -48,6 +54,14 @@ export const COMMISSION_PERIOD_OPTIONS: Array<{ value: CommissionPeriod; label: 
 
 const PAID_STATUSES = new Set(["liberada_parcial", "liberada_total", "paga", "pago"]);
 const RETAINED_STATUSES = new Set(["retida", "liberada_parcial"]);
+const COUNTED_STATUSES = new Set([
+  "contabilizada",
+  "retida",
+  "liberada_parcial",
+  "liberada_total",
+  "paga",
+  "pago",
+]);
 
 function monthIndex(month: number, year: number) {
   return year * 12 + month - 1;
@@ -65,6 +79,7 @@ export function filterCommissionHistory(
 
   return rows.filter((row) => {
     const normalizedStatus = String(row.status ?? "").toLowerCase();
+    if (!COUNTED_STATUSES.has(normalizedStatus)) return false;
     if (filter === "paid" && !PAID_STATUSES.has(normalizedStatus)) return false;
     if (filter === "retained" && !RETAINED_STATUSES.has(normalizedStatus)) return false;
 
@@ -78,26 +93,28 @@ export function filterCommissionHistory(
 }
 
 export function summarizeCommissions(rows: SellerCommissionRow[]) {
-  return rows.reduce(
+  return filterCommissionHistory(rows, "all", "current").reduce(
     (summary, row) => ({
+      contratos: summary.contratos + 1,
       comissao: summary.comissao + Number(row.commission_amount ?? 0),
       bonus: summary.bonus + Number(row.bonus_amount ?? 0),
-      retido: summary.retido + Number(row.reserve_amount ?? 0),
-      liberado: summary.liberado + Number(row.released_amount ?? 0),
+      total:
+        summary.total +
+        Number(row.commission_amount ?? 0) +
+        Number(row.bonus_amount ?? 0),
     }),
-    { comissao: 0, bonus: 0, retido: 0, liberado: 0 },
+    { contratos: 0, comissao: 0, bonus: 0, total: 0 },
   );
 }
 
 export function getCommissionEntryAmount(row: SellerCommissionRow) {
-  const released = Number(row.released_amount ?? 0);
-  const commission = Number(row.commission_amount ?? 0);
-  return released > 0 ? released : commission;
+  return Number(row.commission_amount ?? 0) + Number(row.bonus_amount ?? 0);
 }
 
 export function getCommissionCustomerName(row: SellerCommissionRow) {
   const tenant = row.apolices?.consulta;
   return (
+    row.client_name?.trim() ||
     tenant?.tenant_name?.trim() ||
     tenant?.inquilino?.razao_social?.trim() ||
     tenant?.inquilino?.nome?.trim() ||
@@ -111,4 +128,8 @@ export function getCommissionContractNumber(row: SellerCommissionRow) {
 
 export function getCommissionType(_row: SellerCommissionRow) {
   return "Comissão";
+}
+
+export function getCommissionCountedAt(row: SellerCommissionRow) {
+  return row.counted_at || row.eligible_at || row.paid_at || row.created_at;
 }

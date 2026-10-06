@@ -2753,13 +2753,17 @@ export type Database = {
           clawback_applied_at: string | null
           clawback_reason: string | null
           clawback_until: string | null
+          client_name: string | null
           commission_amount: number
           contract_id: string | null
+          contract_sequence: number | null
+          counted_at: string | null
           created_at: string
           eligible_at: string | null
           id: string
           mensalidade_id: string | null
           month: number
+          paid_at: string | null
           released_amount: number
           released_at: string | null
           reserve_amount: number
@@ -2776,13 +2780,17 @@ export type Database = {
           clawback_applied_at?: string | null
           clawback_reason?: string | null
           clawback_until?: string | null
+          client_name?: string | null
           commission_amount?: number
           contract_id?: string | null
+          contract_sequence?: number | null
+          counted_at?: string | null
           created_at?: string
           eligible_at?: string | null
           id?: string
           mensalidade_id?: string | null
           month: number
+          paid_at?: string | null
           released_amount?: number
           released_at?: string | null
           reserve_amount?: number
@@ -2799,13 +2807,17 @@ export type Database = {
           clawback_applied_at?: string | null
           clawback_reason?: string | null
           clawback_until?: string | null
+          client_name?: string | null
           commission_amount?: number
           contract_id?: string | null
+          contract_sequence?: number | null
+          counted_at?: string | null
           created_at?: string
           eligible_at?: string | null
           id?: string
           mensalidade_id?: string | null
           month?: number
+          paid_at?: string | null
           released_amount?: number
           released_at?: string | null
           reserve_amount?: number
