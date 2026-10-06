@@ -379,8 +379,8 @@ BEGIN
 
   v_closer_id := coalesce(v_meeting.assigned_closer_id, v_meeting.seller_id);
 
-  SELECT event, link.source_sdr_id
-  INTO v_event, v_link_source_sdr_id
+  SELECT event.*
+  INTO v_event
   FROM public.seller_signup_link_send_events AS event
   JOIN public.seller_signup_links AS link ON link.id = event.link_id
   WHERE event.appointment_id = v_meeting.id
@@ -396,6 +396,11 @@ BEGIN
   IF v_event.id IS NULL THEN
     RAISE EXCEPTION 'Este link nao foi enviado pela reuniao informada.';
   END IF;
+
+  SELECT link.source_sdr_id
+  INTO v_link_source_sdr_id
+  FROM public.seller_signup_links AS link
+  WHERE link.id = v_event.link_id;
 
   RETURN QUERY
   SELECT claimed.recipient_email, claimed.recipient_name, claimed.credited_seller_type
