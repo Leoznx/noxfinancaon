@@ -1,4 +1,4 @@
--- Recupera o SDR de origem quando um Closer usa, dentro de uma reuniao,
+-- Recupera automaticamente o SDR de origem quando um Closer usa, dentro de uma reuniao,
 -- um link direto que ainda nao carregava o contexto do handoff. O telefone e
 -- comparado de forma exata com Leads do Dia e o vinculo encontrado passa a
 -- alimentar atribuicao, agenda, follow-ups e metricas compartilhadas.

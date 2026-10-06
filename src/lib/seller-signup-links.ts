@@ -25,9 +25,13 @@ export async function fetchSellerSignupLinks(sourceSdrId: string | null) {
   })) satisfies SellerSignupLink[];
 }
 
-export async function fetchMeetingSignupLinks(appointmentId: string) {
+export async function fetchMeetingSignupLinks(
+  appointmentId: string,
+  sourceSdrId: string | null = null,
+) {
   const { data, error } = await (supabase as any).rpc("get_meeting_signup_links", {
     p_appointment_id: appointmentId,
+    p_source_sdr_id: sourceSdrId,
   });
   if (error) throw error;
   return ((data as Record<string, unknown>[] | null) ?? []).map((row) => ({
@@ -36,6 +40,17 @@ export async function fetchMeetingSignupLinks(appointmentId: string) {
     sourceSdrId: row.source_sdr_id ? String(row.source_sdr_id) : null,
     sourceSdrName: row.source_sdr_name ? String(row.source_sdr_name) : null,
   })) satisfies SellerSignupLink[];
+}
+
+export async function fetchMeetingSourceSdrOptions(appointmentId: string) {
+  const { data, error } = await (supabase as any).rpc("get_meeting_source_sdr_options", {
+    p_appointment_id: appointmentId,
+  });
+  if (error) throw error;
+  return ((data as Record<string, unknown>[] | null) ?? []).map((row) => ({
+    id: String(row.sdr_id),
+    name: String(row.sdr_name || "Vendedor"),
+  })) satisfies SignupLinkSdr[];
 }
 
 export async function fetchSignupLinkSdrs() {
@@ -102,12 +117,7 @@ export async function recordMeetingSignupSelectorSend(
   try {
     await Promise.all(
       links.map((link) =>
-        recordMeetingSignupLinkSend(
-          appointmentId,
-          link.token,
-          link.profileRole,
-          channel,
-        ),
+        recordMeetingSignupLinkSend(appointmentId, link.token, link.profileRole, channel),
       ),
     );
   } catch (fallbackError) {

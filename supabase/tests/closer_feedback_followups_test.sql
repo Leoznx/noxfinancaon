@@ -27,7 +27,7 @@ SELECT has_column('public', 'seller_appointments', 'meeting_feedback', 'agenda a
 SELECT has_column('public', 'seller_appointments', 'follow_up_owner_type', 'follow-up identifica SDR ou Closer');
 SELECT has_column('public', 'seller_appointments', 'follow_up_message_key', 'follow-up escolhe uma mensagem do WhatsApp');
 SELECT has_function('public', 'complete_closer_meeting', ARRAY['uuid', 'text'], 'RPC de conclusao com feedback existe');
-SELECT has_function('public', 'get_meeting_signup_links', ARRAY['uuid'], 'RPC contextual de cadastro existe');
+SELECT has_function('public', 'get_meeting_signup_links', ARRAY['uuid', 'uuid'], 'RPC contextual de cadastro existe');
 
 SELECT * FROM finish();
 ROLLBACK;
