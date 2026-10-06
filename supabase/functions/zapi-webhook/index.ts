@@ -14,6 +14,26 @@ import {
 } from "../_shared/whatsapp-billing.ts";
 import { hasOversizedBody } from "../_shared/http-security.ts";
 
+type WeeklyFollowupPreference = "opt_out" | "opt_in" | null;
+
+function parseWeeklyFollowupPreference(
+  value: string | null | undefined,
+): WeeklyFollowupPreference {
+  const normalized = String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z]/g, "");
+  if (["sair", "pare", "parar", "cancelar", "stop"].includes(normalized)) {
+    return "opt_out";
+  }
+  if (["voltar", "receber", "retomar"].includes(normalized)) {
+    return "opt_in";
+  }
+  return null;
+}
+
 const OPEN_STATUSES = [
   "pending",
   "overdue",
@@ -70,6 +90,84 @@ async function sendSafeReply(phone: string, message: string) {
   return result.sent
     ? { sent: true }
     : { sent: false, reason: result.reason || "send_failed" };
+}
+
+async function handleWeeklyFollowupPreference(
+  request: Request,
+  payload: Record<string, unknown>,
+  preference: Exclude<WeeklyFollowupPreference, null>,
+) {
+  if (payload.fromMe === true || payload.isGroup === true) {
+    return jsonResponse(request, {
+      ok: true,
+      ignored: true,
+      reason: "unsupported_origin",
+    });
+  }
+  const phone = normalizeWhatsappPhone(String(payload.phone || ""));
+  if (!phone) {
+    return jsonResponse(request, {
+      ok: true,
+      ignored: true,
+      reason: "invalid_phone",
+    });
+  }
+
+  const admin = supabaseAdmin();
+  if (preference === "opt_out") {
+    const { error } = await admin
+      .from("weekly_whatsapp_followup_opt_outs")
+      .upsert({
+        phone,
+        reason: "whatsapp_reply",
+        opted_out_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+    if (error) {
+      console.error("[weekly-followup] opt-out failed", error.message);
+      return jsonResponse(request, { ok: false, error: "opt_out_failed" }, 503);
+    }
+    await admin
+      .from("weekly_whatsapp_followups")
+      .update({
+        status: "skipped",
+        last_error: "user_opt_out",
+        next_attempt_at: null,
+        locked_at: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("recipient_phone", phone)
+      .in("status", ["planned", "failed"]);
+    const reply = await sendSafeReply(
+      phone,
+      "Tudo certo! Você não receberá mais os lembretes semanais da NOX. Se quiser voltar, responda VOLTAR. 💛",
+    );
+    return jsonResponse(request, {
+      ok: true,
+      handled: true,
+      preference,
+      reply,
+    });
+  }
+
+  const { error } = await admin
+    .from("weekly_whatsapp_followup_opt_outs")
+    .delete()
+    .eq("phone", phone);
+  if (error) {
+    console.error("[weekly-followup] opt-in failed", error.message);
+    return jsonResponse(request, { ok: false, error: "opt_in_failed" }, 503);
+  }
+  const reply = await sendSafeReply(
+    phone,
+    "Pronto! Seus lembretes semanais da NOX foram reativados. Que bom ter você por aqui! 😊💛",
+  );
+  return jsonResponse(request, {
+    ok: true,
+    handled: true,
+    preference,
+    reply,
+  });
 }
 
 async function handleBillingCommand(
@@ -386,6 +484,19 @@ async function findFinancialDelivery(supabase: any, ids: string[]) {
   return null;
 }
 
+async function findWeeklyFollowupDelivery(supabase: any, ids: string[]) {
+  for (const id of ids) {
+    const { data } = await supabase
+      .from("weekly_whatsapp_followups")
+      .select("id, status")
+      .eq("provider_message_id", id)
+      .limit(1)
+      .maybeSingle();
+    if (data) return { ...data, providerMessageId: id };
+  }
+  return null;
+}
+
 Deno.serve(async (request) => {
   if (request.method !== "POST") {
     return jsonResponse(
@@ -412,7 +523,12 @@ Deno.serve(async (request) => {
     return jsonResponse(request, { ok: false, error: "invalid_payload" }, 400);
   }
   const record = payload as Record<string, unknown>;
-  const method = parseWhatsappBillingCommand(receivedWhatsappText(record));
+  const receivedText = receivedWhatsappText(record);
+  const preference = parseWeeklyFollowupPreference(receivedText);
+  if (String(record.type || "") === "ReceivedCallback" && preference) {
+    return handleWeeklyFollowupPreference(request, record, preference);
+  }
+  const method = parseWhatsappBillingCommand(receivedText);
   if (String(record.type || "") === "ReceivedCallback" && method) {
     return handleBillingCommand(request, record, method);
   }
@@ -427,11 +543,12 @@ Deno.serve(async (request) => {
   }
 
   const supabase = supabaseAdmin();
-  const [contractDelivery, financialDelivery] = await Promise.all([
+  const [contractDelivery, financialDelivery, weeklyFollowupDelivery] = await Promise.all([
     findContractDelivery(supabase, ids),
     findFinancialDelivery(supabase, ids),
+    findWeeklyFollowupDelivery(supabase, ids),
   ]);
-  if (!contractDelivery && !financialDelivery) {
+  if (!contractDelivery && !financialDelivery && !weeklyFollowupDelivery) {
     return jsonResponse(request, {
       ok: true,
       ignored: true,
@@ -474,6 +591,24 @@ Deno.serve(async (request) => {
       .update(deliveryUpdate(resolved.status, resolved.error))
       .eq("id", financialDelivery.id);
   }
+  if (
+    weeklyFollowupDelivery &&
+    canAdvanceDelivery(weeklyFollowupDelivery.status, resolved.status)
+  ) {
+    const now = new Date().toISOString();
+    await supabase
+      .from("weekly_whatsapp_followups")
+      .update({
+        status: resolved.status,
+        provider_status: providerStatus || resolved.status,
+        last_error: resolved.error,
+        ...(resolved.status === "sent" ? { sent_at: now } : {}),
+        ...(resolved.status === "delivered" ? { delivered_at: now } : {}),
+        ...(resolved.status === "read" ? { read_at: now } : {}),
+        updated_at: now,
+      })
+      .eq("id", weeklyFollowupDelivery.id);
+  }
 
   return jsonResponse(request, {
     ok: true,
@@ -481,5 +616,6 @@ Deno.serve(async (request) => {
     status: resolved.status,
     contract: !!contractDelivery,
     financial: !!financialDelivery,
+    weeklyFollowup: !!weeklyFollowupDelivery,
   });
 });
