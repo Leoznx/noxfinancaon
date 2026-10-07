@@ -336,7 +336,7 @@ function AprovacoesPage() {
       </div>
 
       <Dialog open={!!detalhe} onOpenChange={(open) => !open && setDetalhe(null)}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-h-[calc(100dvh-1rem)] w-[calc(100%-1rem)] max-w-3xl overflow-y-auto overscroll-contain rounded-lg p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:w-full sm:p-6">
           <DialogHeader>
             <DialogTitle>Detalhes da aprovação</DialogTitle>
             <DialogDescription>Dados da consulta e documentação complementar (quando enviada).</DialogDescription>
