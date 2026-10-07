@@ -1,5 +1,5 @@
 BEGIN;
-SELECT plan(14);
+SELECT plan(16);
 
 SELECT has_table('public', 'weekly_whatsapp_followups', 'fila semanal existe');
 SELECT has_table('public', 'weekly_whatsapp_followup_opt_outs', 'opt-out existe');
@@ -46,6 +46,17 @@ SELECT like(
   pg_get_functiondef('public.plan_weekly_whatsapp_followups(timestamp with time zone)'::regprocedure),
   '%interval ''10 minutes''%',
   'horários são distribuídos em intervalos de dez minutos'
+);
+SELECT has_function(
+  'public',
+  'set_weekly_whatsapp_message_variant',
+  ARRAY[]::text[],
+  'rotacionador semanal existe'
+);
+SELECT like(
+  pg_get_functiondef('public.set_weekly_whatsapp_message_variant()'::regprocedure),
+  '%2026-01-05%',
+  'rotacionador usa uma base semanal estável'
 );
 
 SELECT ok(

@@ -36,6 +36,14 @@ test("monta CTA interativo com acesso ao site e simulacao", () => {
   );
 });
 
+test("mantém o nome cadastrado no login e troca a mensagem entre variantes", () => {
+  const first = buildWeeklyFollowupMessage({ name: "Leonardo Silva", variant: 0 });
+  const second = buildWeeklyFollowupMessage({ name: "Leonardo Silva", variant: 1 });
+  assert.match(first, /Leonardo Silva/);
+  assert.match(second, /Leonardo Silva/);
+  assert.notEqual(first, second);
+});
+
 test("interpreta saída e reativação sem depender de acento ou pontuação", () => {
   assert.equal(parseWeeklyFollowupPreference("SAIR"), "opt_out");
   assert.equal(parseWeeklyFollowupPreference("Parar!"), "opt_out");

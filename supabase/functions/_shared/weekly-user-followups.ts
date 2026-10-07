@@ -14,12 +14,9 @@ export const WEEKLY_FOLLOWUP_SIMULATION_URL = "https://noxfianca.com/simular";
 export const WEEKLY_FOLLOWUP_TITLE = "NOX Fiança • acompanhamento semanal";
 export const WEEKLY_FOLLOWUP_FOOTER = "Se preferir não receber estes lembretes, responda SAIR.";
 
-function firstName(value: string | null | undefined) {
-  const clean =
-    String(value || "")
-      .trim()
-      .split(/\s+/)[0] || "tudo bem";
-  return clean.slice(0, 60);
+function accountName(value: string | null | undefined) {
+  const clean = String(value || "").trim() || "tudo bem";
+  return clean.slice(0, 80);
 }
 
 export function buildWeeklyFollowupMessage(params: {
@@ -36,7 +33,7 @@ export function buildWeeklyFollowupInteractiveContent(params: {
 }) {
   const index = Math.abs(Math.trunc(Number(params.variant) || 0)) % WEEKLY_FOLLOWUP_MESSAGES.length;
   return {
-    message: WEEKLY_FOLLOWUP_MESSAGES[index].replace("{nome}", firstName(params.name)),
+    message: WEEKLY_FOLLOWUP_MESSAGES[index].replace("{nome}", accountName(params.name)),
     title: WEEKLY_FOLLOWUP_TITLE,
     footer: WEEKLY_FOLLOWUP_FOOTER,
     buttonActions: [
