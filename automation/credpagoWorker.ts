@@ -26,6 +26,7 @@ import { classifyAutomationError } from "./errorClassifier";
 import { reportAutomationError } from "./errorReporter";
 import { redactSensitiveText } from "./redaction";
 import { captureSafeErrorArtifacts } from "./safeArtifacts";
+import { primeiroNomeCliente, somenteDigitos } from "./customerIdentity";
 import {
   assertCreditSimulationAvailable,
   isCredPagoAccountBlockedError,
@@ -277,7 +278,7 @@ async function fetchConsultasPendentes(limite: number): Promise<ConsultaCreditoR
   const { data, error } = await supabaseAdmin
     .from("consultas_credito")
     .select(
-      "id, correlation_id, profile_id_solicitante, created_at, tipo_pessoa, documento, documento_masked, tipo_imovel, cep, valor_aluguel, valor_condominio, valor_taxas, status",
+      "id, correlation_id, profile_id_solicitante, created_at, tipo_pessoa, documento, documento_masked, tenant_name, tenant_document, tipo_imovel, cep, valor_aluguel, valor_condominio, valor_taxas, status, inquilino:inquilinos(nome, razao_social, cpf, cnpj)",
     )
     .eq("status", "pendente")
     .eq("origem", "nox_financa")
@@ -716,7 +717,23 @@ async function processarConsulta(
     }
     estado.persistindoResultado = true;
     try {
-      await atualizarResultado(consulta.id, resultado);
+      await atualizarResultado(consulta.id, {
+        ...resultado,
+        // O portal é a fonte principal. Se uma versão da tela não renderizar o
+        // nome, o cadastro vinculado pelo CPF mantém o resultado identificável.
+        clienteNome: primeiroNomeCliente(
+          resultado.clienteNome,
+          consulta.tenant_name,
+          consulta.inquilino?.nome,
+          consulta.inquilino?.razao_social,
+        ),
+        clienteDocumento:
+          resultado.clienteDocumento ||
+          somenteDigitos(consulta.documento) ||
+          somenteDigitos(consulta.tenant_document) ||
+          somenteDigitos(consulta.inquilino?.cpf) ||
+          somenteDigitos(consulta.inquilino?.cnpj),
+      });
       estado.finalizado = true;
       estado.lastSuccessfulStep = "result-persisted";
     } finally {

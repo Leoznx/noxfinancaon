@@ -11,11 +11,35 @@ import { corsHeaders, hasOversizedBody, rejectDisallowedOrigin } from "../_share
 // Quem pode disparar/registrar uma simulação de crédito.
 const ALLOWED_ROLES = ["corretor", "imobiliaria", "admin", "analista"];
 
+function nomeClienteValido(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const nome = value.replace(/\s+/g, " ").trim();
+  if (!nome || /\d/.test(nome) || /\b(cpf|cnpj|cliente|inquilino|locat[aá]rio|nome)\b/i.test(nome)) {
+    return null;
+  }
+  return /[A-Za-zÀ-ÿ]/.test(nome) ? nome : null;
+}
+
+function primeiroNomeCliente(...values: unknown[]): string | null {
+  for (const value of values) {
+    const nome = nomeClienteValido(value);
+    if (nome) return nome;
+  }
+  return null;
+}
+
+function somenteDigitos(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const digits = value.replace(/\D/g, "");
+  return digits.length >= 11 ? digits : null;
+}
+
 async function persistirResultado(
   supabaseAdmin: ReturnType<typeof createClient>,
   consultaId: string,
   consultaAtual: any,
   resultado: ResultadoSimulacaoCredito,
+  identidade?: { nome?: string | null; documento?: string | null },
 ) {
   // resultado.status já vem normalizado por normalizarStatus() em provider.ts como um de
   // "aprovado" | "recusado" | "em_analise" | "pendente" — grava o mesmo valor, sem
@@ -63,6 +87,10 @@ async function persistirResultado(
       // de resultado caía no branch padrão "aprovado" por não achar nem `resultado`
       // nem `status` num estado "ainda em andamento" reconhecido.
       resultado: statusConsulta,
+      ...(identidade?.nome ? { tenant_name: identidade.nome } : {}),
+      ...(identidade?.documento
+        ? { tenant_document: identidade.documento, documento: identidade.documento }
+        : {}),
     })
     .eq("id", consultaId);
 
@@ -150,7 +178,9 @@ serve(async (req) => {
 
     const { data: consulta, error: consultaError } = await supabaseAdmin
       .from("consultas_credito")
-      .select("id, external_history, automacao_credpago_resultado, automacao_attempts")
+      .select(
+        "id, tenant_name, tenant_document, documento, inquilino:inquilinos(nome, razao_social, cpf, cnpj), external_history, automacao_credpago_resultado, automacao_attempts",
+      )
       .eq("id", consultaId)
       .maybeSingle();
 
@@ -160,6 +190,21 @@ serve(async (req) => {
 
     const provider: ICreditoProvider =
       action === "mock" ? new MockCredPagoProvider() : resolveProvider();
+    const inquilino = (consulta as any).inquilino;
+    const identidadeBase = {
+      nome: primeiroNomeCliente(
+        body.input?.tenantName,
+        (consulta as any).tenant_name,
+        inquilino?.nome,
+        inquilino?.razao_social,
+      ),
+      documento:
+        somenteDigitos(body.input?.tenantDocument) ||
+        somenteDigitos((consulta as any).tenant_document) ||
+        somenteDigitos((consulta as any).documento) ||
+        somenteDigitos(inquilino?.cpf) ||
+        somenteDigitos(inquilino?.cnpj),
+    };
 
     if (action === "iniciar" || action === "mock") {
       if (!body.input) {
@@ -172,6 +217,10 @@ serve(async (req) => {
         .from("consultas_credito")
         .update({
           external_provider: "credpago",
+          ...(identidadeBase.nome ? { tenant_name: identidadeBase.nome } : {}),
+          ...(identidadeBase.documento
+            ? { tenant_document: identidadeBase.documento, documento: identidadeBase.documento }
+            : {}),
           sent_to_provider_at: new Date().toISOString(),
           automacao_credpago_status:
             action === "mock" ? "mock_iniciado" : "aguardando_registro_manual",
@@ -191,7 +240,7 @@ serve(async (req) => {
 
       if (action === "mock") {
         const resultado = await provider.registrarResultado({});
-        await persistirResultado(supabaseAdmin, consultaId, consulta, resultado);
+        await persistirResultado(supabaseAdmin, consultaId, consulta, resultado, identidadeBase);
         await registrarAuditoria(
           supabaseAdmin,
           authUser.id,
@@ -236,7 +285,13 @@ serve(async (req) => {
       return json({ ok: false, error: validationError.message }, 422);
     }
 
-    await persistirResultado(supabaseAdmin, consultaId, consulta, resultado);
+    await persistirResultado(supabaseAdmin, consultaId, consulta, resultado, {
+      nome: primeiroNomeCliente(resultado.inquilinoPrincipal?.nome, identidadeBase.nome),
+      documento:
+        somenteDigitos(resultado.inquilinoPrincipal?.cpf) ||
+        somenteDigitos(resultado.inquilinoPrincipal?.cnpj) ||
+        identidadeBase.documento,
+    });
 
     await registrarAuditoria(
       supabaseAdmin,

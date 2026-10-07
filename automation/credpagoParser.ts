@@ -1,6 +1,7 @@
 import type { Page } from "playwright";
 import type { ResultadoParse, ResultadoStatus } from "./types";
 import { redactSensitiveText, sanitizeUrl } from "./redaction";
+import { nomeClienteValido, somenteDigitos } from "./customerIdentity";
 
 // Ordem importa: "recusado" (inclui negações como "não aprovado") é checado antes de
 // "aprovado" para não gerar falso-positivo quando o texto for algo como "locatício não aprovado".
@@ -226,23 +227,56 @@ function buildSummary(
 }
 
 /**
- * Extrai "Cliente: NOME" e "CPF/CNPJ: 000.000.000-00" do texto da página de resultado
- * da CredPago (ex.: "... Cliente: RONALDO DA SILVA CPF: 827.938.089-20 ..."). Retorna
- * null nos campos que não encontrar — nunca inventa nome/documento.
- *
- * O regex do nome exige pelo menos duas palavras só com letras (nome + sobrenome).
- * Isso é necessário porque em telas onde a CredPago não exibe nome (ex.: algumas
- * páginas de recusado têm só "Cliente: CPF: 000.000.000-00", sem nome entre os
- * dois rótulos), um regex genérico "tudo até o próximo CPF:" acaba capturando o
- * próprio texto "CPF: 000.000.000-00" como se fosse o nome.
+ * Extrai o nome e o CPF/CNPJ da tela de resultado. O portal já usou os rótulos
+ * Cliente, Inquilino, Locatário e Nome do cliente, tanto na mesma linha quanto
+ * em linhas separadas. Nunca devolve CPF/rótulo como nome.
  */
-function extrairClienteInfo(texto: string): { nome: string | null; documento: string | null } {
-  const nomeMatch = texto.match(
-    /Cliente:\s*([A-ZÀ-Ý][A-ZÀ-Ýa-zà-ÿ]*(?:\s+[A-ZÀ-Ýa-zà-ÿ]+)+)\s*(?=CPF\s*:|CNPJ\s*:|\n|$)/,
+export function extrairClienteInfo(texto: string): { nome: string | null; documento: string | null } {
+  const linhas = texto
+    .replace(/\u00a0/g, " ")
+    .split(/\r?\n/)
+    .map((linha) => linha.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+  const compacto = linhas.join(" ");
+  const rotuloNome =
+    /(?:cliente|inquilino|locat[aá]rio|nome(?:\s+do\s+(?:cliente|inquilino|locat[aá]rio))?)\s*[:-]?\s*/i;
+  const candidatos: string[] = [];
+
+  for (const linha of linhas) {
+    const rotulo = linha.match(rotuloNome);
+    if (!rotulo) continue;
+    const depois = linha.slice(rotulo.index! + rotulo[0].length);
+    const antesDoDocumento = depois.split(/\b(?:CPF|CNPJ)\b\s*:/i)[0];
+    if (antesDoDocumento) candidatos.push(antesDoDocumento);
+  }
+
+  const nomeRotulado = compacto.match(
+    /(?:cliente|inquilino|locat[aá]rio|nome(?:\s+do\s+(?:cliente|inquilino|locat[aá]rio))?)\s*[:-]\s*([^\n]+?)(?=\s+(?:CPF|CNPJ)\s*:|$)/i,
   );
-  const docMatch = texto.match(/(?:CPF|CNPJ)\s*:\s*([\d./-]{11,20})/i);
+  if (nomeRotulado) candidatos.unshift(nomeRotulado[1]);
+
+  // Alguns retornos exibem somente “Nome” em uma linha e o valor na seguinte.
+  for (let index = 0; index < linhas.length; index += 1) {
+    if (!/^nome(?:\s+do\s+(?:cliente|inquilino|locat[aá]rio))?\s*:?$/i.test(linhas[index])) continue;
+    if (linhas[index + 1]) candidatos.push(linhas[index + 1]);
+  }
+
+  // Último fallback: quando o portal coloca o nome imediatamente antes do
+  // rótulo CPF/CNPJ, aproveitamos apenas as palavras da mesma linha.
+  const indiceDocumento = linhas.findIndex((linha) => /\b(?:CPF|CNPJ)\b\s*:/i.test(linha));
+  const linhaComDocumento = indiceDocumento >= 0 ? linhas[indiceDocumento] : null;
+  if (linhaComDocumento) {
+    const antes = linhaComDocumento.split(/\b(?:CPF|CNPJ)\b\s*:/i)[0]
+      .replace(/(?:cliente|inquilino|locat[aá]rio|nome)\s*[:-]?\s*/gi, " ")
+      .trim();
+    if (antes) candidatos.push(antes);
+    else if (indiceDocumento > 0) candidatos.push(linhas[indiceDocumento - 1]);
+  }
+
+  const nome = candidatos.map(nomeClienteValido).find(Boolean) ?? null;
+  const docMatch = compacto.match(/(?:CPF|CNPJ)\s*:\s*([\d./-]{11,20})/i);
   return {
-    nome: nomeMatch ? nomeMatch[1].replace(/\s+/g, " ").trim() : null,
-    documento: docMatch ? docMatch[1].replace(/\D/g, "") : null,
+    nome,
+    documento: somenteDigitos(docMatch?.[1]),
   };
 }

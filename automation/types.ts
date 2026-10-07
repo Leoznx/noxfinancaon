@@ -12,6 +12,14 @@ export interface ConsultaCreditoRow {
   valor_condominio: number | null;
   valor_taxas: number | null;
   status: string;
+  tenant_name: string | null;
+  tenant_document: string | null;
+  inquilino: {
+    nome: string | null;
+    razao_social: string | null;
+    cpf: string | null;
+    cnpj: string | null;
+  } | null;
 }
 
 export type ResultadoStatus = "aprovado" | "recusado" | "em_analise" | "erro";
