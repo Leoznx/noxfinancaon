@@ -1,22 +1,25 @@
 export const WEEKLY_FOLLOWUP_MESSAGES = [
-  "E aí, {nome}! 😊 Tá conseguindo fazer as simulações certinho? Se precisar de ajuda, chama a gente por aqui! 💛",
-  "Oi, {nome}! Tudo bem por aí? 👋 Conseguiu fazer suas simulações direitinho? A equipe NOX está por aqui se precisar. 😊",
-  "Passando pra saber como estão as simulações, {nome}! 🚀 Tá conseguindo fazer tudo certinho? Conta com a NOX! 💛",
-  "E aí, {nome}! 😄 Como estão as simulações esta semana? Se surgir qualquer dúvida, pode falar com a gente! 🤝",
-  "Oi, {nome}! Só passando pra acompanhar você. 💛 As simulações estão saindo certinho? Estamos aqui pra ajudar! 😊",
-  "Fala, {nome}! 👋 Tá tudo certo com suas simulações? Se travar em alguma etapa, chama a NOX que a gente ajuda. 🚀",
-  "Como você está, {nome}? 😊 Conseguiu avançar nas simulações? Pode contar com a gente pra deixar tudo mais simples! 💛",
-  "E aí, {nome}! Passando com aquele lembrete amigo. 😄 Tá conseguindo simular certinho? Qualquer coisa, chama a NOX! 🤝",
+  "Olá, {nome}! 😊 Tá conseguindo fazer as simulações certinho? Se precisar de ajuda, chama a gente por aqui! 💛",
+  "Olá, {nome}! 👋 Tudo bem por aí? Conseguiu fazer suas simulações direitinho? A equipe NOX está por aqui se precisar. 😊",
+  "Olá, {nome}! 🚀 Passando pra saber como estão as simulações. Tá conseguindo fazer tudo certinho? Conta com a NOX! 💛",
+  "Olá, {nome}! 😄 Como estão as simulações esta semana? Se surgir qualquer dúvida, pode falar com a gente! 🤝",
+  "Olá, {nome}! 💛 Só passando pra acompanhar você. As simulações estão saindo certinho? Estamos aqui pra ajudar! 😊",
+  "Olá, {nome}! 👋 Tá tudo certo com suas simulações? Se travar em alguma etapa, chama a NOX que a gente ajuda. 🚀",
+  "Olá, {nome}! 😊 Como você está? Conseguiu avançar nas simulações? Pode contar com a gente pra deixar tudo mais simples! 💛",
+  "Olá, {nome}! 😄 Passando com aquele lembrete amigo. Tá conseguindo simular certinho? Qualquer coisa, chama a NOX! 🤝",
 ] as const;
 
 export const WEEKLY_FOLLOWUP_SITE_URL = "https://noxfianca.com/login";
 export const WEEKLY_FOLLOWUP_SIMULATION_URL = "https://noxfianca.com/simular";
-export const WEEKLY_FOLLOWUP_TITLE = "NOX Fiança • acompanhamento semanal";
-export const WEEKLY_FOLLOWUP_FOOTER = "Se preferir não receber estes lembretes, responda SAIR.";
+export const WEEKLY_FOLLOWUP_TITLE = "NOX Fiança • Acompanhamento semanal";
 
-function accountName(value: string | null | undefined) {
-  const clean = String(value || "").trim() || "tudo bem";
-  return clean.slice(0, 80);
+function accountFirstName(value: string | null | undefined) {
+  const firstName = String(value || "")
+    .trim()
+    .split(/\s+/u)[0]
+    .slice(0, 80) || "Cliente";
+  const normalized = firstName.toLocaleLowerCase("pt-BR");
+  return `${normalized.charAt(0).toLocaleUpperCase("pt-BR")}${normalized.slice(1)}`;
 }
 
 export function buildWeeklyFollowupMessage(params: {
@@ -24,7 +27,7 @@ export function buildWeeklyFollowupMessage(params: {
   variant?: number | null;
 }) {
   const content = buildWeeklyFollowupInteractiveContent(params);
-  return `${content.message}\n\n${content.footer}`;
+  return content.message;
 }
 
 export function buildWeeklyFollowupInteractiveContent(params: {
@@ -33,9 +36,8 @@ export function buildWeeklyFollowupInteractiveContent(params: {
 }) {
   const index = Math.abs(Math.trunc(Number(params.variant) || 0)) % WEEKLY_FOLLOWUP_MESSAGES.length;
   return {
-    message: WEEKLY_FOLLOWUP_MESSAGES[index].replace("{nome}", accountName(params.name)),
+    message: WEEKLY_FOLLOWUP_MESSAGES[index].replace("{nome}", accountFirstName(params.name)),
     title: WEEKLY_FOLLOWUP_TITLE,
-    footer: WEEKLY_FOLLOWUP_FOOTER,
     buttonActions: [
       {
         id: "acessar-site-nox",

@@ -17,17 +17,17 @@ test("mantém oito mensagens emocionais diferentes com emoji", () => {
   assert.equal(new Set(WEEKLY_FOLLOWUP_MESSAGES).size, 8);
   for (let variant = 0; variant < WEEKLY_FOLLOWUP_MESSAGES.length; variant += 1) {
     const message = buildWeeklyFollowupMessage({ name: "Leonardo Silva", variant });
-    assert.match(message, /Leonardo/);
+    assert.match(message, /^Olá, Leonardo!/);
     assert.match(message, /simula/i);
     assert.match(message, /[😊💛👋🚀😄🤝]/u);
-    assert.match(message, /responda SAIR/);
+    assert.doesNotMatch(message, /E aí|responda SAIR/i);
   }
 });
 
 test("monta CTA interativo com acesso ao site e simulacao", () => {
   const content = buildWeeklyFollowupInteractiveContent({ name: "Leo", variant: 0 });
-  assert.equal(content.title, "NOX Fiança • acompanhamento semanal");
-  assert.equal(content.footer.includes("SAIR"), true);
+  assert.equal(content.title, "NOX Fiança • Acompanhamento semanal");
+  assert.equal("footer" in content, false);
   assert.deepEqual(
     content.buttonActions.map((button) => [button.type, button.label, button.url]),
     [
@@ -37,11 +37,13 @@ test("monta CTA interativo com acesso ao site e simulacao", () => {
   );
 });
 
-test("mantém o nome cadastrado no login e troca a mensagem entre variantes", () => {
-  const first = buildWeeklyFollowupMessage({ name: "Leonardo Silva", variant: 0 });
+test("usa somente o primeiro nome cadastrado e troca a mensagem entre variantes", () => {
+  const first = buildWeeklyFollowupMessage({ name: "LEONARDO Silva", variant: 0 });
   const second = buildWeeklyFollowupMessage({ name: "Leonardo Silva", variant: 1 });
-  assert.match(first, /Leonardo Silva/);
-  assert.match(second, /Leonardo Silva/);
+  assert.match(first, /^Olá, Leonardo!/);
+  assert.match(second, /^Olá, Leonardo!/);
+  assert.doesNotMatch(first, /Silva/);
+  assert.doesNotMatch(second, /Silva/);
   assert.notEqual(first, second);
 });
 
