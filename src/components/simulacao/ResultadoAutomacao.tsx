@@ -525,7 +525,7 @@ export function ResultadoAutomacao({
               </div>
               <div className="flex justify-between gap-4">
                 <dt className="text-neutral-500">CEP</dt>
-                <dd className="font-semibold text-neutral-900">{consulta.cep || "—"}</dd>
+                <dd className="font-semibold text-neutral-900">{consulta.imovel_cep || "—"}</dd>
               </div>
             </dl>
           </CardContent>

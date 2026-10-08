@@ -6,6 +6,7 @@ interface UpsertParams {
   dados: DadosSimulacao;
   userEmail: string;
   userRole?: string | null;
+  deferQueue?: boolean;
 }
 
 /**
@@ -17,6 +18,7 @@ export async function upsertConsultaCredito({
   dados,
   userEmail,
   userRole,
+  deferQueue = false,
 }: UpsertParams): Promise<string> {
   // 1. Profile do usuário logado — busca pelo id da sessão real (auth.uid()), não pelo
   // e-mail: a policy de INSERT exige profile_id_solicitante = auth.uid(), e o e-mail
@@ -130,9 +132,13 @@ export async function upsertConsultaCredito({
     tenant_document: tenantDocument,
     tenant_type: tenantType,
     property_address: propertyAddress,
+    imovel_cep: dados.cep || null,
     rent_value: dados.valores.aluguel,
-    status: "pendente",
   };
+  // A origem pode continuar como `nox_financa` ao reaproveitar uma consulta com
+  // erro. Nesse caso, só a atualização final deve recolocá-la na fila, já com
+  // todos os campos técnicos preparados para o worker.
+  if (!deferQueue) consultaPayload.status = "pendente";
 
   if (consultaId) {
     const { error } = await supabase.from("consultas_credito").update(consultaPayload).eq("id", consultaId);

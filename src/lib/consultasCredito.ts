@@ -5,6 +5,7 @@ import type { DadosSimulacao } from "@/components/simulacao/FormularioSimulacao"
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { getDemoDecision } from "@/lib/demo-accounts";
 import { createSimulationCorrelationId } from "@/lib/correlation-id";
+import { selectOperationalCreditSimulationCep } from "@/lib/creditSimulationCep";
 
 /** Status do fluxo de automação local CredPago. */
 export type StatusConsulta =
@@ -23,6 +24,7 @@ export interface ConsultaCredito {
   tenant_name: string | null;
   tipo_imovel: string | null;
   cep: string | null;
+  imovel_cep: string | null;
   valor_aluguel: number | null;
   valor_condominio: number | null;
   valor_taxas: number | null;
@@ -135,7 +137,12 @@ export async function criarConsultaParaAutomacao({
   userRole,
 }: CriarConsultaParams): Promise<string> {
   // Reusa o upsert existente: mantém vínculo com inquilinos/imóveis e deduplicação.
-  const consultaId = await upsertConsultaCredito({ dados, userEmail, userRole });
+  const consultaId = await upsertConsultaCredito({
+    dados,
+    userEmail,
+    userRole,
+    deferQueue: true,
+  });
 
   const rawDoc = dados.tipoInquilino === "PF" ? dados.inquilinos[0]?.cpf || "" : dados.cnpj || "";
   const documento = normalizeDocumento(rawDoc);
@@ -146,7 +153,10 @@ export async function criarConsultaParaAutomacao({
     documento,
     documento_masked: maskDocumento(documento),
     tipo_imovel: dados.tipoImovel,
-    cep: dados.cep || null,
+    // Compatibilidade com workers já implantados: `cep` é o campo técnico da
+    // fila; o CEP digitado permanece separado em `imovel_cep`/`imoveis.cep`.
+    cep: selectOperationalCreditSimulationCep(),
+    imovel_cep: dados.cep || null,
     valor_aluguel: dados.valores.aluguel,
     valor_condominio: dados.valores.condominio,
     valor_taxas: dados.valores.taxas,
@@ -184,7 +194,12 @@ export async function criarConsultaDemonstrativa({
   const decision = getDemoDecision(rawDoc);
   if (!decision) throw new Error("Use um dos documentos de demonstração disponíveis.");
 
-  const consultaId = await upsertConsultaCredito({ dados, userEmail, userRole });
+  const consultaId = await upsertConsultaCredito({
+    dados,
+    userEmail,
+    userRole,
+    deferQueue: true,
+  });
   const documento = normalizeDocumento(rawDoc);
   const status = decision === "pendente" ? "em_analise" : decision;
   const mensagem =
@@ -234,7 +249,7 @@ export async function getConsultaCredito(
   const query = supabase
     .from("consultas_credito")
     .select(
-      "id, correlation_id, created_at, updated_at, tipo_pessoa, documento, documento_masked, tenant_name, tipo_imovel, cep, valor_aluguel, valor_condominio, valor_taxas, status, resultado, mensagem, origem, automation_started_at, automation_finished_at, automation_step, error_message, raw_response, substatus, documentos_prazo_iniciado_em, documentos_prazo_limite_em, documentos_faltantes_em",
+      "id, correlation_id, created_at, updated_at, tipo_pessoa, documento, documento_masked, tenant_name, tipo_imovel, cep, imovel_cep, valor_aluguel, valor_condominio, valor_taxas, status, resultado, mensagem, origem, automation_started_at, automation_finished_at, automation_step, error_message, raw_response, substatus, documentos_prazo_iniciado_em, documentos_prazo_limite_em, documentos_faltantes_em",
     )
     .eq("id", id);
   try {
@@ -260,6 +275,7 @@ export async function reenviarConsulta(id: string): Promise<void> {
   const { error } = await supabase
     .from("consultas_credito")
     .update({
+      cep: selectOperationalCreditSimulationCep(),
       status: "pendente",
       resultado: null,
       mensagem: null,

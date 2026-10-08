@@ -1,8 +1,8 @@
 import { randomInt } from "node:crypto";
 
 /**
- * CEPs operacionais usados somente no preenchimento do portal de crédito.
- * O CEP informado pelo usuário nunca é persistido nem enviado ao parceiro.
+ * CEPs operacionais usados somente no campo técnico da consulta de crédito.
+ * O CEP informado pelo usuário permanece separado e nunca é enviado ao parceiro.
  */
 export const CREDIT_SIMULATION_CEPS = [
   "88340001",

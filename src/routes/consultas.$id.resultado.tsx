@@ -184,7 +184,7 @@ function ConsultaResultado() {
     valor_condominio: consulta.valor_condominio ?? imovel.valor_condominio ?? null,
     valor_taxas: consulta.valor_taxas ?? imovel.valor_taxas ?? null,
     tipo_imovel: consulta.tipo_imovel ?? imovel.tipo ?? null,
-    cep: consulta.cep ?? imovel.cep ?? null,
+    cep: consulta.imovel_cep ?? imovel.cep ?? null,
   };
 
   return (

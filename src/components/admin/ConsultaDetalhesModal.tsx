@@ -216,7 +216,7 @@ export function ConsultaDetalhesModal({ consulta, open, onOpenChange }: Props) {
   const cidade = cidadeConsulta || extras?.cidade || null;
   const estado = cidadeConsulta ? estadoConsulta : (extras?.estado ?? null);
   const cidadeUf = [cidade, estado].filter(Boolean).join(" / ") || null;
-  const cep = formatarCep(consulta.cep || consulta.imovel_cep || consulta.imoveis?.cep);
+  const cep = formatarCep(consulta.imovel_cep || consulta.imoveis?.cep);
   const localizacao =
     cidadeUf && cep ? `${cidadeUf} (CEP ${cep})` : cidadeUf || (cep ? `CEP ${cep}` : null);
 
