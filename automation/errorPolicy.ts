@@ -16,7 +16,6 @@ export function isTransientPortalError(error: unknown): boolean {
 export function validateConsultaForAutomation(consulta: ConsultaCreditoRow): string | null {
   const tipoPessoa = consulta.tipo_pessoa || "PF";
   const documento = String(consulta.documento || "").replace(/\D/g, "");
-  const cep = String(consulta.cep || "").replace(/\D/g, "");
   const expectedDocumentLength = tipoPessoa === "PJ" ? 14 : 11;
   const valorTotal =
     (Number(consulta.valor_aluguel) || 0) +
@@ -27,7 +26,6 @@ export function validateConsultaForAutomation(consulta: ConsultaCreditoRow): str
   if (documento.length !== expectedDocumentLength) {
     return tipoPessoa === "PJ" ? "CNPJ incompleto ou inválido" : "CPF incompleto ou inválido";
   }
-  if (cep.length !== 8) return "CEP incompleto ou inválido";
   if (
     consulta.tipo_imovel &&
     consulta.tipo_imovel !== "Residencial" &&

@@ -12,7 +12,6 @@ const consultaValida: ConsultaCreditoRow = {
   documento: "12345678901",
   documento_masked: "123.***.***-01",
   tipo_imovel: "Residencial",
-  cep: "01310100",
   valor_aluguel: 2_000,
   valor_condominio: 300,
   valor_taxas: 100,
@@ -35,7 +34,6 @@ test("valida a consulta antes de abrir o portal", () => {
     validateConsultaForAutomation({ ...consultaValida, documento: "123" }) || "",
     /CPF/,
   );
-  assert.match(validateConsultaForAutomation({ ...consultaValida, cep: "123" }) || "", /CEP/);
   assert.match(
     validateConsultaForAutomation({ ...consultaValida, valor_aluguel: 0, valor_condominio: 0, valor_taxas: 0 }) || "",
     /valor mensal/,

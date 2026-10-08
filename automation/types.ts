@@ -7,7 +7,6 @@ export interface ConsultaCreditoRow {
   documento: string | null;
   documento_masked: string | null;
   tipo_imovel: "Residencial" | "Comercial" | null;
-  cep: string | null;
   valor_aluguel: number | null;
   valor_condominio: number | null;
   valor_taxas: number | null;

@@ -77,10 +77,12 @@ export function FormularioSimulacao({
     dadosIniciais?.endereco ? "ok" : "vazio",
   );
   const [erroCep, setErroCep] = useState<string | null>(null);
+  const cepIgnorado = modo === "interno";
 
   const CEP_NAO_ENCONTRADO = "CEP não encontrado. Corrija o CEP para continuar.";
 
   const buscarCEP = async (valor: string) => {
+    if (cepIgnorado) return;
     const limpo = valor.replace(/\D/g, "");
     if (limpo.length !== 8) {
       setEndereco(null);
@@ -123,28 +125,30 @@ export function FormularioSimulacao({
       toast.error(msg);
       return;
     }
-    if (!cep || cep.replace(/\D/g, "").length < 8) {
-      const msg = "Informe um CEP válido do imóvel.";
-      setErro(msg);
-      setErroCep("Informe um CEP com 8 dígitos.");
-      toast.error(msg);
-      return;
-    }
-    if (cepStatus === "buscando") {
-      const msg = "Aguarde a validação do CEP para continuar.";
-      setErro(msg);
-      toast.error(msg);
-      return;
-    }
-    // Nenhuma cidade/UF encontrada = CEP errado. Bloqueia a simulação e pede a
-    // correção; assim que a região aparecer, o usuário segue normalmente.
-    if (!endereco) {
-      const msg = CEP_NAO_ENCONTRADO;
-      setErro(msg);
-      setErroCep(msg);
-      toast.error(msg);
-      document.getElementById("cep-simulacao")?.focus();
-      return;
+    if (!cepIgnorado) {
+      if (!cep || cep.replace(/\D/g, "").length < 8) {
+        const msg = "Informe um CEP válido do imóvel.";
+        setErro(msg);
+        setErroCep("Informe um CEP com 8 dígitos.");
+        toast.error(msg);
+        return;
+      }
+      if (cepStatus === "buscando") {
+        const msg = "Aguarde a validação do CEP para continuar.";
+        setErro(msg);
+        toast.error(msg);
+        return;
+      }
+      // Nenhuma cidade/UF encontrada = CEP errado. Bloqueia a simulação e pede a
+      // correção; assim que a região aparecer, o usuário segue normalmente.
+      if (!endereco) {
+        const msg = CEP_NAO_ENCONTRADO;
+        setErro(msg);
+        setErroCep(msg);
+        toast.error(msg);
+        document.getElementById("cep-simulacao")?.focus();
+        return;
+      }
     }
 
     // Validação extra apenas no modo INTERNO (corretor já logado preenchendo dados oficiais)
@@ -290,7 +294,7 @@ export function FormularioSimulacao({
 
             <div className="space-y-2">
               <Label className="text-xs font-bold text-neutral-500 uppercase tracking-widest">
-                CEP
+                CEP{cepIgnorado ? " (opcional)" : ""}
               </Label>
               <IMaskInput
                 id="cep-simulacao"
@@ -299,6 +303,12 @@ export function FormularioSimulacao({
                 onAccept={(val: any) => {
                   setCep(val);
                   setErro(null);
+                  if (cepIgnorado) {
+                    setEndereco(null);
+                    setCepStatus("vazio");
+                    setErroCep(null);
+                    return;
+                  }
                   if (val.replace(/\D/g, "").length === 8) {
                     buscarCEP(val);
                   } else {
@@ -308,26 +318,30 @@ export function FormularioSimulacao({
                   }
                 }}
                 autoComplete="off"
-                aria-invalid={cepStatus === "invalido"}
+                aria-invalid={!cepIgnorado && cepStatus === "invalido"}
                 className={`flex h-14 w-full rounded-lg border bg-white px-4 py-2 text-base font-medium outline-none transition-all ${
-                  cepStatus === "invalido"
+                  !cepIgnorado && cepStatus === "invalido"
                     ? "border-red-400 focus:ring-2 focus:ring-red-400"
                     : "border-neutral-200 focus:ring-2 focus:ring-yellow-400"
                 }`}
                 placeholder="00000-000"
               />
-              {cepStatus === "buscando" && (
+              {cepIgnorado ? (
+                <p className="text-xs text-neutral-500 mt-1 font-medium">
+                  Campo opcional. O valor digitado não será salvo nem usado na consulta.
+                </p>
+              ) : cepStatus === "buscando" ? (
                 <p className="text-xs text-neutral-500 mt-1 font-bold uppercase">
                   Buscando região...
                 </p>
-              )}
-              {cepStatus === "ok" && endereco && (
+              ) : null}
+              {!cepIgnorado && cepStatus === "ok" && endereco && (
                 <p className="text-xs text-neutral-500 mt-1 flex items-center gap-1 font-bold uppercase">
                   <MapPin className="w-4 h-4 text-yellow-600" strokeWidth={1.5} />
                   {endereco.cidade}, {endereco.uf}
                 </p>
               )}
-              {cepStatus === "invalido" && erroCep && (
+              {!cepIgnorado && cepStatus === "invalido" && erroCep && (
                 <p className="text-xs text-red-600 mt-1 flex items-center gap-1 font-bold">
                   <AlertCircle className="w-4 h-4" strokeWidth={2} />
                   {erroCep}

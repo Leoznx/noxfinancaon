@@ -6,6 +6,7 @@ interface UpsertParams {
   dados: DadosSimulacao;
   userEmail: string;
   userRole?: string | null;
+  persistirCep?: boolean;
 }
 
 /**
@@ -13,7 +14,12 @@ interface UpsertParams {
  * Garante deduplicação por (profile_id_solicitante + tenant_document).
  * Retorna o id da consulta.
  */
-export async function upsertConsultaCredito({ dados, userEmail, userRole }: UpsertParams): Promise<string> {
+export async function upsertConsultaCredito({
+  dados,
+  userEmail,
+  userRole,
+  persistirCep = true,
+}: UpsertParams): Promise<string> {
   // 1. Profile do usuário logado — busca pelo id da sessão real (auth.uid()), não pelo
   // e-mail: a policy de INSERT exige profile_id_solicitante = auth.uid(), e o e-mail
   // vindo do estado em cache do AuthProvider pode divergir da sessão ativa (ex.: sessão
@@ -48,9 +54,9 @@ export async function upsertConsultaCredito({ dados, userEmail, userRole }: Upse
   }
   const tenantNameSafe = tenantName || tenantDocument;
 
-  const propertyAddress = [dados.endereco?.cidade, dados.endereco?.uf]
-    .filter(Boolean)
-    .join(", ") || `CEP ${dados.cep}`;
+  const propertyAddress = persistirCep
+    ? [dados.endereco?.cidade, dados.endereco?.uf].filter(Boolean).join(", ") || `CEP ${dados.cep}`
+    : null;
 
   // 3. Verificar consulta existente (mesmo usuário + mesmo documento)
   let consultaId: string | null = null;
@@ -96,9 +102,9 @@ export async function upsertConsultaCredito({ dados, userEmail, userRole }: Upse
 
   // 5. Upsert imóvel
   const imovelPayload: any = {
-    cep: dados.cep,
-    cidade: dados.endereco?.cidade || "",
-    estado: dados.endereco?.uf || "",
+    cep: persistirCep ? dados.cep : null,
+    cidade: persistirCep ? dados.endereco?.cidade || "" : null,
+    estado: persistirCep ? dados.endereco?.uf || "" : null,
     valor_aluguel: dados.valores.aluguel,
     valor_condominio: dados.valores.condominio,
     valor_taxas: dados.valores.taxas,

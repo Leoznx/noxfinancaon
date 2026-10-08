@@ -32,6 +32,7 @@ import {
   isCredPagoAccountBlockedError,
 } from "./credpagoAvailability";
 import { LoftCancellationClient, extractLoftProposalId } from "./loftCancellation";
+import { selectRandomCreditSimulationCep } from "./creditSimulationCep";
 
 /**
  * Traduz qualquer falha interna (Playwright, rede, timeout) para uma mensagem segura,
@@ -430,7 +431,7 @@ async function fetchConsultasPendentes(limite: number): Promise<ConsultaCreditoR
   const { data, error } = await supabaseAdmin
     .from("consultas_credito")
     .select(
-      "id, correlation_id, profile_id_solicitante, created_at, tipo_pessoa, documento, documento_masked, tenant_name, tenant_document, tipo_imovel, cep, valor_aluguel, valor_condominio, valor_taxas, status, inquilino:inquilinos(nome, razao_social, cpf, cnpj)",
+      "id, correlation_id, profile_id_solicitante, created_at, tipo_pessoa, documento, documento_masked, tenant_name, tenant_document, tipo_imovel, valor_aluguel, valor_condominio, valor_taxas, status, inquilino:inquilinos(nome, razao_social, cpf, cnpj)",
     )
     .eq("status", "pendente")
     .eq("origem", "nox_financa")
@@ -756,6 +757,7 @@ async function processarConsulta(
   let simulacaoEnviada = false;
   let resultadoObtido = false;
   let cancelamentoAgendado = false;
+  const creditSimulationCep = selectRandomCreditSimulationCep();
   try {
     const erroValidacao = validateConsultaForAutomation(consulta);
     if (erroValidacao) throw new Error(`Dados da consulta inválidos: ${erroValidacao}.`);
@@ -827,8 +829,9 @@ async function processarConsulta(
         page,
         (consulta.tipo_imovel as "Residencial" | "Comercial") || "Residencial",
       );
-      // O CEP permanece obrigatório na nova rota ERP, embora fique abaixo da dobra.
-      await fillCep(page, consulta.cep || "");
+      // O portal exige CEP, mas o valor digitado no NOX é apenas visual e não é
+      // persistido. Um CEP operacional é sorteado uma vez para este processamento.
+      await fillCep(page, creditSimulationCep);
       await fillValores(page, {
         aluguel: Number(consulta.valor_aluguel) || 0,
         condominio: Number(consulta.valor_condominio) || 0,
