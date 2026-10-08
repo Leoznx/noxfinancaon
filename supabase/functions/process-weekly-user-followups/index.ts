@@ -8,7 +8,6 @@ import {
 
 type RunBody = {
   dryRun?: boolean;
-  testPhone?: string;
 };
 
 type FollowupRow = {
@@ -93,7 +92,15 @@ Deno.serve(async (request) => {
     return jsonResponse(request, { ok: false, error: "unauthorized" }, 401);
   }
 
-  const body = (await request.json().catch(() => ({}))) as RunBody;
+  const body = (await request.json().catch(() => ({}))) as RunBody &
+    Record<string, unknown>;
+  if (Object.prototype.hasOwnProperty.call(body, "testPhone")) {
+    return jsonResponse(
+      request,
+      { ok: false, error: "test_dispatch_disabled" },
+      400,
+    );
+  }
   const admin = supabaseAdmin();
   const { data: settings, error: settingsError } = await admin
     .from("weekly_whatsapp_followup_settings")
@@ -108,14 +115,9 @@ Deno.serve(async (request) => {
     return jsonResponse(request, { ok: true, skipped: "automation_disabled" });
   }
 
-  const testPhone = normalizeWhatsappPhone(body.testPhone);
   const dryRun = body.dryRun === true || settings?.dispatch_enabled !== true;
   const now = new Date();
   const clock = saoPauloBusinessClock(now);
-
-  if (body.testPhone && !testPhone) {
-    return jsonResponse(request, { ok: false, error: "invalid_test_phone" }, 400);
-  }
 
   const zapi = await getZApiConnectionStatus().catch(() => ({
     configured: true,
@@ -125,71 +127,6 @@ Deno.serve(async (request) => {
   }));
   if (!zapi.configured || !zapi.connected || !zapi.smartphoneConnected) {
     return jsonResponse(request, { ok: false, error: "zapi_not_connected", zapi }, 503);
-  }
-
-  if (testPhone) {
-    const interactive = buildWeeklyFollowupInteractiveContent({ name: "Leo", variant: 0 });
-    const weekStart = startOfSaoPauloWeek(clock.date);
-    const { data: audit, error: auditError } = await admin
-      .from("weekly_whatsapp_followups")
-      .insert({
-        week_start: weekStart,
-        recipient_name: "Teste da automação NOX",
-        recipient_role: "test",
-        recipient_phone: testPhone,
-        message_variant: 0,
-        scheduled_at: now.toISOString(),
-        status: dryRun ? "skipped" : "processing",
-        attempts: dryRun ? 0 : 1,
-        is_test: true,
-      })
-      .select("id")
-      .maybeSingle();
-    if (auditError || !audit?.id) {
-      console.error("[weekly-followup] test audit unavailable", auditError?.message);
-      return jsonResponse(request, { ok: false, error: "audit_unavailable" }, 503);
-    }
-    if (dryRun) {
-      return jsonResponse(request, {
-        ok: true,
-        test: true,
-        dryRun: true,
-        phone: maskPhone(testPhone),
-        message: `${interactive.message}\n\n${interactive.footer}`,
-      });
-    }
-    const result = await sendZApiButtonActions({
-      to: testPhone,
-      ...interactive,
-    });
-    await admin
-      .from("weekly_whatsapp_followups")
-      .update(
-        result.sent
-          ? {
-              status: "queued",
-              provider_message_id: result.providerMessageId,
-              sent_at: now.toISOString(),
-              last_error: null,
-            }
-          : {
-              status: "failed",
-              last_error: result.reason || "send_failed",
-              next_attempt_at: null,
-            },
-      )
-      .eq("id", audit.id);
-    return jsonResponse(
-      request,
-      {
-        ok: result.sent,
-        test: true,
-        phone: maskPhone(testPhone),
-        providerMessageId: result.providerMessageId || null,
-        error: result.sent ? null : result.reason || "send_failed",
-      },
-      result.sent ? 200 : 502,
-    );
   }
 
   if (!clock.insideBusinessWindow) {
@@ -278,14 +215,3 @@ Deno.serve(async (request) => {
 
   return jsonResponse(request, { ok: true, localDate: clock.date, report });
 });
-
-function startOfSaoPauloWeek(date: string) {
-  const parsed = new Date(`${date}T12:00:00Z`);
-  const weekday = parsed.getUTCDay() || 7;
-  parsed.setUTCDate(parsed.getUTCDate() - weekday + 1);
-  return parsed.toISOString().slice(0, 10);
-}
-
-function maskPhone(phone: string) {
-  return phone.length > 4 ? `${"*".repeat(phone.length - 4)}${phone.slice(-4)}` : "****";
-}

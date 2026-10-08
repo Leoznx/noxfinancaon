@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -57,4 +58,17 @@ test("restringe o envio a dias úteis entre 09:00 e 17:59 em São Paulo", () => 
   assert.equal(saoPauloBusinessClock(new Date("2026-10-05T20:59:00Z")).insideBusinessWindow, true);
   assert.equal(saoPauloBusinessClock(new Date("2026-10-05T21:00:00Z")).insideBusinessWindow, false);
   assert.equal(saoPauloBusinessClock(new Date("2026-10-10T15:00:00Z")).insideBusinessWindow, false);
+});
+
+test("bloqueia o antigo disparo manual para número de teste", () => {
+  const processor = readFileSync(
+    new URL(
+      "../supabase/functions/process-weekly-user-followups/index.ts",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  assert.match(processor, /test_dispatch_disabled/);
+  assert.doesNotMatch(processor, /is_test:\s*true/);
+  assert.doesNotMatch(processor, /sendZApiButtonActions\(\{\s*to:\s*testPhone/);
 });
