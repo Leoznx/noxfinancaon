@@ -79,7 +79,7 @@ export function ModalConsultando({ open, erro, onTentarNovamente, onFechar, prog
             </div>
             <div className="flex items-center gap-2 text-xs font-bold text-neutral-400 uppercase tracking-widest">
               <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
-              Consultando crédito na NOX FINANÇA
+              Consultando crédito na NOX FIANÇA
             </div>
           </div>
         ) : (
