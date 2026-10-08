@@ -293,7 +293,7 @@ export function FormularioSimulacao({
 
             <div className="space-y-2">
               <Label className="text-xs font-bold text-neutral-500 uppercase tracking-widest">
-                CEP{cepSomenteNox ? " (opcional)" : ""}
+                CEP
               </Label>
               <IMaskInput
                 id="cep-simulacao"
@@ -325,12 +325,7 @@ export function FormularioSimulacao({
                 }`}
                 placeholder="00000-000"
               />
-              {cepSomenteNox ? (
-                <p className="text-xs text-neutral-500 mt-1 font-medium">
-                  Campo opcional. O valor ficará salvo apenas na NOX Fiança e não será enviado à
-                  automação.
-                </p>
-              ) : cepStatus === "buscando" ? (
+              {!cepSomenteNox && cepStatus === "buscando" ? (
                 <p className="text-xs text-neutral-500 mt-1 font-bold uppercase">
                   Buscando região...
                 </p>
