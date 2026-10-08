@@ -70,19 +70,18 @@ export function FormularioSimulacao({
   const [condominio, setCondominio] = useState<number>(dadosIniciais?.valores?.condominio || 0);
   const [taxas, setTaxas] = useState<number>(dadosIniciais?.valores?.taxas || 0);
   const [erro, setErro] = useState<string | null>(null);
-  // Estado da busca do CEP. Enquanto nao voltar `ok` (com cidade/UF), o formulario
-  // nao deixa simular: CEP sem regiao encontrada e' CEP errado, e o usuario precisa
-  // corrigir antes de seguir.
+  // No fluxo público o CEP continua sendo validado com cidade/UF. Na Nova Consulta
+  // interna ele é opcional e serve somente para o histórico da NOX Fiança.
   const [cepStatus, setCepStatus] = useState<"vazio" | "buscando" | "ok" | "invalido">(
     dadosIniciais?.endereco ? "ok" : "vazio",
   );
   const [erroCep, setErroCep] = useState<string | null>(null);
-  const cepIgnorado = modo === "interno";
+  const cepSomenteNox = modo === "interno";
 
   const CEP_NAO_ENCONTRADO = "CEP não encontrado. Corrija o CEP para continuar.";
 
   const buscarCEP = async (valor: string) => {
-    if (cepIgnorado) return;
+    if (cepSomenteNox) return;
     const limpo = valor.replace(/\D/g, "");
     if (limpo.length !== 8) {
       setEndereco(null);
@@ -125,7 +124,7 @@ export function FormularioSimulacao({
       toast.error(msg);
       return;
     }
-    if (!cepIgnorado) {
+    if (!cepSomenteNox) {
       if (!cep || cep.replace(/\D/g, "").length < 8) {
         const msg = "Informe um CEP válido do imóvel.";
         setErro(msg);
@@ -294,7 +293,7 @@ export function FormularioSimulacao({
 
             <div className="space-y-2">
               <Label className="text-xs font-bold text-neutral-500 uppercase tracking-widest">
-                CEP{cepIgnorado ? " (opcional)" : ""}
+                CEP{cepSomenteNox ? " (opcional)" : ""}
               </Label>
               <IMaskInput
                 id="cep-simulacao"
@@ -303,7 +302,7 @@ export function FormularioSimulacao({
                 onAccept={(val: any) => {
                   setCep(val);
                   setErro(null);
-                  if (cepIgnorado) {
+                  if (cepSomenteNox) {
                     setEndereco(null);
                     setCepStatus("vazio");
                     setErroCep(null);
@@ -318,30 +317,31 @@ export function FormularioSimulacao({
                   }
                 }}
                 autoComplete="off"
-                aria-invalid={!cepIgnorado && cepStatus === "invalido"}
+                aria-invalid={!cepSomenteNox && cepStatus === "invalido"}
                 className={`flex h-14 w-full rounded-lg border bg-white px-4 py-2 text-base font-medium outline-none transition-all ${
-                  !cepIgnorado && cepStatus === "invalido"
+                  !cepSomenteNox && cepStatus === "invalido"
                     ? "border-red-400 focus:ring-2 focus:ring-red-400"
                     : "border-neutral-200 focus:ring-2 focus:ring-yellow-400"
                 }`}
                 placeholder="00000-000"
               />
-              {cepIgnorado ? (
+              {cepSomenteNox ? (
                 <p className="text-xs text-neutral-500 mt-1 font-medium">
-                  Campo opcional. O valor digitado não será salvo nem usado na consulta.
+                  Campo opcional. O valor ficará salvo apenas na NOX Fiança e não será enviado à
+                  automação.
                 </p>
               ) : cepStatus === "buscando" ? (
                 <p className="text-xs text-neutral-500 mt-1 font-bold uppercase">
                   Buscando região...
                 </p>
               ) : null}
-              {!cepIgnorado && cepStatus === "ok" && endereco && (
+              {!cepSomenteNox && cepStatus === "ok" && endereco && (
                 <p className="text-xs text-neutral-500 mt-1 flex items-center gap-1 font-bold uppercase">
                   <MapPin className="w-4 h-4 text-yellow-600" strokeWidth={1.5} />
                   {endereco.cidade}, {endereco.uf}
                 </p>
               )}
-              {!cepIgnorado && cepStatus === "invalido" && erroCep && (
+              {!cepSomenteNox && cepStatus === "invalido" && erroCep && (
                 <p className="text-xs text-red-600 mt-1 flex items-center gap-1 font-bold">
                   <AlertCircle className="w-4 h-4" strokeWidth={2} />
                   {erroCep}

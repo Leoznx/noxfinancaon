@@ -135,12 +135,7 @@ export async function criarConsultaParaAutomacao({
   userRole,
 }: CriarConsultaParams): Promise<string> {
   // Reusa o upsert existente: mantém vínculo com inquilinos/imóveis e deduplicação.
-  const consultaId = await upsertConsultaCredito({
-    dados,
-    userEmail,
-    userRole,
-    persistirCep: false,
-  });
+  const consultaId = await upsertConsultaCredito({ dados, userEmail, userRole });
 
   const rawDoc = dados.tipoInquilino === "PF" ? dados.inquilinos[0]?.cpf || "" : dados.cnpj || "";
   const documento = normalizeDocumento(rawDoc);
@@ -151,12 +146,7 @@ export async function criarConsultaParaAutomacao({
     documento,
     documento_masked: maskDocumento(documento),
     tipo_imovel: dados.tipoImovel,
-    cep: null,
-    imovel_cep: null,
-    imovel_cidade: null,
-    imovel_estado: null,
-    imovel_endereco: null,
-    property_address: null,
+    cep: dados.cep || null,
     valor_aluguel: dados.valores.aluguel,
     valor_condominio: dados.valores.condominio,
     valor_taxas: dados.valores.taxas,

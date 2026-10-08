@@ -6,7 +6,6 @@ interface UpsertParams {
   dados: DadosSimulacao;
   userEmail: string;
   userRole?: string | null;
-  persistirCep?: boolean;
 }
 
 /**
@@ -18,7 +17,6 @@ export async function upsertConsultaCredito({
   dados,
   userEmail,
   userRole,
-  persistirCep = true,
 }: UpsertParams): Promise<string> {
   // 1. Profile do usuário logado — busca pelo id da sessão real (auth.uid()), não pelo
   // e-mail: a policy de INSERT exige profile_id_solicitante = auth.uid(), e o e-mail
@@ -54,9 +52,9 @@ export async function upsertConsultaCredito({
   }
   const tenantNameSafe = tenantName || tenantDocument;
 
-  const propertyAddress = persistirCep
-    ? [dados.endereco?.cidade, dados.endereco?.uf].filter(Boolean).join(", ") || `CEP ${dados.cep}`
-    : null;
+  const propertyAddress =
+    [dados.endereco?.cidade, dados.endereco?.uf].filter(Boolean).join(", ") ||
+    (dados.cep ? `CEP ${dados.cep}` : "");
 
   // 3. Verificar consulta existente (mesmo usuário + mesmo documento)
   let consultaId: string | null = null;
@@ -102,9 +100,9 @@ export async function upsertConsultaCredito({
 
   // 5. Upsert imóvel
   const imovelPayload: any = {
-    cep: persistirCep ? dados.cep : null,
-    cidade: persistirCep ? dados.endereco?.cidade || "" : null,
-    estado: persistirCep ? dados.endereco?.uf || "" : null,
+    cep: dados.cep || null,
+    cidade: dados.endereco?.cidade || "",
+    estado: dados.endereco?.uf || "",
     valor_aluguel: dados.valores.aluguel,
     valor_condominio: dados.valores.condominio,
     valor_taxas: dados.valores.taxas,
