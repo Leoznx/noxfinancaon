@@ -14,26 +14,6 @@ import {
 } from "../_shared/whatsapp-billing.ts";
 import { hasOversizedBody } from "../_shared/http-security.ts";
 
-type WeeklyFollowupPreference = "opt_out" | "opt_in" | null;
-
-function parseWeeklyFollowupPreference(
-  value: string | null | undefined,
-): WeeklyFollowupPreference {
-  const normalized = String(value || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z]/g, "");
-  if (["sair", "pare", "parar", "cancelar", "stop"].includes(normalized)) {
-    return "opt_out";
-  }
-  if (["voltar", "receber", "retomar"].includes(normalized)) {
-    return "opt_in";
-  }
-  return null;
-}
-
 const OPEN_STATUSES = [
   "pending",
   "overdue",
@@ -90,84 +70,6 @@ async function sendSafeReply(phone: string, message: string) {
   return result.sent
     ? { sent: true }
     : { sent: false, reason: result.reason || "send_failed" };
-}
-
-async function handleWeeklyFollowupPreference(
-  request: Request,
-  payload: Record<string, unknown>,
-  preference: Exclude<WeeklyFollowupPreference, null>,
-) {
-  if (payload.fromMe === true || payload.isGroup === true) {
-    return jsonResponse(request, {
-      ok: true,
-      ignored: true,
-      reason: "unsupported_origin",
-    });
-  }
-  const phone = normalizeWhatsappPhone(String(payload.phone || ""));
-  if (!phone) {
-    return jsonResponse(request, {
-      ok: true,
-      ignored: true,
-      reason: "invalid_phone",
-    });
-  }
-
-  const admin = supabaseAdmin();
-  if (preference === "opt_out") {
-    const { error } = await admin
-      .from("weekly_whatsapp_followup_opt_outs")
-      .upsert({
-        phone,
-        reason: "whatsapp_reply",
-        opted_out_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      });
-    if (error) {
-      console.error("[weekly-followup] opt-out failed", error.message);
-      return jsonResponse(request, { ok: false, error: "opt_out_failed" }, 503);
-    }
-    await admin
-      .from("weekly_whatsapp_followups")
-      .update({
-        status: "skipped",
-        last_error: "user_opt_out",
-        next_attempt_at: null,
-        locked_at: null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("recipient_phone", phone)
-      .in("status", ["planned", "failed"]);
-    const reply = await sendSafeReply(
-      phone,
-      "Tudo certo! Você não receberá mais os lembretes semanais da NOX. Se quiser voltar, responda VOLTAR. 💛",
-    );
-    return jsonResponse(request, {
-      ok: true,
-      handled: true,
-      preference,
-      reply,
-    });
-  }
-
-  const { error } = await admin
-    .from("weekly_whatsapp_followup_opt_outs")
-    .delete()
-    .eq("phone", phone);
-  if (error) {
-    console.error("[weekly-followup] opt-in failed", error.message);
-    return jsonResponse(request, { ok: false, error: "opt_in_failed" }, 503);
-  }
-  const reply = await sendSafeReply(
-    phone,
-    "Pronto! Seus lembretes semanais da NOX foram reativados. Que bom ter você por aqui! 😊💛",
-  );
-  return jsonResponse(request, {
-    ok: true,
-    handled: true,
-    preference,
-    reply,
-  });
 }
 
 async function handleBillingCommand(
@@ -524,10 +426,6 @@ Deno.serve(async (request) => {
   }
   const record = payload as Record<string, unknown>;
   const receivedText = receivedWhatsappText(record);
-  const preference = parseWeeklyFollowupPreference(receivedText);
-  if (String(record.type || "") === "ReceivedCallback" && preference) {
-    return handleWeeklyFollowupPreference(request, record, preference);
-  }
   const method = parseWhatsappBillingCommand(receivedText);
   if (String(record.type || "") === "ReceivedCallback" && method) {
     return handleBillingCommand(request, record, method);

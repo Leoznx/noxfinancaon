@@ -1,5 +1,5 @@
 BEGIN;
-SELECT plan(21);
+SELECT plan(23);
 
 SELECT has_table('public', 'weekly_whatsapp_followups', 'fila semanal existe');
 SELECT has_table('public', 'weekly_whatsapp_followup_opt_outs', 'opt-out existe');
@@ -72,6 +72,16 @@ SELECT like(
   pg_get_functiondef('public.claim_due_weekly_whatsapp_followups(integer,timestamp with time zone)'::regprocedure),
   '%weekly_whatsapp_followup_excluded_phones%',
   'claim aplica novamente o bloqueio do número de teste'
+);
+SELECT unlike(
+  pg_get_functiondef('public.plan_weekly_whatsapp_followups(timestamp with time zone)'::regprocedure),
+  '%weekly_whatsapp_followup_opt_outs%',
+  'planejador não aplica mais o comando de saída'
+);
+SELECT unlike(
+  pg_get_functiondef('public.claim_due_weekly_whatsapp_followups(integer,timestamp with time zone)'::regprocedure),
+  '%weekly_whatsapp_followup_opt_outs%',
+  'claim não aplica mais o comando de saída'
 );
 SELECT has_function(
   'public',

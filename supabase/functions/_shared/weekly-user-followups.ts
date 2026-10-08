@@ -55,26 +55,6 @@ export function buildWeeklyFollowupInteractiveContent(params: {
   };
 }
 
-export type WeeklyFollowupPreference = "opt_out" | "opt_in" | null;
-
-export function parseWeeklyFollowupPreference(
-  value: string | null | undefined,
-): WeeklyFollowupPreference {
-  const normalized = String(value || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z]/g, "");
-  if (["sair", "pare", "parar", "cancelar", "stop"].includes(normalized)) {
-    return "opt_out";
-  }
-  if (["voltar", "receber", "retomar"].includes(normalized)) {
-    return "opt_in";
-  }
-  return null;
-}
-
 export function saoPauloBusinessClock(now = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Sao_Paulo",

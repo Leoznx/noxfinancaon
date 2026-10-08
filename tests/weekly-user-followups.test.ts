@@ -5,7 +5,6 @@ import test from "node:test";
 import {
   buildWeeklyFollowupInteractiveContent,
   buildWeeklyFollowupMessage,
-  parseWeeklyFollowupPreference,
   saoPauloBusinessClock,
   WEEKLY_FOLLOWUP_MESSAGES,
   WEEKLY_FOLLOWUP_SIMULATION_URL,
@@ -47,19 +46,22 @@ test("usa somente o primeiro nome cadastrado e troca a mensagem entre variantes"
   assert.notEqual(first, second);
 });
 
-test("interpreta saída e reativação sem depender de acento ou pontuação", () => {
-  assert.equal(parseWeeklyFollowupPreference("SAIR"), "opt_out");
-  assert.equal(parseWeeklyFollowupPreference("Parar!"), "opt_out");
-  assert.equal(parseWeeklyFollowupPreference("VOLTAR"), "opt_in");
-  assert.equal(parseWeeklyFollowupPreference("quero receber"), null);
-  assert.equal(parseWeeklyFollowupPreference("boleto"), null);
-});
-
 test("restringe o envio a dias úteis entre 09:00 e 17:59 em São Paulo", () => {
   assert.equal(saoPauloBusinessClock(new Date("2026-10-05T12:00:00Z")).insideBusinessWindow, true);
   assert.equal(saoPauloBusinessClock(new Date("2026-10-05T20:59:00Z")).insideBusinessWindow, true);
   assert.equal(saoPauloBusinessClock(new Date("2026-10-05T21:00:00Z")).insideBusinessWindow, false);
   assert.equal(saoPauloBusinessClock(new Date("2026-10-10T15:00:00Z")).insideBusinessWindow, false);
+});
+
+test("webhook não interpreta comandos de saída ou reativação", () => {
+  const webhook = readFileSync(
+    new URL("../supabase/functions/zapi-webhook/index.ts", import.meta.url),
+    "utf8",
+  );
+  assert.doesNotMatch(webhook, /parseWeeklyFollowupPreference/);
+  assert.doesNotMatch(webhook, /handleWeeklyFollowupPreference/);
+  assert.doesNotMatch(webhook, /weekly_whatsapp_followup_opt_outs/);
+  assert.doesNotMatch(webhook, /responda VOLTAR/);
 });
 
 test("bloqueia o antigo disparo manual para número de teste", () => {
