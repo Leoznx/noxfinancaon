@@ -25,7 +25,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { STATUS_FINAIS, formatDocumento, isNomeValido, type ConsultaCredito, type StatusConsulta } from "@/lib/consultasCredito";
+import { STATUS_FINAIS, formatDocumento, type ConsultaCredito, type StatusConsulta } from "@/lib/consultasCredito";
+import { resolveCreditCustomerName } from "@/lib/credit-customer-name";
 import { SeletorPlanos, type ExtrasSelecionados, type PlanoSelecionadoCalculo } from "@/components/simulacao/SeletorPlanos";
 
 const STATUS_UI: Record<
@@ -125,6 +126,10 @@ export function ResultadoAutomacao({
     statusNormalizado.includes("análise") ||
     statusNormalizado.includes("analise") ||
     (statusNormalizado === "pendente" && !!consulta.automation_finished_at);
+  const nomeCliente = resolveCreditCustomerName({
+    tenantName: consulta.tenant_name,
+    rawResponse: consulta.raw_response,
+  });
 
   if (status === "aprovado" || isDocumentacaoPendente) {
     return (
@@ -166,10 +171,10 @@ export function ResultadoAutomacao({
                       Demonstrativo dos valores
                     </p>
                     <div className="space-y-1 text-sm">
-                      {isNomeValido(consulta.tenant_name) && (
+                      {nomeCliente && (
                         <div className="flex items-center justify-between gap-3">
                           <span className="font-medium text-green-800">Cliente</span>
-                          <span className="font-bold text-green-950">{consulta.tenant_name}</span>
+                          <span className="font-bold text-green-950">{nomeCliente}</span>
                         </div>
                       )}
                       {consulta.documento && (
@@ -237,7 +242,7 @@ export function ResultadoAutomacao({
                 aluguel: Number(consulta.valor_aluguel) || 0,
                 condominio: Number(consulta.valor_condominio) || 0,
                 taxas: Number(consulta.valor_taxas) || 0,
-                nomeInquilino: isNomeValido(consulta.tenant_name) ? consulta.tenant_name! : "Cliente",
+                nomeInquilino: nomeCliente || "Cliente",
                 documento: consulta.documento ? formatDocumento(consulta.documento) : undefined,
                 status: consulta.status,
               }}
@@ -292,9 +297,9 @@ export function ResultadoAutomacao({
               <div className="h-px bg-red-300/70 my-3 w-full" />
 
               <div className="text-red-950 text-sm leading-relaxed">
-                {isNomeValido(consulta.tenant_name) && (
+                {nomeCliente && (
                   <p>
-                    Cliente: <strong className="font-bold">{consulta.tenant_name}</strong>
+                    Cliente: <strong className="font-bold">{nomeCliente}</strong>
                   </p>
                 )}
                 {consulta.documento && (
@@ -385,9 +390,9 @@ export function ResultadoAutomacao({
                   <div className="h-px bg-amber-300/70 my-3 w-full" />
 
                   <div className="text-amber-950 text-sm leading-relaxed">
-                    {isNomeValido(consulta.tenant_name) && (
+                    {nomeCliente && (
                       <p>
-                        Cliente: <strong className="font-bold">{consulta.tenant_name}</strong>
+                        Cliente: <strong className="font-bold">{nomeCliente}</strong>
                       </p>
                     )}
                     {consulta.documento && (
@@ -491,10 +496,10 @@ export function ResultadoAutomacao({
                   {consulta.tipo_pessoa === "PJ" ? "Pessoa Jurídica" : "Pessoa Física"}
                 </dd>
               </div>
-              {isNomeValido(consulta.tenant_name) && (
+              {nomeCliente && (
                 <div className="flex justify-between gap-4">
                   <dt className="text-neutral-500">Nome</dt>
-                  <dd className="font-semibold text-neutral-900">{consulta.tenant_name}</dd>
+                  <dd className="font-semibold text-neutral-900">{nomeCliente}</dd>
                 </div>
               )}
               <div className="flex justify-between gap-4">

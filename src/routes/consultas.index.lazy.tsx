@@ -12,7 +12,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { toast } from "sonner";
-import { formatDocumento, isNomeValido } from "@/lib/consultasCredito";
+import { formatDocumento } from "@/lib/consultasCredito";
+import { resolveCreditCustomerName } from "@/lib/credit-customer-name";
 
 export const Route = createLazyFileRoute("/consultas/")({
   component: () => (
@@ -191,15 +192,16 @@ function Consultas() {
 
   const getDoc = (c: any) => c.documento || c.tenant_document || c.inquilinos?.cpf || c.inquilinos?.cnpj || '—';
 
-  // `documento`/`tenant_name` são a fonte mais confiável para consultas passadas pela
-  // automação (a CredPago confirma nome/documento do cliente) — o join com `inquilinos`
-  // só entra como fallback para consultas que nunca passaram pela automação. Em telas de
-  // recusado a CredPago frequentemente não retorna nome nenhum (ver isNomeValido) — nesse
-  // caso mostra só os 3 primeiros dígitos do CPF/CNPJ em vez de "Nome não informado", pra
-  // ainda dar alguma referência de qual cliente foi recusado.
+  // `tenant_name` continua sendo a fonte principal. O resumo técnico entra antes do
+  // cadastro vinculado para recuperar resultados de versões antigas do worker que já
+  // receberam o nome do parceiro, mas não o copiaram para a coluna da consulta.
   const getNome = (c: any) => {
-    if (isNomeValido(c.tenant_name)) return c.tenant_name;
-    if (isNomeValido(c.inquilinos?.nome)) return c.inquilinos.nome;
+    const nome = resolveCreditCustomerName({
+      tenantName: c.tenant_name,
+      rawResponse: c.raw_response,
+      fallbacks: [c.inquilinos?.nome],
+    });
+    if (nome) return nome;
     if (getStatusConsulta(c) === 'recusado') {
       const digits = getDoc(c).replace(/\D/g, '');
       if (digits.length >= 3) return `CPF ${digits.slice(0, 3)}...`;
