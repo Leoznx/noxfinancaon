@@ -307,7 +307,7 @@ function personalizeDocumentXml(
     : 0;
   const observations = [
     paintingEnabled
-      ? `Pintura interna contratada: ${formatCurrency(paintingValue)}`
+      ? `Pintura externa contratada: ${formatCurrency(paintingValue)}`
       : null,
     activationEnabled
       ? `Taxa de adesão: ${formatCurrency(activationValue)}`

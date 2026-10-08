@@ -312,7 +312,7 @@ export function SeletorPlanos({
     [planosCalculados, planoEscolhidoId]
   );
 
-  // Pintura interna: 4,8% do valor locatício aprovado (aluguel), em 3x.
+  // Pintura externa: 4,8% do valor locatício aprovado (aluguel), em 3x.
   const pinturaTotal = useMemo(() => {
     const base = Number(valores.aluguel) || 0;
     return +(base * 0.048).toFixed(2);
@@ -548,7 +548,7 @@ export function SeletorPlanos({
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              {/* Pintura interna */}
+              {/* Pintura externa */}
               <motion.div
                 layout
                 onClick={() => setPinturaEnabled(v => !v)}
@@ -572,10 +572,10 @@ export function SeletorPlanos({
                     </span>
                   </div>
                   <h3 className={`text-base font-black tracking-tight ${pinturaEnabled ? 'text-white' : 'text-neutral-900'}`}>
-                    Pintura interna
+                    Pintura externa
                   </h3>
                   <p className={`text-[11px] font-medium mb-3 mt-0.5 ${pinturaEnabled ? 'text-neutral-400' : 'text-neutral-500'}`}>
-                    Reforce a proteção do imóvel com cobertura de pintura interna.
+                    Reforce a proteção do imóvel com cobertura de pintura externa.
                   </p>
                   <div className="flex items-baseline gap-1 mb-0.5">
                     <span className={`text-sm font-black ${pinturaEnabled ? 'text-yellow-400' : 'text-orange-500'}`}>+</span>
@@ -599,7 +599,7 @@ export function SeletorPlanos({
                   >
                     <Info size={12} className={`shrink-0 mt-0.5 ${pinturaEnabled ? 'text-yellow-400' : 'text-yellow-600'}`} />
                     <p className={`text-[10px] leading-snug font-medium ${pinturaEnabled ? 'text-neutral-300' : 'text-neutral-600'}`}>
-                      <span className={`font-black ${pinturaEnabled ? 'text-yellow-400' : 'text-yellow-700'}`}>Atenção sobre a cobertura:</span> válida apenas para pinturas danificadas por mau uso ou danos intencionais/indevidos. Desgaste natural, envelhecimento ou deterioração pelo tempo não são cobertos.
+                      <span className={`font-black ${pinturaEnabled ? 'text-yellow-400' : 'text-yellow-700'}`}>Atenção sobre a cobertura:</span> válida somente para casas. Apartamentos não possuem esta cobertura. A pintura deve estar danificada por mau uso ou danos intencionais/indevidos; desgaste natural, envelhecimento ou deterioração pelo tempo não são cobertos.
                     </p>
                   </div>
                   <div className={`w-full py-2.5 rounded-xl text-[10px] font-black uppercase tracking-[0.18em] flex items-center justify-center gap-2 transition-all ${
@@ -613,7 +613,7 @@ export function SeletorPlanos({
                 <div className="flex justify-center md:justify-end shrink-0">
                   <img
                     src="/assets/nox-pintura-personagem.webp"
-                    alt="Personagem NOX Fiança pintor, representando a cobertura de pintura interna"
+                    alt="Personagem NOX Fiança pintor, representando a cobertura de pintura externa"
                     className="pointer-events-none select-none h-40 md:h-56 w-auto"
                   />
                 </div>
@@ -715,7 +715,7 @@ export function SeletorPlanos({
                 <ResumoLinha label="Plano selecionado" value={planoSelecionado?.nome || '—'} />
                 <ResumoLinha label="Valor mensal base" value={planoSelecionado ? formatarBRL(planoSelecionado.mensal) : '—'} />
                 <ResumoLinha
-                  label="Pintura interna"
+                  label="Pintura externa"
                   value={pinturaEnabled ? `Sim · +${formatarBRL(pinturaParcela)}/mês (cobertura 3× aluguel)` : 'Não'}
                 />
                 <ResumoLinha
@@ -733,7 +733,7 @@ export function SeletorPlanos({
                 <div className="mt-4 flex gap-2 p-3 rounded-xl bg-yellow-50 border border-yellow-200">
                   <Info size={14} className="shrink-0 mt-0.5 text-yellow-600" />
                   <p className="text-[11px] leading-snug font-medium text-neutral-700">
-                    <span className="font-black text-yellow-700">Pintura interna adicionada:</span> cobertura para danos por mau uso. Não cobre desgaste natural.
+                    <span className="font-black text-yellow-700">Pintura externa adicionada:</span> cobertura para danos por mau uso em casas. Não cobre apartamentos nem desgaste natural.
                   </p>
                 </div>
               )}

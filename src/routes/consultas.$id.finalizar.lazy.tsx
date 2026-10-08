@@ -1728,7 +1728,7 @@ function ResumoPropostaLoft(p: any) {
                     )}
                     {pinturaMensal > 0 && (
                       <div className="flex justify-between gap-4">
-                        <span className="text-neutral-200">Pintura interna</span>
+                        <span className="text-neutral-200">Pintura externa</span>
                         <strong>{fmt(pinturaMensal)} / mês</strong>
                       </div>
                     )}
@@ -2305,10 +2305,10 @@ function EtapaPersonalizar(p: any) {
             <Card icon={<Info size={14} />} title="Extras opcionais">
               {pinturaTotal > 0 && (
                 <div className="p-3 rounded-lg bg-neutral-50 border border-neutral-200 mb-2">
-                  <p className="text-xs font-black">Pintura interna — {fmt(pinturaTotal)}</p>
+                  <p className="text-xs font-black">Pintura externa — {fmt(pinturaTotal)}</p>
                   <p className="text-[11px] text-neutral-500">
-                    Cobertura válida para pinturas com mal uso ou danificadas por vontade própria.
-                    Pintura com desgaste natural de uso não cobre.
+                    Cobertura válida somente para pintura externa de casas, com danos por mau uso ou vontade própria.
+                    Apartamentos não possuem esta cobertura; desgaste natural de uso não é coberto.
                   </p>
                 </div>
               )}
@@ -2577,7 +2577,7 @@ function EtapaRevisao(p: any) {
           <Linha label="Assistência" value={assistLabel} />
           <Linha label="Comissão" value={`${comissaoPct}%`} />
           <Linha label="Taxa de ativação" value={fmt(taxaAtivacao)} />
-          <Linha label="Pintura interna" value={pinturaTotal ? fmt(pinturaTotal) : "—"} />
+          <Linha label="Pintura externa" value={pinturaTotal ? fmt(pinturaTotal) : "—"} />
           <Linha label="Forma de pagamento" value={pagLabel} />
         </Card>
 
@@ -2619,7 +2619,7 @@ function EtapaRevisao(p: any) {
           <Linha label="Prêmio mensal" value={fmt(premioMensal)} />
           <Linha label="Prêmio anual" value={fmt(premioAnual)} />
           <Linha label="Taxa de ativação" value={fmt(taxaAtivacao)} />
-          <Linha label="Pintura interna" value={pinturaTotal ? fmt(pinturaTotal) : "—"} />
+          <Linha label="Pintura externa" value={pinturaTotal ? fmt(pinturaTotal) : "—"} />
           <div className="border-t border-neutral-100 mt-2 pt-2">
             <Linha
               label="Total final"
@@ -2799,7 +2799,7 @@ function ResumoSticky(p: any) {
         </div>
         {pinturaTotal > 0 && (
           <div className="flex justify-between">
-            <span className="text-neutral-400">Pintura interna</span>
+            <span className="text-neutral-400">Pintura externa</span>
             <span>{fmt(pinturaTotal)}</span>
           </div>
         )}

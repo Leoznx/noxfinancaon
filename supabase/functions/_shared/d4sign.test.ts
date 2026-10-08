@@ -107,7 +107,7 @@ for (
     assert(documentXml.includes("Imobiliária Central Ltda."));
     assert(documentXml.includes("12.345.678/0001-99"));
     assert(documentXml.includes("TAXA DE ADESÃO (SETUP) – R$ 200,00"));
-    assert(documentXml.includes("Pintura interna contratada: R$ 72,00"));
+    assert(documentXml.includes("Pintura externa contratada: R$ 72,00"));
     assert(
       documentXml.includes("R$ 57.000,00") ||
         documentXml.includes("R$ 57.000,00"),
