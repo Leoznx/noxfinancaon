@@ -31,6 +31,7 @@ import {
   assertCreditSimulationAvailable,
   isCredPagoAccountBlockedError,
 } from "./credpagoAvailability";
+import { LoftCancellationClient, extractLoftProposalId } from "./loftCancellation";
 
 /**
  * Traduz qualquer falha interna (Playwright, rede, timeout) para uma mensagem segura,
@@ -90,6 +91,15 @@ type AuthRuntimeStatus = "checking" | "ok" | "required" | "unavailable" | "block
 type QueueRuntimeStatus = "checking" | "ok" | "unavailable";
 type BrowserRuntimeStatus = "checking" | "ok" | "unavailable";
 
+interface LoftCancellationJob {
+  id: string;
+  consultation_id: string;
+  correlation_id: string;
+  proposal_id: string;
+  attempt_count: number;
+  max_attempts: number;
+}
+
 const runtimeState: {
   auth: AuthRuntimeStatus;
   lastAuthCheckAt: string | null;
@@ -108,6 +118,10 @@ const runtimeState: {
   totalFailed: number;
   lastSuccessfulSimulationAt: string | null;
   averageDurationMs: number | null;
+  activeCancellation: boolean;
+  totalCancellations: number;
+  totalCancellationFailures: number;
+  lastSuccessfulCancellationAt: string | null;
 } = {
   auth: "checking",
   lastAuthCheckAt: null,
@@ -126,9 +140,24 @@ const runtimeState: {
   totalFailed: 0,
   lastSuccessfulSimulationAt: null,
   averageDurationMs: null,
+  activeCancellation: false,
+  totalCancellations: 0,
+  totalCancellationFailures: 0,
+  lastSuccessfulCancellationAt: null,
 };
 
 const recentDurations: number[] = [];
+const loftCancellationClient = env.loftCancellationEnabled
+  ? new LoftCancellationClient({
+      apiBaseUrl: env.loftApiBaseUrl,
+      tokenUrl: env.loftOauthTokenUrl,
+      clientId: env.loftOauthClientId,
+      clientSecret: env.loftOauthClientSecret,
+      scope: env.loftOauthScope,
+      authorizationDetails: env.loftOauthAuthorizationDetails || undefined,
+      requestTimeoutMs: env.loftCancellationRequestTimeoutMs,
+    })
+  : null;
 
 let proximaValidacaoAuthEm = 0;
 let ultimaRecuperacaoConsultasEm = 0;
@@ -273,6 +302,129 @@ const SESSAO_OCIOSA_MS = 3 * 60 * 1000; // 3 minutos
 // Fila / persistência
 // ---------------------------------------------------------------------------
 
+async function agendarCancelamentoLoft(
+  consulta: ConsultaCreditoRow,
+  proposalId: string | null,
+): Promise<boolean> {
+  if (!env.loftCancellationEnabled) return false;
+  const normalizedProposalId = extractLoftProposalId(proposalId);
+  const { error } = await (supabaseAdmin as any).rpc("schedule_loft_proposal_cancellation", {
+    p_consultation_id: consulta.id,
+    p_proposal_id: normalizedProposalId,
+    p_delay_seconds: Math.round(env.loftCancellationDelayMs / 1000),
+  });
+  if (error) throw error;
+  registrarSucessoFila();
+  return true;
+}
+
+async function claimNextLoftCancellation(): Promise<LoftCancellationJob | null> {
+  if (!loftCancellationClient) return null;
+  const { data, error } = await (supabaseAdmin as any).rpc(
+    "claim_next_loft_proposal_cancellation",
+    { p_worker_id: env.vpsId },
+  );
+  if (error) throw error;
+  registrarSucessoFila();
+  const row = Array.isArray(data) ? data[0] : null;
+  return row ? (row as LoftCancellationJob) : null;
+}
+
+async function finishLoftCancellation(
+  job: LoftCancellationJob,
+  result: { success: true } | { success: false; error: unknown },
+): Promise<void> {
+  const now = new Date();
+  const terminalFailure = !result.success && job.attempt_count >= job.max_attempts;
+  const retryDelayMinutes = Math.min(30, Math.max(1, 2 ** Math.max(0, job.attempt_count - 1)));
+  const payload = result.success
+    ? {
+        status: "cancelled",
+        cancellation_reason: env.loftCancellationReason,
+        cancelled_at: now.toISOString(),
+        last_error: null,
+        next_attempt_at: now.toISOString(),
+        worker_id: null,
+        lease_expires_at: null,
+      }
+    : {
+        status: terminalFailure ? "failed" : "retry",
+        last_error: redactSensitiveText(formatErrorDetail(result.error), 2_000),
+        next_attempt_at: new Date(now.getTime() + retryDelayMinutes * 60_000).toISOString(),
+        worker_id: null,
+        lease_expires_at: null,
+      };
+
+  const { data, error } = await supabaseAdmin
+    .from("loft_proposal_cancellations")
+    .update(payload)
+    .eq("id", job.id)
+    .eq("status", "processing")
+    .eq("worker_id", env.vpsId)
+    .select("id");
+  if (error) throw error;
+  if (!data?.length) throw new Error("O lease do cancelamento mudou antes da gravação final.");
+  registrarSucessoFila();
+}
+
+async function processLoftCancellation(job: LoftCancellationJob): Promise<void> {
+  if (!loftCancellationClient || !env.loftCancellationReason) return;
+  const cid = ensureCorrelationId(job.correlation_id);
+  const startedAt = Date.now();
+  logStructured("loft_proposal_cancellation_started", {
+    correlationId: cid,
+    simulationId: job.consultation_id,
+    proposalId: job.proposal_id,
+    attempt: job.attempt_count,
+  });
+
+  try {
+    const response = await loftCancellationClient.cancelProposal(
+      job.proposal_id,
+      env.loftCancellationReason,
+      env.loftCancellationComment,
+    );
+    await finishLoftCancellation(job, { success: true });
+    runtimeState.totalCancellations += 1;
+    runtimeState.lastSuccessfulCancellationAt = new Date().toISOString();
+    logStructured("loft_proposal_cancellation_finished", {
+      correlationId: cid,
+      simulationId: job.consultation_id,
+      proposalId: response.proposalId,
+      status: response.status,
+      durationMs: Date.now() - startedAt,
+    });
+  } catch (error) {
+    runtimeState.totalCancellationFailures += 1;
+    await finishLoftCancellation(job, { success: false, error }).catch((persistenceError) =>
+      registrarFalhaFila("Falha ao devolver o cancelamento para a fila", persistenceError),
+    );
+    const terminalFailure = job.attempt_count >= job.max_attempts;
+    logErro(
+      `[${cid}] Cancelamento da proposta não foi confirmado; ${
+        terminalFailure ? "intervenção necessária" : "nova tentativa foi agendada"
+      }`,
+      error,
+    );
+    if (job.attempt_count === 1 || terminalFailure) {
+      await reportAutomationError({
+        correlationId: cid,
+        simulationId: job.consultation_id,
+        environment: env.automationEnvironment,
+        service: "loft-proposal-cancellation",
+        step: "cancel-proposal-api",
+        error,
+        attemptCount: job.attempt_count,
+        durationMs: Date.now() - startedAt,
+        metadata: {
+          proposalId: job.proposal_id,
+          terminalFailure,
+        },
+      });
+    }
+  }
+}
+
 async function fetchConsultasPendentes(limite: number): Promise<ConsultaCreditoRow[]> {
   if (limite <= 0) return [];
   const { data, error } = await supabaseAdmin
@@ -379,10 +531,7 @@ async function atualizarResultado(
     } catch (error) {
       if (error instanceof ConsultaStateConflictError) throw error;
       ultimoErro = error;
-      registrarFalhaFila(
-        `Falha ao salvar resultado da consulta (tentativa ${tentativa}/5)`,
-        error,
-      );
+      registrarFalhaFila(`Falha ao salvar resultado da consulta (tentativa ${tentativa}/5)`, error);
       if (tentativa < 5) await sleep(Math.min(1_000 * 2 ** (tentativa - 1), 8_000));
     }
   }
@@ -559,8 +708,8 @@ async function validarAutenticacao(
         isAccountBlocked
           ? "Fila pausada: a conta do parceiro esta bloqueada para criar contratos"
           : isAuthError
-          ? "Fila pausada: a autenticação da CredPago precisa ser recuperada"
-          : "Fila pausada: não foi possível validar o portal da CredPago",
+            ? "Fila pausada: a autenticação da CredPago precisa ser recuperada"
+            : "Fila pausada: não foi possível validar o portal da CredPago",
         error,
       );
     }
@@ -606,6 +755,7 @@ async function processarConsulta(
   let page: Page | null = null;
   let simulacaoEnviada = false;
   let resultadoObtido = false;
+  let cancelamentoAgendado = false;
   try {
     const erroValidacao = validateConsultaForAutomation(consulta);
     if (erroValidacao) throw new Error(`Dados da consulta inválidos: ${erroValidacao}.`);
@@ -645,10 +795,31 @@ async function processarConsulta(
     }
     await assertCreditSimulationAvailable(page);
 
+    const tentarAgendarCancelamento = async (proposalId: string | null) => {
+      if (!env.loftCancellationEnabled || (cancelamentoAgendado && !proposalId)) return;
+      try {
+        cancelamentoAgendado =
+          (await agendarCancelamentoLoft(consulta, proposalId)) || cancelamentoAgendado;
+      } catch (error) {
+        registrarFalhaFila("Falha ao agendar o cancelamento da proposta", error);
+        await reportAutomationError({
+          correlationId,
+          simulationId: consulta.id,
+          initiatingUserId: consulta.profile_id_solicitante,
+          environment: env.automationEnvironment,
+          service: "loft-proposal-cancellation",
+          step: "schedule-proposal-cancellation",
+          error,
+          metadata: {
+            simulationSubmitted: simulacaoEnviada,
+            proposalIdAvailable: Boolean(proposalId),
+          },
+        });
+      }
+    };
+
     const executarTentativa = async (tentativa: number) => {
-      log(
-        `[${cid}] Preenchendo dados${tentativa > 1 ? ` (recuperação ${tentativa - 1}/1)` : ""}`,
-      );
+      log(`[${cid}] Preenchendo dados${tentativa > 1 ? ` (recuperação ${tentativa - 1}/1)` : ""}`);
       await atualizarStep(consulta.id, tentativa > 1 ? "recuperando_portal" : "preenchendo");
       await fillPessoa(page, consulta.tipo_pessoa || "PF");
       await fillDocumento(page, consulta.documento || "", consulta.tipo_pessoa || "PF");
@@ -672,6 +843,7 @@ async function processarConsulta(
           simulacaoEnviada = true;
           estado.simulationSubmitted = true;
         },
+        onAfterClick: () => tentarAgendarCancelamento(null),
       });
       estado.lastSuccessfulStep =
         tentativa > 1 ? "recovery-simulation-submitted" : "simulation-submitted";
@@ -706,6 +878,7 @@ async function processarConsulta(
       };
     }
     resultadoObtido = true;
+    await tentarAgendarCancelamento(resultado.proposalId);
     estado.lastSuccessfulStep = "result-read";
     log(`[${cid}] Resultado identificado: ${resultado.status}`);
 
@@ -747,7 +920,8 @@ async function processarConsulta(
     runtimeState.averageDurationMs = Math.round(
       recentDurations.reduce((sum, value) => sum + value, 0) / recentDurations.length,
     );
-    if (resultado.status !== "erro") runtimeState.lastSuccessfulSimulationAt = new Date().toISOString();
+    if (resultado.status !== "erro")
+      runtimeState.lastSuccessfulSimulationAt = new Date().toISOString();
     if (resultado.status === "erro") {
       runtimeState.totalFailed += 1;
       await reportAutomationError({
@@ -805,7 +979,11 @@ async function processarConsulta(
     if (falhaTemporariaAntesDoEnvio) {
       const falhaDeAutenticacao = err instanceof CredPagoAuthenticationError;
       const contaBloqueada = isCredPagoAccountBlockedError(err);
-      runtimeState.auth = contaBloqueada ? "blocked" : falhaDeAutenticacao ? "required" : "unavailable";
+      runtimeState.auth = contaBloqueada
+        ? "blocked"
+        : falhaDeAutenticacao
+          ? "required"
+          : "unavailable";
       runtimeState.lastAuthCheckAt = new Date().toISOString();
       runtimeState.consecutiveAuthFailures += 1;
       proximaValidacaoAuthEm = 0;
@@ -901,16 +1079,18 @@ async function processarConsultaComTimeout(
       const artifacts = await Promise.race([
         captureSafeErrorArtifacts(estado.page, estado.simulationSubmitted),
         new Promise<Awaited<ReturnType<typeof captureSafeErrorArtifacts>>>((resolve) =>
-          setTimeout(() => resolve({ screenshotSkippedReason: "Captura excedeu o prazo seguro." }), 2_000),
+          setTimeout(
+            () => resolve({ screenshotSkippedReason: "Captura excedeu o prazo seguro." }),
+            2_000,
+          ),
         ),
       ]);
       // Interrompe de verdade a aba desta consulta. Antes, o trabalho continuava em
       // segundo plano e um retry podia enviar a mesma simulação duas vezes.
       await estado.page?.close().catch(() => {});
-      await marcarErro(
-        consulta.id,
-        timeoutError.message,
-      ).catch((e) => logErro(`[${cid}] Falha ao gravar erro de timeout no Supabase`, e));
+      await marcarErro(consulta.id, timeoutError.message).catch((e) =>
+        logErro(`[${cid}] Falha ao gravar erro de timeout no Supabase`, e),
+      );
       runtimeState.totalProcessed += 1;
       runtimeState.totalFailed += 1;
       await reportAutomationError({
@@ -1055,6 +1235,11 @@ function iniciarServidorHealth(): http.Server {
           totalFailed: runtimeState.totalFailed,
           lastSuccessfulSimulationAt: runtimeState.lastSuccessfulSimulationAt,
           averageDurationMs: runtimeState.averageDurationMs,
+          cancellationEnabled: env.loftCancellationEnabled,
+          activeCancellation: runtimeState.activeCancellation,
+          totalCancellations: runtimeState.totalCancellations,
+          totalCancellationFailures: runtimeState.totalCancellationFailures,
+          lastSuccessfulCancellationAt: runtimeState.lastSuccessfulCancellationAt,
           configuredConcurrency: env.requestedMaxConcurrentConsultas,
           effectiveConcurrency: env.maxConcurrentConsultas,
           automationVersion: env.automationVersion,
@@ -1105,6 +1290,13 @@ async function loop(once: boolean): Promise<void> {
       env.credpagoLogin ? "configurada" : "não configurada"
     }`,
   );
+  log(
+    `Cancelamento de propostas após ${Math.round(env.loftCancellationDelayMs / 60000)}min: ${
+      env.loftCancellationEnabled
+        ? "habilitado pela API oficial com motivo homologado"
+        : "desabilitado até configurar OAuth e um motivo verdadeiro"
+    }`,
+  );
   let lock: AutomationLockHandle | null = null;
   lock = await acquireAutomationLock(
     env.automationLockPath,
@@ -1117,6 +1309,7 @@ async function loop(once: boolean): Promise<void> {
   const healthServer = once ? null : iniciarServidorHealth();
 
   const emAndamento = new Map<string, Promise<void>>();
+  let cancelamentoEmAndamento: Promise<void> | null = null;
   let desligando = false;
 
   const finalizarWorker = async () => {
@@ -1136,7 +1329,10 @@ async function loop(once: boolean): Promise<void> {
     log(
       `Encerrando worker — aguardando ${emAndamento.size} consulta(s) em andamento terminar(em)...`,
     );
-    await Promise.allSettled(Array.from(emAndamento.values()));
+    await Promise.allSettled([
+      ...Array.from(emAndamento.values()),
+      ...(cancelamentoEmAndamento ? [cancelamentoEmAndamento] : []),
+    ]);
     await finalizarWorker();
     process.exit(0);
   };
@@ -1159,6 +1355,22 @@ async function loop(once: boolean): Promise<void> {
       await recuperarConsultasTravadas(new Set(emAndamento.keys())).catch((error) =>
         registrarFalhaFila("Falha ao recuperar consultas interrompidas", error),
       );
+
+      if (env.loftCancellationEnabled && !cancelamentoEmAndamento) {
+        try {
+          const job = await claimNextLoftCancellation();
+          if (job) {
+            runtimeState.activeCancellation = true;
+            const task = processLoftCancellation(job).finally(() => {
+              if (cancelamentoEmAndamento === task) cancelamentoEmAndamento = null;
+              runtimeState.activeCancellation = false;
+            });
+            cancelamentoEmAndamento = task;
+          }
+        } catch (error) {
+          registrarFalhaFila("Falha ao consultar a fila de cancelamentos", error);
+        }
+      }
 
       const autenticacaoPronta = await validarAutenticacao(
         contextoAberto.context,
@@ -1245,6 +1457,7 @@ async function loop(once: boolean): Promise<void> {
 
       if (once) {
         if (emAndamento.size === 0) {
+          if (cancelamentoEmAndamento) await Promise.allSettled([cancelamentoEmAndamento]);
           log("Nenhuma consulta pendente encontrada.");
           break;
         }
@@ -1260,7 +1473,10 @@ async function loop(once: boolean): Promise<void> {
     process.removeListener("SIGINT", handleSigint);
     process.removeListener("SIGTERM", handleSigint);
     if (!desligando) {
-      await Promise.allSettled(Array.from(emAndamento.values()));
+      await Promise.allSettled([
+        ...Array.from(emAndamento.values()),
+        ...(cancelamentoEmAndamento ? [cancelamentoEmAndamento] : []),
+      ]);
       await finalizarWorker();
     }
   }

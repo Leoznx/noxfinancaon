@@ -2,6 +2,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import os from "node:os";
 import dotenv from "dotenv";
+import { isLoftCancellationReason, type LoftCancellationReason } from "./loftCancellation";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -44,6 +45,26 @@ if (Boolean(credpagoLogin) !== Boolean(credpagoPassword)) {
     "CREDPAGO_LOGIN e CREDPAGO_PASSWORD precisam ser configuradas juntas em automation/.env.",
   );
 }
+
+const loftOauthClientId = process.env.LOFT_OAUTH_CLIENT_ID?.trim() || "";
+const loftOauthClientSecret = process.env.LOFT_OAUTH_CLIENT_SECRET || "";
+if (Boolean(loftOauthClientId) !== Boolean(loftOauthClientSecret)) {
+  throw new Error(
+    "LOFT_OAUTH_CLIENT_ID e LOFT_OAUTH_CLIENT_SECRET precisam ser configuradas juntas.",
+  );
+}
+const configuredCancellationReason = process.env.LOFT_CANCELLATION_REASON?.trim() || "";
+if (configuredCancellationReason && !isLoftCancellationReason(configuredCancellationReason)) {
+  throw new Error("LOFT_CANCELLATION_REASON não corresponde a um motivo oficial da API da Loft.");
+}
+if (configuredCancellationReason && !loftOauthClientId) {
+  throw new Error(
+    "LOFT_CANCELLATION_REASON exige LOFT_OAUTH_CLIENT_ID e LOFT_OAUTH_CLIENT_SECRET.",
+  );
+}
+const loftCancellationReason = configuredCancellationReason
+  ? (configuredCancellationReason as LoftCancellationReason)
+  : null;
 
 const storageStatePath = process.env.CREDPAGO_STORAGE_STATE_PATH || "";
 const profileDir =
@@ -88,10 +109,12 @@ export const env = {
   repairAutoEnabled: process.env.REPAIR_AUTO_ENABLED !== "false",
   repairHealthToken: process.env.REPAIR_HEALTH_TOKEN || "",
   automationEnvironment: process.env.AUTOMATION_ENVIRONMENT || "production",
-  automationVersion: process.env.AUTOMATION_VERSION || process.env.VERCEL_GIT_COMMIT_SHA || "unknown",
+  automationVersion:
+    process.env.AUTOMATION_VERSION || process.env.VERCEL_GIT_COMMIT_SHA || "unknown",
   deployVersion: process.env.DEPLOY_VERSION || process.env.AUTOMATION_VERSION || "unknown",
   vpsId: process.env.VPS_ID || os.hostname(),
-  automationLockPath: process.env.AUTOMATION_LOCK_PATH || path.join(dataDir, "credit-automation.lock"),
+  automationLockPath:
+    process.env.AUTOMATION_LOCK_PATH || path.join(dataDir, "credit-automation.lock"),
   errorSpoolDir: process.env.ERROR_SPOOL_DIR || path.join(dataDir, "error-spool"),
   repairArtifactDir: process.env.REPAIR_ARTIFACT_DIR || path.join(dataDir, "repair-artifacts"),
   highCpuPercent: percentage("VPS_HIGH_CPU_PERCENT", 90),
@@ -105,6 +128,25 @@ export const env = {
   /** Credenciais exclusivas do servidor para renovar automaticamente a sessão do Login Loft. */
   credpagoLogin,
   credpagoPassword,
+  /** API oficial da parceria, usada apenas no backend para cancelar propostas vencidas. */
+  loftApiBaseUrl: process.env.LOFT_API_BASE_URL?.trim() || "https://api.loft.com.br",
+  loftOauthTokenUrl:
+    process.env.LOFT_OAUTH_TOKEN_URL?.trim() || "https://auth.loft.com.br/v2/oauth/token",
+  loftOauthClientId,
+  loftOauthClientSecret,
+  loftOauthScope: process.env.LOFT_OAUTH_SCOPE?.trim() || "loft-aluguel",
+  loftOauthAuthorizationDetails: process.env.LOFT_OAUTH_AUTHORIZATION_DETAILS?.trim() || "",
+  loftCancellationReason,
+  loftCancellationComment: (process.env.LOFT_CANCELLATION_COMMENT?.trim() || "").slice(0, 500),
+  loftCancellationDelayMs: positiveNumber("LOFT_CANCELLATION_DELAY_MS", 30 * 60 * 1000, 60_000),
+  loftCancellationRequestTimeoutMs: positiveNumber(
+    "LOFT_CANCELLATION_REQUEST_TIMEOUT_MS",
+    15_000,
+    3_000,
+  ),
+  loftCancellationEnabled: Boolean(
+    loftOauthClientId && loftOauthClientSecret && loftCancellationReason,
+  ),
   /** Mantém a sessão aquecida e detecta expiração antes de retirar uma consulta da fila. */
   authCheckIntervalMs: positiveNumber("AUTH_CHECK_INTERVAL_MS", 4 * 60 * 1000, 10_000),
   /** Intervalo entre tentativas de recuperar uma autenticação indisponível. */
@@ -122,10 +164,7 @@ export const env = {
    * A conta do parceiro compartilha o estado da proposta entre abas. Por segurança,
    * somente uma análise é enviada por vez; as demais permanecem na fila do Supabase.
    */
-  maxConcurrentConsultas: Math.min(
-    requestedMaxConcurrentConsultas,
-    SAFE_PROVIDER_CONCURRENCY,
-  ),
+  maxConcurrentConsultas: Math.min(requestedMaxConcurrentConsultas, SAFE_PROVIDER_CONCURRENCY),
   /** Tempo máximo (ms) para uma consulta individual antes de ser marcada como erro. */
   consultaTimeoutMs: positiveNumber("CONSULTA_TIMEOUT_MS", 180_000, 10_000),
   /** Recupera leases "processando" deixados por queda/reinício do worker. */

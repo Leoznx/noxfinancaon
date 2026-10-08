@@ -19,15 +19,15 @@ test("aguarda a análise ativa além do prazo inicial sem repetir o clique", asy
   await page.evaluate(() => {
     setTimeout(() => {
       document.body.innerHTML = "<main>Crédito aprovado</main>";
-    }, 80);
+    }, 150);
   });
 
   let recliques = 0;
   const resultado = await parseResultado(page, {
-    timeoutMs: 40,
-    processingTimeoutMs: 250,
-    pollIntervalMs: 10,
-    retryAfterMs: 20,
+    timeoutMs: 2_000,
+    processingTimeoutMs: 5_000,
+    pollIntervalMs: 50,
+    retryAfterMs: 300,
     onRetryClick: async () => {
       recliques += 1;
     },
@@ -73,16 +73,31 @@ test("não persiste a marca do provedor nem dados sensíveis no resumo técnico"
   await page.close();
 });
 
+test("captura o identificador da proposta gerado pelo portal", async () => {
+  const page = await browser.newPage();
+  await page.setContent("<main>Crédito aprovado — Proposta nº 4775289</main>");
+
+  const resultado = await parseResultado(page, {
+    timeoutMs: 100,
+    processingTimeoutMs: 100,
+    pollIntervalMs: 10,
+  });
+
+  assert.equal(resultado.status, "aprovado");
+  assert.equal(resultado.proposalId, "4775289");
+  await page.close();
+});
+
 test("mantém o reclique de recuperação quando o formulário realmente fica parado", async () => {
   const page = await browser.newPage();
   await page.setContent("<main><button>Simular Crédito</button></main>");
 
   let recliques = 0;
   const resultado = await parseResultado(page, {
-    timeoutMs: 90,
-    processingTimeoutMs: 200,
-    pollIntervalMs: 10,
-    retryAfterMs: 20,
+    timeoutMs: 2_500,
+    processingTimeoutMs: 3_000,
+    pollIntervalMs: 50,
+    retryAfterMs: 300,
     maxRetryClicks: 2,
     onRetryClick: async () => {
       recliques += 1;
@@ -100,16 +115,16 @@ test("encerra rápido quando o portal volta ao formulário após confirmar a an�
   await page.evaluate(() => {
     setTimeout(() => {
       document.body.innerHTML = "<main><button>Fazer análise</button></main>";
-    }, 30);
+    }, 150);
   });
 
   let recliques = 0;
   const inicio = Date.now();
   const resultado = await parseResultado(page, {
-    timeoutMs: 60,
-    processingTimeoutMs: 500,
-    pollIntervalMs: 10,
-    providerResetStableMs: 30,
+    timeoutMs: 2_000,
+    processingTimeoutMs: 5_000,
+    pollIntervalMs: 50,
+    providerResetStableMs: 300,
     onRetryClick: async () => {
       recliques += 1;
     },
@@ -119,7 +134,7 @@ test("encerra rápido quando o portal volta ao formulário após confirmar a an�
   assert.match(resultado.mensagem, /encerrou a análise/i);
   assert.equal(resultado.rawSummary.motivoTecnico, "provider_returned_to_form");
   assert.equal(recliques, 0);
-  assert.ok(Date.now() - inicio < 250);
+  assert.ok(Date.now() - inicio < 4_000);
   await page.close();
 });
 

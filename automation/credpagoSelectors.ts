@@ -114,6 +114,7 @@ async function locateField(
 
 type ClickButtonOptions = {
   onBeforeClick?: () => void | Promise<void>;
+  onAfterClick?: () => void | Promise<void>;
 };
 
 async function clickButtonByText(
@@ -134,6 +135,7 @@ async function clickButtonByText(
       if (await button.isEnabled().catch(() => false)) {
         await options.onBeforeClick?.();
         await byRole.first().click();
+        await options.onAfterClick?.();
         return;
       }
 

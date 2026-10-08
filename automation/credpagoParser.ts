@@ -2,6 +2,7 @@ import type { Page } from "playwright";
 import type { ResultadoParse, ResultadoStatus } from "./types";
 import { redactSensitiveText, sanitizeUrl } from "./redaction";
 import { nomeClienteValido, somenteDigitos } from "./customerIdentity";
+import { extractLoftProposalId } from "./loftCancellation";
 
 // Ordem importa: "recusado" (inclui negações como "não aprovado") é checado antes de
 // "aprovado" para não gerar falso-positivo quando o texto for algo como "locatício não aprovado".
@@ -88,8 +89,7 @@ export async function parseResultado(
     .innerText()
     .catch(() => "");
   let processamentoDetectado = PROCESSING_REGEX.test(baseline);
-  let deadline =
-    inicio + (processamentoDetectado ? timeoutProcessando : timeoutInicial);
+  let deadline = inicio + (processamentoDetectado ? timeoutProcessando : timeoutInicial);
   if (processamentoDetectado) {
     opts.onLog?.(
       `Análise confirmada no portal — aguardando o resultado por até ${Math.round(timeoutProcessando / 1000)}s, sem reenviar a simulação.`,
@@ -111,6 +111,7 @@ export async function parseResultado(
         return {
           status,
           mensagem: MENSAGEM_POR_STATUS[status],
+          proposalId: extractLoftProposalId(page.url()) ?? extractLoftProposalId(bodyText),
           clienteNome: nome,
           clienteDocumento: documento,
           rawSummary: buildSummary(page, bodyText),
@@ -126,6 +127,7 @@ export async function parseResultado(
         status: "erro",
         mensagem:
           "O parceiro de crédito apresentou uma instabilidade interna. A NOX tentou recuperar a consulta automaticamente.",
+        proposalId: extractLoftProposalId(page.url()) ?? extractLoftProposalId(bodyText),
         clienteNome: null,
         clienteDocumento: null,
         rawSummary: buildSummary(page, bodyText, {
@@ -162,6 +164,7 @@ export async function parseResultado(
           status: "erro",
           mensagem:
             "O parceiro encerrou a análise sem devolver um resultado. Tente novamente; seus dados foram preservados.",
+          proposalId: extractLoftProposalId(page.url()) ?? extractLoftProposalId(bodyText),
           clienteNome: null,
           clienteDocumento: null,
           rawSummary: buildSummary(page, bodyText, {
@@ -207,6 +210,7 @@ export async function parseResultado(
     status: "erro",
     mensagem:
       "Não foi possível identificar o resultado da simulação dentro do tempo esperado. Verifique manualmente e tente novamente.",
+    proposalId: extractLoftProposalId(page.url()) ?? extractLoftProposalId(bodyText),
     clienteNome: null,
     clienteDocumento: null,
     rawSummary: buildSummary(page, bodyText),
@@ -231,7 +235,10 @@ function buildSummary(
  * Cliente, Inquilino, Locatário e Nome do cliente, tanto na mesma linha quanto
  * em linhas separadas. Nunca devolve CPF/rótulo como nome.
  */
-export function extrairClienteInfo(texto: string): { nome: string | null; documento: string | null } {
+export function extrairClienteInfo(texto: string): {
+  nome: string | null;
+  documento: string | null;
+} {
   const linhas = texto
     .replace(/\u00a0/g, " ")
     .split(/\r?\n/)
@@ -257,7 +264,8 @@ export function extrairClienteInfo(texto: string): { nome: string | null; docume
 
   // Alguns retornos exibem somente “Nome” em uma linha e o valor na seguinte.
   for (let index = 0; index < linhas.length; index += 1) {
-    if (!/^nome(?:\s+do\s+(?:cliente|inquilino|locat[aá]rio))?\s*:?$/i.test(linhas[index])) continue;
+    if (!/^nome(?:\s+do\s+(?:cliente|inquilino|locat[aá]rio))?\s*:?$/i.test(linhas[index]))
+      continue;
     if (linhas[index + 1]) candidatos.push(linhas[index + 1]);
   }
 
@@ -266,7 +274,8 @@ export function extrairClienteInfo(texto: string): { nome: string | null; docume
   const indiceDocumento = linhas.findIndex((linha) => /\b(?:CPF|CNPJ)\b\s*:/i.test(linha));
   const linhaComDocumento = indiceDocumento >= 0 ? linhas[indiceDocumento] : null;
   if (linhaComDocumento) {
-    const antes = linhaComDocumento.split(/\b(?:CPF|CNPJ)\b\s*:/i)[0]
+    const antes = linhaComDocumento
+      .split(/\b(?:CPF|CNPJ)\b\s*:/i)[0]
       .replace(/(?:cliente|inquilino|locat[aá]rio|nome)\s*[:-]?\s*/gi, " ")
       .trim();
     if (antes) candidatos.push(antes);

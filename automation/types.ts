@@ -27,6 +27,8 @@ export type ResultadoStatus = "aprovado" | "recusado" | "em_analise" | "erro";
 export interface ResultadoParse {
   status: ResultadoStatus;
   mensagem: string;
+  /** Identificador técnico da proposta retornado pela Loft, sem CPF/CNPJ. */
+  proposalId: string | null;
   /** Nome do cliente lido na página de resultado da CredPago (ex.: "Cliente: FULANO DA SILVA"), se encontrado. */
   clienteNome: string | null;
   /** CPF/CNPJ lido na página de resultado da CredPago (só dígitos), se encontrado. */
