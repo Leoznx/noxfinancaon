@@ -3,7 +3,7 @@ BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET LOCAL search_path = public, extensions, pg_catalog;
 
-SELECT plan(68);
+SELECT plan(70);
 
 -- Contratos estruturais compartilhados por web e aplicativo.
 SELECT has_table('public', 'seller_contact_leads', 'dominio dedicado de leads existe');
@@ -215,11 +215,11 @@ SELECT ok(
           AND attempt_no = 2 AND status = 'pending'
       )
     )->>'transferred'
-  )::boolean,
-  'segunda ausencia transfere imediatamente'
+  )::boolean = false,
+  'segunda ausencia nao antecipa o prazo da carteira'
 );
-SELECT isnt((SELECT current_seller_id FROM public.seller_contact_leads WHERE id = (SELECT id FROM _seller_control_test_ids WHERE key = 'dedupe')), 'b2000000-0000-4000-8000-000000000001'::uuid, 'lead saiu da carteira anterior');
-SELECT ok(EXISTS (SELECT 1 FROM public.seller_contact_lead_history WHERE lead_id = (SELECT id FROM _seller_control_test_ids WHERE key = 'dedupe') AND event_type = 'transferred'), 'transferencia fica no historico');
+SELECT is((SELECT current_seller_id FROM public.seller_contact_leads WHERE id = (SELECT id FROM _seller_control_test_ids WHERE key = 'dedupe')), 'b2000000-0000-4000-8000-000000000001'::uuid, 'lead permanece na carteira particular ate o prazo');
+SELECT ok(NOT EXISTS (SELECT 1 FROM public.seller_contact_lead_history WHERE lead_id = (SELECT id FROM _seller_control_test_ids WHERE key = 'dedupe') AND event_type = 'transferred'), 'nenhuma transferencia e registrada antes do prazo');
 
 SELECT set_config('request.jwt.claim.sub', 'b1000000-0000-4000-8000-000000000001', true);
 INSERT INTO _seller_control_test_ids (key, id)
@@ -250,7 +250,7 @@ SELECT is((SELECT cycle_number FROM public.seller_contact_leads WHERE id = (SELE
 SELECT is((SELECT count(*) FROM public.seller_contact_lead_tasks WHERE lead_id = (SELECT id FROM _seller_control_test_ids WHERE key = 'contacted') AND status = 'pending'), 2::bigint, 'novo ciclo recebe duas tarefas');
 SELECT is((SELECT count(*) FROM public.seller_contact_lead_tasks WHERE lead_id = (SELECT id FROM _seller_control_test_ids WHERE key = 'contacted') AND status = 'cancelled'), 1::bigint, 'tarefa antiga pendente e cancelada');
 
--- Tarefa perdida: no proximo dia util o lead muda automaticamente de vendedor.
+-- Tarefa perdida: registra a falta, mas preserva a carteira ate o prazo.
 SELECT set_config('request.jwt.claim.sub', 'b1000000-0000-4000-8000-000000000001', true);
 INSERT INTO _seller_control_test_ids (key, id)
 VALUES ('missed', public.create_my_seller_contact_lead('Lead Perdido', '(11) 98888-0003'));
@@ -269,7 +269,7 @@ WHERE appointment.contact_lead_task_id = task.id
 
 SELECT ok((public.process_seller_contact_lead_automation('2026-10-06 09:00:00 America/Sao_Paulo')->>'missed_tasks')::integer >= 1, 'automacao processa tarefa vencida');
 SELECT is((SELECT status FROM public.seller_contact_lead_tasks WHERE lead_id = (SELECT id FROM _seller_control_test_ids WHERE key = 'missed') AND attempt_no = 1 AND cycle_number = 1), 'missed', 'tarefa vencida fica missed');
-SELECT isnt((SELECT current_seller_id FROM public.seller_contact_leads WHERE id = (SELECT id FROM _seller_control_test_ids WHERE key = 'missed')), 'b2000000-0000-4000-8000-000000000001'::uuid, 'perda transfere no proximo dia util');
+SELECT is((SELECT current_seller_id FROM public.seller_contact_leads WHERE id = (SELECT id FROM _seller_control_test_ids WHERE key = 'missed')), 'b2000000-0000-4000-8000-000000000001'::uuid, 'perda nao antecipa o prazo da carteira');
 SELECT ok(EXISTS (SELECT 1 FROM public.seller_contact_lead_history WHERE lead_id = (SELECT id FROM _seller_control_test_ids WHERE key = 'missed') AND event_type = 'task_missed'), 'perda fica no historico');
 
 -- Expiracao de 30 dias usa a mesma rotacao e nao depende de horario ocupado.
@@ -290,8 +290,19 @@ WHERE appointment.contact_lead_task_id = task.id
   AND task.lead_id = (SELECT id FROM _seller_control_test_ids WHERE key = 'expired');
 
 SELECT ok((public.process_seller_contact_lead_automation('2026-10-06 10:00:00 America/Sao_Paulo')->>'expired_leads')::integer >= 1, 'automacao processa ciclo expirado');
-SELECT isnt((SELECT current_seller_id FROM public.seller_contact_leads WHERE id = (SELECT id FROM _seller_control_test_ids WHERE key = 'expired')), 'b2000000-0000-4000-8000-000000000001'::uuid, 'expiracao transfere o lead');
+SELECT is((SELECT current_seller_id FROM public.seller_contact_leads WHERE id = (SELECT id FROM _seller_control_test_ids WHERE key = 'expired')), 'b2000000-0000-4000-8000-000000000002'::uuid, 'expiracao transfere o lead de SDR para Closer');
 SELECT ok(EXISTS (SELECT 1 FROM public.seller_contact_lead_history WHERE lead_id = (SELECT id FROM _seller_control_test_ids WHERE key = 'expired') AND event_type = 'transferred' AND metadata->>'reason' = 'cycle_expired'), 'motivo de expiracao fica auditado');
+
+-- O caminho inverso tambem e obrigatorio: Closer entrega somente para SDR.
+SELECT set_config('request.jwt.claim.sub', 'b1000000-0000-4000-8000-000000000002', true);
+INSERT INTO _seller_control_test_ids (key, id)
+VALUES ('expired-closer', public.create_my_seller_contact_lead('Lead Expirado Closer', '(11) 98888-0006'));
+SELECT set_config('request.jwt.claim.sub', 'b1000000-0000-4000-8000-000000000003', true);
+UPDATE public.seller_contact_leads
+SET rotation_due_at = '2026-10-05 08:00:00 America/Sao_Paulo'
+WHERE id = (SELECT id FROM _seller_control_test_ids WHERE key = 'expired-closer');
+SELECT ok((public.process_seller_contact_lead_automation('2026-10-06 10:00:00 America/Sao_Paulo')->>'expired_leads')::integer >= 1, 'automacao processa ciclo expirado do Closer');
+SELECT is((SELECT current_seller_id FROM public.seller_contact_leads WHERE id = (SELECT id FROM _seller_control_test_ids WHERE key = 'expired-closer')), 'b2000000-0000-4000-8000-000000000001'::uuid, 'expiracao transfere o lead de Closer para SDR');
 
 -- Metas e relatorios.
 SELECT set_config('request.jwt.claim.sub', 'b1000000-0000-4000-8000-000000000003', true);

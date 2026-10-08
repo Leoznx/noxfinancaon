@@ -16,9 +16,9 @@ export const SELLER_LEAD_CATEGORIES: readonly {
   shortLabel: string;
   description: string;
 }[] = [
-  { value: "cold", label: "Lead frio", shortLabel: "Frio", description: "2 follow-ups em 30 dias; sem retorno, segue para outro vendedor." },
+  { value: "cold", label: "Lead frio", shortLabel: "Frio", description: "2 follow-ups em 30 dias. Fica só na sua carteira até o prazo terminar; sem retorno, passa para o outro time comercial." },
   { value: "meeting_scheduled", label: "Lead marcou reunião", shortLabel: "Reunião marcada", description: "Follow-up exclusivo com você a cada 15 dias, sem rotação." },
-  { value: "potential", label: "Lead em potencial", shortLabel: "Em potencial", description: "4 follow-ups em 30 dias; depois gira se continuar sem retorno." },
+  { value: "potential", label: "Lead em potencial", shortLabel: "Em potencial", description: "4 follow-ups em 30 dias. Fica só na sua carteira durante o prazo e depois passa ao outro time se continuar sem retorno." },
 ] as const;
 
 export const SELLER_LEAD_NEXT_STEPS: readonly {

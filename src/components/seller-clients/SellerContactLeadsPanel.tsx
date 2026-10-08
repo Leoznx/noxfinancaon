@@ -73,7 +73,7 @@ export function SellerContactLeadsPanel() {
 
   return <div className="space-y-4">
     <section className="grid gap-4 rounded-3xl border border-violet-200 bg-[linear-gradient(135deg,#fff_0%,#f5f3ff_100%)] p-5 shadow-sm lg:grid-cols-[minmax(0,1fr)_330px] sm:p-6">
-      <div><span className="inline-flex items-center gap-2 rounded-full bg-violet-100 px-3 py-1 text-[10px] font-black uppercase tracking-[.15em] text-violet-700"><Plus className="h-3.5 w-3.5" /> Novo lead em contato</span><h2 className="mt-3 text-2xl font-black">Cadastre, qualifique e deixe a agenda trabalhar.</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-neutral-600">Depois de nome e telefone, escolha Frio, Reunião marcada ou Em potencial. Cada jornada cria a cadência certa, sem bloquear horários, e cobra o próximo passo em todo retorno.</p></div>
+      <div><span className="inline-flex items-center gap-2 rounded-full bg-violet-100 px-3 py-1 text-[10px] font-black uppercase tracking-[.15em] text-violet-700"><Plus className="h-3.5 w-3.5" /> Novo lead em contato</span><h2 className="mt-3 text-2xl font-black">Cadastre, qualifique e deixe a agenda trabalhar.</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-neutral-600">Depois de nome e telefone, escolha Frio, Reunião marcada ou Em potencial. O lead fica na sua carteira particular durante todo o prazo; somente depois a automação transfere entre SDR e Closer.</p></div>
       <div className="grid place-items-center rounded-2xl border border-violet-200 bg-white/80 p-4 text-center"><strong className="text-4xl font-black text-violet-700">{activeToday}</strong><span className="mt-1 text-xs font-black uppercase tracking-wide text-neutral-500">leads cadastrados hoje</span></div>
     </section>
 
@@ -90,7 +90,7 @@ export function SellerContactLeadsPanel() {
     <Dialog open={categoryPickerOpen} onOpenChange={(open) => !saving && setCategoryPickerOpen(open)}>
       <DialogContent className="max-h-[90vh] max-w-xl overflow-y-auto">
         <DialogHeader><DialogTitle className="text-2xl font-black">Como este lead deve entrar na carteira?</DialogTitle></DialogHeader>
-        <p className="text-sm leading-6 text-neutral-500">Essa escolha define a quantidade de follow-ups, a rotação e quem continuará responsável.</p>
+        <p className="text-sm leading-6 text-neutral-500">Essa escolha define a quantidade de follow-ups e o prazo da sua carteira particular. Uma falta nunca antecipa a transferência.</p>
         <div className="grid gap-3 py-2">
           {SELLER_LEAD_CATEGORIES.map((option) => {
             const Icon = option.value === "cold" ? Snowflake : option.value === "potential" ? Flame : CalendarCheck2;
@@ -121,5 +121,5 @@ function LeadRow({ lead }: { lead: SellerContactLead }) {
 
 function Info({ icon: Icon, label, value }: { icon: typeof History; label: string; value: string }) { return <div className="flex items-start gap-2"><Icon className="mt-0.5 h-4 w-4 text-violet-600" /><div><p className="font-bold text-neutral-500">{label}</p><p className="mt-0.5 font-black text-neutral-800">{value}</p></div></div>; }
 function formatWhen(value: string | null) { return value ? new Date(value).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "A definir"; }
-function historyLabel(event: string, fallback: string) { const labels: Record<string, string> = { lead_created: "Lead cadastrado", lead_observation: "Observação cadastrada", contact_confirmed: "Contato confirmado", category_changed: "Jornada do lead alterada", task_responded: "Lembrete respondido e próximo passo definido", task_missed: "Lembrete não confirmado", transferred: "Transferido para outro vendedor", rotation_deferred: "Rotação adiada por novo contato" }; return labels[event] ?? fallback; }
+function historyLabel(event: string, fallback: string) { const labels: Record<string, string> = { lead_created: "Lead cadastrado", lead_observation: "Observação cadastrada", contact_confirmed: "Contato confirmado", category_changed: "Jornada do lead alterada", task_responded: "Lembrete respondido e próximo passo definido", task_missed: "Lembrete não confirmado", transferred: "Transferido entre SDR e Closer após o prazo", premature_transfer_reverted: "Transferência antecipada corrigida", rotation_deferred: "Rotação adiada por falta de responsável do outro time" }; return labels[event] ?? fallback; }
 function categoryClass(category: SellerLeadCategory) { return category === "potential" ? "bg-orange-100 text-orange-800" : category === "meeting_scheduled" ? "bg-emerald-100 text-emerald-800" : "bg-blue-100 text-blue-800"; }
