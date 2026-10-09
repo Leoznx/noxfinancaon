@@ -2,6 +2,7 @@ export type ZApiResult = {
   sent: boolean;
   reason?: string;
   providerMessageId?: string;
+  deliveryUncertain?: boolean;
 };
 
 export type ZApiButtonAction = {
@@ -12,12 +13,7 @@ export type ZApiButtonAction = {
   url?: string;
 };
 
-export type ZApiDeliveryStatus =
-  | "queued"
-  | "sent"
-  | "delivered"
-  | "read"
-  | "failed";
+export type ZApiDeliveryStatus = "queued" | "sent" | "delivered" | "read" | "failed";
 
 type ZApiWebhookKind = "received" | "delivery" | "message_status";
 
@@ -43,24 +39,20 @@ function credentials() {
   return { instanceId, instanceToken, clientToken };
 }
 
-export function shouldRetryZApiWithoutClientToken(
-  status: number,
-  body: string,
-) {
+export function shouldRetryZApiWithoutClientToken(status: number, body: string) {
   return status === 403 && /client-?token[^\n]*not allowed/i.test(body);
 }
 
-async function zApiFetch(
-  url: string,
-  init: RequestInit,
-  clientToken: string,
-) {
+async function zApiFetch(url: string, init: RequestInit, clientToken: string) {
   const headers = new Headers(init.headers);
   if (clientToken) headers.set("Client-Token", clientToken);
   let response = await fetch(url, { ...init, headers });
   if (!clientToken || response.status !== 403) return response;
 
-  const body = await response.clone().text().catch(() => "");
+  const body = await response
+    .clone()
+    .text()
+    .catch(() => "");
   if (!shouldRetryZApiWithoutClientToken(response.status, body)) {
     return response;
   }
@@ -170,9 +162,7 @@ export async function updateZApiContractWebhooks(value: string) {
 }
 
 function providerReason(body: unknown, status: number) {
-  const record = body && typeof body === "object"
-    ? (body as Record<string, unknown>)
-    : {};
+  const record = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
   const code = String(
     (typeof body === "string" ? body : "") ||
       record.error ||
@@ -196,19 +186,11 @@ export function resolveZApiDeliveryStatus(payload: Record<string, unknown>): {
   const rawStatus = String(payload.status || "")
     .trim()
     .toUpperCase();
-  const rawError = String(
-    payload.error || payload.errorMessage || payload.error_code || "",
-  ).trim();
-  if (
-    rawError ||
-    ["ERROR", "FAILED", "FAILURE", "CANCELED", "CANCELLED"].includes(rawStatus)
-  ) {
+  const rawError = String(payload.error || payload.errorMessage || payload.error_code || "").trim();
+  if (rawError || ["ERROR", "FAILED", "FAILURE", "CANCELED", "CANCELLED"].includes(rawStatus)) {
     return {
       status: "failed",
-      error: (rawError || rawStatus || "provider_delivery_failed").slice(
-        0,
-        500,
-      ),
+      error: (rawError || rawStatus || "provider_delivery_failed").slice(0, 500),
     };
   }
   if (["READ", "READ_BY_ME", "PLAYED"].includes(rawStatus)) {
@@ -217,19 +199,13 @@ export function resolveZApiDeliveryStatus(payload: Record<string, unknown>): {
   if (["RECEIVED", "DELIVERED"].includes(rawStatus)) {
     return { status: "delivered", error: null };
   }
-  if (
-    rawStatus === "SENT" ||
-    String(payload.type || "") === "DeliveryCallback"
-  ) {
+  if (rawStatus === "SENT" || String(payload.type || "") === "DeliveryCallback") {
     return { status: "sent", error: null };
   }
   return { status: "queued", error: null };
 }
 
-export async function sendZApiText(params: {
-  to: string;
-  message: string;
-}): Promise<ZApiResult> {
+export async function sendZApiText(params: { to: string; message: string }): Promise<ZApiResult> {
   const auth = credentials();
   if (!auth) return { sent: false, reason: "not_configured" };
   const phone = normalizeWhatsappPhone(params.to);
@@ -304,27 +280,22 @@ export async function sendZApiButtonActions(params: {
       if (providerMessageId) {
         return { sent: true, providerMessageId: String(providerMessageId) };
       }
+      return {
+        sent: false,
+        reason: "provider_invalid_response",
+        deliveryUncertain: true,
+      };
     }
-
-    // Mantém o follow-up funcional caso a conta/cliente não aceite botões.
-    const fallback = await sendZApiText({
-      to: phone,
-      message: `${params.message}\n\n${params.footer || ""}`.trim(),
-    });
-    if (fallback.sent) return fallback;
     return {
       sent: false,
-      reason: response.ok
-        ? "provider_invalid_response"
-        : providerReason(data, response.status),
+      reason: providerReason(data, response.status),
+      deliveryUncertain: response.status >= 500,
     };
   } catch {
-    const fallback = await sendZApiText({
-      to: phone,
-      message: `${params.message}\n\n${params.footer || ""}`.trim(),
-    });
-    return fallback.sent
-      ? fallback
-      : { sent: false, reason: "provider_unavailable" };
+    return {
+      sent: false,
+      reason: "provider_unavailable",
+      deliveryUncertain: true,
+    };
   }
 }

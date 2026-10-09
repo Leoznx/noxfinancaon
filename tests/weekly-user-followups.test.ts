@@ -66,13 +66,26 @@ test("webhook não interpreta comandos de saída ou reativação", () => {
 
 test("bloqueia o antigo disparo manual para número de teste", () => {
   const processor = readFileSync(
-    new URL(
-      "../supabase/functions/process-weekly-user-followups/index.ts",
-      import.meta.url,
-    ),
+    new URL("../supabase/functions/process-weekly-user-followups/index.ts", import.meta.url),
     "utf8",
   );
   assert.match(processor, /test_dispatch_disabled/);
   assert.doesNotMatch(processor, /is_test:\s*true/);
   assert.doesNotMatch(processor, /sendZApiButtonActions\(\{\s*to:\s*testPhone/);
+});
+
+test("não reenvia quando a resposta do provedor deixa a entrega incerta", () => {
+  const zapi = readFileSync(
+    new URL("../supabase/functions/_shared/zapi.ts", import.meta.url),
+    "utf8",
+  );
+  const buttonSender = zapi.slice(zapi.indexOf("export async function sendZApiButtonActions"));
+  const processor = readFileSync(
+    new URL("../supabase/functions/process-weekly-user-followups/index.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.doesNotMatch(buttonSender, /sendZApiText\(/);
+  assert.match(buttonSender, /deliveryUncertain:\s*true/);
+  assert.match(processor, /delivery_uncertain_not_retried/);
 });

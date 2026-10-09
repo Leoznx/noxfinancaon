@@ -92,14 +92,9 @@ Deno.serve(async (request) => {
     return jsonResponse(request, { ok: false, error: "unauthorized" }, 401);
   }
 
-  const body = (await request.json().catch(() => ({}))) as RunBody &
-    Record<string, unknown>;
+  const body = (await request.json().catch(() => ({}))) as RunBody & Record<string, unknown>;
   if (Object.prototype.hasOwnProperty.call(body, "testPhone")) {
-    return jsonResponse(
-      request,
-      { ok: false, error: "test_dispatch_disabled" },
-      400,
-    );
+    return jsonResponse(request, { ok: false, error: "test_dispatch_disabled" }, 400);
   }
   const admin = supabaseAdmin();
   const { data: settings, error: settingsError } = await admin
@@ -198,16 +193,21 @@ Deno.serve(async (request) => {
         })
         .eq("id", row.id);
     } else {
-      report.failed += 1;
+      const deliveryUncertain = result.deliveryUncertain === true;
+      if (deliveryUncertain) report.skipped += 1;
+      else report.failed += 1;
       const terminal = Number(row.attempts || 0) >= 3;
       await admin
         .from("weekly_whatsapp_followups")
         .update({
-          status: "failed",
-          last_error: result.reason || "send_failed",
-          next_attempt_at: terminal
-            ? null
-            : new Date(Date.now() + Math.max(1, row.attempts) * 15 * 60_000).toISOString(),
+          status: deliveryUncertain ? "skipped" : "failed",
+          last_error: deliveryUncertain
+            ? `delivery_uncertain_not_retried:${result.reason || "unknown"}`
+            : result.reason || "send_failed",
+          next_attempt_at:
+            deliveryUncertain || terminal
+              ? null
+              : new Date(Date.now() + Math.max(1, row.attempts) * 15 * 60_000).toISOString(),
         })
         .eq("id", row.id);
     }

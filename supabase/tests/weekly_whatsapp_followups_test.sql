@@ -1,5 +1,5 @@
 BEGIN;
-SELECT plan(23);
+SELECT plan(28);
 
 SELECT has_table('public', 'weekly_whatsapp_followups', 'fila semanal existe');
 SELECT has_table('public', 'weekly_whatsapp_followup_opt_outs', 'opt-out existe');
@@ -33,6 +33,12 @@ SELECT has_function(
   ARRAY['integer', 'timestamp with time zone'],
   'claim atômico existe'
 );
+SELECT has_function(
+  'public',
+  'resolve_weekly_whatsapp_followup_recipients',
+  ARRAY[]::text[],
+  'resolvedor canônico de destinatários existe'
+);
 
 SELECT function_privs_are(
   'public',
@@ -64,9 +70,29 @@ SELECT like(
   'planejador nunca usa números de teste ou operacionais'
 );
 SELECT like(
-  pg_get_functiondef('public.plan_weekly_whatsapp_followups(timestamp with time zone)'::regprocedure),
+  pg_get_functiondef('public.resolve_weekly_whatsapp_followup_recipients()'::regprocedure),
   '%PARTITION BY normalized.phone%',
   'planejador cria somente uma mensagem semanal por telefone'
+);
+SELECT like(
+  pg_get_functiondef('public.resolve_weekly_whatsapp_followup_recipients()'::regprocedure),
+  '%last_sign_in_at DESC NULLS LAST%',
+  'nome vem da conta que acessou o site mais recentemente'
+);
+SELECT like(
+  pg_get_functiondef('public.plan_weekly_whatsapp_followups(timestamp with time zone)'::regprocedure),
+  '%interval ''7 days''%',
+  'duas mensagens para o mesmo número ficam separadas por sete dias'
+);
+SELECT like(
+  pg_get_functiondef('public.claim_due_weekly_whatsapp_followups(integer,timestamp with time zone)'::regprocedure),
+  '%delivery_uncertain_not_retried%',
+  'reserva abandonada não é reenviada automaticamente'
+);
+SELECT like(
+  pg_get_functiondef('public.claim_due_weekly_whatsapp_followups(integer,timestamp with time zone)'::regprocedure),
+  '%skipped_stale_processing AS (%',
+  'claim envia reservas antigas para conciliação em vez de reciclá-las'
 );
 SELECT like(
   pg_get_functiondef('public.claim_due_weekly_whatsapp_followups(integer,timestamp with time zone)'::regprocedure),
