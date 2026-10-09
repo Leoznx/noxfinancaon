@@ -71,6 +71,7 @@ const profileDir =
   process.env.CREDPAGO_PROFILE_DIR || path.resolve(__dirname, "chrome-profile-credpago");
 const dataDir = storageStatePath ? path.dirname(storageStatePath) : path.resolve(__dirname, "data");
 const CURRENT_CREDIT_SIMULATION_URL = "https://app.loft.com.br/erp/proposta/analise-de-credito";
+const LEGACY_CREDIT_SIMULATION_URL = "https://app.loft.com.br/fianca-aluguel/imobiliaria/proposta";
 const configuredCreditSimulationUrl = process.env.CREDPAGO_URL?.trim() || "";
 const usesLegacyCreditSimulationUrl =
   /^(?:https?:\/\/)?(?:www\.)?(?:credpago\.com\/imobiliaria\/proposta|app\.loft\.com\.br\/fianca-aluguel\/imobiliaria(?:\/proposta)?)[/?#]?$/i.test(
@@ -125,6 +126,12 @@ export const env = {
     !configuredCreditSimulationUrl || usesLegacyCreditSimulationUrl
       ? CURRENT_CREDIT_SIMULATION_URL
       : configuredCreditSimulationUrl,
+  /**
+   * Formulário simples da Fiança Aluguel usado para CNPJ. A primeira abertura
+   * inicializa a sessão deste módulo e pode voltar ao painel; o worker confirma
+   * o formulário e repete a navegação antes de preencher qualquer dado.
+   */
+  credpagoLegacyUrl: LEGACY_CREDIT_SIMULATION_URL,
   /** Credenciais exclusivas do servidor para renovar automaticamente a sessão do Login Loft. */
   credpagoLogin,
   credpagoPassword,

@@ -4,7 +4,11 @@ import http from "node:http";
 import path from "node:path";
 import { chromium } from "playwright";
 import { createCorrelationId } from "./correlation";
-import { validateSimulationFormReady } from "./credpagoSelectors";
+import {
+  openLegacyCreditSimulation,
+  validateLegacySimulationFormReady,
+  validateSimulationFormReady,
+} from "./credpagoSelectors";
 import { isCredPagoAccountBlockedError } from "./credpagoAvailability";
 import { planAiRecovery } from "./aiRecoveryPlanner";
 import { env } from "./env";
@@ -206,9 +210,18 @@ async function safeBrowserValidation(): Promise<Record<string, unknown>> {
       waitUntil: "domcontentloaded",
       timeout: Math.min(env.repairValidationTimeoutMs, 45_000),
     });
-    const selectors = await validateSimulationFormReady(page);
+    const erpSelectors = await validateSimulationFormReady(page);
+    await openLegacyCreditSimulation(
+      page,
+      env.credpagoLegacyUrl,
+      Math.min(env.repairValidationTimeoutMs, 45_000),
+    );
+    const legacySelectors = await validateLegacySimulationFormReady(page);
     await context.close();
-    return { selectors, submitted: false };
+    return {
+      selectors: { erp: erpSelectors, fiancaAluguel: legacySelectors },
+      submitted: false,
+    };
   } finally {
     await browser.close().catch(() => {});
   }

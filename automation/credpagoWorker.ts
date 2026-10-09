@@ -12,7 +12,7 @@ import {
   fillCep,
   fillValores,
   submitSimulation,
-  continueToBusinessProposal,
+  openLegacyCreditSimulation,
   isCaptchaPresent,
   loginWithCredentials,
   detectAuthenticationState,
@@ -786,11 +786,19 @@ async function processarConsulta(
     runtimeState.lastAuthSuccessAt = new Date().toISOString();
     proximaValidacaoAuthEm = Date.now() + env.authCheckIntervalMs;
 
-    // O login costuma redirecionar para o dashboard em vez de voltar à página de origem —
-    // garante que esta aba termine na tela de simulação antes de preencher os dados.
-    if (!isCreditSimulationUrl(page.url())) {
-      await navegarParaPortal(page);
-    }
+    const prepararFormularioDaConsulta = async () => {
+      if (consulta.tipo_pessoa === "PJ") {
+        log(`[${cid}] Abrindo formulário de Pessoa Jurídica da Fiança Aluguel`);
+        await openLegacyCreditSimulation(page!, env.credpagoLegacyUrl);
+        // A primeira navegação cria cookies próprios desse módulo. Persisti-los
+        // evita repetir o ciclo completo quando o worker reiniciar.
+        await persistirSessao();
+      } else if (!isCreditSimulationUrl(page!.url())) {
+        // O login costuma redirecionar para o dashboard em vez de voltar à origem.
+        await navegarParaPortal(page!);
+      }
+    };
+    await prepararFormularioDaConsulta();
 
     if (await isCaptchaPresent(page)) {
       throw new Error(
@@ -855,47 +863,6 @@ async function processarConsulta(
         estado.lastSuccessfulStep =
           tentativa > 1 ? "recovery-simulation-submitted" : "simulation-submitted";
 
-        if (consulta.tipo_pessoa === "PJ") {
-          const formularioJuridicoDisponivel = await continueToBusinessProposal(page, {
-            // "em_analise" pode ser a resposta intermediária que antecede o
-            // modal empresarial. Somente aprovado/recusado encerra esta espera.
-            hasObservedResult: () => {
-              const observed = apiObserver.read();
-              return observed?.status === "aprovado" || observed?.status === "recusado";
-            },
-            onLog: (msg) => log(`[${cid}] ${msg}`),
-          });
-
-          if (formularioJuridicoDisponivel) {
-            log(`[${cid}] Preenchendo formulário de pessoa jurídica`);
-            await atualizarStep(consulta.id, "preenchendo_formulario_cnpj");
-            await fillPessoa(page, "PJ");
-            await fillDocumento(page, consulta.documento || "", "PJ");
-            await fillTipoImovel(
-              page,
-              (consulta.tipo_imovel as "Residencial" | "Comercial") || "Residencial",
-            );
-            await fillCep(page, creditSimulationCep);
-            await fillValores(page, {
-              aluguel: Number(consulta.valor_aluguel) || 0,
-              condominio: Number(consulta.valor_condominio) || 0,
-              taxas: Number(consulta.valor_taxas) || 0,
-            });
-            estado.lastSuccessfulStep = "business-form-filled";
-
-            log(`[${cid}] Enviando formulário de pessoa jurídica`);
-            await atualizarStep(consulta.id, "enviando_formulario_cnpj");
-            await submitSimulation(page, {
-              onBeforeClick: () => {
-                simulacaoEnviada = true;
-                estado.simulationSubmitted = true;
-              },
-              onAfterClick: () => tentarAgendarCancelamento(null),
-            });
-            estado.lastSuccessfulStep = "business-simulation-submitted";
-          }
-        }
-
         log(`[${cid}] Aguardando resultado`);
         await atualizarStep(consulta.id, "aguardando_resultado");
         return await parseResultado(page, {
@@ -924,6 +891,7 @@ async function processarConsulta(
       await page.waitForTimeout(5_000);
       await navegarParaPortal(page);
       await ensureLoggedIn(cid, page, persistirSessao);
+      await prepararFormularioDaConsulta();
       await assertCreditSimulationAvailable(page);
       resultado = await executarTentativa(2);
       resultado.rawSummary = {

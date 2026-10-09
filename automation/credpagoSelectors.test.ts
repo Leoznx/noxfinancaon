@@ -3,7 +3,6 @@ import { after, before, test } from "node:test";
 import { chromium, type Browser } from "playwright";
 import {
   detectAuthenticationState,
-  continueToBusinessProposal,
   fillCep,
   fillDocumento,
   fillPessoa,
@@ -12,7 +11,9 @@ import {
   hasVisibleCaptchaChallenge,
   isCreditSimulationUrl,
   isErpCreditSimulationUrl,
+  openLegacyCreditSimulation,
   submitSimulation,
+  validateLegacySimulationFormReady,
   validateSimulationFormReady,
 } from "./credpagoSelectors";
 import {
@@ -198,50 +199,102 @@ test("envia pelo botão Iniciar análise usado na versão atual do portal", asyn
   await page.close();
 });
 
-test("continua o CNPJ no formulário jurídico e permite preencher a segunda etapa", async () => {
-  const erpUrl = "https://app.loft.com.br/erp/proposta/analise-de-credito";
+test("inicializa a sessão legada e preenche todos os controles reais de CNPJ", async () => {
   const businessUrl = "https://app.loft.com.br/fianca-aluguel/imobiliaria/proposta";
-  const page = await pageWithHtml(
-    erpUrl,
-    `<main>
-      <h1>Vamos para o lugar certo?</h1>
-      <p>Para imobiliárias e empresas, a jornada continua direto no Loft / Fiança Aluguel.</p>
-      <a href="${businessUrl}">Continuar no Loft / Fiança aluguel</a>
-    </main>`,
-  );
-  await page.route(businessUrl, (route) =>
+  const dashboardUrl = "https://app.loft.com.br/fianca-aluguel/imobiliaria/cr/index.php";
+  const page = await browser.newPage();
+  let acessosAoFormulario = 0;
+  await page.route(dashboardUrl, (route) =>
     route.fulfill({
+      status: 200,
+      contentType: "text/html; charset=utf-8",
+      body: "<main><h1>Painel da imobiliária</h1></main>",
+    }),
+  );
+  await page.route(businessUrl, (route) => {
+    acessosAoFormulario += 1;
+    if (acessosAoFormulario === 1) {
+      return route.fulfill({
+        status: 200,
+        contentType: "text/html; charset=utf-8",
+        body: `<script>window.location.replace(${JSON.stringify(dashboardUrl)})</script>`,
+      });
+    }
+    return route.fulfill({
       status: 200,
       contentType: "text/html; charset=utf-8",
       body: `<main>
         <h1>Informe os dados para análise</h1>
-        <button type="button">Pessoa física</button>
-        <button type="button">Pessoa jurídica</button>
-        <section><h2>Empresa</h2><label>CNPJ<input placeholder="00.000.000/0000-00" /></label></section>
-        <section>
-          <h2>Dados da locação</h2>
-          <button type="button">Residencial</button>
-          <button type="button">Comercial</button>
-          <label>CEP do local<input placeholder="00000-000" /></label>
-          <label>Valor mensal do aluguel<input placeholder="R$ 0,00" /></label>
-        </section>
-        <button type="button" onclick="document.body.dataset.submitted='true'">Simular crédito</button>
+        <fieldset>
+          <legend>Dados do inquilino</legend>
+          <label><input type="radio" name="dadosPessoa.tipoPessoa" value="PF" onclick="setPerson('PF')" />Pessoa física</label>
+          <label><input type="radio" name="dadosPessoa.tipoPessoa" value="PJ" onclick="setPerson('PJ')" />Pessoa jurídica</label>
+          <label id="document-label">CPF<input id="document" name="dadosPessoa.pessoas.0.documento" aria-label="CPF" placeholder="000.000.000-00" /></label>
+        </fieldset>
+        <fieldset>
+          <legend>Dados da locação</legend>
+          <label><input type="radio" name="dadosImovel.tipoImovel" value="Residencial" />Residencial</label>
+          <label><input type="radio" name="dadosImovel.tipoImovel" value="Comercial" />Comercial</label>
+          <label>CEP do local *<input id="cep" aria-label="CEP do local" placeholder="00.000-000" /></label>
+          <label>Valor mensal do aluguel<input id="nova-simulacao-aluguel" aria-label="Valor mensal do aluguel" placeholder="0,00" /></label>
+          <label><input id="nova-simulacao-coverage-switch-condominio-Label" type="checkbox" />Incluir condomínio</label>
+          <label>Valor mensal do condomínio<input id="nova-simulacao-coverage-input-condominio" aria-label="Valor mensal do condomínio" placeholder="0,00" /></label>
+          <label><input id="nova-simulacao-coverage-switch-iptu-Label" type="checkbox" />Incluir IPTU</label>
+          <label>Valor mensal do IPTU e taxas adicionais<input id="nova-simulacao-coverage-input-iptu" aria-label="Valor mensal do IPTU e taxas adicionais" placeholder="0,00" /></label>
+        </fieldset>
+        <button type="button" onclick="document.body.dataset.submitted='true'">Fazer análise</button>
+        <script>
+          function setPerson(type) {
+            const label = document.querySelector('#document-label');
+            const input = document.querySelector('#document');
+            const title = type === 'PJ' ? 'CNPJ' : 'CPF';
+            label.firstChild.textContent = title;
+            input.setAttribute('aria-label', title);
+            input.placeholder = type === 'PJ' ? '00.000.000/0000-00' : '000.000.000-00';
+          }
+          for (const input of document.querySelectorAll('input[placeholder="0,00"]')) {
+            input.addEventListener('input', (event) => {
+              const digits = event.currentTarget.value.replace(/\\D/g, '');
+              event.currentTarget.value = digits
+                ? Number(digits).toLocaleString('pt-BR', { minimumFractionDigits: 2 })
+                : '';
+            });
+          }
+        </script>
       </main>`,
-    }),
-  );
+    });
+  });
 
-  assert.equal(await continueToBusinessProposal(page, { timeoutMs: 1_000 }), true);
+  await openLegacyCreditSimulation(page, businessUrl, 4_000);
+  assert.equal(acessosAoFormulario, 2);
   assert.equal(page.url(), businessUrl);
+  assert.deepEqual(await validateLegacySimulationFormReady(page), {
+    pessoaFisica: true,
+    pessoaJuridica: true,
+    documento: true,
+    residencial: true,
+    comercial: true,
+    cep: true,
+    aluguel: true,
+    condominio: true,
+    iptu: true,
+    simular: true,
+  });
   await fillPessoa(page, "PJ");
   await fillDocumento(page, "12936344000196", "PJ");
   await fillTipoImovel(page, "Comercial");
   await fillCep(page, "88340001");
-  await fillValores(page, { aluguel: 3000, condominio: 0, taxas: 0 });
+  await fillValores(page, { aluguel: 3000, condominio: 250, taxas: 90 });
   await submitSimulation(page);
 
   assert.equal(await page.getByLabel(/cnpj/i).inputValue(), "12936344000196");
   assert.equal(await page.getByLabel(/cep/i).inputValue(), "88340001");
-  assert.equal(await page.getByLabel(/aluguel/i).inputValue(), "3000,00");
+  assert.equal(await page.getByLabel(/aluguel/i).inputValue(), "3.000,00");
+  assert.equal(
+    await page.locator("#nova-simulacao-coverage-switch-condominio-Label").isChecked(),
+    true,
+  );
+  assert.equal(await page.locator("#nova-simulacao-coverage-switch-iptu-Label").isChecked(), true);
   assert.equal(await page.locator("body").getAttribute("data-submitted"), "true");
   await page.close();
 });

@@ -1,5 +1,9 @@
 import { chromium } from "playwright";
-import { validateSimulationFormReady } from "./credpagoSelectors";
+import {
+  openLegacyCreditSimulation,
+  validateLegacySimulationFormReady,
+  validateSimulationFormReady,
+} from "./credpagoSelectors";
 import { env } from "./env";
 import { logStructured } from "./logger";
 import { collectSystemDiagnostics } from "./systemDiagnostics";
@@ -22,9 +26,18 @@ async function main(): Promise<void> {
       waitUntil: "domcontentloaded",
       timeout: Math.min(env.repairValidationTimeoutMs, 45_000),
     });
-    const selectors = await validateSimulationFormReady(page);
+    const erpSelectors = await validateSimulationFormReady(page);
+    await openLegacyCreditSimulation(
+      page,
+      env.credpagoLegacyUrl,
+      Math.min(env.repairValidationTimeoutMs, 45_000),
+    );
+    const legacySelectors = await validateLegacySimulationFormReady(page);
     logStructured("automation_safe_validation_succeeded", {
-      selectors,
+      selectors: {
+        erp: erpSelectors,
+        fiancaAluguel: legacySelectors,
+      },
       submitted: false,
       databaseReachable: diagnostics.databaseReachable,
       creditWorkerReachable: diagnostics.creditWorkerReachable,

@@ -21,14 +21,10 @@ const AUTHENTICATED_HOSTNAMES = ["credpago.com", "app.loft.com.br"];
 const CREDIT_SIMULATION_PATH_PATTERN =
   /\/(?:fianca-aluguel\/imobiliaria\/proposta|imobiliaria\/proposta|erp\/proposta\/analise-de-credito)(?:\/|$)/i;
 const ERP_CREDIT_SIMULATION_PATH_PATTERN = /\/erp\/proposta\/analise-de-credito(?:\/|$)/i;
+const LEGACY_CREDIT_SIMULATION_PATH_PATTERN =
+  /\/(?:fianca-aluguel\/)?imobiliaria\/proposta(?:\/|$)/i;
 const SUBMIT_CREDIT_BUTTON_PATTERN =
   /(?:simular(?:\s+an[aá]lise\s+de)?\s+cr[ée]dito|(?:fazer|iniciar)\s+(?:a\s+)?an[aá]lise(?:\s+de\s+cr[ée]dito)?)/i;
-const BUSINESS_HANDOFF_BUTTON_PATTERN =
-  /continuar(?:\s+(?:direto\s+)?no)?[^\n]{0,80}(?:loft|fian[cç]a\s+aluguel)/i;
-const BUSINESS_PROPOSAL_PATH_PATTERN =
-  /\/(?:fianca-aluguel\/imobiliaria\/proposta|imobiliaria\/proposta|erp\/proposta\/nova-proposta)\/?$/i;
-const CREDIT_RESULT_TEXT_PATTERN =
-  /(cr[ée]dito\s+(?:aprovad[oa]|recusad[oa]|negad[oa]|reprovad[oa])|pendente\s+(?:de|em)\s+an[aá]lise|an[aá]lise\s+complementar|erro\s+interno)/i;
 
 export function isCreditSimulationUrl(value: string): boolean {
   try {
@@ -49,6 +45,19 @@ export function isErpCreditSimulationUrl(value: string): boolean {
     return (
       (url.hostname === "app.loft.com.br" || url.hostname.endsWith(".app.loft.com.br")) &&
       ERP_CREDIT_SIMULATION_PATH_PATTERN.test(url.pathname)
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function isLegacyCreditSimulationUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      AUTHENTICATED_HOSTNAMES.some(
+        (hostname) => url.hostname === hostname || url.hostname.endsWith(`.${hostname}`),
+      ) && LEGACY_CREDIT_SIMULATION_PATH_PATTERN.test(url.pathname)
     );
   } catch {
     return false;
@@ -167,6 +176,43 @@ async function clickButtonByText(
   throw new Error(
     `${motivo} (tentativas: ${textos.map(String).join(", ")}). O formulário da CredPago pode ter mudado ou ainda conter dados inválidos. ` +
       `[diagnóstico] url=${urlAtual} | amostra="${amostraTexto}"`,
+  );
+}
+
+/**
+ * As opções PF/PJ e Residencial/Comercial são botões na rota ERP e radios no
+ * formulário Fiança Aluguel. A escolha segue o texto acessível exibido ao
+ * usuário, sem depender da implementação visual de cada uma das duas telas.
+ */
+async function clickChoiceByText(page: Page, textos: (string | RegExp)[]): Promise<void> {
+  const inicio = Date.now();
+  let encontrouControleDesabilitado = false;
+  do {
+    for (const texto of textos) {
+      const candidates = [
+        page.getByRole("radio", { name: texto }),
+        page.getByRole("button", { name: texto }),
+      ];
+      for (const candidate of candidates) {
+        if ((await candidate.count().catch(() => 0)) === 0) continue;
+        const choice = candidate.first();
+        if (!(await choice.isVisible().catch(() => false))) continue;
+        if (await choice.isEnabled().catch(() => false)) {
+          await choice.click();
+          return;
+        }
+        encontrouControleDesabilitado = true;
+      }
+    }
+    await page.waitForTimeout(FIND_POLL_MS);
+  } while (Date.now() - inicio < FIND_TIMEOUT_MS);
+
+  await assertCreditSimulationAvailable(page);
+  const motivo = encontrouControleDesabilitado
+    ? "Opção encontrada, mas permaneceu desabilitada"
+    : "Opção não encontrada";
+  throw new Error(
+    `${motivo} (tentativas: ${textos.map(String).join(", ")}). O formulário da CredPago pode ter mudado.`,
   );
 }
 
@@ -333,21 +379,48 @@ async function setCoverageToggle(
   throw new Error(`Não foi possível ajustar a cobertura (${testId}).`);
 }
 
+async function setLegacyCoverageToggle(
+  page: Page,
+  selector: string,
+  enabled: boolean,
+): Promise<boolean> {
+  const checkbox = page.locator(selector).first();
+  if ((await checkbox.count().catch(() => 0)) === 0) return false;
+
+  if (!(await checkbox.isEnabled().catch(() => false))) {
+    throw new Error(`Controle de cobertura desabilitado (${selector}). O formulário mudou.`);
+  }
+  if ((await checkbox.isChecked().catch(() => !enabled)) !== enabled) {
+    await checkbox.setChecked(enabled, { force: true });
+  }
+  if ((await checkbox.isChecked().catch(() => !enabled)) !== enabled) {
+    throw new Error(`Não foi possível ajustar a cobertura (${selector}).`);
+  }
+  return true;
+}
+
 async function fillCoveredValue(
   page: Page,
   options: {
     value: number;
     toggleTestId: string;
     valueTestId: string;
+    legacyToggleSelector: string;
     label: RegExp;
   },
 ): Promise<void> {
-  const hasToggle = await setCoverageToggle(
+  const hasErpToggle = await setCoverageToggle(
     page,
     options.toggleTestId,
     options.valueTestId,
     options.value > 0,
   );
+  const hasLegacyToggle = await setLegacyCoverageToggle(
+    page,
+    options.legacyToggleSelector,
+    options.value > 0,
+  );
+  const hasToggle = hasErpToggle || hasLegacyToggle;
   if (options.value <= 0) return;
 
   try {
@@ -370,7 +443,7 @@ export async function fillPessoa(page: Page, tipo: "PF" | "PJ"): Promise<void> {
     tipo === "PF"
       ? [/pessoa\s+f[ií]sica/i, /^\s*pf\s*$/i]
       : [/pessoa\s+jur[ií]dica/i, /^\s*pj\s*$/i];
-  await clickButtonByText(page, textos);
+  await clickChoiceByText(page, textos);
 }
 
 export async function fillDocumento(
@@ -387,7 +460,7 @@ export async function fillDocumento(
 }
 
 export async function fillTipoImovel(page: Page, tipo: "Residencial" | "Comercial"): Promise<void> {
-  await clickButtonByText(page, [new RegExp(tipo, "i")]);
+  await clickChoiceByText(page, [new RegExp(tipo, "i")]);
 }
 
 /**
@@ -436,12 +509,14 @@ export async function fillValores(
     value: valores.condominio,
     toggleTestId: "property-condominium-coverage-toggle",
     valueTestId: "property-condominium-value",
+    legacyToggleSelector: "#nova-simulacao-coverage-switch-condominio-Label",
     label: /condom[ií]nio/i,
   });
   await fillCoveredValue(page, {
     value: valores.taxas,
     toggleTestId: "property-iptu-coverage-toggle",
     valueTestId: "property-iptu-value",
+    legacyToggleSelector: "#nova-simulacao-coverage-switch-iptu-Label",
     label: /iptu|taxas?/i,
   });
 }
@@ -453,95 +528,60 @@ export async function submitSimulation(
   await clickButtonByText(page, [SUBMIT_CREDIT_BUTTON_PATTERN], options);
 }
 
-async function isBusinessProposalForm(page: Page): Promise<boolean> {
-  let isBusinessPath = false;
-  try {
-    isBusinessPath = BUSINESS_PROPOSAL_PATH_PATTERN.test(new URL(page.url()).pathname);
-  } catch {
-    return false;
-  }
-  if (!isBusinessPath) return false;
-
-  const cnpjCandidates = [
-    page.getByRole("textbox", { name: /cnpj/i }),
-    page.getByLabel(/cnpj/i),
-    page.getByPlaceholder(/cnpj/i),
+async function hasLegacyCreditSimulationForm(page: Page): Promise<boolean> {
+  if (!isLegacyCreditSimulationUrl(page.url())) return false;
+  const required = [
+    page.locator('input[name="dadosPessoa.tipoPessoa"][value="PF"]'),
+    page.locator('input[name="dadosPessoa.tipoPessoa"][value="PJ"]'),
+    page.locator('input[name="dadosImovel.tipoImovel"][value="Residencial"]'),
+    page.locator('input[name="dadosImovel.tipoImovel"][value="Comercial"]'),
+    page.locator("#cep"),
+    page.locator("#nova-simulacao-aluguel"),
+    page.getByRole("button", { name: SUBMIT_CREDIT_BUTTON_PATTERN }),
   ];
-  for (const candidate of cnpjCandidates) {
-    if (
-      (await candidate.count().catch(() => 0)) > 0 &&
-      (await candidate
-        .first()
-        .isVisible()
-        .catch(() => false)) &&
-      (await isFillable(candidate.first()))
-    ) {
-      return true;
-    }
+  for (const locator of required) {
+    if ((await locator.count().catch(() => 0)) === 0) return false;
   }
-  return false;
-}
-
-export interface ContinueBusinessProposalOptions {
-  /** Resultado oficial já observado na primeira etapa; nesse caso não há redirecionamento a seguir. */
-  hasObservedResult?: () => boolean;
-  onLog?: (message: string) => void;
-  timeoutMs?: number;
+  return true;
 }
 
 /**
- * O ERP usa uma etapa intermediária para CNPJ: depois da primeira análise ele
- * mostra "Vamos para o lugar certo?" e só monta o formulário jurídico depois
- * do clique em "Continuar no Loft / Fiança aluguel". Retornar antes desse clique
- * deixava a proposta sem CNPJ, CEP e aluguel e fazia o NOX expirar por timeout.
- *
- * Retorna true apenas quando o segundo formulário está visível e pronto para
- * ser preenchido. Um resultado direto da API/tela encerra a espera com false e
- * continua sendo interpretado normalmente pelo parser.
+ * A sessão autenticada do ERP não inicializa automaticamente o módulo legado
+ * de Fiança Aluguel. No primeiro acesso a Loft conclui o SSO e volta ao painel;
+ * uma segunda navegação, no mesmo contexto, abre o formulário solicitado.
  */
-export async function continueToBusinessProposal(
+export async function openLegacyCreditSimulation(
   page: Page,
-  options: ContinueBusinessProposalOptions = {},
-): Promise<boolean> {
-  const deadline = Date.now() + (options.timeoutMs ?? 20_000);
-  let handoffClicked = false;
-
-  while (Date.now() < deadline) {
-    if (await isBusinessProposalForm(page)) return true;
-    if (options.hasObservedResult?.()) return false;
-
-    const bodyText = await page
-      .locator("body")
-      .innerText()
-      .catch(() => "");
-    if (!handoffClicked && CREDIT_RESULT_TEXT_PATTERN.test(bodyText)) return false;
-
-    const candidates = [
-      page.getByRole("button", { name: BUSINESS_HANDOFF_BUTTON_PATTERN }),
-      page.getByRole("link", { name: BUSINESS_HANDOFF_BUTTON_PATTERN }),
-    ];
-    for (const candidate of candidates) {
-      if ((await candidate.count().catch(() => 0)) === 0) continue;
-      const target = candidate.first();
-      if (
-        !(await target.isVisible().catch(() => false)) ||
-        !(await target.isEnabled().catch(() => false))
-      ) {
-        continue;
-      }
-
-      options.onLog?.(
-        "Redirecionamento empresarial de CNPJ identificado; abrindo o formulário jurídico.",
-      );
-      await target.click();
-      handoffClicked = true;
-      break;
-    }
-
-    await page.waitForTimeout(FIND_POLL_MS);
+  targetUrl: string,
+  timeoutMs = 45_000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    if (await hasLegacyCreditSimulationForm(page)) return;
+    await page.goto(targetUrl, {
+      waitUntil: "domcontentloaded",
+      timeout: Math.min(30_000, tempoRestante(deadline)),
+    });
+    const formWaitMs = isLegacyCreditSimulationUrl(page.url()) ? 8_000 : 500;
+    const ready = await waitUntil(
+      page,
+      () => hasLegacyCreditSimulationForm(page),
+      Math.min(formWaitMs, tempoRestante(deadline)),
+    );
+    if (ready) return;
   }
 
-  return isBusinessProposalForm(page);
+  await assertCreditSimulationAvailable(page);
+  const urlAtual = sanitizeUrl(page.url());
+  const amostraTexto = await page
+    .locator("body")
+    .innerText()
+    .then((text) => redactSensitiveText(text.replace(/\s+/g, " ").trim(), 400))
+    .catch(() => "(não foi possível ler o corpo da página)");
+  throw new Error(
+    `O formulário de CNPJ da Fiança Aluguel não ficou disponível após inicializar a sessão. ` +
+      `[diagnóstico] url=${urlAtual} | amostra="${amostraTexto}"`,
+  );
 }
 
 /**
@@ -564,7 +604,7 @@ export async function validateSimulationFormReady(page: Page): Promise<Record<st
   }
 
   await assertCreditSimulationAvailable(page);
-  await clickButtonByText(page, [/pessoa\s+f[ií]sica/i, /^\s*pf\s*$/i]);
+  await clickChoiceByText(page, [/pessoa\s+f[ií]sica/i, /^\s*pf\s*$/i]);
   const [documentoPf, aluguel] = await Promise.all([
     locateField(page, { label: /cpf/i, placeholder: /cpf/i, role: { name: /cpf/i } }),
     locateField(page, { label: /aluguel/i, placeholder: /aluguel/i, role: { name: /aluguel/i } }),
@@ -573,7 +613,7 @@ export async function validateSimulationFormReady(page: Page): Promise<Record<st
 
   // Verifica também a ramificação PJ. Assim o monitor de contrato acusa uma
   // alteração do provedor antes que uma consulta real de CNPJ expire.
-  await clickButtonByText(page, [/pessoa\s+jur[ií]dica/i, /^\s*pj\s*$/i]);
+  await clickChoiceByText(page, [/pessoa\s+jur[ií]dica/i, /^\s*pj\s*$/i]);
   const documentoPj = await locateField(page, {
     label: /cnpj/i,
     placeholder: /cnpj/i,
@@ -597,6 +637,115 @@ export async function validateSimulationFormReady(page: Page): Promise<Record<st
   };
   if (!Object.values(result).every(Boolean)) {
     throw new Error("O formulario seguro nao apresentou todos os campos criticos esperados.");
+  }
+  return result;
+}
+
+/**
+ * Confere os controles reais da rota solicitada para CNPJ sem preencher ou
+ * enviar dados. Esta validação também garante que cada opção do formulário NOX
+ * possui um controle correspondente no formulário da Loft.
+ */
+export async function validateLegacySimulationFormReady(
+  page: Page,
+): Promise<Record<string, boolean>> {
+  if (!(await hasLegacyCreditSimulationForm(page))) {
+    throw new Error("O formulário Fiança Aluguel não apresentou todos os controles esperados.");
+  }
+  const authState = await detectAuthenticationState(page);
+  if (authState !== "authenticated") {
+    throw new Error(
+      authState === "login"
+        ? "Sessao expirada: o portal redirecionou para a tela de autenticacao."
+        : "O portal nao confirmou a autenticacao nem exibiu o formulario Fiança Aluguel.",
+    );
+  }
+  if (await isCaptchaPresent(page)) {
+    throw new Error(
+      "O provedor solicitou captcha/OTP; a sessao sera reavaliada automaticamente sem contornar o desafio externo.",
+    );
+  }
+
+  await fillPessoa(page, "PF");
+  const documentoPf = await locateField(page, {
+    label: /cpf/i,
+    placeholder: /cpf/i,
+    role: { name: /cpf/i },
+  });
+  const documentoPfVisivel = await documentoPf.isVisible().catch(() => false);
+  await fillPessoa(page, "PJ");
+  const documentoPj = await locateField(page, {
+    label: /cnpj/i,
+    placeholder: /cnpj/i,
+    role: { name: /cnpj/i },
+  });
+  await fillTipoImovel(page, "Residencial");
+  await fillTipoImovel(page, "Comercial");
+
+  const [cep, aluguel, condominio, iptu] = await Promise.all([
+    locateField(page, { label: /cep/i, placeholder: /cep/i, role: { name: /cep/i } }),
+    locateField(page, {
+      label: /aluguel/i,
+      placeholder: /aluguel/i,
+      role: { name: /aluguel/i },
+    }),
+    locateField(page, {
+      label: /condom[ií]nio/i,
+      placeholder: /condom[ií]nio/i,
+      role: { name: /condom[ií]nio/i },
+    }),
+    locateField(page, {
+      label: /iptu|taxas?/i,
+      placeholder: /iptu|taxas?/i,
+      role: { name: /iptu|taxas?/i },
+    }),
+  ]);
+  const result = {
+    pessoaFisica: await page
+      .locator('input[name="dadosPessoa.tipoPessoa"][value="PF"]')
+      .isEnabled()
+      .catch(() => false),
+    pessoaJuridica: await page
+      .locator('input[name="dadosPessoa.tipoPessoa"][value="PJ"]')
+      .isEnabled()
+      .catch(() => false),
+    documento: documentoPfVisivel && (await documentoPj.isVisible().catch(() => false)),
+    residencial: await page
+      .locator('input[name="dadosImovel.tipoImovel"][value="Residencial"]')
+      .isEnabled()
+      .catch(() => false),
+    comercial: await page
+      .locator('input[name="dadosImovel.tipoImovel"][value="Comercial"]')
+      .isChecked()
+      .catch(() => false),
+    cep: await cep.isVisible().catch(() => false),
+    aluguel: await aluguel.isVisible().catch(() => false),
+    condominio:
+      (await condominio.isVisible().catch(() => false)) &&
+      (await page
+        .locator("#nova-simulacao-coverage-switch-condominio-Label")
+        .count()
+        .catch(() => 0)) > 0,
+    iptu:
+      (await iptu.isVisible().catch(() => false)) &&
+      (await page
+        .locator("#nova-simulacao-coverage-switch-iptu-Label")
+        .count()
+        .catch(() => 0)) > 0,
+    simular: await page
+      .getByRole("button", { name: SUBMIT_CREDIT_BUTTON_PATTERN })
+      .first()
+      .isVisible()
+      .catch(() => false),
+  };
+  if (!Object.values(result).every(Boolean)) {
+    const missing = Object.entries(result)
+      .filter(([, available]) => !available)
+      .map(([field]) => field)
+      .join(", ");
+    throw new Error(
+      `O formulário Fiança Aluguel não apresentou todos os campos críticos esperados: ${missing}.`,
+    );
   }
   return result;
 }
