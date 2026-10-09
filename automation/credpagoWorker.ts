@@ -871,7 +871,7 @@ async function processarConsulta(
           onLog: (msg) => log(`[${cid}] ${msg}`),
           readObservedResult: apiObserver.read,
           hasObservedRequest: apiObserver.hasStarted,
-          onProviderReturnedToForm:
+          lookupSubmittedProposal:
             consulta.tipo_pessoa === "PJ"
               ? () => lookupLegacyProposalResult(page!, consulta.documento || "")
               : undefined,

@@ -52,6 +52,7 @@ const BUSINESS_FLOW_REGEX =
 const RETRY_APOS_MS = 7000;
 const MAX_RECLIQUES = 2;
 const PROVIDER_RESET_STABLE_MS = 3000;
+const PROVIDER_PROPOSAL_LOOKUP_AFTER_MS = 10000;
 
 export interface ParseResultadoOpts {
   /** Tipo enviado ao portal; necessário para reconhecer com segurança o fluxo empresarial de CNPJ. */
@@ -68,12 +69,14 @@ export interface ParseResultadoOpts {
   maxRetryClicks?: number;
   /** Tempo de estabilidade do formulário após uma análise já confirmada. */
   providerResetStableMs?: number;
+  /** Espera mínima após o POST antes de procurar a proposta na lista do legado. */
+  providerProposalLookupAfterMs?: number;
   /** Resultado explícito observado na resposta da API oficial usada pela própria tela. */
   readObservedResult?: () => ObservedCreditSimulationResult | null;
   /** Confirma que a requisição oficial saiu, mesmo se a tela trocar o texto do carregamento. */
   hasObservedRequest?: () => boolean;
-  /** Consulta a lista da Loft quando o legado cria a proposta e volta ao formulário vazio. */
-  onProviderReturnedToForm?: () => Promise<ObservedCreditSimulationResult | null>;
+  /** Consulta a lista da Loft quando o legado cria a proposta sem renderizar o resultado. */
+  lookupSubmittedProposal?: () => Promise<ObservedCreditSimulationResult | null>;
 }
 
 /**
@@ -98,6 +101,8 @@ export async function parseResultado(
   const retryAfter = opts.retryAfterMs ?? RETRY_APOS_MS;
   const maxRetryClicks = opts.maxRetryClicks ?? MAX_RECLIQUES;
   const providerResetStableMs = opts.providerResetStableMs ?? PROVIDER_RESET_STABLE_MS;
+  const providerProposalLookupAfterMs =
+    opts.providerProposalLookupAfterMs ?? PROVIDER_PROPOSAL_LOOKUP_AFTER_MS;
   let bodyText = "";
   let baseline = await page
     .locator("body")
@@ -114,6 +119,24 @@ export async function parseResultado(
   let ultimoReclique = Date.now();
   let tentativasReclique = 0;
   let retornoAoFormularioDesde: number | null = null;
+  let consultaListaExecutada = false;
+
+  const recuperarNaLista = async (
+    resultadoCapturadoVia: "lista_propostas" | "lista_propostas_apos_envio",
+  ): Promise<ResultadoParse | null> => {
+    if (!opts.lookupSubmittedProposal) return null;
+    consultaListaExecutada = true;
+    const recoveredResult = await opts.lookupSubmittedProposal().catch(() => null);
+    if (!recoveredResult) return null;
+    return {
+      status: recoveredResult.status,
+      mensagem: MENSAGEM_POR_STATUS[recoveredResult.status],
+      proposalId: recoveredResult.proposalId,
+      clienteNome: null,
+      clienteDocumento: null,
+      rawSummary: buildSummary(page, bodyText, { resultadoCapturadoVia }),
+    };
+  };
 
   while (Date.now() < deadline) {
     bodyText = await page
@@ -202,6 +225,35 @@ export async function parseResultado(
       );
     }
 
+    // No formulário legado de CNPJ o POST pode ser concluído sem que a tela
+    // renderize o resultado (o indicador de requisição fica ativo indefinidamente).
+    // Depois de uma curta espera, a fonte confiável passa a ser a proposta criada
+    // na lista da Loft. Isso evita aguardar cinco minutos por uma mudança visual
+    // que nunca acontece e não reenvia o crédito.
+    if (
+      processamentoDetectado &&
+      opts.tipoPessoa === "PJ" &&
+      opts.lookupSubmittedProposal &&
+      !consultaListaExecutada &&
+      Date.now() - inicio >= providerProposalLookupAfterMs
+    ) {
+      opts.onLog?.("Consultando na lista a proposta criada para confirmar o resultado do CNPJ.");
+      const recovered = await recuperarNaLista("lista_propostas_apos_envio");
+      if (recovered) return recovered;
+      return {
+        status: "erro",
+        mensagem:
+          "A análise foi enviada, mas o parceiro ainda não disponibilizou a proposta para consulta. Tente novamente em instantes.",
+        proposalId: extractLoftProposalId(page.url()) ?? extractLoftProposalId(bodyText),
+        clienteNome: null,
+        clienteDocumento: null,
+        rawSummary: buildSummary(page, bodyText, {
+          motivoTecnico: "provider_proposal_not_found_after_submission",
+          tipoPessoa: opts.tipoPessoa ?? null,
+        }),
+      };
+    }
+
     // Depois que o portal confirmou a análise, voltar ao formulário com o botão de
     // envio significa que o fluxo foi abandonado sem resultado (observado quando
     // duas abas da mesma sessão disputavam o estado da SPA). Não esperamos os 150s
@@ -211,19 +263,8 @@ export async function parseResultado(
     if (voltouAoFormulario) {
       retornoAoFormularioDesde ??= Date.now();
       if (Date.now() - retornoAoFormularioDesde >= providerResetStableMs) {
-        const recoveredResult = await opts.onProviderReturnedToForm?.().catch(() => null);
-        if (recoveredResult) {
-          return {
-            status: recoveredResult.status,
-            mensagem: MENSAGEM_POR_STATUS[recoveredResult.status],
-            proposalId: recoveredResult.proposalId,
-            clienteNome: null,
-            clienteDocumento: null,
-            rawSummary: buildSummary(page, bodyText, {
-              resultadoCapturadoVia: "lista_propostas",
-            }),
-          };
-        }
+        const recovered = await recuperarNaLista("lista_propostas");
+        if (recovered) return recovered;
         opts.onLog?.(
           "O portal voltou ao formulário depois de iniciar a análise; encerrando sem reenviar para evitar duplicidade.",
         );

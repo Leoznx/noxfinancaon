@@ -339,7 +339,7 @@ test("recupera na lista da Loft o resultado criado antes do retorno ao formulár
     processingTimeoutMs: 5_000,
     pollIntervalMs: 50,
     providerResetStableMs: 200,
-    onProviderReturnedToForm: async () => ({
+    lookupSubmittedProposal: async () => ({
       status: "aprovado",
       proposalId: "4783753",
     }),
@@ -348,6 +348,61 @@ test("recupera na lista da Loft o resultado criado antes do retorno ao formulár
   assert.equal(resultado.status, "aprovado");
   assert.equal(resultado.proposalId, "4783753");
   assert.equal(resultado.rawSummary.resultadoCapturadoVia, "lista_propostas");
+  await page.close();
+});
+
+test("consulta a lista sem aguardar o timeout quando o CNPJ fica processando", async () => {
+  const page = await browser.newPage();
+  await page.setContent("<main>Analisando crédito</main>");
+
+  let consultasLista = 0;
+  const inicio = Date.now();
+  const resultado = await parseResultado(page, {
+    tipoPessoa: "PJ",
+    timeoutMs: 2_000,
+    processingTimeoutMs: 5_000,
+    pollIntervalMs: 25,
+    providerProposalLookupAfterMs: 100,
+    hasObservedRequest: () => true,
+    lookupSubmittedProposal: async () => {
+      consultasLista += 1;
+      return { status: "aprovado", proposalId: "4783753" };
+    },
+  });
+
+  assert.equal(resultado.status, "aprovado");
+  assert.equal(resultado.proposalId, "4783753");
+  assert.equal(resultado.rawSummary.resultadoCapturadoVia, "lista_propostas_apos_envio");
+  assert.equal(consultasLista, 1);
+  assert.ok(Date.now() - inicio < 1_000);
+  await page.close();
+});
+
+test("não consulta a lista de propostas no fluxo de CPF", async () => {
+  const page = await browser.newPage();
+  await page.setContent("<main>Analisando crédito</main>");
+  await page.evaluate(() => {
+    setTimeout(() => {
+      document.body.innerHTML = "<main>Crédito aprovado</main>";
+    }, 150);
+  });
+
+  let consultasLista = 0;
+  const resultado = await parseResultado(page, {
+    tipoPessoa: "PF",
+    timeoutMs: 500,
+    processingTimeoutMs: 1_000,
+    pollIntervalMs: 25,
+    providerProposalLookupAfterMs: 50,
+    lookupSubmittedProposal: async () => {
+      consultasLista += 1;
+      return { status: "recusado", proposalId: "9999999" };
+    },
+    hasObservedRequest: () => true,
+  });
+
+  assert.equal(resultado.status, "aprovado");
+  assert.equal(consultasLista, 0);
   await page.close();
 });
 
