@@ -3,6 +3,7 @@ import type { ResultadoParse, ResultadoStatus } from "./types";
 import { redactSensitiveText, sanitizeUrl } from "./redaction";
 import { nomeClienteValido, somenteDigitos } from "./customerIdentity";
 import { extractLoftProposalId } from "./loftCancellation";
+import type { ObservedCreditSimulationResult } from "./creditSimulationApiObserver";
 
 // Ordem importa: "recusado" (inclui negações como "não aprovado") é checado antes de
 // "aprovado" para não gerar falso-positivo quando o texto for algo como "locatício não aprovado".
@@ -15,9 +16,13 @@ const PADROES: { status: Exclude<ResultadoStatus, "erro">; regex: RegExp }[] = [
   {
     status: "em_analise",
     regex:
-      /(pendente\s+de\s+an[aá]lise|em\s+an[aá]lise|an[aá]lise\s+pendente|an[aá]lise\s+complementar\s+necess[aá]ria)/i,
+      /(pendente\s+(?:de|em)\s+an[aá]lise|em\s+an[aá]lise|an[aá]lise\s+pendente|an[aá]lise\s+complementar(?:\s+necess[aá]ria|\s+devido\s+a\s+pontos\s+de\s+aten[cç][aã]o)?|precisamos\s+de\s+uma\s+an[aá]lise\s+complementar)/i,
   },
-  { status: "aprovado", regex: /(valor\s+locat[ií]cio\s+)?(cr[ée]dito\s+)?aprovad[oa]/i },
+  {
+    status: "aprovado",
+    regex:
+      /((valor\s+locat[ií]cio|cr[ée]dito|fian[cç]a(?:\s+loft)?)\s+aprovad[oa]|cliente\s+com\s+excelente\s+hist[oó]rico\s+de\s+cr[ée]dito\s+identificad[oa]|(?:cliente\s+)?est[aá]\s+apto\s+a\s+contratar\s+(?:a\s+)?(?:loft\s+)?fian[cç]a)/i,
+  },
 ];
 
 // Mensagem curta e limpa por status — nunca o texto bruto da página (que mistura
@@ -29,11 +34,11 @@ const MENSAGEM_POR_STATUS: Record<Exclude<ResultadoStatus, "erro">, string> = {
 };
 
 const TIMEOUT_MS = 30000;
-const PROCESSING_TIMEOUT_MS = 150000;
+const PROCESSING_TIMEOUT_MS = 300000;
 const POLL_INTERVAL_MS = 1000;
 const PROCESSING_REGEX =
-  /(estamos\s+fazendo\s+a\s+an[aá]lise\s+de\s+cr[ée]dito|an[aá]lise\s+de\s+cr[ée]dito\s+em\s+andamento|analisando\s+cr[ée]dito|consultando\s+hist[oó]rico[^\n]{0,80}(?:pagamento|cliente)|aguarde[^\n]{0,80}an[aá]lise\s+de\s+cr[ée]dito)/i;
-const IDLE_FORM_REGEX = /(fazer\s+an[aá]lise|simular\s+cr[ée]dito)/i;
+  /(estamos\s+fazendo\s+a\s+an[aá]lise\s+de\s+cr[ée]dito|an[aá]lise(?:\s+de\s+cr[ée]dito)?\s+em\s+andamento|analisando(?:\s+o)?\s+(?:hist[oó]rico\s+financeiro|cr[ée]dito)|consultando\s+(?:os\s+principais\s+bir[oô]s\s+de\s+cr[ée]dito|hist[oó]rico[^\n]{0,80}(?:pagamento|cliente))|verificando\s+informa[cç][oõ]es\s+cadastrais|avaliando\s+a\s+compatibilidade\s+entre\s+renda|processando\s+a\s+simula[cç][aã]o|aguarde[^\n]{0,80}an[aá]lise\s+de\s+cr[ée]dito)/i;
+const IDLE_FORM_REGEX = /(fazer|iniciar)\s+(?:a\s+)?an[aá]lise|simular\s+cr[ée]dito/i;
 const PROVIDER_INTERNAL_ERROR_REGEX =
   /(ocorreu\s+um\s+erro\s+interno|erro\s+interno[^\n]{0,100}tente\s+novamente|tente\s+novamente\s+mais\s+tarde)/i;
 /**
@@ -59,6 +64,10 @@ export interface ParseResultadoOpts {
   maxRetryClicks?: number;
   /** Tempo de estabilidade do formulário após uma análise já confirmada. */
   providerResetStableMs?: number;
+  /** Resultado explícito observado na resposta da API oficial usada pela própria tela. */
+  readObservedResult?: () => ObservedCreditSimulationResult | null;
+  /** Confirma que a requisição oficial saiu, mesmo se a tela trocar o texto do carregamento. */
+  hasObservedRequest?: () => boolean;
 }
 
 /**
@@ -88,7 +97,8 @@ export async function parseResultado(
     .locator("body")
     .innerText()
     .catch(() => "");
-  let processamentoDetectado = PROCESSING_REGEX.test(baseline);
+  let processamentoDetectado =
+    PROCESSING_REGEX.test(baseline) || (opts.hasObservedRequest?.() ?? false);
   let deadline = inicio + (processamentoDetectado ? timeoutProcessando : timeoutInicial);
   if (processamentoDetectado) {
     opts.onLog?.(
@@ -104,6 +114,40 @@ export async function parseResultado(
       .locator("body")
       .innerText()
       .catch(() => "");
+
+    const observedResult = opts.readObservedResult?.() ?? null;
+    if (observedResult) {
+      const { nome, documento } = extrairClienteInfo(bodyText);
+      return {
+        status: observedResult.status,
+        mensagem: MENSAGEM_POR_STATUS[observedResult.status],
+        proposalId:
+          observedResult.proposalId ??
+          extractLoftProposalId(page.url()) ??
+          extractLoftProposalId(bodyText),
+        clienteNome: nome,
+        clienteDocumento: documento,
+        rawSummary: buildSummary(page, bodyText, {
+          resultadoCapturadoVia: "resposta_api",
+        }),
+      };
+    }
+
+    // Na versão atual do ERP, uma pessoa jurídica não recebe um veredito imediato:
+    // o próprio botão de análise redireciona para a proposta empresarial já
+    // preenchida. Isso é uma análise complementar legítima, não um timeout.
+    if (isBusinessProposalRedirect(page.url())) {
+      return {
+        status: "em_analise",
+        mensagem: "A consulta de CNPJ requer análise complementar no fluxo empresarial.",
+        proposalId: extractLoftProposalId(page.url()) ?? extractLoftProposalId(bodyText),
+        clienteNome: null,
+        clienteDocumento: null,
+        rawSummary: buildSummary(page, bodyText, {
+          motivoTecnico: "provider_cnpj_business_flow",
+        }),
+      };
+    }
 
     for (const { status, regex } of PADROES) {
       if (regex.test(bodyText)) {
@@ -139,7 +183,8 @@ export async function parseResultado(
     // A Loft pode manter esta mensagem estática por mais de 30 segundos enquanto
     // processa a proposta. Isso é progresso real: não repetimos o clique (que pode
     // duplicar/reiniciar a simulação) e estendemos somente esse estado comprovado.
-    const processamentoAtivo = PROCESSING_REGEX.test(bodyText);
+    const processamentoAtivo =
+      PROCESSING_REGEX.test(bodyText) || (opts.hasObservedRequest?.() ?? false);
     if (processamentoAtivo && !processamentoDetectado) {
       processamentoDetectado = true;
       deadline = Math.max(deadline, inicio + timeoutProcessando);
@@ -215,6 +260,18 @@ export async function parseResultado(
     clienteDocumento: null,
     rawSummary: buildSummary(page, bodyText),
   };
+}
+
+function isBusinessProposalRedirect(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      /\/erp\/proposta\/nova-proposta\/?$/i.test(url.pathname) &&
+      url.searchParams.get("creditAnalysisOrigin") === "1"
+    );
+  } catch {
+    return false;
+  }
 }
 
 function buildSummary(

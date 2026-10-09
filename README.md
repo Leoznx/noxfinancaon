@@ -125,7 +125,7 @@ formulário sem resultado.
   'pendente'` condicional — se duas execuções tentarem pegar a mesma consulta ao mesmo tempo,
   só uma consegue: a outra recebe zero linhas afetadas e segue para a próxima. Isso é o que
   garante que o resultado nunca vai parar na consulta errada.
-- **Timeout por consulta** (`CONSULTA_TIMEOUT_MS`, padrão `180000` = 180s): se uma consulta travar
+- **Timeout por consulta** (`CONSULTA_TIMEOUT_MS`, padrão `420000` = 420s): se uma consulta travar
   no portal, só ela é marcada como `erro`; a próxima começa automaticamente. Se o portal voltar
   ao formulário depois de confirmar o processamento, o worker encerra em poucos segundos sem
   reenviar e sem arriscar duplicidade.
@@ -202,8 +202,8 @@ Preencha:
 | `AUTOMATION_POLL_INTERVAL_MS` | Intervalo de verificação de novas consultas (padrão: `5000`) |
 | `CREDPAGO_URL` | `https://app.loft.com.br/erp/proposta/analise-de-credito` |
 | `MAX_CONCURRENT_CONSULTAS` | Concorrência pedida; limitada a `1` pela sessão do parceiro (padrão: `1`) |
-| `CONSULTA_TIMEOUT_MS` | Tempo máximo por consulta antes de marcar erro (padrão: `180000`) |
-| `STALE_CONSULTA_MS` | Recupera consultas interrompidas; deve ser maior que o timeout (padrão: `360000`) |
+| `CONSULTA_TIMEOUT_MS` | Tempo máximo por consulta antes de marcar erro (padrão: `420000`) |
+| `STALE_CONSULTA_MS` | Recupera consultas interrompidas; deve ser maior que o timeout (padrão: `600000`) |
 | `HEADLESS` | `true` para rodar sem janela visível (requer sessão já logada) — padrão `false` |
 
 > Nota: o `.env.example` sugerido para este tipo de automação às vezes cita

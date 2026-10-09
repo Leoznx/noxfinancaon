@@ -15,6 +15,10 @@ services:
       HEADLESS: "true"
       HEALTH_PORT: "3000"
       REPAIR_HEALTH_PORT: "3001"
+      # A API de análise da Loft pode levar vários minutos em horário de pico.
+      # Estes valores sobrescrevem limites legados que possam permanecer no .env da VPS.
+      CONSULTA_TIMEOUT_MS: "420000"
+      STALE_CONSULTA_MS: "600000"
     volumes:
       # Só o arquivo de sessão (poucos KB) fica persistido no host — nunca o
       # perfil completo do Chrome. Gerado localmente por

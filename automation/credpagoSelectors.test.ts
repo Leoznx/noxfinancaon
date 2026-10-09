@@ -180,6 +180,21 @@ test("envia pelo botão Fazer análise sem clicar no texto explicativo que cont�
   await page.close();
 });
 
+test("envia pelo botão Iniciar análise usado na versão atual do portal", async () => {
+  const url = "https://app.loft.com.br/erp/proposta/analise-de-credito";
+  const page = await pageWithHtml(
+    url,
+    `<main>
+      <button type="button" onclick="document.body.dataset.submitted='true'">Iniciar análise</button>
+    </main>`,
+  );
+
+  await submitSimulation(page);
+
+  assert.equal(await page.locator("body").getAttribute("data-submitted"), "true");
+  await page.close();
+});
+
 test("aguarda o botão Fazer análise ficar habilitado antes de enviar", async () => {
   const url = "https://app.loft.com.br/erp/proposta/analise-de-credito";
   const page = await pageWithHtml(

@@ -22,7 +22,7 @@ const CREDIT_SIMULATION_PATH_PATTERN =
   /\/(?:fianca-aluguel\/imobiliaria\/proposta|imobiliaria\/proposta|erp\/proposta\/analise-de-credito)(?:\/|$)/i;
 const ERP_CREDIT_SIMULATION_PATH_PATTERN = /\/erp\/proposta\/analise-de-credito(?:\/|$)/i;
 const SUBMIT_CREDIT_BUTTON_PATTERN =
-  /(?:simular(?:\s+an[aá]lise\s+de)?\s+cr[ée]dito|fazer\s+(?:a\s+)?an[aá]lise(?:\s+de\s+cr[ée]dito)?)/i;
+  /(?:simular(?:\s+an[aá]lise\s+de)?\s+cr[ée]dito|(?:fazer|iniciar)\s+(?:a\s+)?an[aá]lise(?:\s+de\s+cr[ée]dito)?)/i;
 
 export function isCreditSimulationUrl(value: string): boolean {
   try {

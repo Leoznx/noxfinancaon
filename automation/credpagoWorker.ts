@@ -33,6 +33,7 @@ import {
 } from "./credpagoAvailability";
 import { LoftCancellationClient, extractLoftProposalId } from "./loftCancellation";
 import { selectRandomCreditSimulationCep } from "./creditSimulationCep";
+import { observeCreditSimulationApi } from "./creditSimulationApiObserver";
 
 /**
  * Traduz qualquer falha interna (Playwright, rede, timeout) para uma mensagem segura,
@@ -841,24 +842,31 @@ async function processarConsulta(
 
       log(`[${cid}] Enviando simulação${tentativa > 1 ? " novamente" : ""}`);
       await atualizarStep(consulta.id, tentativa > 1 ? "reenviando" : "enviando");
-      await submitSimulation(page, {
-        onBeforeClick: () => {
-          simulacaoEnviada = true;
-          estado.simulationSubmitted = true;
-        },
-        onAfterClick: () => tentarAgendarCancelamento(null),
-      });
-      estado.lastSuccessfulStep =
-        tentativa > 1 ? "recovery-simulation-submitted" : "simulation-submitted";
+      const apiObserver = observeCreditSimulationApi(page);
+      try {
+        await submitSimulation(page, {
+          onBeforeClick: () => {
+            simulacaoEnviada = true;
+            estado.simulationSubmitted = true;
+          },
+          onAfterClick: () => tentarAgendarCancelamento(null),
+        });
+        estado.lastSuccessfulStep =
+          tentativa > 1 ? "recovery-simulation-submitted" : "simulation-submitted";
 
-      log(`[${cid}] Aguardando resultado`);
-      await atualizarStep(consulta.id, "aguardando_resultado");
-      return parseResultado(page, {
-        onLog: (msg) => log(`[${cid}] ${msg}`),
-        // Só reclica quando o envio não causou mudança alguma; nunca durante uma
-        // análise confirmada ou depois de uma resposta do portal.
-        onRetryClick: () => submitSimulation(page),
-      });
+        log(`[${cid}] Aguardando resultado`);
+        await atualizarStep(consulta.id, "aguardando_resultado");
+        return await parseResultado(page, {
+          onLog: (msg) => log(`[${cid}] ${msg}`),
+          readObservedResult: apiObserver.read,
+          hasObservedRequest: apiObserver.hasStarted,
+          // Só reclica quando o envio não causou mudança alguma; nunca durante uma
+          // análise confirmada ou depois de uma resposta do portal.
+          onRetryClick: () => submitSimulation(page),
+        });
+      } finally {
+        apiObserver.dispose();
+      }
     };
 
     let resultado = await executarTentativa(1);

@@ -166,11 +166,11 @@ export const env = {
    */
   maxConcurrentConsultas: Math.min(requestedMaxConcurrentConsultas, SAFE_PROVIDER_CONCURRENCY),
   /** Tempo máximo (ms) para uma consulta individual antes de ser marcada como erro. */
-  consultaTimeoutMs: positiveNumber("CONSULTA_TIMEOUT_MS", 180_000, 10_000),
+  consultaTimeoutMs: positiveNumber("CONSULTA_TIMEOUT_MS", 420_000, 10_000),
   /** Recupera leases "processando" deixados por queda/reinício do worker. */
   // Deve ser maior que CONSULTA_TIMEOUT_MS: nunca recupera uma consulta que ainda
   // está persistindo o resultado depois de uma resposta lenta do portal.
-  staleConsultaMs: positiveNumber("STALE_CONSULTA_MS", 6 * 60 * 1000, 60_000),
+  staleConsultaMs: positiveNumber("STALE_CONSULTA_MS", 10 * 60 * 1000, 60_000),
   staleRecoveryIntervalMs: positiveNumber("STALE_RECOVERY_INTERVAL_MS", 60 * 1000, 10_000),
   /**
    * Chrome invisível. Login manual exige uma janela visível — se HEADLESS=true e a sessão
