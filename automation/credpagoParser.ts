@@ -41,6 +41,8 @@ const PROCESSING_REGEX =
 const IDLE_FORM_REGEX = /(fazer|iniciar)\s+(?:a\s+)?an[aá]lise|simular\s+cr[ée]dito/i;
 const PROVIDER_INTERNAL_ERROR_REGEX =
   /(ocorreu\s+um\s+erro\s+interno|erro\s+interno[^\n]{0,100}tente\s+novamente|tente\s+novamente\s+mais\s+tarde)/i;
+const BUSINESS_FLOW_REGEX =
+  /(vamos\s+para\s+o\s+lugar\s+certo|cadastro\s+est[aá]\s+vinculado\s+a\s+um\s+cnpj|para\s+imobili[aá]rias\s+e\s+empresas[^\n]{0,180}jornada\s+continua|continuar\s+no[^\n]{0,80}fian[cç]a\s+aluguel|contrata[cç][aã]o\s+de\s+garantia\s+para\s+cnpj|como\s+esta\s+proposta\s+[ée]\s+para\s+uma\s+empresa|complemente\s+sua\s+proposta)/i;
 /**
  * Se a página ficar com o texto EXATAMENTE igual por esse tempo depois do clique em
  * de envio (nem um spinner, nem uma navegação, nada), assumimos que o clique
@@ -52,6 +54,8 @@ const MAX_RECLIQUES = 2;
 const PROVIDER_RESET_STABLE_MS = 3000;
 
 export interface ParseResultadoOpts {
+  /** Tipo enviado ao portal; necessário para reconhecer com segurança o fluxo empresarial de CNPJ. */
+  tipoPessoa?: "PF" | "PJ";
   /** Chamado quando a página parece travada (sem nenhuma mudança) após o envio — deve reenviar o clique. */
   onRetryClick?: (tentativa: number) => Promise<void>;
   /** Log opcional de progresso (o worker usa para deixar rastro no console). */
@@ -136,7 +140,10 @@ export async function parseResultado(
     // Na versão atual do ERP, uma pessoa jurídica não recebe um veredito imediato:
     // o próprio botão de análise redireciona para a proposta empresarial já
     // preenchida. Isso é uma análise complementar legítima, não um timeout.
-    if (isBusinessProposalRedirect(page.url())) {
+    if (
+      isBusinessProposalRedirect(page.url(), opts.tipoPessoa) ||
+      (opts.tipoPessoa === "PJ" && BUSINESS_FLOW_REGEX.test(bodyText))
+    ) {
       return {
         status: "em_analise",
         mensagem: "A consulta de CNPJ requer análise complementar no fluxo empresarial.",
@@ -258,17 +265,18 @@ export async function parseResultado(
     proposalId: extractLoftProposalId(page.url()) ?? extractLoftProposalId(bodyText),
     clienteNome: null,
     clienteDocumento: null,
-    rawSummary: buildSummary(page, bodyText),
+    rawSummary: buildSummary(page, bodyText, {
+      motivoTecnico: "result_not_recognized",
+      tipoPessoa: opts.tipoPessoa ?? null,
+    }),
   };
 }
 
-function isBusinessProposalRedirect(value: string): boolean {
+function isBusinessProposalRedirect(value: string, tipoPessoa?: "PF" | "PJ"): boolean {
   try {
     const url = new URL(value);
-    return (
-      /\/erp\/proposta\/nova-proposta\/?$/i.test(url.pathname) &&
-      url.searchParams.get("creditAnalysisOrigin") === "1"
-    );
+    if (!/(?:^|\/)proposta\/nova-proposta(?:\/|$)/i.test(url.pathname)) return false;
+    return url.searchParams.get("creditAnalysisOrigin") === "1" || tipoPessoa === "PJ";
   } catch {
     return false;
   }

@@ -468,10 +468,21 @@ export async function validateSimulationFormReady(page: Page): Promise<Record<st
 
   await assertCreditSimulationAvailable(page);
   await clickButtonByText(page, [/pessoa\s+f[ií]sica/i, /^\s*pf\s*$/i]);
-  const [documento, aluguel] = await Promise.all([
+  const [documentoPf, aluguel] = await Promise.all([
     locateField(page, { label: /cpf/i, placeholder: /cpf/i, role: { name: /cpf/i } }),
     locateField(page, { label: /aluguel/i, placeholder: /aluguel/i, role: { name: /aluguel/i } }),
   ]);
+  const documentoPfVisivel = await documentoPf.isVisible().catch(() => false);
+
+  // Verifica também a ramificação PJ. Assim o monitor de contrato acusa uma
+  // alteração do provedor antes que uma consulta real de CNPJ expire.
+  await clickButtonByText(page, [/pessoa\s+jur[ií]dica/i, /^\s*pj\s*$/i]);
+  const documentoPj = await locateField(page, {
+    label: /cnpj/i,
+    placeholder: /cnpj/i,
+    role: { name: /cnpj/i },
+  });
+  const documentoPjVisivel = await documentoPj.isVisible().catch(() => false);
   // O CEP também é obrigatório na rota ERP atual; ele só aparece abaixo da dobra
   // em telas menores, então precisa fazer parte da validação do contrato visual.
   const cep = await locateField(page, {
@@ -481,7 +492,8 @@ export async function validateSimulationFormReady(page: Page): Promise<Record<st
   });
   const simular = page.getByRole("button", { name: SUBMIT_CREDIT_BUTTON_PATTERN }).first();
   const result = {
-    documento: await documento.isVisible().catch(() => false),
+    documento: documentoPfVisivel && documentoPjVisivel,
+    cnpj: documentoPjVisivel,
     cep: await cep.isVisible().catch(() => false),
     aluguel: await aluguel.isVisible().catch(() => false),
     simular: await simular.isVisible().catch(() => false),

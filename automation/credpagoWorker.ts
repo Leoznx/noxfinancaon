@@ -857,6 +857,7 @@ async function processarConsulta(
         log(`[${cid}] Aguardando resultado`);
         await atualizarStep(consulta.id, "aguardando_resultado");
         return await parseResultado(page, {
+          tipoPessoa: consulta.tipo_pessoa === "PJ" ? "PJ" : "PF",
           onLog: (msg) => log(`[${cid}] ${msg}`),
           readObservedResult: apiObserver.read,
           hasObservedRequest: apiObserver.hasStarted,

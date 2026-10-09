@@ -128,6 +128,7 @@ test("preenche e valida o formulário ERP incluindo o CEP abaixo da dobra", asyn
         <button type="button">Pessoa física</button>
         <button type="button">Pessoa jurídica</button>
         <label>CPF*<input /></label>
+        <label>CNPJ*<input /></label>
       </section>
       <section aria-label="Dados do Imóvel">
         <span>Tipo do imóvel *</span>
@@ -145,6 +146,7 @@ test("preenche e valida o formulário ERP incluindo o CEP abaixo da dobra", asyn
   assert.equal(await detectAuthenticationState(page, 300), "authenticated");
   assert.deepEqual(await validateSimulationFormReady(page), {
     documento: true,
+    cnpj: true,
     cep: true,
     aluguel: true,
     simular: true,

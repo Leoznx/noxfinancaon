@@ -44,12 +44,68 @@ test("reconhece a análise complementar do novo portal como em análise", async 
   await page.setContent("<main><h1>Análise complementar necessária</h1></main>");
 
   const resultado = await parseResultado(page, {
+    tipoPessoa: "PJ",
     timeoutMs: 100,
     processingTimeoutMs: 100,
     pollIntervalMs: 10,
   });
 
   assert.equal(resultado.status, "em_analise");
+  await page.close();
+});
+
+test("reconhece o modal atual que encaminha CNPJ ao fluxo empresarial", async () => {
+  const page = await browser.newPage();
+  await page.setContent(`<main>
+    <h1>Vamos para o lugar certo?</h1>
+    <p>Vimos que o seu cadastro está vinculado a um CNPJ. Para imobiliárias e empresas, a jornada continua direto no Loft / Fiança Aluguel.</p>
+    <button>Continuar no Loft / Fiança aluguel</button>
+  </main>`);
+
+  const resultado = await parseResultado(page, {
+    tipoPessoa: "PJ",
+    timeoutMs: 100,
+    processingTimeoutMs: 100,
+    pollIntervalMs: 10,
+  });
+
+  assert.equal(resultado.status, "em_analise");
+  assert.equal(resultado.rawSummary.motivoTecnico, "provider_cnpj_business_flow");
+  await page.close();
+});
+
+test("reconhece o resumo de garantia empresarial como resultado pendente", async () => {
+  const page = await browser.newPage();
+  await page.setContent(`<main>
+    <h1>Contratação de garantia para CNPJ</h1>
+    <p>Como esta proposta é para uma empresa, a escolha e a configuração da garantia são feitas diretamente na plataforma Loft / Fiança Aluguel.</p>
+  </main>`);
+
+  const resultado = await parseResultado(page, {
+    tipoPessoa: "PJ",
+    timeoutMs: 100,
+    processingTimeoutMs: 100,
+    pollIntervalMs: 10,
+  });
+
+  assert.equal(resultado.status, "em_analise");
+  assert.equal(resultado.rawSummary.motivoTecnico, "provider_cnpj_business_flow");
+  await page.close();
+});
+
+test("não classifica texto empresarial isolado como resultado de CPF", async () => {
+  const page = await browser.newPage();
+  await page.setContent("<main>Vamos para o lugar certo?</main>");
+
+  const resultado = await parseResultado(page, {
+    tipoPessoa: "PF",
+    timeoutMs: 40,
+    processingTimeoutMs: 40,
+    pollIntervalMs: 10,
+  });
+
+  assert.equal(resultado.status, "erro");
+  assert.equal(resultado.rawSummary.motivoTecnico, "result_not_recognized");
   await page.close();
 });
 
