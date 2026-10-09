@@ -54,6 +54,23 @@ test("ignora o plural Inquilinos e recupera o nome antes do documento", () => {
   );
 });
 
+test("exibe somente o nome quando a Loft retorna o texto jurídico de portador", () => {
+  assert.equal(
+    normalizeCreditCustomerName("O , ANA BEATRIZ BENVENUTTI, portador do"),
+    "ANA BEATRIZ BENVENUTTI",
+  );
+  assert.equal(
+    resolveCreditCustomerName({
+      tenantName: null,
+      rawResponse: {
+        textoCapturado:
+          "Crédito aprovado\nO , ANA BEATRIZ BENVENUTTI, portador do\nCPF: [DOCUMENT_REDACTED]",
+      },
+    }),
+    "ANA BEATRIZ BENVENUTTI",
+  );
+});
+
 test("prioriza tenant_name e usa o resumo técnico somente como fallback", () => {
   assert.equal(
     resolveCreditCustomerName({

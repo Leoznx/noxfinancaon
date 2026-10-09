@@ -1,6 +1,8 @@
 const NAME_LABEL =
   "(?:nome(?:\\s+do\\s+(?:cliente|inquilino|locat[aá]rio|proponente))?|cliente|inquilino|locat[aá]rio|proponente)";
 const DOCUMENT_MARKER = "(?:CPF|CNPJ)\\s*:?|\\[DOCUMENT_REDACTED\\]";
+const LEGAL_BEARER_WRAPPER =
+  /^(?:(?:o(?:\s*\(\s*a\s*\))?|a)\s*,\s*)?(.+?)\s*,\s*portador(?:a)?\s+d[oa]\b.*$/iu;
 
 const NON_NAME_WORDS = new Set([
   "aluguel",
@@ -18,6 +20,8 @@ const NON_NAME_WORDS = new Set([
   "locataria",
   "nome",
   "pendente",
+  "portador",
+  "portadora",
   "proponente",
   "recusado",
   "recusada",
@@ -39,11 +43,17 @@ export function normalizeCreditCustomerName(
 ): string | null {
   if (typeof value !== "string") return null;
 
-  const normalized = value
+  let normalized = value
     .replace(/\u00a0/g, " ")
     .replace(/\s+/g, " ")
     .replace(/^[\s:;|,.-]+|[\s:;|,.-]+$/g, "")
     .trim();
+  const legalWrapper = normalized.match(LEGAL_BEARER_WRAPPER);
+  if (legalWrapper) {
+    normalized = legalWrapper[1]
+      .replace(/^[\s:;|,.-]+|[\s:;|,.-]+$/g, "")
+      .trim();
+  }
   if (normalized.length < 2 || normalized.length > 120 || /\d/.test(normalized)) return null;
 
   const words = normalized.match(/\p{L}+(?:['’-]\p{L}+)*/gu) ?? [];

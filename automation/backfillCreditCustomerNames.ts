@@ -48,6 +48,7 @@ async function main(): Promise<void> {
   let offset = 0;
   let scanned = 0;
   let invalid = 0;
+  let normalized = 0;
   let recoverable = 0;
   let updated = 0;
   let skippedConcurrent = 0;
@@ -64,12 +65,18 @@ async function main(): Promise<void> {
     const rows = (data as ConsultationRow[] | null) ?? [];
     for (const row of rows) {
       scanned += 1;
-      if (nomeClienteValido(row.tenant_name)) continue;
-      invalid += 1;
+      const storedName = row.tenant_name?.replace(/\s+/g, " ").trim() ?? "";
+      const normalizedStoredName = nomeClienteValido(storedName);
+      if (normalizedStoredName === storedName) continue;
 
-      const text = capturedText(row.raw_response);
-      if (!text) continue;
-      const recoveredName = extrairClienteInfo(text).nome;
+      let recoveredName = normalizedStoredName;
+      if (recoveredName) {
+        normalized += 1;
+      } else {
+        invalid += 1;
+        const text = capturedText(row.raw_response);
+        recoveredName = text ? extrairClienteInfo(text).nome : null;
+      }
       if (!recoveredName) continue;
       recoverable += 1;
 
@@ -94,6 +101,7 @@ async function main(): Promise<void> {
       mode: applyChanges ? "apply" : "dry-run",
       scanned,
       invalid,
+      normalized,
       recoverable,
       updated,
       skippedConcurrent,

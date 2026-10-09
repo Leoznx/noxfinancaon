@@ -32,3 +32,16 @@ test("não interpreta o plural Inquilinos como o nome s", () => {
     { nome: "Maria da Silva", documento: "11144477735" },
   );
 });
+
+test("remove o texto jurídico ao redor do nome retornado pela Loft", () => {
+  assert.equal(
+    nomeClienteValido("O , ANA BEATRIZ BENVENUTTI, portador do"),
+    "ANA BEATRIZ BENVENUTTI",
+  );
+  assert.deepEqual(
+    extrairClienteInfo(
+      "Crédito aprovado\nO , ANA BEATRIZ BENVENUTTI, portador do\nCPF: 073.950.269-77",
+    ),
+    { nome: "ANA BEATRIZ BENVENUTTI", documento: "07395026977" },
+  );
+});

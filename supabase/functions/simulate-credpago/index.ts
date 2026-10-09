@@ -13,12 +13,16 @@ const ALLOWED_ROLES = ["corretor", "imobiliaria", "admin", "analista"];
 
 function nomeClienteValido(value: unknown): string | null {
   if (typeof value !== "string") return null;
-  const nome = value.replace(/\s+/g, " ").trim();
+  let nome = value.replace(/\s+/g, " ").trim();
+  const legalWrapper = nome.match(
+    /^(?:(?:o(?:\s*\(\s*a\s*\))?|a)\s*,\s*)?(.+?)\s*,\s*portador(?:a)?\s+d[oa]\b.*$/iu,
+  );
+  if (legalWrapper) nome = legalWrapper[1].replace(/^[\s,.;:-]+|[\s,.;:-]+$/g, "").trim();
   if (
     nome.length < 2 ||
     nome.length > 120 ||
     /\d/.test(nome) ||
-    /\b(cpf|cnpj|cliente|inquilino|locat[aá]rio|nome)\b/i.test(nome)
+    /\b(cpf|cnpj|cliente|inquilino|locat[aá]rio|nome|portador(?:a)?)\b/i.test(nome)
   ) {
     return null;
   }
