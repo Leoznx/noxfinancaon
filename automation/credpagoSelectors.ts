@@ -390,10 +390,14 @@ async function setLegacyCoverageToggle(
   if (!(await checkbox.isEnabled().catch(() => false))) {
     throw new Error(`Controle de cobertura desabilitado (${selector}). O formulário mudou.`);
   }
-  if ((await checkbox.isChecked().catch(() => !enabled)) !== enabled) {
-    await checkbox.setChecked(enabled, { force: true });
+  // Neste componente legado, `checked=false` é exibido como "Cobertura inclusa"
+  // e `checked=true` como "Cobertura removida". Portanto o valor semântico é
+  // invertido em relação ao checkbox nativo.
+  const expectedChecked = !enabled;
+  if ((await checkbox.isChecked().catch(() => !expectedChecked)) !== expectedChecked) {
+    await checkbox.setChecked(expectedChecked, { force: true });
   }
-  if ((await checkbox.isChecked().catch(() => !enabled)) !== enabled) {
+  if ((await checkbox.isChecked().catch(() => !expectedChecked)) !== expectedChecked) {
     throw new Error(`Não foi possível ajustar a cobertura (${selector}).`);
   }
   return true;

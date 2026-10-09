@@ -284,7 +284,7 @@ test("inicializa a sessão legada e preenche todos os controles reais de CNPJ", 
   await fillDocumento(page, "12936344000196", "PJ");
   await fillTipoImovel(page, "Comercial");
   await fillCep(page, "88340001");
-  await fillValores(page, { aluguel: 3000, condominio: 250, taxas: 90 });
+  await fillValores(page, { aluguel: 3000, condominio: 0, taxas: 0 });
   await submitSimulation(page);
 
   assert.equal(await page.getByLabel(/cnpj/i).inputValue(), "12936344000196");
