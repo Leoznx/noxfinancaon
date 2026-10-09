@@ -15,6 +15,7 @@
     "automation:repair": "tsx automation/repairWorker.ts",
     "automation:validate": "tsx automation/validateAutomation.ts",
     "automation:once": "tsx automation/credpagoWorker.ts --once",
+    "automation:backfill-names": "tsx automation/backfillCreditCustomerNames.ts",
     "automation:install-browsers": "playwright install chromium",
     "automation:export-session": "tsx automation/exportSession.ts",
     "automation:interactive-login": "node automation/interactiveLogin.mjs",

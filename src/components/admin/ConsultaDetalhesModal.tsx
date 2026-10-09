@@ -14,10 +14,10 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   LABEL_STATUS_CONSULTA,
   formatDocumento,
-  isNomeValido,
   resolverStatusConsulta,
   type StatusExibicaoConsulta,
 } from "@/lib/consultasCredito";
+import { resolveCreditCustomerName } from "@/lib/credit-customer-name";
 import { maskPhone } from "@/utils/validators";
 
 type Props = {
@@ -226,10 +226,11 @@ export function ConsultaDetalhesModal({ consulta, open, onOpenChange }: Props) {
     consulta.inquilinos?.cpf ||
     consulta.inquilinos?.cnpj ||
     null;
-  const nomeInquilino =
-    [consulta.tenant_name, consulta.inquilinos?.nome, consulta.inquilinos?.razao_social].find(
-      isNomeValido,
-    ) || null;
+  const nomeInquilino = resolveCreditCustomerName({
+    tenantName: consulta.tenant_name,
+    rawResponse: consulta.raw_response,
+    fallbacks: [consulta.inquilinos?.nome, consulta.inquilinos?.razao_social],
+  });
 
   const aluguel = Number(consulta.rent_value ?? consulta.valor_aluguel ?? consulta.imoveis?.valor_aluguel ?? 0);
 

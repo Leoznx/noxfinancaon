@@ -30,6 +30,7 @@ test("recupera o nome de resultados aprovados antigos", () => {
 
 test("não transforma documento ou rótulo do portal em nome", () => {
   assert.equal(normalizeCreditCustomerName("064.097.487-28"), null);
+  assert.equal(normalizeCreditCustomerName("s"), null);
   assert.equal(
     extractCreditCustomerName({
       textoCapturado: "Crédito aprovado\nCliente:\nCPF: [DOCUMENT_REDACTED]",
@@ -44,6 +45,15 @@ test("não transforma documento ou rótulo do portal em nome", () => {
   );
 });
 
+test("ignora o plural Inquilinos e recupera o nome antes do documento", () => {
+  assert.equal(
+    extractCreditCustomerName({
+      textoCapturado: "Resultado aprovado\nInquilinos\nMaria da Silva\nCPF: [DOCUMENT_REDACTED]",
+    }),
+    "Maria da Silva",
+  );
+});
+
 test("prioriza tenant_name e usa o resumo técnico somente como fallback", () => {
   assert.equal(
     resolveCreditCustomerName({
@@ -54,7 +64,7 @@ test("prioriza tenant_name e usa o resumo técnico somente como fallback", () =>
   );
   assert.equal(
     resolveCreditCustomerName({
-      tenantName: "104.076.879-20",
+      tenantName: "s",
       rawResponse: { textoCapturado: "Nome: Carla Mendes\nCPF: [DOCUMENT_REDACTED]" },
     }),
     "Carla Mendes",

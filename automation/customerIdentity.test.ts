@@ -20,7 +20,15 @@ test("aceita nomes retornados pelos rótulos atuais do portal", () => {
 
 test("não confunde CPF ou rótulos com o nome do cliente", () => {
   assert.equal(nomeClienteValido("111.444.777-35"), null);
+  assert.equal(nomeClienteValido("s"), null);
   assert.equal(nomeClienteValido("Cliente: CPF: 111.444.777-35"), null);
   assert.equal(primeiroNomeCliente("CPF: 111.444.777-35", "Ana Souza"), "Ana Souza");
   assert.equal(somenteDigitos("111.444.777-35"), "11144477735");
+});
+
+test("não interpreta o plural Inquilinos como o nome s", () => {
+  assert.deepEqual(
+    extrairClienteInfo("Resultado aprovado\nInquilinos\nMaria da Silva\nCPF: 111.444.777-35"),
+    { nome: "Maria da Silva", documento: "11144477735" },
+  );
 });

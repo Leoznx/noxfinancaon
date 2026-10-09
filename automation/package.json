@@ -9,6 +9,7 @@
     "start:repair": "tsx repairWorker.ts",
     "validate": "tsx validateAutomation.ts",
     "start:once": "tsx credpagoWorker.ts --once",
+    "backfill:names": "tsx backfillCreditCustomerNames.ts",
     "export-session": "tsx exportSession.ts",
     "login:interactive": "node interactiveLogin.mjs",
     "install-browsers": "playwright install --with-deps chromium",

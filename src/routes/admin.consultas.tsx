@@ -32,6 +32,7 @@ import {
   resolverStatusConsulta,
   type StatusExibicaoConsulta,
 } from "@/lib/consultasCredito";
+import { resolveCreditCustomerName } from "@/lib/credit-customer-name";
 
 export const Route = createFileRoute("/admin/consultas")({
   component: () => (
@@ -50,7 +51,7 @@ export const Route = createFileRoute("/admin/consultas")({
 
 const SELECT_CONSULTA = `
   id, status, resultado, substatus, created_at, updated_at,
-  tenant_name, tenant_document, documento, property_address, rent_value, valor_aluguel,
+  tenant_name, tenant_document, documento, property_address, rent_value, valor_aluguel, raw_response,
   cep, imovel_cep, imovel_cidade, imovel_estado,
   role_solicitante, profile_id_solicitante, payment_status,
   plano_id, valor_premio_mensal, valor_anual,
@@ -61,6 +62,16 @@ const SELECT_CONSULTA = `
 `;
 
 const LIMITE_LISTA = 500;
+
+function nomeInquilino(consulta: any): string {
+  return (
+    resolveCreditCustomerName({
+      tenantName: consulta.tenant_name,
+      rawResponse: consulta.raw_response,
+      fallbacks: [consulta.inquilinos?.nome, consulta.inquilinos?.razao_social],
+    }) ?? "Nome não informado"
+  );
+}
 
 function ConsultasAdminPage() {
   const { user } = useAuth();
@@ -162,9 +173,9 @@ function ConsultasAdminPage() {
       if (status !== "todas" && statusConsulta !== status) return false;
       if (!q) return true;
       const documento = c.tenant_document ?? c.documento ?? "";
+      const nome = nomeInquilino(c);
       return (
-        (c.tenant_name ?? "").toLowerCase().includes(q) ||
-        (c.inquilinos?.nome ?? "").toLowerCase().includes(q) ||
+        nome.toLowerCase().includes(q) ||
         (!!qDigitos && String(documento).replace(/\D/g, "").includes(qDigitos)) ||
         (c.property_address ?? "").toLowerCase().includes(q) ||
         (c.solicitante?.nome ?? "").toLowerCase().includes(q) ||
@@ -242,6 +253,7 @@ function ConsultasAdminPage() {
           ) : (
             filtradas.map((c) => {
               const documento = c.tenant_document ?? c.documento ?? c.inquilinos?.cpf ?? null;
+              const nome = nomeInquilino(c);
               const criadaEm = new Date(c.created_at);
               const aluguel = Number(
                 c.rent_value ?? c.valor_aluguel ?? c.imoveis?.valor_aluguel ?? 0,
@@ -251,7 +263,7 @@ function ConsultasAdminPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="font-semibold text-neutral-900 truncate">
-                        {c.tenant_name || c.inquilinos?.nome || "—"}
+                        {nome}
                       </p>
                       <p className="text-xs text-neutral-500">
                         {documento ? formatDocumento(documento) : "—"}
@@ -333,6 +345,7 @@ function ConsultasAdminPage() {
                 ) : (
                   filtradas.map((c) => {
                     const documento = c.tenant_document ?? c.documento ?? c.inquilinos?.cpf ?? null;
+                    const nome = nomeInquilino(c);
                     const criadaEm = new Date(c.created_at);
                     const aluguel = Number(
                       c.rent_value ?? c.valor_aluguel ?? c.imoveis?.valor_aluguel ?? 0,
@@ -340,7 +353,7 @@ function ConsultasAdminPage() {
                     return (
                       <TableRow key={c.id} className="hover:bg-neutral-50/50">
                         <TableCell className="px-6 font-semibold">
-                          {c.tenant_name || c.inquilinos?.nome || "—"}
+                          {nome}
                         </TableCell>
                         <TableCell className="text-xs text-neutral-500">
                           {documento ? formatDocumento(documento) : "—"}

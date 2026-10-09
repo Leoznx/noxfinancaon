@@ -246,7 +246,7 @@ export function extrairClienteInfo(texto: string): {
     .filter(Boolean);
   const compacto = linhas.join(" ");
   const rotuloNome =
-    /(?:cliente|inquilino|locat[aá]rio|nome(?:\s+do\s+(?:cliente|inquilino|locat[aá]rio))?)\s*[:-]?\s*/i;
+    /\b(?:cliente|inquilino|locat[aá]rio|nome(?:\s+do\s+(?:cliente|inquilino|locat[aá]rio))?)\b\s*[:-]?\s*/i;
   const candidatos: string[] = [];
 
   for (const linha of linhas) {
@@ -258,13 +258,13 @@ export function extrairClienteInfo(texto: string): {
   }
 
   const nomeRotulado = compacto.match(
-    /(?:cliente|inquilino|locat[aá]rio|nome(?:\s+do\s+(?:cliente|inquilino|locat[aá]rio))?)\s*[:-]\s*([^\n]+?)(?=\s+(?:CPF|CNPJ)\s*:|$)/i,
+    /\b(?:cliente|inquilino|locat[aá]rio|nome(?:\s+do\s+(?:cliente|inquilino|locat[aá]rio))?)\b\s*[:-]\s*([^\n]+?)(?=\s+(?:CPF|CNPJ)\s*:|$)/i,
   );
   if (nomeRotulado) candidatos.unshift(nomeRotulado[1]);
 
   // Alguns retornos exibem somente “Nome” em uma linha e o valor na seguinte.
   for (let index = 0; index < linhas.length; index += 1) {
-    if (!/^nome(?:\s+do\s+(?:cliente|inquilino|locat[aá]rio))?\s*:?$/i.test(linhas[index]))
+    if (!/^nome(?:\s+do\s+(?:cliente|inquilino|locat[aá]rio))?\b\s*:?$/i.test(linhas[index]))
       continue;
     if (linhas[index + 1]) candidatos.push(linhas[index + 1]);
   }
@@ -276,7 +276,7 @@ export function extrairClienteInfo(texto: string): {
   if (linhaComDocumento) {
     const antes = linhaComDocumento
       .split(/\b(?:CPF|CNPJ)\b\s*:/i)[0]
-      .replace(/(?:cliente|inquilino|locat[aá]rio|nome)\s*[:-]?\s*/gi, " ")
+      .replace(/\b(?:cliente|inquilino|locat[aá]rio|nome)\b\s*[:-]?\s*/gi, " ")
       .trim();
     if (antes) candidatos.push(antes);
     else if (indiceDocumento > 0) candidatos.push(linhas[indiceDocumento - 1]);
