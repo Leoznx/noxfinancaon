@@ -13,6 +13,7 @@ import {
   fillValores,
   submitSimulation,
   openLegacyCreditSimulation,
+  lookupLegacyProposalResult,
   isCaptchaPresent,
   loginWithCredentials,
   detectAuthenticationState,
@@ -870,6 +871,10 @@ async function processarConsulta(
           onLog: (msg) => log(`[${cid}] ${msg}`),
           readObservedResult: apiObserver.read,
           hasObservedRequest: apiObserver.hasStarted,
+          onProviderReturnedToForm:
+            consulta.tipo_pessoa === "PJ"
+              ? () => lookupLegacyProposalResult(page!, consulta.documento || "")
+              : undefined,
           // Só reclica quando o envio não causou mudança alguma; nunca durante uma
           // análise confirmada ou depois de uma resposta do portal.
           onRetryClick: () => submitSimulation(page),

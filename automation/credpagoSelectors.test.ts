@@ -11,6 +11,7 @@ import {
   hasVisibleCaptchaChallenge,
   isCreditSimulationUrl,
   isErpCreditSimulationUrl,
+  lookupLegacyProposalResult,
   openLegacyCreditSimulation,
   submitSimulation,
   validateLegacySimulationFormReady,
@@ -296,6 +297,34 @@ test("inicializa a sessão legada e preenche todos os controles reais de CNPJ", 
   );
   assert.equal(await page.locator("#nova-simulacao-coverage-switch-iptu-Label").isChecked(), true);
   assert.equal(await page.locator("body").getAttribute("data-submitted"), "true");
+  await page.close();
+});
+
+test("recupera da lista o resultado criado pelo formulário legado", async () => {
+  const proposalsUrl = "https://app.loft.com.br/fianca-aluguel/imobiliaria/view/index.php";
+  const page = await browser.newPage();
+  await page.route(proposalsUrl, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "text/html; charset=utf-8",
+      body: `<main>
+        <label>Proposta, nome/razão social, CPF/CNPJ ou tag
+          <input placeholder="Proposta, nome/razão social, CPF/CNPJ ou tag" />
+        </label>
+        <button type="button">Pesquisar</button>
+        <table><tbody><tr>
+          <td><a href="/fianca-aluguel/imobiliaria/proposta/4783753">4783753</a></td>
+          <td>Empresa teste<br />CNPJ: 12.936.344/0001-96</td>
+          <td>Rascunho • Aprovado</td>
+        </tr></tbody></table>
+      </main>`,
+    }),
+  );
+
+  assert.deepEqual(await lookupLegacyProposalResult(page, "12.936.344/0001-96", 2_000), {
+    status: "aprovado",
+    proposalId: "4783753",
+  });
   await page.close();
 });
 

@@ -1,6 +1,7 @@
 import type { Page, Locator } from "playwright";
 import { redactSensitiveText, sanitizeUrl } from "./redaction";
 import { assertCreditSimulationAvailable } from "./credpagoAvailability";
+import type { ObservedCreditSimulationResult } from "./creditSimulationApiObserver";
 
 // Teto/intervalo de poll pra dar tempo do formulário (SPA) terminar de hidratar
 // antes de desistir de achar um campo/botão. Sem isso, uma checagem única logo
@@ -586,6 +587,72 @@ export async function openLegacyCreditSimulation(
     `O formulário de CNPJ da Fiança Aluguel não ficou disponível após inicializar a sessão. ` +
       `[diagnóstico] url=${urlAtual} | amostra="${amostraTexto}"`,
   );
+}
+
+/**
+ * O formulário legado confirma o POST, cria a proposta e depois volta vazio à
+ * tela inicial. Nesse fluxo o resultado confiável fica na lista de propostas.
+ * A busca usa somente o documento da consulta atual e devolve apenas status e
+ * identificador técnico; nenhum nome ou documento é persistido pelo helper.
+ */
+export async function lookupLegacyProposalResult(
+  page: Page,
+  documento: string,
+  timeoutMs = 15_000,
+): Promise<ObservedCreditSimulationResult | null> {
+  const documentDigits = documento.replace(/\D/g, "");
+  if (documentDigits.length < 11) return null;
+
+  const proposalsUrl = "https://app.loft.com.br/fianca-aluguel/imobiliaria/view/index.php";
+  await page.goto(proposalsUrl, {
+    waitUntil: "domcontentloaded",
+    timeout: Math.min(timeoutMs, 30_000),
+  });
+  if (!/\/fianca-aluguel\/imobiliaria\/view\/index\.php/i.test(page.url())) {
+    await page.goto(proposalsUrl, {
+      waitUntil: "domcontentloaded",
+      timeout: Math.min(timeoutMs, 30_000),
+    });
+  }
+
+  const search = await firstVisibleLocator(
+    page,
+    [
+      page.getByRole("textbox", { name: /proposta|nome|raz[aã]o social|cpf\/cnpj|tag/i }),
+      page.getByPlaceholder(/proposta|nome|raz[aã]o social|cpf\/cnpj|tag/i),
+    ],
+    Math.min(timeoutMs, FIND_TIMEOUT_MS),
+    "Busca de propostas",
+  );
+  await search.fill(documentDigits);
+  await clickButtonByText(page, [/pesquisar/i]);
+
+  const deadline = Date.now() + timeoutMs;
+  do {
+    const matches = await page.locator("tr").evaluateAll((rows, digits) => {
+      return rows.flatMap((row) => {
+        const text = row.textContent ?? "";
+        if (!text.replace(/\D/g, "").includes(digits)) return [];
+
+        let status: "aprovado" | "recusado" | "em_analise" | null = null;
+        if (/aprovad[oa]/i.test(text)) status = "aprovado";
+        else if (/recusad[oa]|reprovad[oa]|negad[oa]/i.test(text)) status = "recusado";
+        else if (/em\s+an[aá]lise|pendente/i.test(text)) status = "em_analise";
+        if (!status) return [];
+
+        const href = row.querySelector('a[href*="/proposta/"]')?.getAttribute("href") ?? "";
+        const proposalId = href.match(/\/proposta\/(\d+)/)?.[1] ?? null;
+        return [{ status, proposalId }];
+      });
+    }, documentDigits);
+
+    if (matches.length > 0) {
+      return matches.sort((a, b) => Number(b.proposalId ?? 0) - Number(a.proposalId ?? 0))[0];
+    }
+    await page.waitForTimeout(FIND_POLL_MS);
+  } while (Date.now() < deadline);
+
+  return null;
 }
 
 /**

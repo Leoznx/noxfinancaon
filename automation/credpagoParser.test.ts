@@ -325,6 +325,32 @@ test("encerra rápido quando o portal volta ao formulário após confirmar a an�
   await page.close();
 });
 
+test("recupera na lista da Loft o resultado criado antes do retorno ao formulário", async () => {
+  const page = await browser.newPage();
+  await page.setContent("<main>Analisando crédito</main>");
+  await page.evaluate(() => {
+    setTimeout(() => {
+      document.body.innerHTML = "<main><button>Fazer análise</button></main>";
+    }, 100);
+  });
+
+  const resultado = await parseResultado(page, {
+    timeoutMs: 2_000,
+    processingTimeoutMs: 5_000,
+    pollIntervalMs: 50,
+    providerResetStableMs: 200,
+    onProviderReturnedToForm: async () => ({
+      status: "aprovado",
+      proposalId: "4783753",
+    }),
+  });
+
+  assert.equal(resultado.status, "aprovado");
+  assert.equal(resultado.proposalId, "4783753");
+  assert.equal(resultado.rawSummary.resultadoCapturadoVia, "lista_propostas");
+  await page.close();
+});
+
 test("identifica o erro interno do parceiro para permitir uma recuperação controlada", async () => {
   const page = await browser.newPage();
   await page.setContent(

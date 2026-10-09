@@ -72,6 +72,8 @@ export interface ParseResultadoOpts {
   readObservedResult?: () => ObservedCreditSimulationResult | null;
   /** Confirma que a requisição oficial saiu, mesmo se a tela trocar o texto do carregamento. */
   hasObservedRequest?: () => boolean;
+  /** Consulta a lista da Loft quando o legado cria a proposta e volta ao formulário vazio. */
+  onProviderReturnedToForm?: () => Promise<ObservedCreditSimulationResult | null>;
 }
 
 /**
@@ -209,6 +211,19 @@ export async function parseResultado(
     if (voltouAoFormulario) {
       retornoAoFormularioDesde ??= Date.now();
       if (Date.now() - retornoAoFormularioDesde >= providerResetStableMs) {
+        const recoveredResult = await opts.onProviderReturnedToForm?.().catch(() => null);
+        if (recoveredResult) {
+          return {
+            status: recoveredResult.status,
+            mensagem: MENSAGEM_POR_STATUS[recoveredResult.status],
+            proposalId: recoveredResult.proposalId,
+            clienteNome: null,
+            clienteDocumento: null,
+            rawSummary: buildSummary(page, bodyText, {
+              resultadoCapturadoVia: "lista_propostas",
+            }),
+          };
+        }
         opts.onLog?.(
           "O portal voltou ao formulário depois de iniciar a análise; encerrando sem reenviar para evitar duplicidade.",
         );
