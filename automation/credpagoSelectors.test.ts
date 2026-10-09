@@ -3,6 +3,7 @@ import { after, before, test } from "node:test";
 import { chromium, type Browser } from "playwright";
 import {
   detectAuthenticationState,
+  continueToBusinessProposal,
   fillCep,
   fillDocumento,
   fillPessoa,
@@ -193,6 +194,54 @@ test("envia pelo botão Iniciar análise usado na versão atual do portal", asyn
 
   await submitSimulation(page);
 
+  assert.equal(await page.locator("body").getAttribute("data-submitted"), "true");
+  await page.close();
+});
+
+test("continua o CNPJ no formulário jurídico e permite preencher a segunda etapa", async () => {
+  const erpUrl = "https://app.loft.com.br/erp/proposta/analise-de-credito";
+  const businessUrl = "https://app.loft.com.br/fianca-aluguel/imobiliaria/proposta";
+  const page = await pageWithHtml(
+    erpUrl,
+    `<main>
+      <h1>Vamos para o lugar certo?</h1>
+      <p>Para imobiliárias e empresas, a jornada continua direto no Loft / Fiança Aluguel.</p>
+      <a href="${businessUrl}">Continuar no Loft / Fiança aluguel</a>
+    </main>`,
+  );
+  await page.route(businessUrl, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "text/html; charset=utf-8",
+      body: `<main>
+        <h1>Informe os dados para análise</h1>
+        <button type="button">Pessoa física</button>
+        <button type="button">Pessoa jurídica</button>
+        <section><h2>Empresa</h2><label>CNPJ<input placeholder="00.000.000/0000-00" /></label></section>
+        <section>
+          <h2>Dados da locação</h2>
+          <button type="button">Residencial</button>
+          <button type="button">Comercial</button>
+          <label>CEP do local<input placeholder="00000-000" /></label>
+          <label>Valor mensal do aluguel<input placeholder="R$ 0,00" /></label>
+        </section>
+        <button type="button" onclick="document.body.dataset.submitted='true'">Simular crédito</button>
+      </main>`,
+    }),
+  );
+
+  assert.equal(await continueToBusinessProposal(page, { timeoutMs: 1_000 }), true);
+  assert.equal(page.url(), businessUrl);
+  await fillPessoa(page, "PJ");
+  await fillDocumento(page, "12936344000196", "PJ");
+  await fillTipoImovel(page, "Comercial");
+  await fillCep(page, "88340001");
+  await fillValores(page, { aluguel: 3000, condominio: 0, taxas: 0 });
+  await submitSimulation(page);
+
+  assert.equal(await page.getByLabel(/cnpj/i).inputValue(), "12936344000196");
+  assert.equal(await page.getByLabel(/cep/i).inputValue(), "88340001");
+  assert.equal(await page.getByLabel(/aluguel/i).inputValue(), "3000,00");
   assert.equal(await page.locator("body").getAttribute("data-submitted"), "true");
   await page.close();
 });

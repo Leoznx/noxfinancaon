@@ -23,6 +23,12 @@ const CREDIT_SIMULATION_PATH_PATTERN =
 const ERP_CREDIT_SIMULATION_PATH_PATTERN = /\/erp\/proposta\/analise-de-credito(?:\/|$)/i;
 const SUBMIT_CREDIT_BUTTON_PATTERN =
   /(?:simular(?:\s+an[aá]lise\s+de)?\s+cr[ée]dito|(?:fazer|iniciar)\s+(?:a\s+)?an[aá]lise(?:\s+de\s+cr[ée]dito)?)/i;
+const BUSINESS_HANDOFF_BUTTON_PATTERN =
+  /continuar(?:\s+(?:direto\s+)?no)?[^\n]{0,80}(?:loft|fian[cç]a\s+aluguel)/i;
+const BUSINESS_PROPOSAL_PATH_PATTERN =
+  /\/(?:fianca-aluguel\/imobiliaria\/proposta|imobiliaria\/proposta|erp\/proposta\/nova-proposta)\/?$/i;
+const CREDIT_RESULT_TEXT_PATTERN =
+  /(cr[ée]dito\s+(?:aprovad[oa]|recusad[oa]|negad[oa]|reprovad[oa])|pendente\s+(?:de|em)\s+an[aá]lise|an[aá]lise\s+complementar|erro\s+interno)/i;
 
 export function isCreditSimulationUrl(value: string): boolean {
   try {
@@ -445,6 +451,97 @@ export async function submitSimulation(
   options: ClickButtonOptions = {},
 ): Promise<void> {
   await clickButtonByText(page, [SUBMIT_CREDIT_BUTTON_PATTERN], options);
+}
+
+async function isBusinessProposalForm(page: Page): Promise<boolean> {
+  let isBusinessPath = false;
+  try {
+    isBusinessPath = BUSINESS_PROPOSAL_PATH_PATTERN.test(new URL(page.url()).pathname);
+  } catch {
+    return false;
+  }
+  if (!isBusinessPath) return false;
+
+  const cnpjCandidates = [
+    page.getByRole("textbox", { name: /cnpj/i }),
+    page.getByLabel(/cnpj/i),
+    page.getByPlaceholder(/cnpj/i),
+  ];
+  for (const candidate of cnpjCandidates) {
+    if (
+      (await candidate.count().catch(() => 0)) > 0 &&
+      (await candidate
+        .first()
+        .isVisible()
+        .catch(() => false)) &&
+      (await isFillable(candidate.first()))
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export interface ContinueBusinessProposalOptions {
+  /** Resultado oficial já observado na primeira etapa; nesse caso não há redirecionamento a seguir. */
+  hasObservedResult?: () => boolean;
+  onLog?: (message: string) => void;
+  timeoutMs?: number;
+}
+
+/**
+ * O ERP usa uma etapa intermediária para CNPJ: depois da primeira análise ele
+ * mostra "Vamos para o lugar certo?" e só monta o formulário jurídico depois
+ * do clique em "Continuar no Loft / Fiança aluguel". Retornar antes desse clique
+ * deixava a proposta sem CNPJ, CEP e aluguel e fazia o NOX expirar por timeout.
+ *
+ * Retorna true apenas quando o segundo formulário está visível e pronto para
+ * ser preenchido. Um resultado direto da API/tela encerra a espera com false e
+ * continua sendo interpretado normalmente pelo parser.
+ */
+export async function continueToBusinessProposal(
+  page: Page,
+  options: ContinueBusinessProposalOptions = {},
+): Promise<boolean> {
+  const deadline = Date.now() + (options.timeoutMs ?? 20_000);
+  let handoffClicked = false;
+
+  while (Date.now() < deadline) {
+    if (await isBusinessProposalForm(page)) return true;
+    if (options.hasObservedResult?.()) return false;
+
+    const bodyText = await page
+      .locator("body")
+      .innerText()
+      .catch(() => "");
+    if (!handoffClicked && CREDIT_RESULT_TEXT_PATTERN.test(bodyText)) return false;
+
+    const candidates = [
+      page.getByRole("button", { name: BUSINESS_HANDOFF_BUTTON_PATTERN }),
+      page.getByRole("link", { name: BUSINESS_HANDOFF_BUTTON_PATTERN }),
+    ];
+    for (const candidate of candidates) {
+      if ((await candidate.count().catch(() => 0)) === 0) continue;
+      const target = candidate.first();
+      if (
+        !(await target.isVisible().catch(() => false)) ||
+        !(await target.isEnabled().catch(() => false))
+      ) {
+        continue;
+      }
+
+      options.onLog?.(
+        "Redirecionamento empresarial de CNPJ identificado; abrindo o formulário jurídico.",
+      );
+      await target.click();
+      handoffClicked = true;
+      break;
+    }
+
+    await page.waitForTimeout(FIND_POLL_MS);
+  }
+
+  return isBusinessProposalForm(page);
 }
 
 /**
