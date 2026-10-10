@@ -342,11 +342,14 @@ test("recupera na lista da Loft o resultado criado antes do retorno ao formulár
     lookupSubmittedProposal: async () => ({
       status: "aprovado",
       proposalId: "4783753",
+      clienteNome: "EJCG AGROPECUARIA LTDA",
     }),
   });
 
   assert.equal(resultado.status, "aprovado");
   assert.equal(resultado.proposalId, "4783753");
+  assert.equal(resultado.clienteNome, "EJCG AGROPECUARIA LTDA");
+  assert.equal(resultado.rawSummary.clienteNome, "EJCG AGROPECUARIA LTDA");
   assert.equal(resultado.rawSummary.resultadoCapturadoVia, "lista_propostas");
   await page.close();
 });

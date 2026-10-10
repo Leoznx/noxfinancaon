@@ -128,13 +128,17 @@ export async function parseResultado(
     consultaListaExecutada = true;
     const recoveredResult = await opts.lookupSubmittedProposal().catch(() => null);
     if (!recoveredResult) return null;
+    const clienteNome = nomeClienteValido(recoveredResult.clienteNome);
     return {
       status: recoveredResult.status,
       mensagem: MENSAGEM_POR_STATUS[recoveredResult.status],
       proposalId: recoveredResult.proposalId,
-      clienteNome: null,
+      clienteNome,
       clienteDocumento: null,
-      rawSummary: buildSummary(page, bodyText, { resultadoCapturadoVia }),
+      rawSummary: buildSummary(page, bodyText, {
+        resultadoCapturadoVia,
+        ...(clienteNome ? { clienteNome } : {}),
+      }),
     };
   };
 

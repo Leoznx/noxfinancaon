@@ -324,6 +324,7 @@ test("recupera da lista o resultado criado pelo formulário legado", async () =>
   assert.deepEqual(await lookupLegacyProposalResult(page, "12.936.344/0001-96", 2_000), {
     status: "aprovado",
     proposalId: "4783753",
+    clienteNome: "Empresa teste",
   });
   await page.close();
 });

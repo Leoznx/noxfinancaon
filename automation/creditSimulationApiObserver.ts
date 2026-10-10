@@ -8,6 +8,8 @@ const MAX_VISITED_OBJECTS = 100;
 export interface ObservedCreditSimulationResult {
   status: Exclude<ResultadoStatus, "erro">;
   proposalId: string | null;
+  /** Nome ou razão social exibido na proposta, quando o portal o disponibiliza. */
+  clienteNome?: string | null;
 }
 
 export interface CreditSimulationApiObserver {

@@ -2,6 +2,7 @@ import type { Page, Locator } from "playwright";
 import { redactSensitiveText, sanitizeUrl } from "./redaction";
 import { assertCreditSimulationAvailable } from "./credpagoAvailability";
 import type { ObservedCreditSimulationResult } from "./creditSimulationApiObserver";
+import { nomeClienteValido } from "./customerIdentity";
 
 // Teto/intervalo de poll pra dar tempo do formulário (SPA) terminar de hidratar
 // antes de desistir de achar um campo/botão. Sem isso, uma checagem única logo
@@ -642,12 +643,27 @@ export async function lookupLegacyProposalResult(
 
         const href = row.querySelector('a[href*="/proposta/"]')?.getAttribute("href") ?? "";
         const proposalId = href.match(/\/proposta\/(\d+)/)?.[1] ?? null;
-        return [{ status, proposalId }];
+        const customerCell = Array.from(row.querySelectorAll("td"))
+          .map((cell) => cell.textContent ?? "")
+          .find((cellText) => cellText.replace(/\D/g, "").includes(digits));
+        const documentLabelIndex = customerCell?.search(/(?:CPF|CNPJ)\s*:/i) ?? -1;
+        const clienteNome =
+          customerCell && documentLabelIndex > 0
+            ? customerCell.slice(0, documentLabelIndex).replace(/\s+/g, " ").trim()
+            : null;
+        return [{ status, proposalId, clienteNome }];
       });
     }, documentDigits);
 
     if (matches.length > 0) {
-      return matches.sort((a, b) => Number(b.proposalId ?? 0) - Number(a.proposalId ?? 0))[0];
+      const newest = matches.sort(
+        (a, b) => Number(b.proposalId ?? 0) - Number(a.proposalId ?? 0),
+      )[0];
+      return {
+        status: newest.status,
+        proposalId: newest.proposalId,
+        clienteNome: nomeClienteValido(newest.clienteNome),
+      };
     }
     await page.waitForTimeout(FIND_POLL_MS);
   } while (Date.now() < deadline);
