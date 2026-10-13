@@ -247,20 +247,23 @@ async function waitForExactCandidate(
   return null;
 }
 
-async function findSearchInput(page: Page): Promise<Locator> {
-  const input = await firstVisible([
-    page.getByRole("textbox", {
-      name: /proposta|nome|raz[aã]o social|cpf\/?cnpj|cpf|cnpj|tag/i,
-    }),
-    page.getByPlaceholder(/proposta|nome|raz[aã]o social|cpf\/?cnpj|cpf|cnpj|tag/i),
-    page.locator('input[type="search"]'),
-  ]);
-  if (!input) {
-    throw new LoftPortalCancellationError(
-      "O campo de pesquisa da lista de propostas não foi encontrado.",
-    );
-  }
-  return input;
+async function findSearchInput(page: Page, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<Locator> {
+  const deadline = Date.now() + Math.max(500, timeoutMs);
+  do {
+    const input = await firstVisible([
+      page.getByRole("textbox", {
+        name: /proposta|nome|raz[aã]o social|cpf\/?cnpj|cpf|cnpj|tag/i,
+      }),
+      page.getByPlaceholder(/proposta|nome|raz[aã]o social|cpf\/?cnpj|cpf|cnpj|tag/i),
+      page.locator('input[type="search"]'),
+    ]);
+    if (input) return input;
+    await page.waitForTimeout(POLL_INTERVAL_MS);
+  } while (Date.now() < deadline);
+
+  throw new LoftPortalCancellationError(
+    "O campo de pesquisa da lista de propostas não foi encontrado após a página terminar de carregar.",
+  );
 }
 
 async function submitSearch(page: Page, input: Locator): Promise<void> {
@@ -303,7 +306,7 @@ async function navigateAndSearchProposals(
     );
   }
 
-  const searchInput = await findSearchInput(page);
+  const searchInput = await findSearchInput(page, timeoutMs);
   await searchInput.fill(query);
   await submitSearch(page, searchInput);
 }
@@ -321,7 +324,7 @@ async function searchCancelledTab(
   if (!tab) return null;
   await tab.click();
   await page.waitForTimeout(POLL_INTERVAL_MS);
-  const searchInput = await findSearchInput(page);
+  const searchInput = await findSearchInput(page, timeoutMs);
   await searchInput.fill(proposalId);
   await submitSearch(page, searchInput);
   const candidate = await waitForExactCandidate(page, proposalId, timeoutMs);
@@ -811,7 +814,7 @@ export async function probeLoftProposalCancellationPortal(
   const boundedTimeout = Math.max(500, timeoutMs);
   await navigateAndSearchProposals(page, "00000000000", boundedTimeout);
   validateProposalsUrl(page.url());
-  await findSearchInput(page);
+  await findSearchInput(page, boundedTimeout);
 }
 
 /** Interface mínima usada pelo worker para cancelar uma proposta já identificada. */

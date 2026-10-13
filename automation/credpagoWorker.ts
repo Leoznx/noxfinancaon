@@ -473,6 +473,29 @@ async function vincularPropostaAoCancelamento(jobId: string, proposalId: string)
   return attachedProposalId;
 }
 
+async function vincularPropostaCausalAoCancelamento(
+  jobId: string,
+  proposalId: string,
+): Promise<string> {
+  const normalizedProposalId = extractLoftProposalId(proposalId);
+  if (!normalizedProposalId) throw new Error("Identificador de proposta inválido.");
+  const { data, error } = await (supabaseAdmin as any).rpc(
+    "attach_loft_proposal_id_from_submission",
+    {
+      p_job_id: jobId,
+      p_proposal_id: normalizedProposalId,
+    },
+  );
+  if (error) throw error;
+  const row = (Array.isArray(data) ? data[0] : data) as { proposal_id?: unknown } | null;
+  const attachedProposalId = extractLoftProposalId(row?.proposal_id);
+  if (attachedProposalId !== normalizedProposalId) {
+    throw new Error("A fila não confirmou o ID devolvido pela submissão atual.");
+  }
+  registrarSucessoFilaCancelamento();
+  return attachedProposalId;
+}
+
 async function confirmarSubmissaoParaCancelamento(
   jobId: string,
   submittedAt: string,
@@ -1191,7 +1214,13 @@ async function processarConsulta(
       target.proposalId = normalizedProposalId;
       try {
         await confirmarEnvioPreparado(target);
-        target.proposalId = await vincularPropostaAoCancelamento(target.id, normalizedProposalId);
+        // Este caminho só recebe o ID extraído do mesmo payload HTTP que trouxe
+        // o resultado da submissão atual. A Loft pode atualizar e devolver uma
+        // proposta já presente no snapshot, sem criar um novo identificador.
+        target.proposalId = await vincularPropostaCausalAoCancelamento(
+          target.id,
+          normalizedProposalId,
+        );
         return true;
       } catch (error) {
         await reportarFalhaDeAgendamento(

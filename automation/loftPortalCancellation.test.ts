@@ -6,6 +6,7 @@ import {
   listLoftProposalIdsForDocument,
   LOFT_PROPOSALS_URL,
   LoftPortalCancellationError,
+  probeLoftProposalCancellationPortal,
 } from "./loftPortalCancellation";
 
 let browser: Browser;
@@ -126,6 +127,26 @@ async function pageWithHtml(html: string): Promise<Page> {
   );
   return page;
 }
+
+test("aguarda a hidratação da pesquisa antes de declarar o cancelamento indisponível", async () => {
+  const page = await pageWithHtml(`<!doctype html><html lang="pt-BR"><body>
+    <main id="root"><p>Carregando propostas...</p></main>
+    <script>
+      setTimeout(() => {
+        document.querySelector('#root').innerHTML = \`
+          <label>Proposta, nome/razão social, CPF/CNPJ ou tag
+            <input id="search" placeholder="Proposta, nome/razão social, CPF/CNPJ ou tag" />
+          </label>
+          <button type="button" id="search-button">Pesquisar</button>
+          <table><thead><tr><th>Proposta</th></tr></thead><tbody></tbody></table>
+        \`;
+      }, 350);
+    </script>
+  </body></html>`);
+
+  await probeLoftProposalCancellationPortal(page, 1_500);
+  await page.close();
+});
 
 test("cancela somente o ID exato, seleciona o motivo configurado e preenche o comentário", async () => {
   const page = await pageWithHtml(
