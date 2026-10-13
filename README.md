@@ -194,23 +194,35 @@ cp automation/.env.example automation/.env
 
 Preencha:
 
-| Variável | Onde conseguir |
-|---|---|
-| `SUPABASE_URL` | Mesma URL do projeto usado no frontend (`https://njheoytyidsghittjilr.supabase.co`) |
-| `SUPABASE_SERVICE_ROLE_KEY` | Painel Supabase → Project Settings → API → `service_role` (secreta!) |
-| `CREDPAGO_PROFILE_DIR` | Pasta do perfil do Chrome (padrão: `./automation/chrome-profile-credpago`) |
-| `AUTOMATION_POLL_INTERVAL_MS` | Intervalo de verificação de novas consultas (padrão: `5000`) |
-| `CREDPAGO_URL` | `https://app.loft.com.br/erp/proposta/analise-de-credito` |
-| `MAX_CONCURRENT_CONSULTAS` | Concorrência pedida; limitada a `1` pela sessão do parceiro (padrão: `1`) |
-| `CONSULTA_TIMEOUT_MS` | Tempo máximo por consulta antes de marcar erro (padrão: `420000`) |
-| `STALE_CONSULTA_MS` | Recupera consultas interrompidas; deve ser maior que o timeout (padrão: `600000`) |
-| `HEADLESS` | `true` para rodar sem janela visível (requer sessão já logada) — padrão `false` |
+| Variável                      | Onde conseguir                                                                      |
+| ----------------------------- | ----------------------------------------------------------------------------------- |
+| `SUPABASE_URL`                | Mesma URL do projeto usado no frontend (`https://njheoytyidsghittjilr.supabase.co`) |
+| `SUPABASE_SERVICE_ROLE_KEY`   | Painel Supabase → Project Settings → API → `service_role` (secreta!)                |
+| `CREDPAGO_PROFILE_DIR`        | Pasta do perfil do Chrome (padrão: `./automation/chrome-profile-credpago`)          |
+| `AUTOMATION_POLL_INTERVAL_MS` | Intervalo de verificação de novas consultas (padrão: `5000`)                        |
+| `CREDPAGO_URL`                | `https://app.loft.com.br/erp/proposta/analise-de-credito`                           |
+| `MAX_CONCURRENT_CONSULTAS`    | Concorrência pedida; limitada a `1` pela sessão do parceiro (padrão: `1`)           |
+| `CONSULTA_TIMEOUT_MS`         | Tempo máximo por consulta antes de marcar erro (padrão: `420000`)                   |
+| `STALE_CONSULTA_MS`           | Recupera consultas interrompidas; deve ser maior que o timeout (padrão: `600000`)   |
+| `LOFT_CANCELLATION_ENABLED`   | Ativa o cancelamento programado de propostas (padrão: `true`)                       |
+| `LOFT_CANCELLATION_REQUIRED`  | Inclui a fila de cancelamentos na prontidão do worker (padrão: `true`)              |
+| `LOFT_CANCELLATION_MODE`      | `portal` usa a sessão Playwright; `api` exige OAuth homologado (padrão: `portal`)   |
+| `LOFT_CANCELLATION_REASON`    | Preferência de motivo; o rótulo efetivamente escolhido é auditado                   |
+| `LOFT_CANCELLATION_DELAY_MS`  | Prazo contado de cada envio real até o cancelamento (padrão: `1800000`)             |
+| `HEADLESS`                    | `true` para rodar sem janela visível (requer sessão já logada) — padrão `false`     |
 
 > Nota: o `.env.example` sugerido para este tipo de automação às vezes cita
 > `CHROME_USER_DATA_DIR`/`CHROME_PROFILE_DIRECTORY` (nomenclatura de Selenium/Chrome puro).
 > Como o worker usa Playwright (`chromium.launchPersistentContext`), o equivalente exato já
 > existente é `CREDPAGO_PROFILE_DIR` — não é preciso (nem existe) um "profile directory"
 > separado dentro dele.
+
+O procedimento completo de configuração, migrations, deploy e validação está em
+[`docs/loft-proposal-cancellation.md`](docs/loft-proposal-cancellation.md).
+
+Com o cancelamento obrigatório, o fluxo legado de CNPJ é bloqueado antes do clique porque
+a Loft ainda não devolve nele um ID causal da proposta. O worker não usa a proposta “mais
+nova” do mesmo CNPJ como substituto; isso evita cancelar uma proposta manual ou externa.
 
 **Nunca** commite `automation/.env` nem a pasta `automation/chrome-profile-credpago/` — ambos
 já estão no `.gitignore`. O `.env` da raiz também foi adicionado ao `.gitignore` nesta
@@ -323,12 +335,23 @@ Isso aplica (idempotentemente):
 - `20260704190000_consultas_credito_status_check_automacao.sql` — amplia a constraint de
   `status` para aceitar `processando`, `recusado`, `em_analise` e `erro` (os valores legados
   continuam válidos).
+- `20261008203000_loft_proposal_cancellation_queue.sql` — cria a fila persistente, leases,
+  tentativas e RLS do cancelamento programado.
+- `20261013100000_loft_cancellation_jobs_per_execution.sql` — torna a fila append-only por
+  envio real, prepara/confirma o job em duas fases, preserva o snapshot dos IDs anteriores,
+  permite múltiplas propostas por consulta e exige o ID exato devolvido por cada envio antes
+  de qualquer cancelamento.
 
 ### Operação contínua em produção
 
 O frontend da Vercel não executa o Playwright. Em produção, o worker roda continuamente na
 VPS pelo `automation/docker-compose.yml`, com `restart: unless-stopped`, uma aba isolada por
-consulta e processamento serializado para preservar o estado da sessão do parceiro.
+consulta e processamento serializado para preservar o estado da sessão do parceiro. O mesmo
+processo consome a fila de cancelamentos e, no modo padrão `portal`, reutiliza essa sessão
+autenticada. Atualizar apenas a Vercel não publica o worker: a imagem precisa ser reconstruída
+na VPS e as migrations precisam ser aplicadas no Supabase. Como a migration nova troca a
+assinatura da RPC, pare o worker antigo antes de aplicá-la e suba a imagem nova logo depois;
+o procedimento coordenado está no documento de cancelamento.
 
 As proteções contra fila travada são complementares:
 
@@ -342,8 +365,10 @@ As proteções contra fila travada são complementares:
 - falhas do Supabase têm retentativa, não encerram o processo e preservam um resultado já lido;
 - uma aba que excede o timeout é fechada antes de liberar a vaga, impedindo envio duplicado;
 - linhas antigas em `processando` voltam automaticamente à fila após queda/reinício;
-- `/health` mede se o loop está vivo e retorna erro se ele congelar; `/ready` informa se a
-  sessão do parceiro e a conexão com a fila estão prontas;
+- `/health` mede se o loop está vivo e também expõe a prontidão e as métricas das duas filas;
+  `/ready` exige autenticação, navegador, fila de simulações e, quando
+  `LOFT_CANCELLATION_REQUIRED=true`, cancelamento habilitado, fila acessível e nenhuma falha
+  operacional de cancelamento aguardando uma retentativa bem-sucedida;
 - site e aplicativo usam Realtime com polling não sobreposto, cancelamento e timeout local.
 
 O endpoint público de monitoramento é `https://automacao.noxfianca.com/health`; prontidão é

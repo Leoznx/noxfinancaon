@@ -104,6 +104,25 @@ test("não repete o POST quando a proposta já está cancelada", async () => {
   assert.equal(postRequests, 0);
 });
 
+test("reconhece os estados CANCELLED/CANCELED retornados pela API", async () => {
+  for (const status of ["CANCELLED", "CANCELED"]) {
+    let postRequests = 0;
+    const fakeFetch: typeof fetch = async (input, init) => {
+      if (String(input) === config.tokenUrl) {
+        return Response.json({ access_token: "access-token", expires_in: 300 });
+      }
+      if (init?.method === "POST") postRequests += 1;
+      return Response.json({ data: { id: "4775289", status: { name: status } } });
+    };
+    const client = new LoftCancellationClient(config, fakeFetch);
+
+    const result = await client.cancelProposal("4775289", "Imóvel não está mais disponível");
+
+    assert.equal(result.status, status);
+    assert.equal(postRequests, 0);
+  }
+});
+
 test("não marca a fila como concluída diante de uma resposta ambígua", async () => {
   const fakeFetch: typeof fetch = async (input) => {
     if (String(input) === config.tokenUrl) {

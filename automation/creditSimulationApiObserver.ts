@@ -62,7 +62,9 @@ function findResultPayload(value: unknown): Record<string, unknown> | null {
   return null;
 }
 
-function parseResponsePayload(value: unknown): ObservedCreditSimulationResult | null {
+export function parseCreditSimulationResponsePayload(
+  value: unknown,
+): ObservedCreditSimulationResult | null {
   const payload = findResultPayload(value);
   if (!payload) return null;
 
@@ -74,14 +76,20 @@ function parseResponsePayload(value: unknown): ObservedCreditSimulationResult | 
   );
   if (!status) return null;
 
-  const proposalId = [
+  const explicitProposalIds = [
     payload.proposalId,
     payload.proposal_id,
     payload.idProposta,
     payload.id_proposta,
-  ]
-    .map(extractLoftProposalId)
-    .find(Boolean);
+  ];
+  // `id` é genérico demais para ser promovido junto de um simples `status`.
+  // No BFF atual ele só é o ID da proposta quando o MESMO objeto traz o campo
+  // específico `fiancaRiskAnalysisStatus` que identifica o contrato da Loft.
+  if (normalizeProviderStatus(payload.fiancaRiskAnalysisStatus)) {
+    explicitProposalIds.push(payload.id);
+  }
+
+  const proposalId = explicitProposalIds.map(extractLoftProposalId).find(Boolean);
 
   return { status, proposalId: proposalId ?? null };
 }
@@ -107,18 +115,27 @@ function isSimulationResponse(response: Response): boolean {
  */
 export function observeCreditSimulationApi(page: Page): CreditSimulationApiObserver {
   let latest: ObservedCreditSimulationResult | null = null;
-  let started = false;
+  const observedRequests = new Set<Request>();
 
   const onRequest = (request: Request) => {
-    if (isSimulationRequest(request)) started = true;
+    if (isSimulationRequest(request)) observedRequests.add(request);
   };
 
   const onResponse = (response: Response) => {
-    if (!isSimulationResponse(response) || !response.ok()) return;
+    // Uma resposta tardia de uma tentativa anterior não pode entregar seu ID
+    // ao job criado por um clique posterior. Só aceitamos respostas cujo objeto
+    // Request foi visto por esta instância do observer.
+    if (
+      !isSimulationResponse(response) ||
+      !observedRequests.has(response.request()) ||
+      !response.ok()
+    ) {
+      return;
+    }
     void response
       .json()
       .then((payload) => {
-        latest = parseResponsePayload(payload) ?? latest;
+        latest = parseCreditSimulationResponsePayload(payload) ?? latest;
       })
       .catch(() => {});
   };
@@ -127,7 +144,7 @@ export function observeCreditSimulationApi(page: Page): CreditSimulationApiObser
   page.on("response", onResponse);
   return {
     read: () => latest,
-    hasStarted: () => started,
+    hasStarted: () => observedRequests.size > 0,
     dispose: () => {
       page.off("request", onRequest);
       page.off("response", onResponse);

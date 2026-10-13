@@ -154,10 +154,9 @@ export async function parseResultado(
       return {
         status: observedResult.status,
         mensagem: MENSAGEM_POR_STATUS[observedResult.status],
-        proposalId:
-          observedResult.proposalId ??
-          extractLoftProposalId(page.url()) ??
-          extractLoftProposalId(bodyText),
+        // A identidade causal vem exclusivamente da resposta pertencente ao
+        // POST observado. URL/texto visual podem conter uma proposta anterior.
+        proposalId: observedResult.proposalId,
         clienteNome: nome,
         clienteDocumento: documento,
         rawSummary: buildSummary(page, bodyText, {

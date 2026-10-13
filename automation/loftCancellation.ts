@@ -72,6 +72,10 @@ function readJsonRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
 }
 
+function isCancelledStatus(value: string): boolean {
+  return /^(?:cancelad[oa]|cancell?ed)$/i.test(value.trim());
+}
+
 export class LoftCancellationClient {
   private accessToken: string | null = null;
   private accessTokenExpiresAt = 0;
@@ -140,6 +144,11 @@ export class LoftCancellationClient {
     const safeLifetimeSeconds = Number.isFinite(expiresIn) ? Math.max(5, expiresIn - 30) : 4 * 60;
     this.accessTokenExpiresAt = Date.now() + safeLifetimeSeconds * 1000;
     return token;
+  }
+
+  /** Valida OAuth sem consultar nem alterar uma proposta. */
+  async validateAuthentication(): Promise<void> {
+    await this.getAccessToken(true);
   }
 
   private async performAuthorizedRequest(input: string, init: RequestInit): Promise<Response> {
@@ -211,7 +220,7 @@ export class LoftCancellationClient {
     // A fila é at-least-once. Conferir o estado antes do POST torna a repetição
     // segura quando a Loft cancelou, mas o worker caiu antes de persistir o sucesso.
     const current = await this.getProposalStatus(proposalId);
-    if (/cancelad[oa]/i.test(current.status)) return current;
+    if (isCancelledStatus(current.status)) return current;
 
     const response = await this.performAuthorizedRequest(
       `${normalizeBaseUrl(this.config.apiBaseUrl)}/rental-guarantee/v1/proposal/${encodeURIComponent(proposalId)}/cancel`,
@@ -232,7 +241,7 @@ export class LoftCancellationClient {
     }
 
     const result = await this.readConfirmedProposalStatus(response, proposalId);
-    if (!/cancelad[oa]/i.test(result.status)) {
+    if (!isCancelledStatus(result.status)) {
       throw new LoftApiError(
         `A parceira respondeu com um estado inesperado para a proposta ${proposalId}.`,
       );

@@ -600,9 +600,11 @@ export async function lookupLegacyProposalResult(
   page: Page,
   documento: string,
   timeoutMs = 15_000,
+  knownProposalIds: readonly string[] = [],
 ): Promise<ObservedCreditSimulationResult | null> {
   const documentDigits = documento.replace(/\D/g, "");
   if (documentDigits.length < 11) return null;
+  const knownIds = new Set(knownProposalIds.filter((value) => /^\d{4,12}$/.test(value)));
 
   const proposalsUrl = "https://app.loft.com.br/fianca-aluguel/imobiliaria/view/index.php";
   await page.goto(proposalsUrl, {
@@ -633,7 +635,12 @@ export async function lookupLegacyProposalResult(
     const matches = await page.locator("tr").evaluateAll((rows, digits) => {
       return rows.flatMap((row) => {
         const text = row.textContent ?? "";
-        if (!text.replace(/\D/g, "").includes(digits)) return [];
+        const labelledDocument = Array.from(
+          text.matchAll(/(?:CPF|CNPJ)\s*:?\s*([0-9.\-/]{11,20})/gi),
+        )
+          .map((match) => String(match[1] ?? "").replace(/\D/g, ""))
+          .find((value) => value === digits);
+        if (!labelledDocument) return [];
 
         let status: "aprovado" | "recusado" | "em_analise" | null = null;
         if (/aprovad[oa]/i.test(text)) status = "aprovado";
@@ -645,7 +652,11 @@ export async function lookupLegacyProposalResult(
         const proposalId = href.match(/\/proposta\/(\d+)/)?.[1] ?? null;
         const customerCell = Array.from(row.querySelectorAll("td"))
           .map((cell) => cell.textContent ?? "")
-          .find((cellText) => cellText.replace(/\D/g, "").includes(digits));
+          .find((cellText) =>
+            Array.from(cellText.matchAll(/(?:CPF|CNPJ)\s*:?\s*([0-9.\-/]{11,20})/gi)).some(
+              (match) => String(match[1] ?? "").replace(/\D/g, "") === digits,
+            ),
+          );
         const documentLabelIndex = customerCell?.search(/(?:CPF|CNPJ)\s*:/i) ?? -1;
         const clienteNome =
           customerCell && documentLabelIndex > 0
@@ -655,16 +666,26 @@ export async function lookupLegacyProposalResult(
       });
     }, documentDigits);
 
-    if (matches.length > 0) {
-      const newest = matches.sort(
-        (a, b) => Number(b.proposalId ?? 0) - Number(a.proposalId ?? 0),
-      )[0];
+    const newMatches = Array.from(
+      new Map(
+        matches
+          .filter((match): match is typeof match & { proposalId: string } =>
+            Boolean(match.proposalId && !knownIds.has(match.proposalId)),
+          )
+          .map((match) => [match.proposalId, match]),
+      ).values(),
+    );
+    if (newMatches.length === 1) {
+      const [createdByThisSubmission] = newMatches;
       return {
-        status: newest.status,
-        proposalId: newest.proposalId,
-        clienteNome: nomeClienteValido(newest.clienteNome),
+        status: createdByThisSubmission.status,
+        proposalId: createdByThisSubmission.proposalId,
+        clienteNome: nomeClienteValido(createdByThisSubmission.clienteNome),
       };
     }
+    // Mais de um ID novo no mesmo intervalo é ambíguo: nenhum deles pode ser
+    // atribuído ao clique atual por ordenação ou "mais recente".
+    if (newMatches.length > 1) return null;
     await page.waitForTimeout(FIND_POLL_MS);
   } while (Date.now() < deadline);
 

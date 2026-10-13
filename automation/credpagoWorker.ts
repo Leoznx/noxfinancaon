@@ -1,4 +1,5 @@
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
+import { randomUUID } from "node:crypto";
 import readline from "node:readline/promises";
 import { stdin, stdout } from "node:process";
 import http from "node:http";
@@ -34,6 +35,11 @@ import {
   isCredPagoAccountBlockedError,
 } from "./credpagoAvailability";
 import { LoftCancellationClient, extractLoftProposalId } from "./loftCancellation";
+import {
+  cancelLoftProposalViaPortal,
+  listLoftProposalIdsForDocument,
+  probeLoftProposalCancellationPortal,
+} from "./loftPortalCancellation";
 import { selectRandomCreditSimulationCep } from "./creditSimulationCep";
 import { observeCreditSimulationApi } from "./creditSimulationApiObserver";
 
@@ -57,6 +63,9 @@ function mensagemSeguraParaErro(erroTecnico: string): string {
   }
   if (/n[ãa]o foi poss[ií]vel identificar o resultado/i.test(erroTecnico)) {
     return erroTecnico;
+  }
+  if (/CNPJ.*ID causal|ID causal.*CNPJ|fluxo legado de CNPJ/i.test(erroTecnico)) {
+    return "As simulações para pessoa jurídica estão temporariamente indisponíveis porque o cancelamento seguro da proposta ainda não pôde ser confirmado. Nenhum dado foi enviado; acione o suporte antes de tentar novamente.";
   }
   return "Não foi possível concluir a consulta no momento. Tente novamente em instantes.";
 }
@@ -84,6 +93,20 @@ class CredPagoServiceUnavailableError extends Error {
   }
 }
 
+class LoftCancellationUnavailableError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "LoftCancellationUnavailableError";
+  }
+}
+
+class LoftCancellationIdentityUnavailableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "LoftCancellationIdentityUnavailableError";
+  }
+}
+
 class ConsultaStateConflictError extends Error {
   constructor(message: string) {
     super(message);
@@ -99,9 +122,23 @@ interface LoftCancellationJob {
   id: string;
   consultation_id: string;
   correlation_id: string;
-  proposal_id: string;
+  proposal_id: string | null;
+  known_proposal_ids: string[];
   attempt_count: number;
   max_attempts: number;
+}
+
+interface ScheduledLoftCancellation {
+  id: string;
+  submissionToken: string;
+  proposalId: string | null;
+  knownProposalIds: string[];
+}
+
+interface TrackedLoftCancellation extends ScheduledLoftCancellation {
+  clicked: boolean;
+  submittedAt: string | null;
+  confirmed: boolean;
 }
 
 const runtimeState: {
@@ -116,6 +153,11 @@ const runtimeState: {
   lastQueueSuccessAt: string | null;
   lastQueueErrorAt: string | null;
   consecutiveQueueFailures: number;
+  cancellationQueue: QueueRuntimeStatus;
+  cancellationExecution: QueueRuntimeStatus;
+  lastCancellationQueueSuccessAt: string | null;
+  lastCancellationQueueErrorAt: string | null;
+  consecutiveCancellationQueueFailures: number;
   browser: BrowserRuntimeStatus;
   activeConsultations: number;
   totalProcessed: number;
@@ -138,6 +180,11 @@ const runtimeState: {
   lastQueueSuccessAt: null,
   lastQueueErrorAt: null,
   consecutiveQueueFailures: 0,
+  cancellationQueue: "checking",
+  cancellationExecution: "checking",
+  lastCancellationQueueSuccessAt: null,
+  lastCancellationQueueErrorAt: null,
+  consecutiveCancellationQueueFailures: 0,
   browser: "checking",
   activeConsultations: 0,
   totalProcessed: 0,
@@ -151,19 +198,21 @@ const runtimeState: {
 };
 
 const recentDurations: number[] = [];
-const loftCancellationClient = env.loftCancellationEnabled
-  ? new LoftCancellationClient({
-      apiBaseUrl: env.loftApiBaseUrl,
-      tokenUrl: env.loftOauthTokenUrl,
-      clientId: env.loftOauthClientId,
-      clientSecret: env.loftOauthClientSecret,
-      scope: env.loftOauthScope,
-      authorizationDetails: env.loftOauthAuthorizationDetails || undefined,
-      requestTimeoutMs: env.loftCancellationRequestTimeoutMs,
-    })
-  : null;
+const loftCancellationClient =
+  env.loftCancellationEnabled && env.loftCancellationMode === "api"
+    ? new LoftCancellationClient({
+        apiBaseUrl: env.loftApiBaseUrl,
+        tokenUrl: env.loftOauthTokenUrl,
+        clientId: env.loftOauthClientId,
+        clientSecret: env.loftOauthClientSecret,
+        scope: env.loftOauthScope,
+        authorizationDetails: env.loftOauthAuthorizationDetails || undefined,
+        requestTimeoutMs: env.loftCancellationRequestTimeoutMs,
+      })
+    : null;
 
 let proximaValidacaoAuthEm = 0;
+let proximaValidacaoCancelamentoEm = 0;
 let ultimaRecuperacaoConsultasEm = 0;
 let ultimaSinalizacaoAuthNaFilaEm = 0;
 
@@ -185,6 +234,27 @@ function registrarFalhaFila(contexto: string, error: unknown): void {
   if (primeiraFalha || runtimeState.consecutiveQueueFailures % 12 === 0) {
     logErro(
       `${contexto}; o worker continuará ativo e tentará novamente (falha ${runtimeState.consecutiveQueueFailures})`,
+      error,
+    );
+  }
+}
+
+function registrarSucessoFilaCancelamento(): void {
+  const estavaIndisponivel = runtimeState.cancellationQueue === "unavailable";
+  runtimeState.cancellationQueue = "ok";
+  runtimeState.lastCancellationQueueSuccessAt = new Date().toISOString();
+  runtimeState.consecutiveCancellationQueueFailures = 0;
+  if (estavaIndisponivel) log("Conexão com a fila de cancelamentos recuperada.");
+}
+
+function registrarFalhaFilaCancelamento(contexto: string, error: unknown): void {
+  const primeiraFalha = runtimeState.cancellationQueue !== "unavailable";
+  runtimeState.cancellationQueue = "unavailable";
+  runtimeState.lastCancellationQueueErrorAt = new Date().toISOString();
+  runtimeState.consecutiveCancellationQueueFailures += 1;
+  if (primeiraFalha || runtimeState.consecutiveCancellationQueueFailures % 12 === 0) {
+    logErro(
+      `${contexto}; o cancelamento continuará tentando (falha ${runtimeState.consecutiveCancellationQueueFailures})`,
       error,
     );
   }
@@ -308,35 +378,142 @@ const SESSAO_OCIOSA_MS = 3 * 60 * 1000; // 3 minutos
 
 async function agendarCancelamentoLoft(
   consulta: ConsultaCreditoRow,
-  proposalId: string | null,
-): Promise<boolean> {
-  if (!env.loftCancellationEnabled) return false;
-  const normalizedProposalId = extractLoftProposalId(proposalId);
-  const { error } = await (supabaseAdmin as any).rpc("schedule_loft_proposal_cancellation", {
+  submissionToken: string,
+  knownProposalIds: string[],
+): Promise<ScheduledLoftCancellation | null> {
+  if (!env.loftCancellationEnabled) return null;
+  const abortarPreparacao = async (): Promise<void> => {
+    let lastAbortError: unknown = null;
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      const response = await (supabaseAdmin as any).rpc("abort_loft_proposal_preparation", {
+        p_consultation_id: consulta.id,
+        p_submission_token: submissionToken,
+        p_known_proposal_ids: knownProposalIds,
+      });
+      if (!response.error) {
+        const abortedRow = (Array.isArray(response.data) ? response.data[0] : response.data) as {
+          submission_token?: unknown;
+          status?: unknown;
+        } | null;
+        if (abortedRow?.submission_token === submissionToken && abortedRow?.status === "aborted") {
+          registrarSucessoFilaCancelamento();
+          return;
+        }
+        lastAbortError = new Error("A fila não confirmou o abort da preparação.");
+      } else {
+        lastAbortError = response.error;
+      }
+      if (attempt < 2) await sleep(250);
+    }
+    throw lastAbortError ?? new Error("Não foi possível abortar a preparação da submissão.");
+  };
+  const falharDepoisDeAbortar = async (scheduleError: unknown): Promise<never> => {
+    try {
+      await abortarPreparacao();
+    } catch (abortError) {
+      throw new AggregateError(
+        [scheduleError, abortError],
+        "O agendamento falhou e não foi possível confirmar o abort seguro da preparação.",
+      );
+    }
+    throw scheduleError;
+  };
+  const args = {
     p_consultation_id: consulta.id,
+    p_submission_token: submissionToken,
+    p_known_proposal_ids: knownProposalIds,
+    p_delay_seconds: Math.round(env.loftCancellationDelayMs / 1000),
+  };
+  let data: unknown = null;
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const response = await (supabaseAdmin as any).rpc("schedule_loft_proposal_cancellation", args);
+    if (!response.error) {
+      data = response.data;
+      lastError = null;
+      break;
+    }
+    lastError = response.error;
+    if (attempt < 2) await sleep(250);
+  }
+  if (lastError) return falharDepoisDeAbortar(lastError);
+  const row = (Array.isArray(data) ? data[0] : data) as {
+    id?: unknown;
+    proposal_id?: unknown;
+    status?: unknown;
+  } | null;
+  if (typeof row?.id !== "string" || row.status !== "prepared") {
+    return falharDepoisDeAbortar(
+      new Error("A fila não devolveu um job de cancelamento no estado preparado."),
+    );
+  }
+  registrarSucessoFilaCancelamento();
+  return {
+    id: row.id,
+    submissionToken,
+    proposalId: extractLoftProposalId(row.proposal_id),
+    knownProposalIds,
+  };
+}
+
+async function vincularPropostaAoCancelamento(jobId: string, proposalId: string): Promise<string> {
+  const normalizedProposalId = extractLoftProposalId(proposalId);
+  if (!normalizedProposalId) throw new Error("Identificador de proposta inválido.");
+  const { data, error } = await (supabaseAdmin as any).rpc("attach_loft_proposal_id", {
+    p_job_id: jobId,
     p_proposal_id: normalizedProposalId,
+  });
+  if (error) throw error;
+  const row = (Array.isArray(data) ? data[0] : data) as { proposal_id?: unknown } | null;
+  const attachedProposalId = extractLoftProposalId(row?.proposal_id);
+  if (attachedProposalId !== normalizedProposalId) {
+    throw new Error("A fila não confirmou o vínculo com a proposta da Loft.");
+  }
+  registrarSucessoFilaCancelamento();
+  return attachedProposalId;
+}
+
+async function confirmarSubmissaoParaCancelamento(
+  jobId: string,
+  submittedAt: string,
+): Promise<void> {
+  const { data, error } = await (supabaseAdmin as any).rpc("confirm_loft_proposal_submission", {
+    p_job_id: jobId,
+    p_submitted_at: submittedAt,
     p_delay_seconds: Math.round(env.loftCancellationDelayMs / 1000),
   });
   if (error) throw error;
-  registrarSucessoFila();
-  return true;
+  const row = (Array.isArray(data) ? data[0] : data) as {
+    id?: unknown;
+    submitted_at?: unknown;
+  } | null;
+  if (row?.id !== jobId || typeof row?.submitted_at !== "string") {
+    throw new Error("A fila não confirmou o início do prazo de cancelamento.");
+  }
+  registrarSucessoFilaCancelamento();
 }
 
 async function claimNextLoftCancellation(): Promise<LoftCancellationJob | null> {
-  if (!loftCancellationClient) return null;
+  if (!env.loftCancellationEnabled) return null;
+  const { error: recoveryError } = await (supabaseAdmin as any).rpc(
+    "recover_expired_loft_proposal_cancellations",
+  );
+  if (recoveryError) throw recoveryError;
   const { data, error } = await (supabaseAdmin as any).rpc(
     "claim_next_loft_proposal_cancellation",
     { p_worker_id: env.vpsId },
   );
   if (error) throw error;
-  registrarSucessoFila();
+  registrarSucessoFilaCancelamento();
   const row = Array.isArray(data) ? data[0] : null;
   return row ? (row as LoftCancellationJob) : null;
 }
 
 async function finishLoftCancellation(
   job: LoftCancellationJob,
-  result: { success: true } | { success: false; error: unknown },
+  result:
+    | { success: true; proposalId: string; cancellationReason: string | null }
+    | { success: false; error: unknown },
 ): Promise<void> {
   const now = new Date();
   const terminalFailure = !result.success && job.attempt_count >= job.max_attempts;
@@ -344,7 +521,8 @@ async function finishLoftCancellation(
   const payload = result.success
     ? {
         status: "cancelled",
-        cancellation_reason: env.loftCancellationReason,
+        proposal_id: result.proposalId,
+        cancellation_reason: result.cancellationReason,
         cancelled_at: now.toISOString(),
         last_error: null,
         next_attempt_at: now.toISOString(),
@@ -365,14 +543,34 @@ async function finishLoftCancellation(
     .eq("id", job.id)
     .eq("status", "processing")
     .eq("worker_id", env.vpsId)
+    .eq("attempt_count", job.attempt_count)
+    .gt("lease_expires_at", now.toISOString())
     .select("id");
   if (error) throw error;
   if (!data?.length) throw new Error("O lease do cancelamento mudou antes da gravação final.");
-  registrarSucessoFila();
+  registrarSucessoFilaCancelamento();
 }
 
-async function processLoftCancellation(job: LoftCancellationJob): Promise<void> {
-  if (!loftCancellationClient || !env.loftCancellationReason) return;
+async function loadLoftCancellationDocument(job: LoftCancellationJob): Promise<string> {
+  const { data, error } = await supabaseAdmin
+    .from("consultas_credito")
+    .select("documento,tenant_document")
+    .eq("id", job.consultation_id)
+    .maybeSingle();
+  if (error) throw error;
+  const document = String(data?.documento || data?.tenant_document || "").replace(/\D/g, "");
+  if (!/^(?:\d{11}|\d{14})$/.test(document)) {
+    throw new Error("A consulta vinculada não possui CPF/CNPJ válido para localizar a proposta.");
+  }
+  return document;
+}
+
+async function processLoftCancellation(
+  job: LoftCancellationJob,
+  context: BrowserContext,
+  persistirSessao: () => Promise<void>,
+): Promise<void> {
+  if (!env.loftCancellationEnabled || !env.loftCancellationReason) return;
   const cid = ensureCorrelationId(job.correlation_id);
   const startedAt = Date.now();
   logStructured("loft_proposal_cancellation_started", {
@@ -382,13 +580,54 @@ async function processLoftCancellation(job: LoftCancellationJob): Promise<void> 
     attempt: job.attempt_count,
   });
 
+  let page: Page | null = null;
   try {
-    const response = await loftCancellationClient.cancelProposal(
-      job.proposal_id,
-      env.loftCancellationReason,
-      env.loftCancellationComment,
-    );
-    await finishLoftCancellation(job, { success: true });
+    if (!job.proposal_id) {
+      throw new Error(
+        "O job não possui o identificador exato devolvido pelo envio; nenhuma proposta foi alterada.",
+      );
+    }
+    let response: {
+      proposalId: string;
+      status: string;
+      cancellationReason: string | null;
+    };
+    if (env.loftCancellationMode === "api" && job.proposal_id && loftCancellationClient) {
+      const apiResponse = await loftCancellationClient.cancelProposal(
+        job.proposal_id,
+        env.loftCancellationReason,
+        env.loftCancellationComment,
+      );
+      response = {
+        ...apiResponse,
+        cancellationReason: env.loftCancellationReason,
+      };
+    } else {
+      const document = await loadLoftCancellationDocument(job);
+      page = await context.newPage();
+      await navegarParaPortal(page);
+      await ensureLoggedIn(cid, page, persistirSessao);
+      response = await cancelLoftProposalViaPortal(page, {
+        proposalId: job.proposal_id,
+        document,
+        reason: env.loftCancellationReason,
+        comment: env.loftCancellationComment || undefined,
+        timeoutMs: env.loftCancellationRequestTimeoutMs,
+        onProposalResolved: async (proposalId) => {
+          const attached = await vincularPropostaAoCancelamento(job.id, proposalId);
+          if (attached !== job.proposal_id) {
+            throw new Error("A proposta localizada diverge do identificador persistido no job.");
+          }
+        },
+      });
+      await persistirSessao();
+    }
+    await finishLoftCancellation(job, {
+      success: true,
+      proposalId: response.proposalId,
+      cancellationReason: response.cancellationReason,
+    });
+    runtimeState.cancellationExecution = "ok";
     runtimeState.totalCancellations += 1;
     runtimeState.lastSuccessfulCancellationAt = new Date().toISOString();
     logStructured("loft_proposal_cancellation_finished", {
@@ -399,9 +638,13 @@ async function processLoftCancellation(job: LoftCancellationJob): Promise<void> 
       durationMs: Date.now() - startedAt,
     });
   } catch (error) {
+    runtimeState.cancellationExecution = "unavailable";
     runtimeState.totalCancellationFailures += 1;
     await finishLoftCancellation(job, { success: false, error }).catch((persistenceError) =>
-      registrarFalhaFila("Falha ao devolver o cancelamento para a fila", persistenceError),
+      registrarFalhaFilaCancelamento(
+        "Falha ao devolver o cancelamento para a fila",
+        persistenceError,
+      ),
     );
     const terminalFailure = job.attempt_count >= job.max_attempts;
     logErro(
@@ -416,7 +659,10 @@ async function processLoftCancellation(job: LoftCancellationJob): Promise<void> 
         simulationId: job.consultation_id,
         environment: env.automationEnvironment,
         service: "loft-proposal-cancellation",
-        step: "cancel-proposal-api",
+        step:
+          env.loftCancellationMode === "api" && job.proposal_id
+            ? "cancel-proposal-api"
+            : "cancel-proposal-portal",
         error,
         attemptCount: job.attempt_count,
         durationMs: Date.now() - startedAt,
@@ -426,6 +672,8 @@ async function processLoftCancellation(job: LoftCancellationJob): Promise<void> 
         },
       });
     }
+  } finally {
+    await page?.close().catch(() => {});
   }
 }
 
@@ -442,7 +690,7 @@ async function fetchConsultasPendentes(limite: number): Promise<ConsultaCreditoR
     .limit(limite);
   if (error) throw error;
   registrarSucessoFila();
-  return (data as ConsultaCreditoRow[]) || [];
+  return (data as unknown as ConsultaCreditoRow[]) || [];
 }
 
 /** Atualização condicional (status ainda 'pendente') evita que duas execuções peguem a mesma consulta. */
@@ -469,7 +717,14 @@ async function marcarProcessando(id: string): Promise<boolean> {
  */
 async function atualizarStep(
   id: string,
-  step: "abrindo" | "preenchendo" | "enviando" | "aguardando_resultado",
+  step:
+    | "abrindo"
+    | "preenchendo"
+    | "enviando"
+    | "aguardando_resultado"
+    | "recuperando_portal"
+    | "reenviando"
+    | "aguardando_recuperacao_portal",
 ): Promise<void> {
   try {
     const { error } = await supabaseAdmin
@@ -563,7 +818,10 @@ async function marcarErro(id: string, erroTecnico: string): Promise<void> {
  */
 async function recolocarNaFilaAguardandoServico(
   id: string,
-  step: "aguardando_autenticacao" | "aguardando_liberacao_parceiro" = "aguardando_autenticacao",
+  step:
+    | "aguardando_autenticacao"
+    | "aguardando_liberacao_parceiro"
+    | "aguardando_cancelamento" = "aguardando_autenticacao",
 ): Promise<void> {
   const { error } = await supabaseAdmin
     .from("consultas_credito")
@@ -759,7 +1017,8 @@ async function processarConsulta(
   let page: Page | null = null;
   let simulacaoEnviada = false;
   let resultadoObtido = false;
-  let cancelamentoAgendado = false;
+  const cancelamentosAgendados: TrackedLoftCancellation[] = [];
+  let ultimoCancelamentoEnviado: TrackedLoftCancellation | null = null;
   const creditSimulationCep = selectRandomCreditSimulationCep();
   try {
     const erroValidacao = validateConsultaForAutomation(consulta);
@@ -808,42 +1067,159 @@ async function processarConsulta(
     }
     await assertCreditSimulationAvailable(page);
 
-    const tentarAgendarCancelamento = async (proposalId: string | null) => {
-      if (!env.loftCancellationEnabled || (cancelamentoAgendado && !proposalId)) return;
+    const reportarFalhaDeAgendamento = async (
+      error: unknown,
+      submissionToken: string,
+      step:
+        | "snapshot-proposals-before-submission"
+        | "schedule-proposal-cancellation"
+        | "confirm-proposal-submission"
+        | "attach-proposal-id",
+      proposalId?: string | null,
+    ) => {
+      registrarFalhaFilaCancelamento(
+        step === "attach-proposal-id"
+          ? "Falha ao vincular o identificador da proposta ao cancelamento"
+          : step === "confirm-proposal-submission"
+            ? "Falha ao iniciar o prazo do cancelamento depois do envio"
+            : step === "snapshot-proposals-before-submission"
+              ? "Falha ao fotografar as propostas existentes antes do envio"
+              : "Falha ao agendar o cancelamento da proposta",
+        error,
+      );
+      await reportAutomationError({
+        correlationId,
+        simulationId: consulta.id,
+        initiatingUserId: consulta.profile_id_solicitante,
+        environment: env.automationEnvironment,
+        service: "loft-proposal-cancellation",
+        step,
+        error,
+        metadata: {
+          simulationSubmitted: simulacaoEnviada,
+          proposalIdAvailable: Boolean(proposalId),
+          submissionToken,
+        },
+      });
+    };
+
+    const prepararCancelamentoAntesDoEnvio = async (submissionToken: string) => {
+      if (!env.loftCancellationEnabled) return null;
+      if (consulta.tipo_pessoa === "PJ" && env.loftCancellationRequired) {
+        throw new LoftCancellationIdentityUnavailableError(
+          "O fluxo legado de CNPJ não devolve um ID causal da proposta; o envio foi bloqueado antes do clique para não cancelar uma proposta externa por inferência.",
+        );
+      }
+      let snapshotPage: Page | null = null;
+      let snapshotCaptured = false;
       try {
-        cancelamentoAgendado =
-          (await agendarCancelamentoLoft(consulta, proposalId)) || cancelamentoAgendado;
+        snapshotPage = await context.newPage();
+        const knownProposalIds = await listLoftProposalIdsForDocument(
+          snapshotPage,
+          consulta.documento || consulta.tenant_document || "",
+          env.loftCancellationRequestTimeoutMs,
+        );
+        snapshotCaptured = true;
+        const scheduled = await agendarCancelamentoLoft(
+          consulta,
+          submissionToken,
+          knownProposalIds,
+        );
+        if (!scheduled) return null;
+        const tracking: TrackedLoftCancellation = {
+          ...scheduled,
+          clicked: false,
+          submittedAt: null,
+          confirmed: false,
+        };
+        cancelamentosAgendados.push(tracking);
+        return tracking;
       } catch (error) {
-        registrarFalhaFila("Falha ao agendar o cancelamento da proposta", error);
-        await reportAutomationError({
-          correlationId,
-          simulationId: consulta.id,
-          initiatingUserId: consulta.profile_id_solicitante,
-          environment: env.automationEnvironment,
-          service: "loft-proposal-cancellation",
-          step: "schedule-proposal-cancellation",
-          error,
-          metadata: {
-            simulationSubmitted: simulacaoEnviada,
-            proposalIdAvailable: Boolean(proposalId),
-          },
-        });
+        const step = snapshotCaptured
+          ? "schedule-proposal-cancellation"
+          : "snapshot-proposals-before-submission";
+        await reportarFalhaDeAgendamento(error, submissionToken, step).catch((reportError) =>
+          logErro("Falha ao registrar indisponibilidade do cancelamento", reportError),
+        );
+        if (env.loftCancellationRequired) {
+          throw new LoftCancellationUnavailableError(
+            "A simulação não foi enviada porque o cancelamento obrigatório não pôde ser preparado com segurança.",
+            { cause: error },
+          );
+        }
+        return null;
+      } finally {
+        await snapshotPage?.close().catch(() => {});
       }
     };
+
+    const confirmarEnvioPreparado = async (tracking: TrackedLoftCancellation) => {
+      if (tracking.confirmed || !tracking.clicked || !tracking.submittedAt) {
+        return;
+      }
+      try {
+        await confirmarSubmissaoParaCancelamento(tracking.id, tracking.submittedAt);
+        tracking.confirmed = true;
+      } catch (error) {
+        await reportarFalhaDeAgendamento(
+          error,
+          tracking.submissionToken,
+          "confirm-proposal-submission",
+          tracking.proposalId,
+        ).catch((reportError) =>
+          logErro("Falha ao registrar a confirmação pendente do cancelamento", reportError),
+        );
+      }
+    };
+
+    const vincularResultadoAoUltimoEnvio = async (proposalId: string | null): Promise<boolean> => {
+      if (!env.loftCancellationEnabled) return false;
+      const normalizedProposalId = extractLoftProposalId(proposalId);
+      if (!normalizedProposalId) return false;
+
+      const target = ultimoCancelamentoEnviado;
+      if (!target) {
+        await reportarFalhaDeAgendamento(
+          new Error("Nenhum job preparado corresponde ao envio que devolveu a proposta."),
+          randomUUID(),
+          "attach-proposal-id",
+          normalizedProposalId,
+        );
+        return false;
+      }
+
+      target.proposalId = normalizedProposalId;
+      try {
+        await confirmarEnvioPreparado(target);
+        target.proposalId = await vincularPropostaAoCancelamento(target.id, normalizedProposalId);
+        return true;
+      } catch (error) {
+        await reportarFalhaDeAgendamento(
+          error,
+          target.submissionToken,
+          "attach-proposal-id",
+          normalizedProposalId,
+        );
+        return false;
+      }
+    };
+
+    const executionPage = page;
+    if (!executionPage) throw new Error("A página da simulação não foi inicializada.");
 
     const executarTentativa = async (tentativa: number) => {
       log(`[${cid}] Preenchendo dados${tentativa > 1 ? ` (recuperação ${tentativa - 1}/1)` : ""}`);
       await atualizarStep(consulta.id, tentativa > 1 ? "recuperando_portal" : "preenchendo");
-      await fillPessoa(page, consulta.tipo_pessoa || "PF");
-      await fillDocumento(page, consulta.documento || "", consulta.tipo_pessoa || "PF");
+      await fillPessoa(executionPage, consulta.tipo_pessoa || "PF");
+      await fillDocumento(executionPage, consulta.documento || "", consulta.tipo_pessoa || "PF");
       await fillTipoImovel(
-        page,
+        executionPage,
         (consulta.tipo_imovel as "Residencial" | "Comercial") || "Residencial",
       );
       // O portal exige CEP, mas o valor digitado no NOX é apenas visual e não é
       // persistido. Um CEP operacional é sorteado uma vez para este processamento.
-      await fillCep(page, creditSimulationCep);
-      await fillValores(page, {
+      await fillCep(executionPage, creditSimulationCep);
+      await fillValores(executionPage, {
         aluguel: Number(consulta.valor_aluguel) || 0,
         condominio: Number(consulta.valor_condominio) || 0,
         taxas: Number(consulta.valor_taxas) || 0,
@@ -852,35 +1228,93 @@ async function processarConsulta(
 
       log(`[${cid}] Enviando simulação${tentativa > 1 ? " novamente" : ""}`);
       await atualizarStep(consulta.id, tentativa > 1 ? "reenviando" : "enviando");
-      const apiObserver = observeCreditSimulationApi(page);
+      let apiObserver: ReturnType<typeof observeCreditSimulationApi> | null = null;
+      const enviarSimulacaoComCancelamento = async () => {
+        apiObserver?.dispose();
+        const clickObserver = observeCreditSimulationApi(executionPage);
+        apiObserver = clickObserver;
+        const aguardarPostDaSimulacao = async (): Promise<boolean> => {
+          if (consulta.tipo_pessoa === "PJ") return true;
+          const deadline = Date.now() + 5_000;
+          do {
+            if (clickObserver.hasStarted()) return true;
+            await executionPage.waitForTimeout(100);
+          } while (Date.now() < deadline);
+          return clickObserver.hasStarted();
+        };
+        // Cada clique possível possui sua própria identidade. Se a preparação
+        // opcional desta tentativa falhar, nunca reutilizamos o job de um envio
+        // anterior para anexar o ID devolvido por este novo POST.
+        ultimoCancelamentoEnviado = null;
+        const submissionToken = randomUUID();
+        let tracking: TrackedLoftCancellation | null = null;
+        const registrarEnvioObservado = async () => {
+          simulacaoEnviada = true;
+          estado.simulationSubmitted = true;
+          if (tracking) {
+            tracking.clicked = true;
+            tracking.submittedAt ??= new Date().toISOString();
+            ultimoCancelamentoEnviado = tracking;
+            await confirmarEnvioPreparado(tracking);
+          }
+        };
+        try {
+          await submitSimulation(executionPage, {
+            onBeforeClick: async () => {
+              tracking = await prepararCancelamentoAntesDoEnvio(submissionToken);
+            },
+            onAfterClick: async () => {
+              if (!(await aguardarPostDaSimulacao())) {
+                throw new LoftCancellationUnavailableError(
+                  "O clique não produziu o POST esperado da simulação; o prazo de cancelamento não foi iniciado.",
+                );
+              }
+              await registrarEnvioObservado();
+            },
+          });
+        } catch (error) {
+          // Um erro do Playwright entre onBeforeClick e onAfterClick pode ocorrer
+          // antes ou depois do evento de mouse. Para PF, o POST observado decide:
+          // se começou, preservamos o job; se não começou, o prepared bloqueia
+          // a fila para uma reconciliação segura.
+          const preparedTracking = tracking as TrackedLoftCancellation | null;
+          if (preparedTracking && !preparedTracking.clicked && consulta.tipo_pessoa !== "PJ") {
+            if (await aguardarPostDaSimulacao()) {
+              await registrarEnvioObservado();
+            }
+          }
+          throw error;
+        }
+      };
       try {
-        await submitSimulation(page, {
-          onBeforeClick: () => {
-            simulacaoEnviada = true;
-            estado.simulationSubmitted = true;
-          },
-          onAfterClick: () => tentarAgendarCancelamento(null),
-        });
+        await enviarSimulacaoComCancelamento();
         estado.lastSuccessfulStep =
           tentativa > 1 ? "recovery-simulation-submitted" : "simulation-submitted";
 
         log(`[${cid}] Aguardando resultado`);
         await atualizarStep(consulta.id, "aguardando_resultado");
-        return await parseResultado(page, {
+        return await parseResultado(executionPage, {
           tipoPessoa: consulta.tipo_pessoa === "PJ" ? "PJ" : "PF",
           onLog: (msg) => log(`[${cid}] ${msg}`),
-          readObservedResult: apiObserver.read,
-          hasObservedRequest: apiObserver.hasStarted,
+          readObservedResult: () => apiObserver?.read() ?? null,
+          hasObservedRequest: () =>
+            consulta.tipo_pessoa === "PJ" ? simulacaoEnviada : (apiObserver?.hasStarted() ?? false),
           lookupSubmittedProposal:
             consulta.tipo_pessoa === "PJ"
-              ? () => lookupLegacyProposalResult(page!, consulta.documento || "")
+              ? () =>
+                  lookupLegacyProposalResult(
+                    executionPage,
+                    consulta.documento || "",
+                    15_000,
+                    ultimoCancelamentoEnviado?.knownProposalIds ?? [],
+                  )
               : undefined,
           // Só reclica quando o envio não causou mudança alguma; nunca durante uma
           // análise confirmada ou depois de uma resposta do portal.
-          onRetryClick: () => submitSimulation(page),
+          onRetryClick: consulta.tipo_pessoa === "PJ" ? undefined : enviarSimulacaoComCancelamento,
         });
       } finally {
-        apiObserver.dispose();
+        (apiObserver as ReturnType<typeof observeCreditSimulationApi> | null)?.dispose();
       }
     };
 
@@ -889,6 +1323,21 @@ async function processarConsulta(
       resultado.status === "erro" &&
       resultado.rawSummary.motivoTecnico === "provider_internal_error"
     ) {
+      const origemPrimeiroResultado = String(resultado.rawSummary.resultadoCapturadoVia || "");
+      const proposalIdPrimeiroEnvio =
+        origemPrimeiroResultado === "resposta_api" ? resultado.proposalId : null;
+      if (proposalIdPrimeiroEnvio) {
+        const linked = await vincularResultadoAoUltimoEnvio(proposalIdPrimeiroEnvio);
+        if (!linked) {
+          throw new LoftCancellationUnavailableError(
+            "A recuperação foi interrompida porque o ID do primeiro envio não pôde ser vinculado ao seu job.",
+          );
+        }
+      } else if (ultimoCancelamentoEnviado) {
+        throw new LoftCancellationUnavailableError(
+          "A Loft retornou erro interno sem um ID causal; o job foi preservado para reconciliação e o reenvio foi bloqueado.",
+        );
+      }
       log(
         `[${cid}] O portal informou erro interno — aguardando 5s e refazendo a análise uma única vez.`,
       );
@@ -905,7 +1354,10 @@ async function processarConsulta(
       };
     }
     resultadoObtido = true;
-    await tentarAgendarCancelamento(resultado.proposalId);
+    const resultadoCapturadoVia = String(resultado.rawSummary.resultadoCapturadoVia || "");
+    const proposalIdCapturadoNoProprioFluxo =
+      resultadoCapturadoVia === "resposta_api" ? resultado.proposalId : null;
+    await vincularResultadoAoUltimoEnvio(proposalIdCapturadoNoProprioFluxo);
     estado.lastSuccessfulStep = "result-read";
     log(`[${cid}] Resultado identificado: ${resultado.status}`);
 
@@ -1000,24 +1452,28 @@ async function processarConsulta(
       !simulacaoEnviada &&
       (err instanceof CredPagoAuthenticationError ||
         err instanceof CredPagoServiceUnavailableError ||
+        err instanceof LoftCancellationUnavailableError ||
         isCredPagoAccountBlockedError(err) ||
         isTransientPortalError(err));
     estado.finalizado = true;
     if (falhaTemporariaAntesDoEnvio) {
       const falhaDeAutenticacao = err instanceof CredPagoAuthenticationError;
+      const falhaDeCancelamento = err instanceof LoftCancellationUnavailableError;
       const contaBloqueada = isCredPagoAccountBlockedError(err);
-      runtimeState.auth = contaBloqueada
-        ? "blocked"
-        : falhaDeAutenticacao
-          ? "required"
-          : "unavailable";
-      runtimeState.lastAuthCheckAt = new Date().toISOString();
-      runtimeState.consecutiveAuthFailures += 1;
-      proximaValidacaoAuthEm = 0;
+      if (!falhaDeCancelamento) {
+        runtimeState.auth = contaBloqueada
+          ? "blocked"
+          : falhaDeAutenticacao
+            ? "required"
+            : "unavailable";
+        runtimeState.lastAuthCheckAt = new Date().toISOString();
+        runtimeState.consecutiveAuthFailures += 1;
+        proximaValidacaoAuthEm = 0;
+      }
       const artifacts = await captureSafeErrorArtifacts(page, false);
       const returnedToQueue = await recolocarNaFilaAguardandoServico(
         consulta.id,
-        "aguardando_liberacao_parceiro",
+        falhaDeCancelamento ? "aguardando_cancelamento" : "aguardando_liberacao_parceiro",
       )
         .then(() => {
           log(`[${cid}] Consulta preservada na fila enquanto o serviço é recuperado.`);
@@ -1063,6 +1519,30 @@ async function processarConsulta(
       });
     }
   } finally {
+    for (const tracking of cancelamentosAgendados) {
+      if (!tracking.clicked || !tracking.submittedAt || tracking.confirmed) {
+        continue;
+      }
+      await confirmarSubmissaoParaCancelamento(tracking.id, tracking.submittedAt)
+        .then(() => {
+          tracking.confirmed = true;
+        })
+        .catch((error) =>
+          registrarFalhaFilaCancelamento(
+            "Submissão enviada permaneceu sem confirmação na fila de cancelamentos",
+            error,
+          ),
+        );
+    }
+    for (const tracking of cancelamentosAgendados) {
+      if (!tracking.proposalId) continue;
+      await vincularPropostaAoCancelamento(tracking.id, tracking.proposalId).catch((error) =>
+        registrarFalhaFilaCancelamento(
+          "Identificador exato permaneceu sem vínculo na fila de cancelamentos",
+          error,
+        ),
+      );
+    }
     await page?.close().catch(() => {});
     estado.page = null;
     log(`[${cid}] Aba fechada`);
@@ -1221,31 +1701,92 @@ async function fecharContexto(contextoAberto: ContextoAberto): Promise<void> {
   if (contextoAberto.browser) await contextoAberto.browser.close().catch(() => {});
 }
 
+async function validarSuperficieCancelamento(
+  context: BrowserContext,
+  persistirSessao: () => Promise<void>,
+): Promise<boolean> {
+  if (!env.loftCancellationEnabled) return !env.loftCancellationRequired;
+  if (Date.now() < proximaValidacaoCancelamentoEm) {
+    return runtimeState.cancellationExecution === "ok";
+  }
+
+  if (env.loftCancellationMode === "api") {
+    try {
+      if (!loftCancellationClient) throw new Error("Cliente OAuth da Loft não configurado.");
+      await loftCancellationClient.validateAuthentication();
+      runtimeState.cancellationExecution = "ok";
+      proximaValidacaoCancelamentoEm = Date.now() + env.authCheckIntervalMs;
+      return true;
+    } catch (error) {
+      const firstFailure = runtimeState.cancellationExecution !== "unavailable";
+      runtimeState.cancellationExecution = "unavailable";
+      proximaValidacaoCancelamentoEm = Date.now() + env.authRetryIntervalMs;
+      if (firstFailure) logErro("OAuth do cancelamento Loft não está pronto", error);
+      return false;
+    }
+  }
+
+  let page: Page | null = null;
+  try {
+    page = await context.newPage();
+    await navegarParaPortal(page);
+    await ensureLoggedIn("CANCEL", page, persistirSessao);
+    await probeLoftProposalCancellationPortal(page, env.loftCancellationRequestTimeoutMs);
+    await persistirSessao();
+    runtimeState.cancellationExecution = "ok";
+    proximaValidacaoCancelamentoEm = Date.now() + env.authCheckIntervalMs;
+    log("Superfície de cancelamento da Loft validada sem alterar propostas.");
+    return true;
+  } catch (error) {
+    const firstFailure = runtimeState.cancellationExecution !== "unavailable";
+    runtimeState.cancellationExecution = "unavailable";
+    proximaValidacaoCancelamentoEm = Date.now() + env.authRetryIntervalMs;
+    if (firstFailure) {
+      logErro("A lista de propostas da Loft não está pronta para cancelamentos", error);
+    }
+    return false;
+  } finally {
+    await page?.close().catch(() => {});
+  }
+}
+
 /**
  * Servidor HTTP mínimo só para health check (ex.: Docker healthcheck, monitoramento
  * externo). Não expõe nenhuma rota de negócio, secret ou detalhe interno.
  */
+function avaliarProntidaoRuntime(agora = Date.now()) {
+  const authCheckAgeMs = runtimeState.authCheckStartedAt
+    ? agora - Date.parse(runtimeState.authCheckStartedAt)
+    : 0;
+  const loopAgeMs = runtimeState.lastLoopAt ? agora - Date.parse(runtimeState.lastLoopAt) : 0;
+  const authTravada = authCheckAgeMs > env.authValidationTimeoutMs + 15_000;
+  const loopTravado =
+    loopAgeMs > Math.max(env.authValidationTimeoutMs + 30_000, env.pollIntervalMs * 12);
+  const healthy = !authTravada && !loopTravado && runtimeState.browser !== "unavailable";
+  const cancellationReady =
+    !env.loftCancellationRequired ||
+    (env.loftCancellationEnabled &&
+      runtimeState.cancellationQueue === "ok" &&
+      runtimeState.cancellationExecution === "ok");
+  const ready =
+    healthy &&
+    runtimeState.auth === "ok" &&
+    runtimeState.queue === "ok" &&
+    runtimeState.browser === "ok" &&
+    cancellationReady;
+  return { authTravada, loopTravado, healthy, cancellationReady, ready };
+}
+
 function iniciarServidorHealth(): http.Server {
   const server = http.createServer((req, res) => {
     if (req.method === "GET" && req.url === "/health") {
-      const agora = Date.now();
-      const authCheckAgeMs = runtimeState.authCheckStartedAt
-        ? agora - Date.parse(runtimeState.authCheckStartedAt)
-        : 0;
-      const loopAgeMs = runtimeState.lastLoopAt ? agora - Date.parse(runtimeState.lastLoopAt) : 0;
-      const authTravada = authCheckAgeMs > env.authValidationTimeoutMs + 15_000;
-      const loopTravado =
-        loopAgeMs > Math.max(env.authValidationTimeoutMs + 30_000, env.pollIntervalMs * 12);
-      const healthy = !authTravada && !loopTravado && runtimeState.browser !== "unavailable";
-      const ready = runtimeState.auth === "ok" && runtimeState.queue === "ok";
-      const browserReady = runtimeState.browser === "ok";
-      const fullyReady = ready && browserReady;
+      const { healthy, cancellationReady, ready } = avaliarProntidaoRuntime();
 
       res.writeHead(healthy ? 200 : 503, { "Content-Type": "application/json" });
       res.end(
         JSON.stringify({
           status: healthy ? "ok" : "stalled",
-          ready: fullyReady,
+          ready,
           auth: runtimeState.auth,
           queue: runtimeState.queue,
           lastAuthCheckAt: runtimeState.lastAuthCheckAt,
@@ -1263,6 +1804,14 @@ function iniciarServidorHealth(): http.Server {
           lastSuccessfulSimulationAt: runtimeState.lastSuccessfulSimulationAt,
           averageDurationMs: runtimeState.averageDurationMs,
           cancellationEnabled: env.loftCancellationEnabled,
+          cancellationRequired: env.loftCancellationRequired,
+          cancellationMode: env.loftCancellationMode,
+          cancellationQueue: runtimeState.cancellationQueue,
+          cancellationExecution: runtimeState.cancellationExecution,
+          cancellationReady,
+          lastCancellationQueueSuccessAt: runtimeState.lastCancellationQueueSuccessAt,
+          lastCancellationQueueErrorAt: runtimeState.lastCancellationQueueErrorAt,
+          consecutiveCancellationQueueFailures: runtimeState.consecutiveCancellationQueueFailures,
           activeCancellation: runtimeState.activeCancellation,
           totalCancellations: runtimeState.totalCancellations,
           totalCancellationFailures: runtimeState.totalCancellationFailures,
@@ -1275,8 +1824,7 @@ function iniciarServidorHealth(): http.Server {
       return;
     }
     if (req.method === "GET" && req.url === "/ready") {
-      const ready =
-        runtimeState.auth === "ok" && runtimeState.queue === "ok" && runtimeState.browser === "ok";
+      const { cancellationReady, ready } = avaliarProntidaoRuntime();
       res.writeHead(ready ? 200 : 503, { "Content-Type": "application/json" });
       res.end(
         JSON.stringify({
@@ -1284,6 +1832,15 @@ function iniciarServidorHealth(): http.Server {
           auth: runtimeState.auth,
           queue: runtimeState.queue,
           browser: runtimeState.browser,
+          cancellationEnabled: env.loftCancellationEnabled,
+          cancellationRequired: env.loftCancellationRequired,
+          cancellationMode: env.loftCancellationMode,
+          cancellationQueue: runtimeState.cancellationQueue,
+          cancellationExecution: runtimeState.cancellationExecution,
+          cancellationReady,
+          lastCancellationQueueSuccessAt: runtimeState.lastCancellationQueueSuccessAt,
+          lastCancellationQueueErrorAt: runtimeState.lastCancellationQueueErrorAt,
+          consecutiveCancellationQueueFailures: runtimeState.consecutiveCancellationQueueFailures,
         }),
       );
       return;
@@ -1320,8 +1877,10 @@ async function loop(once: boolean): Promise<void> {
   log(
     `Cancelamento de propostas após ${Math.round(env.loftCancellationDelayMs / 60000)}min: ${
       env.loftCancellationEnabled
-        ? "habilitado pela API oficial com motivo homologado"
-        : "desabilitado até configurar OAuth e um motivo verdadeiro"
+        ? `habilitado via ${env.loftCancellationMode} com preferência de motivo${
+            env.loftCancellationRequired ? " e obrigatório para a prontidão" : ""
+          }`
+        : `desabilitado${env.loftCancellationRequired ? " (o worker permanecerá não pronto)" : ""}`
     }`,
   );
   let lock: AutomationLockHandle | null = null;
@@ -1383,20 +1942,45 @@ async function loop(once: boolean): Promise<void> {
         registrarFalhaFila("Falha ao recuperar consultas interrompidas", error),
       );
 
-      if (env.loftCancellationEnabled && !cancelamentoEmAndamento) {
+      // O modo portal usa o mesmo BrowserContext da simulação. Só inicia um
+      // cancelamento quando nenhuma consulta está usando a sessão e não retira
+      // novas consultas enquanto a tela de propostas estiver em uso.
+      if (env.loftCancellationEnabled && !cancelamentoEmAndamento && emAndamento.size === 0) {
         try {
           const job = await claimNextLoftCancellation();
           if (job) {
             runtimeState.activeCancellation = true;
-            const task = processLoftCancellation(job).finally(() => {
+            const task = processLoftCancellation(
+              job,
+              contextoAberto.context,
+              contextoAberto.persistirSessao,
+            ).finally(() => {
               if (cancelamentoEmAndamento === task) cancelamentoEmAndamento = null;
               runtimeState.activeCancellation = false;
             });
             cancelamentoEmAndamento = task;
           }
         } catch (error) {
-          registrarFalhaFila("Falha ao consultar a fila de cancelamentos", error);
+          registrarFalhaFilaCancelamento("Falha ao consultar a fila de cancelamentos", error);
         }
+      }
+
+      if (cancelamentoEmAndamento) {
+        if (once) await Promise.allSettled([cancelamentoEmAndamento]);
+        else await sleep(env.pollIntervalMs);
+        continue;
+      }
+
+      const filaCancelamentoOperacional = !env.loftCancellationEnabled
+        ? !env.loftCancellationRequired
+        : runtimeState.cancellationQueue === "ok";
+      if (!filaCancelamentoOperacional) {
+        if (once) {
+          log("Fila obrigatória de cancelamentos indisponível — nenhuma consulta foi enviada.");
+          break;
+        }
+        await sleep(env.pollIntervalMs);
+        continue;
       }
 
       const autenticacaoPronta = await validarAutenticacao(
@@ -1437,6 +2021,26 @@ async function loop(once: boolean): Promise<void> {
         }
 
         await new Promise((r) => setTimeout(r, env.pollIntervalMs));
+        continue;
+      }
+
+      const superficieCancelamentoPronta = await validarSuperficieCancelamento(
+        contextoAberto.context,
+        contextoAberto.persistirSessao,
+      );
+      const cancelamentoOperacional = !env.loftCancellationEnabled
+        ? !env.loftCancellationRequired
+        : runtimeState.cancellationQueue === "ok" &&
+          runtimeState.cancellationExecution === "ok" &&
+          superficieCancelamentoPronta;
+      if (!cancelamentoOperacional) {
+        if (once) {
+          log(
+            "Superfície obrigatória de cancelamento indisponível — nenhuma consulta foi enviada.",
+          );
+          break;
+        }
+        await sleep(env.pollIntervalMs);
         continue;
       }
 

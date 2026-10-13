@@ -13,6 +13,11 @@ services:
       # Sobrescreve um eventual valor legado ainda presente no .env da VPS.
       CREDPAGO_URL: https://app.loft.com.br/erp/proposta/analise-de-credito
       HEADLESS: "true"
+      # O cancelador compartilha a sessão autenticada do Chromium e é parte da
+      # prontidão operacional do worker.
+      LOFT_CANCELLATION_ENABLED: "${LOFT_CANCELLATION_ENABLED:-true}"
+      LOFT_CANCELLATION_REQUIRED: "${LOFT_CANCELLATION_REQUIRED:-true}"
+      LOFT_CANCELLATION_MODE: "${LOFT_CANCELLATION_MODE:-portal}"
       HEALTH_PORT: "3000"
       REPAIR_HEALTH_PORT: "3001"
       # A API de análise da Loft pode levar vários minutos em horário de pico.

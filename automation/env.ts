@@ -2,7 +2,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import os from "node:os";
 import dotenv from "dotenv";
-import { isLoftCancellationReason, type LoftCancellationReason } from "./loftCancellation";
+import {
+  LOFT_CANCELLATION_REASONS,
+  isLoftCancellationReason,
+  type LoftCancellationReason,
+} from "./loftCancellation";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -53,14 +57,23 @@ if (Boolean(loftOauthClientId) !== Boolean(loftOauthClientSecret)) {
     "LOFT_OAUTH_CLIENT_ID e LOFT_OAUTH_CLIENT_SECRET precisam ser configuradas juntas.",
   );
 }
-const configuredCancellationReason = process.env.LOFT_CANCELLATION_REASON?.trim() || "";
-if (configuredCancellationReason && !isLoftCancellationReason(configuredCancellationReason)) {
-  throw new Error("LOFT_CANCELLATION_REASON não corresponde a um motivo oficial da API da Loft.");
+const loftCancellationEnabled = process.env.LOFT_CANCELLATION_ENABLED !== "false";
+const loftCancellationRequired = process.env.LOFT_CANCELLATION_REQUIRED !== "false";
+const configuredCancellationMode =
+  process.env.LOFT_CANCELLATION_MODE?.trim().toLowerCase() || "portal";
+if (!(["portal", "api"] as const).includes(configuredCancellationMode as "portal" | "api")) {
+  throw new Error('LOFT_CANCELLATION_MODE precisa ser "portal" ou "api".');
 }
-if (configuredCancellationReason && !loftOauthClientId) {
+const loftCancellationMode = configuredCancellationMode as "portal" | "api";
+if (loftCancellationEnabled && loftCancellationMode === "api" && !loftOauthClientId) {
   throw new Error(
-    "LOFT_CANCELLATION_REASON exige LOFT_OAUTH_CLIENT_ID e LOFT_OAUTH_CLIENT_SECRET.",
+    'LOFT_CANCELLATION_MODE="api" exige LOFT_OAUTH_CLIENT_ID e LOFT_OAUTH_CLIENT_SECRET.',
   );
+}
+const configuredCancellationReason =
+  process.env.LOFT_CANCELLATION_REASON?.trim() || LOFT_CANCELLATION_REASONS[0];
+if (configuredCancellationReason && !isLoftCancellationReason(configuredCancellationReason)) {
+  throw new Error("LOFT_CANCELLATION_REASON não corresponde a um motivo aceito pela Loft.");
 }
 const loftCancellationReason = configuredCancellationReason
   ? (configuredCancellationReason as LoftCancellationReason)
@@ -135,7 +148,7 @@ export const env = {
   /** Credenciais exclusivas do servidor para renovar automaticamente a sessão do Login Loft. */
   credpagoLogin,
   credpagoPassword,
-  /** API oficial da parceria, usada apenas no backend para cancelar propostas vencidas. */
+  /** API opcional da parceria; o modo padrão usa a sessão autenticada do portal. */
   loftApiBaseUrl: process.env.LOFT_API_BASE_URL?.trim() || "https://api.loft.com.br",
   loftOauthTokenUrl:
     process.env.LOFT_OAUTH_TOKEN_URL?.trim() || "https://auth.loft.com.br/v2/oauth/token",
@@ -143,17 +156,18 @@ export const env = {
   loftOauthClientSecret,
   loftOauthScope: process.env.LOFT_OAUTH_SCOPE?.trim() || "loft-aluguel",
   loftOauthAuthorizationDetails: process.env.LOFT_OAUTH_AUTHORIZATION_DETAILS?.trim() || "",
+  loftCancellationMode,
   loftCancellationReason,
   loftCancellationComment: (process.env.LOFT_CANCELLATION_COMMENT?.trim() || "").slice(0, 500),
   loftCancellationDelayMs: positiveNumber("LOFT_CANCELLATION_DELAY_MS", 30 * 60 * 1000, 60_000),
   loftCancellationRequestTimeoutMs: positiveNumber(
     "LOFT_CANCELLATION_REQUEST_TIMEOUT_MS",
-    15_000,
+    45_000,
     3_000,
   ),
-  loftCancellationEnabled: Boolean(
-    loftOauthClientId && loftOauthClientSecret && loftCancellationReason,
-  ),
+  /** O cancelamento é operacionalmente obrigatório por padrão; use false só em manutenção. */
+  loftCancellationEnabled,
+  loftCancellationRequired,
   /** Mantém a sessão aquecida e detecta expiração antes de retirar uma consulta da fila. */
   authCheckIntervalMs: positiveNumber("AUTH_CHECK_INTERVAL_MS", 4 * 60 * 1000, 10_000),
   /** Intervalo entre tentativas de recuperar uma autenticação indisponível. */
