@@ -6,6 +6,7 @@ import { ResultadoAutomacao } from "@/components/simulacao/ResultadoAutomacao";
 import type { ExtrasSelecionados, PlanoSelecionadoCalculo } from "@/components/simulacao/SeletorPlanos";
 import { supabase } from "@/integrations/supabase/client";
 import { isNomeValido, reenviarConsulta, registrarEventoProposta } from "@/lib/consultasCredito";
+import { normalizeContractPeriodMonths } from "@/lib/contract-period";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/consultas/$id/resultado")({
@@ -68,11 +69,15 @@ function ConsultaResultado() {
 
   const handleSelecionarPlano = async (
     planoId: string,
+    contractPeriodMonths: number,
     extras?: ExtrasSelecionados,
     planoCalculado?: PlanoSelecionadoCalculo,
   ) => {
     setSubmitting(true);
     try {
+      const periodoContrato = normalizeContractPeriodMonths(contractPeriodMonths);
+      if (!periodoContrato) throw new Error("Selecione um período de contrato válido.");
+
       const { data: plano } = await supabase
         .from("planos")
         .select("*")
@@ -91,6 +96,7 @@ function ConsultaResultado() {
 
       const updatePayload: any = {
         plano_id: planoId,
+        contract_period_months: periodoContrato,
         valor_premio_mensal: premioMensal,
         valor_anual: anual,
         status: "pendente_documentacao",
@@ -115,7 +121,12 @@ function ConsultaResultado() {
         id,
         "plano_selecionado",
         `Plano ${(plano as any).nome} selecionado. Prêmio mensal de ${premioMensal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}.`,
-        { plano_id: planoId, valor_premio_mensal: premioMensal, valor_anual: anual },
+        {
+          plano_id: planoId,
+          contract_period_months: periodoContrato,
+          valor_premio_mensal: premioMensal,
+          valor_anual: anual,
+        },
       );
 
       toast.success("Plano selecionado! Vamos completar os dados da proposta.");
@@ -198,6 +209,7 @@ function ConsultaResultado() {
             onAtualizarValores={handleAtualizarValores}
             isSubmittingPlano={submitting}
             planoIdInicial={consulta.plano_id ?? null}
+            contractPeriodMonthsInitial={consulta.contract_period_months ?? null}
             extrasIniciais={{
               external_painting_enabled: !!(consulta.external_painting_enabled ?? consulta.documentos?.extras?.external_painting_enabled),
               external_painting_total: Number(consulta.external_painting_total ?? consulta.documentos?.extras?.external_painting_total) || 0,

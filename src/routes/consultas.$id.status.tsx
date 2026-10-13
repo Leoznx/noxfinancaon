@@ -15,6 +15,7 @@ import {
   watchConsultaCredito,
   type ConsultaCredito,
 } from "@/lib/consultasCredito";
+import { normalizeContractPeriodMonths } from "@/lib/contract-period";
 
 /**
  * Tela de resultado da automação local CredPago (worker Playwright).
@@ -90,11 +91,15 @@ function StatusConsulta() {
 
   const handleSelecionarPlano = async (
     planoId: string,
+    contractPeriodMonths: number,
     extras?: ExtrasSelecionados,
     planoCalculado?: PlanoSelecionadoCalculo,
   ) => {
     setIsSubmittingPlano(true);
     try {
+      const periodoContrato = normalizeContractPeriodMonths(contractPeriodMonths);
+      if (!periodoContrato) throw new Error("Selecione um período de contrato válido.");
+
       const { data: plano } = await supabase.from("planos").select("*").eq("id", planoId).single();
       if (!plano) throw new Error("Plano não encontrado");
 
@@ -109,6 +114,7 @@ function StatusConsulta() {
 
       const updatePayload: any = {
         plano_id: planoId,
+        contract_period_months: periodoContrato,
         valor_premio_mensal: premioMensal,
         valor_anual: anual,
         status: "pendente_documentacao",
@@ -130,7 +136,12 @@ function StatusConsulta() {
         id,
         "plano_selecionado",
         `Plano ${(plano as any).nome} selecionado. Prêmio mensal de ${premioMensal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}.`,
-        { plano_id: planoId, valor_premio_mensal: premioMensal, valor_anual: anual },
+        {
+          plano_id: planoId,
+          contract_period_months: periodoContrato,
+          valor_premio_mensal: premioMensal,
+          valor_anual: anual,
+        },
       );
 
       toast.success("Plano selecionado! Vamos completar os dados da proposta.");
@@ -151,6 +162,13 @@ function StatusConsulta() {
             onTentarNovamente={handleTentarNovamente}
             onSelecionarPlano={handleSelecionarPlano}
             isSubmittingPlano={isSubmittingPlano}
+            planoIdInicial={consulta.plano_id ?? null}
+            contractPeriodMonthsInitial={consulta.contract_period_months ?? null}
+            extrasIniciais={
+              consulta.documentos && typeof consulta.documentos === "object"
+                ? ((consulta.documentos as Record<string, unknown>).extras as Partial<ExtrasSelecionados> | null)
+                : null
+            }
           />
         </div>
       </div>

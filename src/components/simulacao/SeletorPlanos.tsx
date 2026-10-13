@@ -20,6 +20,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  CONTRACT_PERIOD_OPTIONS,
+  MAX_CONTRACT_PERIOD_MONTHS,
+  MIN_CONTRACT_PERIOD_MONTHS,
+  formatContractPeriodMonths,
+  normalizeContractPeriodMonths,
+} from "@/lib/contract-period";
 import { toast } from "sonner";
 
 interface Plano {
@@ -168,11 +175,17 @@ interface SeletorPlanosProps {
     status?: string;
   };
   onVoltar: () => void;
-  onSelecionarPlano: (planoId: string, extras?: ExtrasSelecionados, planoCalculado?: PlanoSelecionadoCalculo) => void;
+  onSelecionarPlano: (
+    planoId: string,
+    contractPeriodMonths: number,
+    extras?: ExtrasSelecionados,
+    planoCalculado?: PlanoSelecionadoCalculo,
+  ) => void;
   isSubmitting?: boolean;
   onAtualizarValores?: (valores: { aluguel: number; condominio: number; taxas: number }) => Promise<void> | void;
   planoIdInicial?: string | null;
   extrasIniciais?: Partial<ExtrasSelecionados> | null;
+  contractPeriodMonthsInitial?: number | null;
   ocultarVoltar?: boolean;
   ocultarStatusAnalise?: boolean;
 }
@@ -185,6 +198,7 @@ export function SeletorPlanos({
   onAtualizarValores,
   planoIdInicial,
   extrasIniciais,
+  contractPeriodMonthsInitial,
   ocultarVoltar = false,
   ocultarStatusAnalise = false,
 }: SeletorPlanosProps) {
@@ -195,6 +209,23 @@ export function SeletorPlanos({
   // Extras
   const [pinturaEnabled, setPinturaEnabled] = useState<boolean>(!!extrasIniciais?.external_painting_enabled);
   const [activationAmount, setActivationAmount] = useState<number>(Number(extrasIniciais?.activation_fee_amount) || 0);
+
+  const periodoInicial = normalizeContractPeriodMonths(contractPeriodMonthsInitial);
+  const periodoInicialPersonalizado =
+    periodoInicial !== null && !CONTRACT_PERIOD_OPTIONS.some((option) => option === periodoInicial);
+  const [contractPeriodMonths, setContractPeriodMonths] = useState<number | null>(periodoInicial);
+  const [periodoPersonalizadoAtivo, setPeriodoPersonalizadoAtivo] = useState(periodoInicialPersonalizado);
+  const [periodoPersonalizado, setPeriodoPersonalizado] = useState(
+    periodoInicialPersonalizado ? String(periodoInicial) : "",
+  );
+
+  useEffect(() => {
+    const periodo = normalizeContractPeriodMonths(contractPeriodMonthsInitial);
+    const personalizado = periodo !== null && !CONTRACT_PERIOD_OPTIONS.some((option) => option === periodo);
+    setContractPeriodMonths(periodo);
+    setPeriodoPersonalizadoAtivo(personalizado);
+    setPeriodoPersonalizado(personalizado ? String(periodo) : "");
+  }, [contractPeriodMonthsInitial]);
 
   // Valores editáveis (espelham `dados` mas permitem edição local + recálculo imediato)
   const [valores, setValores] = useState({
@@ -335,6 +366,22 @@ export function SeletorPlanos({
   };
 
   const statusInfo = (dados.status && STATUS_DISPLAY[dados.status]) || STATUS_DISPLAY_FALLBACK;
+
+  const selecionarPeriodoPredefinido = (months: number) => {
+    setContractPeriodMonths(months);
+    setPeriodoPersonalizadoAtivo(false);
+    setPeriodoPersonalizado("");
+  };
+
+  const ativarPeriodoPersonalizado = () => {
+    setPeriodoPersonalizadoAtivo(true);
+    setContractPeriodMonths(normalizeContractPeriodMonths(periodoPersonalizado));
+  };
+
+  const atualizarPeriodoPersonalizado = (rawValue: string) => {
+    setPeriodoPersonalizado(rawValue);
+    setContractPeriodMonths(normalizeContractPeriodMonths(rawValue));
+  };
 
   return (
     <div className="animate-fade-in">
@@ -705,6 +752,101 @@ export function SeletorPlanos({
 
             </div>
 
+            <div className="mt-8 rounded-3xl border border-neutral-200 bg-white p-6 shadow-sm">
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-5 bg-yellow-400 rounded-full" />
+                  <h3 className="text-sm font-black uppercase tracking-[0.2em] text-neutral-900">
+                    Período do contrato <span className="text-red-500" aria-hidden="true">*</span>
+                  </h3>
+                </div>
+                <p className="text-xs font-medium text-neutral-500">
+                  Escolha por quantos meses este contrato ficará vigente. Esta informação define as cobranças e os próximos prazos.
+                </p>
+              </div>
+
+              <div
+                className="mt-5 grid grid-cols-3 gap-2 sm:grid-cols-5"
+                role="group"
+                aria-label="Período do contrato em meses"
+                aria-required="true"
+              >
+                {CONTRACT_PERIOD_OPTIONS.map((months) => {
+                  const selected = !periodoPersonalizadoAtivo && contractPeriodMonths === months;
+                  return (
+                    <button
+                      key={months}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => selecionarPeriodoPredefinido(months)}
+                      className={`rounded-xl border px-3 py-3 text-center transition-all ${
+                        selected
+                          ? "border-neutral-900 bg-neutral-900 text-white shadow-md"
+                          : "border-neutral-200 bg-neutral-50 text-neutral-700 hover:border-neutral-400 hover:bg-white"
+                      }`}
+                    >
+                      <span className="block text-base font-black">{months}x</span>
+                      <span className={`block text-[9px] font-bold uppercase tracking-widest ${selected ? "text-neutral-300" : "text-neutral-400"}`}>
+                        meses
+                      </span>
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  aria-pressed={periodoPersonalizadoAtivo}
+                  onClick={ativarPeriodoPersonalizado}
+                  className={`rounded-xl border px-3 py-3 text-center transition-all ${
+                    periodoPersonalizadoAtivo
+                      ? "border-neutral-900 bg-neutral-900 text-white shadow-md"
+                      : "border-neutral-200 bg-neutral-50 text-neutral-700 hover:border-neutral-400 hover:bg-white"
+                  }`}
+                >
+                  <span className="block text-sm font-black">Outro</span>
+                  <span className={`block text-[9px] font-bold uppercase tracking-widest ${periodoPersonalizadoAtivo ? "text-neutral-300" : "text-neutral-400"}`}>
+                    em meses
+                  </span>
+                </button>
+              </div>
+
+              {periodoPersonalizadoAtivo && (
+                <div className="mt-4 max-w-xs space-y-1.5">
+                  <Label htmlFor="contract-period-months" className="text-[10px] font-black uppercase tracking-widest text-neutral-500">
+                    Quantidade de meses
+                  </Label>
+                  <Input
+                    id="contract-period-months"
+                    type="number"
+                    inputMode="numeric"
+                    min={MIN_CONTRACT_PERIOD_MONTHS}
+                    max={MAX_CONTRACT_PERIOD_MONTHS}
+                    step={1}
+                    required
+                    value={periodoPersonalizado}
+                    onChange={(event) => atualizarPeriodoPersonalizado(event.target.value)}
+                    onBlur={() => {
+                      const normalized = normalizeContractPeriodMonths(periodoPersonalizado);
+                      if (normalized !== null) setPeriodoPersonalizado(String(normalized));
+                    }}
+                    aria-invalid={periodoPersonalizado.length > 0 && contractPeriodMonths === null}
+                    aria-describedby="contract-period-help"
+                    placeholder="Ex.: 18"
+                    className="h-12 rounded-xl border-neutral-300 font-bold"
+                  />
+                  <p
+                    id="contract-period-help"
+                    className={`text-[11px] font-medium ${
+                      periodoPersonalizado.length > 0 && contractPeriodMonths === null
+                        ? "text-red-600"
+                        : "text-neutral-400"
+                    }`}
+                  >
+                    Digite um número inteiro entre {MIN_CONTRACT_PERIOD_MONTHS} e {MAX_CONTRACT_PERIOD_MONTHS} meses.
+                  </p>
+                </div>
+              )}
+            </div>
+
             {/* Resumo */}
             <div className="mt-8 p-6 rounded-3xl bg-gradient-to-br from-neutral-50 to-white border border-neutral-100">
               <div className="flex items-center gap-2 mb-4">
@@ -714,6 +856,10 @@ export function SeletorPlanos({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2.5 text-sm">
                 <ResumoLinha label="Plano selecionado" value={planoSelecionado?.nome || '—'} />
                 <ResumoLinha label="Valor mensal base" value={planoSelecionado ? formatarBRL(planoSelecionado.mensal) : '—'} />
+                <ResumoLinha
+                  label="Período do contrato"
+                  value={contractPeriodMonths ? formatContractPeriodMonths(contractPeriodMonths) : 'Selecione uma opção'}
+                />
                 <ResumoLinha
                   label="Pintura externa"
                   value={pinturaEnabled ? `Sim · +${formatarBRL(pinturaParcela)}/mês (cobertura 3× aluguel)` : 'Não'}
@@ -745,8 +891,19 @@ export function SeletorPlanos({
             </div>
 
             <Button
-              onClick={() => onSelecionarPlano(planoEscolhidoId!, extrasPayload, planoSelecionado ?? undefined)}
-              disabled={isSubmitting}
+              onClick={() => {
+                if (!contractPeriodMonths) {
+                  toast.error("Selecione o período do contrato para continuar.");
+                  return;
+                }
+                onSelecionarPlano(
+                  planoEscolhidoId!,
+                  contractPeriodMonths,
+                  extrasPayload,
+                  planoSelecionado ?? undefined,
+                );
+              }}
+              disabled={isSubmitting || !contractPeriodMonths}
               className="mt-6 w-full bg-neutral-900 hover:bg-neutral-800 text-white py-6 rounded-xl font-bold text-lg flex items-center justify-center gap-2 shadow-xl shadow-neutral-200 transition-all"
             >
               {isSubmitting ? 'Salvando...' : 'Finalizar Simulação'}

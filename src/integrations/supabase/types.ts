@@ -596,6 +596,8 @@ export type Database = {
           commission_enabled: boolean | null
           contract_accepted: boolean | null
           contract_accepted_at: string | null
+          contract_period_locked_at: string | null
+          contract_period_months: number | null
           corretor_id: string | null
           created_at: string
           dados_complementares_em: string | null
@@ -690,6 +692,8 @@ export type Database = {
           commission_enabled?: boolean | null
           contract_accepted?: boolean | null
           contract_accepted_at?: string | null
+          contract_period_locked_at?: string | null
+          contract_period_months?: number | null
           corretor_id?: string | null
           created_at?: string
           dados_complementares_em?: string | null
@@ -784,6 +788,8 @@ export type Database = {
           commission_enabled?: boolean | null
           contract_accepted?: boolean | null
           contract_accepted_at?: string | null
+          contract_period_locked_at?: string | null
+          contract_period_months?: number | null
           corretor_id?: string | null
           created_at?: string
           dados_complementares_em?: string | null

@@ -67,7 +67,7 @@ serve(async (req) => {
           .eq("id", payment.consultation_id);
       }
       // "Atualizar status" e o fallback manual (botao) pro mesmo caminho que
-      // o webhook faz sozinho - se essa cobranca for uma das 12 mensalidades,
+      // o webhook faz sozinho - se essa cobranca for uma das mensalidades,
       // sincroniza a faturas_inquilino vinculada tambem, senao o botao
       // atualizaria asaas_payments mas a tela continuaria mostrando o status
       // antigo.

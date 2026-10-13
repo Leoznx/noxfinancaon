@@ -73,13 +73,19 @@ function formatarMoeda(v: number | null): string {
 interface ResultadoAutomacaoProps {
   consulta: ConsultaCredito;
   onTentarNovamente?: () => void;
-  onSelecionarPlano?: (planoId: string, extras?: ExtrasSelecionados, planoCalculado?: PlanoSelecionadoCalculo) => void;
+  onSelecionarPlano?: (
+    planoId: string,
+    contractPeriodMonths: number,
+    extras?: ExtrasSelecionados,
+    planoCalculado?: PlanoSelecionadoCalculo,
+  ) => void;
   isSubmittingPlano?: boolean;
   /** Permite editar aluguel/condomínio/taxas antes de escolher o plano (opcional — só passe se a consulta tiver um imóvel vinculado que possa ser atualizado). */
   onAtualizarValores?: (valores: { aluguel: number; condominio: number; taxas: number }) => Promise<void> | void;
   /** Retoma um plano já escolhido anteriormente (ex.: corretor volta em "Detalhes" depois de já ter selecionado um plano). */
   planoIdInicial?: string | null;
   extrasIniciais?: Partial<ExtrasSelecionados> | null;
+  contractPeriodMonthsInitial?: number | null;
 }
 
 export function ResultadoAutomacao({
@@ -90,6 +96,7 @@ export function ResultadoAutomacao({
   onAtualizarValores,
   planoIdInicial,
   extrasIniciais,
+  contractPeriodMonthsInitial,
 }: ResultadoAutomacaoProps) {
   const navigate = useNavigate();
   // `resultado` guarda o veredito da consulta de crédito de forma permanente — a
@@ -252,6 +259,7 @@ export function ResultadoAutomacao({
               isSubmitting={isSubmittingPlano}
               planoIdInicial={planoIdInicial}
               extrasIniciais={extrasIniciais}
+              contractPeriodMonthsInitial={contractPeriodMonthsInitial}
               ocultarVoltar
               ocultarStatusAnalise
             />

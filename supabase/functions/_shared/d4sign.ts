@@ -11,6 +11,12 @@ import {
 import { escapeEmailHtml, renderNoxEmail } from "./email-branding.ts";
 import { sendZApiText } from "./zapi.ts";
 import { buildStyledContractPdf } from "./contract-pdf.ts";
+import {
+  addUtcMonthsClamped,
+  lockContractPeriod,
+  replaceFixedContractPeriodText,
+  resolveContractPeriodMonths,
+} from "./contract-period.ts";
 
 const D4SIGN_API_DEFAULT = "https://secure.d4sign.com.br/api/v1";
 const SIGNED_CONTRACTS_BUCKET = "contratos-assinados";
@@ -280,6 +286,7 @@ function personalizeDocumentXml(
     inquilino.cnpj || "";
   const tenantPhone = consulta?.tenant_telefone || inquilino.telefone || "";
   const packageValue = calculatePackageValue(consulta);
+  const contractPeriodMonths = resolveContractPeriodMonths(consulta);
   const multiplier = Number(
     planCalculated.cobertura_multiplicador ?? plan.cobertura_multiplicador ?? 0,
   );
@@ -333,7 +340,13 @@ function personalizeDocumentXml(
     if (!current) return paragraph;
     let next: string | null = null;
 
-    if (current === "QUADRO RESUMO – CONTRATO Nº") {
+    const periodAdjusted = replaceFixedContractPeriodText(
+      current,
+      contractPeriodMonths,
+    );
+    if (periodAdjusted !== current) {
+      next = periodAdjusted;
+    } else if (current === "QUADRO RESUMO – CONTRATO Nº") {
       next = `${current} ${contractNumber}`;
     } else if (current === "NOME COMPLETO:") next = `${current} ${tenantName}`;
     else if (current === "INSCRITO NO CPF:") {
@@ -1053,6 +1066,10 @@ export async function dispatchD4SignContract(
       };
     }
 
+    // Valida e congela o prazo antes de criar a assinatura ou chamar a D4Sign.
+    const contractPeriodMonths = resolveContractPeriodMonths(consulta);
+    await lockContractPeriod(supabase, consultationId, contractPeriodMonths);
+
     const planName = consulta?.planos?.nome ||
       consulta?.documentos?.plano_calculado?.nome;
     const { templateKey } = resolveContractTemplate(planName);
@@ -1290,8 +1307,8 @@ async function createOrGetPolicy(supabase: any, consulta: any) {
   }
 
   const starts = new Date();
-  const ends = new Date(starts);
-  ends.setUTCFullYear(ends.getUTCFullYear() + 1);
+  const contractPeriodMonths = resolveContractPeriodMonths(consulta);
+  const ends = addUtcMonthsClamped(starts, contractPeriodMonths);
   const role = String(consulta.role_solicitante || "").toLowerCase();
   const { data, error } = await supabase
     .from("apolices")

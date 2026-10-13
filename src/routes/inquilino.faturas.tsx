@@ -91,7 +91,7 @@ function FaturasInquilino() {
 
     try {
       const consultationSelect =
-        "id, payment_type, insurance_payment_method, imovel:imoveis(endereco, cidade, estado), plano:planos(nome)";
+        "id, payment_type, insurance_payment_method, contract_period_months, imovel:imoveis(endereco, cidade, estado), plano:planos(nome)";
       const [byUser, byEmail] = await Promise.all([
         supabase
           .from("consultas_credito")

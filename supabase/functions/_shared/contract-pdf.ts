@@ -5,6 +5,11 @@ import {
   rgb,
   StandardFonts,
 } from "https://esm.sh/pdf-lib@1.17.1?target=deno";
+import {
+  formatContractPeriodMonths,
+  replaceFixedContractPeriodText,
+  resolveContractPeriodMonths,
+} from "./contract-period.ts";
 
 const PAGE_WIDTH = 595.28;
 const PAGE_HEIGHT = 841.89;
@@ -100,7 +105,11 @@ function safeText(value: unknown) {
     .replace(/✦/g, "")
     .replace(/telefone\s+X{5,}/gi, "telefone não informado")
     .replace(/e-mail\s+x{5,}/gi, "e-mail contato@noxfianca.com.br")
-    .replace(/[^\u0009\u000A\u000D\u0020-\u00FF]/g, "")
+    .replace(/[^\u0020-\u00FF]/g, (character) =>
+      character === "\t" || character === "\n" || character === "\r"
+        ? character
+        : ""
+    )
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -256,6 +265,7 @@ export async function buildStyledContractPdf(input: ContractPdfInput) {
   const calculated = consulta?.documentos?.plano_calculado || {};
   const extras = consulta?.documentos?.extras || {};
   const packageValue = calculatePackageValue(consulta);
+  const contractPeriodMonths = resolveContractPeriodMonths(consulta);
   const multiplier = Number(
     calculated.cobertura_multiplicador ?? plan.cobertura_multiplicador ?? 0,
   );
@@ -556,40 +566,46 @@ export async function buildStyledContractPdf(input: ContractPdfInput) {
     [
       [
         { label: "Plano", value: planName },
-        { label: "Pacote locatício", value: formatCurrency(packageValue) },
+        {
+          label: "Período do contrato",
+          value: formatContractPeriodMonths(contractPeriodMonths),
+        },
       ],
       [
+        { label: "Pacote locatício", value: formatCurrency(packageValue) },
         {
           label: `Cobertura - ${multiplier || 0} vezes`,
           value: formatCurrency(coverageValue),
         },
+      ],
+      [
         {
           label: `Custos de saída - ${exitMultiplier || 0} vezes`,
           value: formatCurrency(exitValue),
         },
-      ],
-      [
         { label: "Prêmio mensal", value: formatCurrency(monthlyValue) },
-        { label: "Total anual", value: formatCurrency(annualValue) },
       ],
       [
+        { label: "Total anual", value: formatCurrency(annualValue) },
         {
           label: "Taxa de adesão",
           value: activationEnabled
             ? formatCurrency(activationValue)
             : "Não contratada",
         },
+      ],
+      [
         {
           label: "Cobertura adicional",
           value: coverages.length ? coverages.join(", ") : "Nenhuma",
         },
-      ],
-      [
         {
           label: "Forma de pagamento",
           value: consulta?.insurance_payment_method_label ||
             consulta?.insurance_payment_method || "Não informada",
         },
+      ],
+      [
         {
           label: "Assistência adicional",
           value: !assistance || assistance === "none" ? "Nenhuma" : assistance,
@@ -638,7 +654,12 @@ export async function buildStyledContractPdf(input: ContractPdfInput) {
   );
   const normalizedLegal = legalParagraphs
     .slice(Math.max(0, legalStart))
-    .map(safeText)
+    .map((paragraph) =>
+      replaceFixedContractPeriodText(
+        safeText(paragraph),
+        contractPeriodMonths,
+      )
+    )
     .filter(Boolean);
 
   for (let text of normalizedLegal) {

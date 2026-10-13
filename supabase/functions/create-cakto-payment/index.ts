@@ -1,6 +1,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 import { corsHeaders, hasOversizedBody, rejectDisallowedOrigin } from "../_shared/http-security.ts";
+import {
+  CONTRACT_PERIOD_LOCK_CONFLICT_CODE,
+  ContractPeriodLockError,
+  lockContractPeriod,
+  resolveContractPeriodMonths,
+} from "../_shared/contract-period.ts";
 
 type PaymentMethod = "pix" | "boleto" | "credit_card";
 type FireMode = "avista" | "embutido";
@@ -327,6 +333,21 @@ serve(async (req) => {
         404,
       );
 
+    let contractPeriodMonths: number;
+    try {
+      contractPeriodMonths = resolveContractPeriodMonths(consulta);
+    } catch {
+      return jsonResponse(
+        req,
+        {
+          ok: false,
+          error:
+            "Selecione um período de contrato válido, entre 1 e 120 meses, antes de gerar o pagamento.",
+        },
+        400,
+      );
+    }
+
     const imovel = (consulta as any).imoveis || {};
     const inquilino = (consulta as any).inquilinos || {};
     const docs =
@@ -403,6 +424,35 @@ serve(async (req) => {
       amount: expectedAmount,
       fireMode,
     });
+
+    // A seleção validada acima é congelada antes da primeira chamada ao
+    // provedor. Se ela mudou em paralelo, o UPDATE condicional não adquire o
+    // lock e nenhuma cobrança é iniciada com dados obsoletos.
+    try {
+      await lockContractPeriod(
+        supabaseAdmin,
+        proposalId,
+        contractPeriodMonths,
+      );
+    } catch (error) {
+      const conflict = error instanceof ContractPeriodLockError &&
+        error.code === CONTRACT_PERIOD_LOCK_CONFLICT_CODE;
+      console.error("[create-cakto-payment] falha ao bloquear período", {
+        proposalId,
+        code: error instanceof ContractPeriodLockError ? error.code : "unknown",
+      });
+      return jsonResponse(
+        req,
+        {
+          ok: false,
+          error: conflict
+            ? "O período do contrato mudou. Atualize a página antes de gerar o pagamento."
+            : "Não foi possível confirmar o período do contrato agora. Tente novamente.",
+        },
+        conflict ? 409 : 500,
+      );
+    }
+
     const { data: existente } = await supabaseAdmin
       .from("cakto_payments")
       .select("*")

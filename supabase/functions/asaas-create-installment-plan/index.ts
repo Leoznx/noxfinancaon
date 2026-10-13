@@ -27,9 +27,14 @@ import {
 } from "../_shared/asaas.ts";
 import { ensureAsaasCustomer } from "../_shared/asaas-customer.ts";
 import { asaasLateFeePayload, nextMonthlyDueDate } from "../_shared/billing-automation.ts";
+import {
+  CONTRACT_PERIOD_LOCK_CONFLICT_CODE,
+  ContractPeriodLockError,
+  lockContractPeriod,
+  parseContractPeriodMonths,
+  resolveContractPeriodMonths,
+} from "../_shared/contract-period.ts";
 import { dispatchD4SignContract } from "../_shared/d4sign.ts";
-
-const INSTALLMENT_COUNT = 12;
 
 function queueContractDispatch(proposalId: string) {
   runInBackground(`enviar contrato D4Sign ${proposalId}`, async () => {
@@ -101,11 +106,26 @@ serve(async (req) => {
       ["admin", "financeiro", "corretor", "imobiliaria"].includes(role);
     if (!allowed) return jsonResponse(req, { ok: false, error: "Acesso nao autorizado." }, 403);
 
+    let persistedInstallmentCount: number;
+    try {
+      persistedInstallmentCount = resolveContractPeriodMonths(consulta);
+    } catch {
+      return jsonResponse(
+        req,
+        {
+          ok: false,
+          error:
+            "Selecione um período de contrato válido, entre 1 e 120 meses, antes de gerar as cobranças.",
+        },
+        400,
+      );
+    }
+
     const recipient = resolvePaymentRecipient(consulta);
     if (recipient.paymentResponsible !== "tenant") {
       return jsonResponse(
         req,
-        { ok: false, error: "Este fluxo de 12 boletos e so para pagamento pelo inquilino." },
+        { ok: false, error: "Este fluxo de boletos mensais e so para pagamento pelo inquilino." },
         400,
       );
     }
@@ -136,13 +156,102 @@ serve(async (req) => {
       .order("numero_parcela", { ascending: true });
     if (existentesError) throw existentesError;
 
+    const frozenTotals = new Set<number>();
+    for (const invoice of existentes ?? []) {
+      const total = parseContractPeriodMonths(invoice.installment_total);
+      if (total === null) {
+        return jsonResponse(
+          req,
+          {
+            ok: false,
+            error:
+              "O cronograma existente possui um período inválido e precisa de revisão antes de continuar.",
+          },
+          409,
+        );
+      }
+      frozenTotals.add(total);
+    }
+    if (frozenTotals.size > 1) {
+      return jsonResponse(
+        req,
+        {
+          ok: false,
+          error:
+            "As cobranças existentes possuem períodos divergentes e precisam de revisão antes de continuar.",
+        },
+        409,
+      );
+    }
+    const frozenInstallmentCount = frozenTotals.values().next().value as number | undefined;
+    if (
+      frozenInstallmentCount !== undefined &&
+      frozenInstallmentCount !== persistedInstallmentCount
+    ) {
+      return jsonResponse(
+        req,
+        {
+          ok: false,
+          error:
+            "O período da proposta não coincide com o cronograma já gerado. Nenhuma nova cobrança foi criada.",
+        },
+        409,
+      );
+    }
+    // A primeira fatura materializada congela o total para toda retomada. A
+    // coluna da proposta precisa continuar igual ao valor já contratado.
+    const installmentCount = frozenInstallmentCount ?? persistedInstallmentCount;
+
     const jaCriadas = new Map<number, any>(
       (existentes ?? []).map((f: any) => [f.numero_parcela, f]),
     );
 
-    if (jaCriadas.size >= INSTALLMENT_COUNT) {
+    if (
+      [...jaCriadas.keys()].some(
+        (installmentNumber) =>
+          !Number.isSafeInteger(Number(installmentNumber)) ||
+          Number(installmentNumber) < 1 ||
+          Number(installmentNumber) > installmentCount,
+      )
+    ) {
+      return jsonResponse(
+        req,
+        {
+          ok: false,
+          error: "O cronograma existente possui uma parcela incompatível com o período contratado.",
+        },
+        409,
+      );
+    }
+
+    // Congela o mesmo período validado acima antes de qualquer chamada ao
+    // Asaas ou despacho para a D4Sign. O UPDATE condicional impede usar um
+    // prazo que tenha sido alterado por outra requisição nesse intervalo.
+    try {
+      await lockContractPeriod(supabase, proposalId, installmentCount);
+    } catch (error) {
+      const conflict =
+        error instanceof ContractPeriodLockError &&
+        error.code === CONTRACT_PERIOD_LOCK_CONFLICT_CODE;
+      console.error("[asaas-create-installment-plan] falha ao bloquear período", {
+        proposalId,
+        code: error instanceof ContractPeriodLockError ? error.code : "unknown",
+      });
+      return jsonResponse(
+        req,
+        {
+          ok: false,
+          error: conflict
+            ? "O período do contrato mudou. Atualize a página antes de gerar as cobranças."
+            : "Não foi possível confirmar o período do contrato agora. Tente novamente.",
+        },
+        conflict ? 409 : 500,
+      );
+    }
+
+    if (jaCriadas.size >= installmentCount) {
       queueContractDispatch(proposalId);
-      return jsonResponse(req, buildResponse([...jaCriadas.values()], recipient));
+      return jsonResponse(req, buildResponse([...jaCriadas.values()], recipient, installmentCount));
     }
 
     // A ativacao continua sendo uma cobranca separada; as mensalidades
@@ -151,7 +260,7 @@ serve(async (req) => {
     const primeiroVencimento = jaCriadas.size > 0 ? null : nextMonthlyDueDate(new Date(), 1);
     const schedule = generateInstallmentSchedule({
       firstDueDate: primeiroVencimento || (existentes?.[0]?.vencimento ?? addBusinessDays(3)),
-      count: INSTALLMENT_COUNT,
+      count: installmentCount,
     });
 
     let customerId: string;
@@ -174,13 +283,14 @@ serve(async (req) => {
         paymentErrorStatus(error, 502),
       );
     }
+
     const criadas: any[] = [...jaCriadas.values()];
 
     for (const item of schedule) {
       if (jaCriadas.has(item.installmentNumber)) continue;
 
       const externalReference = `nox:consulta:${proposalId}:installment:${item.installmentNumber}`;
-      const description = `NOX Fiança — Mensalidade ${item.installmentNumber}/${INSTALLMENT_COUNT} — ${MESES_PT[item.referenceMonth - 1]} de ${item.referenceYear}`;
+      const description = `NOX Fiança — Mensalidade ${item.installmentNumber}/${installmentCount} — ${MESES_PT[item.referenceMonth - 1]} de ${item.referenceYear}`;
 
       let raw: any;
       try {
@@ -208,9 +318,9 @@ serve(async (req) => {
           req,
           {
             ok: false,
-            error: `Nao foi possivel gerar a mensalidade ${item.installmentNumber}/${INSTALLMENT_COUNT}: ${describePaymentError(error, "tente novamente")}. As mensalidades ja criadas foram preservadas.`,
+            error: `Nao foi possivel gerar a mensalidade ${item.installmentNumber}/${installmentCount}: ${describePaymentError(error, "tente novamente")}. As mensalidades ja criadas foram preservadas.`,
             created: criadas.length,
-            total: INSTALLMENT_COUNT,
+            total: installmentCount,
           },
           502,
         );
@@ -263,7 +373,7 @@ serve(async (req) => {
           consulta_id: proposalId,
           tenant_user_id: consulta.tenant_user_id,
           numero_parcela: item.installmentNumber,
-          installment_total: INSTALLMENT_COUNT,
+          installment_total: installmentCount,
           vencimento: item.dueDate,
           valor: monthlyValue,
           status: internalStatus,
@@ -289,7 +399,7 @@ serve(async (req) => {
     // O cronograma ja esta persistido. Notificacoes consolidadas continuam
     // idempotentes, mas nao bloqueiam mais a resposta que libera o pagamento.
     runInBackground(`notificar cronograma ${proposalId}`, async () => {
-      if (criadas.length >= INSTALLMENT_COUNT && recipient.recipientEmail) {
+      if (criadas.length >= installmentCount && recipient.recipientEmail) {
         const jaEnviadoEmail = await wasNotificationSent(supabase, {
           invoiceId: criadas[0]?.id,
           channel: "email",
@@ -317,7 +427,7 @@ serve(async (req) => {
           });
         }
       }
-      if (criadas.length >= INSTALLMENT_COUNT && recipient.recipientPhone) {
+      if (criadas.length >= installmentCount && recipient.recipientPhone) {
         const jaEnviadoSms = await wasNotificationSent(supabase, {
           invoiceId: criadas[0]?.id,
           channel: "sms",
@@ -351,7 +461,7 @@ serve(async (req) => {
             const primeira = criadas[0];
             const resultadoWpp = await sendPaymentWhatsapp({
               to: recipient.recipientPhone,
-              mensagem: `Olá, ${recipient.recipientName || "cliente"}. Os ${INSTALLMENT_COUNT} boletos mensais da NOX Fiança foram gerados. Primeira mensalidade: ${formatBRL(Number(primeira.valor))}, vencimento ${formatDateBr(primeira.vencimento)}. Acesse sua conta para visualizar ou pagar o boleto.`,
+              mensagem: `Olá, ${recipient.recipientName || "cliente"}. Os ${installmentCount} boletos mensais da NOX Fiança foram gerados. Primeira mensalidade: ${formatBRL(Number(primeira.valor))}, vencimento ${formatDateBr(primeira.vencimento)}. Acesse sua conta para visualizar ou pagar o boleto.`,
             });
             await logFinancialNotification(supabase, {
               invoiceId: criadas[0]?.id,
@@ -368,7 +478,7 @@ serve(async (req) => {
 
     queueContractDispatch(proposalId);
 
-    return jsonResponse(req, buildResponse(criadas, recipient));
+    return jsonResponse(req, buildResponse(criadas, recipient, installmentCount));
   } catch (error) {
     console.error("[asaas-create-installment-plan] erro", {
       message: error instanceof Error ? error.message : String(error),
@@ -395,11 +505,15 @@ function maskPhoneLocal(phone?: string | null) {
   return `+55 (***) *****-${digits.slice(-4)}`;
 }
 
-function buildResponse(faturas: any[], recipient: ReturnType<typeof resolvePaymentRecipient>) {
+function buildResponse(
+  faturas: any[],
+  recipient: ReturnType<typeof resolvePaymentRecipient>,
+  installmentCount: number,
+) {
   const ordenadas = [...faturas].sort((a, b) => a.numero_parcela - b.numero_parcela);
   return {
     success: true,
-    installmentTotal: INSTALLMENT_COUNT,
+    installmentTotal: installmentCount,
     installments: ordenadas.map((f) => ({
       installmentNumber: f.numero_parcela,
       dueDate: f.vencimento,

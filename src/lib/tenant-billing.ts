@@ -1,3 +1,5 @@
+import { resolveContractPeriodMonths } from "@/lib/contract-period";
+
 export const AGENCY_BILLING_MESSAGE =
   "Sua imobiliária parceira realizará o pagamentos das faturas através da cobrança feita a você.";
 
@@ -7,6 +9,7 @@ export type TenantBillingConsultation = {
   id: string;
   payment_type: string | null;
   insurance_payment_method: string | null;
+  contract_period_months: number | null;
   imovel?: {
     endereco: string | null;
     cidade: string | null;
@@ -72,11 +75,14 @@ function normalizeMethod(value: string | null | undefined): TenantBillingMethod 
   return "unknown";
 }
 
-function installmentFromReference(reference: string | null | undefined) {
+function installmentFromReference(
+  reference: string | null | undefined,
+  contractPeriodMonths: number | null | undefined,
+) {
   const match = String(reference || "").match(/installment:(\d+)/i);
   return {
     number: match ? Number(match[1]) : 1,
-    total: match ? 12 : 1,
+    total: match ? resolveContractPeriodMonths(contractPeriodMonths) : 1,
   };
 }
 
@@ -125,7 +131,9 @@ export function mergeTenantBillingItems(
       dueDate: payment?.due_date || invoice.vencimento || null,
       paidAt: payment?.received_at || payment?.confirmed_at || invoice.pago_em || null,
       installmentNumber: Number(invoice.numero_parcela || 1),
-      installmentTotal: Number(invoice.installment_total || 1),
+      installmentTotal: Number(
+        invoice.installment_total || resolveContractPeriodMonths(consultation?.contract_period_months),
+      ),
       boletoUrl: payment?.boleto_url || invoice.boleto_url || null,
       boletoBarcode: payment?.boleto_barcode || invoice.linha_digitavel || null,
       pixCopyPaste: payment?.pix_copy_paste || null,
@@ -139,7 +147,11 @@ export function mergeTenantBillingItems(
     if (usedPaymentIds.has(payment.id) || !tenantConsultationIds.has(consultationId)) {
       continue;
     }
-    const installment = installmentFromReference(payment.external_reference);
+    const consultation = consultationById.get(consultationId);
+    const installment = installmentFromReference(
+      payment.external_reference,
+      consultation?.contract_period_months,
+    );
     merged.push({
       id: `payment:${payment.id}`,
       invoiceId: null,

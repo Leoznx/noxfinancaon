@@ -723,8 +723,9 @@ export function formatDateBr(isoDate: string) {
   return `${d}/${m}/${y}`;
 }
 
-// Parcela mensal recorrente (usada nas 12 mensalidades quando o responsavel
-// e o inquilino) - sempre premioMensal + pinturaMensal + incendioMensal,
+// Parcela mensal recorrente (usada durante o período contratado quando o
+// responsavel e o inquilino) - sempre premioMensal + pinturaMensal +
+// incendioMensal,
 // sem a distincao a-vista/embutido de calculateExpectedPayment (que e so pra
 // cobranca inicial de ativacao). Nao inclui taxa de ativacao: essa e um
 // valor avulso, nao deve ser diluida nas parcelas recorrentes.
@@ -802,8 +803,8 @@ export function generateInstallmentSchedule(params: {
   return items;
 }
 
-// E-mail consolidado com o cronograma completo das 12 mensalidades -
-// disparado uma unica vez na criacao do plano (nunca 12 e-mails separados
+// E-mail consolidado com o cronograma completo das mensalidades -
+// disparado uma unica vez na criacao do plano (nunca um e-mail por parcela
 // nesse momento; os lembretes individuais ficam por conta de
 // process-scheduled-invoice-notifications).
 export async function sendInstallmentScheduleEmail(params: {

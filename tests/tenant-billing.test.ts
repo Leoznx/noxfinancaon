@@ -14,11 +14,13 @@ const agency: TenantBillingConsultation = {
   id: "agency-contract",
   payment_type: "imobiliaria",
   insurance_payment_method: "boleto",
+  contract_period_months: 12,
 };
 const tenant: TenantBillingConsultation = {
   id: "tenant-contract",
   payment_type: "inquilino",
   insurance_payment_method: "pix",
+  contract_period_months: 24,
 };
 
 const invoice: TenantInvoiceSource = {
@@ -85,6 +87,15 @@ test("inclui pagamentos gerados sem linha correspondente em faturas_inquilino", 
   assert.equal(result.length, 1);
   assert.equal(result[0].method, "credit_card");
   assert.equal(result[0].installmentNumber, 2);
-  assert.equal(result[0].installmentTotal, 12);
+  assert.equal(result[0].installmentTotal, 24);
   assert.equal(tenantBillingMethodLabel(result[0].method), "Cartão");
+});
+
+test("usa o período do contrato quando a fatura antiga não informa o total", () => {
+  const result = mergeTenantBillingItems(
+    [tenant],
+    [{ ...invoice, installment_total: null }],
+    [payment],
+  );
+  assert.equal(result[0].installmentTotal, 24);
 });

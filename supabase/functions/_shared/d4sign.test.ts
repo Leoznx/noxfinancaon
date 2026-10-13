@@ -33,6 +33,7 @@ const consulta = {
   tenant_email: "maria@example.com",
   tenant_telefone: "11999998888",
   tenant_data_nascimento: "1990-05-17",
+  contract_period_months: 24,
   valor_premio_mensal: 480,
   valor_anual: 5760,
   imovel_subtipo: "Apartamento",
@@ -108,6 +109,8 @@ for (
     assert(documentXml.includes("12.345.678/0001-99"));
     assert(documentXml.includes("TAXA DE ADESÃO (SETUP) – R$ 200,00"));
     assert(documentXml.includes("Pintura externa contratada: R$ 72,00"));
+    assert(documentXml.includes("vigência de 24 meses"));
+    assertEquals(documentXml.includes("vigência de 12 meses"), false);
     assert(
       documentXml.includes("R$ 57.000,00") ||
         documentXml.includes("R$ 57.000,00"),

@@ -39,6 +39,7 @@ import {
   getEdgeFunctionErrorDetails,
   getEdgeFunctionErrorMessage,
 } from "@/lib/asaas-payment";
+import { formatContractPeriodMonths, normalizeContractPeriodMonths } from "@/lib/contract-period";
 import {
   CheckCircle2,
   Circle,
@@ -394,6 +395,10 @@ function FinalizarPage() {
   const cobertura = totalLoc * (Number(plano?.cobertura_multiplicador) || 12);
   const documentosMeta =
     consulta?.documentos && typeof consulta.documentos === "object" ? consulta.documentos : {};
+  const contractPeriodMonths = normalizeContractPeriodMonths(
+    consulta?.contract_period_months ?? (documentosMeta as any).contract_period_months,
+  );
+  const contractPeriodLabel = formatContractPeriodMonths(contractPeriodMonths);
   const extrasSummary = (documentosMeta as any).extras ?? {};
   const dadosComplementaresSummary = (documentosMeta as any).dados_complementares ?? {};
 
@@ -546,6 +551,29 @@ function FinalizarPage() {
     );
   }
 
+  if (contractPeriodMonths === null) {
+    return (
+      <DashboardLayout>
+        <div className="mx-auto max-w-xl p-6 sm:p-10">
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
+            <h1 className="text-lg font-black text-neutral-900">Período do contrato não informado</h1>
+            <p className="mt-2 text-sm leading-relaxed text-neutral-600">
+              Volte à proposta e selecione por quantos meses o contrato ficará vigente antes de
+              continuar.
+            </p>
+            <Button
+              type="button"
+              onClick={() => navigate({ to: `/consultas/${id}/resultado` as any })}
+              className="mt-5 bg-neutral-900 text-white hover:bg-neutral-800"
+            >
+              Voltar à proposta
+            </Button>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   const numeroProposta = `NOX-${String(id).slice(0, 8).toUpperCase()}`;
 
   const seguroConcluido = !!(pagamento && aceiteTermos);
@@ -586,6 +614,7 @@ function FinalizarPage() {
         taxas={taxas}
         totalLoc={totalLoc}
         premioMensal={premioMensal}
+        contractPeriodMonths={contractPeriodMonths}
         taxaAtivacao={taxaAtivacao}
         pinturaTotal={pinturaTotal}
         pinturaMensal={pinturaMensal}
@@ -640,7 +669,7 @@ function FinalizarPage() {
               emissão do seguro, a apólice poderá não ser emitida e a proposta poderá ser cancelada.
             </p>
             <p>
-              <strong>6. Vigência.</strong> A apólice vigora por 12 meses a contar da data de
+              <strong>6. Vigência.</strong> A apólice vigora por {contractPeriodLabel} a contar da data de
               ativação pelo inquilino.
             </p>
             <p>
@@ -792,7 +821,7 @@ function FinalizarPage() {
               emissão do seguro, a apólice poderá não ser emitida e a proposta poderá ser cancelada.
             </p>
             <p>
-              <strong>6. Vigência.</strong> A apólice vigora por 12 meses a contar da data de
+              <strong>6. Vigência.</strong> A apólice vigora por {contractPeriodLabel} a contar da data de
               ativação pelo inquilino.
             </p>
             <p>
@@ -858,6 +887,7 @@ function ResumoPropostaLoft(p: any) {
     taxas,
     totalLoc,
     premioMensal,
+    contractPeriodMonths,
     taxaAtivacao,
     pinturaTotal,
     pinturaMensal,
@@ -880,6 +910,7 @@ function ResumoPropostaLoft(p: any) {
     fnEnviar,
     onPropostaRegistrada,
   } = p;
+  const contractPeriodLabel = formatContractPeriodMonths(contractPeriodMonths);
   const dataNascimento = consulta?.tenant_data_nascimento
     ? new Date(`${consulta.tenant_data_nascimento}T00:00:00`).toLocaleDateString("pt-BR")
     : "—";
@@ -949,16 +980,16 @@ function ResumoPropostaLoft(p: any) {
   const pagandoRef = useRef(false);
 
   // Quando o responsavel pelo pagamento e o inquilino e a forma e boleto, a
-  // contratacao gera as 12 mensalidades de uma vez (asaas-create-installment-
+  // contratacao gera todas as mensalidades do periodo de uma vez (asaas-create-installment-
   // plan) em vez de uma cobranca unica - nenhuma outra combinacao muda.
   const ehParceladoInquilino = consulta?.payment_type === "inquilino" && pagamento === "boleto";
   const cronogramaPreview = useMemo(() => {
     if (!ehParceladoInquilino) return [];
     return generateInstallmentSchedulePreview({
       firstDueDate: addBusinessDaysPreview(3),
-      count: 12,
+      count: contractPeriodMonths,
     });
-  }, [ehParceladoInquilino]);
+  }, [contractPeriodMonths, ehParceladoInquilino]);
 
   /** Subtipo do imóvel escolhido na aba do seguro — vira `imovel_subtipo` na consulta. */
   function subtipoSelecionado(): string {
@@ -1288,6 +1319,7 @@ function ResumoPropostaLoft(p: any) {
         <ResumoBox title="Dados do plano" onEdit={onEditarDados}>
           <ResumoRow label="Plano" value={<strong>{planoNome}</strong>} />
           <ResumoRow label="Tipo de pagador" value={tipoPagador} />
+          <ResumoRow label="Período do contrato" value={contractPeriodLabel} />
           <ResumoRow label="Valor da taxa" value={fmt(premioMensal * 12)} />
           <ResumoRow label="Valor do setup" value={fmt(valorSetup)} />
           <ResumoRow label="Custo de saída" value={custoSaidaTexto} />
@@ -1543,7 +1575,9 @@ function ResumoPropostaLoft(p: any) {
                 {ehParceladoInquilino && (
                   <div className="rounded-md border border-slate-300 bg-slate-50 p-4">
                     <p className="text-sm font-bold text-neutral-950">
-                      O inquilino paga por boleto: 12 boletos mensais serão gerados agora
+                      {contractPeriodMonths === 1
+                        ? "O inquilino paga por boleto: 1 boleto mensal será gerado agora"
+                        : `O inquilino paga por boleto: ${contractPeriodMonths} boletos mensais serão gerados agora`}
                     </p>
                     <p className="mt-1 text-xs text-slate-600">
                       Cada mensalidade vira uma cobrança independente, visível em "Minhas Faturas".
@@ -1551,7 +1585,7 @@ function ResumoPropostaLoft(p: any) {
                     <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-700 sm:grid-cols-3">
                       {cronogramaPreview.map((parcela) => (
                         <div key={parcela.installmentNumber}>
-                          {parcela.installmentNumber}/12 — {MESES_PT[parcela.referenceMonth - 1]}/
+                          {parcela.installmentNumber}/{contractPeriodMonths} — {MESES_PT[parcela.referenceMonth - 1]}/
                           {parcela.referenceYear} · {formatDateBr(parcela.dueDate)}
                         </div>
                       ))}
@@ -1786,7 +1820,7 @@ function ResumoPropostaLoft(p: any) {
                   : enviando
                     ? "Processando..."
                     : ehParceladoInquilino
-                      ? "Gerar 12 boletos"
+                      ? `Gerar ${contractPeriodMonths} ${contractPeriodMonths === 1 ? "boleto" : "boletos"}`
                       : "Pagar"
                 : "Seguir para pagamento"}{" "}
               <ArrowRight size={16} className="ml-2" />

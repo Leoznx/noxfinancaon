@@ -64,7 +64,7 @@ export type TenantDashboardData = {
 };
 
 const CONSULTATION_SELECT =
-  "id, status, created_at, updated_at, approved_at, contract_accepted_at, activation_completed_at, activation_status, payment_type, insurance_payment_method, imovel:imoveis(endereco, cidade, estado), plano:planos(nome)";
+  "id, status, created_at, updated_at, approved_at, contract_accepted_at, activation_completed_at, activation_status, payment_type, insurance_payment_method, contract_period_months, imovel:imoveis(endereco, cidade, estado), plano:planos(nome)";
 
 const DOCUMENT_BUCKETS = [
   "contratos-assinados",

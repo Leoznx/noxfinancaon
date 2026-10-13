@@ -4,10 +4,11 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { SeletorPlanos } from "@/components/simulacao/SeletorPlanos";
+import { SeletorPlanos, type ExtrasSelecionados } from "@/components/simulacao/SeletorPlanos";
 import { useAuth } from "@/components/AuthProvider";
 import { DadosSimulacao } from "@/components/simulacao/FormularioSimulacao";
 import { registrarEventoProposta } from "@/lib/consultasCredito";
+import { normalizeContractPeriodMonths } from "@/lib/contract-period";
 
 export const Route = createFileRoute("/simular/resultado")({
   component: SimularResultadoWrapper,
@@ -56,21 +57,42 @@ function SimularResultado() {
     }
   }, [navigate]);
 
-  const handleSelecionarPlano = async (planoId: string, extras?: import("@/components/simulacao/SeletorPlanos").ExtrasSelecionados) => {
+  const handleSelecionarPlano = async (
+    planoId: string,
+    contractPeriodMonths: number,
+    extras?: ExtrasSelecionados,
+  ) => {
     if (!dados || !user?.email) return;
     setIsSubmitting(true);
     try {
+      const periodoContrato = normalizeContractPeriodMonths(contractPeriodMonths);
+      if (!periodoContrato) throw new Error("Selecione um período de contrato válido.");
+
       const { upsertConsultaCredito } = await import("@/lib/consultas");
       const consultaId = await upsertConsultaCredito({
         dados,
         userEmail: user.email,
         userRole: user.role,
       });
+      const { data: consultaAtual, error: consultaAtualError } = await supabase
+        .from("consultas_credito")
+        .select("documentos")
+        .eq("id", consultaId)
+        .maybeSingle();
+      if (consultaAtualError) throw consultaAtualError;
+      const previousDocumentos =
+        consultaAtual?.documentos &&
+        typeof consultaAtual.documentos === "object" &&
+        !Array.isArray(consultaAtual.documentos)
+          ? consultaAtual.documentos
+          : {};
       const updatePayload: any = {
         plano_id: planoId,
+        contract_period_months: periodoContrato,
         origem: "simulacao_publica",
         status: "pendente_documentacao",
         documentos: {
+          ...previousDocumentos,
           extras: extras ?? {},
         },
       };
@@ -85,7 +107,7 @@ function SimularResultado() {
         consultaId,
         "plano_selecionado",
         "Plano selecionado na simulação pública.",
-        { plano_id: planoId },
+        { plano_id: planoId, contract_period_months: periodoContrato },
       );
 
       localStorage.removeItem("nox_simulacao_pendente");

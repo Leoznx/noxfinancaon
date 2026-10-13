@@ -135,9 +135,9 @@ serve(async (req) => {
     return jsonResponse(req, { ok: false, error: "Falha ao atualizar pagamento." }, 500);
   }
 
-  // Se esse pagamento e uma das 12 mensalidades (asaas-create-installment-
+  // Se esse pagamento e uma das mensalidades (asaas-create-installment-
   // plan vincula faturas_inquilino.asaas_payment_id = asaas_payments.id),
-  // atualiza SO aquela parcela - as outras 11 continuam intactas.
+  // atualiza SO aquela parcela - as demais continuam intactas.
   const { data: faturaVinculada } = await supabase
     .from("faturas_inquilino")
     .select("id, status, numero_parcela, installment_total, vencimento, pago_em")
@@ -209,7 +209,7 @@ serve(async (req) => {
       // PAYMENT_CONFIRMED/PAYMENT_RECEIVED, nunca em PAYMENT_CREATED, e o
       // event_id unico do webhook (checado no topo desta funcao) ja impede
       // reenvio duplicado quando o Asaas reentrega o MESMO evento. Quando a
-      // fatura e uma das 12 mensalidades, ainda existe o caso de
+      // fatura e uma das mensalidades, ainda existe o caso de
       // PAYMENT_CONFIRMED seguido depois de PAYMENT_RECEIVED (dois eventos
       // DIFERENTES, cada um passaria pelo dedup acima) - sem uma segunda
       // trava, o inquilino receberia duas notificacoes de "pago" pra mesma
@@ -338,10 +338,18 @@ serve(async (req) => {
         // O evento financeiro continua processado: o pagamento não pode ser
         // refeito por uma indisponibilidade externa. A tentativa fica salva
         // em contract_signatures e pode ser retomada com segurança.
+        const signatureId = "signatureId" in contractResult
+          ? contractResult.signatureId
+          : existingSignature?.id || null;
+        const contractError = "error" in contractResult
+          ? contractResult.error
+          : "status" in contractResult
+          ? contractResult.status
+          : "unknown";
         console.error("[asaas-webhook] falha ao despachar contrato D4Sign", {
           consultationId: localPayment.consultation_id,
-          signatureId: contractResult.signatureId || null,
-          error: contractResult.error || contractResult.status || "unknown",
+          signatureId,
+          error: contractError || "unknown",
         });
       }
     }

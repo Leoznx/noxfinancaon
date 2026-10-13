@@ -24,6 +24,12 @@ import {
   toMoney,
 } from "../_shared/asaas.ts";
 import { ensureAsaasCustomer } from "../_shared/asaas-customer.ts";
+import {
+  CONTRACT_PERIOD_LOCK_CONFLICT_CODE,
+  ContractPeriodLockError,
+  lockContractPeriod,
+  resolveContractPeriodMonths,
+} from "../_shared/contract-period.ts";
 
 type Body = {
   proposalId?: string;
@@ -91,6 +97,21 @@ serve(async (req) => {
       ["admin", "financeiro", "corretor", "imobiliaria"].includes(role);
     if (!allowed) return jsonResponse(req, { ok: false, error: "Acesso nao autorizado." }, 403);
 
+    let contractPeriodMonths: number;
+    try {
+      contractPeriodMonths = resolveContractPeriodMonths(consulta);
+    } catch {
+      return jsonResponse(
+        req,
+        {
+          ok: false,
+          error:
+            "Selecione um período de contrato válido, entre 1 e 120 meses, antes de gerar o pagamento.",
+        },
+        400,
+      );
+    }
+
     const expectedAmount = calculateExpectedPayment(consulta, fireMode);
     const requestedAmount = toMoney(body.amount || expectedAmount);
     if (expectedAmount <= 0)
@@ -123,6 +144,30 @@ serve(async (req) => {
       .select("*")
       .eq("idempotency_key", externalReference)
       .maybeSingle();
+
+    // A cobrança avulsa também materializa o contrato. O lock é adquirido
+    // antes de consultar novamente o Asaas ou criar cliente/pagamento externo.
+    try {
+      await lockContractPeriod(supabase, proposalId, contractPeriodMonths);
+    } catch (error) {
+      const conflict =
+        error instanceof ContractPeriodLockError &&
+        error.code === CONTRACT_PERIOD_LOCK_CONFLICT_CODE;
+      console.error("[asaas-create-payment] falha ao bloquear período", {
+        proposalId,
+        code: error instanceof ContractPeriodLockError ? error.code : "unknown",
+      });
+      return jsonResponse(
+        req,
+        {
+          ok: false,
+          error: conflict
+            ? "O período do contrato mudou. Atualize a página antes de gerar o pagamento."
+            : "Não foi possível confirmar o período do contrato agora. Tente novamente.",
+        },
+        conflict ? 409 : 500,
+      );
+    }
 
     if (existente) {
       // Cobranca ja existe no Asaas - nunca recriar. Se for Pix e a busca do
