@@ -1,8 +1,25 @@
 import { useEffect, useState } from "react";
-import { Building2, Calendar, Clock, Copy, FileText, IdCard, Mail, MapPin, Phone, UserRound } from "lucide-react";
+import {
+  Building2,
+  Calendar,
+  CheckCircle2,
+  Clock,
+  Copy,
+  CreditCard,
+  FileText,
+  IdCard,
+  Loader2,
+  Mail,
+  MapPin,
+  Phone,
+  RefreshCw,
+  Send,
+  UserRound,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -18,6 +35,10 @@ import {
   type StatusExibicaoConsulta,
 } from "@/lib/consultasCredito";
 import { resolveCreditCustomerName } from "@/lib/credit-customer-name";
+import {
+  reconcileExistingAsaasSubscription,
+  type ExistingAsaasSubscriptionPreview,
+} from "@/lib/asaas-import";
 import { maskPhone } from "@/utils/validators";
 
 type Props = {
@@ -115,6 +136,8 @@ const LABEL_ETAPA: Record<string, string> = {
 export function ConsultaDetalhesModal({ consulta, open, onOpenChange }: Props) {
   const [extras, setExtras] = useState<ExtrasSolicitante | null>(null);
   const [historico, setHistorico] = useState<EventoHistorico[] | null>(null);
+  const [asaasPreview, setAsaasPreview] = useState<ExistingAsaasSubscriptionPreview | null>(null);
+  const [asaasAction, setAsaasAction] = useState<"preview" | "import" | null>(null);
 
   const profileIdSolicitante = consulta?.profile_id_solicitante ?? null;
   const emailSolicitante = consulta?.solicitante?.email ?? null;
@@ -122,6 +145,45 @@ export function ConsultaDetalhesModal({ consulta, open, onOpenChange }: Props) {
   // Cidade do solicitante não existe em `profiles` — corretor guarda em `corretores`,
   // imobiliária em `imobiliarias`. Busca só quando a caixa abre, pra não pesar a lista.
   const consultaId = consulta?.id ?? null;
+
+  useEffect(() => {
+    setAsaasPreview(null);
+    setAsaasAction(null);
+  }, [consultaId, open]);
+
+  const consultarAssinaturaExistente = async () => {
+    if (!consultaId || asaasAction) return;
+    setAsaasAction("preview");
+    try {
+      const result = await reconcileExistingAsaasSubscription(consultaId, "preview");
+      setAsaasPreview(result);
+      toast.success("Assinatura existente localizada no Asaas.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível consultar o Asaas.");
+    } finally {
+      setAsaasAction(null);
+    }
+  };
+
+  const importarAssinaturaExistente = async () => {
+    if (!consultaId || asaasAction || !asaasPreview?.contractReady) return;
+    setAsaasAction("import");
+    try {
+      const result = await reconcileExistingAsaasSubscription(consultaId, "import");
+      setAsaasPreview(result);
+      if (result.contractSent) {
+        toast.success("Assinatura importada e contrato enviado para assinatura.");
+      } else {
+        toast.warning("Assinatura importada, mas o envio do contrato precisa de revisão.");
+      }
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Não foi possível importar a assinatura.",
+      );
+    } finally {
+      setAsaasAction(null);
+    }
+  };
 
   // Passo a passo da proposta depois da aprovação — é o que o administrador usa
   // para acompanhar a performance de quem fez a consulta.
@@ -232,7 +294,9 @@ export function ConsultaDetalhesModal({ consulta, open, onOpenChange }: Props) {
     fallbacks: [consulta.inquilinos?.nome, consulta.inquilinos?.razao_social],
   });
 
-  const aluguel = Number(consulta.rent_value ?? consulta.valor_aluguel ?? consulta.imoveis?.valor_aluguel ?? 0);
+  const aluguel = Number(
+    consulta.rent_value ?? consulta.valor_aluguel ?? consulta.imoveis?.valor_aluguel ?? 0,
+  );
 
   const moeda = (valor: unknown) => {
     const numero = Number(valor ?? 0);
@@ -336,6 +400,115 @@ export function ConsultaDetalhesModal({ consulta, open, onOpenChange }: Props) {
           </Secao>
         )}
 
+        {aprovada && planoEscolhido && (
+          <section className="rounded-xl border border-blue-200 bg-blue-50/60 p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="flex items-center gap-2 text-sm font-bold text-neutral-900">
+                  <CreditCard size={16} className="text-blue-700" />
+                  Assinatura criada manualmente no Asaas
+                </h3>
+                <p className="mt-1 text-xs leading-relaxed text-neutral-600">
+                  Localiza pelo CPF, confere cartão mensal, valor, prazo e primeira cobrança sem
+                  criar uma nova assinatura.
+                </p>
+              </div>
+              {!asaasPreview && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0 gap-1.5 bg-white"
+                  disabled={asaasAction !== null}
+                  onClick={consultarAssinaturaExistente}
+                >
+                  {asaasAction === "preview" ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <RefreshCw size={14} />
+                  )}
+                  Localizar
+                </Button>
+              )}
+            </div>
+
+            {asaasPreview && (
+              <div className="mt-4 space-y-3">
+                <div className="grid grid-cols-1 gap-2 text-xs text-neutral-700 sm:grid-cols-2">
+                  <p>
+                    <strong>Cartão mensal:</strong> {asaasPreview.provider.installments} cobranças
+                  </p>
+                  <p>
+                    <strong>Primeira:</strong>{" "}
+                    {formatarDataCurta(asaasPreview.provider.firstDueDate)} · Paga no cartão
+                  </p>
+                  <p>
+                    <strong>Cobrança no cartão:</strong>{" "}
+                    {moeda(asaasPreview.provider.grossMonthlyAmount)}
+                  </p>
+                  <p>
+                    <strong>Prêmio do contrato:</strong>{" "}
+                    {moeda(asaasPreview.provider.contractualMonthlyAmount)}
+                  </p>
+                  <p>
+                    <strong>Próxima:</strong> {formatarDataCurta(asaasPreview.provider.nextDueDate)}
+                  </p>
+                  <p>
+                    <strong>Término:</strong> {formatarDataCurta(asaasPreview.provider.endDate)}
+                  </p>
+                  <p>
+                    <strong>E-mail:</strong> {asaasPreview.tenant.emailMasked ?? "Não informado"}
+                  </p>
+                  <p>
+                    <strong>WhatsApp:</strong> {asaasPreview.tenant.phoneMasked ?? "Não informado"}
+                  </p>
+                </div>
+
+                {asaasPreview.missingContractFields.length > 0 && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                    <p className="font-bold">Dados obrigatórios antes da D4Sign</p>
+                    <p className="mt-1">{asaasPreview.missingContractFields.join(", ")}.</p>
+                  </div>
+                )}
+
+                {asaasPreview.contractSent ? (
+                  <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">
+                    <CheckCircle2 size={17} />
+                    Cobrança conciliada e contrato enviado para assinatura.
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="gap-1.5"
+                      disabled={asaasAction !== null || !asaasPreview.contractReady}
+                      onClick={importarAssinaturaExistente}
+                    >
+                      {asaasAction === "import" ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : (
+                        <Send size={14} />
+                      )}
+                      Importar e enviar para assinatura
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="gap-1.5 bg-white"
+                      disabled={asaasAction !== null}
+                      onClick={consultarAssinaturaExistente}
+                    >
+                      <RefreshCw size={14} /> Atualizar conferência
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+        )}
+
         {planoEscolhido && (
           <section className="rounded-xl border border-neutral-200 bg-neutral-50/60 p-4">
             <h3 className="text-[10px] font-black uppercase tracking-widest text-neutral-400">
@@ -359,8 +532,7 @@ export function ConsultaDetalhesModal({ consulta, open, onOpenChange }: Props) {
                     </div>
                     <div className="min-w-0 pb-1">
                       <p className="text-sm font-semibold text-neutral-900">
-                        {LABEL_EVENTO[evento.tipo_evento] ??
-                          evento.tipo_evento.replace(/_/g, " ")}
+                        {LABEL_EVENTO[evento.tipo_evento] ?? evento.tipo_evento.replace(/_/g, " ")}
                       </p>
                       <p className="text-sm text-neutral-600 break-words">{evento.descricao}</p>
                       <p className="text-[11px] font-medium text-neutral-400">
@@ -376,6 +548,14 @@ export function ConsultaDetalhesModal({ consulta, open, onOpenChange }: Props) {
       </DialogContent>
     </Dialog>
   );
+}
+
+function formatarDataCurta(value?: string | null) {
+  if (!value) return "—";
+  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleDateString("pt-BR");
 }
 
 function Secao({ titulo, children }: { titulo: string; children: React.ReactNode }) {

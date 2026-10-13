@@ -61,6 +61,13 @@ verify_jwt = true
 [functions.asaas-create-payment]
 verify_jwt = true
 
+[functions.asaas-create-subscription]
+verify_jwt = true
+
+[functions.asaas-import-existing-subscription]
+verify_jwt = true
+static_files = ["./functions/_shared/contract-templates/*.docx"]
+
 [functions.asaas-get-payment]
 verify_jwt = true
 
