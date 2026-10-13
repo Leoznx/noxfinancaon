@@ -311,6 +311,17 @@ test("aceita uma tabela carregada e vazia como snapshot sem propostas anteriores
   await page.close();
 });
 
+test("aceita a linha vazia usada atualmente pela Loft como snapshot sem propostas", async () => {
+  const page = await pageWithHtml(
+    pageHtml('<tr><td colspan="6">Você não tem propostas pendentes</td></tr>'),
+  );
+
+  const ids = await listLoftProposalIdsForDocument(page, "79253172991", 2_500);
+
+  assert.deepEqual(ids, []);
+  await page.close();
+});
+
 test("sem ID exato falha fechado mesmo quando o CPF possui propostas novas", async () => {
   const page = await pageWithHtml(
     pageHtml(

@@ -365,7 +365,9 @@ async function waitForVisibleProposalIdsForDocument(
     lastIds = ids;
 
     const noResults = await firstVisible([
-      page.getByText(/nenhuma proposta|nenhum resultado|n[aã]o encontramos propostas/i),
+      page.getByText(
+        /nenhuma proposta|nenhum resultado|n[aã]o encontramos propostas|(?:voc[eê]\s+)?n[aã]o (?:tem|h[aá]) propostas pendentes|sem propostas pendentes/i,
+      ),
     ]);
     const rows = await proposalRows(page);
     let visibleRowCount = 0;
