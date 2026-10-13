@@ -30,6 +30,14 @@ export type TenantInvoiceSource = {
   pago_em?: string | null;
   boleto_url?: string | null;
   linha_digitavel?: string | null;
+  payment_method?: string | null;
+  payment_url?: string | null;
+  confirmed_at?: string | null;
+  asaas_subscription_id?: string | null;
+  payment_responsible?: "tenant" | "agency" | null;
+  billing_key?: string | null;
+  charge_kind?: string | null;
+  notifications?: Array<{ status?: string | null; channel?: string | null }> | null;
 };
 
 export type TenantPaymentSource = {
@@ -48,6 +56,29 @@ export type TenantPaymentSource = {
   boleto_url: string | null;
   boleto_barcode: string | null;
   external_reference: string | null;
+  payment_responsible?: "tenant" | "agency" | null;
+  invoice_url?: string | null;
+};
+
+export type TenantSubscriptionSource = {
+  id: string;
+  consultation_id: string;
+  mode: "direct" | "checkout";
+  asaas_subscription_id?: string | null;
+  checkout_url?: string | null;
+  initial_checkout_url?: string | null;
+  initial_checkout_status?: "pending" | "paid" | "cancelled" | "expired" | "error" | null;
+  checkout_status?: "pending" | "paid" | "cancelled" | "expired" | "error" | null;
+  status?: "pending" | "active" | "suspended" | "cancelled" | "error" | null;
+  card_registration_status?:
+    | "not_required"
+    | "awaiting_card"
+    | "registered"
+    | "failed"
+    | null;
+  initial_amount?: number | null;
+  monthly_amount?: number | null;
+  fire_insurance_payment_mode?: "avista" | "embutido" | null;
 };
 
 export type TenantBillingItem = {
@@ -68,6 +99,22 @@ export type TenantBillingItem = {
   pixCopyPaste: string | null;
   pixQrCode: string | null;
   pixExpiresAt: string | null;
+  paymentUrl: string | null;
+  externalReference: string | null;
+  paymentResponsible: "tenant" | "agency" | null;
+  subscriptionId: string | null;
+  subscriptionLocalId: string | null;
+  subscriptionMode: "direct" | "checkout" | null;
+  subscriptionStatus: TenantSubscriptionSource["status"];
+  cardRegistrationStatus: TenantSubscriptionSource["card_registration_status"];
+  subscriptionCheckoutUrl: string | null;
+  subscriptionInitialPaymentUrl: string | null;
+  subscriptionInitialCheckoutStatus: TenantSubscriptionSource["initial_checkout_status"];
+  subscriptionCheckoutStatus: TenantSubscriptionSource["checkout_status"];
+  subscriptionInitialAmount: number;
+  subscriptionMonthlyAmount: number;
+  subscriptionFireMode: "avista" | "embutido";
+  notificationCount: number;
 };
 
 function normalizeMethod(value: string | null | undefined): TenantBillingMethod {
@@ -79,7 +126,7 @@ function installmentFromReference(
   reference: string | null | undefined,
   contractPeriodMonths: number | null | undefined,
 ) {
-  const match = String(reference || "").match(/installment:(\d+)/i);
+  const match = String(reference || "").match(/(?:installment:|:monthly:)(\d+)/i);
   return {
     number: match ? Number(match[1]) : 1,
     total: match ? resolveContractPeriodMonths(contractPeriodMonths) : 1,
@@ -97,6 +144,7 @@ export function mergeTenantBillingItems(
   consultations: TenantBillingConsultation[],
   invoices: TenantInvoiceSource[],
   payments: TenantPaymentSource[],
+  subscriptions: TenantSubscriptionSource[] = [],
 ): TenantBillingItem[] {
   const consultationById = new Map(consultations.map((item) => [item.id, item]));
   const tenantConsultationIds = new Set(
@@ -105,6 +153,12 @@ export function mergeTenantBillingItems(
       .map((item) => item.id),
   );
   const paymentById = new Map(payments.map((item) => [item.id, item]));
+  const subscriptionByConsultation = new Map<string, TenantSubscriptionSource>();
+  for (const subscription of subscriptions) {
+    if (!subscriptionByConsultation.has(subscription.consultation_id)) {
+      subscriptionByConsultation.set(subscription.consultation_id, subscription);
+    }
+  }
   const usedPaymentIds = new Set<string>();
   const merged: TenantBillingItem[] = [];
 
@@ -116,6 +170,7 @@ export function mergeTenantBillingItems(
       : undefined;
     if (payment) usedPaymentIds.add(payment.id);
     const consultation = consultationById.get(consultationId);
+    const subscription = subscriptionByConsultation.get(consultationId);
 
     merged.push({
       id: `invoice:${invoice.id}`,
@@ -124,7 +179,7 @@ export function mergeTenantBillingItems(
       localPaymentId: payment?.id || invoice.asaas_payment_id || null,
       providerPaymentId: payment?.asaas_payment_id || null,
       method: normalizeMethod(
-        payment?.payment_method || consultation?.insurance_payment_method,
+        payment?.payment_method || invoice.payment_method || consultation?.insurance_payment_method,
       ),
       status: payment?.status || invoice.status || "pending",
       amount: Number(payment?.value ?? invoice.valor ?? 0),
@@ -139,6 +194,23 @@ export function mergeTenantBillingItems(
       pixCopyPaste: payment?.pix_copy_paste || null,
       pixQrCode: payment?.pix_qr_code || null,
       pixExpiresAt: payment?.pix_expires_at || null,
+      paymentUrl: invoice.payment_url || payment?.invoice_url || payment?.boleto_url || null,
+      externalReference: payment?.external_reference || invoice.billing_key || null,
+      paymentResponsible: invoice.payment_responsible || payment?.payment_responsible || "tenant",
+      subscriptionId: subscription?.asaas_subscription_id || null,
+      subscriptionLocalId: subscription?.id || invoice.asaas_subscription_id || null,
+      subscriptionMode: subscription?.mode || null,
+      subscriptionStatus: subscription?.status || null,
+      cardRegistrationStatus: subscription?.card_registration_status || null,
+      subscriptionCheckoutUrl: subscription?.checkout_url || null,
+      subscriptionInitialPaymentUrl: subscription?.initial_checkout_url || null,
+      subscriptionInitialCheckoutStatus: subscription?.initial_checkout_status || null,
+      subscriptionCheckoutStatus: subscription?.checkout_status || null,
+      subscriptionInitialAmount: Number(subscription?.initial_amount || 0),
+      subscriptionMonthlyAmount: Number(subscription?.monthly_amount || 0),
+      subscriptionFireMode:
+        subscription?.fire_insurance_payment_mode === "avista" ? "avista" : "embutido",
+      notificationCount: invoice.notifications?.length || 0,
     });
   }
 
@@ -152,6 +224,7 @@ export function mergeTenantBillingItems(
       payment.external_reference,
       consultation?.contract_period_months,
     );
+    const subscription = subscriptionByConsultation.get(consultationId);
     merged.push({
       id: `payment:${payment.id}`,
       invoiceId: null,
@@ -170,6 +243,23 @@ export function mergeTenantBillingItems(
       pixCopyPaste: payment.pix_copy_paste,
       pixQrCode: payment.pix_qr_code,
       pixExpiresAt: payment.pix_expires_at,
+      paymentUrl: payment.invoice_url || payment.boleto_url,
+      externalReference: payment.external_reference,
+      paymentResponsible: payment.payment_responsible || "tenant",
+      subscriptionId: subscription?.asaas_subscription_id || null,
+      subscriptionLocalId: subscription?.id || null,
+      subscriptionMode: subscription?.mode || null,
+      subscriptionStatus: subscription?.status || null,
+      cardRegistrationStatus: subscription?.card_registration_status || null,
+      subscriptionCheckoutUrl: subscription?.checkout_url || null,
+      subscriptionInitialPaymentUrl: subscription?.initial_checkout_url || null,
+      subscriptionInitialCheckoutStatus: subscription?.initial_checkout_status || null,
+      subscriptionCheckoutStatus: subscription?.checkout_status || null,
+      subscriptionInitialAmount: Number(subscription?.initial_amount || 0),
+      subscriptionMonthlyAmount: Number(subscription?.monthly_amount || 0),
+      subscriptionFireMode:
+        subscription?.fire_insurance_payment_mode === "avista" ? "avista" : "embutido",
+      notificationCount: 0,
     });
   }
 

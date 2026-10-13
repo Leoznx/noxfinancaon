@@ -1,53 +1,60 @@
 import { useState } from "react";
 import {
+  Check,
+  Copy,
+  ExternalLink,
+  FileText,
+  Mail,
+  MessageCircle,
+  QrCode,
+  RefreshCw,
+  RotateCw,
+} from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import {
   Dialog,
   DialogContent,
-  DialogTitle,
   DialogDescription,
   DialogFooter,
+  DialogTitle,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { supabase } from "@/integrations/supabase/client";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Check, Clock, Copy, FileText, QrCode, RefreshCw } from "lucide-react";
 import {
   isPagamentoConcluido,
+  paymentLink,
+  policyStatusLabel,
+  signatureStatusLabel,
   statusPagamentoLabel,
+  type CheckoutIntent,
   type NormalizedAsaasPayment,
 } from "@/lib/asaas-payment";
-import { toast } from "sonner";
+
+type Channel = "email" | "whatsapp";
 
 interface ModalPagamentoAsaasProps {
   open: boolean;
   resultado: NormalizedAsaasPayment | null;
+  intent?: CheckoutIntent;
   onAtualizarResultado: (resultado: NormalizedAsaasPayment) => void;
   onFechar: () => void;
-  /**
-   * "Pagar depois" — só faz sentido em Pix/boleto, que ficam em aberto e podem
-   * ser pagos mais tarde. Quando ausente, o botão não aparece.
-   */
-  onPagarDepois?: (resultado: NormalizedAsaasPayment) => Promise<void> | void;
+  onAtualizarStatus: () => Promise<NormalizedAsaasPayment | void>;
+  onReemitir?: () => Promise<void>;
+  onReenviar?: (channel: Channel) => Promise<void>;
+  onRetryInstallments?: () => Promise<void>;
+  onIrParaFaturas?: () => void;
 }
 
 function useCopiar() {
   const [copiado, setCopiado] = useState(false);
-  const copiar = async (texto: string) => {
+  const copiar = async (texto: string, mensagem = "Código copiado.") => {
     try {
       await navigator.clipboard.writeText(texto);
       setCopiado(true);
       window.setTimeout(() => setCopiado(false), 2000);
+      toast.success(mensagem);
     } catch {
-      toast.error("Nao foi possivel copiar agora.");
+      toast.error("Não foi possível copiar agora.");
     }
   };
   return { copiado, copiar };
@@ -56,165 +63,179 @@ function useCopiar() {
 export function ModalPagamentoAsaas({
   open,
   resultado,
+  intent,
   onAtualizarResultado,
   onFechar,
-  onPagarDepois,
+  onAtualizarStatus,
+  onReemitir,
+  onReenviar,
+  onRetryInstallments,
+  onIrParaFaturas,
 }: ModalPagamentoAsaasProps) {
-  const pixCopiar = useCopiar();
-  const boletoCopiar = useCopiar();
-  const [consultando, setConsultando] = useState(false);
-  const [adiando, setAdiando] = useState(false);
-  const [confirmandoAdiar, setConfirmandoAdiar] = useState(false);
+  const codigoCopiar = useCopiar();
+  const linkCopiar = useCopiar();
+  const [busy, setBusy] = useState<"refresh" | "reissue" | Channel | null>(null);
 
   if (!resultado) return null;
 
-  const isPix = resultado.paymentMethod === "pix" && resultado.pix;
-  const isBoleto = resultado.paymentMethod === "boleto" && resultado.boleto;
-  const valor = resultado.amount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-  const concluido = isPagamentoConcluido(resultado.status);
+  const isPix = resultado.paymentMethod === "pix";
+  const status = resultado.paymentStatus || resultado.status;
+  const concluido = isPagamentoConcluido(status);
+  const adiado = intent === "pay_later" || resultado.deferPayment;
+  const consolidado = status === "awaiting_consolidation";
+  const link = paymentLink(resultado);
+  const codigo = isPix ? resultado.pix?.qrCode : resultado.boleto?.barcode;
+  const valor = resultado.amount.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
   const pixImage = resultado.pix?.qrCodeBase64
     ? resultado.pix.qrCodeBase64.startsWith("data:")
       ? resultado.pix.qrCodeBase64
       : `data:image/png;base64,${resultado.pix.qrCodeBase64}`
     : "";
 
-  async function consultarStatus() {
-    if (!resultado?.paymentId) return;
-    setConsultando(true);
+  async function executar(
+    action: "refresh" | "reissue" | Channel,
+    callback: (() => Promise<NormalizedAsaasPayment | void>) | undefined,
+    success: string,
+  ) {
+    if (!callback) return;
+    setBusy(action);
     try {
-      const { data, error } = await supabase.functions.invoke<NormalizedAsaasPayment>(
-        "asaas-get-payment",
-        {
-          body: { paymentId: resultado.paymentId },
-        },
-      );
-      if (error) throw new Error(error.message);
-      if ((data as any)?.error) throw new Error((data as any).error);
-      if (data) {
-        onAtualizarResultado(data);
-        toast.success(statusPagamentoLabel(data.status));
-      }
-    } catch (error: any) {
-      toast.error(error?.message || "Nao foi possivel atualizar o status.");
+      const atualizado = await callback();
+      if (atualizado) onAtualizarResultado(atualizado);
+      toast.success(success);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível concluir a ação agora.");
     } finally {
-      setConsultando(false);
-    }
-  }
-
-  // Pagar depois só existe para cobranças que continuam válidas sem pagamento
-  // imediato (Pix e boleto) e que ainda não foram quitadas.
-  const podeAdiar = !!onPagarDepois && !concluido && !!(isPix || isBoleto);
-
-  async function pagarDepois() {
-    if (!onPagarDepois || !resultado) return;
-    setAdiando(true);
-    try {
-      await onPagarDepois(resultado);
-      setConfirmandoAdiar(false);
-    } finally {
-      setAdiando(false);
+      setBusy(null);
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && onFechar()}>
-      <DialogContent className="max-w-md rounded-2xl">
-        {isPix && resultado.pix && (
-          <div className="flex flex-col items-center gap-4 text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-yellow-50">
-              <QrCode className="h-6 w-6 text-yellow-600" />
-            </div>
-            <DialogTitle className="text-xl font-bold text-neutral-900">Pague com Pix</DialogTitle>
-            <DialogDescription className="text-sm text-neutral-600">
-              Escaneie o QR Code ou copie o codigo abaixo no app do banco.
-            </DialogDescription>
-            <StatusPill status={resultado.status} valor={valor} />
-            {pixImage && (
-              <img
-                src={pixImage}
-                alt="QR Code Pix"
-                className="h-56 w-56 rounded-lg border border-neutral-200 p-2"
-              />
+    <Dialog open={open} onOpenChange={(value) => !value && onFechar()}>
+      <DialogContent className="max-h-[92vh] max-w-lg overflow-y-auto rounded-2xl">
+        <div className="flex flex-col items-center gap-2 text-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-yellow-50">
+            {isPix ? (
+              <QrCode className="h-6 w-6 text-yellow-700" />
+            ) : (
+              <FileText className="h-6 w-6 text-yellow-700" />
             )}
-            <div className="flex w-full items-center gap-2">
-              <Input readOnly value={resultado.pix.qrCode} className="font-mono text-xs" />
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => pixCopiar.copiar(resultado.pix!.qrCode)}
-                className="shrink-0"
-              >
-                {pixCopiar.copiado ? (
-                  <Check className="h-4 w-4 text-emerald-600" />
-                ) : (
-                  <Copy className="h-4 w-4" />
-                )}
-              </Button>
-            </div>
-            {resultado.pix.expiresAt && (
-              <p className="text-xs text-neutral-500">
-                Expira em {new Date(resultado.pix.expiresAt).toLocaleString("pt-BR")}
-              </p>
-            )}
+          </div>
+          <DialogTitle className="text-xl font-bold text-neutral-900">
+            {consolidado
+              ? "Enviado ao faturamento consolidado"
+              : adiado
+              ? "Cobrança gerada com sucesso"
+              : concluido
+                ? "Pagamento identificado"
+                : isPix
+                  ? "Pague com Pix"
+                  : "Boleto gerado"}
+          </DialogTitle>
+          <DialogDescription className="text-sm text-neutral-600">
+            {consolidado
+              ? "A parcela foi registrada no financeiro da imobiliária e será incluída no lote, sem cobrança individual duplicada."
+              : adiado
+              ? "O processo de contratação continuará normalmente. O pagamento está pendente."
+              : isPix
+                ? "Escaneie o QR Code ou copie o código no aplicativo do banco."
+                : "Copie a linha digitável ou abra o boleto para pagar."}
+          </DialogDescription>
+        </div>
+
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <StatusItem label="Pagamento" value={statusPagamentoLabel(status)} />
+          <StatusItem label="Assinatura" value={signatureStatusLabel(resultado.signatureStatus)} />
+          <StatusItem label="Apólice" value={policyStatusLabel(resultado.policyStatus)} />
+        </div>
+
+        <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-sm text-neutral-700">
+          <div className="flex justify-between gap-3">
+            <span>Valor</span>
+            <strong>{valor}</strong>
+          </div>
+          <div className="mt-1 flex justify-between gap-3">
+            <span>Vencimento</span>
+            <strong>
+              {resultado.dueDate
+                ? new Date(`${resultado.dueDate}T00:00:00`).toLocaleDateString("pt-BR")
+                : "Conforme fatura"}
+            </strong>
+          </div>
+          <div className="mt-1 flex justify-between gap-3">
+            <span>Responsável financeiro</span>
+            <strong>
+              {resultado.recipient?.name ||
+                (resultado.recipient?.responsible === "agency" ? "Imobiliária" : "Inquilino")}
+            </strong>
+          </div>
+          {resultado.paymentId && (
+            <p className="mt-2 break-all text-[11px] text-neutral-500">
+              Cobrança Asaas: {resultado.paymentId}
+            </p>
+          )}
+        </div>
+
+        {isPix && pixImage && !concluido && (
+          <img
+            src={pixImage}
+            alt="QR Code Pix"
+            className="mx-auto h-52 w-52 rounded-lg border border-neutral-200 p-2"
+          />
+        )}
+
+        {codigo && !concluido && (
+          <div className="flex w-full items-center gap-2">
+            <Input readOnly value={codigo} className="font-mono text-xs" />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() =>
+                codigoCopiar.copiar(
+                  codigo,
+                  isPix ? "Código Pix copiado." : "Linha digitável copiada.",
+                )
+              }
+            >
+              {codigoCopiar.copiado ? (
+                <Check className="h-4 w-4 text-emerald-600" />
+              ) : (
+                <Copy className="h-4 w-4" />
+              )}
+            </Button>
           </div>
         )}
 
-        {isBoleto && resultado.boleto && (
-          <div className="flex flex-col items-center gap-4 text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-yellow-50">
-              <FileText className="h-6 w-6 text-yellow-600" />
-            </div>
-            <DialogTitle className="text-xl font-bold text-neutral-900">Boleto gerado</DialogTitle>
-            <DialogDescription className="text-sm text-neutral-600">
-              Copie a linha digitavel ou abra o boleto para pagar.
-            </DialogDescription>
-            <StatusPill status={resultado.status} valor={valor} />
-            <div className="flex w-full items-center gap-2">
-              <Input readOnly value={resultado.boleto.barcode} className="font-mono text-xs" />
+        {link && (
+          <div className="rounded-lg border border-neutral-200 p-3">
+            <p className="break-all text-xs text-neutral-600">{link}</p>
+            <div className="mt-2 flex flex-wrap gap-2">
               <Button
                 type="button"
+                size="sm"
                 variant="outline"
-                onClick={() => boletoCopiar.copiar(resultado.boleto!.barcode)}
-                className="shrink-0"
+                onClick={() => linkCopiar.copiar(link, "Link copiado.")}
               >
-                {boletoCopiar.copiado ? (
-                  <Check className="h-4 w-4 text-emerald-600" />
+                {linkCopiar.copiado ? (
+                  <Check className="mr-1 h-4 w-4 text-emerald-600" />
                 ) : (
-                  <Copy className="h-4 w-4" />
+                  <Copy className="mr-1 h-4 w-4" />
                 )}
+                Copiar link
               </Button>
-            </div>
-            {resultado.boleto.dueDate && (
-              <p className="text-xs text-neutral-500">
-                Vencimento:{" "}
-                {new Date(`${resultado.boleto.dueDate}T00:00:00`).toLocaleDateString("pt-BR")}
-              </p>
-            )}
-            {resultado.boleto.pdfUrl && (
-              <a href={resultado.boleto.pdfUrl} target="_blank" rel="noreferrer" className="w-full">
+              <a href={link} target="_blank" rel="noreferrer">
                 <Button
                   type="button"
-                  className="w-full bg-neutral-900 text-white hover:bg-neutral-800"
+                  size="sm"
+                  className="bg-neutral-900 text-white hover:bg-neutral-800"
                 >
-                  Visualizar boleto
+                  <ExternalLink className="mr-1 h-4 w-4" /> Abrir cobrança
                 </Button>
               </a>
-            )}
-          </div>
-        )}
-
-        {resultado.paymentMethod === "credit_card" && (
-          <div className="flex flex-col items-center gap-4 text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-yellow-50">
-              <Check className="h-6 w-6 text-yellow-600" />
             </div>
-            <DialogTitle className="text-xl font-bold text-neutral-900">
-              {statusPagamentoLabel(resultado.status)}
-            </DialogTitle>
-            <DialogDescription className="text-sm text-neutral-600">
-              O processamento do cartao sera atualizado pelo Asaas.
-            </DialogDescription>
-            <StatusPill status={resultado.status} valor={valor} />
           </div>
         )}
 
@@ -224,26 +245,92 @@ export function ModalPagamentoAsaas({
           </div>
         )}
 
-        {resultado.recipient && (resultado.recipient.emailMasked || resultado.recipient.phoneMasked) && (
-          <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-xs text-neutral-600">
-            <p className="font-semibold text-neutral-800">
-              Responsável pelo pagamento: {resultado.recipient.responsible === "agency" ? "Imobiliária" : "Inquilino"}
-            </p>
-            {resultado.recipient.emailMasked && <p>Cobrança enviada para: {resultado.recipient.emailMasked}</p>}
-            {resultado.recipient.phoneMasked && <p>SMS enviado para: {resultado.recipient.phoneMasked}</p>}
+        {resultado.recipient && (
+          <div className="rounded-lg border border-neutral-200 p-3 text-xs text-neutral-600">
+            {resultado.recipient.emailMasked && <p>E-mail: {resultado.recipient.emailMasked}</p>}
+            {resultado.recipient.phoneMasked && <p>WhatsApp: {resultado.recipient.phoneMasked}</p>}
+            {resultado.notifications?.email && (
+              <p>E-mail — {notificationLabel(resultado.notifications.email.status)}</p>
+            )}
+            {resultado.notifications?.whatsapp && (
+              <p>WhatsApp — {notificationLabel(resultado.notifications.whatsapp.status)}</p>
+            )}
           </div>
         )}
 
-        {podeAdiar && (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-            <p className="flex items-center gap-1.5 font-bold">
-              <Clock className="h-3.5 w-3.5" /> Prefere pagar depois?
+        {(onReenviar || onReemitir) && (
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {onReenviar && (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={busy !== null}
+                  onClick={() =>
+                    void executar(
+                      "whatsapp",
+                      () => onReenviar("whatsapp"),
+                      "Cobrança reenviada por WhatsApp.",
+                    )
+                  }
+                >
+                  <MessageCircle className="mr-2 h-4 w-4" /> Reenviar WhatsApp
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={busy !== null}
+                  onClick={() =>
+                    void executar(
+                      "email",
+                      () => onReenviar("email"),
+                      "Cobrança reenviada por e-mail.",
+                    )
+                  }
+                >
+                  <Mail className="mr-2 h-4 w-4" /> Reenviar e-mail
+                </Button>
+              </>
+            )}
+            {onReemitir && !concluido && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={busy !== null}
+                onClick={() => void executar("reissue", onReemitir, "Segunda via gerada.")}
+              >
+                <RotateCw
+                  className={`mr-2 h-4 w-4 ${busy === "reissue" ? "animate-spin" : ""}`}
+                />
+                Gerar segunda via
+              </Button>
+            )}
+          </div>
+        )}
+
+        {onRetryInstallments && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">
+            <p className="font-bold">A cobrança inicial está preservada.</p>
+            <p className="mt-1">
+              As mensalidades futuras ainda não foram preparadas. Tente novamente sem gerar outra
+              cobrança inicial.
             </p>
-            <p className="mt-1 leading-relaxed">
-              A cobrança fica em aberto na sua aba de faturas e pode ser paga a qualquer momento.
-              O contrato só é enviado para assinatura após a confirmação do primeiro pagamento —
-              por isso o ideal é pagar agora e seguir o fluxo.
-            </p>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="mt-2 border-amber-300 bg-white"
+              disabled={busy !== null}
+              onClick={() =>
+                void executar(
+                  "reissue",
+                  onRetryInstallments,
+                  "Mensalidades futuras preparadas.",
+                )
+              }
+            >
+              <RefreshCw className="mr-2 h-4 w-4" /> Tentar mensalidades novamente
+            </Button>
           </div>
         )}
 
@@ -251,71 +338,50 @@ export function ModalPagamentoAsaas({
           <Button
             type="button"
             variant="outline"
-            onClick={consultarStatus}
-            disabled={consultando}
-            className="w-full"
+            disabled={busy !== null}
+            onClick={() =>
+              void executar(
+                "refresh",
+                onAtualizarStatus,
+                "Status atualizado.",
+              )
+            }
           >
-            <RefreshCw className={`mr-2 h-4 w-4 ${consultando ? "animate-spin" : ""}`} />
+            <RefreshCw
+              className={`mr-2 h-4 w-4 ${busy === "refresh" ? "animate-spin" : ""}`}
+            />
             Atualizar status
           </Button>
-          {podeAdiar && (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setConfirmandoAdiar(true)}
-              disabled={adiando}
-              className="w-full border-amber-300 text-amber-800 hover:bg-amber-50"
-            >
-              <Clock className="mr-2 h-4 w-4" />
-              Pagar depois
+          {onIrParaFaturas && (
+            <Button type="button" variant="outline" onClick={onIrParaFaturas}>
+              Ir para faturas
             </Button>
           )}
-          <Button type="button" variant="outline" onClick={onFechar} className="w-full">
-            Fechar
+          <Button
+            type="button"
+            className="bg-yellow-400 text-neutral-950 hover:bg-yellow-300"
+            onClick={onFechar}
+          >
+            Concluir
           </Button>
         </DialogFooter>
-
-        <AlertDialog open={confirmandoAdiar} onOpenChange={setConfirmandoAdiar}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Deixar esta cobrança em aberto?</AlertDialogTitle>
-              <AlertDialogDescription asChild>
-                <div className="space-y-2 text-sm text-neutral-600">
-                  <p>
-                    A cobrança de <strong>{valor}</strong> ficará disponível na sua aba de faturas
-                    em aberto e continua válida.
-                  </p>
-                  <p className="rounded-md border border-amber-200 bg-amber-50 p-3 font-semibold text-amber-900">
-                    A proposta só será enviada para assinatura após o primeiro pagamento ser
-                    identificado pelo sistema.
-                  </p>
-                </div>
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={adiando}>Voltar e pagar agora</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={(event) => {
-                  event.preventDefault();
-                  void pagarDepois();
-                }}
-                disabled={adiando}
-                className="bg-neutral-900 text-white hover:bg-neutral-800"
-              >
-                {adiando ? "Registrando..." : "Confirmar e pagar depois"}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
       </DialogContent>
     </Dialog>
   );
 }
 
-function StatusPill({ status, valor }: { status: string; valor: string }) {
+function StatusItem({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-full bg-yellow-50 px-3 py-1 text-xs font-bold text-yellow-800">
-      {statusPagamentoLabel(status)} - {valor}
+    <div className="rounded-lg border border-neutral-200 bg-white p-2.5 text-center">
+      <p className="text-[10px] font-bold uppercase tracking-wide text-neutral-500">{label}</p>
+      <p className="mt-1 text-xs font-semibold text-neutral-900">{value}</p>
     </div>
   );
+}
+
+function notificationLabel(status: string) {
+  if (status === "sent") return "enviado";
+  if (status === "queued") return "na fila";
+  if (status === "failed") return "falhou; pode reenviar";
+  return "não enviado";
 }

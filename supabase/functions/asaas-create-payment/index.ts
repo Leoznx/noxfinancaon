@@ -1,26 +1,23 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import {
   AsaasApiError,
-  describePaymentError,
-  paymentErrorStatus,
   FireMode,
   PaymentMethod,
+  addBusinessDays,
   asaasFetch,
-  buildExternalReference,
   calculateExpectedPayment,
+  calculateMonthlyInstallmentValue,
   corsHeaders,
+  describePaymentError,
   jsonResponse,
   mapAsaasStatus,
   normalizedPaymentResponse,
+  paymentErrorStatus,
   refetchPixQrCode,
   requireUser,
-  resolvePaymentRecipient,
-  runInBackground,
+  resolvePaymentRecipientFromContract,
   sanitizeAsaasResponse,
-  sendPaymentEmail,
-  sendPaymentSms,
   todayDate,
-  addBusinessDays,
   toMoney,
 } from "../_shared/asaas.ts";
 import { ensureAsaasCustomer } from "../_shared/asaas-customer.ts";
@@ -30,13 +27,43 @@ import {
   lockContractPeriod,
   resolveContractPeriodMonths,
 } from "../_shared/contract-period.ts";
+import {
+  assertCanManageConsultationBilling,
+  assertContractAcceptsBilling,
+} from "../_shared/billing-auth.ts";
+import {
+  buildBillingKey,
+  billingDueDateError,
+  normalizePaymentStatus,
+  persistProviderTransition,
+  planInitialBilling,
+  reducePaymentStatus,
+} from "../_shared/billing-state.ts";
+import {
+  claimBillingOperation,
+  getContractBillingStates,
+  getInvoiceNotificationSummary,
+  materializeInvoice,
+  publicRecipient,
+  queuePendingContractFlow,
+  reclaimStaleBillingOperation,
+  recoverPaymentForOperation,
+  sendInvoiceNotifications,
+  updateBillingOperation,
+} from "../_shared/contract-billing.ts";
+import { ensurePendingPolicy } from "../_shared/d4sign.ts";
+
+type Action = "create" | "refresh" | "resend_email" | "resend_whatsapp";
 
 type Body = {
   proposalId?: string;
   consultationId?: string;
   paymentMethod?: PaymentMethod;
   selectedFireInsuranceMode?: FireMode;
+  deferPayment?: boolean;
+  action?: Action;
   amount?: number;
+  dueDate?: string;
   creditCard?: {
     holderName?: string;
     number?: string;
@@ -54,6 +81,103 @@ type Body = {
   };
 };
 
+function providerPaymentUrl(raw: any, local?: any) {
+  return raw?.invoiceUrl || raw?.bankSlipUrl || local?.payment_url || local?.boleto_url || null;
+}
+
+async function loadExistingInitial(supabase: any, proposalId: string) {
+  const billingKey = buildBillingKey(proposalId, "initial", 1);
+  const { data: invoice } = await supabase
+    .from("faturas_inquilino")
+    .select("*, asaas_payment:asaas_payments(*)")
+    .eq("billing_key", billingKey)
+    .maybeSingle();
+  return invoice || null;
+}
+
+async function persistConsultationPaymentState(
+  supabase: any,
+  consultationId: string,
+  incomingStatus: ReturnType<typeof normalizePaymentStatus>,
+  providerEventAt: string,
+  buildPatch: (
+    current: any,
+    nextStatus: string,
+    incomingAccepted: boolean,
+  ) => Record<string, unknown>,
+) {
+  const { data: consultation, error } = await supabase
+    .from("consultas_credito")
+    .select("*")
+    .eq("id", consultationId)
+    .maybeSingle();
+  if (error || !consultation) throw error || new Error("consultation_not_found");
+  return await persistProviderTransition({
+    supabase,
+    table: "consultas_credito",
+    rowId: consultationId,
+    current: consultation,
+    incomingEventAt: providerEventAt,
+    statusColumn: "payment_state",
+    eventAtColumn: "payment_provider_event_at",
+    reduce: (currentStatus, currentEventAt, incomingEventAt) =>
+      reducePaymentStatus(currentStatus as string, incomingStatus, currentEventAt, incomingEventAt),
+    buildPatch: ({ current, nextStatus, staleEvent }) => ({
+      payment_status: nextStatus,
+      ...buildPatch(
+        current,
+        nextStatus,
+        !staleEvent && normalizePaymentStatus(nextStatus) === incomingStatus,
+      ),
+    }),
+  });
+}
+
+async function responseFor(
+  supabase: any,
+  params: {
+    consultationId: string;
+    recipient: any;
+    invoice: any;
+    payment?: any;
+    raw?: any;
+    deferred: boolean;
+    notifications?: any;
+  },
+) {
+  const localPayment = params.payment || params.invoice?.asaas_payment || null;
+  const base = localPayment
+    ? normalizedPaymentResponse(params.raw || localPayment.raw_response || {}, localPayment)
+    : {
+        success: true,
+        paymentId: null,
+        externalReference: params.invoice?.billing_key || null,
+        status: params.invoice?.status || "awaiting_consolidation",
+        paymentMethod: params.invoice?.payment_method || null,
+        amount: Number(params.invoice?.valor || 0),
+        dueDate: params.invoice?.vencimento || null,
+        invoiceUrl: params.invoice?.payment_url || null,
+        pix: null,
+        boleto: null,
+      };
+  const states = await getContractBillingStates(supabase, params.consultationId);
+  const notifications =
+    params.notifications || (await getInvoiceNotificationSummary(supabase, params.invoice.id));
+  return {
+    ...base,
+    success: true,
+    localPaymentId: localPayment?.id || null,
+    invoiceId: params.invoice.id,
+    status: params.invoice.status || base.status,
+    paymentStatus: normalizePaymentStatus(params.invoice.status || base.status),
+    invoiceUrl: params.invoice.payment_url || base.invoiceUrl || null,
+    deferPayment: params.deferred,
+    recipient: publicRecipient(params.recipient),
+    notifications,
+    ...states,
+  };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders(req) });
   if (req.method !== "POST")
@@ -63,39 +187,46 @@ serve(async (req) => {
     const { supabase, user } = await requireUser(req);
     const body = (await req.json()) as Body;
     const proposalId = body.proposalId || body.consultationId;
+    const action = body.action || "create";
     const paymentMethod = body.paymentMethod;
     const fireMode = body.selectedFireInsuranceMode || "embutido";
+    const deferred = body.deferPayment === true;
 
     if (!proposalId)
       return jsonResponse(req, { ok: false, error: "Proposta nao encontrada." }, 400);
     if (!paymentMethod || !["pix", "boleto", "credit_card"].includes(paymentMethod)) {
       return jsonResponse(req, { ok: false, error: "Selecione uma forma de pagamento." }, 400);
     }
+    if (paymentMethod === "credit_card") {
+      return jsonResponse(
+        req,
+        {
+          ok: false,
+          error: "Cartao requer a configuracao recorrente. Use asaas-create-subscription.",
+          subscriptionRequired: true,
+        },
+        409,
+      );
+    }
+    if (deferred && paymentMethod === "credit_card") {
+      return jsonResponse(
+        req,
+        { ok: false, error: "Pagar depois esta disponivel apenas para Pix e boleto." },
+        400,
+      );
+    }
 
     const { data: consulta, error: consultaError } = await supabase
       .from("consultas_credito")
       .select(
-        "*, inquilinos(*), imoveis(*), planos(*), responsavel_profile:profiles!consultas_credito_profile_id_solicitante_fkey(nome, email, telefone)",
+        "*, inquilinos(*), imoveis(*), planos(*), responsavel_profile:profiles!consultas_credito_profile_id_solicitante_fkey(id, nome, email, telefone, cnpj, role)",
       )
       .eq("id", proposalId)
       .maybeSingle();
     if (consultaError) throw consultaError;
     if (!consulta) return jsonResponse(req, { ok: false, error: "Proposta nao encontrada." }, 404);
-
-    const recipient = resolvePaymentRecipient(consulta);
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .maybeSingle();
-    const role = profile?.role;
-    const allowed =
-      consulta.profile_id_solicitante === user.id ||
-      consulta.tenant_user_id === user.id ||
-      consulta.billing_responsible_user_id === user.id ||
-      ["admin", "financeiro", "corretor", "imobiliaria"].includes(role);
-    if (!allowed) return jsonResponse(req, { ok: false, error: "Acesso nao autorizado." }, 403);
+    await assertCanManageConsultationBilling(supabase, user.id, consulta);
+    await assertContractAcceptsBilling(supabase, consulta);
 
     let contractPeriodMonths: number;
     try {
@@ -112,14 +243,113 @@ serve(async (req) => {
       );
     }
 
-    const expectedAmount = calculateExpectedPayment(consulta, fireMode);
-    const requestedAmount = toMoney(body.amount || expectedAmount);
-    if (expectedAmount <= 0)
+    const recipient = await resolvePaymentRecipientFromContract(supabase, consulta);
+    const initialDecision =
+      paymentMethod === "credit_card"
+        ? null
+        : planInitialBilling({
+            paymentMethod,
+            deferPayment: deferred,
+            payer: recipient.paymentResponsible,
+            fireMode,
+          });
+
+    let existingInvoice = await loadExistingInitial(supabase, proposalId);
+    if (action !== "create") {
+      if (!existingInvoice) {
+        return jsonResponse(req, { ok: false, error: "Cobranca ainda nao foi criada." }, 404);
+      }
+      let payment = existingInvoice.asaas_payment || null;
+      let raw = payment?.raw_response || {};
+      if (
+        recipient.paymentResponsible === "agency" &&
+        (action === "resend_email" || action === "resend_whatsapp")
+      ) {
+        return jsonResponse(
+          req,
+          {
+            ok: false,
+            error:
+              "Esta fatura aguarda a cobranca consolidada da imobiliaria. O reenvio sera feito pelo lote quando o link existir.",
+          },
+          409,
+        );
+      }
+      if (action === "refresh" && payment?.asaas_payment_id) {
+        raw = await asaasFetch(`/payments/${payment.asaas_payment_id}`);
+        const incoming = normalizePaymentStatus(mapAsaasStatus(raw?.status));
+        const providerEventAt = new Date().toISOString();
+        const sanitizedRaw = sanitizeAsaasResponse(raw);
+        const paymentTransition = await persistProviderTransition({
+          supabase,
+          table: "asaas_payments",
+          rowId: payment.id,
+          current: payment,
+          incomingEventAt: providerEventAt,
+          reduce: (currentStatus, currentEventAt, incomingEventAt) =>
+            reducePaymentStatus(currentStatus as string, incoming, currentEventAt, incomingEventAt),
+          buildPatch: ({ current, nextStatus, staleEvent }) => ({
+            raw_response:
+              !staleEvent && normalizePaymentStatus(nextStatus) === incoming
+                ? sanitizedRaw
+                : current.raw_response,
+          }),
+        });
+        payment = paymentTransition.row;
+        const effectivePaymentStatus = normalizePaymentStatus(payment.status);
+        const invoiceTransition = await persistProviderTransition({
+          supabase,
+          table: "faturas_inquilino",
+          rowId: existingInvoice.id,
+          current: existingInvoice,
+          incomingEventAt: providerEventAt,
+          reduce: (currentStatus, currentEventAt, incomingEventAt) =>
+            reducePaymentStatus(
+              currentStatus as string,
+              effectivePaymentStatus,
+              currentEventAt,
+              incomingEventAt,
+            ),
+          buildPatch: () => ({}),
+        });
+        existingInvoice = invoiceTransition.row;
+      }
+      if (payment?.payment_method === "pix") payment = await refetchPixQrCode(supabase, payment);
+      let notifications: any;
+      if (action === "resend_email" || action === "resend_whatsapp") {
+        notifications = await sendInvoiceNotifications(supabase, {
+          invoice: existingInvoice,
+          recipient,
+          paymentMethod,
+          amount: Number(existingInvoice.valor),
+          dueDate: existingInvoice.vencimento,
+          paymentUrl: existingInvoice.payment_url || providerPaymentUrl(raw, payment),
+          pixCopyPaste: payment?.pix_copy_paste,
+          boletoBarcode: payment?.boleto_barcode,
+          contractRef: String(proposalId).slice(0, 8).toUpperCase(),
+          forceChannel: action === "resend_email" ? "email" : "whatsapp",
+        });
+      }
       return jsonResponse(
         req,
-        { ok: false, error: "Nao foi possivel calcular o valor do pagamento." },
-        400,
+        await responseFor(supabase, {
+          consultationId: proposalId,
+          recipient,
+          invoice: existingInvoice,
+          payment,
+          raw,
+          deferred: consulta.payment_deferred === true,
+          notifications,
+        }),
       );
+    }
+
+    const expectedAmount = calculateExpectedPayment(consulta, fireMode);
+    const monthlyAmount = calculateMonthlyInstallmentValue(consulta, fireMode);
+    const requestedAmount = toMoney(body.amount ?? expectedAmount);
+    if (expectedAmount <= 0 || monthlyAmount <= 0) {
+      return jsonResponse(req, { ok: false, error: "Nao foi possivel calcular o pagamento." }, 400);
+    }
     if (Math.abs(requestedAmount - expectedAmount) > 0.02) {
       return jsonResponse(
         req,
@@ -132,21 +362,8 @@ serve(async (req) => {
       );
     }
 
-    const externalReference = buildExternalReference({
-      consultationId: proposalId,
-      paymentMethod,
-      fireMode,
-      amount: expectedAmount,
-    });
-
-    const { data: existente } = await supabase
-      .from("asaas_payments")
-      .select("*")
-      .eq("idempotency_key", externalReference)
-      .maybeSingle();
-
-    // A cobrança avulsa também materializa o contrato. O lock é adquirido
-    // antes de consultar novamente o Asaas ou criar cliente/pagamento externo.
+    // Congela o prazo antes de qualquer retomada que consulte o provedor,
+    // reserva local, materializacao ou criacao de recurso no Asaas.
     try {
       await lockContractPeriod(supabase, proposalId, contractPeriodMonths);
     } catch (error) {
@@ -169,53 +386,188 @@ serve(async (req) => {
       );
     }
 
-    if (existente) {
-      // Cobranca ja existe no Asaas - nunca recriar. Se for Pix e a busca do
-      // QR Code tiver falhado na tentativa anterior, tenta buscar de novo em
-      // vez de servir pra sempre a mesma resposta incompleta (bug do
-      // "Embutir na parcela" travado sem QR Code / copia-e-cola).
-      const atualizado =
-        paymentMethod === "pix" ? await refetchPixQrCode(supabase, existente) : existente;
-      return jsonResponse(req, normalizedPaymentResponse(atualizado.raw_response, atualizado));
+    if (existingInvoice) {
+      let payment = existingInvoice.asaas_payment || null;
+      if (payment?.payment_method === "pix") payment = await refetchPixQrCode(supabase, payment);
+      queuePendingContractFlow(supabase, proposalId);
+      return jsonResponse(
+        req,
+        await responseFor(supabase, {
+          consultationId: proposalId,
+          recipient,
+          invoice: existingInvoice,
+          payment,
+          deferred: existingInvoice.components?.deferred === true || deferred,
+        }),
+      );
+    }
+
+    if (body.dueDate) {
+      const dueDateError = billingDueDateError(body.dueDate, todayDate());
+      if (dueDateError) return jsonResponse(req, { ok: false, error: dueDateError }, 400);
+    }
+    const dueDate = body.dueDate || (paymentMethod === "boleto" ? addBusinessDays(3) : todayDate());
+    const contractMonths = contractPeriodMonths;
+    const billingKey = buildBillingKey(proposalId, "initial", 1);
+    // A mesma chave usada na reserva local vai ao provedor. Assim uma resposta
+    // perdida pode ser reconciliada por externalReference sem novo POST.
+    const externalReference = billingKey;
+    const { operation, claimed } = await claimBillingOperation(supabase, {
+      consultationId: proposalId,
+      operationType: "payment",
+      idempotencyKey: billingKey,
+      request: {
+        proposalId,
+        paymentMethod,
+        fireMode,
+        amount: expectedAmount,
+        dueDate,
+        payer: recipient.paymentResponsible,
+      },
+      userId: user.id,
+    });
+
+    let raw: any = null;
+    if (!claimed) {
+      const racedInvoice = await loadExistingInitial(supabase, proposalId);
+      if (racedInvoice) {
+        return jsonResponse(
+          req,
+          await responseFor(supabase, {
+            consultationId: proposalId,
+            recipient,
+            invoice: racedInvoice,
+            payment: racedInvoice.asaas_payment,
+            deferred,
+          }),
+        );
+      }
+      if (["reserved", "provider_created", "ambiguous", "persisted"].includes(operation.state)) {
+        raw = await recoverPaymentForOperation(operation, externalReference);
+      }
+      if (!raw && (await reclaimStaleBillingOperation(supabase, operation))) {
+        // A consulta por externalReference acima comprovou a ausencia no
+        // provedor; este chamador ganhou o CAS e pode concluir a reserva orfa.
+      } else if (!raw) {
+        return jsonResponse(
+          req,
+          {
+            ok: false,
+            error:
+              operation.state === "ambiguous"
+                ? "A criacao da cobranca segue em conciliacao no Asaas. Nenhuma nova cobranca foi emitida."
+                : "A cobranca ja esta sendo criada. Aguarde e consulte novamente.",
+            retryable: true,
+            reconciled: false,
+            operationState: operation.state,
+          },
+          409,
+        );
+      }
+      await updateBillingOperation(supabase, operation.id, {
+        state: "provider_created",
+        provider_id: raw?.id || operation.provider_id || null,
+        provider_response: sanitizeAsaasResponse(raw),
+        attempts: Number(operation.attempts || 0) + 1,
+        last_error: null,
+      });
+    }
+
+    const components = {
+      deferred,
+      fireMode,
+      initialAmount: expectedAmount,
+      monthlyAmount,
+      includesFirstMonthlyPayment: true,
+      contractMonths,
+    };
+
+    if (initialDecision && !initialDecision.createIndividualProviderCharge) {
+      const invoice = await materializeInvoice(supabase, {
+        consultation: consulta,
+        recipient,
+        billingKey,
+        installmentNumber: 1,
+        installmentTotal: contractMonths,
+        dueDate,
+        value: expectedAmount,
+        status: initialDecision.invoiceStatus,
+        chargeKind: "initial",
+        paymentMethod,
+        components,
+      });
+      await updateBillingOperation(supabase, operation.id, {
+        invoice_id: invoice.id,
+        state: "persisted",
+        completed_at: new Date().toISOString(),
+      });
+      await persistConsultationPaymentState(
+        supabase,
+        proposalId,
+        "awaiting_consolidation",
+        new Date().toISOString(),
+        (current) => ({
+          payment_deferred: deferred,
+          payment_deferred_at: deferred ? new Date().toISOString() : null,
+          payment_method: paymentMethod,
+          payment_value: expectedAmount,
+          payment_due_date: dueDate,
+          fire_insurance_payment_mode: fireMode,
+          policy_status: ["active", "cancelled"].includes(current.policy_status)
+            ? current.policy_status
+            : "issued_pending",
+        }),
+      );
+      try {
+        await ensurePendingPolicy(supabase, proposalId);
+      } catch (error) {
+        console.error("[asaas-create-payment] apolice pendente sera retomada", {
+          proposalId,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+      queuePendingContractFlow(supabase, proposalId);
+      return jsonResponse(
+        req,
+        await responseFor(supabase, {
+          consultationId: proposalId,
+          recipient,
+          invoice,
+          deferred,
+        }),
+      );
     }
 
     let customerId: string;
     try {
-      customerId = await ensureAsaasCustomer(supabase, consulta);
+      customerId = await ensureAsaasCustomer(supabase, consulta, recipient);
     } catch (error) {
-      console.error("[asaas-create-payment] falha ao preparar cliente Asaas", {
-        proposalId,
-        message: error instanceof Error ? error.message : String(error),
+      await updateBillingOperation(supabase, operation.id, {
+        state: "failed",
+        last_error: error instanceof Error ? error.message : String(error),
       });
-      return jsonResponse(
-        req,
-        {
-          ok: false,
-          error: describePaymentError(
-            error,
-            "Nao foi possivel preparar o cadastro de cobranca. Confira os dados do inquilino e tente novamente.",
-          ),
-        },
-        paymentErrorStatus(error, 502),
-      );
+      throw error;
     }
-    const dueDate = paymentMethod === "boleto" ? addBusinessDays(3) : todayDate();
+
     const billingType =
       paymentMethod === "pix" ? "PIX" : paymentMethod === "boleto" ? "BOLETO" : "CREDIT_CARD";
-
-    const payload: Record<string, unknown> = {
+    const providerPayload: Record<string, unknown> = {
       customer: customerId,
       billingType,
       value: expectedAmount,
       dueDate,
-      description: `NOX Fianca - proposta ${String(proposalId).slice(0, 8).toUpperCase()}`,
+      description: `NOX Fianca - inicial ${String(proposalId).slice(0, 8).toUpperCase()}`,
       externalReference,
     };
 
-    if (paymentMethod === "credit_card") {
-      const cc = body.creditCard || {};
+    if (paymentMethod === "credit_card" && !raw) {
+      const card = body.creditCard || {};
       const holder = body.creditCardHolderInfo || {};
-      if (!cc.holderName || !cc.number || !cc.expiryMonth || !cc.expiryYear || !cc.ccv) {
+      if (!card.holderName || !card.number || !card.expiryMonth || !card.expiryYear || !card.ccv) {
+        await updateBillingOperation(supabase, operation.id, {
+          state: "failed",
+          last_error: "missing_card",
+        });
         return jsonResponse(req, { ok: false, error: "Preencha todos os dados do cartao." }, 400);
       }
       if (
@@ -226,20 +578,24 @@ serve(async (req) => {
         !holder.addressNumber ||
         !holder.phone
       ) {
+        await updateBillingOperation(supabase, operation.id, {
+          state: "failed",
+          last_error: "missing_holder",
+        });
         return jsonResponse(
           req,
           { ok: false, error: "Preencha os dados do titular do cartao." },
           400,
         );
       }
-      payload.creditCard = {
-        holderName: cc.holderName,
-        number: String(cc.number).replace(/\s/g, ""),
-        expiryMonth: cc.expiryMonth,
-        expiryYear: cc.expiryYear,
-        ccv: cc.ccv,
+      providerPayload.creditCard = {
+        holderName: card.holderName,
+        number: String(card.number).replace(/\s/g, ""),
+        expiryMonth: card.expiryMonth,
+        expiryYear: card.expiryYear,
+        ccv: card.ccv,
       };
-      payload.creditCardHolderInfo = {
+      providerPayload.creditCardHolderInfo = {
         name: holder.name,
         email: holder.email,
         cpfCnpj: String(holder.cpfCnpj).replace(/\D/g, ""),
@@ -247,29 +603,29 @@ serve(async (req) => {
         addressNumber: holder.addressNumber,
         phone: String(holder.phone).replace(/\D/g, ""),
       };
-      payload.remoteIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "127.0.0.1";
+      providerPayload.remoteIp =
+        req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "127.0.0.1";
     }
 
-    let raw: any;
-    try {
-      raw = await asaasFetch("/payments", { method: "POST", body: JSON.stringify(payload) });
-    } catch (error) {
-      console.error("[asaas-create-payment] falha Asaas", {
-        status: error instanceof AsaasApiError ? error.status : "unknown",
-        proposalId,
-        paymentMethod,
-      });
-      return jsonResponse(
-        req,
-        {
-          ok: false,
-          error: describePaymentError(
-            error,
-            "Nao foi possivel gerar o pagamento agora. Tente novamente.",
-          ),
-        },
-        paymentErrorStatus(error, 502),
-      );
+    if (!raw) {
+      try {
+        raw = await asaasFetch("/payments", {
+          method: "POST",
+          body: JSON.stringify(providerPayload),
+        });
+        await updateBillingOperation(supabase, operation.id, {
+          state: "provider_created",
+          provider_id: raw?.id || null,
+          provider_response: sanitizeAsaasResponse(raw),
+        });
+      } catch (error) {
+        const ambiguous = !(error instanceof AsaasApiError) || error.status >= 500;
+        await updateBillingOperation(supabase, operation.id, {
+          state: ambiguous ? "ambiguous" : "failed",
+          last_error: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
+      }
     }
 
     const sanitized = sanitizeAsaasResponse(raw);
@@ -277,22 +633,21 @@ serve(async (req) => {
     let pixQrCode: string | null = null;
     let pixCopyPaste: string | null = null;
     let pixExpiresAt: string | null = null;
-
     if (paymentMethod === "pix" && raw?.id) {
       try {
         const pix = await asaasFetch(`/payments/${raw.id}/pixQrCode`);
         pixQrCode = pix?.encodedImage || null;
         pixCopyPaste = pix?.payload || null;
         pixExpiresAt = pix?.expirationDate || null;
-      } catch (error) {
-        console.error("[asaas-create-payment] falha ao buscar QR Pix", {
+      } catch {
+        console.error("[asaas-create-payment] QR Pix pendente de reidratacao", {
           proposalId,
           paymentId: raw?.id,
         });
       }
     }
 
-    const localPayment = {
+    const localPayload = {
       consultation_id: proposalId,
       proposal_id: proposalId,
       plan_id: consulta.plano_id,
@@ -301,7 +656,9 @@ serve(async (req) => {
       asaas_customer_id: customerId,
       asaas_payment_id: raw?.id || null,
       external_reference: externalReference,
-      idempotency_key: externalReference,
+      idempotency_key: billingKey,
+      billing_operation_id: operation.id,
+      charge_kind: "initial",
       payment_method: paymentMethod,
       value: expectedAmount,
       status: internalStatus,
@@ -320,106 +677,96 @@ serve(async (req) => {
       recipient_email: recipient.recipientEmail,
       recipient_phone: recipient.recipientPhone,
     };
-
-    const [{ error: insertError }, { error: updateError }] = await Promise.all([
-      supabase.from("asaas_payments").insert(localPayment),
-      supabase
-        .from("consultas_credito")
-        .update({
-          asaas_customer_id: customerId,
-          asaas_payment_id: raw?.id || null,
-          external_reference: externalReference,
-          payment_method: paymentMethod,
-          payment_status: internalStatus,
-          payment_value: expectedAmount,
-          payment_due_date: dueDate,
-          payment_data: sanitized,
-        })
-        .eq("id", proposalId),
-    ]);
-
-    if (insertError)
-      console.error("[asaas-create-payment] falha ao salvar pagamento", {
-        proposalId,
-        error: insertError.message,
+    const { data: localPayment, error: paymentError } = await supabase
+      .from("asaas_payments")
+      .upsert(localPayload, { onConflict: "idempotency_key" })
+      .select("*")
+      .maybeSingle();
+    if (paymentError || !localPayment) {
+      await updateBillingOperation(supabase, operation.id, {
+        state: "provider_created",
+        last_error: paymentError?.message || "local_payment_missing",
       });
-    if (updateError)
-      console.error("[asaas-create-payment] falha ao atualizar proposta", {
-        proposalId,
-        error: updateError.message,
-      });
-
-    // Notifica quem foi escolhido como responsavel pelo pagamento (imobiliaria
-    // OU inquilino, decidido em resolvePaymentRecipient a partir do que ja
-    // esta salvo na consulta - nunca os dois, nunca jurídico/admin/financeiro/
-    // outro corretor). So dispara na criacao nova (nao no cache-hit acima),
-    // entao um retry com a mesma idempotency_key nunca reenvia o e-mail/SMS.
-    // Se o responsavel escolhido nao tiver e-mail/telefone cadastrado, so
-    // registra a falta - nunca cai pra outra pessoa como destinatario.
-    const destinatarioNome = recipient.recipientName || "cliente";
-    const destinatarioEmail = recipient.recipientEmail;
-    const destinatarioTelefone = recipient.recipientPhone;
-    if (!destinatarioEmail) {
-      console.error("[asaas-create-payment] cobranca criada sem e-mail para notificar", {
-        proposalId,
-        paymentResponsible: recipient.paymentResponsible,
-      });
+      throw new Error("A cobranca foi criada e sera conciliada automaticamente.");
     }
-    if (!destinatarioTelefone) {
-      console.error("[asaas-create-payment] cobranca criada sem telefone para notificar", {
-        proposalId,
-        paymentResponsible: recipient.paymentResponsible,
-      });
-    }
-    // A cobranca ja esta persistida. E-mail e SMS seguem em background pelo
-    // waitUntil do Edge Runtime para que uma lentidao externa nao desconecte o
-    // navegador antes de ele receber o boleto/Pix/cartao criado.
-    runInBackground(`notificar pagamento ${proposalId}`, async () => {
-      const notificacoes: Promise<unknown>[] = [];
-      if (destinatarioEmail) {
-        notificacoes.push(
-          sendPaymentEmail({
-            to: destinatarioEmail,
-            nome: destinatarioNome,
-            tipo: "criado",
-            valor: expectedAmount,
-            metodo: paymentMethod,
-            vencimento: dueDate,
-            pixCopyPaste: pixCopyPaste,
-            boletoUrl: localPayment.boleto_url,
-            boletoBarcode: localPayment.boleto_barcode,
-            contratoRef: String(proposalId).slice(0, 8).toUpperCase(),
-          }).catch((error) =>
-            console.error("[asaas-create-payment] falha ao notificar por e-mail", {
-              proposalId,
-              message: error instanceof Error ? error.message : String(error),
-            }),
-          ),
-        );
-      }
-      if (destinatarioTelefone) {
-        const valorFmt = expectedAmount.toLocaleString("pt-BR", {
-          style: "currency",
-          currency: "BRL",
-        });
-        const metodoLabel =
-          paymentMethod === "pix" ? "Pix" : paymentMethod === "boleto" ? "boleto" : "cartão";
-        notificacoes.push(
-          sendPaymentSms({
-            to: destinatarioTelefone,
-            mensagem: `NOX Fiança: seu pagamento de ${valorFmt} via ${metodoLabel} foi gerado. Acesse sua conta para concluir o pagamento.`,
-          }).catch((error) =>
-            console.error("[asaas-create-payment] falha ao notificar por SMS", {
-              proposalId,
-              message: error instanceof Error ? error.message : String(error),
-            }),
-          ),
-        );
-      }
-      await Promise.allSettled(notificacoes);
+
+    const paymentUrl = providerPaymentUrl(raw, localPayment);
+    const invoice = await materializeInvoice(supabase, {
+      consultation: consulta,
+      recipient,
+      billingKey,
+      installmentNumber: 1,
+      installmentTotal: contractMonths,
+      dueDate,
+      value: expectedAmount,
+      status: internalStatus,
+      chargeKind: "initial",
+      paymentMethod,
+      components,
+      paymentUrl,
+      localPaymentId: localPayment.id,
     });
+    await updateBillingOperation(supabase, operation.id, {
+      invoice_id: invoice.id,
+      state: "persisted",
+      completed_at: new Date().toISOString(),
+      last_error: null,
+    });
+    await persistConsultationPaymentState(
+      supabase,
+      proposalId,
+      normalizePaymentStatus(internalStatus),
+      new Date().toISOString(),
+      (current, _nextStatus, incomingAccepted) => ({
+        asaas_customer_id: customerId,
+        asaas_payment_id: raw?.id || null,
+        external_reference: externalReference,
+        payment_method: paymentMethod,
+        payment_value: expectedAmount,
+        payment_due_date: dueDate,
+        payment_data: incomingAccepted ? sanitized : current.payment_data,
+        payment_deferred: deferred,
+        payment_deferred_at: deferred ? new Date().toISOString() : null,
+        fire_insurance_payment_mode: fireMode,
+        policy_status: ["active", "cancelled"].includes(current.policy_status)
+          ? current.policy_status
+          : "issued_pending",
+      }),
+    );
 
-    return jsonResponse(req, normalizedPaymentResponse(raw, localPayment));
+    try {
+      await ensurePendingPolicy(supabase, proposalId);
+    } catch (error) {
+      console.error("[asaas-create-payment] apolice pendente sera retomada", {
+        proposalId,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+    const notifications = await sendInvoiceNotifications(supabase, {
+      invoice,
+      recipient,
+      paymentMethod,
+      amount: expectedAmount,
+      dueDate,
+      paymentUrl,
+      pixCopyPaste,
+      boletoBarcode: localPayment.boleto_barcode,
+      contractRef: String(proposalId).slice(0, 8).toUpperCase(),
+    });
+    queuePendingContractFlow(supabase, proposalId);
+
+    return jsonResponse(
+      req,
+      await responseFor(supabase, {
+        consultationId: proposalId,
+        recipient,
+        invoice,
+        payment: localPayment,
+        raw,
+        deferred,
+        notifications,
+      }),
+    );
   } catch (error) {
     console.error("[asaas-create-payment] erro", {
       message: error instanceof Error ? error.message : String(error),

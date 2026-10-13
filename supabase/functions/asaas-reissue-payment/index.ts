@@ -13,6 +13,7 @@ import {
   asaasLateFeePayload,
   isCollectableStatus,
 } from "../_shared/billing-automation.ts";
+import { assertCanManageInvoiceOrBatch } from "../_shared/billing-auth.ts";
 
 type Body = {
   invoiceId?: string;
@@ -105,7 +106,7 @@ serve(async (req) => {
       const { data: invoice, error } = await supabase
         .from("faturas_inquilino")
         .select(
-          "id, asaas_payment_id, consolidated_item_id, valor, vencimento, status, recipient_user_id, tenant_user_id",
+          "id, consulta_id, asaas_payment_id, consolidated_item_id, valor, vencimento, status, recipient_user_id, tenant_user_id",
         )
         .eq("id", body.invoiceId)
         .maybeSingle();
@@ -115,6 +116,7 @@ serve(async (req) => {
           error: "Cobrança não encontrada.",
         }, 404);
       }
+      await assertCanManageInvoiceOrBatch(admin, user.id, { invoice });
       if (
         internalWhatsappRequest &&
         invoice.recipient_user_id !== user.id &&
@@ -176,6 +178,7 @@ serve(async (req) => {
           error: "Cobrança consolidada não encontrada.",
         }, 404);
       }
+      await assertCanManageInvoiceOrBatch(admin, user.id, { batch });
       if (internalWhatsappRequest && batch.agency_user_id !== user.id) {
         return jsonResponse(req, {
           ok: false,

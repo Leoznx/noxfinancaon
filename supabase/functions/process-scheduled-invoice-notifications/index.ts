@@ -9,10 +9,12 @@ import {
   wasNotificationSent,
 } from "../_shared/asaas.ts";
 import {
+  CONSOLIDATABLE_INVOICE_STATUSES,
   buildCollectionMessage,
   collectionCadence,
   monthlyDueDate,
   notificationKey,
+  resolveBillingDueDay,
   saoPauloClock,
 } from "../_shared/billing-automation.ts";
 import { getZApiConnectionStatus } from "../_shared/zapi.ts";
@@ -75,11 +77,14 @@ serve(async (req) => {
   }
 
   const admin = supabaseAdmin();
-  const { data: settings } = await admin
-    .from("billing_automation_settings")
-    .select("enabled, dispatch_enabled")
-    .eq("id", true)
-    .maybeSingle();
+  const [{ data: settings }, dueDay] = await Promise.all([
+    admin
+      .from("billing_automation_settings")
+      .select("enabled, dispatch_enabled")
+      .eq("id", true)
+      .maybeSingle(),
+    resolveBillingDueDay(admin),
+  ]);
   if (settings?.enabled === false) {
     return jsonResponse(req, { ok: true, skipped: "automation_disabled" });
   }
@@ -90,20 +95,29 @@ serve(async (req) => {
   const clock = saoPauloClock(now);
   const fromDate = addDays(clock.date, -14);
   const toDate = addDays(clock.date, 1);
-  const consolidation = { planned: 0, synchronized: 0, failed: 0 };
+  const consolidation = {
+    planned: 0,
+    synchronized: 0,
+    failed: 0,
+    dueDate: null as string | null,
+  };
 
   // Na primeira janela de cada dia, mantém o lote do mês sincronizado com os
   // contratos ativos. Entradas e saídas alteram a cobrança já existente.
   if (clock.hour === 9) {
     const [targetYear, targetMonth] = clock.date.split("-").map(Number);
-    const targetDueDate = monthlyDueDate(targetYear, targetMonth);
+    const targetDueDate = monthlyDueDate(targetYear, targetMonth, dueDay);
+    const targetMonthStart = `${targetYear}-${String(targetMonth).padStart(2, "0")}-01`;
+    const targetMonthEnd = monthlyDueDate(targetYear, targetMonth, 31);
+    consolidation.dueDate = targetDueDate;
     const [{ data: agencyInvoices }, { data: activeBatches }] = await Promise.all([
       admin
         .from("faturas_inquilino")
         .select("recipient_user_id")
         .eq("payment_responsible", "agency")
-        .eq("vencimento", targetDueDate)
-        .in("status", ["pending", "overdue", "risk_analysis", "approved"])
+        .gte("vencimento", targetMonthStart)
+        .lte("vencimento", targetMonthEnd)
+        .in("status", CONSOLIDATABLE_INVOICE_STATUSES)
         .not("recipient_user_id", "is", null),
       admin
         .from("consolidated_invoice_batches")

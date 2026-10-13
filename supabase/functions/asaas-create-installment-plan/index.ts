@@ -1,32 +1,33 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import {
   AsaasApiError,
-  MESES_PT,
-  addBusinessDays,
+  FireMode,
   asaasFetch,
   calculateMonthlyInstallmentValue,
-  describePaymentError,
-  paymentErrorStatus,
   corsHeaders,
+  describePaymentError,
   formatBRL,
   formatDateBr,
-  generateInstallmentSchedule,
   jsonResponse,
   logFinancialNotification,
   mapAsaasStatus,
+  paymentErrorStatus,
   requireUser,
-  resolvePaymentRecipient,
-  runInBackground,
+  resolvePaymentRecipientFromContract,
   sanitizeAsaasResponse,
   sendInstallmentScheduleEmail,
-  sendInstallmentScheduleSms,
   sendPaymentWhatsapp,
   supabaseAdmin,
   toMoney,
   wasNotificationSent,
 } from "../_shared/asaas.ts";
 import { ensureAsaasCustomer } from "../_shared/asaas-customer.ts";
-import { asaasLateFeePayload, nextMonthlyDueDate } from "../_shared/billing-automation.ts";
+import {
+  assertCanManageConsultationBilling,
+  assertContractAcceptsBilling,
+} from "../_shared/billing-auth.ts";
+import { buildBillingKey, buildBillingSchedule } from "../_shared/billing-state.ts";
+import { asaasLateFeePayload, resolveBillingDueDay } from "../_shared/billing-automation.ts";
 import {
   CONTRACT_PERIOD_LOCK_CONFLICT_CODE,
   ContractPeriodLockError,
@@ -34,109 +35,159 @@ import {
   parseContractPeriodMonths,
   resolveContractPeriodMonths,
 } from "../_shared/contract-period.ts";
-import { dispatchD4SignContract } from "../_shared/d4sign.ts";
-
-function queueContractDispatch(proposalId: string) {
-  runInBackground(`enviar contrato D4Sign ${proposalId}`, async () => {
-    const result = await dispatchD4SignContract(
-      supabaseAdmin(),
-      proposalId,
-      { allowPendingPayment: true },
-    );
-    if (!result.ok) {
-      console.error("[asaas-create-installment-plan] falha ao despachar contrato D4Sign", {
-        proposalId,
-        signatureId: result.signatureId || null,
-        error: result.error || result.status || "unknown",
-      });
-    }
-  });
-}
+import {
+  claimBillingOperation,
+  materializeInvoice,
+  publicRecipient,
+  queuePendingContractFlow,
+  reclaimStaleBillingOperation,
+  recoverPaymentForOperation,
+  updateBillingOperation,
+} from "../_shared/contract-billing.ts";
 
 type Body = {
   proposalId?: string;
   consultationId?: string;
+  paymentMethod?: "pix" | "boleto";
+  selectedFireInsuranceMode?: FireMode;
   amount?: number;
 };
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders(req) });
-  if (req.method !== "POST")
+  if (req.method !== "POST") {
     return jsonResponse(req, { ok: false, error: "Metodo nao permitido." }, 405);
+  }
 
   try {
     const { supabase, user } = await requireUser(req);
     const body = (await req.json()) as Body;
     const proposalId = body.proposalId || body.consultationId;
-    if (!proposalId)
+    const paymentMethod = body.paymentMethod || "boleto";
+    const fireMode = body.selectedFireInsuranceMode || "embutido";
+    if (!proposalId) {
       return jsonResponse(req, { ok: false, error: "Proposta nao encontrada." }, 400);
+    }
+    if (!["pix", "boleto"].includes(paymentMethod)) {
+      return jsonResponse(
+        req,
+        { ok: false, error: "Cronograma disponivel para Pix ou boleto." },
+        400,
+      );
+    }
 
     const { data: consulta, error: consultaError } = await supabase
       .from("consultas_credito")
       .select(
-        "*, inquilinos(*), imoveis(*), planos(*), responsavel_profile:profiles!consultas_credito_profile_id_solicitante_fkey(nome, email, telefone)",
+        "*, inquilinos(*), imoveis(*), planos(*), responsavel_profile:profiles!consultas_credito_profile_id_solicitante_fkey(id, nome, email, telefone, cnpj, role)",
       )
       .eq("id", proposalId)
       .maybeSingle();
     if (consultaError) throw consultaError;
-    if (!consulta) return jsonResponse(req, { ok: false, error: "Proposta nao encontrada." }, 404);
+    if (!consulta) {
+      return jsonResponse(req, { ok: false, error: "Proposta nao encontrada." }, 404);
+    }
+    await assertCanManageConsultationBilling(supabase, user.id, consulta);
+    await assertContractAcceptsBilling(supabase, consulta);
+    const recipient = await resolvePaymentRecipientFromContract(supabase, consulta);
 
-    // consultas_credito não possui coluna apolice_id. Resolve a apólice pelo
-    // relacionamento real antes de criar as parcelas, garantindo que o evento
-    // de pagamento consiga localizar o contrato que gerou a comissão.
-    const { data: apolice, error: apoliceError } = await supabase
-      .from("apolices")
-      .select("id")
-      .eq("consulta_id", proposalId)
-      .order("created_at", { ascending: false })
-      .limit(1)
+    const initialKey = buildBillingKey(proposalId, "initial", 1);
+    const { data: initialInvoice, error: initialError } = await supabase
+      .from("faturas_inquilino")
+      .select("*, asaas_payment:asaas_payments(*)")
+      .eq("billing_key", initialKey)
       .maybeSingle();
-    if (apoliceError) throw apoliceError;
+    if (initialError) throw initialError;
+    if (!initialInvoice) {
+      return jsonResponse(
+        req,
+        {
+          ok: false,
+          error: "Gere primeiro a cobranca inicial. Nenhuma mensalidade futura foi criada.",
+          initialRequired: true,
+        },
+        409,
+      );
+    }
+    if (initialInvoice.payment_method && initialInvoice.payment_method !== paymentMethod) {
+      return jsonResponse(
+        req,
+        {
+          ok: false,
+          error: "O metodo difere da cobranca inicial. Consulte ou reemita a cobranca existente.",
+        },
+        409,
+      );
+    }
+    const frozenFireMode = initialInvoice.components?.fireMode || fireMode;
+    if (frozenFireMode !== fireMode) {
+      return jsonResponse(
+        req,
+        {
+          ok: false,
+          error: "A forma de cobranca do seguro incendio difere da cobranca inicial.",
+        },
+        409,
+      );
+    }
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .maybeSingle();
-    const role = profile?.role;
-    const allowed =
-      consulta.profile_id_solicitante === user.id ||
-      consulta.tenant_user_id === user.id ||
-      consulta.billing_responsible_user_id === user.id ||
-      ["admin", "financeiro", "corretor", "imobiliaria"].includes(role);
-    if (!allowed) return jsonResponse(req, { ok: false, error: "Acesso nao autorizado." }, 403);
-
-    let persistedInstallmentCount: number;
+    let contractPeriodMonths: number;
     try {
-      persistedInstallmentCount = resolveContractPeriodMonths(consulta);
+      contractPeriodMonths = resolveContractPeriodMonths(consulta);
     } catch {
       return jsonResponse(
         req,
         {
           ok: false,
           error:
-            "Selecione um período de contrato válido, entre 1 e 120 meses, antes de gerar as cobranças.",
+            "Selecione um periodo de contrato valido, entre 1 e 120 meses, antes de gerar as cobrancas.",
         },
         400,
       );
     }
 
-    const recipient = resolvePaymentRecipient(consulta);
-    if (recipient.paymentResponsible !== "tenant") {
+    const initialInstallmentTotal = parseContractPeriodMonths(initialInvoice.installment_total);
+    const componentPeriodRaw = initialInvoice.components?.contractMonths;
+    const componentPeriod =
+      componentPeriodRaw == null ? null : parseContractPeriodMonths(componentPeriodRaw);
+    if (
+      initialInstallmentTotal === null ||
+      (componentPeriodRaw != null && componentPeriod === null)
+    ) {
       return jsonResponse(
         req,
-        { ok: false, error: "Este fluxo de boletos mensais e so para pagamento pelo inquilino." },
+        {
+          ok: false,
+          error:
+            "A cobranca inicial possui um periodo invalido e precisa de revisao antes de continuar.",
+        },
+        409,
+      );
+    }
+    if (
+      initialInstallmentTotal !== contractPeriodMonths ||
+      (componentPeriod !== null && componentPeriod !== contractPeriodMonths)
+    ) {
+      return jsonResponse(
+        req,
+        {
+          ok: false,
+          error:
+            "O periodo da proposta nao coincide com a cobranca inicial. Nenhuma nova cobranca foi criada.",
+        },
+        409,
+      );
+    }
+    const installmentTotal = contractPeriodMonths;
+
+    const monthlyValue = calculateMonthlyInstallmentValue(consulta, fireMode);
+    if (monthlyValue <= 0) {
+      return jsonResponse(
+        req,
+        { ok: false, error: "Nao foi possivel calcular a mensalidade." },
         400,
       );
     }
-
-    const monthlyValue = calculateMonthlyInstallmentValue(consulta);
-    if (monthlyValue <= 0)
-      return jsonResponse(
-        req,
-        { ok: false, error: "Nao foi possivel calcular o valor da mensalidade." },
-        400,
-      );
     if (body.amount != null && Math.abs(toMoney(body.amount) - monthlyValue) > 0.02) {
       return jsonResponse(
         req,
@@ -149,91 +200,69 @@ serve(async (req) => {
       );
     }
 
-    const { data: existentes, error: existentesError } = await supabase
+    const dueDay = await resolveBillingDueDay(supabaseAdmin());
+    const schedule = buildBillingSchedule({
+      consultationId: proposalId,
+      months: installmentTotal,
+      initialDueDate: initialInvoice.vencimento,
+      monthlyDueDay: dueDay,
+    });
+    const { data: existingRows, error: existingError } = await supabase
       .from("faturas_inquilino")
       .select("*, asaas_payment:asaas_payments(*)")
       .eq("consulta_id", proposalId)
-      .order("numero_parcela", { ascending: true });
-    if (existentesError) throw existentesError;
+      .in("charge_kind", ["initial", "monthly"]);
+    if (existingError) throw existingError;
 
-    const frozenTotals = new Set<number>();
-    for (const invoice of existentes ?? []) {
-      const total = parseContractPeriodMonths(invoice.installment_total);
-      if (total === null) {
+    for (const invoice of existingRows || []) {
+      const frozenTotal = parseContractPeriodMonths(invoice.installment_total);
+      const installmentNumber = Number(invoice.numero_parcela);
+      if (frozenTotal === null) {
         return jsonResponse(
           req,
           {
             ok: false,
             error:
-              "O cronograma existente possui um período inválido e precisa de revisão antes de continuar.",
+              "O cronograma existente possui um periodo invalido e precisa de revisao antes de continuar.",
           },
           409,
         );
       }
-      frozenTotals.add(total);
-    }
-    if (frozenTotals.size > 1) {
-      return jsonResponse(
-        req,
-        {
-          ok: false,
-          error:
-            "As cobranças existentes possuem períodos divergentes e precisam de revisão antes de continuar.",
-        },
-        409,
-      );
-    }
-    const frozenInstallmentCount = frozenTotals.values().next().value as number | undefined;
-    if (
-      frozenInstallmentCount !== undefined &&
-      frozenInstallmentCount !== persistedInstallmentCount
-    ) {
-      return jsonResponse(
-        req,
-        {
-          ok: false,
-          error:
-            "O período da proposta não coincide com o cronograma já gerado. Nenhuma nova cobrança foi criada.",
-        },
-        409,
-      );
-    }
-    // A primeira fatura materializada congela o total para toda retomada. A
-    // coluna da proposta precisa continuar igual ao valor já contratado.
-    const installmentCount = frozenInstallmentCount ?? persistedInstallmentCount;
-
-    const jaCriadas = new Map<number, any>(
-      (existentes ?? []).map((f: any) => [f.numero_parcela, f]),
-    );
-
-    if (
-      [...jaCriadas.keys()].some(
-        (installmentNumber) =>
-          !Number.isSafeInteger(Number(installmentNumber)) ||
-          Number(installmentNumber) < 1 ||
-          Number(installmentNumber) > installmentCount,
-      )
-    ) {
-      return jsonResponse(
-        req,
-        {
-          ok: false,
-          error: "O cronograma existente possui uma parcela incompatível com o período contratado.",
-        },
-        409,
-      );
+      if (frozenTotal !== installmentTotal) {
+        return jsonResponse(
+          req,
+          {
+            ok: false,
+            error:
+              "O periodo da proposta nao coincide com o cronograma ja gerado. Nenhuma nova cobranca foi criada.",
+          },
+          409,
+        );
+      }
+      if (
+        !Number.isSafeInteger(installmentNumber) ||
+        installmentNumber < 1 ||
+        installmentNumber > installmentTotal
+      ) {
+        return jsonResponse(
+          req,
+          {
+            ok: false,
+            error:
+              "O cronograma existente possui uma parcela incompatível com o periodo contratado.",
+          },
+          409,
+        );
+      }
     }
 
-    // Congela o mesmo período validado acima antes de qualquer chamada ao
-    // Asaas ou despacho para a D4Sign. O UPDATE condicional impede usar um
-    // prazo que tenha sido alterado por outra requisição nesse intervalo.
     try {
-      await lockContractPeriod(supabase, proposalId, installmentCount);
+      await lockContractPeriod(supabase, proposalId, installmentTotal);
     } catch (error) {
       const conflict =
         error instanceof ContractPeriodLockError &&
         error.code === CONTRACT_PERIOD_LOCK_CONFLICT_CODE;
-      console.error("[asaas-create-installment-plan] falha ao bloquear período", {
+      console.error("[asaas-create-installment-plan] falha ao bloquear periodo", {
         proposalId,
         code: error instanceof ContractPeriodLockError ? error.code : "unknown",
       });
@@ -242,292 +271,322 @@ serve(async (req) => {
         {
           ok: false,
           error: conflict
-            ? "O período do contrato mudou. Atualize a página antes de gerar as cobranças."
-            : "Não foi possível confirmar o período do contrato agora. Tente novamente.",
+            ? "O periodo do contrato mudou. Atualize a pagina antes de gerar as cobrancas."
+            : "Nao foi possivel confirmar o periodo do contrato agora. Tente novamente.",
         },
         conflict ? 409 : 500,
       );
     }
 
-    if (jaCriadas.size >= installmentCount) {
-      queueContractDispatch(proposalId);
-      return jsonResponse(req, buildResponse([...jaCriadas.values()], recipient, installmentCount));
+    const byKey = new Map((existingRows || []).map((row: any) => [row.billing_key, row]));
+    byKey.set(initialKey, initialInvoice);
+
+    let customerId: string | null = null;
+    if (recipient.paymentResponsible === "tenant") {
+      customerId = await ensureAsaasCustomer(supabase, consulta, recipient);
     }
 
-    // A ativacao continua sendo uma cobranca separada; as mensalidades
-    // recorrentes novas passam a vencer sempre no dia 10, iniciando no mes
-    // seguinte. Planos antigos preservam o cronograma ja contratado.
-    const primeiroVencimento = jaCriadas.size > 0 ? null : nextMonthlyDueDate(new Date(), 1);
-    const schedule = generateInstallmentSchedule({
-      firstDueDate: primeiroVencimento || (existentes?.[0]?.vencimento ?? addBusinessDays(3)),
-      count: installmentCount,
-    });
-
-    let customerId: string;
-    try {
-      customerId = await ensureAsaasCustomer(supabase, consulta);
-    } catch (error) {
-      console.error("[asaas-create-installment-plan] falha ao preparar cliente Asaas", {
-        proposalId,
-        message: error instanceof Error ? error.message : String(error),
-      });
-      return jsonResponse(
-        req,
-        {
-          ok: false,
-          error: describePaymentError(
-            error,
-            "Nao foi possivel preparar o cadastro de cobranca. Confira os dados do inquilino e tente novamente.",
-          ),
-        },
-        paymentErrorStatus(error, 502),
-      );
-    }
-
-    const criadas: any[] = [...jaCriadas.values()];
-
-    for (const item of schedule) {
-      if (jaCriadas.has(item.installmentNumber)) continue;
-
-      const externalReference = `nox:consulta:${proposalId}:installment:${item.installmentNumber}`;
-      const description = `NOX Fiança — Mensalidade ${item.installmentNumber}/${installmentCount} — ${MESES_PT[item.referenceMonth - 1]} de ${item.referenceYear}`;
-
-      let raw: any;
-      try {
-        raw = await asaasFetch("/payments", {
-          method: "POST",
-          body: JSON.stringify({
-            customer: customerId,
-            billingType: "BOLETO",
-            value: monthlyValue,
-            dueDate: item.dueDate,
-            description,
-            externalReference,
-            ...asaasLateFeePayload(),
-          }),
+    for (const item of schedule.slice(1)) {
+      if (byKey.has(item.billingKey)) continue;
+      const status =
+        recipient.paymentResponsible === "agency" ? "awaiting_consolidation" : "pending";
+      if (recipient.paymentResponsible === "agency") {
+        const invoice = await materializeInvoice(supabase, {
+          consultation: consulta,
+          recipient,
+          billingKey: item.billingKey,
+          installmentNumber: item.installmentNumber,
+          installmentTotal,
+          dueDate: item.dueDate,
+          value: monthlyValue,
+          status,
+          chargeKind: "monthly",
+          paymentMethod,
+          components: { fireMode, monthlyAmount: monthlyValue, contractMonths: installmentTotal },
+          referenceMonth: item.referenceMonth,
         });
-      } catch (error) {
-        console.error("[asaas-create-installment-plan] falha ao criar parcela", {
+        byKey.set(item.billingKey, invoice);
+        continue;
+      }
+
+      const { operation, claimed } = await claimBillingOperation(supabase, {
+        consultationId: proposalId,
+        operationType: "installment",
+        idempotencyKey: item.billingKey,
+        request: {
           proposalId,
           installmentNumber: item.installmentNumber,
-          status: error instanceof AsaasApiError ? error.status : "unknown",
+          paymentMethod,
+          fireMode,
+          value: monthlyValue,
+          dueDate: item.dueDate,
+        },
+        userId: user.id,
+      });
+      let raw: any = null;
+      if (!claimed) {
+        const { data: raced } = await supabase
+          .from("faturas_inquilino")
+          .select("*, asaas_payment:asaas_payments(*)")
+          .eq("billing_key", item.billingKey)
+          .maybeSingle();
+        if (raced) {
+          byKey.set(item.billingKey, raced);
+          continue;
+        }
+        if (["reserved", "provider_created", "ambiguous", "persisted"].includes(operation.state)) {
+          raw = await recoverPaymentForOperation(operation, item.billingKey);
+        }
+        if (!raw && (await reclaimStaleBillingOperation(supabase, operation))) {
+          // A busca por externalReference comprovou que a competencia ainda nao existe no Asaas.
+        } else if (!raw) {
+          return jsonResponse(
+            req,
+            {
+              ok: false,
+              error: `A mensalidade ${item.installmentNumber}/${installmentTotal} esta sendo conciliada no Asaas. Nenhuma cobranca nova foi emitida.`,
+              created: byKey.size,
+              total: installmentTotal,
+              reconciled: false,
+              operationState: operation.state,
+            },
+            409,
+          );
+        }
+        await updateBillingOperation(supabase, operation.id, {
+          state: "provider_created",
+          provider_id: raw?.id || operation.provider_id || null,
+          provider_response: sanitizeAsaasResponse(raw),
+          attempts: Number(operation.attempts || 0) + 1,
+          last_error: null,
         });
-        // Nao tenta as proximas - preserva o que ja foi criado (nunca apaga),
-        // e uma nova chamada a esta funcao retoma exatamente daqui.
+      }
+
+      if (!raw) {
+        try {
+          raw = await asaasFetch("/payments", {
+            method: "POST",
+            body: JSON.stringify({
+              customer: customerId,
+              billingType: paymentMethod === "pix" ? "PIX" : "BOLETO",
+              value: monthlyValue,
+              dueDate: item.dueDate,
+              description: `NOX Fianca - mensalidade ${item.installmentNumber}/${installmentTotal}`,
+              externalReference: item.billingKey,
+              ...asaasLateFeePayload(),
+            }),
+          });
+          await updateBillingOperation(supabase, operation.id, {
+            state: "provider_created",
+            provider_id: raw?.id || null,
+            provider_response: sanitizeAsaasResponse(raw),
+          });
+        } catch (error) {
+          await updateBillingOperation(supabase, operation.id, {
+            state: error instanceof AsaasApiError && error.status < 500 ? "failed" : "ambiguous",
+            last_error: error instanceof Error ? error.message : String(error),
+          });
+          return jsonResponse(
+            req,
+            {
+              ok: false,
+              error: `Nao foi possivel gerar a mensalidade ${item.installmentNumber}/${installmentTotal}: ${describePaymentError(error, "tente novamente")}. As cobrancas existentes foram preservadas.`,
+              created: byKey.size,
+              total: installmentTotal,
+            },
+            paymentErrorStatus(error, 502),
+          );
+        }
+      }
+
+      let pixQrCode: string | null = null;
+      let pixCopyPaste: string | null = null;
+      let pixExpiresAt: string | null = null;
+      if (paymentMethod === "pix" && raw?.id) {
+        try {
+          const pix = await asaasFetch(`/payments/${raw.id}/pixQrCode`);
+          pixQrCode = pix?.encodedImage || null;
+          pixCopyPaste = pix?.payload || null;
+          pixExpiresAt = pix?.expirationDate || null;
+        } catch {
+          // A mensalidade continua criada; refresh recupera o QR posteriormente.
+        }
+      }
+      const internalStatus = mapAsaasStatus(raw?.status);
+      const { data: payment, error: paymentError } = await supabase
+        .from("asaas_payments")
+        .upsert(
+          {
+            consultation_id: proposalId,
+            proposal_id: proposalId,
+            plan_id: consulta.plano_id,
+            user_id: user.id,
+            tenant_user_id: consulta.tenant_user_id,
+            asaas_customer_id: customerId,
+            asaas_payment_id: raw?.id || null,
+            external_reference: item.billingKey,
+            idempotency_key: item.billingKey,
+            billing_operation_id: operation.id,
+            charge_kind: "monthly",
+            payment_method: paymentMethod,
+            value: monthlyValue,
+            status: internalStatus,
+            due_date: item.dueDate,
+            pix_qr_code: pixQrCode,
+            pix_copy_paste: pixCopyPaste,
+            pix_expires_at: pixExpiresAt,
+            boleto_url: raw?.bankSlipUrl || raw?.invoiceUrl || null,
+            boleto_barcode: raw?.identificationField || raw?.nossoNumero || null,
+            raw_response: sanitizeAsaasResponse(raw),
+            payment_responsible: recipient.paymentResponsible,
+            recipient_type: recipient.recipientType,
+            recipient_user_id: recipient.recipientUserId,
+            recipient_tenant_id: recipient.recipientTenantId,
+            recipient_name: recipient.recipientName,
+            recipient_email: recipient.recipientEmail,
+            recipient_phone: recipient.recipientPhone,
+          },
+          { onConflict: "idempotency_key" },
+        )
+        .select("*")
+        .maybeSingle();
+      if (paymentError || !payment) {
+        await updateBillingOperation(supabase, operation.id, {
+          state: "provider_created",
+          last_error: paymentError?.message || "local_payment_missing",
+        });
         return jsonResponse(
           req,
           {
             ok: false,
-            error: `Nao foi possivel gerar a mensalidade ${item.installmentNumber}/${installmentCount}: ${describePaymentError(error, "tente novamente")}. As mensalidades ja criadas foram preservadas.`,
-            created: criadas.length,
-            total: installmentCount,
+            error:
+              "Uma mensalidade foi criada no Asaas e esta em conciliacao. Nao tente criar outra.",
+            created: byKey.size,
+            total: installmentTotal,
           },
           502,
         );
       }
-
-      const sanitized = sanitizeAsaasResponse(raw);
-      const internalStatus = mapAsaasStatus(raw?.status);
-
-      const { data: pagamento, error: pagamentoError } = await supabase
-        .from("asaas_payments")
-        .insert({
-          consultation_id: proposalId,
-          proposal_id: proposalId,
-          plan_id: consulta.plano_id,
-          user_id: user.id,
-          tenant_user_id: consulta.tenant_user_id,
-          asaas_customer_id: customerId,
-          asaas_payment_id: raw?.id || null,
-          external_reference: externalReference,
-          idempotency_key: externalReference,
-          payment_method: "boleto",
-          value: monthlyValue,
-          status: internalStatus,
-          due_date: item.dueDate,
-          boleto_url: raw?.bankSlipUrl || raw?.invoiceUrl || null,
-          boleto_barcode: raw?.identificationField || raw?.nossoNumero || null,
-          raw_response: sanitized,
-          payment_responsible: recipient.paymentResponsible,
-          recipient_type: recipient.recipientType,
-          recipient_user_id: recipient.recipientUserId,
-          recipient_tenant_id: recipient.recipientTenantId,
-          recipient_name: recipient.recipientName,
-          recipient_email: recipient.recipientEmail,
-          recipient_phone: recipient.recipientPhone,
-        })
-        .select()
-        .maybeSingle();
-      if (pagamentoError) {
-        console.error("[asaas-create-installment-plan] falha ao salvar asaas_payments", {
-          proposalId,
-          installmentNumber: item.installmentNumber,
-          error: pagamentoError.message,
-        });
-      }
-
-      const { data: fatura, error: faturaError } = await supabase
-        .from("faturas_inquilino")
-        .insert({
-          apolice_id: apolice?.id || null,
-          consulta_id: proposalId,
-          tenant_user_id: consulta.tenant_user_id,
-          numero_parcela: item.installmentNumber,
-          installment_total: installmentCount,
-          vencimento: item.dueDate,
-          valor: monthlyValue,
-          status: internalStatus,
-          boleto_url: raw?.bankSlipUrl || raw?.invoiceUrl || null,
-          linha_digitavel: raw?.identificationField || raw?.nossoNumero || null,
-          payment_responsible: recipient.paymentResponsible,
-          recipient_user_id: recipient.recipientUserId,
-          asaas_payment_id: pagamento?.id || null,
-        })
-        .select()
-        .maybeSingle();
-      if (faturaError) {
-        console.error("[asaas-create-installment-plan] falha ao salvar faturas_inquilino", {
-          proposalId,
-          installmentNumber: item.installmentNumber,
-          error: faturaError.message,
-        });
-      }
-
-      criadas.push({ ...fatura, asaas_payment: pagamento });
+      const paymentUrl = raw?.invoiceUrl || raw?.bankSlipUrl || null;
+      const invoice = await materializeInvoice(supabase, {
+        consultation: consulta,
+        recipient,
+        billingKey: item.billingKey,
+        installmentNumber: item.installmentNumber,
+        installmentTotal,
+        dueDate: item.dueDate,
+        value: monthlyValue,
+        status: internalStatus,
+        chargeKind: "monthly",
+        paymentMethod,
+        components: { fireMode, monthlyAmount: monthlyValue, contractMonths: installmentTotal },
+        paymentUrl,
+        localPaymentId: payment.id,
+        referenceMonth: item.referenceMonth,
+      });
+      await updateBillingOperation(supabase, operation.id, {
+        invoice_id: invoice.id,
+        state: "persisted",
+        completed_at: new Date().toISOString(),
+      });
+      byKey.set(item.billingKey, { ...invoice, asaas_payment: payment });
     }
 
-    // O cronograma ja esta persistido. Notificacoes consolidadas continuam
-    // idempotentes, mas nao bloqueiam mais a resposta que libera o pagamento.
-    runInBackground(`notificar cronograma ${proposalId}`, async () => {
-      if (criadas.length >= installmentCount && recipient.recipientEmail) {
-        const jaEnviadoEmail = await wasNotificationSent(supabase, {
-          invoiceId: criadas[0]?.id,
+    const invoices = schedule.map((item) => byKey.get(item.billingKey)).filter(Boolean);
+    if (invoices.length === installmentTotal) {
+      const anchor = initialInvoice;
+      if (
+        recipient.recipientEmail &&
+        !(await wasNotificationSent(supabase, {
+          invoiceId: anchor.id,
           channel: "email",
           notificationType: "billing_schedule_created",
+        }))
+      ) {
+        const result = await sendInstallmentScheduleEmail({
+          to: recipient.recipientEmail,
+          nome: recipient.recipientName || "cliente",
+          installments: schedule.map((item, index) => ({
+            installmentNumber: item.installmentNumber,
+            dueDate: item.dueDate,
+            referenceMonth: Number(item.dueDate.slice(5, 7)),
+            referenceYear: Number(item.dueDate.slice(0, 4)),
+            value: index === 0 ? Number(initialInvoice.valor) : monthlyValue,
+          })),
         });
-        if (!jaEnviadoEmail) {
-          const resultado = await sendInstallmentScheduleEmail({
-            to: recipient.recipientEmail,
-            nome: recipient.recipientName || "cliente",
-            installments: criadas.map((f) => ({
-              installmentNumber: f.numero_parcela,
-              dueDate: f.vencimento,
-              referenceMonth: Number(String(f.vencimento).split("-")[1]),
-              referenceYear: Number(String(f.vencimento).split("-")[0]),
-              value: Number(f.valor),
-            })),
-          });
-          await logFinancialNotification(supabase, {
-            invoiceId: criadas[0]?.id,
-            recipientType: recipient.recipientType,
-            recipientId: recipient.recipientTenantId || recipient.recipientUserId,
-            channel: "email",
-            notificationType: "billing_schedule_created",
-            result: resultado,
-          });
-        }
-      }
-      if (criadas.length >= installmentCount && recipient.recipientPhone) {
-        const jaEnviadoSms = await wasNotificationSent(supabase, {
-          invoiceId: criadas[0]?.id,
-          channel: "sms",
+        await logFinancialNotification(supabase, {
+          invoiceId: anchor.id,
+          recipientType: recipient.recipientType,
+          recipientId: recipient.recipientTenantId || recipient.recipientUserId,
+          channel: "email",
           notificationType: "billing_schedule_created",
+          result,
         });
-        if (!jaEnviadoSms) {
-          const resultado = await sendInstallmentScheduleSms({
-            to: recipient.recipientPhone,
-            installments: criadas.map((f) => ({
-              installmentNumber: f.numero_parcela,
-              dueDate: f.vencimento,
-              referenceMonth: Number(String(f.vencimento).split("-")[1]),
-              referenceYear: Number(String(f.vencimento).split("-")[0]),
-              value: Number(f.valor),
-            })),
-          });
-          await logFinancialNotification(supabase, {
-            invoiceId: criadas[0]?.id,
-            recipientType: recipient.recipientType,
-            recipientId: recipient.recipientTenantId || recipient.recipientUserId,
-            channel: "sms",
-            notificationType: "billing_schedule_created",
-            result: resultado,
-          });
-          const jaEnviadoWhatsapp = await wasNotificationSent(supabase, {
-            invoiceId: criadas[0]?.id,
-            channel: "whatsapp",
-            notificationType: "billing_schedule_created",
-          });
-          if (!jaEnviadoWhatsapp) {
-            const primeira = criadas[0];
-            const resultadoWpp = await sendPaymentWhatsapp({
-              to: recipient.recipientPhone,
-              mensagem: `Olá, ${recipient.recipientName || "cliente"}. Os ${installmentCount} boletos mensais da NOX Fiança foram gerados. Primeira mensalidade: ${formatBRL(Number(primeira.valor))}, vencimento ${formatDateBr(primeira.vencimento)}. Acesse sua conta para visualizar ou pagar o boleto.`,
-            });
-            await logFinancialNotification(supabase, {
-              invoiceId: criadas[0]?.id,
-              recipientType: recipient.recipientType,
-              recipientId: recipient.recipientTenantId || recipient.recipientUserId,
-              channel: "whatsapp",
-              notificationType: "billing_schedule_created",
-              result: resultadoWpp,
-            });
-          }
-        }
       }
+      if (
+        recipient.recipientPhone &&
+        !(await wasNotificationSent(supabase, {
+          invoiceId: anchor.id,
+          channel: "whatsapp",
+          notificationType: "billing_schedule_created",
+        }))
+      ) {
+        const result = await sendPaymentWhatsapp({
+          to: recipient.recipientPhone,
+          mensagem: `Ola, ${recipient.recipientName || "cliente"}. O cronograma da NOX Fianca foi gerado sem duplicar a primeira mensalidade: inicial ${formatBRL(Number(initialInvoice.valor))} em ${formatDateBr(initialInvoice.vencimento)} e ${Math.max(installmentTotal - 1, 0)} mensalidades futuras de ${formatBRL(monthlyValue)}.`,
+        });
+        await logFinancialNotification(supabase, {
+          invoiceId: anchor.id,
+          recipientType: recipient.recipientType,
+          recipientId: recipient.recipientTenantId || recipient.recipientUserId,
+          channel: "whatsapp",
+          notificationType: "billing_schedule_created",
+          result,
+        });
+      }
+    }
+
+    queuePendingContractFlow(supabase, proposalId);
+    return jsonResponse(req, {
+      success: true,
+      paymentMethod,
+      fireMode,
+      installmentTotal,
+      initialInvoiceId: initialInvoice.id,
+      initialAmount: Number(initialInvoice.valor),
+      monthlyAmount: monthlyValue,
+      recipient: publicRecipient(recipient),
+      installments: invoices.map((invoice: any) => ({
+        installmentNumber: invoice.numero_parcela,
+        kind: invoice.charge_kind,
+        dueDate: invoice.vencimento,
+        value: Number(invoice.valor),
+        status: invoice.status,
+        paymentUrl: invoice.payment_url || invoice.boleto_url || null,
+        boletoUrl: invoice.boleto_url || null,
+        boletoBarcode: invoice.linha_digitavel || invoice.asaas_payment?.boleto_barcode || null,
+        pix:
+          invoice.asaas_payment?.pix_copy_paste || invoice.asaas_payment?.pix_qr_code
+            ? {
+                qrCode: invoice.asaas_payment?.pix_copy_paste || "",
+                qrCodeBase64: invoice.asaas_payment?.pix_qr_code || "",
+                expiresAt: invoice.asaas_payment?.pix_expires_at || null,
+              }
+            : null,
+        faturaId: invoice.id,
+      })),
     });
-
-    queueContractDispatch(proposalId);
-
-    return jsonResponse(req, buildResponse(criadas, recipient, installmentCount));
   } catch (error) {
     console.error("[asaas-create-installment-plan] erro", {
       message: error instanceof Error ? error.message : String(error),
     });
     return jsonResponse(
       req,
-      { ok: false, error: describePaymentError(error, "Nao foi possivel gerar os boletos agora.") },
+      {
+        ok: false,
+        error: describePaymentError(error, "Nao foi possivel gerar o cronograma agora."),
+      },
       paymentErrorStatus(error, 500),
     );
   }
 });
-
-function maskEmailLocal(email?: string | null) {
-  if (!email) return null;
-  const [u, domain] = email.split("@");
-  if (!domain) return email;
-  return `${u.slice(0, 2)}${"*".repeat(Math.max(u.length - 2, 2))}@${domain}`;
-}
-
-function maskPhoneLocal(phone?: string | null) {
-  if (!phone) return null;
-  const digits = String(phone).replace(/\D/g, "");
-  if (digits.length < 4) return phone;
-  return `+55 (***) *****-${digits.slice(-4)}`;
-}
-
-function buildResponse(
-  faturas: any[],
-  recipient: ReturnType<typeof resolvePaymentRecipient>,
-  installmentCount: number,
-) {
-  const ordenadas = [...faturas].sort((a, b) => a.numero_parcela - b.numero_parcela);
-  return {
-    success: true,
-    installmentTotal: installmentCount,
-    installments: ordenadas.map((f) => ({
-      installmentNumber: f.numero_parcela,
-      dueDate: f.vencimento,
-      value: Number(f.valor),
-      status: f.status,
-      boletoUrl: f.boleto_url,
-      boletoBarcode: f.linha_digitavel,
-      faturaId: f.id,
-    })),
-    recipient: {
-      responsible: recipient.paymentResponsible,
-      type: recipient.recipientType,
-      emailMasked: maskEmailLocal(recipient.recipientEmail),
-      phoneMasked: maskPhoneLocal(recipient.recipientPhone),
-    },
-  };
-}

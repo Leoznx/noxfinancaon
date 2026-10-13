@@ -931,7 +931,8 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
                                     CRECI
                                   </Label>
                                   <Select
-                                    onValueChange={(val: "sim" | "nao") => {
+                                    onValueChange={(value) => {
+                                      const val = value as "sim" | "nao";
                                       setPossuiCreci(val);
                                       formCorretor.setValue(
                                         "creci",
@@ -1125,7 +1126,8 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
                                     Vinculado a uma imobiliária?
                                   </Label>
                                   <Select
-                                    onValueChange={(val: "sim" | "nao") => {
+                                    onValueChange={(value) => {
+                                      const val = value as "sim" | "nao";
                                       formCorretor.setValue("vinculadoImobiliaria", val, {
                                         shouldValidate: true,
                                       });
@@ -1326,7 +1328,7 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
                           <div className="flex items-start space-x-2">
                             <Checkbox
                               id="termos"
-                              onCheckedChange={(val: boolean) => activeForm.setValue("termos", val)}
+                              onCheckedChange={(val) => activeForm.setValue("termos", val === true)}
                               className="mt-0.5"
                             />
                             <div className="grid gap-1">
@@ -1449,7 +1451,7 @@ function InquilinoForm({
       <div className="flex items-start space-x-2 pt-2">
         <Checkbox
           id="termos-inq"
-          onCheckedChange={(val: boolean) => form.setValue("termos", val)}
+          onCheckedChange={(val) => form.setValue("termos", val === true)}
           className="mt-0.5"
         />
         <label htmlFor="termos-inq" className="text-xs font-medium leading-none text-neutral-700">

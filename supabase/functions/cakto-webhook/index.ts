@@ -36,6 +36,18 @@ function mapearStatus(statusBruto: string | undefined | null): StatusMapeado {
   return "desconhecido";
 }
 
+function mapearPaymentState(status: StatusMapeado) {
+  const map: Partial<Record<StatusMapeado, string>> = {
+    pago: "paid",
+    aguardando_pagamento: "pending",
+    recusado: "refused",
+    cancelado: "cancelled",
+    estornado: "refunded",
+    chargeback: "chargeback",
+  };
+  return map[status] || null;
+}
+
 serve(async (req) => {
   const jsonResponse = (body: Record<string, unknown>, status = 200) =>
     new Response(JSON.stringify(body), {
@@ -158,9 +170,11 @@ serve(async (req) => {
   }
 
   if (existente.consultation_id) {
+    const paymentState = mapearPaymentState(statusMapeado);
     const consultaPayload: Record<string, unknown> = {
       payment_status: statusMapeado,
     };
+    if (paymentState) consultaPayload.payment_state = paymentState;
     if (statusMapeado === "pago") {
       consultaPayload.payment_confirmed_at = paidAt || new Date().toISOString();
     }

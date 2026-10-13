@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Check, Clock, Copy, FileText, CalendarClock } from "lucide-react";
+import { Check, Copy, FileText, CalendarClock } from "lucide-react";
 import { statusPagamentoLabel } from "@/lib/asaas-payment";
 import { MESES_PT, formatDateBr } from "@/lib/asaas-payment";
 import { toast } from "sonner";
@@ -38,31 +38,20 @@ interface ModalCronogramaBoletosProps {
   open: boolean;
   resultado: CronogramaResultado | null;
   onFechar: () => void;
-  /** "Pagar depois": deixa os boletos em aberto na aba de faturas do usuário. */
-  onPagarDepois?: (resultado: CronogramaResultado) => Promise<void> | void;
+  deferPayment?: boolean;
+  onIrParaFaturas?: () => void;
 }
 
 export function ModalCronogramaBoletos({
   open,
   resultado,
   onFechar,
-  onPagarDepois,
+  deferPayment = false,
+  onIrParaFaturas,
 }: ModalCronogramaBoletosProps) {
-  const [adiando, setAdiando] = useState(false);
-
   if (!resultado) return null;
 
   const valorFmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-
-  async function pagarDepois() {
-    if (!onPagarDepois || !resultado) return;
-    setAdiando(true);
-    try {
-      await onPagarDepois(resultado);
-    } finally {
-      setAdiando(false);
-    }
-  }
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onFechar()}>
@@ -85,7 +74,7 @@ export function ModalCronogramaBoletos({
               Responsável pelo pagamento: {resultado.recipient.responsible === "agency" ? "Imobiliária" : "Inquilino"}
             </p>
             {resultado.recipient.emailMasked && <p>Cobranças enviadas para: {resultado.recipient.emailMasked}</p>}
-            {resultado.recipient.phoneMasked && <p>SMS enviado para: {resultado.recipient.phoneMasked}</p>}
+            {resultado.recipient.phoneMasked && <p>WhatsApp: {resultado.recipient.phoneMasked}</p>}
           </div>
         )}
 
@@ -95,29 +84,20 @@ export function ModalCronogramaBoletos({
           ))}
         </div>
 
-        {onPagarDepois && (
+        {deferPayment && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-            <p className="flex items-center gap-1.5 font-bold">
-              <Clock className="h-3.5 w-3.5" /> Prefere pagar depois?
-            </p>
+            <p className="font-bold">Cobranças geradas com sucesso</p>
             <p className="mt-1 leading-relaxed">
-              Os boletos ficam em aberto na aba de faturas e podem ser pagos a qualquer momento.
-              A proposta só é enviada para assinatura após a confirmação do primeiro pagamento.
+              O processo de contratação continuará normalmente. O pagamento está pendente e os
+              boletos permanecem disponíveis em faturas.
             </p>
           </div>
         )}
 
         <DialogFooter className="gap-2 sm:gap-2">
-          {onPagarDepois && (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => void pagarDepois()}
-              disabled={adiando}
-              className="w-full border-amber-300 text-amber-800 hover:bg-amber-50"
-            >
-              <Clock className="mr-2 h-4 w-4" />
-              {adiando ? "Registrando..." : "Pagar depois"}
+          {onIrParaFaturas && (
+            <Button type="button" variant="outline" onClick={onIrParaFaturas} className="w-full">
+              Ir para faturas
             </Button>
           )}
           <Button type="button" variant="outline" onClick={onFechar} className="w-full">

@@ -401,7 +401,11 @@ function LoginComponent() {
 
                 <Link
                   to={
-                    searchParams.perfil ? cadastroRouteByPerfil[searchParams.perfil] : "/cadastro"
+                    searchParams.perfil
+                      ? cadastroRouteByPerfil[
+                          searchParams.perfil as keyof typeof cadastroRouteByPerfil
+                        ]
+                      : "/cadastro"
                   }
                   search={returnTo !== "/dashboard" ? { returnTo } : {}}
                   className="flex min-h-14 items-center gap-4 rounded-xl border border-neutral-200 bg-white px-5 text-sm font-semibold text-neutral-900 transition-colors hover:border-yellow-300 hover:bg-yellow-50 lg:min-h-16"

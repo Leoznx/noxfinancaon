@@ -5,17 +5,31 @@ import {
   cancelAsaasPayment,
   corsHeaders,
   jsonResponse,
+  logFinancialNotification,
   normalizeDocumento,
   normalizePhone,
   requireUser,
+  sanitizeAsaasResponse,
+  sendPaymentEmail,
+  sendPaymentWhatsapp,
   supabaseAdmin,
   toMoney,
+  wasNotificationSent,
 } from "../_shared/asaas.ts";
 import {
+  CONSOLIDATABLE_INVOICE_STATUSES,
   asaasLateFeePayload,
-  monthlyDueDate,
+  consolidatedDueDate,
+  isCollectableStatus,
+  resolveBillingDueDay,
   saoPauloClock,
 } from "../_shared/billing-automation.ts";
+import {
+  claimBillingOperation,
+  reclaimStaleBillingOperation,
+  recoverPaymentForOperation,
+  updateBillingOperation,
+} from "../_shared/contract-billing.ts";
 import { hasOversizedBody, safeEqualSecret } from "../_shared/http-security.ts";
 
 type Body = {
@@ -24,15 +38,6 @@ type Body = {
   referenceYear?: number;
   agencyUserId?: string;
 };
-
-const OPEN_STATUSES = [
-  "pending",
-  "overdue",
-  "risk_analysis",
-  "approved",
-  "created",
-  "waiting_payment",
-];
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -83,6 +88,37 @@ serve(async (req) => {
       );
     }
 
+    const { data: latestBatch, error: latestBatchError } = await admin
+      .from("consolidated_invoice_batches")
+      .select("*")
+      .eq("agency_user_id", agencyUserId)
+      .eq("reference_month", referenceMonth)
+      .eq("reference_year", referenceYear)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (latestBatchError) throw latestBatchError;
+    const existingBatch = ["active", "partial"].includes(latestBatch?.status)
+      ? latestBatch
+      : null;
+
+    const invoiceIds = Array.isArray(body.invoiceIds)
+      ? [...new Set(body.invoiceIds.filter(Boolean))]
+      : [];
+    let scopedInvoiceIds = invoiceIds;
+    if (invoiceIds.length && existingBatch?.id) {
+      const { data: currentItems, error: currentItemsError } = await admin
+        .from("consolidated_invoice_items")
+        .select("fatura_id")
+        .eq("batch_id", existingBatch.id)
+        .eq("status", "active");
+      if (currentItemsError) throw currentItemsError;
+      scopedInvoiceIds = [...new Set([
+        ...invoiceIds,
+        ...(currentItems || []).map((item: any) => item.fatura_id).filter(Boolean),
+      ])];
+    }
+
     let candidateQuery = admin
       .from("faturas_inquilino")
       .select(
@@ -90,11 +126,8 @@ serve(async (req) => {
       )
       .eq("recipient_user_id", agencyUserId)
       .eq("payment_responsible", "agency")
-      .in("status", OPEN_STATUSES);
-    const invoiceIds = Array.isArray(body.invoiceIds)
-      ? [...new Set(body.invoiceIds.filter(Boolean))]
-      : [];
-    if (invoiceIds.length) candidateQuery = candidateQuery.in("id", invoiceIds);
+      .in("status", CONSOLIDATABLE_INVOICE_STATUSES);
+    if (scopedInvoiceIds.length) candidateQuery = candidateQuery.in("id", scopedInvoiceIds);
     const { data: candidates, error: candidateError } = await candidateQuery;
     if (candidateError) throw candidateError;
 
@@ -103,18 +136,23 @@ serve(async (req) => {
       return year === referenceYear && month === referenceMonth;
     });
 
-    const { data: existingBatch } = await admin
-      .from("consolidated_invoice_batches")
-      .select("*")
-      .eq("agency_user_id", agencyUserId)
-      .eq("reference_month", referenceMonth)
-      .eq("reference_year", referenceYear)
-      .in("status", ["active", "partial"])
-      .maybeSingle();
-
     if (!eligible.length) {
       if (existingBatch?.asaas_payment_id && existingBatch.status === "active") {
-        await cancelAsaasPayment(existingBatch.asaas_payment_id);
+        const cancellation = await cancelAsaasPayment(existingBatch.asaas_payment_id);
+        if (!cancellation.cancelled) {
+          await admin.from("consolidated_invoice_batches").update({
+            reconciliation_status: "manual_review",
+            reconciliation_error: cancellation.error || "provider_cancellation_failed",
+          }).eq("id", existingBatch.id);
+          return jsonResponse(req, {
+            ok: false,
+            error:
+              "O lote continua vinculado porque o cancelamento no Asaas nao foi confirmado. Revisao financeira necessaria.",
+            manualReview: true,
+          }, 502);
+        }
+        await releaseBatch(admin, existingBatch.id);
+      } else if (existingBatch?.id) {
         await releaseBatch(admin, existingBatch.id);
       }
       return jsonResponse(
@@ -167,7 +205,13 @@ serve(async (req) => {
     const totalValue = toMoney(
       eligible.reduce((sum: number, invoice: any) => sum + Number(invoice.valor || 0), 0),
     );
-    const dueDate = monthlyDueDate(referenceYear, referenceMonth);
+    const dueDay = await resolveBillingDueDay(admin);
+    const dueDate = consolidatedDueDate(
+      referenceYear,
+      referenceMonth,
+      dueDay,
+      clock.date,
+    );
     let customerId = existingBatch?.asaas_customer_id || null;
     if (!customerId) {
       const found = await asaasFetch(`/customers?cpfCnpj=${encodeURIComponent(cpfCnpj)}`);
@@ -188,9 +232,12 @@ serve(async (req) => {
     }
     if (!customerId) throw new Error("asaas_customer_missing");
 
-    const externalReference =
-      existingBatch?.external_reference ||
+    const previousGeneration = Math.max(1, Number(latestBatch?.automation_version || 1));
+    const generation = existingBatch ? previousGeneration : latestBatch ? previousGeneration + 1 : 1;
+    const baseExternalReference =
       `nox:lote:${agencyUserId}:${referenceYear}:${String(referenceMonth).padStart(2, "0")}`;
+    const externalReference = existingBatch?.external_reference ||
+      (generation === 1 ? baseExternalReference : `${baseExternalReference}:attempt:${generation}`);
     const paymentPayload = {
       customer: customerId,
       billingType: "BOLETO",
@@ -204,18 +251,67 @@ serve(async (req) => {
       ...asaasLateFeePayload(),
     };
 
-    let raw: any;
+    const { operation, claimed } = await claimBillingOperation(admin, {
+      consultationId: eligible[0].consulta_id,
+      operationType: "payment",
+      idempotencyKey: externalReference,
+      request: { agencyUserId, referenceYear, referenceMonth, generation },
+      userId: actorId,
+    });
+
+    let raw: any = null;
+    if (!existingBatch?.asaas_payment_id) {
+      raw = await recoverPaymentForOperation(operation, externalReference);
+      if (!raw && !claimed) {
+        const reclaimed = await reclaimStaleBillingOperation(admin, operation);
+        if (!reclaimed) {
+          return jsonResponse(req, {
+            ok: false,
+            error: "A cobranca consolidada esta em conciliacao. Nenhum boleto novo foi criado.",
+            operationState: operation.state,
+            retryable: true,
+          }, 409);
+        }
+      }
+    }
+    if (!existingBatch && ["CANCELLED", "CANCELED", "DELETED", "REFUNDED"].includes(
+      String(raw?.status || "").toUpperCase(),
+    )) {
+      await updateBillingOperation(admin, operation.id, {
+        state: "failed",
+        provider_id: raw?.id || operation.provider_id || null,
+        provider_response: sanitizeAsaasResponse(raw),
+        last_error: "recovered_consolidated_payment_is_terminal",
+      });
+      return jsonResponse(req, {
+        ok: false,
+        error: "A tentativa anterior do lote foi cancelada. Solicite uma nova geracao.",
+        retryable: true,
+      }, 409);
+    }
     try {
       raw = existingBatch?.asaas_payment_id
         ? await asaasFetch(`/payments/${existingBatch.asaas_payment_id}`, {
             method: "PUT",
             body: JSON.stringify(paymentPayload),
           })
-        : await asaasFetch("/payments", {
+        : raw || await asaasFetch("/payments", {
             method: "POST",
             body: JSON.stringify(paymentPayload),
           });
+      if (!existingBatch?.asaas_payment_id) {
+        await updateBillingOperation(admin, operation.id, {
+          state: "provider_created",
+          provider_id: raw?.id || null,
+          provider_response: sanitizeAsaasResponse(raw),
+          last_error: null,
+        });
+      }
     } catch (error) {
+      await updateBillingOperation(admin, operation.id, {
+        state: error instanceof AsaasApiError && error.status < 500 ? "failed" : "ambiguous",
+        last_error: error instanceof Error ? error.message : String(error),
+      });
       console.error("[asaas-create-consolidated-invoice] provider_error", {
         status: error instanceof AsaasApiError ? error.status : "unknown",
       });
@@ -244,6 +340,9 @@ serve(async (req) => {
           bank_slip_url: raw?.bankSlipUrl || raw?.invoiceUrl || null,
           identification_field: raw?.identificationField || raw?.nossoNumero || null,
           last_synced_at: new Date().toISOString(),
+          reconciliation_status: "ready",
+          reconciliation_error: null,
+          automation_version: generation,
         })
         .eq("id", batch.id)
         .select()
@@ -270,6 +369,9 @@ serve(async (req) => {
           bank_slip_url: raw?.bankSlipUrl || raw?.invoiceUrl || null,
           identification_field: raw?.identificationField || raw?.nossoNumero || null,
           last_synced_at: new Date().toISOString(),
+          reconciliation_status: "ready",
+          reconciliation_error: null,
+          automation_version: generation,
         })
         .select()
         .maybeSingle();
@@ -340,21 +442,62 @@ serve(async (req) => {
         .select("id, asaas_payment_id, status")
         .eq("id", invoice.asaas_payment_id)
         .maybeSingle();
-      if (!payment?.asaas_payment_id || !OPEN_STATUSES.includes(String(payment.status))) continue;
+      if (!payment?.asaas_payment_id || !isCollectableStatus(payment.status)) continue;
       const cancelled = await cancelAsaasPayment(payment.asaas_payment_id);
       if (!cancelled.cancelled) {
-        await cancelAsaasPayment(batch.asaas_payment_id);
-        await releaseBatch(admin, batch.id);
+        const batchCancellation = await cancelAsaasPayment(batch.asaas_payment_id);
+        if (batchCancellation.cancelled) {
+          await releaseBatch(admin, batch.id);
+          await updateBillingOperation(admin, operation.id, {
+            state: "cancelled",
+            provider_id: batch.asaas_payment_id,
+            last_error: "individual_payment_cancellation_failed",
+            completed_at: new Date().toISOString(),
+          });
+        } else {
+          await admin.from("consolidated_invoice_batches").update({
+            reconciliation_status: "manual_review",
+            reconciliation_error:
+              `individual:${payment.asaas_payment_id};batch:${batch.asaas_payment_id}`,
+          }).eq("id", batch.id);
+          await updateBillingOperation(admin, operation.id, {
+            state: "ambiguous",
+            provider_id: batch.asaas_payment_id,
+            last_error: "provider_exclusivity_not_confirmed",
+          });
+        }
         return jsonResponse(
           req,
           {
             ok: false,
-            error: "A consolidação foi interrompida para evitar uma cobrança duplicada.",
+            error: batchCancellation.cancelled
+              ? "A consolidacao foi interrompida e o lote cancelado para evitar cobranca duplicada."
+              : "Nao foi possivel confirmar exclusividade das cobrancas. Os vinculos foram preservados para revisao financeira.",
+            manualReview: !batchCancellation.cancelled,
           },
           502,
         );
       }
       await admin.from("asaas_payments").update({ status: "cancelled" }).eq("id", payment.id);
+    }
+
+    await updateBillingOperation(admin, operation.id, {
+      state: "persisted",
+      provider_id: batch.asaas_payment_id,
+      provider_response: sanitizeAsaasResponse(raw),
+      completed_at: new Date().toISOString(),
+      last_error: null,
+    });
+
+    try {
+      await notifyBatchCreated(admin, batch, profile, raw);
+    } catch (notificationError) {
+      console.error("[asaas-create-consolidated-invoice] notification_error", {
+        batchId: batch.id,
+        message: notificationError instanceof Error
+          ? notificationError.message
+          : String(notificationError),
+      });
     }
 
     return jsonResponse(req, {
@@ -411,6 +554,47 @@ async function resolveProfileDocument(admin: any, profile: any) {
     return normalizeDocumento(data?.cpf || data?.cnpj);
   }
   return "";
+}
+
+async function notifyBatchCreated(admin: any, batch: any, profile: any, raw: any) {
+  const notificationType = "consolidated_payment_created";
+  const paymentUrl = raw?.bankSlipUrl || raw?.invoiceUrl || batch.bank_slip_url ||
+    batch.invoice_url || null;
+  for (const channel of ["email", "whatsapp"] as const) {
+    if (await wasNotificationSent(admin, {
+      batchId: batch.id,
+      channel,
+      notificationType,
+    })) continue;
+    let result: any;
+    try {
+      result = channel === "email"
+        ? await sendPaymentEmail({
+            to: profile.email,
+            nome: profile.nome || "cliente",
+            tipo: "criado",
+            valor: Number(batch.total_value || 0),
+            metodo: "boleto",
+            vencimento: batch.due_date,
+            boletoUrl: paymentUrl,
+            contratoRef: `lote ${String(batch.reference_month).padStart(2, "0")}/${batch.reference_year}`,
+          })
+        : await sendPaymentWhatsapp({
+            to: profile.telefone,
+            mensagem: `Olá, ${profile.nome || "cliente"}. A cobrança consolidada NOX Fiança de ${Number(batch.total_value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}, com vencimento em ${String(batch.due_date).split("-").reverse().join("/")}, está disponível.${paymentUrl ? ` Link seguro: ${paymentUrl}` : " Consulte o painel financeiro."}`,
+          });
+    } catch (error) {
+      result = { sent: false, reason: error instanceof Error ? error.message : String(error) };
+    }
+    await logFinancialNotification(admin, {
+      batchId: batch.id,
+      recipientType: "user",
+      recipientId: batch.agency_user_id,
+      channel,
+      notificationType,
+      result,
+    });
+  }
 }
 
 async function releaseBatch(admin: any, batchId: string) {

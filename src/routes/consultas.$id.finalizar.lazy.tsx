@@ -25,21 +25,36 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { ModalPagamentoAsaas } from "@/components/simulacao/ModalPagamentoAsaas";
+import { ModalAssinaturaAsaas } from "@/components/simulacao/ModalAssinaturaAsaas";
 import {
   ModalCronogramaBoletos,
   type CronogramaResultado,
 } from "@/components/simulacao/ModalCronogramaBoletos";
 import { toast } from "sonner";
-import type { NormalizedAsaasPayment } from "@/lib/asaas-payment";
+import type {
+  CardSetupMode,
+  CheckoutIntent,
+  NormalizedAsaasPayment,
+  NormalizedAsaasSubscription,
+} from "@/lib/asaas-payment";
 import {
   MESES_PT,
   addBusinessDaysPreview,
+  checkoutActionsForMethod,
   formatDateBr,
   generateInstallmentSchedulePreview,
-  getEdgeFunctionErrorDetails,
-  getEdgeFunctionErrorMessage,
 } from "@/lib/asaas-payment";
 import { formatContractPeriodMonths, normalizeContractPeriodMonths } from "@/lib/contract-period";
+import {
+  AsaasCheckoutError,
+  createAsaasPayment,
+  ensureFutureInstallments,
+  managePersistedAsaasPayment,
+  manageAsaasSubscription,
+  readCheckoutPreferences,
+  rehydrateAsaasCheckout,
+  writeCheckoutPreferences,
+} from "@/lib/asaas-checkout";
 import {
   CheckCircle2,
   Circle,
@@ -72,7 +87,6 @@ import {
   salvarFormaPagamento,
   enviarProposta,
   listarHistoricoProposta,
-  registrarPagamentoDepois,
 } from "@/lib/finalizacao.functions";
 
 export const Route = createLazyFileRoute("/consultas/$id/finalizar")({
@@ -249,6 +263,18 @@ function fmt(n: number) {
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+function toMoney(value: unknown) {
+  const parsed = Number(value || 0);
+  return Math.round((Number.isFinite(parsed) ? parsed : 0) * 100) / 100;
+}
+
+function isAgencyBilling(consulta: any) {
+  return (
+    consulta?.payment_type === "imobiliaria" ||
+    consulta?.billing_responsible_role === "imobiliaria"
+  );
+}
+
 // Alíquota do seguro incêndio (obrigatório) sobre o valor do aluguel, por tipo de imóvel.
 function calcularPercentualIncendio(
   tipo: "residencial" | "comercial",
@@ -308,6 +334,11 @@ function FinalizarPage() {
   const fnHist = useServerFn(listarHistoricoProposta);
 
   useEffect(() => {
+    const preferencias = readCheckoutPreferences(id);
+    if (preferencias) {
+      setPagamento(preferencias.paymentMethod);
+      setIncendioPagamento(preferencias.fireMode);
+    }
     (async () => {
       try {
         // consulta/documentos/histórico não dependem uns dos outros — buscar em paralelo
@@ -385,13 +416,14 @@ function FinalizarPage() {
   // consultas sem linha em `imoveis` guardam o aluguel direto na consulta, e usar
   // só `imoveis.valor_aluguel` fazia o valor exibido divergir do valor calculado
   // no backend — o que derrubava a cobrança com "O valor do pagamento mudou".
-  const aluguel =
-    Number(imovel.valor_aluguel) || Number(consulta?.rent_value) || Number(consulta?.valor_aluguel) || 0;
-  const condominio = Number(imovel.valor_condominio) || Number(consulta?.valor_condominio) || 0;
-  const taxas = Number(imovel.valor_taxas) || Number(consulta?.valor_taxas) || 0;
-  const totalLoc = aluguel + condominio + taxas;
-  const premioMensal = Number(consulta?.valor_premio_mensal) || 0;
-  const premioAnual = Number(consulta?.valor_anual) || premioMensal * 12;
+  const aluguel = toMoney(
+    Number(imovel.valor_aluguel) || Number(consulta?.rent_value) || Number(consulta?.valor_aluguel),
+  );
+  const condominio = toMoney(Number(imovel.valor_condominio) || Number(consulta?.valor_condominio));
+  const taxas = toMoney(Number(imovel.valor_taxas) || Number(consulta?.valor_taxas));
+  const totalLoc = toMoney(aluguel + condominio + taxas);
+  const premioMensal = toMoney(consulta?.valor_premio_mensal);
+  const premioAnual = toMoney(Number(consulta?.valor_anual) || premioMensal * 12);
   const cobertura = totalLoc * (Number(plano?.cobertura_multiplicador) || 12);
   const documentosMeta =
     consulta?.documentos && typeof consulta.documentos === "object" ? consulta.documentos : {};
@@ -404,17 +436,17 @@ function FinalizarPage() {
 
   const taxaAtivacao =
     (consulta?.activation_fee_enabled ?? extrasSummary?.activation_fee_enabled)
-      ? Number(consulta?.activation_fee_amount ?? extrasSummary?.activation_fee_amount) || 0
+      ? toMoney(consulta?.activation_fee_amount ?? extrasSummary?.activation_fee_amount)
       : 0;
   const pinturaTotal =
     (consulta?.external_painting_enabled ?? extrasSummary?.external_painting_enabled)
-      ? Number(consulta?.external_painting_total ?? extrasSummary?.external_painting_total) || 0
+      ? toMoney(consulta?.external_painting_total ?? extrasSummary?.external_painting_total)
       : 0;
   const pinturaMensal =
     (consulta?.external_painting_enabled ?? extrasSummary?.external_painting_enabled)
-      ? Number(
+      ? toMoney(
           consulta?.external_painting_installment ?? extrasSummary?.external_painting_installment,
-        ) || (pinturaTotal > 0 ? +(pinturaTotal / 3).toFixed(2) : 0)
+        ) || (pinturaTotal > 0 ? toMoney(pinturaTotal / 3) : 0)
       : 0;
   const contratoAssinadoPendente = !!dadosComplementaresSummary?.contrato_locacao_pendencia;
   const custoSaida = Number(plano?.custo_saida) || 0;
@@ -432,10 +464,13 @@ function FinalizarPage() {
     [tipoSeguroImovel, aluguel],
   );
   const premioIncendioAnual = useMemo(
-    () => aluguel * (percentualIncendio / 100),
+    () => toMoney(aluguel * (percentualIncendio / 100)),
     [aluguel, percentualIncendio],
   );
-  const premioIncendioMensal = useMemo(() => premioIncendioAnual / 12, [premioIncendioAnual]);
+  const premioIncendioMensal = useMemo(
+    () => toMoney(premioIncendioAnual / 12),
+    [premioIncendioAnual],
+  );
   const totalSeguroImobiliario = useMemo(() => {
     return premioIncendioAnual + (ASSISTENCIA_VALORES[assistencia] ?? 0) * 12;
   }, [premioIncendioAnual, assistencia]);
@@ -487,8 +522,6 @@ function FinalizarPage() {
     setConsulta((c: any) => ({
       ...c,
       proposta_enviada_em: enviadoEm,
-      substatus: "aguardando_pagamento",
-      status: "aguardando_ativacao",
     }));
     setEtapa("enviada");
 
@@ -849,7 +882,6 @@ function FinalizarPage() {
 function ResumoPropostaLoft(p: any) {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const fnPagarDepois = useServerFn(registrarPagamentoDepois);
   // Onde a cobrança em aberto aparece para quem está usando o sistema.
   const rotaFaturasAbertas =
     user?.role === "inquilino" ? "/inquilino/faturas" : "/carteira-cobrancas";
@@ -907,7 +939,6 @@ function ResumoPropostaLoft(p: any) {
     onEnviar,
     fnSalvarConfig,
     fnSalvarPagamento,
-    fnEnviar,
     onPropostaRegistrada,
   } = p;
   const contractPeriodLabel = formatContractPeriodMonths(contractPeriodMonths);
@@ -916,7 +947,7 @@ function ResumoPropostaLoft(p: any) {
     : "—";
   const planoNome = (plano?.nome ?? "—").replace(/^NOX\s+/i, "");
   const tipoPagador =
-    consulta?.payment_type === "imobiliaria"
+    isAgencyBilling(consulta)
       ? "Recorrência via Imobiliária"
       : "Recorrência via Inquilino";
   const solicitacao =
@@ -928,21 +959,41 @@ function ResumoPropostaLoft(p: any) {
   const coberturaTotal = `${Number(plano?.cobertura_multiplicador) || 35}x`;
   const custoSaidaTexto = `${Number(custoSaida) || 3}x`;
   const documentosNomes = documentos.map((doc: any) => doc.file_name).filter(Boolean);
-  const [pagamentoAberto, setPagamentoAberto] = useState(false);
-  const mensalidadeBaseComPintura = premioMensal + pinturaMensal;
+  const preferenciasIniciais = useMemo(() => readCheckoutPreferences(id), [id]);
+  const [pagamentoAberto, setPagamentoAberto] = useState(
+    preferenciasIniciais?.paymentOpen ?? false,
+  );
+  const [cardSetupMode, setCardSetupMode] = useState<CardSetupMode | null>(
+    preferenciasIniciais?.cardMode ?? null,
+  );
+  const [modalEscolhaCartaoAberto, setModalEscolhaCartaoAberto] = useState(false);
+  const mensalidadeBaseComPintura = toMoney(premioMensal + pinturaMensal);
   const mensalidadeFinal =
     incendioPagamento === "parcelado"
-      ? mensalidadeBaseComPintura + premioIncendioMensal
+      ? toMoney(mensalidadeBaseComPintura + premioIncendioMensal)
       : mensalidadeBaseComPintura;
   const pagamentoInicial =
-    (incendioPagamento === "a_vista" ? premioIncendioAnual : 0) + taxaAtivacao;
-  const valorCobradoAgora = mensalidadeFinal + pagamentoInicial;
+    toMoney((incendioPagamento === "a_vista" ? premioIncendioAnual : 0) + taxaAtivacao);
+  const valorCobradoAgora = toMoney(mensalidadeFinal + pagamentoInicial);
   const pagamentoSelecionado = PAGAMENTOS.find((item) => item.id === pagamento);
-  const pagamentoOpcoes = ["boleto", "pix", "credit_card"]
+  const faturamentoConsolidado = isAgencyBilling(consulta);
+  const checkoutActions = faturamentoConsolidado
+    ? { canPayNow: false, canPayLater: false }
+    : checkoutActionsForMethod(pagamento);
+  const pagamentoOpcoes = (faturamentoConsolidado
+    ? ["boleto"]
+    : ["boleto", "pix", "credit_card"])
     .map((id) => PAGAMENTOS.find((item) => item.id === id))
     .filter(Boolean) as typeof PAGAMENTOS;
+  useEffect(() => {
+    if (faturamentoConsolidado && pagamento !== "boleto") {
+      setPagamento("boleto");
+      setCardSetupMode(null);
+    }
+  }, [faturamentoConsolidado, pagamento, setPagamento]);
   const irParaPagamento = () => {
     setPagamentoAberto(true);
+    if (pagamento === "credit_card" && !cardSetupMode) setModalEscolhaCartaoAberto(true);
     window.setTimeout(
       () =>
         document
@@ -975,14 +1026,20 @@ function ResumoPropostaLoft(p: any) {
   const [pagamentoAsaasResultado, setPagamentoAsaasResultado] =
     useState<NormalizedAsaasPayment | null>(null);
   const [modalAsaasAberto, setModalAsaasAberto] = useState(false);
+  const [checkoutIntent, setCheckoutIntent] = useState<CheckoutIntent>("pay_now");
+  const [assinaturaAsaasResultado, setAssinaturaAsaasResultado] =
+    useState<NormalizedAsaasSubscription | null>(null);
+  const [modalAssinaturaAberto, setModalAssinaturaAberto] = useState(false);
   const [cronogramaResultado, setCronogramaResultado] = useState<CronogramaResultado | null>(null);
   const [modalCronogramaAberto, setModalCronogramaAberto] = useState(false);
+  const [parcelasFuturasPendentes, setParcelasFuturasPendentes] = useState(false);
   const pagandoRef = useRef(false);
+  const reidratadoRef = useRef(false);
 
   // Quando o responsavel pelo pagamento e o inquilino e a forma e boleto, a
   // contratacao gera todas as mensalidades do periodo de uma vez (asaas-create-installment-
   // plan) em vez de uma cobranca unica - nenhuma outra combinacao muda.
-  const ehParceladoInquilino = consulta?.payment_type === "inquilino" && pagamento === "boleto";
+  const ehParceladoInquilino = !faturamentoConsolidado && pagamento === "boleto";
   const cronogramaPreview = useMemo(() => {
     if (!ehParceladoInquilino) return [];
     return generateInstallmentSchedulePreview({
@@ -990,6 +1047,60 @@ function ResumoPropostaLoft(p: any) {
       count: contractPeriodMonths,
     });
   }, [contractPeriodMonths, ehParceladoInquilino]);
+
+  useEffect(() => {
+    writeCheckoutPreferences(id, {
+      paymentMethod: pagamento,
+      fireMode: incendioPagamento,
+      cardMode: cardSetupMode,
+      paymentOpen: pagamentoAberto,
+    });
+  }, [cardSetupMode, id, incendioPagamento, pagamento, pagamentoAberto]);
+
+  useEffect(() => {
+    if (reidratadoRef.current) return;
+    reidratadoRef.current = true;
+    let ativo = true;
+    void rehydrateAsaasCheckout(id, {
+      paymentMethod: pagamento,
+      fireMode: incendioPagamento,
+      cardMode: cardSetupMode,
+      paymentOpen: pagamentoAberto,
+    }).then(({ payment, subscription, installmentPlanPending }) => {
+      if (!ativo) return;
+      if (subscription) {
+        setAssinaturaAsaasResultado(subscription);
+        setCardSetupMode(subscription.mode);
+        setPagamento("credit_card");
+        setPagamentoAberto(true);
+        setModalAssinaturaAberto(true);
+        if (subscription.selectedFireInsuranceMode) {
+          setIncendioPagamento(
+            subscription.selectedFireInsuranceMode === "avista" ? "a_vista" : "parcelado",
+          );
+        }
+        return;
+      }
+      if (payment) {
+        setPagamentoAsaasResultado(payment);
+        setPagamento(payment.paymentMethod);
+        setPagamentoAberto(true);
+        setCheckoutIntent(payment.deferPayment ? "pay_later" : "pay_now");
+        setModalAsaasAberto(true);
+        setParcelasFuturasPendentes(installmentPlanPending);
+        if (payment.selectedFireInsuranceMode) {
+          setIncendioPagamento(
+            payment.selectedFireInsuranceMode === "avista" ? "a_vista" : "parcelado",
+          );
+        }
+      }
+    });
+    return () => {
+      ativo = false;
+    };
+    // A reidratação deve acontecer uma única vez por proposta, nunca após cada escolha local.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   /** Subtipo do imóvel escolhido na aba do seguro — vira `imovel_subtipo` na consulta. */
   function subtipoSelecionado(): string {
@@ -1047,182 +1158,194 @@ function ResumoPropostaLoft(p: any) {
     if (error) throw new Error("Não foi possível salvar a proposta: " + error.message);
   }
 
-  /**
-   * Registra a proposta como enviada depois que a cobrança já existe no Asaas.
-   * Nunca pode derrubar o fluxo: o pagamento já foi criado, e travar aqui fazia
-   * a tela mostrar erro escondendo o Pix/boleto que o usuário precisa pagar.
-   */
+  /** A Edge Function persiste estados e dispara D4Sign; aqui só reidratamos a UI. */
   async function registrarPropostaEnviada(): Promise<void> {
     const agora = new Date().toISOString();
     try {
-      const registro = await fnEnviar({ data: { consultaId: id } });
-      await onPropostaRegistrada(registro.enviadoEm);
-      return;
-    } catch (erroServerFn: any) {
-      console.error("Falha ao registrar proposta via server function:", erroServerFn);
-    }
-
-    try {
-      const { error } = await supabase
-        .from("consultas_credito")
-        .update({
-          status: "aguardando_ativacao",
-          substatus: "aguardando_pagamento",
-          proposta_enviada_em: agora,
-          activation_status: "aguardando_pagamento",
-        } as any)
-        .eq("id", id);
-      if (error) throw error;
       await onPropostaRegistrada(agora);
-    } catch (erroFallback: any) {
-      console.error("Falha ao registrar proposta no fallback:", erroFallback);
-      toast.warning(
-        "A cobrança foi gerada, mas não foi possível atualizar a situação da proposta. Recarregue a página em instantes.",
-      );
-    }
-  }
-
-  /**
-   * "Pagar depois": o Pix/boleto já existe e continua válido. Registra a opção,
-   * deixa a fatura em aberto para o usuário e reforça que a assinatura só é
-   * liberada quando o pagamento for identificado.
-   */
-  async function handlePagarDepois(params: {
-    metodo: "pix" | "boleto";
-    valor: number;
-    vencimento: string | null;
-  }) {
-    try {
-      await fnPagarDepois({
-        data: {
-          consultaId: id,
-          metodo: params.metodo,
-          valor: params.valor,
-          vencimento: params.vencimento,
-        },
-      });
     } catch (erro: any) {
-      console.error("Falha ao registrar pagamento adiado:", erro);
-      toast.error(
-        "Não foi possível registrar o pagamento para depois. A cobrança continua em aberto na sua aba de faturas.",
+      console.error("Falha ao reidratar proposta depois do checkout:", erro);
+      toast.warning(
+        "A cobrança foi gerada e persistida, mas a tela não conseguiu atualizar o histórico. Recarregue a página em instantes.",
       );
-      return;
     }
-
-    toast.success(
-      "Cobrança deixada em aberto. A proposta será enviada para assinatura após o primeiro pagamento.",
-    );
-    setModalAsaasAberto(false);
-    setModalCronogramaAberto(false);
-    // Cada perfil tem a sua própria aba de faturas em aberto.
-    navigate({ to: rotaFaturasAbertas as any });
   }
 
-  async function handlePagarComAsaas() {
+  function dadosDoInquilino() {
+    return {
+      nome: consulta?.tenant_name || inquilino?.nome || "",
+      email: consulta?.tenant_email || "",
+      telefone: consulta?.tenant_telefone || inquilino?.telefone || "",
+      documento: consulta?.tenant_document || inquilino?.cpf || inquilino?.cnpj || "",
+    };
+  }
+
+  function normalizarCartao() {
+    const { email, telefone, documento } = dadosDoInquilino();
+    return {
+      holderName: cartao.holderName.trim(),
+      number: cartao.number.replace(/\D/g, ""),
+      expiryMonth: cartao.expiryMonth.replace(/\D/g, ""),
+      expiryYear: cartao.expiryYear.replace(/\D/g, ""),
+      ccv: cartao.ccv.replace(/\D/g, ""),
+      holderDocument: (cartao.holderDocument || documento).replace(/\D/g, ""),
+      holderPhone: (cartao.holderPhone || telefone).replace(/\D/g, ""),
+      holderEmail: (cartao.holderEmail || email).trim().toLowerCase(),
+      holderPostalCode: (
+        cartao.holderPostalCode ||
+        consulta?.imovel_cep ||
+        imovel?.cep ||
+        ""
+      ).replace(/\D/g, ""),
+      holderAddressNumber: (
+        cartao.holderAddressNumber ||
+        consulta?.imovel_numero ||
+        imovel?.numero ||
+        ""
+      ).trim(),
+    };
+  }
+
+  function validarCheckout() {
+    if (!pagamento) return "Selecione uma forma de pagamento.";
+    if (!aceiteTermos) return "Aceite os Termos e Condições para seguir para o pagamento.";
+    if (valorCobradoAgora <= 0) return "Não foi possível calcular o valor do pagamento.";
+    const { nome, email, telefone, documento } = dadosDoInquilino();
+    if (!nome || !email || !telefone || !documento) {
+      return "Complete os dados do inquilino (nome, e-mail, telefone e CPF/CNPJ) antes de pagar.";
+    }
+    return null;
+  }
+
+  async function persistirCheckout() {
+    const formaPagamentoLabel =
+      PAGAMENTOS.find((item) => item.id === pagamento)?.label ?? "Cartão de crédito";
+    const incendioPagamentoLabel =
+      incendioPagamento === "a_vista" ? "incêndio à vista" : "incêndio embutido na parcela";
+    await persistirAntesDoPagamento({
+      subtipo: subtipoSelecionado(),
+      metodoLabel: `${formaPagamentoLabel} - ${incendioPagamentoLabel}`,
+    });
+  }
+
+  async function criarParcelasFuturas(method: "pix" | "boleto") {
+    try {
+      const planoData = await ensureFutureInstallments({
+        proposalId: id,
+        paymentMethod: method,
+        selectedFireInsuranceMode: incendioPagamento === "a_vista" ? "avista" : "embutido",
+      });
+      setParcelasFuturasPendentes(false);
+      if (Array.isArray((planoData as any)?.installments)) {
+        setCronogramaResultado(planoData as unknown as CronogramaResultado);
+      }
+    } catch (error) {
+      setParcelasFuturasPendentes(true);
+      toast.warning(
+        error instanceof Error
+          ? error.message
+          : "A cobrança inicial foi criada, mas as mensalidades futuras precisam ser retomadas.",
+      );
+      throw error;
+    }
+  }
+
+  async function executarPagamento(intent: CheckoutIntent) {
     if (pagandoRef.current) return;
 
-    if (!pagamento) return toast.error("Selecione uma forma de pagamento.");
-    if (!aceiteTermos)
-      return toast.error("Aceite os Termos e Condições para seguir para o pagamento.");
-    if (valorCobradoAgora <= 0)
-      return toast.error("Não foi possível calcular o valor do pagamento.");
-
-    const nome = consulta?.tenant_name || inquilino?.nome || "";
-    const email = consulta?.tenant_email || "";
-    const telefone = consulta?.tenant_telefone || inquilino?.telefone || "";
-    const documento = consulta?.tenant_document || inquilino?.cpf || inquilino?.cnpj || "";
-    if (!nome || !email || !telefone || !documento) {
-      toast.error(
-        "Complete os dados do inquilino (nome, e-mail, telefone e CPF/CNPJ) antes de pagar.",
-      );
+    const erroValidacao = validarCheckout();
+    if (erroValidacao) return toast.error(erroValidacao);
+    if (pagamento === "credit_card") {
+      if (!cardSetupMode) {
+        setModalEscolhaCartaoAberto(true);
+        return;
+      }
+      await executarAssinaturaCartao(cardSetupMode);
       return;
     }
 
     pagandoRef.current = true;
     setPagando(true);
     try {
-      const formaPagamentoLabel =
-        PAGAMENTOS.find((p) => p.id === pagamento)?.label ?? "Cartão de crédito";
-      const incendioPagamentoLabel =
-        incendioPagamento === "a_vista" ? "incêndio à vista" : "incêndio embutido na parcela";
-      const subtipoEscolhido = subtipoSelecionado();
-      const metodoLabelCompleto = `${formaPagamentoLabel} - ${incendioPagamentoLabel}`;
-
-      // Grava o que a Edge Function vai reler antes de cobrar. Se a server
-      // function estiver indisponível, o mesmo update é feito direto pelo
-      // cliente (RLS já garante o acesso) — sem isso, uma falha de
-      // infraestrutura no /_serverFn impedia gerar Pix, boleto e cartão.
-      await persistirAntesDoPagamento({
-        subtipo: subtipoEscolhido,
-        metodoLabel: metodoLabelCompleto,
-      });
-
-      if (ehParceladoInquilino) {
-        const { data: planoData, error: planoError } =
-          await supabase.functions.invoke<CronogramaResultado>("asaas-create-installment-plan", {
-            body: { proposalId: id },
-          });
-        if (planoError) {
-          throw new Error(
-            await getEdgeFunctionErrorMessage(
-              planoError,
-              "Nao foi possivel gerar os boletos agora. Tente novamente.",
-            ),
-          );
-        }
-        if ((planoData as any)?.error) throw new Error((planoData as any).error);
-        if (!planoData?.installments?.length)
-          throw new Error("O Asaas nao retornou o cronograma de boletos.");
-        await registrarPropostaEnviada();
-        setCronogramaResultado(planoData);
-        setModalCronogramaAberto(true);
-        toast.success(`${planoData.installmentTotal} boletos gerados com sucesso.`);
-        return;
-      }
-
-      const body: any = {
+      await persistirCheckout();
+      const body: Parameters<typeof createAsaasPayment>[0] = {
         proposalId: id,
-        paymentMethod: pagamento,
+        paymentMethod: pagamento as "pix" | "boleto",
         selectedFireInsuranceMode: incendioPagamento === "a_vista" ? "avista" : "embutido",
         amount: Number(valorCobradoAgora.toFixed(2)),
+        deferPayment: intent === "pay_later",
       };
-
-      if (pagamento === "credit_card") {
-        const cartaoNormalizado: CartaoForm = {
-          holderName: cartao.holderName.trim(),
-          number: cartao.number.replace(/\D/g, ""),
-          expiryMonth: cartao.expiryMonth.replace(/\D/g, ""),
-          expiryYear: cartao.expiryYear.replace(/\D/g, ""),
-          ccv: cartao.ccv.replace(/\D/g, ""),
-          holderDocument: (cartao.holderDocument || documento).replace(/\D/g, ""),
-          holderPhone: (cartao.holderPhone || telefone).replace(/\D/g, ""),
-          holderEmail: (cartao.holderEmail || email).trim().toLowerCase(),
-          holderPostalCode: (
-            cartao.holderPostalCode ||
-            consulta?.imovel_cep ||
-            imovel?.cep ||
-            ""
-          ).replace(/\D/g, ""),
-          holderAddressNumber: (
-            cartao.holderAddressNumber ||
-            consulta?.imovel_numero ||
-            imovel?.numero ||
-            ""
-          ).trim(),
-        };
-        const erroCartao = validarCartaoPagamento(cartaoNormalizado);
-        if (erroCartao) {
-          toast.error(erroCartao);
-          return;
+      let data: NormalizedAsaasPayment;
+      try {
+        data = await createAsaasPayment(body);
+      } catch (error) {
+        const valorEsperado =
+          error instanceof AsaasCheckoutError ? Number(error.payload?.expectedAmount) : Number.NaN;
+        if (!(error instanceof AsaasCheckoutError) || error.status !== 409 || !valorEsperado) {
+          throw error;
         }
-        body.creditCard = {
+        toast.info(`Valor atualizado para ${fmt(valorEsperado)} conforme o cadastro da proposta.`);
+        data = await createAsaasPayment({ ...body, amount: Number(valorEsperado.toFixed(2)) });
+      }
+      if (!data?.success) throw new Error("O Asaas nao retornou os dados do pagamento.");
+
+      // Só registra a proposta depois que o provedor materializou a cobrança.
+      await registrarPropostaEnviada();
+      setCheckoutIntent(intent);
+      setPagamentoAsaasResultado(data);
+      setModalAsaasAberto(true);
+      try {
+        await criarParcelasFuturas(pagamento as "pix" | "boleto");
+      } catch {
+        // A cobrança inicial continua válida e o modal oferece retry somente do cronograma.
+      }
+      toast.success(
+        faturamentoConsolidado
+          ? "Proposta enviada ao faturamento consolidado da imobiliária. A cobrança individual não será duplicada."
+          : intent === "pay_later"
+          ? "Cobrança gerada com sucesso. O processo de contratação continuará normalmente. O pagamento está pendente."
+          : "Cobrança criada. Use os dados exibidos para pagar agora.",
+      );
+    } catch (e: any) {
+      console.error("Erro ao criar pagamento Asaas:", e);
+      toast.error(e?.message || "Não foi possível gerar o pagamento agora. Tente novamente.");
+    } finally {
+      pagandoRef.current = false;
+      setPagando(false);
+    }
+  }
+
+  async function executarAssinaturaCartao(mode: CardSetupMode) {
+    if (pagandoRef.current) return;
+    const erroValidacao = validarCheckout();
+    if (erroValidacao) return toast.error(erroValidacao);
+
+    const cartaoNormalizado = normalizarCartao();
+    if (mode === "direct") {
+      const erroCartao = validarCartaoPagamento(cartaoNormalizado);
+      if (erroCartao) return toast.error(erroCartao);
+    }
+
+    pagandoRef.current = true;
+    setPagando(true);
+    try {
+      await persistirCheckout();
+      const request: Parameters<typeof manageAsaasSubscription>[0] = {
+        proposalId: id,
+        mode,
+        selectedFireInsuranceMode: incendioPagamento === "a_vista" ? "avista" : "embutido",
+        amount: Number(valorCobradoAgora.toFixed(2)),
+        monthlyAmount: Number(mensalidadeFinal.toFixed(2)),
+      };
+      if (mode === "direct") {
+        request.creditCard = {
           holderName: cartaoNormalizado.holderName,
           number: cartaoNormalizado.number,
           expiryMonth: cartaoNormalizado.expiryMonth,
           expiryYear: cartaoNormalizado.expiryYear,
           ccv: cartaoNormalizado.ccv,
         };
-        body.creditCardHolderInfo = {
+        request.creditCardHolderInfo = {
           name: cartaoNormalizado.holderName,
           email: cartaoNormalizado.holderEmail,
           cpfCnpj: cartaoNormalizado.holderDocument,
@@ -1231,58 +1354,75 @@ function ResumoPropostaLoft(p: any) {
           phone: cartaoNormalizado.holderPhone,
         };
       }
-
-      let { data, error } = await supabase.functions.invoke<NormalizedAsaasPayment>(
-        "asaas-create-payment",
-        {
-          body,
-        },
-      );
-
-      // 409 = o valor calculado na tela divergiu do valor calculado no backend
-      // (a fonte de verdade). Em vez de deixar o usuário travado com "o valor
-      // mudou", refaz a cobrança com o valor que o backend espera e avisa qual
-      // é, para o resumo da tela ser corrigido no próximo carregamento.
-      if (error) {
-        const detalhes = await getEdgeFunctionErrorDetails(
-          error,
-          "Nao foi possivel gerar o pagamento agora. Tente novamente.",
-        );
-        const valorEsperado = Number(detalhes.payload?.expectedAmount);
-        if (detalhes.status === 409 && Number.isFinite(valorEsperado) && valorEsperado > 0) {
-          toast.info(`Valor atualizado para ${fmt(valorEsperado)} conforme o cadastro da proposta.`);
-          const retry = await supabase.functions.invoke<NormalizedAsaasPayment>(
-            "asaas-create-payment",
-            { body: { ...body, amount: Number(valorEsperado.toFixed(2)) } },
-          );
-          data = retry.data;
-          error = retry.error;
-        }
-      }
-      setCartao(emptyCardForm);
-
-      if (error) {
-        throw new Error(
-          await getEdgeFunctionErrorMessage(
-            error,
-            "Nao foi possivel gerar o pagamento agora. Tente novamente.",
-          ),
-        );
-      }
-      if ((data as any)?.error) throw new Error((data as any).error);
-      if (!data?.success) throw new Error("O Asaas nao retornou os dados do pagamento.");
-
+      const data = await manageAsaasSubscription(request);
+      if (!data.success) throw new Error("O Asaas não retornou a assinatura recorrente.");
       await registrarPropostaEnviada();
-      setPagamentoAsaasResultado(data);
-      setModalAsaasAberto(true);
-      toast.success("Pagamento criado. O contrato será enviado pela D4Sign após a confirmação.");
-    } catch (e: any) {
-      console.error("Erro ao criar pagamento Asaas:", e);
-      toast.error(e?.message || "Não foi possível gerar o pagamento agora. Tente novamente.");
+      setCartao(emptyCardForm);
+      setAssinaturaAsaasResultado(data);
+      setModalAssinaturaAberto(true);
+      toast.success(
+        mode === "checkout"
+          ? "Link seguro criado e enviado ao inquilino."
+          : "Cartão enviado para processamento e recorrência preparada.",
+      );
+    } catch (error) {
+      console.error("Erro ao preparar assinatura Asaas:", error);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível preparar a cobrança recorrente agora.",
+      );
     } finally {
       pagandoRef.current = false;
       setPagando(false);
     }
+  }
+
+  async function atualizarPagamento(action: "refresh" | "resend_email" | "resend_whatsapp") {
+    if (!pagamentoAsaasResultado) return;
+    const atualizado = await managePersistedAsaasPayment({
+      consultationId: id,
+      invoiceId: pagamentoAsaasResultado.invoiceId,
+      paymentId: pagamentoAsaasResultado.paymentId,
+      action,
+    });
+    setPagamentoAsaasResultado(atualizado);
+    return atualizado;
+  }
+
+  async function reemitirPagamento() {
+    if (!pagamentoAsaasResultado?.invoiceId) {
+      throw new Error("A fatura ainda não possui identificador para segunda via.");
+    }
+    if (pagamentoAsaasResultado.paymentMethod === "credit_card") return;
+    const atualizado = await managePersistedAsaasPayment({
+      consultationId: id,
+      invoiceId: pagamentoAsaasResultado.invoiceId,
+      paymentId: pagamentoAsaasResultado.paymentId,
+      action: "reissue",
+      paymentMethod: pagamentoAsaasResultado.paymentMethod,
+    });
+    setPagamentoAsaasResultado(atualizado);
+  }
+
+  async function atualizarAssinatura(
+    action:
+      | "refresh"
+      | "resend_email"
+      | "resend_whatsapp"
+      | "reissue_initial"
+      | "reissue_checkout",
+  ) {
+    if (!assinaturaAsaasResultado) return;
+    const atualizado = await manageAsaasSubscription({
+      proposalId: id,
+      mode: assinaturaAsaasResultado.mode,
+      selectedFireInsuranceMode: incendioPagamento === "a_vista" ? "avista" : "embutido",
+      amount: assinaturaAsaasResultado.initialAmount,
+      monthlyAmount: assinaturaAsaasResultado.monthlyAmount,
+      action,
+    });
+    setAssinaturaAsaasResultado(atualizado);
   }
 
   return (
@@ -1536,11 +1676,13 @@ function ResumoPropostaLoft(p: any) {
                 <div>
                   <h3 className="text-lg font-bold text-neutral-950">Pagamento</h3>
                   <p className="mt-1 text-sm text-slate-600">
-                    Escolha a forma de pagamento e como cobrar o seguro incêndio.
+                    {faturamentoConsolidado
+                      ? "Esta proposta seguirá para o faturamento consolidado da imobiliária, sem cobrança individual duplicada."
+                      : "Escolha a forma de pagamento e como cobrar o seguro incêndio."}
                   </p>
                 </div>
 
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div className={`grid grid-cols-1 gap-3 ${faturamentoConsolidado ? "" : "sm:grid-cols-3"}`}>
                   {pagamentoOpcoes.map((opcao) => {
                     const Icon = opcao.icon;
                     const selected = pagamento === opcao.id;
@@ -1548,7 +1690,12 @@ function ResumoPropostaLoft(p: any) {
                       <button
                         key={opcao.id}
                         type="button"
-                        onClick={() => setPagamento(opcao.id)}
+                        onClick={() => {
+                          setPagamento(opcao.id);
+                          if (opcao.id === "credit_card") {
+                            setModalEscolhaCartaoAberto(true);
+                          }
+                        }}
                         className={`flex min-h-[118px] flex-col justify-between rounded-md border p-4 text-left transition ${
                           selected
                             ? "border-yellow-400 bg-yellow-50 ring-1 ring-yellow-400"
@@ -1593,9 +1740,19 @@ function ResumoPropostaLoft(p: any) {
                   </div>
                 )}
 
-                {pagamento === "credit_card" && (
+                {pagamento === "credit_card" && cardSetupMode === "direct" && (
                   <div className="rounded-md border border-slate-300 bg-slate-50 p-4">
-                    <p className="mb-3 text-sm font-bold text-neutral-950">Dados do cartao</p>
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <p className="text-sm font-bold text-neutral-950">Dados do cartão</p>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setModalEscolhaCartaoAberto(true)}
+                      >
+                        Alterar opção
+                      </Button>
+                    </div>
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <Input
                         value={cartao.holderName}
@@ -1705,6 +1862,30 @@ function ResumoPropostaLoft(p: any) {
                   </div>
                 )}
 
+                {pagamento === "credit_card" && cardSetupMode === "checkout" && (
+                  <div className="rounded-md border border-yellow-300 bg-yellow-50 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-bold text-neutral-950">
+                          Link seguro para cadastro do cartão
+                        </p>
+                        <p className="mt-1 text-xs text-slate-600">
+                          O inquilino receberá o link por e-mail e WhatsApp. Nenhum dado sensível
+                          será armazenado pela NOX.
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setModalEscolhaCartaoAberto(true)}
+                      >
+                        Alterar opção
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <button
                     type="button"
@@ -1807,24 +1988,57 @@ function ResumoPropostaLoft(p: any) {
             >
               <ArrowLeft size={16} className="mr-2" /> Voltar
             </Button>
-            <Button
-              onClick={pagamentoAberto ? handlePagarComAsaas : irParaPagamento}
-              disabled={pagando || enviando || !seguroConcluido || (pagamentoAberto && !pagamento)}
-              className="ml-auto h-11 w-fit rounded-md bg-yellow-400 px-6 font-bold text-neutral-900 hover:bg-yellow-300 disabled:opacity-50"
-            >
-              {pagamentoAberto
-                ? pagando
-                  ? ehParceladoInquilino
-                    ? "Gerando boletos..."
-                    : "Gerando pagamento..."
-                  : enviando
-                    ? "Processando..."
-                    : ehParceladoInquilino
-                      ? `Gerar ${contractPeriodMonths} ${contractPeriodMonths === 1 ? "boleto" : "boletos"}`
-                      : "Pagar"
-                : "Seguir para pagamento"}{" "}
-              <ArrowRight size={16} className="ml-2" />
-            </Button>
+            {!pagamentoAberto ? (
+              <Button
+                onClick={irParaPagamento}
+                disabled={pagando || enviando || !seguroConcluido}
+                className="ml-auto h-11 w-fit rounded-md bg-yellow-400 px-6 font-bold text-neutral-900 hover:bg-yellow-300 disabled:opacity-50"
+              >
+                Seguir para pagamento <ArrowRight size={16} className="ml-2" />
+              </Button>
+            ) : (
+              <div className="ml-auto flex flex-1 flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                {faturamentoConsolidado && (
+                  <Button
+                    type="button"
+                    onClick={() => void executarPagamento("pay_later")}
+                    disabled={pagando || enviando || !seguroConcluido || !pagamento}
+                    className="h-11 rounded-md bg-yellow-400 px-6 font-bold text-neutral-900 hover:bg-yellow-300 disabled:opacity-50"
+                  >
+                    {pagando ? "Processando..." : "Continuar para faturamento consolidado"}
+                    <ArrowRight size={16} className="ml-2" />
+                  </Button>
+                )}
+                {checkoutActions.canPayLater && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void executarPagamento("pay_later")}
+                    disabled={pagando || enviando || !seguroConcluido || !pagamento}
+                    className="h-11 rounded-md border-slate-300 bg-white px-6 font-bold text-neutral-900 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    {pagando ? "Processando..." : "Pagar depois"}
+                  </Button>
+                )}
+                {checkoutActions.canPayNow && (
+                  <Button
+                    type="button"
+                    onClick={() => void executarPagamento("pay_now")}
+                    disabled={pagando || enviando || !seguroConcluido || !pagamento}
+                    className="h-11 rounded-md bg-yellow-400 px-6 font-bold text-neutral-900 hover:bg-yellow-300 disabled:opacity-50"
+                  >
+                    {pagando
+                      ? "Processando..."
+                      : pagamento === "credit_card" && !cardSetupMode
+                        ? "Escolher como cadastrar"
+                        : pagamento === "credit_card" && cardSetupMode === "checkout"
+                          ? "Gerar link para o inquilino"
+                          : "Pagar agora"}
+                    <ArrowRight size={16} className="ml-2" />
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
           {!seguroConcluido && (
             <p className="text-xs text-neutral-500">
@@ -1842,31 +2056,100 @@ function ResumoPropostaLoft(p: any) {
       <ModalPagamentoAsaas
         open={modalAsaasAberto}
         resultado={pagamentoAsaasResultado}
+        intent={checkoutIntent}
         onAtualizarResultado={setPagamentoAsaasResultado}
-        onFechar={() => setModalAsaasAberto(false)}
-        onPagarDepois={(resultado) =>
-          handlePagarDepois({
-            metodo: resultado.paymentMethod === "pix" ? "pix" : "boleto",
-            valor: resultado.amount,
-            vencimento: resultado.dueDate ? formatDateBr(resultado.dueDate) : null,
-          })
+        onFechar={() => {
+          setModalAsaasAberto(false);
+          if (cronogramaResultado) setModalCronogramaAberto(true);
+        }}
+        onAtualizarStatus={() => atualizarPagamento("refresh")}
+        onReemitir={faturamentoConsolidado ? undefined : reemitirPagamento}
+        onReenviar={(channel) =>
+          atualizarPagamento(channel === "email" ? "resend_email" : "resend_whatsapp").then(
+            () => undefined,
+          )
         }
+        onRetryInstallments={
+          parcelasFuturasPendentes && pagamento !== "credit_card"
+            ? () =>
+                criarParcelasFuturas(pagamento as "pix" | "boleto").then(() => undefined)
+            : undefined
+        }
+        onIrParaFaturas={() => navigate({ to: rotaFaturasAbertas as any })}
       />
 
       <ModalCronogramaBoletos
         open={modalCronogramaAberto}
         resultado={cronogramaResultado}
-        onFechar={() => setModalCronogramaAberto(false)}
-        onPagarDepois={(resultado) =>
-          handlePagarDepois({
-            metodo: "boleto",
-            valor: resultado.installments[0]?.value ?? 0,
-            vencimento: resultado.installments[0]?.dueDate
-              ? formatDateBr(resultado.installments[0].dueDate)
-              : null,
-          })
-        }
+        deferPayment={checkoutIntent === "pay_later"}
+        onFechar={() => {
+          setModalCronogramaAberto(false);
+          setCronogramaResultado(null);
+        }}
+        onIrParaFaturas={() => navigate({ to: rotaFaturasAbertas as any })}
       />
+
+      <ModalAssinaturaAsaas
+        open={modalAssinaturaAberto}
+        resultado={assinaturaAsaasResultado}
+        onFechar={() => setModalAssinaturaAberto(false)}
+        onAtualizar={() => atualizarAssinatura("refresh")}
+        onReenviar={(channel) =>
+          atualizarAssinatura(channel === "email" ? "resend_email" : "resend_whatsapp")
+        }
+        onReemitirInicial={() => atualizarAssinatura("reissue_initial")}
+        onReemitirCheckout={() => atualizarAssinatura("reissue_checkout")}
+        onRetomarCartaoDireto={() => {
+          setModalAssinaturaAberto(false);
+          setPagamento("credit_card");
+          setCardSetupMode("direct");
+          setCartao(emptyCardForm);
+          setPagamentoAberto(true);
+          window.setTimeout(
+            () =>
+              document
+                .getElementById("pagamento-proposta")
+                ?.scrollIntoView({ behavior: "smooth", block: "start" }),
+            50,
+          );
+        }}
+        onIrParaFaturas={() => navigate({ to: rotaFaturasAbertas as any })}
+      />
+
+      <Dialog open={modalEscolhaCartaoAberto} onOpenChange={setModalEscolhaCartaoAberto}>
+        <DialogContent className="max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>Como deseja cadastrar o cartão?</DialogTitle>
+            <DialogDescription>
+              Escolha se deseja informar o cartão agora ou enviar ao inquilino um link seguro do
+              Asaas.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-auto min-h-24 whitespace-normal border-slate-300 p-4 text-left font-bold"
+              onClick={() => {
+                setCardSetupMode("direct");
+                setModalEscolhaCartaoAberto(false);
+              }}
+            >
+              <CreditCard className="mr-2 h-5 w-5 shrink-0" /> Preencher cartão agora
+            </Button>
+            <Button
+              type="button"
+              className="h-auto min-h-24 whitespace-normal bg-yellow-400 p-4 text-left font-bold text-neutral-950 hover:bg-yellow-300"
+              onClick={() => {
+                setCardSetupMode("checkout");
+                setModalEscolhaCartaoAberto(false);
+              }}
+            >
+              <Send className="mr-2 h-5 w-5 shrink-0" /> Enviar link ao inquilino
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -2142,7 +2425,7 @@ function EtapaResumo(p: any) {
 
         <Card icon={<Building2 size={14} />} title="Tipo de pagamento">
           <div
-            className={`p-3 rounded-xl border-2 ${consulta?.payment_type === "imobiliaria" ? "border-yellow-400 bg-yellow-50" : "border-neutral-200"} mb-2`}
+            className={`p-3 rounded-xl border-2 ${isAgencyBilling(consulta) ? "border-yellow-400 bg-yellow-50" : "border-neutral-200"} mb-2`}
           >
             <p className="text-xs font-black flex items-center gap-1">
               <Building2 size={14} /> Via imobiliária
@@ -2152,7 +2435,7 @@ function EtapaResumo(p: any) {
             </p>
           </div>
           <div
-            className={`p-3 rounded-xl border-2 ${consulta?.payment_type === "inquilino" ? "border-yellow-400 bg-yellow-50" : "border-neutral-200"}`}
+            className={`p-3 rounded-xl border-2 ${!isAgencyBilling(consulta) ? "border-yellow-400 bg-yellow-50" : "border-neutral-200"}`}
           >
             <p className="text-xs font-black flex items-center gap-1">
               <User size={14} /> Via inquilino

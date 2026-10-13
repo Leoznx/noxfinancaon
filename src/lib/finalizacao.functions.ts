@@ -86,12 +86,14 @@ export const enviarProposta = createServerFn({ method: "POST" })
       .from("consultas_credito")
       .update({
         status: "aguardando_ativacao",
-        substatus: "aguardando_pagamento",
+        substatus: "aguardando_pagamento_e_assinatura_d4sign",
         proposta_enviada_em: now,
         link_ativacao_enviado_em: null,
         activation_token: null,
         activation_token_expires_at: null,
-        activation_status: "aguardando_pagamento",
+        activation_status: "aguardando_pagamento_e_assinatura",
+        signature_status: "pending",
+        policy_status: "issued_pending",
       } as any)
       .eq("id", data.consultaId);
     if (error) throw new Error(error.message);
@@ -104,7 +106,7 @@ export const enviarProposta = createServerFn({ method: "POST" })
       },
       {
         tipo: "contrato_d4sign_pendente",
-        desc: "O contrato será enviado pela D4Sign após a confirmação do pagamento.",
+        desc: "O contrato pode ser enviado pela D4Sign enquanto o pagamento permanece pendente.",
       },
     ];
     for (const e of eventos) {
@@ -129,8 +131,8 @@ const pagamentoDepoisSchema = z.object({
 /**
  * "Pagar depois": o Pix/boleto já foi gerado e continua válido, mas o usuário
  * optou por não pagar agora. A cobrança fica em aberto na aba de faturas dele e
- * o contrato só segue para assinatura quando o Asaas confirmar o pagamento —
- * é exatamente o mesmo gatilho do fluxo normal, nada é liberado antes.
+ * o fluxo documental e a assinatura seguem de forma independente. A cobertura
+ * permanece pendente ate assinatura e confirmacao financeira.
  */
 export const registrarPagamentoDepois = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -146,10 +148,11 @@ export const registrarPagamentoDepois = createServerFn({ method: "POST" })
     const { error } = await context.supabase
       .from("consultas_credito")
       .update({
-        substatus: "aguardando_pagamento",
-        activation_status: "aguardando_pagamento",
+        substatus: "aguardando_pagamento_e_assinatura_d4sign",
+        activation_status: "aguardando_pagamento_e_assinatura",
         payment_deferred: true,
         payment_deferred_at: new Date().toISOString(),
+        policy_status: "issued_pending",
       } as any)
       .eq("id", data.consultaId);
     if (error) throw new Error(error.message);
@@ -157,7 +160,7 @@ export const registrarPagamentoDepois = createServerFn({ method: "POST" })
     await context.supabase.from("proposta_historico").insert({
       consulta_id: data.consultaId,
       tipo_evento: "pagamento_adiado",
-      descricao: `Pagamento adiado pelo usuário: ${metodoLabel}${valorLabel} ficou em aberto na aba de faturas.${vencimentoLabel} O envio para assinatura acontece somente após a confirmação do primeiro pagamento.`,
+      descricao: `Pagamento adiado pelo usuário: ${metodoLabel}${valorLabel} ficou em aberto na aba de faturas.${vencimentoLabel} A emissão documental e o envio para assinatura continuam; a cobertura permanece pendente até os requisitos contratuais e financeiros serem cumpridos.`,
       created_by: context.userId,
     } as any);
 

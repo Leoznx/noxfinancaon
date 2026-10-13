@@ -15,6 +15,10 @@ import {
   Loader2,
   RefreshCw,
   QrCode,
+  ExternalLink,
+  Mail,
+  MessageCircle,
+  RotateCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -34,7 +38,15 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { MESES_PT, isPagamentoConcluido, statusPagamentoLabel } from "@/lib/asaas-payment";
+import {
+  cardRegistrationStatusLabel,
+  MESES_PT,
+  isPagamentoConcluido,
+  isReissuablePaymentStatus,
+  statusPagamentoLabel,
+  subscriptionStatusLabel,
+} from "@/lib/asaas-payment";
+import { manageAsaasSubscription, managePersistedAsaasPayment } from "@/lib/asaas-checkout";
 import {
   fetchOwnConsolidatedBatches,
   reissuePayment,
@@ -60,7 +72,14 @@ const STATUS_CLASS: Record<string, string> = {
   refunded: "bg-neutral-100 text-neutral-700 border-neutral-200",
   partially_refunded: "bg-neutral-100 text-neutral-700 border-neutral-200",
 };
-const STATUS_ABERTO = ["pending", "overdue", "risk_analysis", "approved"];
+const STATUS_ABERTO = [
+  "pending",
+  "processing",
+  "overdue",
+  "risk_analysis",
+  "approved",
+  "awaiting_consolidation",
+];
 
 function statusInfo(s: string) {
   return { label: statusPagamentoLabel(s), cls: STATUS_CLASS[s] || "bg-amber-100 text-amber-700 border-amber-200" };
@@ -89,22 +108,40 @@ function CarteiraCobrancas() {
   const [confirmandoAberto, setConfirmandoAberto] = useState(false);
   const [gerando, setGerando] = useState(false);
   const [atualizandoId, setAtualizandoId] = useState<string | null>(null);
+  const [acaoId, setAcaoId] = useState<string | null>(null);
   const [reissuingBatch, setReissuingBatch] = useState<string | null>(null);
 
   async function carregar() {
     setLoading(true);
     try {
-      const [{ data }, batchRows] = await Promise.all([
+      const [invoiceResult, batchRows, subscriptionResult] = await Promise.all([
         supabase.from("faturas_inquilino").select(
           `*, consulta:consultas_credito(
             id, tenant_name,
             inquilino:inquilinos(nome, cpf, cnpj, razao_social),
             imovel:imoveis(endereco, cidade, estado)
-          ), asaas_payment:asaas_payments(asaas_payment_id)`,
+          ), asaas_payment:asaas_payments(*), notifications:financial_notifications(*)`,
         ).order("numero_parcela", { ascending: true }),
         fetchOwnConsolidatedBatches(),
+        (supabase as any)
+          .from("asaas_subscriptions")
+          .select("*")
+          .order("created_at", { ascending: false }),
       ]);
-      setFaturas(data ?? []);
+      if (invoiceResult.error) throw invoiceResult.error;
+      if (subscriptionResult.error) throw subscriptionResult.error;
+      const subscriptions = new Map<string, any>();
+      for (const subscription of subscriptionResult.data ?? []) {
+        if (!subscriptions.has(subscription.consultation_id)) {
+          subscriptions.set(subscription.consultation_id, subscription);
+        }
+      }
+      setFaturas(
+        (invoiceResult.data ?? []).map((invoice: any) => ({
+          ...invoice,
+          asaas_subscription: subscriptions.get(invoice.consulta_id) || null,
+        })),
+      );
       setBatches(batchRows);
     } finally {
       setLoading(false);
@@ -135,6 +172,11 @@ function CarteiraCobrancas() {
         { event: "*", schema: "public", table: "consolidated_invoice_batches", filter: `agency_user_id=eq.${user.id}` },
         () => carregar(),
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "asaas_subscriptions" },
+        () => carregar(),
+      )
       .subscribe();
 
     return () => {
@@ -143,15 +185,30 @@ function CarteiraCobrancas() {
   }, [user?.id]);
 
   async function atualizarStatus(fatura: any) {
+    const method = fatura.payment_method || fatura.asaas_payment?.payment_method;
+    if (method === "credit_card") {
+      setAtualizandoId(fatura.id);
+      try {
+        await executarAcaoAssinatura(fatura, "refresh");
+        await carregar();
+        toast.success("Status da assinatura atualizado.");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Não foi possível consultar a assinatura.");
+      } finally {
+        setAtualizandoId(null);
+      }
+      return;
+    }
     const paymentId = fatura.asaas_payment?.asaas_payment_id;
     if (!paymentId) return;
     setAtualizandoId(fatura.id);
     try {
-      const { data, error } = await supabase.functions.invoke("asaas-get-payment", {
-        body: { paymentId },
+      await managePersistedAsaasPayment({
+        invoiceId: fatura.id,
+        paymentId,
+        consultationId: fatura.consulta_id,
+        action: "refresh",
       });
-      if (error) throw new Error(error.message);
-      if ((data as any)?.error) throw new Error((data as any).error);
       await carregar();
       toast.success("Status atualizado.");
     } catch (e: any) {
@@ -159,6 +216,77 @@ function CarteiraCobrancas() {
     } finally {
       setAtualizandoId(null);
     }
+  }
+
+  async function executarAcaoFatura(
+    fatura: any,
+    action:
+      | "resend_email"
+      | "resend_whatsapp"
+      | "reissue"
+      | "reissue_initial"
+      | "reissue_checkout",
+  ) {
+    const key = `${fatura.id}:${action}`;
+    setAcaoId(key);
+    try {
+      const method = fatura.payment_method || fatura.asaas_payment?.payment_method;
+      if (method === "credit_card") {
+        if (action === "reissue") throw new Error("Segunda via não se aplica ao cartão recorrente.");
+        await executarAcaoAssinatura(fatura, action);
+      } else {
+        if (action === "reissue_initial" || action === "reissue_checkout") {
+          throw new Error("Reemissão de Checkout se aplica somente ao cartão recorrente.");
+        }
+        await managePersistedAsaasPayment({
+          invoiceId: fatura.id,
+          paymentId: fatura.asaas_payment?.asaas_payment_id,
+          consultationId: fatura.consulta_id,
+          action,
+          paymentMethod: method === "pix" ? "pix" : "boleto",
+        });
+      }
+      toast.success(
+        action === "resend_email"
+          ? "Cobrança reenviada por e-mail."
+          : action === "resend_whatsapp"
+            ? "Cobrança reenviada por WhatsApp."
+            : action === "reissue_initial"
+              ? "Novo link inicial gerado e enviado."
+            : action === "reissue_checkout"
+              ? "Novo link de cadastro recorrente gerado e enviado."
+            : "Segunda via gerada.",
+      );
+      await carregar();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível concluir a ação.");
+    } finally {
+      setAcaoId(null);
+    }
+  }
+
+  async function executarAcaoAssinatura(
+    fatura: any,
+    action:
+      | "refresh"
+      | "resend_email"
+      | "resend_whatsapp"
+      | "reissue_initial"
+      | "reissue_checkout",
+  ) {
+    const subscription = fatura.asaas_subscription;
+    if (!subscription?.id || !subscription.mode) {
+      throw new Error("A assinatura recorrente ainda não está disponível para consulta.");
+    }
+    return manageAsaasSubscription({
+      proposalId: fatura.consulta_id,
+      mode: subscription.mode,
+      selectedFireInsuranceMode:
+        subscription.fire_insurance_payment_mode === "avista" ? "avista" : "embutido",
+      amount: Number(subscription.initial_amount || 0),
+      monthlyAmount: Number(subscription.monthly_amount || 0),
+      action,
+    });
   }
 
   const contratos = useMemo<Contrato[]>(() => {
@@ -469,6 +597,19 @@ function CarteiraCobrancas() {
                     <div className="md:hidden divide-y divide-neutral-100 border-t border-neutral-100">
                       {contrato.parcelas.map((f) => {
                         const s = statusInfo(f.status);
+                        const initialLinkExpired = ["cancelled", "expired"].includes(
+                          f.asaas_subscription?.initial_checkout_status,
+                        );
+                        const recurringLinkExpired = ["cancelled", "expired"].includes(
+                          f.asaas_subscription?.checkout_status,
+                        );
+                        const managedByConsolidatedBatch =
+                          f.payment_responsible === "agency" || f.status === "awaiting_consolidation";
+                        const validCheckoutLink = !recurringLinkExpired
+                          ? f.asaas_subscription?.checkout_url
+                          : !initialLinkExpired
+                            ? f.payment_url
+                            : null;
                         const [fAno, fMes] = String(f.vencimento).split("-").map(Number);
                         const elegivel =
                           f.payment_responsible === "agency" &&
@@ -507,20 +648,53 @@ function CarteiraCobrancas() {
                             </div>
                             <p className="text-xs text-neutral-500">
                               {f.payment_responsible === "agency" ? "Imobiliária" : "Inquilino"}
+                              {" · "}
+                              {(f.payment_method || f.asaas_payment?.payment_method) === "pix"
+                                ? "Pix"
+                                : (f.payment_method || f.asaas_payment?.payment_method) === "credit_card"
+                                  ? "Cartão"
+                                  : "Boleto"}
                             </p>
-                            {(f.boleto_url || f.linha_digitavel || f.asaas_payment?.asaas_payment_id) && (
-                              <div className="flex items-center gap-2 pt-1">
-                                {f.boleto_url && (
+                            {f.asaas_payment?.asaas_payment_id && (
+                              <p className="break-all text-[10px] text-neutral-400">
+                                Asaas: {f.asaas_payment.asaas_payment_id}
+                              </p>
+                            )}
+                            {f.asaas_subscription && (
+                              <p className="break-all text-[10px] text-neutral-500">
+                                Assinatura {f.asaas_subscription.asaas_subscription_id || f.asaas_subscription.id}
+                                {` · ${subscriptionStatusLabel(f.asaas_subscription.status)}`}
+                                {` · ${cardRegistrationStatusLabel(f.asaas_subscription.card_registration_status)}`}
+                              </p>
+                            )}
+                            {(f.confirmed_at || f.asaas_payment?.confirmed_at || f.asaas_payment?.received_at) && (
+                              <p className="text-[10px] text-emerald-700">
+                                Confirmada em{" "}
+                                {new Date(
+                                  f.confirmed_at ||
+                                    f.asaas_payment?.received_at ||
+                                    f.asaas_payment?.confirmed_at,
+                                ).toLocaleString("pt-BR")}
+                              </p>
+                            )}
+                            {f.notifications?.length > 0 && (
+                              <p className="text-[10px] text-neutral-500">
+                                {f.notifications.length} registro(s) de notificação
+                              </p>
+                            )}
+                            <div className="flex flex-wrap items-center gap-2 pt-1">
+                                {!managedByConsolidatedBatch && f.boleto_url && (
                                   <a href={f.boleto_url} target="_blank" rel="noreferrer" className="flex-1">
                                     <Button size="sm" variant="outline" className="w-full"><FileText size={14} /></Button>
                                   </a>
                                 )}
-                                {f.linha_digitavel && (
+                                {!managedByConsolidatedBatch && f.linha_digitavel && (
                                   <Button size="sm" variant="outline" className="flex-1" onClick={() => copiar(f.linha_digitavel)}>
                                     <Copy size={14} />
                                   </Button>
                                 )}
-                                {f.asaas_payment?.asaas_payment_id && (
+                                {!managedByConsolidatedBatch &&
+                                  (f.asaas_payment?.asaas_payment_id || f.asaas_subscription) && (
                                   <Button
                                     size="sm"
                                     variant="outline"
@@ -532,8 +706,70 @@ function CarteiraCobrancas() {
                                     <RefreshCw size={14} className={atualizandoId === f.id ? "animate-spin" : ""} />
                                   </Button>
                                 )}
+                                {!managedByConsolidatedBatch && validCheckoutLink && (
+                                  <a
+                                    href={validCheckoutLink}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                  >
+                                    <Button size="sm" variant="outline" title="Abrir cobrança">
+                                      <ExternalLink size={14} />
+                                    </Button>
+                                  </a>
+                                )}
+                                {!managedByConsolidatedBatch && !initialLinkExpired && !recurringLinkExpired && <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={acaoId !== null}
+                                  onClick={() => void executarAcaoFatura(f, "resend_whatsapp")}
+                                  title="Reenviar WhatsApp"
+                                >
+                                  <MessageCircle size={14} />
+                                </Button>}
+                                {!managedByConsolidatedBatch && !initialLinkExpired && !recurringLinkExpired && <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={acaoId !== null}
+                                  onClick={() => void executarAcaoFatura(f, "resend_email")}
+                                  title="Reenviar e-mail"
+                                >
+                                  <Mail size={14} />
+                                </Button>}
+                                {!managedByConsolidatedBatch && initialLinkExpired && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={acaoId !== null}
+                                    onClick={() => void executarAcaoFatura(f, "reissue_initial")}
+                                    title="Gerar novo link inicial"
+                                  >
+                                    <RotateCw size={14} />
+                                  </Button>
+                                )}
+                                {!managedByConsolidatedBatch && recurringLinkExpired && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={acaoId !== null}
+                                    onClick={() => void executarAcaoFatura(f, "reissue_checkout")}
+                                    title="Gerar novo link de cadastro"
+                                  >
+                                    <RotateCw size={14} />
+                                  </Button>
+                                )}
+                                {!managedByConsolidatedBatch && isReissuablePaymentStatus(f.status) &&
+                                  (f.payment_method || f.asaas_payment?.payment_method) !== "credit_card" && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      disabled={acaoId !== null}
+                                      onClick={() => void executarAcaoFatura(f, "reissue")}
+                                      title="Gerar segunda via"
+                                    >
+                                      <RotateCw size={14} />
+                                    </Button>
+                                  )}
                               </div>
-                            )}
                           </div>
                         );
                       })}
@@ -555,6 +791,19 @@ function CarteiraCobrancas() {
                         <tbody className="divide-y">
                           {contrato.parcelas.map((f) => {
                             const s = statusInfo(f.status);
+                            const initialLinkExpired = ["cancelled", "expired"].includes(
+                              f.asaas_subscription?.initial_checkout_status,
+                            );
+                            const recurringLinkExpired = ["cancelled", "expired"].includes(
+                              f.asaas_subscription?.checkout_status,
+                            );
+                            const managedByConsolidatedBatch =
+                              f.payment_responsible === "agency" || f.status === "awaiting_consolidation";
+                            const validCheckoutLink = !recurringLinkExpired
+                              ? f.asaas_subscription?.checkout_url
+                              : !initialLinkExpired
+                                ? f.payment_url
+                                : null;
                             const [fAno, fMes] = String(f.vencimento).split("-").map(Number);
                             const elegivel =
                               f.payment_responsible === "agency" &&
@@ -579,30 +828,73 @@ function CarteiraCobrancas() {
                                   <span className="block text-xs font-normal text-neutral-500">
                                     {MESES_PT[fMes - 1]} de {fAno}
                                   </span>
+                                  {f.asaas_payment?.asaas_payment_id && (
+                                    <span className="block max-w-40 truncate text-[10px] font-normal text-neutral-400" title={f.asaas_payment.asaas_payment_id}>
+                                      Asaas {f.asaas_payment.asaas_payment_id}
+                                    </span>
+                                  )}
+                                  {f.asaas_subscription && (
+                                    <span className="block max-w-40 truncate text-[10px] font-normal text-neutral-500">
+                                      Assinatura {f.asaas_subscription.asaas_subscription_id || f.asaas_subscription.id}
+                                    </span>
+                                  )}
                                 </td>
                                 <td className="px-4 py-3 text-neutral-700">{new Date(f.vencimento).toLocaleDateString("pt-BR")}</td>
                                 <td className="px-4 py-3 font-black text-neutral-900">{brl(f.valor)}</td>
                                 <td className="px-4 py-3 text-neutral-600">
                                   {f.payment_responsible === "agency" ? "Imobiliária" : "Inquilino"}
+                                  <span className="block text-[10px] text-neutral-500">
+                                    {(f.payment_method || f.asaas_payment?.payment_method) === "pix"
+                                      ? "Pix"
+                                      : (f.payment_method || f.asaas_payment?.payment_method) === "credit_card"
+                                        ? "Cartão"
+                                        : "Boleto"}
+                                  </span>
                                 </td>
                                 <td className="px-4 py-3">
                                   <Badge className={`${s.cls} border`}>{s.label}</Badge>
                                   {f.consolidated_item_id && (
                                     <span className="block text-[10px] text-neutral-400 mt-0.5">Em lote consolidado</span>
                                   )}
+                                  {(f.confirmed_at || f.asaas_payment?.confirmed_at || f.asaas_payment?.received_at) && (
+                                    <span className="mt-1 block text-[10px] text-emerald-700">
+                                      {new Date(
+                                        f.confirmed_at ||
+                                          f.asaas_payment?.received_at ||
+                                          f.asaas_payment?.confirmed_at,
+                                      ).toLocaleDateString("pt-BR")}
+                                    </span>
+                                  )}
+                                  {f.notifications?.length > 0 && (
+                                    <span className="block text-[10px] text-neutral-500">
+                                      {f.notifications.length} notificação(ões)
+                                    </span>
+                                  )}
                                 </td>
                                 <td className="px-4 py-3 text-right space-x-1 whitespace-nowrap">
-                                  {f.boleto_url && (
+                                  {!managedByConsolidatedBatch && f.boleto_url && (
                                     <a href={f.boleto_url} target="_blank" rel="noreferrer">
                                       <Button size="sm" variant="outline"><FileText size={14} /></Button>
                                     </a>
                                   )}
-                                  {f.linha_digitavel && (
+                                  {!managedByConsolidatedBatch && f.linha_digitavel && (
                                     <Button size="sm" variant="ghost" onClick={() => copiar(f.linha_digitavel)}>
                                       <Copy size={14} />
                                     </Button>
                                   )}
-                                  {f.asaas_payment?.asaas_payment_id && (
+                                  {!managedByConsolidatedBatch && validCheckoutLink && (
+                                    <a
+                                      href={validCheckoutLink}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                    >
+                                      <Button size="sm" variant="ghost" title="Abrir cobrança">
+                                        <ExternalLink size={14} />
+                                      </Button>
+                                    </a>
+                                  )}
+                                  {!managedByConsolidatedBatch &&
+                                    (f.asaas_payment?.asaas_payment_id || f.asaas_subscription) && (
                                     <Button
                                       size="sm"
                                       variant="ghost"
@@ -613,6 +905,58 @@ function CarteiraCobrancas() {
                                       <RefreshCw size={14} className={atualizandoId === f.id ? "animate-spin" : ""} />
                                     </Button>
                                   )}
+                                  {!managedByConsolidatedBatch && !initialLinkExpired && !recurringLinkExpired && <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => void executarAcaoFatura(f, "resend_whatsapp")}
+                                    disabled={acaoId !== null}
+                                    title="Reenviar WhatsApp"
+                                  >
+                                    <MessageCircle size={14} />
+                                  </Button>}
+                                  {!managedByConsolidatedBatch && !initialLinkExpired && !recurringLinkExpired && <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => void executarAcaoFatura(f, "resend_email")}
+                                    disabled={acaoId !== null}
+                                    title="Reenviar e-mail"
+                                  >
+                                    <Mail size={14} />
+                                  </Button>}
+                                  {!managedByConsolidatedBatch && initialLinkExpired && (
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => void executarAcaoFatura(f, "reissue_initial")}
+                                      disabled={acaoId !== null}
+                                      title="Gerar novo link inicial"
+                                    >
+                                      <RotateCw size={14} />
+                                    </Button>
+                                  )}
+                                  {!managedByConsolidatedBatch && recurringLinkExpired && (
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => void executarAcaoFatura(f, "reissue_checkout")}
+                                      disabled={acaoId !== null}
+                                      title="Gerar novo link de cadastro"
+                                    >
+                                      <RotateCw size={14} />
+                                    </Button>
+                                  )}
+                                  {!managedByConsolidatedBatch && isReissuablePaymentStatus(f.status) &&
+                                    (f.payment_method || f.asaas_payment?.payment_method) !== "credit_card" && (
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => void executarAcaoFatura(f, "reissue")}
+                                        disabled={acaoId !== null}
+                                        title="Gerar segunda via"
+                                      >
+                                        <RotateCw size={14} />
+                                      </Button>
+                                    )}
                                 </td>
                               </tr>
                             );

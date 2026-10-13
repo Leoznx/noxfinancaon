@@ -1,9 +1,20 @@
 import { useCallback, useEffect, useState } from "react";
-import { Clock, Copy, FileText, QrCode, RefreshCw } from "lucide-react";
+import {
+  Clock,
+  Copy,
+  ExternalLink,
+  FileText,
+  Mail,
+  MessageCircle,
+  QrCode,
+  RefreshCw,
+  RotateCw,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { isPagamentoConcluido, statusPagamentoLabel } from "@/lib/asaas-payment";
+import { managePersistedAsaasPayment } from "@/lib/asaas-checkout";
 import { toast } from "sonner";
 
 type CobrancaAvulsa = {
@@ -17,27 +28,33 @@ type CobrancaAvulsa = {
   pix_copy_paste: string | null;
   boleto_url: string | null;
   boleto_barcode: string | null;
+  invoice_url?: string | null;
+  payment_url?: string | null;
+  external_reference?: string | null;
+  payment_responsible?: "tenant" | "agency" | null;
+  recipient_name?: string | null;
+  confirmed_at?: string | null;
+  received_at?: string | null;
   consulta?: { tenant_name: string | null } | null;
 };
 
 /**
  * Cobranças de contratação (Pix/boleto/cartão) que ainda estão em aberto e não
  * viraram parcela em `faturas_inquilino` — é aqui que cai o valor quando o
- * usuário escolhe "pagar depois". Enquanto não houver baixa, a proposta não
- * segue para assinatura.
+ * usuário escolhe "pagar depois". O fluxo documental continua e a ativação
+ * permanece condicionada aos requisitos contratuais e financeiros.
  */
 export function CobrancasAvulsasAbertas() {
   const [itens, setItens] = useState<CobrancaAvulsa[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [atualizandoId, setAtualizandoId] = useState<string | null>(null);
+  const [acaoId, setAcaoId] = useState<string | null>(null);
 
   const carregar = useCallback(async () => {
     const [pagamentosRes, faturasRes] = await Promise.all([
       (supabase as any)
         .from("asaas_payments")
-        .select(
-          "id, consultation_id, asaas_payment_id, payment_method, status, value, due_date, pix_copy_paste, boleto_url, boleto_barcode, consulta:consultas_credito(tenant_name)",
-        )
+        .select("*, consulta:consultas_credito(tenant_name)")
         .order("created_at", { ascending: false }),
       supabase.from("faturas_inquilino").select("asaas_payment_id"),
     ]);
@@ -72,17 +89,49 @@ export function CobrancasAvulsasAbertas() {
     if (!item.asaas_payment_id) return;
     setAtualizandoId(item.id);
     try {
-      const { data, error } = await supabase.functions.invoke("asaas-get-payment", {
-        body: { paymentId: item.asaas_payment_id },
+      const data = await managePersistedAsaasPayment({
+        paymentId: item.asaas_payment_id,
+        consultationId: item.consultation_id,
+        action: "refresh",
       });
-      if (error) throw error;
-      if ((data as any)?.error) throw new Error((data as any).error);
-      toast.success(statusPagamentoLabel((data as any)?.status));
+      toast.success(statusPagamentoLabel(data.paymentStatus || data.status));
       await carregar();
     } catch (error: any) {
       toast.error(error?.message || "Não foi possível atualizar o status agora.");
     } finally {
       setAtualizandoId(null);
+    }
+  }
+
+  async function executarAcao(
+    item: CobrancaAvulsa,
+    action: "resend_email" | "resend_whatsapp" | "reissue",
+  ) {
+    if (!item.asaas_payment_id) return;
+    const key = `${item.id}:${action}`;
+    setAcaoId(key);
+    try {
+      await managePersistedAsaasPayment({
+        paymentId: item.asaas_payment_id,
+        consultationId: item.consultation_id,
+        action,
+        paymentMethod:
+          item.payment_method === "pix" || item.payment_method === "boleto"
+            ? item.payment_method
+            : undefined,
+      });
+      toast.success(
+        action === "resend_email"
+          ? "Cobrança reenviada por e-mail."
+          : action === "resend_whatsapp"
+            ? "Cobrança reenviada por WhatsApp."
+            : "Segunda via gerada.",
+      );
+      await carregar();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível concluir a ação.");
+    } finally {
+      setAcaoId(null);
     }
   }
 
@@ -109,7 +158,7 @@ export function CobrancasAvulsasAbertas() {
             Faturas em aberto da contratação
           </h2>
           <p className="text-xs text-amber-900/80">
-            A proposta só é enviada para assinatura depois que o pagamento for identificado.
+            A assinatura pode continuar; a cobertura só é ativada quando todos os requisitos forem cumpridos.
           </p>
         </div>
       </div>
@@ -130,6 +179,21 @@ export function CobrancasAvulsasAbertas() {
                   ? ` · vence em ${new Date(`${item.due_date}T00:00:00`).toLocaleDateString("pt-BR")}`
                   : ""}
               </p>
+              <p className="mt-1 text-[11px] text-neutral-500">
+                {item.payment_method === "pix"
+                  ? "Pix"
+                  : item.payment_method === "boleto"
+                    ? "Boleto"
+                    : "Cartão"}
+                {" · "}
+                {item.payment_responsible === "agency" ? "Imobiliária" : "Inquilino"}
+                {item.asaas_payment_id ? ` · Asaas ${item.asaas_payment_id}` : ""}
+              </p>
+              {(item.confirmed_at || item.received_at) && (
+                <p className="text-[11px] text-emerald-700">
+                  Confirmado em {new Date(item.received_at || item.confirmed_at || "").toLocaleString("pt-BR")}
+                </p>
+              )}
             </div>
             <Badge variant="outline" className="text-xs">
               {statusPagamentoLabel(item.status)}
@@ -160,6 +224,42 @@ export function CobrancasAvulsasAbertas() {
                   <FileText className="h-3 w-3" /> Ver boleto
                 </Button>
               </a>
+            )}
+            {(item.payment_url || item.invoice_url) && (
+              <a href={item.payment_url || item.invoice_url || "#"} target="_blank" rel="noreferrer">
+                <Button size="sm" variant="outline" className="h-8 gap-1 text-xs">
+                  <ExternalLink className="h-3 w-3" /> Abrir cobrança
+                </Button>
+              </a>
+            )}
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 gap-1 text-xs"
+              disabled={acaoId !== null || !item.asaas_payment_id}
+              onClick={() => void executarAcao(item, "resend_whatsapp")}
+            >
+              <MessageCircle className="h-3 w-3" /> WhatsApp
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 gap-1 text-xs"
+              disabled={acaoId !== null || !item.asaas_payment_id}
+              onClick={() => void executarAcao(item, "resend_email")}
+            >
+              <Mail className="h-3 w-3" /> E-mail
+            </Button>
+            {(item.payment_method === "pix" || item.payment_method === "boleto") && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 gap-1 text-xs"
+                disabled={acaoId !== null || !item.asaas_payment_id}
+                onClick={() => void executarAcao(item, "reissue")}
+              >
+                <RotateCw className="h-3 w-3" /> Segunda via
+              </Button>
             )}
             <Button
               size="sm"

@@ -24,7 +24,7 @@
     "test:auth-links": "tsx --test tests/auth-email-links.test.ts",
     "test:tracking": "tsx --test tests/tracking.test.ts",
     "test:billing": "tsx --test tests/billing-automation.test.ts",
-    "test:payments": "tsx --test tests/asaas-payment.test.ts",
+    "test:payments": "tsx --test tests/asaas-payment.test.ts tests/asaas-checkout-state.test.ts tests/tenant-billing.test.ts tests/intelligent-contract-billing.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

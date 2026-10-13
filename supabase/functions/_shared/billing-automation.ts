@@ -2,6 +2,55 @@ export const BILLING_TIME_ZONE = "America/Sao_Paulo";
 export const BILLING_DUE_DAY = 10;
 export const BILLING_FINE_PERCENT = 2;
 export const BILLING_MONTHLY_INTEREST_PERCENT = 1;
+export const CONSOLIDATABLE_INVOICE_STATUSES = [
+  "awaiting_consolidation",
+  "pending",
+  "processing",
+  "overdue",
+  "risk_analysis",
+  "approved",
+  "created",
+  "waiting_payment",
+];
+
+export function isConsolidatableInvoiceStatus(status: unknown) {
+  return CONSOLIDATABLE_INVOICE_STATUSES.includes(String(status || "").toLowerCase());
+}
+
+export function normalizeBillingDueDay(
+  value: unknown,
+  fallback = BILLING_DUE_DAY,
+) {
+  const parsed = Number(value);
+  if (Number.isSafeInteger(parsed) && parsed >= 1 && parsed <= 28) return parsed;
+  return fallback;
+}
+
+/**
+ * Reads the canonical monthly due day with a safe fallback. Billing entry
+ * points use a service-role client here because tenant RLS intentionally does
+ * not expose automation settings to contract payers.
+ */
+export async function resolveBillingDueDay(supabase: any) {
+  try {
+    const { data, error } = await supabase
+      .from("billing_automation_settings")
+      .select("due_day")
+      .eq("id", true)
+      .maybeSingle();
+    if (error) {
+      console.warn("[billing-automation] due_day_fallback", error.message || error);
+      return BILLING_DUE_DAY;
+    }
+    return normalizeBillingDueDay(data?.due_day);
+  } catch (error) {
+    console.warn(
+      "[billing-automation] due_day_fallback",
+      error instanceof Error ? error.message : String(error),
+    );
+    return BILLING_DUE_DAY;
+  }
+}
 
 export type BillingCadence =
   | { kind: "pre_due"; slot: 1; overdueDays: -1 }
@@ -66,6 +115,28 @@ export function monthlyDueDate(
   return `${year}-${String(month).padStart(2, "0")}-${
     String(Math.min(dueDay, lastDay)).padStart(2, "0")
   }`;
+}
+
+function addBusinessDaysFrom(isoDate: string, days: number) {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  let added = 0;
+  while (added < days) {
+    date.setUTCDate(date.getUTCDate() + 1);
+    const weekday = date.getUTCDay();
+    if (weekday !== 0 && weekday !== 6) added += 1;
+  }
+  return date.toISOString().slice(0, 10);
+}
+
+export function consolidatedDueDate(
+  year: number,
+  month: number,
+  dueDay = BILLING_DUE_DAY,
+  today = saoPauloClock().date,
+) {
+  const configured = monthlyDueDate(year, month, dueDay);
+  return configured > today ? configured : addBusinessDaysFrom(today, 3);
 }
 
 export function nextMonthlyDueDate(now = new Date(), monthsAhead = 1) {

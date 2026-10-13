@@ -8,6 +8,7 @@ import {
   type TenantBillingConsultation,
   type TenantInvoiceSource,
   type TenantPaymentSource,
+  type TenantSubscriptionSource,
 } from "../src/lib/tenant-billing";
 
 const agency: TenantBillingConsultation = {
@@ -54,6 +55,19 @@ const payment: TenantPaymentSource = {
   external_reference: "nox:consulta:tenant-contract:installment:1",
 };
 
+const subscription: TenantSubscriptionSource = {
+  id: "subscription-local-1",
+  consultation_id: "tenant-contract",
+  mode: "checkout",
+  asaas_subscription_id: "sub_asaas_1",
+  checkout_url: "https://asaas.example/checkout",
+  status: "pending",
+  card_registration_status: "awaiting_card",
+  initial_amount: 377.5,
+  monthly_amount: 277.5,
+  fire_insurance_payment_mode: "embutido",
+};
+
 test("contratos pagos pela imobiliária nunca expõem cobranças ao inquilino", () => {
   const result = mergeTenantBillingItems(
     [agency],
@@ -98,4 +112,26 @@ test("usa o período do contrato quando a fatura antiga não informa o total", (
     [payment],
   );
   assert.equal(result[0].installmentTotal, 24);
+});
+
+test("reidrata a parcela mensal recorrente pelo novo externalReference", () => {
+  const monthlyPayment = {
+    ...payment,
+    id: "payment-monthly-7",
+    external_reference: "nox:consulta:tenant-contract:monthly:7",
+  };
+  const result = mergeTenantBillingItems([tenant], [], [monthlyPayment]);
+  assert.equal(result.length, 1);
+  assert.equal(result[0].installmentNumber, 7);
+  assert.equal(result[0].installmentTotal, 24);
+});
+
+test("anexa a assinatura recorrente oficial para retomada e reenvio", () => {
+  const cardPayment = { ...payment, payment_method: "credit_card" };
+  const result = mergeTenantBillingItems([tenant], [invoice], [cardPayment], [subscription]);
+  assert.equal(result[0].subscriptionLocalId, "subscription-local-1");
+  assert.equal(result[0].subscriptionId, "sub_asaas_1");
+  assert.equal(result[0].subscriptionMode, "checkout");
+  assert.equal(result[0].subscriptionCheckoutUrl, "https://asaas.example/checkout");
+  assert.equal(result[0].cardRegistrationStatus, "awaiting_card");
 });

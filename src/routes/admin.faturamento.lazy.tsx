@@ -1,5 +1,6 @@
 import { createLazyFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { useAuth } from "@/components/AuthProvider";
 import { AdminAreaSwitcher } from "@/components/admin/AdminAreaSwitcher";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useEffect, useMemo, useState } from "react";
@@ -10,9 +11,29 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, AlertTriangle, Clock, CheckCircle2, Wallet, ChevronLeft, ChevronRight, RefreshCw, Copy, FileText } from "lucide-react";
+import {
+  Search,
+  AlertTriangle,
+  Clock,
+  CheckCircle2,
+  Wallet,
+  ChevronLeft,
+  ChevronRight,
+  RefreshCw,
+  Copy,
+  ExternalLink,
+  Mail,
+  MessageCircle,
+  RotateCcw,
+  XCircle,
+} from "lucide-react";
 import { toast } from "sonner";
-import { statusPagamentoLabel, isPagamentoConcluido } from "@/lib/asaas-payment";
+import {
+  statusPagamentoLabel,
+  isPagamentoConcluido,
+  isReissuablePaymentStatus,
+} from "@/lib/asaas-payment";
+import { manageAsaasSubscription, managePersistedAsaasPayment } from "@/lib/asaas-checkout";
 
 export const Route = createLazyFileRoute("/admin/faturamento")({
   component: () => (
@@ -29,6 +50,48 @@ function formatEndereco(imovel: { endereco?: string | null; cidade?: string | nu
   const cidadeEstado = [imovel.cidade, imovel.estado].filter(Boolean).join("/");
   return [imovel.endereco, cidadeEstado].filter(Boolean).join(", ") || "—";
 }
+function formatDataHora(value?: string | null) {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString("pt-BR");
+}
+function metodoLabel(value?: string | null) {
+  if (value === "pix") return "Pix";
+  if (value === "boleto") return "Boleto";
+  if (value === "credit_card") return "Cartão recorrente";
+  return "Não informado";
+}
+function dadosCobranca(p: any) {
+  const payment = p.asaas_payment || {};
+  const subscription = p.asaas_subscription || {};
+  const initialLinkExpired = ["cancelled", "expired"].includes(subscription.initial_checkout_status);
+  const recurringLinkExpired = ["cancelled", "expired"].includes(subscription.checkout_status);
+  const notifications = Array.isArray(p.notifications) ? p.notifications : [];
+  const latestNotification = [...notifications].sort((a, b) =>
+    String(b.created_at || "").localeCompare(String(a.created_at || "")),
+  )[0];
+  return {
+    method: p.payment_method || payment.payment_method || null,
+    link:
+      (!recurringLinkExpired ? subscription.checkout_url : null) ||
+      (!initialLinkExpired ? p.payment_url : null) ||
+      payment.invoice_url ||
+      p.boleto_url ||
+      payment.boleto_url ||
+      null,
+    copyValue: payment.pix_copy_paste || p.linha_digitavel || payment.boleto_barcode || null,
+    providerId: payment.asaas_payment_id || subscription.asaas_subscription_id || null,
+    confirmedAt: payment.confirmed_at || payment.received_at || p.confirmed_at || p.pago_em || null,
+    subscriptionStatus: subscription.status || null,
+    notificationCount: notifications.length,
+    latestNotification,
+  };
+}
+function apoliceDaFatura(p: any) {
+  if (p.apolice) return p.apolice;
+  const policies = p.consulta?.apolices;
+  return Array.isArray(policies) ? policies[0] || null : policies || null;
+}
 const meses = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 const mesLabel = (y: number, m: number) => `${meses[m]}/${y}`;
 const ymKey = (d: string) => d.slice(0, 7); // YYYY-MM
@@ -37,17 +100,21 @@ const ymKey = (d: string) => d.slice(0, 7); // YYYY-MM
 // fonte de verdade usada em Minhas Faturas / Carteira de Cobranças. "Pago"
 // cobre confirmed/paid/paid_via_consolidated (ver PAYMENT_STATUS_SYNC); status
 // cancelado/estornado/recusado ficam fora dos 3 totais (nem devido nem pago).
-const STATUS_ABERTO = ["pending", "risk_analysis", "approved"];
+const STATUS_ABERTO = ["pending", "processing", "risk_analysis", "approved", "awaiting_consolidation"];
 const STATUS_EXCLUIDOS_DOS_TOTAIS = ["cancelled", "refunded", "partially_refunded", "refused", "chargeback", "chargeback_dispute", "refund_processing", "refund_denied"];
 
 function FaturamentoAdminPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const billingRole = user?.internalRole || user?.role || "";
+  const canManageBilling = ["admin", "admin_master", "financeiro"].includes(billingRole);
   const routeSearch = useSearch({ from: "/admin/faturamento" });
   const [parcelas, setParcelas] = useState<any[]>([]);
   const [lotes, setLotes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState("");
   const [atualizandoId, setAtualizandoId] = useState<string | null>(null);
+  const [acaoId, setAcaoId] = useState<string | null>(null);
   const now = useMemo(() => new Date(), []);
   // selectedYM: 'YYYY-MM' OR 'all'
   const [selectedYM, setSelectedYM] = useState<string>(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
@@ -61,18 +128,36 @@ function FaturamentoAdminPage() {
 
   const carregar = async () => {
     setLoading(true);
-    const [{ data, error }, { data: batchData, error: batchError }] = await Promise.all([
-      supabase.from("faturas_inquilino").select(
-        `id, valor, vencimento, pago_em, status, numero_parcela, installment_total, boleto_url, linha_digitavel, payment_responsible, consolidated_item_id,
-         asaas_payment:asaas_payments(asaas_payment_id),
-         consulta:consultas_credito(id, tenant_name, tenant_document, imovel:imoveis(endereco, cidade, estado))`,
+    const [invoiceResult, batchResult, subscriptionResult] = await Promise.all([
+      (supabase as any).from("faturas_inquilino").select(
+        `*,
+         apolice:apolices(numero, status, imobiliaria:profiles!apolices_imobiliaria_profile_id_fkey(nome)),
+         asaas_payment:asaas_payments(*),
+         notifications:financial_notifications(*),
+         consulta:consultas_credito(
+           id, tenant_name, tenant_document, payment_type, billing_responsible_role,
+           imovel:imoveis(endereco, cidade, estado),
+           apolices(numero, status, imobiliaria:profiles!apolices_imobiliaria_profile_id_fkey(nome))
+         )`,
       ).order("vencimento", { ascending: false }).limit(5000),
-      (supabase as any).from("consolidated_invoice_batches").select("id, total_value, received_value, due_date, paid_at, status, invoice_count, bank_slip_url, identification_field, asaas_payment_id, reference_month, reference_year"),
+      (supabase as any).from("consolidated_invoice_batches").select("id, total_value, received_value, due_date, paid_at, status, invoice_count, bank_slip_url, identification_field, asaas_payment_id, reference_month, reference_year, agency:profiles!consolidated_invoice_batches_agency_user_id_fkey(nome)"),
+      (supabase as any).from("asaas_subscriptions").select("*").order("created_at", { ascending: false }),
     ]);
-    if (error || batchError) toast.error("Erro ao carregar faturas");
+    if (invoiceResult.error || batchResult.error || subscriptionResult.error) toast.error("Erro ao carregar faturas");
     else {
-      setParcelas(data ?? []);
-      setLotes(batchData ?? []);
+      const subscriptions = new Map<string, any>();
+      for (const subscription of subscriptionResult.data ?? []) {
+        if (!subscriptions.has(subscription.consultation_id)) {
+          subscriptions.set(subscription.consultation_id, subscription);
+        }
+      }
+      setParcelas(
+        (invoiceResult.data ?? []).map((invoice: any) => ({
+          ...invoice,
+          asaas_subscription: subscriptions.get(invoice.consulta_id) || null,
+        })),
+      );
+      setLotes(batchResult.data ?? []);
     }
     setLoading(false);
   };
@@ -96,9 +181,15 @@ function FaturamentoAdminPage() {
         numero_parcela: 1,
         installment_total: 1,
         boleto_url: batch.bank_slip_url,
+        payment_url: batch.bank_slip_url,
         linha_digitavel: batch.identification_field,
+        payment_method: "boleto",
         payment_responsible: "agency",
         asaas_payment: { asaas_payment_id: batch.asaas_payment_id },
+        asaas_subscription: null,
+        notifications: [],
+        apolice: null,
+        agency_name: batch.agency?.nome || null,
         consulta: { tenant_name: `Lote consolidado (${batch.invoice_count} contratos)`, tenant_document: "", imovel: null },
       };
       if (batch.status !== "partial") {
@@ -195,18 +286,119 @@ function FaturamentoAdminPage() {
 
   const atualizarStatus = async (p: any) => {
     const paymentId = p.asaas_payment?.asaas_payment_id;
-    if (!paymentId) return;
+    const subscription = p.asaas_subscription;
+    const method = p.payment_method || p.asaas_payment?.payment_method;
+    if (!paymentId && !subscription?.id) return;
     setAtualizandoId(p.id);
     try {
-      const { data, error } = await supabase.functions.invoke("asaas-get-payment", { body: { paymentId } });
-      if (error) throw new Error(error.message);
-      if ((data as any)?.error) throw new Error((data as any).error);
+      if (String(p.id).startsWith("batch:")) {
+        const { data, error } = await supabase.functions.invoke("asaas-get-payment", { body: { paymentId } });
+        if (error) throw new Error(error.message);
+        if ((data as any)?.error) throw new Error((data as any).error);
+      } else if (method === "credit_card" && subscription?.id) {
+        await manageAsaasSubscription({
+          proposalId: p.consulta_id,
+          mode: subscription.mode,
+          selectedFireInsuranceMode:
+            subscription.fire_insurance_payment_mode === "avista" ? "avista" : "embutido",
+          amount: Number(subscription.initial_amount || 0),
+          monthlyAmount: Number(subscription.monthly_amount || 0),
+          action: "refresh",
+        });
+      } else {
+        await managePersistedAsaasPayment({
+          invoiceId: p.id,
+          paymentId,
+          consultationId: p.consulta_id,
+          action: "refresh",
+        });
+      }
       await carregar();
       toast.success("Status atualizado.");
     } catch (e: any) {
       toast.error(e?.message || "Não foi possível consultar o pagamento agora.");
     } finally {
       setAtualizandoId(null);
+    }
+  };
+
+  const executarAcao = async (
+    p: any,
+    action:
+      | "resend_email"
+      | "resend_whatsapp"
+      | "reissue"
+      | "reissue_initial"
+      | "reissue_checkout"
+      | "cancel",
+  ) => {
+    if (String(p.id).startsWith("batch:")) {
+      toast.error("Use a gestão do lote consolidado para alterar essa cobrança.");
+      return;
+    }
+    if (
+      action === "cancel" &&
+      !window.confirm(
+        "Cancelar esta assinatura recorrente no Asaas? Novas mensalidades deixarão de ser geradas.",
+      )
+    ) {
+      return;
+    }
+    const key = `${p.id}:${action}`;
+    setAcaoId(key);
+    try {
+      const method = p.payment_method || p.asaas_payment?.payment_method;
+      const subscription = p.asaas_subscription;
+      if (method === "credit_card") {
+        if (action === "reissue") {
+          throw new Error("Segunda via não se aplica ao cartão recorrente.");
+        }
+        if (!subscription?.id || !subscription.mode) {
+          throw new Error("A assinatura recorrente ainda não está disponível.");
+        }
+        await manageAsaasSubscription({
+          proposalId: p.consulta_id,
+          mode: subscription.mode,
+          selectedFireInsuranceMode:
+            subscription.fire_insurance_payment_mode === "avista" ? "avista" : "embutido",
+          amount: Number(subscription.initial_amount || 0),
+          monthlyAmount: Number(subscription.monthly_amount || 0),
+          action,
+        });
+      } else {
+        if (
+          action === "reissue_initial" ||
+          action === "reissue_checkout" ||
+          action === "cancel"
+        ) {
+          throw new Error("Reemissão de Checkout se aplica somente ao cartão recorrente.");
+        }
+        await managePersistedAsaasPayment({
+          invoiceId: p.id,
+          paymentId: p.asaas_payment?.asaas_payment_id,
+          consultationId: p.consulta_id,
+          action,
+          paymentMethod: method === "pix" ? "pix" : "boleto",
+        });
+      }
+      await carregar();
+      toast.success(
+        action === "resend_email"
+          ? "Cobrança reenviada por e-mail."
+          : action === "resend_whatsapp"
+            ? "Cobrança reenviada por WhatsApp."
+            : action === "reissue_initial"
+              ? "Novo link inicial gerado e enviado."
+            : action === "reissue_checkout"
+              ? "Novo link de cadastro recorrente gerado e enviado."
+            : action === "cancel"
+              ? "Assinatura recorrente cancelada no Asaas."
+            : "Segunda via gerada.",
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível concluir a ação.");
+    } finally {
+      setAcaoId(null);
     }
   };
 
@@ -293,7 +485,16 @@ function FaturamentoAdminPage() {
             <TabsTrigger value="pagos">Pagos ({pagas.length})</TabsTrigger>
           </TabsList>
           <TabsContent value={tab} className="mt-6">
-            <TabelaFaturas loading={loading} parcelas={tabLista} atualizandoId={atualizandoId} onAtualizar={atualizarStatus} onCopiar={copiar} />
+            <TabelaFaturas
+              loading={loading}
+              parcelas={tabLista}
+              atualizandoId={atualizandoId}
+              acaoId={acaoId}
+              canManageBilling={canManageBilling}
+              onAtualizar={atualizarStatus}
+              onAcao={executarAcao}
+              onCopiar={copiar}
+            />
           </TabsContent>
         </Tabs>
 
@@ -400,13 +601,28 @@ function TabelaFaturas({
   loading,
   parcelas,
   atualizandoId,
+  acaoId,
+  canManageBilling,
   onAtualizar,
+  onAcao,
   onCopiar,
 }: {
   loading: boolean;
   parcelas: any[];
   atualizandoId: string | null;
+  acaoId: string | null;
+  canManageBilling: boolean;
   onAtualizar: (p: any) => void;
+  onAcao: (
+    p: any,
+    action:
+      | "resend_email"
+      | "resend_whatsapp"
+      | "reissue"
+      | "reissue_initial"
+      | "reissue_checkout"
+      | "cancel",
+  ) => void;
   onCopiar: (txt?: string | null) => void;
 }) {
   return (
@@ -427,6 +643,19 @@ function TabelaFaturas({
                 ? "bg-purple-50 text-purple-700 border-purple-200"
                 : "bg-neutral-50 text-neutral-500 border-neutral-200";
             const imovel = p.consulta?.imovel;
+            const billing = dadosCobranca(p);
+            const policy = apoliceDaFatura(p);
+            const isBatch = String(p.id).startsWith("batch:");
+            const isConsolidatedItem =
+              isBatch || p.payment_responsible === "agency" || p.status === "awaiting_consolidation";
+            const managedIndividual = !isBatch && isConsolidatedItem;
+            const busy = atualizandoId === p.id || acaoId?.startsWith(`${p.id}:`);
+            const initialLinkExpired =
+              billing.method === "credit_card" &&
+              ["cancelled", "expired"].includes(p.asaas_subscription?.initial_checkout_status);
+            const recurringLinkExpired =
+              billing.method === "credit_card" &&
+              ["cancelled", "expired"].includes(p.asaas_subscription?.checkout_status);
             return (
               <div key={p.id} className="p-4">
                 <div className="flex items-start justify-between gap-3">
@@ -447,16 +676,32 @@ function TabelaFaturas({
                   <Badge className={respCls}>{respLabel}</Badge>
                   <StatusFat status={p.status} />
                 </div>
-                <div className="mt-3 flex items-center gap-1 border-t border-neutral-100 pt-3">
-                  {p.boleto_url && (
-                    <a href={p.boleto_url} target="_blank" rel="noreferrer">
-                      <Button size="sm" variant="ghost"><FileText size={14} /></Button>
+                <div className="mt-3 space-y-1 border-t border-neutral-100 pt-3 text-xs text-neutral-600">
+                  <p><strong>Meio:</strong> {metodoLabel(billing.method)}</p>
+                  <p><strong>Imobiliária:</strong> {p.agency_name || policy?.imobiliaria?.nome || "Não vinculada"}</p>
+                  <p><strong>Apólice:</strong> {policy?.numero || "Aguardando emissão"}</p>
+                  <p><strong>ID Asaas:</strong> {billing.providerId || "Aguardando materialização"}</p>
+                  {billing.subscriptionStatus && <p><strong>Assinatura:</strong> {statusPagamentoLabel(billing.subscriptionStatus)}</p>}
+                  {p.asaas_subscription?.checkout_status && <p><strong>Cadastro recorrente:</strong> {statusPagamentoLabel(p.asaas_subscription.checkout_status)}</p>}
+                  <p><strong>Confirmado em:</strong> {formatDataHora(billing.confirmedAt)}</p>
+                  <p>
+                    <strong>Histórico:</strong> {billing.notificationCount} notificação(ões)
+                    {billing.latestNotification
+                      ? ` · última ${billing.latestNotification.channel || "tentativa"}: ${billing.latestNotification.status || "registrada"}`
+                      : ""}
+                  </p>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-1 border-t border-neutral-100 pt-3">
+                  {!managedIndividual && billing.link && (
+                    <a href={billing.link} target="_blank" rel="noreferrer">
+                      <Button size="sm" variant="ghost" title="Abrir cobrança"><ExternalLink size={14} /></Button>
                     </a>
                   )}
-                  {p.linha_digitavel && (
-                    <Button size="sm" variant="ghost" onClick={() => onCopiar(p.linha_digitavel)}><Copy size={14} /></Button>
+                  {!managedIndividual && billing.copyValue && (
+                    <Button size="sm" variant="ghost" onClick={() => onCopiar(billing.copyValue)} title="Copiar código"><Copy size={14} /></Button>
                   )}
-                  {p.asaas_payment?.asaas_payment_id && (
+                  {canManageBilling && !isConsolidatedItem &&
+                    (p.asaas_payment?.asaas_payment_id || p.asaas_subscription?.id) && (
                     <Button
                       size="sm"
                       variant="outline"
@@ -466,6 +711,25 @@ function TabelaFaturas({
                     >
                       <RefreshCw size={14} className={atualizandoId === p.id ? "animate-spin" : ""} />
                     </Button>
+                  )}
+                  {canManageBilling && !isConsolidatedItem && (
+                    <>
+                      {!initialLinkExpired && !recurringLinkExpired && <Button size="sm" variant="outline" disabled={busy} onClick={() => onAcao(p, "resend_email")} title="Reenviar por e-mail"><Mail size={14} /></Button>}
+                      {!initialLinkExpired && !recurringLinkExpired && <Button size="sm" variant="outline" disabled={busy} onClick={() => onAcao(p, "resend_whatsapp")} title="Reenviar por WhatsApp"><MessageCircle size={14} /></Button>}
+                      {initialLinkExpired && (
+                        <Button size="sm" variant="outline" disabled={busy} onClick={() => onAcao(p, "reissue_initial")} title="Gerar novo link inicial"><RotateCcw size={14} /></Button>
+                      )}
+                      {recurringLinkExpired && (
+                        <Button size="sm" variant="outline" disabled={busy} onClick={() => onAcao(p, "reissue_checkout")} title="Gerar novo link de cadastro"><RotateCcw size={14} /></Button>
+                      )}
+                      {billing.method === "credit_card" &&
+                        p.asaas_subscription?.status !== "cancelled" && (
+                          <Button size="sm" variant="outline" disabled={busy} onClick={() => onAcao(p, "cancel")} title="Cancelar recorrência"><XCircle size={14} /></Button>
+                        )}
+                      {billing.method !== "credit_card" && isReissuablePaymentStatus(p.status) && (
+                        <Button size="sm" variant="outline" disabled={busy} onClick={() => onAcao(p, "reissue")} title="Gerar segunda via"><RotateCcw size={14} /></Button>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -485,15 +749,16 @@ function TabelaFaturas({
             <TableHead>Valor</TableHead>
             <TableHead>Vencimento</TableHead>
             <TableHead>Responsável pelo pagamento</TableHead>
+            <TableHead>Cobrança</TableHead>
             <TableHead>Status</TableHead>
             <TableHead className="pr-6 text-right">Ações</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {loading ? (
-            <TableRow><TableCell colSpan={8} className="text-center py-16 text-neutral-400">Carregando...</TableCell></TableRow>
+            <TableRow><TableCell colSpan={9} className="text-center py-16 text-neutral-400">Carregando...</TableCell></TableRow>
           ) : !parcelas.length ? (
-            <TableRow><TableCell colSpan={8} className="text-center py-16 text-neutral-500">Nenhuma parcela no período.</TableCell></TableRow>
+            <TableRow><TableCell colSpan={9} className="text-center py-16 text-neutral-500">Nenhuma parcela no período.</TableCell></TableRow>
           ) : parcelas.map(p => {
             const resp = p.payment_responsible;
             const respLabel = resp === "agency" ? "Imobiliária" : resp === "tenant" ? "Inquilino" : "—";
@@ -503,6 +768,19 @@ function TabelaFaturas({
                 ? "bg-purple-50 text-purple-700 border-purple-200"
                 : "bg-neutral-50 text-neutral-500 border-neutral-200";
             const imovel = p.consulta?.imovel;
+            const billing = dadosCobranca(p);
+            const policy = apoliceDaFatura(p);
+            const isBatch = String(p.id).startsWith("batch:");
+            const isConsolidatedItem =
+              isBatch || p.payment_responsible === "agency" || p.status === "awaiting_consolidation";
+            const managedIndividual = !isBatch && isConsolidatedItem;
+            const busy = atualizandoId === p.id || acaoId?.startsWith(`${p.id}:`);
+            const initialLinkExpired =
+              billing.method === "credit_card" &&
+              ["cancelled", "expired"].includes(p.asaas_subscription?.initial_checkout_status);
+            const recurringLinkExpired =
+              billing.method === "credit_card" &&
+              ["cancelled", "expired"].includes(p.asaas_subscription?.checkout_status);
             return (
             <TableRow key={p.id}>
               <TableCell className="px-6">
@@ -514,17 +792,33 @@ function TabelaFaturas({
               <TableCell className="font-semibold">{brl(p.valor)}</TableCell>
               <TableCell className="text-xs">{new Date(p.vencimento).toLocaleDateString("pt-BR")}</TableCell>
               <TableCell><Badge className={respCls}>{respLabel}</Badge></TableCell>
+              <TableCell className="min-w-[210px] text-xs">
+                <p className="font-semibold">{metodoLabel(billing.method)}</p>
+                <p>Imobiliária: {p.agency_name || policy?.imobiliaria?.nome || "não vinculada"}</p>
+                <p>Apólice: {policy?.numero || "aguardando"}</p>
+                <p>ID Asaas: {billing.providerId || "aguardando"}</p>
+                {billing.subscriptionStatus && <p>Assinatura: {statusPagamentoLabel(billing.subscriptionStatus)}</p>}
+                {p.asaas_subscription?.checkout_status && <p>Cadastro recorrente: {statusPagamentoLabel(p.asaas_subscription.checkout_status)}</p>}
+                <p>Confirmação: {formatDataHora(billing.confirmedAt)}</p>
+                <p>
+                  Notificações: {billing.notificationCount}
+                  {billing.latestNotification
+                    ? ` · ${billing.latestNotification.channel || "tentativa"}/${billing.latestNotification.status || "registrada"}`
+                    : ""}
+                </p>
+              </TableCell>
               <TableCell><StatusFat status={p.status} /></TableCell>
               <TableCell className="pr-6 text-right space-x-1 whitespace-nowrap">
-                {p.boleto_url && (
-                  <a href={p.boleto_url} target="_blank" rel="noreferrer">
-                    <Button size="sm" variant="ghost"><FileText size={14} /></Button>
+                {!managedIndividual && billing.link && (
+                  <a href={billing.link} target="_blank" rel="noreferrer">
+                    <Button size="sm" variant="ghost" title="Abrir cobrança"><ExternalLink size={14} /></Button>
                   </a>
                 )}
-                {p.linha_digitavel && (
-                  <Button size="sm" variant="ghost" onClick={() => onCopiar(p.linha_digitavel)}><Copy size={14} /></Button>
+                {!managedIndividual && billing.copyValue && (
+                  <Button size="sm" variant="ghost" onClick={() => onCopiar(billing.copyValue)} title="Copiar código"><Copy size={14} /></Button>
                 )}
-                {p.asaas_payment?.asaas_payment_id && (
+                {canManageBilling && !isConsolidatedItem &&
+                  (p.asaas_payment?.asaas_payment_id || p.asaas_subscription?.id) && (
                   <Button
                     size="sm"
                     variant="outline"
@@ -534,6 +828,25 @@ function TabelaFaturas({
                   >
                     <RefreshCw size={14} className={atualizandoId === p.id ? "animate-spin" : ""} />
                   </Button>
+                )}
+                {canManageBilling && !isConsolidatedItem && (
+                  <>
+                    {!initialLinkExpired && !recurringLinkExpired && <Button size="sm" variant="outline" disabled={busy} onClick={() => onAcao(p, "resend_email")} title="Reenviar por e-mail"><Mail size={14} /></Button>}
+                    {!initialLinkExpired && !recurringLinkExpired && <Button size="sm" variant="outline" disabled={busy} onClick={() => onAcao(p, "resend_whatsapp")} title="Reenviar por WhatsApp"><MessageCircle size={14} /></Button>}
+                    {initialLinkExpired && (
+                      <Button size="sm" variant="outline" disabled={busy} onClick={() => onAcao(p, "reissue_initial")} title="Gerar novo link inicial"><RotateCcw size={14} /></Button>
+                    )}
+                    {recurringLinkExpired && (
+                      <Button size="sm" variant="outline" disabled={busy} onClick={() => onAcao(p, "reissue_checkout")} title="Gerar novo link de cadastro"><RotateCcw size={14} /></Button>
+                    )}
+                    {billing.method === "credit_card" &&
+                      p.asaas_subscription?.status !== "cancelled" && (
+                        <Button size="sm" variant="outline" disabled={busy} onClick={() => onAcao(p, "cancel")} title="Cancelar recorrência"><XCircle size={14} /></Button>
+                      )}
+                    {billing.method !== "credit_card" && isReissuablePaymentStatus(p.status) && (
+                      <Button size="sm" variant="outline" disabled={busy} onClick={() => onAcao(p, "reissue")} title="Gerar segunda via"><RotateCcw size={14} /></Button>
+                    )}
+                  </>
                 )}
               </TableCell>
             </TableRow>

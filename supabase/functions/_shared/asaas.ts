@@ -2,6 +2,10 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 import { renderNoxEmail } from "./email-branding.ts";
 import { sendZApiText } from "./zapi.ts";
 import { corsHeaders as secureCorsHeaders } from "./http-security.ts";
+import {
+  calculateFireInsuranceAmounts,
+  shouldAttemptNotification,
+} from "./billing-state.ts";
 
 export type PaymentMethod = "pix" | "boleto" | "credit_card";
 export type FireMode = "avista" | "embutido";
@@ -215,10 +219,11 @@ export function calculateExpectedPayment(consulta: any, fireMode: FireMode) {
         )
       ? "comercial"
       : "residencial";
-  const incendioAnual = toMoney(
-    aluguel * (calcularPercentualIncendio(tipoImovel, aluguel) / 100),
-  );
-  const incendioMensal = toMoney(incendioAnual / 12);
+  const { annual: incendioAnual, monthly: incendioMensal } =
+    calculateFireInsuranceAmounts(
+      aluguel,
+      calcularPercentualIncendio(tipoImovel, aluguel),
+    );
   const mensalidadeFinal = premioMensal +
     pinturaMensal +
     (fireMode === "embutido" ? incendioMensal : 0);
@@ -242,9 +247,13 @@ export async function asaasFetch(path: string, init: RequestInit = {}) {
   const base = Deno.env.get("ASAAS_API_BASE_URL") || "https://api.asaas.com/v3";
   const res = await fetch(`${base}${path}`, {
     ...init,
+    // A criacao de assinatura com cartao pode levar mais de um minuto no
+    // Asaas. Timeout explicito evita conexao infinita sem fazer retry cego.
+    signal: init.signal || AbortSignal.timeout(65_000),
     headers: {
       access_token: env("ASAAS_API_KEY"),
       "Content-Type": "application/json",
+      "User-Agent": "NOX-Fianca/contract-billing",
       ...(init.headers || {}),
     },
   });
@@ -259,6 +268,46 @@ export async function asaasFetch(path: string, init: RequestInit = {}) {
   }
   if (!res.ok) throw new AsaasApiError(res.status, body);
   return body as any;
+}
+
+export function uniqueProviderResourceByExternalReference(
+  response: any,
+  externalReference: string,
+) {
+  const rows = Array.isArray(response?.data)
+    ? response.data
+    : Array.isArray(response)
+    ? response
+    : [];
+  const exact = rows.filter((row: any) =>
+    String(row?.externalReference || "") === externalReference
+  );
+  if (exact.length > 1) {
+    throw new HttpError(
+      409,
+      "Mais de um recurso foi encontrado para a mesma referencia. A conciliacao requer revisao manual.",
+    );
+  }
+  return exact[0] || null;
+}
+
+/**
+ * O Asaas nao oferece uma chave de idempotencia de escrita para esses POSTs.
+ * A referencia externa deterministica permite descobrir o recurso aceito
+ * quando a resposta ou o checkpoint local falham, sem repetir a cobranca.
+ */
+export async function findAsaasPaymentByExternalReference(externalReference: string) {
+  const response = await asaasFetch(
+    `/payments?externalReference=${encodeURIComponent(externalReference)}&limit=10`,
+  );
+  return uniqueProviderResourceByExternalReference(response, externalReference);
+}
+
+export async function findAsaasSubscriptionByExternalReference(externalReference: string) {
+  const response = await asaasFetch(
+    `/subscriptions?externalReference=${encodeURIComponent(externalReference)}&limit=10`,
+  );
+  return uniqueProviderResourceByExternalReference(response, externalReference);
 }
 
 export function sanitizeAsaasResponse(raw: unknown): unknown {
@@ -358,6 +407,9 @@ export type PaymentRecipient = {
   recipientName: string | null;
   recipientEmail: string | null;
   recipientPhone: string | null;
+  recipientDocument?: string | null;
+  recipientAddress?: Record<string, string | null> | null;
+  agencyId?: string | null;
 };
 
 export function resolvePaymentRecipient(consulta: any): PaymentRecipient {
@@ -369,7 +421,8 @@ export function resolvePaymentRecipient(consulta: any): PaymentRecipient {
     return {
       paymentResponsible: "agency",
       recipientType: "user",
-      recipientUserId: consulta?.profile_id_solicitante || null,
+      recipientUserId: consulta?.billing_responsible_user_id ||
+        consulta?.profile_id_solicitante || null,
       recipientTenantId: null,
       recipientName: responsavel?.nome || null,
       recipientEmail: responsavel?.email || null,
@@ -386,6 +439,121 @@ export function resolvePaymentRecipient(consulta: any): PaymentRecipient {
     recipientEmail: consulta?.tenant_email || null,
     recipientPhone: consulta?.tenant_telefone || null,
   };
+}
+
+/**
+ * Resolve o pagador a partir do contrato, inclusive quando o solicitante e um
+ * corretor vinculado. Nao usa o usuario logado e nunca troca silenciosamente
+ * para o inquilino quando a imobiliaria esta configurada como responsavel.
+ */
+export async function resolvePaymentRecipientFromContract(
+  supabase: any,
+  consulta: any,
+): Promise<PaymentRecipient> {
+  const base = resolvePaymentRecipient(consulta);
+  if (base.paymentResponsible === "tenant") {
+    return {
+      ...base,
+      recipientDocument: consulta?.tenant_document || consulta?.documento ||
+        consulta?.inquilinos?.cpf || consulta?.inquilinos?.cnpj || null,
+      recipientAddress: {
+        address: consulta?.imovel_endereco || consulta?.imoveis?.endereco || null,
+        addressNumber: consulta?.imovel_numero || consulta?.imoveis?.numero || null,
+        complement: consulta?.imovel_complemento || consulta?.imoveis?.complemento || null,
+        province: consulta?.imovel_bairro || consulta?.imoveis?.bairro || null,
+        postalCode: consulta?.imovel_cep || consulta?.imoveis?.cep || null,
+      },
+    };
+  }
+
+  let agencyUserId = consulta?.billing_responsible_user_id || null;
+  let requesterProfile: any = consulta?.responsavel_profile || null;
+  if (!requesterProfile && consulta?.profile_id_solicitante) {
+    const result = await supabase
+      .from("profiles")
+      .select("id, nome, email, telefone, cnpj, role")
+      .eq("id", consulta.profile_id_solicitante)
+      .maybeSingle();
+    requesterProfile = result.data;
+  }
+  if (!agencyUserId && requesterProfile?.role === "imobiliaria") {
+    agencyUserId = requesterProfile.id || consulta?.profile_id_solicitante || null;
+  }
+  if (!agencyUserId && consulta?.profile_id_solicitante) {
+    const { data } = await supabase.rpc("imobiliaria_profile_id_do_corretor", {
+      p_profile_id_corretor: consulta.profile_id_solicitante,
+    });
+    agencyUserId = data || null;
+  }
+
+  let agencyProfile: any = null;
+  if (agencyUserId) {
+    const result = await supabase
+      .from("profiles")
+      .select("id, nome, email, telefone, cnpj, role")
+      .eq("id", agencyUserId)
+      .maybeSingle();
+    agencyProfile = result.data;
+  }
+
+  let agency: any = null;
+  if (consulta?.profile_id_solicitante) {
+    const brokerResult = await supabase
+      .from("corretores")
+      .select("imobiliaria_id")
+      .eq("profile_id", consulta.profile_id_solicitante)
+      .maybeSingle();
+    if (brokerResult.data?.imobiliaria_id) {
+      const agencyResult = await supabase
+        .from("imobiliarias")
+        .select("*")
+        .eq("id", brokerResult.data.imobiliaria_id)
+        .maybeSingle();
+      agency = agencyResult.data;
+    }
+  }
+  if (!agency && agencyProfile?.email) {
+    const agencyResult = await supabase
+      .from("imobiliarias")
+      .select("*")
+      .ilike("contato_email", agencyProfile.email)
+      .maybeSingle();
+    agency = agencyResult.data;
+  }
+
+  const resolved: PaymentRecipient = {
+    paymentResponsible: "agency",
+    recipientType: "user",
+    recipientUserId: agencyUserId,
+    recipientTenantId: null,
+    recipientName: agency?.razao_social || agency?.nome_fantasia ||
+      agencyProfile?.nome || null,
+    recipientEmail: agency?.contato_email || agencyProfile?.email || null,
+    recipientPhone: agency?.contato_telefone || agencyProfile?.telefone || null,
+    recipientDocument: agency?.cnpj || agencyProfile?.cnpj || null,
+    recipientAddress: {
+      address: agency?.endereco || null,
+      addressNumber: agency?.numero || null,
+      complement: agency?.complemento || null,
+      province: agency?.bairro || null,
+      postalCode: agency?.cep || null,
+    },
+    agencyId: agency?.id || null,
+  };
+
+  if (!resolved.recipientUserId || !resolved.recipientDocument) {
+    throw new HttpError(
+      409,
+      "A imobiliaria responsavel precisa ter conta, CNPJ e contato financeiro cadastrados.",
+    );
+  }
+  if (consulta?.billing_responsible_user_id !== resolved.recipientUserId) {
+    await supabase
+      .from("consultas_credito")
+      .update({ billing_responsible_user_id: resolved.recipientUserId })
+      .eq("id", consulta.id);
+  }
+  return resolved;
 }
 
 // Busca o QR Code Pix de uma cobranca ja criada no Asaas e persiste no banco.
@@ -446,6 +614,7 @@ export async function sendPaymentEmail(params: {
   boletoUrl?: string | null;
   boletoBarcode?: string | null;
   contratoRef?: string | null;
+  cardRegistration?: boolean;
 }) {
   const apiKey = Deno.env.get("RESEND_API_KEY");
   if (!apiKey || !params.to) {
@@ -471,11 +640,26 @@ export async function sendPaymentEmail(params: {
     ? "Boleto"
     : "Cartão de crédito";
 
-  const assunto = params.tipo === "criado"
+  const assunto = params.cardRegistration
+    ? "Autorize o cartão da mensalidade — NOX Fiança"
+    : params.tipo === "criado"
     ? "Pagamento gerado — NOX Fiança"
     : "Pagamento confirmado — NOX Fiança";
 
-  const conteudo = params.tipo === "criado"
+  const conteudo = params.cardRegistration
+    ? `
+        <p>Olá, ${params.nome}.</p>
+        <p>Falta autorizar o cartão que será usado nas mensalidades recorrentes da NOX Fiança.</p>
+        <p>
+          ${params.contratoRef ? `<strong>Contrato:</strong> ${params.contratoRef}<br/>` : ""}
+          <strong>Mensalidade:</strong> ${valorFmt}<br/>
+          ${params.vencimento ? `<strong>Primeira competência recorrente:</strong> ${params.vencimento}<br/>` : ""}
+          <strong>Status:</strong> Aguardando cadastro do cartão
+        </p>
+        ${params.boletoUrl ? `<p><a href="${params.boletoUrl}">Cadastrar cartão com segurança</a></p>` : ""}
+        <p>A cobrança inicial é uma operação separada e pode ser acompanhada na sua conta.</p>
+      `
+    : params.tipo === "criado"
     ? `
         <p>Olá, ${params.nome}.</p>
         <p>Seu pagamento da NOX Fiança foi gerado com sucesso.</p>
@@ -544,7 +728,9 @@ export async function sendPaymentEmail(params: {
         subject: assunto,
         html: renderNoxEmail(
           conteudo,
-          params.tipo === "criado"
+          params.cardRegistration
+            ? "Autorize o cartão das mensalidades recorrentes."
+            : params.tipo === "criado"
             ? "Seu pagamento da NOX Fiança foi gerado."
             : "Seu pagamento da NOX Fiança foi confirmado.",
         ),
@@ -729,7 +915,10 @@ export function formatDateBr(isoDate: string) {
 // sem a distincao a-vista/embutido de calculateExpectedPayment (que e so pra
 // cobranca inicial de ativacao). Nao inclui taxa de ativacao: essa e um
 // valor avulso, nao deve ser diluida nas parcelas recorrentes.
-export function calculateMonthlyInstallmentValue(consulta: any) {
+export function calculateMonthlyInstallmentValue(
+  consulta: any,
+  fireMode: FireMode = "embutido",
+) {
   const imovel = consulta?.imoveis || {};
   const docs = typeof consulta?.documentos === "object" && consulta?.documentos
     ? consulta.documentos
@@ -762,11 +951,13 @@ export function calculateMonthlyInstallmentValue(consulta: any) {
         )
       ? "comercial"
       : "residencial";
-  const incendioAnual = toMoney(
-    aluguel * (calcularPercentualIncendio(tipoImovel, aluguel) / 100),
+  const { monthly: incendioMensal } = calculateFireInsuranceAmounts(
+    aluguel,
+    calcularPercentualIncendio(tipoImovel, aluguel),
   );
-  const incendioMensal = toMoney(incendioAnual / 12);
-  return toMoney(premioMensal + pinturaMensal + incendioMensal);
+  return toMoney(
+    premioMensal + pinturaMensal + (fireMode === "embutido" ? incendioMensal : 0),
+  );
 }
 
 export type InstallmentScheduleItem = {
@@ -931,15 +1122,14 @@ export async function wasNotificationSent(
 ) {
   let query = supabase
     .from("financial_notifications")
-    .select("id")
+    .select("id, status")
     .eq("channel", params.channel)
-    .eq("notification_type", params.notificationType)
-    .in("status", ["queued", "sent", "delivered", "read"]);
+    .eq("notification_type", params.notificationType);
   query = params.invoiceId
     ? query.eq("invoice_id", params.invoiceId)
     : query.eq("batch_id", params.batchId);
   const { data } = await query.maybeSingle();
-  return !!data;
+  return !!data && !shouldAttemptNotification(data.status);
 }
 
 export async function logFinancialNotification(
@@ -1014,6 +1204,9 @@ export async function cancelAsaasPayment(paymentId: string) {
     await asaasFetch(`/payments/${paymentId}`, { method: "DELETE" });
     return { cancelled: true };
   } catch (error) {
+    if (error instanceof AsaasApiError && error.status === 404) {
+      return { cancelled: true, alreadyAbsent: true };
+    }
     console.error("[asaas] falha ao cancelar cobranca", {
       paymentId,
       message: error instanceof Error ? error.message : String(error),

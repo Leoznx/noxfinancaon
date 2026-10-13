@@ -312,7 +312,10 @@ export function WithdrawalRequestDialog({
             <div className="grid gap-5 sm:grid-cols-[0.8fr_1.2fr]">
               <div className="space-y-2">
                 <Label htmlFor="withdrawal-pix-type">Tipo da chave Pix</Label>
-                <Select value={pixKeyType} onValueChange={handlePixKeyTypeChange}>
+                <Select
+                  value={pixKeyType}
+                  onValueChange={(value) => handlePixKeyTypeChange(value as PixKeyType)}
+                >
                   <SelectTrigger id="withdrawal-pix-type" className="h-11">
                     <SelectValue placeholder="Selecione" />
                   </SelectTrigger>

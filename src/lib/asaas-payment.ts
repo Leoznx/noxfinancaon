@@ -1,14 +1,55 @@
 export type AsaasPaymentMethod = "pix" | "boleto" | "credit_card";
 
+export type CheckoutIntent = "pay_now" | "pay_later";
+export type CardSetupMode = "direct" | "checkout";
+export type PaymentFlowStatus =
+  | "pending"
+  | "overdue"
+  | "confirmed"
+  | "cancelled"
+  | "refunded"
+  | "awaiting_consolidation";
+export type SignatureFlowStatus = "pending" | "sent" | "signed" | "error";
+export type PolicyFlowStatus = "draft" | "issued_pending" | "active" | "cancelled";
+export type NotificationDeliveryStatus = "queued" | "sent" | "failed" | "skipped";
+
+export type NotificationDelivery = {
+  status: NotificationDeliveryStatus;
+  sentAt?: string | null;
+  error?: string | null;
+};
+
+export type PaymentRecipient = {
+  responsible: "agency" | "tenant" | null;
+  type: "user" | "tenant" | null;
+  userId?: string | null;
+  tenantId?: string | null;
+  name?: string | null;
+  emailMasked: string | null;
+  phoneMasked: string | null;
+};
+
+export type PaymentNotifications = {
+  email: NotificationDelivery;
+  whatsapp: NotificationDelivery;
+};
+
 export type NormalizedAsaasPayment = {
   success: boolean;
   paymentId: string | null;
+  localPaymentId?: string | null;
+  invoiceId?: string | null;
   externalReference: string | null;
   status: string;
+  paymentStatus?: PaymentFlowStatus;
   paymentMethod: AsaasPaymentMethod;
   amount: number;
   dueDate: string | null;
   invoiceUrl?: string | null;
+  deferPayment?: boolean;
+  signatureStatus?: SignatureFlowStatus;
+  policyStatus?: PolicyFlowStatus;
+  selectedFireInsuranceMode?: "avista" | "embutido" | null;
   pix?: {
     qrCode: string;
     qrCodeBase64: string;
@@ -19,13 +60,141 @@ export type NormalizedAsaasPayment = {
     pdfUrl: string;
     dueDate: string | null;
   } | null;
-  recipient?: {
-    responsible: "agency" | "tenant" | null;
-    type: "user" | "tenant" | null;
-    emailMasked: string | null;
-    phoneMasked: string | null;
-  } | null;
+  recipient?: PaymentRecipient | null;
+  notifications?: PaymentNotifications | null;
 };
+
+export type NormalizedAsaasSubscription = {
+  success: boolean;
+  mode: CardSetupMode;
+  localSubscriptionId: string;
+  subscriptionId: string | null;
+  checkoutId: string | null;
+  checkoutUrl: string | null;
+  initialCheckoutStatus: "pending" | "paid" | "cancelled" | "expired" | "error";
+  checkoutStatus: "pending" | "paid" | "cancelled" | "expired" | "error";
+  status: "pending" | "active" | "suspended" | "cancelled" | "error";
+  cardRegistrationStatus: "not_required" | "awaiting_card" | "registered" | "failed";
+  paymentStatus: "pending" | "processing" | "confirmed" | "failed" | "awaiting_initial_payment";
+  initialAmount: number;
+  monthlyAmount: number;
+  nextDueDate: string | null;
+  selectedFireInsuranceMode?: "avista" | "embutido" | null;
+  initialPayment: {
+    paymentId: string | null;
+    invoiceId: string | null;
+    status: string;
+    invoiceUrl: string | null;
+    pix?: NormalizedAsaasPayment["pix"];
+    boleto?: NormalizedAsaasPayment["boleto"];
+  } | null;
+  split: {
+    required: boolean;
+    reason?: string;
+    initialPaymentUrl?: string | null;
+  };
+  recipient?: PaymentRecipient | null;
+  notifications?: PaymentNotifications | null;
+};
+
+export function checkoutActionsForMethod(method: AsaasPaymentMethod | "") {
+  return {
+    canPayNow: method === "pix" || method === "boleto" || method === "credit_card",
+    canPayLater: method === "pix" || method === "boleto",
+  };
+}
+
+export function isReissuablePaymentStatus(status: unknown) {
+  return ["pending", "processing", "overdue", "risk_analysis", "approved"].includes(
+    String(status || "").toLowerCase(),
+  );
+}
+
+export function shouldCollectCardData(mode: CardSetupMode | null) {
+  return mode === "direct";
+}
+
+export function hasIncompleteInstallmentPlan(
+  invoices: Array<{
+    id?: string | null;
+    billing_key?: string | null;
+    charge_kind?: string | null;
+    installment_total?: number | string | null;
+    payment_method?: string | null;
+    components?: { contractMonths?: number | string | null } | null;
+  }>,
+) {
+  const initial = invoices.find(
+    (invoice) =>
+      invoice.charge_kind === "initial" ||
+      String(invoice.billing_key || "").includes(":initial:"),
+  );
+  if (!initial || (initial.payment_method !== "pix" && initial.payment_method !== "boleto")) {
+    return false;
+  }
+  const expected = Number(initial.installment_total || initial.components?.contractMonths || 0);
+  if (expected <= 1) return false;
+  const materialized = new Set(
+    invoices
+      .filter(
+        (invoice) =>
+          invoice.charge_kind === "initial" ||
+          invoice.charge_kind === "monthly" ||
+          String(invoice.billing_key || "").includes(":initial:") ||
+          String(invoice.billing_key || "").includes(":monthly:"),
+      )
+      .map((invoice) => invoice.billing_key || invoice.id),
+  ).size;
+  return materialized < expected;
+}
+
+export function paymentLink(resultado: NormalizedAsaasPayment | null | undefined) {
+  if (!resultado) return null;
+  return resultado.invoiceUrl || resultado.boleto?.pdfUrl || null;
+}
+
+export function policyStatusLabel(status?: PolicyFlowStatus | null) {
+  const labels: Record<PolicyFlowStatus, string> = {
+    draft: "Rascunho",
+    issued_pending: "Emitida, aguardando requisitos",
+    active: "Ativa",
+    cancelled: "Cancelada",
+  };
+  return status ? labels[status] : "Rascunho";
+}
+
+export function signatureStatusLabel(status?: SignatureFlowStatus | null) {
+  const labels: Record<SignatureFlowStatus, string> = {
+    pending: "Pendente",
+    sent: "Enviada",
+    signed: "Assinada",
+    error: "Falha no envio",
+  };
+  return status ? labels[status] : "Pendente";
+}
+
+export function subscriptionStatusLabel(status?: NormalizedAsaasSubscription["status"] | null) {
+  const labels: Record<NormalizedAsaasSubscription["status"], string> = {
+    pending: "Pendente",
+    active: "Ativa",
+    suspended: "Suspensa",
+    cancelled: "Cancelada",
+    error: "Com erro",
+  };
+  return status ? labels[status] : "Pendente";
+}
+
+export function cardRegistrationStatusLabel(
+  status?: NormalizedAsaasSubscription["cardRegistrationStatus"] | null,
+) {
+  const labels: Record<NormalizedAsaasSubscription["cardRegistrationStatus"], string> = {
+    not_required: "Cartão processado diretamente",
+    awaiting_card: "Aguardando cadastro do cartão",
+    registered: "Cartão cadastrado e autorizado",
+    failed: "Cadastro do cartão não concluído",
+  };
+  return status ? labels[status] : "Aguardando cadastro do cartão";
+}
 
 type EdgeFunctionErrorPayload = {
   error?: unknown;
@@ -141,7 +310,13 @@ export function statusPagamentoLabel(status?: string | null) {
 }
 
 export function isPagamentoConcluido(status?: string | null) {
-  return status === "confirmed" || status === "paid" || status === "paid_via_consolidated";
+  return (
+    status === "confirmed" ||
+    status === "paid" ||
+    status === "received" ||
+    status === "received_in_cash" ||
+    status === "paid_via_consolidated"
+  );
 }
 
 export const MESES_PT = [

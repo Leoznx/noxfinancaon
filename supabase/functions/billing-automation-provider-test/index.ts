@@ -14,6 +14,26 @@ import {
 } from "../_shared/zapi.ts";
 import { dispatchD4SignContract } from "../_shared/d4sign.ts";
 
+const REQUIRED_ASAAS_EVENTS = [
+  "PAYMENT_CREATED",
+  "PAYMENT_UPDATED",
+  "PAYMENT_CONFIRMED",
+  "PAYMENT_RECEIVED",
+  "PAYMENT_OVERDUE",
+  "PAYMENT_DELETED",
+  "PAYMENT_REFUNDED",
+  "PAYMENT_PARTIALLY_REFUNDED",
+  "PAYMENT_CREDIT_CARD_CAPTURE_REFUSED",
+  "SUBSCRIPTION_CREATED",
+  "SUBSCRIPTION_UPDATED",
+  "SUBSCRIPTION_INACTIVATED",
+  "SUBSCRIPTION_DELETED",
+  "CHECKOUT_CREATED",
+  "CHECKOUT_PAID",
+  "CHECKOUT_CANCELED",
+  "CHECKOUT_EXPIRED",
+] as const;
+
 async function getD4SignConnectionStatus() {
   const token = Deno.env.get("D4SIGN_TOKEN_API")?.trim() || "";
   const cryptKey = Deno.env.get("D4SIGN_CRYPT_KEY")?.trim() || "";
@@ -80,15 +100,19 @@ async function auditAsaasPayments() {
   if (error) throw error;
 
   const webhookResponse = await asaasFetch("/webhooks");
-  const webhooks = (webhookResponse?.data || []).map((webhook: any) => ({
-    id: webhook.id,
-    name: webhook.name,
-    url: webhook.url,
-    enabled: webhook.enabled,
-    interrupted: webhook.interrupted,
-    sendType: webhook.sendType,
-    events: Array.isArray(webhook.events) ? webhook.events : [],
-  }));
+  const webhooks = (webhookResponse?.data || []).map((webhook: any) => {
+    const events = Array.isArray(webhook.events) ? webhook.events : [];
+    return {
+      id: webhook.id,
+      name: webhook.name,
+      url: webhook.url,
+      enabled: webhook.enabled,
+      interrupted: webhook.interrupted,
+      sendType: webhook.sendType,
+      events,
+      missingRequiredEvents: REQUIRED_ASAAS_EVENTS.filter((event) => !events.includes(event)),
+    };
+  });
 
   const rows: Array<Record<string, unknown>> = [];
   for (const payment of payments || []) {
@@ -158,6 +182,10 @@ async function configureAsaasWebhook() {
     /nox\s*fian[cç]a/i.test(String(webhook?.name || ""))
   );
   if (!existing?.id) throw new Error("asaas_webhook_not_found");
+  const events = [...new Set([
+    ...(Array.isArray(existing.events) ? existing.events : []),
+    ...REQUIRED_ASAAS_EVENTS,
+  ])];
 
   const result = await asaasFetch(
     "/webhooks/" + encodeURIComponent(existing.id),
@@ -170,7 +198,7 @@ async function configureAsaasWebhook() {
         interrupted: false,
         sendType: existing.sendType || "SEQUENTIALLY",
         authToken: webhookToken,
-        events: Array.isArray(existing.events) ? existing.events : [],
+        events,
       }),
     },
   );
@@ -181,7 +209,7 @@ async function configureAsaasWebhook() {
     enabled: result?.enabled === true,
     interrupted: result?.interrupted === true,
     sendType: result?.sendType || existing.sendType,
-    events: Array.isArray(result?.events) ? result.events : existing.events,
+    events: Array.isArray(result?.events) ? result.events : events,
   };
 }
 

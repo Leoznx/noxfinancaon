@@ -196,21 +196,26 @@ export const concluirAtivacao = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     await assertTokenMatch(data.token, data.consultaId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const now = new Date().toISOString();
-    await supabaseAdmin
+    const { data: state, error } = await supabaseAdmin
       .from("consultas_credito")
-      .update({
-        status: "ativado",
-        activation_status: "concluido",
-        activation_completed_at: now,
-        payment_status: "aprovado",
-        payment_confirmed_at: now,
-      } as any)
-      .eq("id", data.consultaId);
-    await logEvento(
-      data.consultaId,
-      "ativacao_concluida",
-      "Fiança ativada com sucesso pelo inquilino.",
-    );
-    return { ok: true, concluidoEm: now };
+      .select("activation_status, policy_status, signature_status, payment_state, payment_status")
+      .eq("id", data.consultaId)
+      .single();
+    if (error || !state) throw new Error("Proposta não encontrada.");
+    const paymentConfirmed = ["confirmed", "paid", "aprovado", "confirmado"]
+      .includes(String((state as any).payment_state || (state as any).payment_status || "").toLowerCase());
+    const signatureSigned = (state as any).signature_status === "signed";
+    const policyActive = (state as any).policy_status === "active" &&
+      (state as any).activation_status === "concluido";
+    if (!policyActive) {
+      await logEvento(
+        data.consultaId,
+        "ativacao_aguardando_requisitos",
+        `Ativação solicitada; pagamento confirmado=${paymentConfirmed}; assinatura concluída=${signatureSigned}.`,
+      );
+      throw new Error(
+        "A ativação será concluída automaticamente após a confirmação do pagamento e da assinatura.",
+      );
+    }
+    return { ok: true, concluidoEm: new Date().toISOString() };
   });

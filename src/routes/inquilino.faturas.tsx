@@ -6,11 +6,15 @@ import {
   CalendarClock,
   Copy,
   CreditCard,
+  ExternalLink,
   FileText,
   Landmark,
+  Mail,
+  MessageCircle,
   QrCode,
   Receipt,
   RefreshCw,
+  RotateCw,
   Wallet,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -21,8 +25,15 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { isPagamentoConcluido, MESES_PT, statusPagamentoLabel } from "@/lib/asaas-payment";
-import { reissuePayment } from "@/lib/automated-billing";
+import {
+  cardRegistrationStatusLabel,
+  isPagamentoConcluido,
+  isReissuablePaymentStatus,
+  MESES_PT,
+  statusPagamentoLabel,
+  subscriptionStatusLabel,
+} from "@/lib/asaas-payment";
+import { manageAsaasSubscription, managePersistedAsaasPayment } from "@/lib/asaas-checkout";
 import {
   AGENCY_BILLING_MESSAGE,
   mergeTenantBillingItems,
@@ -31,6 +42,7 @@ import {
   type TenantBillingItem,
   type TenantInvoiceSource,
   type TenantPaymentSource,
+  type TenantSubscriptionSource,
 } from "@/lib/tenant-billing";
 
 export const Route = createFileRoute("/inquilino/faturas")({
@@ -41,7 +53,7 @@ export const Route = createFileRoute("/inquilino/faturas")({
   ),
 });
 
-const STATUS_ABERTO = ["pending", "overdue", "risk_analysis", "approved"];
+const STATUS_ABERTO = ["pending", "processing", "overdue", "risk_analysis", "approved"];
 
 const STATUS_CLASS: Record<string, string> = {
   paid: "bg-emerald-100 text-emerald-700 border-emerald-200",
@@ -84,6 +96,7 @@ function FaturasInquilino() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [refreshingId, setRefreshingId] = useState<string | null>(null);
   const [reissuingId, setReissuingId] = useState<string | null>(null);
+  const [notifyingId, setNotifyingId] = useState<string | null>(null);
 
   const loadBilling = useCallback(async () => {
     if (!user?.id) return;
@@ -123,28 +136,31 @@ function FaturasInquilino() {
         return;
       }
 
-      const [invoiceResult, paymentResult] = await Promise.all([
+      const [invoiceResult, paymentResult, subscriptionResult] = await Promise.all([
         supabase
           .from("faturas_inquilino")
-          .select(
-            "id, consulta_id, asaas_payment_id, numero_parcela, installment_total, vencimento, valor, status, pago_em, boleto_url, linha_digitavel",
-          )
+          .select("*, notifications:financial_notifications(*)")
           .in("consulta_id", consultationIds),
         (supabase as any)
           .from("asaas_payments")
-          .select(
-            "id, consultation_id, asaas_payment_id, payment_method, status, value, due_date, confirmed_at, received_at, pix_qr_code, pix_copy_paste, pix_expires_at, boleto_url, boleto_barcode, external_reference",
-          )
+          .select("*")
           .in("consultation_id", consultationIds),
+        (supabase as any)
+          .from("asaas_subscriptions")
+          .select("*")
+          .in("consultation_id", consultationIds)
+          .order("created_at", { ascending: false }),
       ]);
       if (invoiceResult.error) throw invoiceResult.error;
       if (paymentResult.error) throw paymentResult.error;
+      if (subscriptionResult.error) throw subscriptionResult.error;
 
       setItems(
         mergeTenantBillingItems(
           uniqueConsultations,
           (invoiceResult.data ?? []) as unknown as TenantInvoiceSource[],
           (paymentResult.data ?? []) as unknown as TenantPaymentSource[],
+          (subscriptionResult.data ?? []) as unknown as TenantSubscriptionSource[],
         ),
       );
     } catch (error) {
@@ -182,6 +198,15 @@ function FaturasInquilino() {
           schema: "public",
           table: "asaas_payments",
           filter: `tenant_user_id=eq.${user.id}`,
+        },
+        loadBilling,
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "asaas_subscriptions",
         },
         loadBilling,
       )
@@ -250,14 +275,19 @@ function FaturasInquilino() {
   }
 
   async function refreshStatus(item: TenantBillingItem) {
-    if (!item.providerPaymentId) return;
+    if (item.method !== "credit_card" && !item.providerPaymentId) return;
     setRefreshingId(item.id);
     try {
-      const { data, error } = await supabase.functions.invoke("asaas-get-payment", {
-        body: { paymentId: item.providerPaymentId },
-      });
-      if (error) throw error;
-      if ((data as any)?.error) throw new Error((data as any).error);
+      if (item.method === "credit_card") {
+        await executarAcaoAssinatura(item, "refresh");
+      } else {
+        await managePersistedAsaasPayment({
+          invoiceId: item.invoiceId,
+          paymentId: item.providerPaymentId,
+          consultationId: item.consultationId,
+          action: "refresh",
+        });
+      }
       await loadBilling();
       toast.success("Status atualizado.");
     } catch (error) {
@@ -278,13 +308,19 @@ function FaturasInquilino() {
     }
     setReissuingId(`${item.id}:${method}`);
     try {
-      const payment = await reissuePayment({ invoiceId: item.invoiceId, method });
+      const payment = await managePersistedAsaasPayment({
+        invoiceId: item.invoiceId,
+        paymentId: item.providerPaymentId,
+        consultationId: item.consultationId,
+        action: "reissue",
+        paymentMethod: method,
+      });
       await loadBilling();
       if (method === "boleto" && payment.boleto?.pdfUrl) {
         window.open(payment.boleto.pdfUrl, "_blank", "noopener,noreferrer");
       }
-      if (method === "pix" && payment.pix?.copyPaste) {
-        await copyValue(payment.pix.copyPaste, "Pix atualizado copiado.");
+      if (method === "pix" && payment.pix?.qrCode) {
+        await copyValue(payment.pix.qrCode, "Pix atualizado copiado.");
       }
       toast.success(method === "boleto" ? "Boleto atualizado gerado." : "Pix atualizado gerado.");
     } catch (error) {
@@ -292,6 +328,84 @@ function FaturasInquilino() {
     } finally {
       setReissuingId(null);
     }
+  }
+
+  async function reissueInitialCheckout(item: TenantBillingItem) {
+    const key = `${item.id}:initial-checkout`;
+    setReissuingId(key);
+    try {
+      await executarAcaoAssinatura(item, "reissue_initial");
+      await loadBilling();
+      toast.success("Novo link da cobrança inicial gerado e enviado.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Não foi possível gerar um novo link inicial.",
+      );
+    } finally {
+      setReissuingId(null);
+    }
+  }
+
+  async function reissueRecurringCheckout(item: TenantBillingItem) {
+    const key = `${item.id}:recurring-checkout`;
+    setReissuingId(key);
+    try {
+      await executarAcaoAssinatura(item, "reissue_checkout");
+      await loadBilling();
+      toast.success("Novo link de cadastro recorrente gerado e enviado.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Não foi possível gerar um novo link de cadastro.",
+      );
+    } finally {
+      setReissuingId(null);
+    }
+  }
+
+  async function resend(item: TenantBillingItem, channel: "email" | "whatsapp") {
+    const key = `${item.id}:${channel}`;
+    setNotifyingId(key);
+    try {
+      const action = channel === "email" ? "resend_email" : "resend_whatsapp";
+      if (item.method === "credit_card") {
+        await executarAcaoAssinatura(item, action);
+      } else {
+        await managePersistedAsaasPayment({
+          invoiceId: item.invoiceId,
+          paymentId: item.providerPaymentId,
+          consultationId: item.consultationId,
+          action,
+        });
+      }
+      toast.success(channel === "email" ? "Cobrança reenviada por e-mail." : "Cobrança reenviada por WhatsApp.");
+      await loadBilling();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível reenviar a cobrança.");
+    } finally {
+      setNotifyingId(null);
+    }
+  }
+
+  async function executarAcaoAssinatura(
+    item: TenantBillingItem,
+    action:
+      | "refresh"
+      | "resend_email"
+      | "resend_whatsapp"
+      | "reissue_initial"
+      | "reissue_checkout",
+  ) {
+    if (!item.subscriptionLocalId || !item.subscriptionMode) {
+      throw new Error("A assinatura recorrente ainda não está disponível para consulta.");
+    }
+    return manageAsaasSubscription({
+      proposalId: item.consultationId,
+      mode: item.subscriptionMode,
+      selectedFireInsuranceMode: item.subscriptionFireMode,
+      amount: item.subscriptionInitialAmount,
+      monthlyAmount: item.subscriptionMonthlyAmount,
+      action,
+    });
   }
 
   return (
@@ -364,9 +478,13 @@ function FaturasInquilino() {
                 actionableId={actionableByContract.get(contract.id)}
                 refreshingId={refreshingId}
                 reissuingId={reissuingId}
+                notifyingId={notifyingId}
                 onCopy={copyValue}
                 onRefresh={refreshStatus}
                 onReissue={reissue}
+                onReissueInitialCheckout={reissueInitialCheckout}
+                onReissueRecurringCheckout={reissueRecurringCheckout}
+                onResend={resend}
               />
             ))}
           </>
@@ -381,17 +499,25 @@ function ContractBilling({
   actionableId,
   refreshingId,
   reissuingId,
+  notifyingId,
   onCopy,
   onRefresh,
   onReissue,
+  onReissueInitialCheckout,
+  onReissueRecurringCheckout,
+  onResend,
 }: {
   contract: BillingContract;
   actionableId?: string;
   refreshingId: string | null;
   reissuingId: string | null;
+  notifyingId: string | null;
   onCopy: (value: string, message: string) => Promise<void>;
   onRefresh: (item: TenantBillingItem) => Promise<void>;
   onReissue: (item: TenantBillingItem, method: "boleto" | "pix") => Promise<void>;
+  onReissueInitialCheckout: (item: TenantBillingItem) => Promise<void>;
+  onReissueRecurringCheckout: (item: TenantBillingItem) => Promise<void>;
+  onResend: (item: TenantBillingItem, channel: "email" | "whatsapp") => Promise<void>;
 }) {
   const address = contract.imovel
     ? [contract.imovel.endereco, contract.imovel.cidade, contract.imovel.estado]
@@ -432,6 +558,15 @@ function ContractBilling({
           <div className="md:hidden divide-y divide-neutral-100 rounded-2xl border border-neutral-200 bg-white shadow-sm">
             {contract.items.map((item) => {
               const status = statusInfo(item, actionableId);
+              const initialLinkExpired = ["cancelled", "expired"].includes(
+                item.subscriptionInitialCheckoutStatus || "",
+              );
+              const recurringLinkExpired = ["cancelled", "expired"].includes(
+                item.subscriptionCheckoutStatus || "",
+              );
+              const validPaymentLink =
+                (!recurringLinkExpired ? item.subscriptionCheckoutUrl : null) ||
+                (!initialLinkExpired ? item.paymentUrl : null);
               const [year, month] = String(item.dueDate || "").split("-").map(Number);
               return (
                 <div key={item.id} className="p-4 space-y-3">
@@ -468,8 +603,27 @@ function ContractBilling({
                       </span>
                     )}
                   </div>
+                  {(item.providerPaymentId ||
+                    item.subscriptionLocalId ||
+                    item.notificationCount > 0) && (
+                    <p className="break-all text-[10px] text-neutral-500">
+                      {item.providerPaymentId ? `Asaas ${item.providerPaymentId}` : ""}
+                      {item.subscriptionId ? ` · Assinatura ${item.subscriptionId}` : ""}
+                      {item.subscriptionStatus
+                        ? ` · ${subscriptionStatusLabel(item.subscriptionStatus)}`
+                        : ""}
+                      {item.cardRegistrationStatus
+                        ? ` · ${cardRegistrationStatusLabel(item.cardRegistrationStatus)}`
+                        : ""}
+                      {item.notificationCount > 0
+                        ? ` · ${item.notificationCount} notificação(ões)`
+                        : ""}
+                    </p>
+                  )}
 
-                  {(item.method === "boleto" || item.method === "pix" ||
+                  {(item.method === "boleto" ||
+                    item.method === "pix" ||
+                    item.subscriptionLocalId ||
                     (item.providerPaymentId && !isPagamentoConcluido(item.status))) && (
                     <div className="flex flex-wrap gap-2 pt-1">
                       {item.method === "boleto" && item.boletoUrl && (
@@ -498,7 +652,21 @@ function ContractBilling({
                           <QrCode className="mr-1" size={14} /> Copiar Pix
                         </Button>
                       )}
-                      {item.invoiceId && item.providerPaymentId && !isPagamentoConcluido(item.status) && (
+                      {validPaymentLink && (
+                        <a
+                          href={validPaymentLink}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          <Button size="sm" variant="outline">
+                            <ExternalLink className="mr-1" size={14} /> Abrir cobrança
+                          </Button>
+                        </a>
+                      )}
+                      {item.method !== "credit_card" &&
+                        item.invoiceId &&
+                        item.providerPaymentId &&
+                        isReissuablePaymentStatus(item.status) && (
                         <>
                           <Button
                             size="sm"
@@ -518,7 +686,8 @@ function ContractBilling({
                           </Button>
                         </>
                       )}
-                      {item.providerPaymentId && !isPagamentoConcluido(item.status) && (
+                      {((item.method === "credit_card" && item.subscriptionLocalId) ||
+                        (item.providerPaymentId && !isPagamentoConcluido(item.status))) && (
                         <Button
                           size="sm"
                           variant="ghost"
@@ -532,6 +701,46 @@ function ContractBilling({
                           />
                           Atualizar
                         </Button>
+                      )}
+                      {initialLinkExpired && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => onReissueInitialCheckout(item)}
+                          disabled={reissuingId === `${item.id}:initial-checkout`}
+                        >
+                          <RotateCw className="mr-1" size={14} /> Gerar novo link inicial
+                        </Button>
+                      )}
+                      {recurringLinkExpired && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => onReissueRecurringCheckout(item)}
+                          disabled={reissuingId === `${item.id}:recurring-checkout`}
+                        >
+                          <RotateCw className="mr-1" size={14} /> Gerar novo link de cadastro
+                        </Button>
+                      )}
+                      {!initialLinkExpired && !recurringLinkExpired && (item.invoiceId || item.providerPaymentId || item.subscriptionLocalId) && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => onResend(item, "whatsapp")}
+                            disabled={notifyingId !== null}
+                          >
+                            <MessageCircle className="mr-1" size={14} /> WhatsApp
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => onResend(item, "email")}
+                            disabled={notifyingId !== null}
+                          >
+                            <Mail className="mr-1" size={14} /> E-mail
+                          </Button>
+                        </>
                       )}
                     </div>
                   )}
@@ -556,6 +765,15 @@ function ContractBilling({
             <tbody className="divide-y">
               {contract.items.map((item) => {
                 const status = statusInfo(item, actionableId);
+                const initialLinkExpired = ["cancelled", "expired"].includes(
+                  item.subscriptionInitialCheckoutStatus || "",
+                );
+                const recurringLinkExpired = ["cancelled", "expired"].includes(
+                  item.subscriptionCheckoutStatus || "",
+                );
+                const validPaymentLink =
+                  (!recurringLinkExpired ? item.subscriptionCheckoutUrl : null) ||
+                  (!initialLinkExpired ? item.paymentUrl : null);
                 const [year, month] = String(item.dueDate || "").split("-").map(Number);
                 return (
                   <tr key={item.id} className="hover:bg-neutral-50/60">
@@ -567,6 +785,19 @@ function ContractBilling({
                           {MESES_PT[month - 1]} de {year}
                         </span>
                       ) : null}
+                      {item.providerPaymentId && (
+                        <span
+                          className="block max-w-40 truncate text-[10px] font-normal text-neutral-400"
+                          title={item.providerPaymentId}
+                        >
+                          Asaas {item.providerPaymentId}
+                        </span>
+                      )}
+                      {item.subscriptionLocalId && (
+                        <span className="block text-[10px] font-normal text-neutral-500">
+                          Assinatura {item.subscriptionStatus || "pendente"}
+                        </span>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-neutral-700">
                       {item.dueDate
@@ -614,7 +845,21 @@ function ContractBilling({
                           <QrCode className="mr-1" size={14} /> Copiar Pix
                         </Button>
                       )}
-                      {item.invoiceId && item.providerPaymentId && !isPagamentoConcluido(item.status) && (
+                      {validPaymentLink && (
+                        <a
+                          href={validPaymentLink}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          <Button size="sm" variant="ghost" title="Abrir cobrança">
+                            <ExternalLink size={14} />
+                          </Button>
+                        </a>
+                      )}
+                      {item.method !== "credit_card" &&
+                        item.invoiceId &&
+                        item.providerPaymentId &&
+                        isReissuablePaymentStatus(item.status) && (
                         <>
                           <Button
                             size="sm"
@@ -634,7 +879,8 @@ function ContractBilling({
                           </Button>
                         </>
                       )}
-                      {item.providerPaymentId && !isPagamentoConcluido(item.status) && (
+                      {((item.method === "credit_card" && item.subscriptionLocalId) ||
+                        (item.providerPaymentId && !isPagamentoConcluido(item.status))) && (
                         <Button
                           size="sm"
                           variant="ghost"
@@ -647,6 +893,50 @@ function ContractBilling({
                             className={refreshingId === item.id ? "animate-spin" : ""}
                           />
                         </Button>
+                      )}
+                      {initialLinkExpired && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => onReissueInitialCheckout(item)}
+                          disabled={reissuingId === `${item.id}:initial-checkout`}
+                          title="Gerar novo link inicial"
+                        >
+                          <RotateCw size={14} />
+                        </Button>
+                      )}
+                      {recurringLinkExpired && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => onReissueRecurringCheckout(item)}
+                          disabled={reissuingId === `${item.id}:recurring-checkout`}
+                          title="Gerar novo link de cadastro"
+                        >
+                          <RotateCw size={14} />
+                        </Button>
+                      )}
+                      {!initialLinkExpired && !recurringLinkExpired && (item.invoiceId || item.providerPaymentId || item.subscriptionLocalId) && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => onResend(item, "whatsapp")}
+                            disabled={notifyingId !== null}
+                            title="Reenviar WhatsApp"
+                          >
+                            <MessageCircle size={14} />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => onResend(item, "email")}
+                            disabled={notifyingId !== null}
+                            title="Reenviar e-mail"
+                          >
+                            <Mail size={14} />
+                          </Button>
+                        </>
                       )}
                     </td>
                   </tr>
