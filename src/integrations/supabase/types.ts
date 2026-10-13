@@ -1361,6 +1361,7 @@ export type Database = {
       imobiliarias: {
         Row: {
           cargo: string | null
+          cep: string | null
           cidade: string | null
           cnpj: string
           comissao_pct: number | null
@@ -1378,6 +1379,7 @@ export type Database = {
         }
         Insert: {
           cargo?: string | null
+          cep?: string | null
           cidade?: string | null
           cnpj: string
           comissao_pct?: number | null
@@ -1395,6 +1397,7 @@ export type Database = {
         }
         Update: {
           cargo?: string | null
+          cep?: string | null
           cidade?: string | null
           cnpj?: string
           comissao_pct?: number | null
