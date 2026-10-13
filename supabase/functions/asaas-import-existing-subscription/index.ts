@@ -9,7 +9,6 @@ import {
   mapAsaasStatus,
   normalizeDocumento,
   paymentErrorStatus,
-  publicRecipient,
   requireUser,
   sanitizeAsaasResponse,
   toMoney,
@@ -20,7 +19,7 @@ import {
   normalizePaymentStatus,
   normalizeSubscriptionStatus,
 } from "../_shared/billing-state.ts";
-import { materializeInvoice } from "../_shared/contract-billing.ts";
+import { materializeInvoice, publicRecipient } from "../_shared/contract-billing.ts";
 import { resolveContractPeriodMonths } from "../_shared/contract-period.ts";
 import {
   buildD4SignSigner,
