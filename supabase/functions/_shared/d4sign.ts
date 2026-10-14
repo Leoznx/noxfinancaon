@@ -943,6 +943,150 @@ async function createSignatureRow(
   return raced;
 }
 
+async function persistPreparedContractDocument(
+  supabase: any,
+  params: {
+    consulta: any;
+    signature: any;
+    policy: any;
+    tenantUserId: string;
+    templateKey: TemplateKey;
+    built?: Awaited<ReturnType<typeof buildContractPdf>>;
+  },
+) {
+  const { consulta, signature, policy, tenantUserId, templateKey } = params;
+  const documentUuid = String(signature.d4sign_document_uuid || "").trim();
+  if (!documentUuid) throw new Error("prepared_contract_missing_uuid");
+
+  const { data: existingDoc } = await supabase
+    .from("documentos_proposta")
+    .select("id, document_subtype")
+    .eq("contract_signature_id", signature.id)
+    .maybeSingle();
+
+  // Um webhook pode concluir a assinatura enquanto esta rotina ainda está em
+  // andamento. Nunca substitua o PDF final por uma versão sem assinatura.
+  if (
+    existingDoc?.id &&
+    existingDoc.document_subtype === SIGNED_CONTRACTS_BUCKET
+  ) {
+    return existingDoc;
+  }
+
+  const built = params.built ||
+    (await buildContractPdf(templateKey, consulta, contractNumber(consulta.id)));
+  const path = `${tenantUserId}/${consulta.id}/${documentUuid}-pendente.pdf`;
+  const { error: uploadError } = await supabase.storage
+    .from(SIGNED_CONTRACTS_BUCKET)
+    .upload(path, built.bytes, {
+      contentType: "application/pdf",
+      upsert: true,
+    });
+  if (uploadError) {
+    throw new Error(`prepared_contract_upload_error:${uploadError.message}`);
+  }
+
+  const payload = {
+    consulta_id: consulta.id,
+    apolice_id: policy.id,
+    tenant_user_id: tenantUserId,
+    contract_signature_id: signature.id,
+    file_name: built.fileName || `Contrato ${signature.plan_name} para assinatura.pdf`,
+    file_url: path,
+    file_type: "application/pdf",
+    document_type: "contrato",
+    document_subtype: "pendente_assinatura_d4sign",
+  };
+
+  if (existingDoc?.id) {
+    const { data, error } = await supabase
+      .from("documentos_proposta")
+      .update(payload)
+      .eq("id", existingDoc.id)
+      .neq("document_subtype", SIGNED_CONTRACTS_BUCKET)
+      .select("*")
+      .maybeSingle();
+    if (error) throw new Error(`prepared_contract_record_error:${error.message}`);
+    if (data) return data;
+    const { data: latest } = await supabase
+      .from("documentos_proposta")
+      .select("*")
+      .eq("id", existingDoc.id)
+      .maybeSingle();
+    return latest;
+  }
+
+  const { data, error } = await supabase
+    .from("documentos_proposta")
+    .insert(payload)
+    .select("*")
+    .single();
+  if (error) {
+    const { data: raced } = await supabase
+      .from("documentos_proposta")
+      .select("*")
+      .eq("contract_signature_id", signature.id)
+      .maybeSingle();
+    if (raced) return raced;
+    throw new Error(`prepared_contract_record_error:${error.message}`);
+  }
+  return data;
+}
+
+/**
+ * Materializa no storage privado a mesma versão do contrato que já foi
+ * preparada para a D4Sign. É usada pela tela de detalhes para recuperar fluxos
+ * antigos que foram enviados antes de o PDF pendente passar a ser persistido.
+ */
+export async function materializeD4SignContractDocument(
+  supabase: any,
+  consultationId: string,
+) {
+  const consulta = await getConsultation(supabase, consultationId);
+  const { data: signature, error } = await supabase
+    .from("contract_signatures")
+    .select("*")
+    .eq("consultation_id", consultationId)
+    .maybeSingle();
+  if (error) throw new Error(`signature_lookup_error:${error.message}`);
+  if (!signature?.d4sign_document_uuid) {
+    return { ok: false, status: "not_generated", document: null };
+  }
+
+  const { data: currentDocument } = await supabase
+    .from("documentos_proposta")
+    .select("*")
+    .eq("contract_signature_id", signature.id)
+    .maybeSingle();
+  if (
+    ["signed", "active"].includes(String(signature.status || "")) ||
+    signature.signature_status === "signed" ||
+    signature.signed_at
+  ) {
+    return { ok: true, status: "signed", document: currentDocument || null };
+  }
+
+  const tenantUserId = signature.tenant_user_id || consulta.tenant_user_id;
+  if (!tenantUserId) throw new Error("prepared_contract_missing_tenant");
+  const planName = consulta?.planos?.nome || consulta?.documentos?.plano_calculado?.nome;
+  const { templateKey } = resolveContractTemplate(planName);
+  const policy = await ensurePendingPolicyForConsultation(supabase, consulta);
+  const document = await persistPreparedContractDocument(supabase, {
+    consulta,
+    signature,
+    policy,
+    tenantUserId,
+    templateKey,
+  });
+  if (signature.policy_id !== policy.id) {
+    await supabase
+      .from("contract_signatures")
+      .update({ policy_id: policy.id })
+      .eq("id", signature.id);
+  }
+  return { ok: true, status: "prepared", document };
+}
+
 export async function dispatchD4SignContract(
   supabase: any,
   consultationId: string,
@@ -976,8 +1120,18 @@ export async function dispatchD4SignContract(
     const tenantUserId = await ensureTenantAccount(supabase, consulta);
     signature = await createSignatureRow(supabase, consulta, templateKey, tenantUserId);
 
+    const policy = await ensurePendingPolicyForConsultation(supabase, consulta);
+    if (signature.policy_id !== policy.id) {
+      await supabase
+        .from("contract_signatures")
+        .update({ policy_id: policy.id })
+        .eq("id", signature.id);
+      signature = { ...signature, policy_id: policy.id };
+    }
+
     if (["awaiting_signature", "signed", "active"].includes(signature.status)) {
       if (signature.status === "awaiting_signature") {
+        await materializeD4SignContractDocument(supabase, consultationId);
         await ensureSignatureInviteWhatsapp(supabase, signature, consulta);
       }
       return {
@@ -1004,9 +1158,10 @@ export async function dispatchD4SignContract(
       Deno.env.get("D4SIGN_SAFE_UUID")?.trim() || "9fbb5127-b896-4310-bdca-3933841dfd3a";
     const number = contractNumber(consultationId);
     let documentUuid = signature.d4sign_document_uuid as string | null;
+    let built: Awaited<ReturnType<typeof buildContractPdf>> | undefined;
 
     if (!documentUuid) {
-      const built = await buildContractPdf(templateKey, consulta, number);
+      built = await buildContractPdf(templateKey, consulta, number);
       const uploaded = await d4SignRequest(`/documents/${safeUuid}/uploadbinary`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1023,6 +1178,16 @@ export async function dispatchD4SignContract(
         .update({ d4sign_document_uuid: documentUuid })
         .eq("id", signature.id);
     }
+
+    signature = { ...signature, d4sign_document_uuid: documentUuid };
+    await persistPreparedContractDocument(supabase, {
+      consulta,
+      signature,
+      policy,
+      tenantUserId,
+      templateKey,
+      built,
+    });
 
     await d4SignRequest(`/documents/${documentUuid}/webhooks`, {
       method: "POST",

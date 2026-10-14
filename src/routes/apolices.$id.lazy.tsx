@@ -3,11 +3,11 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { supabase } from "@/integrations/supabase/client";
-import { useEffect, useState } from "react";
+import { type ChangeEvent, useEffect, useRef, useState } from "react";
 import {
   ArrowLeft, FileText, Download, Eye, AlertCircle, MapPin,
   Calendar, User, Building2, Wallet, Copy, FileCheck, Receipt,
-  ClipboardCheck, ShieldCheck,
+  ClipboardCheck, ShieldCheck, Upload, Loader2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,20 +25,36 @@ export const Route = createLazyFileRoute("/apolices/$id")({
   ),
 });
 
-const TIPOS_DOC = [
-  { tipo: "contrato", label: "Contrato de Locação", icone: FileCheck, descricao: "Contrato vinculado à garantia da NOX." },
-  { tipo: "vistoria", label: "Vistoria do Imóvel", icone: ClipboardCheck, descricao: "Laudo de vistoria de entrada do inquilino." },
-  { tipo: "apolice",  label: "Apólice / Garantia",  icone: ShieldCheck,    descricao: "Documento oficial da apólice emitida." },
-] as const;
+const DOCUMENT_BUCKETS = ["contratos-assinados", "approval-documents", "anexos", "documentos-proposta"] as const;
+const ACCEPTED_CONTRACT_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
+
+type ContractDocument = {
+  id: string;
+  file_name?: string | null;
+  file_url?: string | null;
+  storage_path?: string | null;
+  status?: string | null;
+  uploaded_at?: string | null;
+  updated_at?: string | null;
+  tipo?: string | null;
+  document_type?: string | null;
+  document_subtype?: string | null;
+  contract_signature_id?: string | null;
+};
 
 function ApoliceDetalhe() {
   const { id } = Route.useParams();
   const { user } = useAuth();
   const [apolice, setApolice] = useState<any>(null);
   const [documentos, setDocumentos] = useState<any[]>([]);
+  const [documentosProposta, setDocumentosProposta] = useState<ContractDocument[]>([]);
+  const [assinatura, setAssinatura] = useState<any>(null);
   const [faturas, setFaturas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [replacingDocument, setReplacingDocument] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -49,7 +65,7 @@ function ApoliceDetalhe() {
         const { data: ap, error: apErr } = await supabase
           .from("apolices")
           .select(`
-            id, numero, status, vigencia_inicio, vigencia_fim, valor_premio, created_at,
+            id, consulta_id, numero, status, vigencia_inicio, vigencia_fim, valor_premio, created_at,
             consulta:consultas_credito(
               inquilino:inquilinos(nome, cpf, cnpj, razao_social, tipo, profile:profiles(nome, email, telefone)),
               imovel:imoveis(endereco, logradouro, numero, bairro, cidade, estado, cep, valor_aluguel),
@@ -64,28 +80,59 @@ function ApoliceDetalhe() {
         if (apErr) throw apErr;
         if (!ap) throw new Error("Apólice não encontrada ou sem acesso.");
 
-        const { data: docs, error: docsError } = await supabase
-          .from("documentos_contrato")
-          .select("*")
-          .eq("apolice_id", id);
+        const [docsResult, proposalDocsResult, signatureResult, invoicesResult] = await Promise.all([
+          supabase.from("documentos_contrato").select("*").eq("apolice_id", id),
+          (supabase.from("documentos_proposta") as any)
+            .select("id, file_name, file_url, file_type, document_type, document_subtype, contract_signature_id, updated_at")
+            .or(`consulta_id.eq.${ap.consulta_id},apolice_id.eq.${id}`)
+            .order("updated_at", { ascending: false }),
+          (supabase as any).from("contract_signatures")
+            .select("id, status, signature_status, sent_at, signed_at")
+            .eq("consultation_id", ap.consulta_id)
+            .maybeSingle(),
+          (supabase as any)
+            .from("faturas_inquilino")
+            .select(`
+              id, numero_parcela, installment_total, vencimento, valor, status,
+              pago_em, confirmed_at, payment_url, boleto_url, linha_digitavel,
+              asaas_payment:asaas_payments(invoice_url, boleto_url, boleto_barcode, pix_copy_paste)
+            `)
+            .eq("apolice_id", id)
+            .order("vencimento", { ascending: true }),
+        ]);
 
-        const { data: fts, error: invoicesError } = await (supabase as any)
-          .from("faturas_inquilino")
-          .select(`
-            id, numero_parcela, installment_total, vencimento, valor, status,
-            pago_em, confirmed_at, payment_url, boleto_url, linha_digitavel,
-            asaas_payment:asaas_payments(invoice_url, boleto_url, boleto_barcode, pix_copy_paste)
-          `)
-          .eq("apolice_id", id)
-          .order("vencimento", { ascending: true });
-        if (docsError) throw docsError;
-        if (invoicesError) throw invoicesError;
+        if (docsResult.error) throw docsResult.error;
+        if (proposalDocsResult.error) throw proposalDocsResult.error;
+        if (signatureResult.error) throw signatureResult.error;
+        if (invoicesResult.error) throw invoicesResult.error;
+
+        let proposalDocs = (proposalDocsResult.data || []) as ContractDocument[];
+        const signature = signatureResult.data;
+        const missingPreparedDocument =
+          signature?.id &&
+          !["signed", "active"].includes(String(signature.status || "")) &&
+          !proposalDocs.some((document) => document.contract_signature_id === signature.id);
+
+        if (missingPreparedDocument) {
+          const { data: materialized } = await supabase.functions.invoke("contract-document", {
+            body: { policyId: id },
+          });
+          if (materialized?.ok) {
+            const refreshed = await (supabase.from("documentos_proposta") as any)
+              .select("id, file_name, file_url, file_type, document_type, document_subtype, contract_signature_id, updated_at")
+              .or(`consulta_id.eq.${ap.consulta_id},apolice_id.eq.${id}`)
+              .order("updated_at", { ascending: false });
+            proposalDocs = (refreshed.data || []) as ContractDocument[];
+          }
+        }
 
         if (!cancelled) {
           setApolice(ap);
-          setDocumentos(docs || []);
+          setDocumentos(docsResult.data || []);
+          setDocumentosProposta(proposalDocs);
+          setAssinatura(signature || null);
           setFaturas(
-            (fts || []).map((invoice: any) => ({
+            (invoicesResult.data || []).map((invoice: any) => ({
               ...invoice,
               data_vencimento: invoice.vencimento,
               data_pagamento: invoice.pago_em || invoice.confirmed_at,
@@ -111,7 +158,7 @@ function ApoliceDetalhe() {
     }
     load();
     return () => { cancelled = true; };
-  }, [id]);
+  }, [id, refreshKey]);
 
   if (loading) {
     return (
@@ -156,6 +203,151 @@ function ApoliceDetalhe() {
   const isStaff = ["admin", "admin_master", "analista", "juridico", "financeiro"].includes(
     user?.internalRole || user?.role || "",
   );
+  const contratoLocacao = documentosProposta.find((document) => document.document_type === "contrato_locacao");
+  const documentoD4Sign = documentosProposta.find((document) => Boolean(document.contract_signature_id));
+  const assinaturaConcluida =
+    ["signed", "active"].includes(String(assinatura?.status || "")) ||
+    assinatura?.signature_status === "signed" ||
+    Boolean(assinatura?.signed_at) ||
+    documentoD4Sign?.document_subtype === "contratos-assinados";
+  const podeEditarContrato =
+    Boolean(contratoLocacao?.id) &&
+    contratoLocacao?.document_subtype === "pendente_assinatura" &&
+    !assinaturaConcluida;
+
+  const documentCards = [
+    {
+      key: "contrato_locacao",
+      label: "Contrato de locação",
+      icon: FileCheck,
+      description: podeEditarContrato
+        ? "Arquivo informado como não assinado. Você pode substituí-lo até a assinatura ser concluída."
+        : "Contrato de locação anexado durante a contratação.",
+      document: contratoLocacao || documentos.find((document) => document.tipo === "contrato"),
+      editable: podeEditarContrato,
+      pending: Boolean(contratoLocacao) && contratoLocacao?.document_subtype === "pendente_assinatura",
+    },
+    {
+      key: "contrato_nox",
+      label: assinaturaConcluida ? "Contrato NOX assinado" : "Apólice para assinatura",
+      icon: ShieldCheck,
+      description: assinaturaConcluida
+        ? "Documento final assinado pelo inquilino."
+        : "Documento gerado na contratação e enviado ao inquilino para assinatura.",
+      document: documentoD4Sign || documentos.find((document) => document.tipo === "apolice"),
+      editable: false,
+      pending: Boolean(assinatura) && !assinaturaConcluida,
+    },
+    {
+      key: "vistoria",
+      label: "Vistoria do imóvel",
+      icon: ClipboardCheck,
+      description: "Laudo de vistoria anexado à proposta.",
+      document:
+        documentosProposta.find((document) => document.document_type === "vistoria_imovel") ||
+        documentos.find((document) => document.tipo === "vistoria"),
+      editable: false,
+      pending: false,
+    },
+  ];
+
+  async function resolveDocumentUrl(document: ContractDocument) {
+    const path = document.storage_path || document.file_url;
+    if (!path) return null;
+    if (/^https?:\/\//i.test(path)) return path;
+
+    const preferredBucket = document.document_subtype === "contratos-assinados"
+      || document.document_subtype === "pendente_assinatura_d4sign"
+      ? "contratos-assinados"
+      : null;
+    const buckets = preferredBucket
+      ? [preferredBucket, ...DOCUMENT_BUCKETS.filter((bucket) => bucket !== preferredBucket)]
+      : [...DOCUMENT_BUCKETS];
+    for (const bucket of buckets) {
+      const { data } = await supabase.storage.from(bucket).createSignedUrl(path, 300);
+      if (data?.signedUrl) return data.signedUrl;
+    }
+    return null;
+  }
+
+  async function openDocument(document: ContractDocument, download = false) {
+    const url = await resolveDocumentUrl(document);
+    if (!url) {
+      toast.error("Não foi possível abrir este documento.");
+      return;
+    }
+    if (!download) {
+      window.open(url, "_blank", "noopener,noreferrer");
+      return;
+    }
+    const anchor = window.document.createElement("a");
+    anchor.href = url;
+    anchor.download = document.file_name || "documento.pdf";
+    anchor.target = "_blank";
+    anchor.rel = "noopener";
+    window.document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+  }
+
+  async function replaceUnsignedContract(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !contratoLocacao?.id || !podeEditarContrato) return;
+    if (!ACCEPTED_CONTRACT_TYPES.includes(file.type)) {
+      toast.error("Envie um arquivo PDF, JPG, PNG ou WEBP.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("O arquivo deve ter no máximo 10 MB.");
+      return;
+    }
+
+    setReplacingDocument(true);
+    try {
+      const { data: authData } = await supabase.auth.getUser();
+      const userId = authData.user?.id;
+      if (!userId) throw new Error("Sessão inválida.");
+      const safeName = file.name
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-zA-Z0-9._-]/g, "-")
+        .replace(/-+/g, "-");
+      const path = `${userId}/${apolice.consulta_id}/contrato_locacao-${Date.now()}-${safeName}`;
+      let uploadError: any = null;
+      for (const bucket of ["approval-documents", "anexos", "documentos-proposta"]) {
+        const { error } = await supabase.storage.from(bucket).upload(path, file, {
+          cacheControl: "3600",
+          contentType: file.type,
+          upsert: true,
+        });
+        if (!error) {
+          uploadError = null;
+          break;
+        }
+        uploadError = error;
+        if (!String(error.message || "").toLowerCase().includes("bucket not found")) break;
+      }
+      if (uploadError) throw uploadError;
+
+      const { error: updateError } = await (supabase.from("documentos_proposta") as any)
+        .update({
+          file_name: file.name,
+          file_url: path,
+          file_type: file.type,
+          uploaded_by: userId,
+        })
+        .eq("id", contratoLocacao.id);
+      if (updateError) throw updateError;
+
+      toast.success("Contrato atualizado. A nova versão já está disponível.");
+      setRefreshKey((value) => value + 1);
+    } catch (error: any) {
+      toast.error(error?.message || "Não foi possível atualizar o contrato.");
+    } finally {
+      setReplacingDocument(false);
+    }
+  }
 
   return (
     <DashboardLayout>
@@ -201,58 +393,74 @@ function ApoliceDetalhe() {
             </Link>
           </Button>
         </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
+          className="hidden"
+          onChange={replaceUnsignedContract}
+        />
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {TIPOS_DOC.map((t) => {
-            const doc = documentos.find((d) => d.tipo === t.tipo);
-            const disponivel = doc?.status === "disponivel" && doc?.file_url;
+          {documentCards.map((item) => {
+            const doc = item.document as ContractDocument | undefined;
+            const available = Boolean(doc?.file_url || doc?.storage_path);
             return (
-              <Card key={t.tipo} className="p-6 border-neutral-200 rounded-2xl bg-white flex flex-col gap-4">
+              <Card key={item.key} className="p-6 border-neutral-200 rounded-2xl bg-white flex flex-col gap-4">
                 <div className="flex items-start justify-between">
                   <div className="w-12 h-12 rounded-xl bg-yellow-50 border border-yellow-200 flex items-center justify-center">
-                    <t.icone className="w-5 h-5 text-yellow-700" />
+                    <item.icon className="w-5 h-5 text-yellow-700" />
                   </div>
-                  <DocStatusBadge status={doc?.status || "nao_enviado"} />
+                  <DocStatusBadge status={available ? (item.pending ? "pendente_assinatura" : "disponivel") : "nao_enviado"} />
                 </div>
                 <div className="space-y-1">
-                  <h3 className="font-black text-neutral-900">{t.label}</h3>
-                  <p className="text-xs text-neutral-500 font-medium">{t.descricao}</p>
-                  {doc?.uploaded_at && (
+                  <h3 className="font-black text-neutral-900">{item.label}</h3>
+                  <p className="text-xs text-neutral-500 font-medium">{item.description}</p>
+                  {doc?.file_name && (
+                    <p className="text-xs text-neutral-700 font-bold mt-2 break-all">{doc.file_name}</p>
+                  )}
+                  {(doc?.uploaded_at || doc?.updated_at) && (
                     <p className="text-[10px] text-neutral-400 uppercase tracking-widest font-bold mt-2">
-                      Enviado em {new Date(doc.uploaded_at).toLocaleDateString("pt-BR")}
+                      Atualizado em {new Date(doc.uploaded_at || doc.updated_at || "").toLocaleDateString("pt-BR")}
                     </p>
                   )}
                 </div>
-                <div className="flex gap-2 pt-2 mt-auto">
+                <div className="grid grid-cols-2 gap-2 pt-2 mt-auto">
                   <Button
                     size="sm"
                     variant="outline"
                     className="flex-1 rounded-lg gap-1.5 font-bold"
-                    disabled={!disponivel}
-                    onClick={() => doc?.file_url && window.open(doc.file_url, "_blank")}
+                    disabled={!available}
+                    onClick={() => doc && void openDocument(doc)}
                   >
                     <Eye size={14} /> Visualizar
                   </Button>
                   <Button
                     size="sm"
                     className="flex-1 bg-neutral-900 hover:bg-neutral-800 text-white rounded-lg gap-1.5 font-bold"
-                    disabled={!disponivel}
-                    onClick={() => {
-                      if (!doc?.file_url) return;
-                      const a = document.createElement("a");
-                      a.href = doc.file_url;
-                      a.download = doc.file_name || `${t.tipo}.pdf`;
-                      a.target = "_blank";
-                      a.rel = "noopener";
-                      document.body.appendChild(a);
-                      a.click();
-                      a.remove();
-                    }}
+                    disabled={!available}
+                    onClick={() => doc && void openDocument(doc, true)}
                   >
                     <Download size={14} /> Baixar
                   </Button>
+                  {item.editable && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="col-span-2 rounded-lg gap-1.5 font-bold border-yellow-300 bg-yellow-50 hover:bg-yellow-100"
+                      disabled={replacingDocument}
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      {replacingDocument ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                      {replacingDocument ? "Atualizando..." : "Editar arquivo"}
+                    </Button>
+                  )}
                 </div>
                 {!doc && (
-                  <p className="text-xs text-neutral-400 italic">Ainda não enviado pelo administrador.</p>
+                  <p className="text-xs text-neutral-400 italic">
+                    {item.key === "contrato_nox" && assinatura
+                      ? "O documento está sendo preparado para visualização."
+                      : "Documento ainda não enviado."}
+                  </p>
                 )}
               </Card>
             );
@@ -449,6 +657,7 @@ function DocStatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; cls: string }> = {
     disponivel:  { label: "Disponível",   cls: "bg-green-50 text-green-700 border-green-200" },
     pendente:    { label: "Pendente",     cls: "bg-amber-50 text-amber-700 border-amber-200" },
+    pendente_assinatura: { label: "Não assinado", cls: "bg-amber-50 text-amber-700 border-amber-200" },
     nao_enviado: { label: "Não enviado",  cls: "bg-neutral-100 text-neutral-500 border-neutral-200" },
   };
   const cfg = map[status] || map.nao_enviado;
