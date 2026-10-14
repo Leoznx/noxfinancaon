@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -65,6 +65,14 @@ export function FormularioSimulacao({
   const [endereco, setEndereco] = useState<{ cidade: string; uf: string } | null>(
     dadosIniciais?.endereco || null,
   );
+  const [localizacaoVisual, setLocalizacaoVisual] = useState<{
+    cidade: string;
+    uf: string;
+  } | null>(dadosIniciais?.endereco || null);
+  const [localizacaoVisualStatus, setLocalizacaoVisualStatus] = useState<
+    "vazio" | "buscando" | "ok"
+  >(dadosIniciais?.endereco ? "ok" : "vazio");
+  const localizacaoVisualRequestRef = useRef<AbortController | null>(null);
 
   const [aluguel, setAluguel] = useState<number>(dadosIniciais?.valores?.aluguel || 0);
   const [condominio, setCondominio] = useState<number>(dadosIniciais?.valores?.condominio || 0);
@@ -79,6 +87,55 @@ export function FormularioSimulacao({
   const cepSomenteNox = modo === "interno";
 
   const CEP_NAO_ENCONTRADO = "CEP não encontrado. Corrija o CEP para continuar.";
+
+  useEffect(
+    () => () => {
+      localizacaoVisualRequestRef.current?.abort();
+    },
+    [],
+  );
+
+  // Consulta somente para exibição na Nova Consulta. O endereço enviado e o CEP
+  // técnico consumido pela automação continuam seguindo o fluxo existente.
+  const buscarLocalizacaoVisualCEP = async (valor: string) => {
+    const limpo = valor.replace(/\D/g, "");
+    localizacaoVisualRequestRef.current?.abort();
+
+    if (limpo.length !== 8) {
+      setLocalizacaoVisual(null);
+      setLocalizacaoVisualStatus("vazio");
+      return;
+    }
+
+    const controller = new AbortController();
+    localizacaoVisualRequestRef.current = controller;
+    setLocalizacaoVisual(null);
+    setLocalizacaoVisualStatus("buscando");
+
+    try {
+      const response = await fetch(`https://viacep.com.br/ws/${limpo}/json/`, {
+        signal: controller.signal,
+      });
+      if (!response.ok) throw new Error(`ViaCEP respondeu ${response.status}`);
+      const data = await response.json();
+
+      if (!data.erro && data.localidade && data.uf) {
+        setLocalizacaoVisual({ cidade: data.localidade, uf: data.uf });
+        setLocalizacaoVisualStatus("ok");
+      } else {
+        setLocalizacaoVisual(null);
+        setLocalizacaoVisualStatus("vazio");
+      }
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      setLocalizacaoVisual(null);
+      setLocalizacaoVisualStatus("vazio");
+    } finally {
+      if (localizacaoVisualRequestRef.current === controller) {
+        localizacaoVisualRequestRef.current = null;
+      }
+    }
+  };
 
   const buscarCEP = async (valor: string) => {
     if (cepSomenteNox) return;
@@ -306,6 +363,7 @@ export function FormularioSimulacao({
                     setEndereco(null);
                     setCepStatus("vazio");
                     setErroCep(null);
+                    void buscarLocalizacaoVisualCEP(val);
                     return;
                   }
                   if (val.replace(/\D/g, "").length === 8) {
@@ -325,15 +383,17 @@ export function FormularioSimulacao({
                 }`}
                 placeholder="00000-000"
               />
-              {!cepSomenteNox && cepStatus === "buscando" ? (
+              {(cepSomenteNox ? localizacaoVisualStatus : cepStatus) === "buscando" ? (
                 <p className="text-xs text-neutral-500 mt-1 font-bold uppercase">
                   Buscando região...
                 </p>
               ) : null}
-              {!cepSomenteNox && cepStatus === "ok" && endereco && (
+              {(cepSomenteNox ? localizacaoVisualStatus : cepStatus) === "ok" &&
+                (cepSomenteNox ? localizacaoVisual : endereco) && (
                 <p className="text-xs text-neutral-500 mt-1 flex items-center gap-1 font-bold uppercase">
                   <MapPin className="w-4 h-4 text-yellow-600" strokeWidth={1.5} />
-                  {endereco.cidade}, {endereco.uf}
+                  {(cepSomenteNox ? localizacaoVisual : endereco)?.cidade},{" "}
+                  {(cepSomenteNox ? localizacaoVisual : endereco)?.uf}
                 </p>
               )}
               {!cepSomenteNox && cepStatus === "invalido" && erroCep && (
