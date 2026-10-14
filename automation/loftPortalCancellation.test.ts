@@ -30,7 +30,7 @@ function proposalRow(input: {
   document: string;
   createdAt: string;
   status?: string;
-  tab?: "active" | "cancelled" | "delayed";
+  tab?: "active" | "sent" | "cancelled" | "delayed";
 }): string {
   return `<tr data-proposal-id="${input.id}" data-tab="${input.tab ?? "active"}"${input.tab && input.tab !== "active" ? " hidden" : ""}>
     <td><a href="/fianca-aluguel/imobiliaria/proposta/${input.id}">${input.id}</a></td>
@@ -49,6 +49,7 @@ function pageHtml(
   cancelledTabWorks = true,
 ): string {
   return `<!doctype html><html lang="pt-BR"><body>
+    <button id="sent-tab" role="tab" type="button">Enviadas aguardando ativação</button>
     <button id="cancelled-tab" role="tab" type="button">Canceladas</button>
     <label>Proposta, nome/razão social, CPF/CNPJ ou tag
       <input id="search" placeholder="Proposta, nome/razão social, CPF/CNPJ ou tag" />
@@ -87,11 +88,15 @@ function pageHtml(
         });
       };
       document.querySelector('#search-button').addEventListener('click', applyFilter);
+      document.querySelector('#sent-tab').addEventListener('click', () => {
+        document.body.dataset.tab = 'sent';
+        applyFilter();
+      });
       document.querySelector('#cancelled-tab').addEventListener('click', () => {
         ${
           cancelledTabWorks
             ? "document.body.dataset.tab = 'cancelled';"
-            : "document.querySelectorAll('[data-tab=delayed]').forEach((row) => { row.dataset.tab = 'active'; });"
+            : "document.body.dataset.tab = 'active'; document.querySelectorAll('[data-tab=delayed]').forEach((row) => { row.dataset.tab = 'active'; });"
         }
         applyFilter();
       });
@@ -303,6 +308,35 @@ test("lista somente IDs visíveis que correspondem exatamente ao CPF", async () 
   await page.close();
 });
 
+test("cria o snapshot reunindo propostas iniciadas, enviadas e canceladas", async () => {
+  const page = await pageWithHtml(
+    pageHtml(
+      proposalRow({ id: "4788303", document: "792.531.729-91", createdAt: "10/10/2026" }),
+      true,
+      [
+        proposalRow({
+          id: "4789594",
+          document: "792.531.729-91",
+          createdAt: "13/10/2026",
+          tab: "sent",
+        }),
+        proposalRow({
+          id: "4787000",
+          document: "792.531.729-91",
+          createdAt: "09/10/2026",
+          status: "Cancelada",
+          tab: "cancelled",
+        }),
+      ].join(""),
+    ),
+  );
+
+  const ids = await listLoftProposalIdsForDocument(page, "79253172991", 1_000);
+
+  assert.deepEqual(ids, ["4788303", "4789594", "4787000"]);
+  await page.close();
+});
+
 test("aceita uma tabela carregada e vazia como snapshot sem propostas anteriores", async () => {
   const page = await pageWithHtml(pageHtml(""));
 
@@ -486,6 +520,35 @@ test("reconhece de forma idempotente uma proposta já cancelada sem abrir o menu
     document: "79253172991",
     reason: "Inquilino desistiu do aluguel",
     timeoutMs: 1_000,
+  });
+
+  assert.equal(result.status, "Cancelado");
+  assert.equal(result.cancellationReason, null);
+  assert.equal(await page.locator("body").getAttribute("data-cancelled-id"), null);
+  assert.equal(await page.locator("#menu").isHidden(), true);
+  await page.close();
+});
+
+test("reconhece proposta reprovada na aba Canceladas como terminal sem abrir o menu", async () => {
+  const page = await pageWithHtml(
+    pageHtml(
+      "",
+      true,
+      proposalRow({
+        id: "4789594",
+        document: "792.531.729-91",
+        createdAt: "13/10/2026",
+        status: "Reprovada",
+        tab: "cancelled",
+      }),
+    ),
+  );
+
+  const result = await cancelLoftProposalViaPortal(page, {
+    proposalId: "4789594",
+    document: "79253172991",
+    reason: "Inquilino desistiu do aluguel",
+    timeoutMs: 500,
   });
 
   assert.equal(result.status, "Cancelado");

@@ -5,7 +5,7 @@ export const LOFT_PROPOSALS_URL =
 
 const DEFAULT_TIMEOUT_MS = 15_000;
 const POLL_INTERVAL_MS = 200;
-const CANCELLED_PATTERN = /\b(?:cancelad[ao]|exclu[ií]d[ao])\b/i;
+const TERMINAL_PROPOSAL_PATTERN = /\b(?:cancelad[ao]|exclu[ií]d[ao]|reprovad[ao]|recusad[ao])\b/i;
 const SUCCESS_PATTERN =
   /(?:proposta[^\n]{0,80}(?:cancelad[ao]|exclu[ií]d[ao])[^\n]{0,80}(?:sucesso|êxito)|(?:cancelamento|exclus[aã]o)[^\n]{0,80}(?:conclu[ií]d[ao]|realizad[ao]|sucesso)|proposta\s+(?:foi\s+)?(?:cancelad[ao]|exclu[ií]d[ao]))/i;
 const PLACEHOLDER_REASON_PATTERN =
@@ -303,6 +303,47 @@ async function submitSearch(page: Page, input: Locator): Promise<void> {
   await page.waitForTimeout(POLL_INTERVAL_MS);
 }
 
+const ACTIVE_PROPOSAL_TAB_PATTERNS = [
+  /^iniciadas\s+aguardando\s+envio(?:\s*\d+)?$/i,
+  /^enviadas\s+aguardando\s+ativa[cç][aã]o(?:\s*\d+)?$/i,
+] as const;
+
+async function findProposalTab(page: Page, name: RegExp): Promise<Locator | null> {
+  return firstVisible([
+    page.getByRole("tab", { name }),
+    page.getByRole("button", { name }),
+    page.getByText(name, { exact: true }),
+  ]);
+}
+
+async function searchProposalTab(
+  page: Page,
+  tab: Locator,
+  query: string,
+  timeoutMs: number,
+): Promise<void> {
+  await tab.click();
+  await page.waitForTimeout(POLL_INTERVAL_MS);
+  const searchInput = await findSearchInput(page, timeoutMs);
+  await searchInput.fill(query);
+  await submitSearch(page, searchInput);
+}
+
+async function searchOtherActiveTabsForExactCandidate(
+  page: Page,
+  proposalId: string,
+  timeoutMs: number,
+): Promise<ProposalCandidate | null> {
+  for (const pattern of ACTIVE_PROPOSAL_TAB_PATTERNS) {
+    const tab = await findProposalTab(page, pattern);
+    if (!tab || (await tab.getAttribute("aria-selected")) === "true") continue;
+    await searchProposalTab(page, tab, proposalId, timeoutMs);
+    const candidate = await waitForExactCandidate(page, proposalId, timeoutMs);
+    if (candidate) return candidate;
+  }
+  return null;
+}
+
 async function navigateAndSearchProposals(
   page: Page,
   query: string,
@@ -355,9 +396,9 @@ async function searchCancelledTab(
   await submitSearch(page, searchInput);
   const candidate = await waitForExactCandidate(page, proposalId, timeoutMs);
   if (!candidate) return null;
-  if (!CANCELLED_PATTERN.test(candidate.text)) {
+  if (!TERMINAL_PROPOSAL_PATTERN.test(candidate.text)) {
     throw new LoftPortalCancellationError(
-      `A aba Canceladas não confirmou o estado da proposta ${proposalId}; nenhuma ação foi presumida como concluída.`,
+      `A aba Canceladas não confirmou o estado terminal da proposta ${proposalId}; nenhuma ação foi presumida como concluída.`,
     );
   }
   return candidate;
@@ -700,7 +741,7 @@ async function selectedRowIsCancelled(
           Boolean(document && candidate.documents.includes(document)) &&
           candidate.createdText === selected.createdText,
       );
-  return sameRows.some((candidate) => CANCELLED_PATTERN.test(candidate.text));
+  return sameRows.some((candidate) => TERMINAL_PROPOSAL_PATTERN.test(candidate.text));
 }
 
 async function waitForCancellationConfirmation(
@@ -747,6 +788,9 @@ async function cancelLoftProposalFromPortal(
   let candidate = await waitForExactCandidate(page, proposalId, timeoutMs);
   let foundInCancelledTab = false;
   if (!candidate) {
+    candidate = await searchOtherActiveTabsForExactCandidate(page, proposalId, timeoutMs);
+  }
+  if (!candidate) {
     candidate = await searchCancelledTab(page, proposalId, timeoutMs);
     foundInCancelledTab = Boolean(candidate);
   }
@@ -758,7 +802,7 @@ async function cancelLoftProposalFromPortal(
   await assertCandidateStillMatches(candidate, proposalId, document);
   await options.onProposalResolved?.(proposalId);
 
-  if (foundInCancelledTab || CANCELLED_PATTERN.test(candidate.text)) {
+  if (foundInCancelledTab || TERMINAL_PROPOSAL_PATTERN.test(candidate.text)) {
     return {
       proposalId,
       document,
@@ -831,7 +875,27 @@ export async function listLoftProposalIdsForDocument(
   }
   const boundedTimeout = Math.max(500, timeoutMs);
   await navigateAndSearchProposals(page, normalizedDocument, boundedTimeout);
-  return waitForVisibleProposalIdsForDocument(page, normalizedDocument, boundedTimeout);
+  const proposalIds = new Set(
+    await waitForVisibleProposalIdsForDocument(page, normalizedDocument, boundedTimeout),
+  );
+
+  const tabPatterns = [
+    ...ACTIVE_PROPOSAL_TAB_PATTERNS,
+    /^canceladas(?:\s*\d+)?$/i,
+  ];
+  for (const pattern of tabPatterns) {
+    const tab = await findProposalTab(page, pattern);
+    if (!tab || (await tab.getAttribute("aria-selected")) === "true") continue;
+    await searchProposalTab(page, tab, normalizedDocument, boundedTimeout);
+    const ids = await waitForVisibleProposalIdsForDocument(
+      page,
+      normalizedDocument,
+      boundedTimeout,
+    );
+    ids.forEach((proposalId) => proposalIds.add(proposalId));
+  }
+
+  return Array.from(proposalIds);
 }
 
 /** Valida URL e busca da superfície de cancelamento sem selecionar nem alterar propostas. */
