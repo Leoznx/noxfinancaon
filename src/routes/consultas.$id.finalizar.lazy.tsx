@@ -98,6 +98,7 @@ export const Route = createLazyFileRoute("/consultas/$id/finalizar")({
 
 type EtapaKey = "resumo" | "pagamento" | "revisao" | "enviada";
 type IncendioPagamento = "a_vista" | "parcelado";
+type PaymentType = "imobiliaria" | "inquilino";
 type CartaoForm = {
   holderName: string;
   number: string;
@@ -267,12 +268,6 @@ function toMoney(value: unknown) {
   return Math.round((Number.isFinite(parsed) ? parsed : 0) * 100) / 100;
 }
 
-function isAgencyBilling(consulta: any) {
-  return (
-    consulta?.payment_type === "imobiliaria" || consulta?.billing_responsible_role === "imobiliaria"
-  );
-}
-
 // Alíquota do seguro incêndio (obrigatório) sobre o valor do aluguel, por tipo de imóvel.
 function calcularPercentualIncendio(
   tipo: "residencial" | "comercial",
@@ -316,6 +311,7 @@ function FinalizarPage() {
   const [comissaoPct, setComissaoPct] = useState<number>(10);
 
   // Pagamento
+  const [paymentType, setPaymentType] = useState<PaymentType | "">("");
   const [pagamento, setPagamento] = useState<"credit_card" | "pix" | "boleto" | "">("");
   const [incendioPagamento, setIncendioPagamento] = useState<IncendioPagamento>("parcelado");
   const [aceiteTermos, setAceiteTermos] = useState(false);
@@ -366,6 +362,9 @@ function FinalizarPage() {
           setComissaoPct(Number((data as any).insurance_commission_pct));
         if ((data as any).insurance_payment_method)
           setPagamento((data as any).insurance_payment_method);
+        const responsavelSalvo = (data as any).payment_type || (data as any).billing_responsible_role;
+        if (responsavelSalvo === "imobiliaria" || responsavelSalvo === "inquilino")
+          setPaymentType(responsavelSalvo);
 
         // O tipo do imóvel é a base da alíquota do seguro incêndio no backend.
         // Começar sempre em "residencial" fazia a tela mostrar um valor e o
@@ -500,6 +499,8 @@ function FinalizarPage() {
   }
 
   async function avancarParaRevisao() {
+    if (!paymentType)
+      return toast.error("Escolha se o pagamento será feito pela imobiliária ou pelo inquilino.");
     if (!pagamento) return toast.error("Selecione uma forma de pagamento.");
     if (!aceiteTermos) return toast.error("Aceite os Termos e Condições para continuar.");
     try {
@@ -507,6 +508,7 @@ function FinalizarPage() {
       await fnSalvarPagamento({
         data: {
           consultaId: id,
+          payment_type: paymentType,
           insurance_payment_method: pagamento as any,
           insurance_payment_method_label: label,
           property_not_wood_confirmed: true,
@@ -537,6 +539,10 @@ function FinalizarPage() {
   }
 
   async function handleEnviar(options: { silentSuccess?: boolean } = {}) {
+    if (!paymentType) {
+      toast.error("Escolha se o pagamento será feito pela imobiliária ou pelo inquilino.");
+      return;
+    }
     setEnviando(true);
     try {
       await fnSalvarConfig({
@@ -558,6 +564,7 @@ function FinalizarPage() {
       await fnSalvarPagamento({
         data: {
           consultaId: id,
+          payment_type: paymentType,
           insurance_payment_method: (pagamento || "credit_card") as any,
           insurance_payment_method_label: `${formaPagamentoLabel} - ${incendioPagamentoLabel}`,
           property_not_wood_confirmed: true,
@@ -612,7 +619,7 @@ function FinalizarPage() {
 
   const numeroProposta = `NOX-${String(id).slice(0, 8).toUpperCase()}`;
 
-  const seguroConcluido = !!(pagamento && aceiteTermos);
+  const seguroConcluido = aceiteTermos;
 
   return (
     <DashboardLayout>
@@ -657,6 +664,8 @@ function FinalizarPage() {
         custoSaida={custoSaida}
         contratoAssinadoPendente={contratoAssinadoPendente}
         enviando={enviando}
+        paymentType={paymentType}
+        setPaymentType={setPaymentType}
         pagamento={pagamento}
         setPagamento={setPagamento}
         incendioPagamento={incendioPagamento}
@@ -930,6 +939,8 @@ function ResumoPropostaLoft(p: any) {
     custoSaida,
     contratoAssinadoPendente,
     enviando,
+    paymentType,
+    setPaymentType,
     pagamento,
     setPagamento,
     incendioPagamento,
@@ -952,9 +963,6 @@ function ResumoPropostaLoft(p: any) {
     : "—";
   const planoNome = (plano?.nome ?? "—").replace(/^NOX\s+/i, "");
   const contaPagadora = billingAccountCopy(consulta?.responsavel_profile?.role ?? user?.role);
-  const tipoPagador = isAgencyBilling(consulta)
-    ? `Recorrência via ${contaPagadora.title}`
-    : "Recorrência via Inquilino";
   const solicitacao =
     String(id).slice(0, 8).replace(/\D/g, "") || numeroProposta.replace("NOX-", "");
   const historicoPadrao = `Criada solicitação ${numeroProposta} no produto ${planoNome}. Aluguel ${fmt(aluguel)}, condomínio ${fmt(condominio)}, outras taxas ${fmt(taxas)} e total ${fmt(totalLoc)}.`;
@@ -982,7 +990,7 @@ function ResumoPropostaLoft(p: any) {
   );
   const valorCobradoAgora = toMoney(mensalidadeFinal + pagamentoInicial);
   const pagamentoSelecionado = PAGAMENTOS.find((item) => item.id === pagamento);
-  const pagamentoViaImobiliaria = isAgencyBilling(consulta);
+  const pagamentoViaImobiliaria = paymentType === "imobiliaria";
   const checkoutActions = checkoutActionsForMethod(pagamento);
   const pagamentoOpcoes = ["boleto", "pix", "credit_card"]
     .map((id) => PAGAMENTOS.find((item) => item.id === id))
@@ -1106,6 +1114,9 @@ function ResumoPropostaLoft(p: any) {
    * desses campos gravados para calcular o valor correto.
    */
   async function persistirAntesDoPagamento(params: { subtipo: string; metodoLabel: string }) {
+    if (!paymentType) {
+      throw new Error("Escolha se o pagamento será feito pela imobiliária ou pelo inquilino.");
+    }
     try {
       await fnSalvarConfig({
         data: {
@@ -1119,6 +1130,7 @@ function ResumoPropostaLoft(p: any) {
       await fnSalvarPagamento({
         data: {
           consultaId: id,
+          payment_type: paymentType,
           insurance_payment_method: pagamento as any,
           insurance_payment_method_label: params.metodoLabel,
           property_not_wood_confirmed: true,
@@ -1137,6 +1149,12 @@ function ResumoPropostaLoft(p: any) {
         insurance_assistance: assistencia,
         insurance_commission_pct: comissaoPct,
         imovel_subtipo: params.subtipo,
+        payment_type: paymentType,
+        billing_responsible_role: paymentType,
+        billing_responsible_user_id:
+          paymentType === "inquilino"
+            ? consulta?.tenant_user_id ?? null
+            : consulta?.profile_id_solicitante ?? consulta?.responsavel_profile?.id ?? null,
         insurance_payment_method: pagamento,
         insurance_payment_method_label: params.metodoLabel,
         property_not_wood_confirmed: true,
@@ -1199,6 +1217,8 @@ function ResumoPropostaLoft(p: any) {
   }
 
   function validarCheckout() {
+    if (!paymentType)
+      return "Escolha se o pagamento será feito pela imobiliária ou pelo inquilino.";
     if (!pagamento) return "Selecione uma forma de pagamento.";
     if (!aceiteTermos) return "Aceite os Termos e Condições para seguir para o pagamento.";
     if (valorCobradoAgora <= 0) return "Não foi possível calcular o valor do pagamento.";
@@ -1450,7 +1470,6 @@ function ResumoPropostaLoft(p: any) {
 
         <ResumoBox title="Dados do plano" onEdit={onEditarDados}>
           <ResumoRow label="Plano" value={<strong>{planoNome}</strong>} />
-          <ResumoRow label="Tipo de pagador" value={tipoPagador} />
           <ResumoRow label="Período do contrato" value={contractPeriodLabel} />
           <ResumoRow label="Valor da taxa" value={fmt(premioMensal * 12)} />
           <ResumoRow label="Valor do setup" value={fmt(valorSetup)} />
@@ -1501,7 +1520,7 @@ function ResumoPropostaLoft(p: any) {
         <ResumoBox title="Dados do inquilino" onEdit={onEditarDados}>
           <div className="rounded-sm border border-slate-300">
             <span className="inline-flex bg-sky-700 px-2 py-1 text-xs font-bold text-white">
-              {pagamentoViaImobiliaria ? "Inquilino" : "Pagador"}
+              Inquilino
             </span>
             <div className="grid gap-4 p-5 text-sm sm:grid-cols-[1.5fr_0.8fr_0.8fr_0.8fr]">
               <div>
@@ -1668,11 +1687,61 @@ function ResumoPropostaLoft(p: any) {
                 <div>
                   <h3 className="text-lg font-bold text-neutral-950">Pagamento</h3>
                   <p className="mt-1 text-sm text-slate-600">
-                    Escolha a forma de pagamento e como cobrar o seguro incêndio. Boleto, Pix e
-                    cartão preenchido agora usam os dados cadastrados {pagamentoViaImobiliaria
-                      ? contaPagadora.dataOwner
-                      : "da pessoa inquilina"}.
+                    Escolha quem será responsável pelo pagamento, a forma de cobrança e como cobrar
+                    o seguro incêndio.
                   </p>
+                </div>
+
+                <div className="space-y-3">
+                  <h4 className="text-sm font-bold text-neutral-950">
+                    Quem será responsável pelo pagamento?
+                  </h4>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={() => setPaymentType("imobiliaria")}
+                      className={`rounded-md border p-4 text-left transition ${
+                        paymentType === "imobiliaria"
+                          ? "border-yellow-400 bg-yellow-50 ring-1 ring-yellow-400"
+                          : "border-slate-300 bg-white hover:border-slate-400"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <Building2 size={22} className="text-neutral-800" />
+                        <span
+                          className={`h-4 w-4 rounded-full border-2 ${paymentType === "imobiliaria" ? "border-neutral-900 bg-yellow-400" : "border-slate-300"}`}
+                        />
+                      </div>
+                      <p className="mt-4 text-sm font-bold text-neutral-950">
+                        Pagamento via {contaPagadora.title}
+                      </p>
+                      <p className="mt-1 text-xs leading-relaxed text-slate-600">
+                        As cobranças deste contrato usarão os dados cadastrados {contaPagadora.dataOwner}.
+                      </p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentType("inquilino")}
+                      className={`rounded-md border p-4 text-left transition ${
+                        paymentType === "inquilino"
+                          ? "border-yellow-400 bg-yellow-50 ring-1 ring-yellow-400"
+                          : "border-slate-300 bg-white hover:border-slate-400"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <User size={22} className="text-neutral-800" />
+                        <span
+                          className={`h-4 w-4 rounded-full border-2 ${paymentType === "inquilino" ? "border-neutral-900 bg-yellow-400" : "border-slate-300"}`}
+                        />
+                      </div>
+                      <p className="mt-4 text-sm font-bold text-neutral-950">
+                        Pagamento via Inquilino
+                      </p>
+                      <p className="mt-1 text-xs leading-relaxed text-slate-600">
+                        As cobranças serão vinculadas ao inquilino e ficarão disponíveis no painel.
+                      </p>
+                    </button>
+                  </div>
                 </div>
 
                 {metodoCobrancaPersistida && (
@@ -2002,7 +2071,7 @@ function ResumoPropostaLoft(p: any) {
                     type="button"
                     variant="outline"
                     onClick={() => void executarPagamento("pay_later")}
-                    disabled={pagando || enviando || !seguroConcluido || !pagamento}
+                    disabled={pagando || enviando || !seguroConcluido || !paymentType || !pagamento}
                     className="h-11 rounded-md border-slate-300 bg-white px-6 font-bold text-neutral-900 hover:bg-slate-50 disabled:opacity-50"
                   >
                     {pagando ? "Processando..." : "Pagar depois"}
@@ -2012,7 +2081,7 @@ function ResumoPropostaLoft(p: any) {
                   <Button
                     type="button"
                     onClick={() => void executarPagamento("pay_now")}
-                    disabled={pagando || enviando || !seguroConcluido || !pagamento}
+                    disabled={pagando || enviando || !seguroConcluido || !paymentType || !pagamento}
                     className="h-11 rounded-md bg-yellow-400 px-6 font-bold text-neutral-900 hover:bg-yellow-300 disabled:opacity-50"
                   >
                     {pagando
@@ -2036,6 +2105,11 @@ function ResumoPropostaLoft(p: any) {
           {pagamentoAberto && !pagamento && (
             <p className="text-xs text-neutral-500">
               Escolha uma forma de pagamento para enviar a proposta.
+            </p>
+          )}
+          {pagamentoAberto && !paymentType && (
+            <p className="text-xs text-neutral-500">
+              Escolha se o pagamento será feito pela imobiliária ou pelo inquilino.
             </p>
           )}
         </div>
@@ -2389,7 +2463,6 @@ function EtapaResumo(p: any) {
     onVoltar,
     onAvancar,
   } = p;
-  const contaPagadora = billingAccountCopy(consulta?.responsavel_profile?.role);
   return (
     <div className="space-y-6">
       <div>
@@ -2439,29 +2512,6 @@ function EtapaResumo(p: any) {
           <Linha label="Nascimento" value={consulta?.tenant_data_nascimento} />
         </Card>
 
-        <Card icon={<Building2 size={14} />} title="Tipo de pagamento">
-          <div
-            className={`p-3 rounded-xl border-2 ${isAgencyBilling(consulta) ? "border-yellow-400 bg-yellow-50" : "border-neutral-200"} mb-2`}
-          >
-            <p className="text-xs font-black flex items-center gap-1">
-              <Building2 size={14} /> Via {contaPagadora.title}
-            </p>
-            <p className="text-[11px] text-neutral-600">
-              Boleto, Pix e cartão preenchido agora usam os dados {contaPagadora.dataOwner}; o link de cartão pode
-              ser enviado ao inquilino.
-            </p>
-          </div>
-          <div
-            className={`p-3 rounded-xl border-2 ${!isAgencyBilling(consulta) ? "border-yellow-400 bg-yellow-50" : "border-neutral-200"}`}
-          >
-            <p className="text-xs font-black flex items-center gap-1">
-              <User size={14} /> Via inquilino
-            </p>
-            <p className="text-[11px] text-neutral-600">
-              O inquilino paga a fiança diretamente à NOX.
-            </p>
-          </div>
-        </Card>
 
         <Card icon={<FileCheck2 size={14} />} title="Documentos enviados">
           {documentos.length === 0 && (

@@ -3,18 +3,16 @@ import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { useAuth } from "@/components/AuthProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { ensureTenantUser } from "@/lib/proposta.functions";
 import { DEMO_COMPLEMENTARY_DATA } from "@/lib/demo-accounts";
 import { isDemoSession } from "@/lib/demo-session";
-import { billingAccountCopy } from "@/lib/billing-account";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Upload, X, Building2, User, FileText, ClipboardCheck, IdCard, Receipt, CheckCircle2, AlertTriangle, ArrowLeft, ArrowRight } from "lucide-react";
+import { Upload, X, FileText, ClipboardCheck, IdCard, Receipt, CheckCircle2, AlertTriangle, ArrowLeft, ArrowRight } from "lucide-react";
 
 export const Route = createLazyFileRoute("/consultas/$id/dados-complementares")({
   component: () => (
@@ -63,7 +61,6 @@ function maskCEP(v: string) {
 function DadosComplementaresPage() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
   const ensureTenantFn = useServerFn(ensureTenantUser);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -89,9 +86,6 @@ function DadosComplementaresPage() {
   const [email, setEmail] = useState("");
   const [telefone, setTelefone] = useState("");
 
-  // Pagamento
-  const [paymentType, setPaymentType] = useState<"imobiliaria" | "inquilino" | "">("");
-
   // Documentos (4 obrigatórios)
   const [docVistoria, setDocVistoria] = useState<File | null>(null);
   const [docContrato, setDocContrato] = useState<File | null>(null);
@@ -111,7 +105,7 @@ function DadosComplementaresPage() {
       try {
         const { data, error } = await supabase
           .from("consultas_credito")
-          .select(`*, inquilinos(*), imoveis(*), responsavel_profile:profiles!consultas_credito_profile_id_solicitante_fkey(id, role)`)
+          .select(`*, inquilinos(*), imoveis(*)`)
           .eq("id", id)
           .single();
         if (error) throw error;
@@ -138,7 +132,6 @@ function DadosComplementaresPage() {
           setNumero(demo.imovel.numero);
           setComplemento(demo.imovel.complemento);
           setSubtipo(demo.imovel.subtipo);
-          setPaymentType(demo.paymentType);
           setContratoAssinado(demo.contratoAssinado);
           setDocInquilinoSubtype(demo.documentoFoto);
         } else {
@@ -155,7 +148,6 @@ function DadosComplementaresPage() {
           setNumero((data as any).imovel_numero ?? im.numero ?? "");
           setComplemento((data as any).imovel_complemento ?? im.complemento ?? "");
           setSubtipo((data as any).imovel_subtipo ?? "");
-          if ((data as any).payment_type) setPaymentType((data as any).payment_type);
         }
 
         const { data: docs } = await supabase
@@ -223,7 +215,6 @@ function DadosComplementaresPage() {
     if (cpf.replace(/\D/g, "").length < 11) e.cpf = true;
     if (!email.trim()) e.email = true;
     if (!telefone.trim()) e.telefone = true;
-    if (!paymentType) e.paymentType = true;
     if (!demoMode) {
       if (!docVistoria && !hasExistingDoc("vistoria_imovel")) e.docVistoria = true;
       if (!docContrato && !hasExistingDoc("contrato_locacao")) e.docContrato = true;
@@ -248,7 +239,6 @@ function DadosComplementaresPage() {
         cpf: "CPF",
         email: "E-mail",
         telefone: "Telefone",
-        paymentType: "Tipo de pagamento",
         docVistoria: "Vistoria do imóvel",
         docContrato: "Contrato de locação",
         contratoAssinado: "Contrato assinado por todas as partes",
@@ -303,10 +293,6 @@ function DadosComplementaresPage() {
 
 
       // 2. Atualiza consulta
-      const billingRole = paymentType === "imobiliaria" ? "imobiliaria" : "inquilino";
-      const billingUserId = paymentType === "inquilino"
-        ? tenantUserId
-        : (consulta as any)?.profile_id_solicitante ?? null;
       const previousDocumentos = ((consulta as any)?.documentos && typeof (consulta as any).documentos === "object")
         ? (consulta as any).documentos
         : {};
@@ -326,9 +312,6 @@ function DadosComplementaresPage() {
           tenant_email: email,
           tenant_telefone: telefone,
           tenant_data_nascimento: nascimento || null,
-          payment_type: paymentType,
-          billing_responsible_role: billingRole,
-          billing_responsible_user_id: billingUserId,
           dados_complementares_em: new Date().toISOString(),
           documentos: {
             ...previousDocumentos,
@@ -412,10 +395,6 @@ function DadosComplementaresPage() {
     return <DashboardLayout><div className="p-10 text-sm text-neutral-500">Carregando...</div></DashboardLayout>;
   }
 
-  const contaPagadora = billingAccountCopy(
-    (consulta as any)?.responsavel_profile?.role ?? user?.role,
-  );
-
   return (
     <DashboardLayout>
       <div className="flex-1 flex flex-col px-4 sm:px-6 py-6 pb-28">
@@ -465,7 +444,7 @@ function DadosComplementaresPage() {
 
           {/* Contato do inquilino */}
           <section className="bg-white rounded-2xl border border-neutral-100 p-5 sm:p-6 space-y-4">
-            <h2 className="text-sm font-black uppercase tracking-widest text-neutral-700">Contato do inquilino (Pagador)</h2>
+            <h2 className="text-sm font-black uppercase tracking-widest text-neutral-700">Contato do inquilino</h2>
             <p className="text-xs text-neutral-500">Não é mais necessário fornecer o endereço do inquilino — usaremos o endereço do imóvel alugado.</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div><Label>Nome</Label><Input data-error={errors.nome || undefined} className={err("nome")} value={nome} onChange={(e) => { setNome(e.target.value); setErrors(p => ({ ...p, nome: false })); }} /></div>
@@ -473,29 +452,6 @@ function DadosComplementaresPage() {
               <div><Label>Data de nascimento</Label><Input type="date" value={nascimento} onChange={(e) => setNascimento(e.target.value)} /></div>
               <div><Label>E-mail *</Label><Input data-error={errors.email || undefined} className={err("email")} type="email" value={email} onChange={(e) => { setEmail(e.target.value); setErrors(p => ({ ...p, email: false })); }} /></div>
               <div className="sm:col-span-2"><Label>Telefone *</Label><Input data-error={errors.telefone || undefined} className={err("telefone")} value={telefone} onChange={(e) => { setTelefone(maskTel(e.target.value)); setErrors(p => ({ ...p, telefone: false })); }} placeholder="(00) 00000-0000" /></div>
-            </div>
-          </section>
-
-          {/* Tipo de pagamento */}
-          <section className="bg-white rounded-2xl border border-neutral-100 p-5 sm:p-6 space-y-4">
-            <h2 className="text-sm font-black uppercase tracking-widest text-neutral-700">Tipo de pagamento</h2>
-            <div data-error={errors.paymentType || undefined} className={`grid grid-cols-1 sm:grid-cols-2 gap-3 ${errors.paymentType ? "rounded-xl ring-2 ring-red-500 p-1" : ""}`}>
-              <button
-                type="button"
-                onClick={() => { setPaymentType("imobiliaria"); setErrors(p => ({ ...p, paymentType: false })); }}
-                className={`text-left p-5 rounded-xl border-2 transition-all ${paymentType === "imobiliaria" ? "border-yellow-400 bg-yellow-50" : "border-neutral-200 bg-white hover:border-neutral-300"}`}
-              >
-                <div className="flex items-center gap-2 mb-2"><Building2 size={18} /><span className="font-black text-sm">Pagamento via {contaPagadora.title}</span></div>
-                <p className="text-xs text-neutral-600 leading-relaxed">Boleto, Pix e cartão preenchido em “Pagar agora” usam os dados cadastrados {contaPagadora.dataOwner}. No cartão, o link também pode ser enviado ao inquilino.</p>
-              </button>
-              <button
-                type="button"
-                onClick={() => { setPaymentType("inquilino"); setErrors(p => ({ ...p, paymentType: false })); }}
-                className={`text-left p-5 rounded-xl border-2 transition-all ${paymentType === "inquilino" ? "border-yellow-400 bg-yellow-50" : "border-neutral-200 bg-white hover:border-neutral-300"}`}
-              >
-                <div className="flex items-center gap-2 mb-2"><User size={18} /><span className="font-black text-sm">Pagamento via Inquilino</span></div>
-                <p className="text-xs text-neutral-600 leading-relaxed">O inquilino paga a fiança diretamente para a NOX. As faturas e documentos ficam disponíveis no painel do inquilino.</p>
-              </button>
             </div>
           </section>
 

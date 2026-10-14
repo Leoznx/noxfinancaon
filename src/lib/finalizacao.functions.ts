@@ -37,6 +37,7 @@ export const salvarConfiguracaoSeguro = createServerFn({ method: "POST" })
 
 const salvarPagamentoSchema = z.object({
   consultaId: z.string().uuid(),
+  payment_type: z.enum(["imobiliaria", "inquilino"]),
   insurance_payment_method: z.enum(["credit_card", "pix", "boleto"]),
   insurance_payment_method_label: z.string(),
   property_not_wood_confirmed: z.boolean(),
@@ -51,9 +52,22 @@ export const salvarFormaPagamento = createServerFn({ method: "POST" })
       throw new Error("Confirme que o imóvel não é de madeira para continuar.");
     if (!data.terms_accepted) throw new Error("Aceite os Termos e Condições para continuar.");
 
+    const { data: consulta, error: consultaError } = await context.supabase
+      .from("consultas_credito")
+      .select("tenant_user_id, profile_id_solicitante")
+      .eq("id", data.consultaId)
+      .single();
+    if (consultaError) throw new Error(consultaError.message);
+
     const { error } = await context.supabase
       .from("consultas_credito")
       .update({
+        payment_type: data.payment_type,
+        billing_responsible_role: data.payment_type,
+        billing_responsible_user_id:
+          data.payment_type === "inquilino"
+            ? (consulta as any)?.tenant_user_id ?? null
+            : (consulta as any)?.profile_id_solicitante ?? null,
         insurance_payment_method: data.insurance_payment_method,
         insurance_payment_method_label: data.insurance_payment_method_label,
         property_not_wood_confirmed: true,
@@ -67,7 +81,7 @@ export const salvarFormaPagamento = createServerFn({ method: "POST" })
     await context.supabase.from("proposta_historico").insert({
       consulta_id: data.consultaId,
       tipo_evento: "pagamento_selecionado",
-      descricao: `Forma de pagamento do seguro selecionada: ${data.insurance_payment_method_label}. Termos aceitos. Confirmação de imóvel não madeirado realizada.`,
+      descricao: `Responsável pelo pagamento: ${data.payment_type === "imobiliaria" ? "imobiliária" : "inquilino"}. Forma de pagamento do seguro selecionada: ${data.insurance_payment_method_label}. Termos aceitos. Confirmação de imóvel não madeirado realizada.`,
       created_by: context.userId,
     } as any);
 
