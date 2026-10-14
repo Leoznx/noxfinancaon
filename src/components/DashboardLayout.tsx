@@ -711,7 +711,7 @@ export function DashboardLayout({
 
   return (
     <div
-      className={`${lockViewport ? "h-dvh min-h-0 overflow-hidden" : "min-h-dvh"} bg-neutral-50 flex ${
+      className={`nox-dashboard-shell ${lockViewport ? "h-dvh min-h-0 overflow-hidden" : "min-h-dvh"} bg-neutral-50 flex ${
         !lockViewport && lockDesktopViewport ? "xl:h-screen xl:min-h-0 xl:overflow-hidden" : ""
       }`}
     >

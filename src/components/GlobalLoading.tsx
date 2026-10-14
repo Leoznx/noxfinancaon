@@ -136,27 +136,34 @@ function GlobalLoadingOverlay({ active }: { active: boolean }) {
           </button>
         </div>
       ) : (
-        <div className="nox-global-loading__media" aria-hidden="true">
-          {!videoFailed ? (
-            <video
-              className="nox-global-loading__video"
-              src="/media/nox-loading-ping-pong.mp4"
-              poster="/media/nox-loading-static.png"
-              autoPlay
-              muted
-              loop
-              playsInline
-              preload="auto"
-              disablePictureInPicture
-              controlsList="nodownload noplaybackrate noremoteplayback"
-              onError={() => setVideoFailed(true)}
+        <div className="nox-global-loading__indicator" aria-hidden="true">
+          <div className="nox-global-loading__media">
+            {!videoFailed ? (
+              <video
+                className="nox-global-loading__video"
+                src="/media/nox-loading-ping-pong.mp4"
+                poster="/media/nox-loading-static.png"
+                autoPlay
+                muted
+                loop
+                playsInline
+                preload="auto"
+                disablePictureInPicture
+                controlsList="nodownload noplaybackrate noremoteplayback"
+                onError={() => setVideoFailed(true)}
+              />
+            ) : null}
+            <img
+              className={`nox-global-loading__static${videoFailed ? " nox-global-loading__static--visible" : ""}`}
+              src="/media/nox-loading-static.png"
+              alt=""
             />
-          ) : null}
-          <img
-            className={`nox-global-loading__static${videoFailed ? " nox-global-loading__static--visible" : ""}`}
-            src="/media/nox-loading-static.png"
-            alt=""
-          />
+          </div>
+          <span className="nox-global-loading__dots">
+            <i />
+            <i />
+            <i />
+          </span>
         </div>
       )}
     </div>

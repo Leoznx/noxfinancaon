@@ -339,13 +339,27 @@ body:has(.nox-global-loading) {
   transition: opacity 120ms ease-out;
 }
 
+body:has(.nox-dashboard-shell) .nox-global-loading {
+  inset: 4rem 0 0;
+  z-index: 30;
+  width: auto;
+  height: auto;
+}
+
 .nox-global-loading--exiting {
   opacity: 0;
 }
 
+.nox-global-loading__indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
 .nox-global-loading__media {
   position: relative;
-  width: 160px;
+  width: 96px;
   aspect-ratio: 1;
   overflow: hidden;
 }
@@ -364,6 +378,41 @@ body:has(.nox-global-loading) {
 
 .nox-global-loading__static--visible {
   display: block;
+}
+
+.nox-global-loading__dots {
+  display: flex;
+  height: 12px;
+  align-items: flex-end;
+  gap: 5px;
+}
+
+.nox-global-loading__dots i {
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: #f4bf00;
+  animation: nox-loading-dot 780ms ease-in-out infinite alternate;
+}
+
+.nox-global-loading__dots i:nth-child(2) {
+  animation-delay: 130ms;
+}
+
+.nox-global-loading__dots i:nth-child(3) {
+  animation-delay: 260ms;
+}
+
+@keyframes nox-loading-dot {
+  from {
+    transform: translateY(0);
+    opacity: 0.45;
+  }
+
+  to {
+    transform: translateY(-6px);
+    opacity: 1;
+  }
 }
 
 .nox-global-loading__error {
@@ -400,7 +449,13 @@ body:has(.nox-global-loading) {
 
 @media (max-width: 640px) {
   .nox-global-loading__media {
-    width: 120px;
+    width: 76px;
+  }
+}
+
+@media (min-width: 1024px) {
+  body:has(.nox-dashboard-shell) .nox-global-loading {
+    left: 16rem;
   }
 }
 
@@ -415,6 +470,11 @@ body:has(.nox-global-loading) {
 
   .nox-global-loading__static {
     display: block;
+  }
+
+  .nox-global-loading__dots i {
+    animation: none;
+    opacity: 0.65;
   }
 }
 @media (min-width: 1280px) and (max-height: 700px) {
