@@ -60,6 +60,18 @@ test("não tenta retirar outro cancelamento enquanto uma submissão aguarda reco
   );
 });
 
+test("faz o snapshot em paralelo e evita reabrir a lista durante a estabilização", async () => {
+  const worker = await readFile(workerUrl, "utf8");
+
+  assert.match(worker, /let snapshotPrecarregado = env\.loftCancellationEnabled/);
+  assert.match(worker, /snapshotDesteClique/);
+  assert.match(worker, /proximaReconciliacaoLoftEm\.set\(job\.id/);
+  assert.doesNotMatch(
+    worker,
+    /throw new Error\(\s*"As propostas candidatas já aparecem em estado terminal/,
+  );
+});
+
 test("encerra reparos sem lease depois que todas as tentativas foram consumidas", async () => {
   const migration = await readFile(exhaustedRepairsMigrationUrl, "utf8");
 

@@ -114,6 +114,20 @@ test("monitor transforma qualquer linha real de erro em incidente e ignora event
   assert.equal(analyzeWorkerLogLine("Validação concluída com 0 erros", when), null);
   assert.equal(
     analyzeWorkerLogLine(
+      "Sessão ociosa — recarregando antes de preencher para evitar travar sem erro.",
+      when,
+    ),
+    null,
+  );
+  assert.equal(
+    analyzeWorkerLogLine(
+      "ERRO: As propostas candidatas já aparecem em estado terminal, mas a lista ainda aguarda estabilização.",
+      when,
+    ),
+    null,
+  );
+  assert.equal(
+    analyzeWorkerLogLine(
       "ERRO: Spool 1789420477371-caa817.json ainda nao pode ser enviado — StorageApiError",
       when,
     ),

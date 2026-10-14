@@ -13,6 +13,11 @@ services:
       # Sobrescreve um eventual valor legado ainda presente no .env da VPS.
       CREDPAGO_URL: https://app.loft.com.br/erp/proposta/analise-de-credito
       HEADLESS: "true"
+      # O deploy informa o commit atual; o fallback preserva instalações antigas.
+      AUTOMATION_VERSION: "${AUTOMATION_VERSION:-unknown}"
+      DEPLOY_VERSION: "${DEPLOY_VERSION:-unknown}"
+      # Evita que um valor legado de 5s no .env atrase cada nova simulacao.
+      AUTOMATION_POLL_INTERVAL_MS: "1500"
       # O cancelador compartilha a sessão autenticada do Chromium e é parte da
       # prontidão operacional do worker.
       LOFT_CANCELLATION_ENABLED: "${LOFT_CANCELLATION_ENABLED:-true}"

@@ -314,7 +314,9 @@ export function watchConsultaCredito(
   let consecutiveErrors = 0;
   let errorReported = false;
   let activeController: AbortController | null = null;
-  const pollIntervalMs = options.pollIntervalMs ?? 4000;
+  // O Realtime continua sendo o caminho principal. O fallback mais curto reduz
+  // a espera visível quando a conexão websocket estiver indisponível.
+  const pollIntervalMs = options.pollIntervalMs ?? 2000;
   const requestTimeoutMs = options.requestTimeoutMs ?? 12_000;
 
   const emit = (c: ConsultaCredito | null) => {

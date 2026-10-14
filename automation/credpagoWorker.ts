@@ -368,7 +368,17 @@ async function ensureLoggedIn(
 // sempre que a última atividade real foi há muito tempo.
 // ---------------------------------------------------------------------------
 let ultimaAtividadeEm = Date.now();
-const SESSAO_OCIOSA_MS = 3 * 60 * 1000; // 3 minutos
+// A validacao periodica do cancelamento tambem navega com a mesma sessao e a
+// mantem aquecida. O limite fica acima desse ciclo para nao carregar duas vezes
+// a pagina justamente na primeira consulta depois de alguns minutos ociosa.
+const SESSAO_OCIOSA_MS = Math.max(5 * 60 * 1000, env.authCheckIntervalMs + 30_000);
+
+// A lista da Loft e custosa (navegacao + busca em todas as abas). Depois que
+// uma reconciliacao ainda nao madura foi verificada, aguardamos em memoria antes
+// de abrir a mesma lista novamente. Novas simulacoes continuam fluindo nesse
+// intervalo e, apos restart, a verificacao segura simplesmente e refeita.
+const RECONCILIATION_RETRY_MS = 30_000;
+const proximaReconciliacaoLoftEm = new Map<string, number>();
 
 // ---------------------------------------------------------------------------
 // Fila / persistência
@@ -653,6 +663,9 @@ async function reconcilePendingLoftCancellation(
   const job = Array.isArray(data) && data.length ? (data[0] as LoftCancellationJob) : null;
   if (!job) return false;
 
+  const proximaVerificacao = proximaReconciliacaoLoftEm.get(job.id) ?? 0;
+  if (Date.now() < proximaVerificacao) return true;
+
   const document = await loadLoftCancellationDocument(job);
   let page: Page | null = null;
   try {
@@ -675,10 +688,12 @@ async function reconcilePendingLoftCancellation(
       ) {
         registrarSucessoFilaCancelamento();
         runtimeState.cancellationExecution = "ok";
+        proximaReconciliacaoLoftEm.set(job.id, Date.now() + RECONCILIATION_RETRY_MS);
         return true;
       }
       await persistirSessao();
       await finishMissingLoftReconciliation(job);
+      proximaReconciliacaoLoftEm.delete(job.id);
       runtimeState.cancellationExecution = "ok";
       log(
         "Job de cancelamento encerrado sem clique: nenhuma proposta nova apareceu após o prazo completo de reconciliação.",
@@ -687,13 +702,18 @@ async function reconcilePendingLoftCancellation(
     }
     if (resolution.kind === "already-terminal") {
       const submittedAt = Date.parse(job.submitted_at ?? "");
-      if (!Number.isFinite(submittedAt) || Date.now() - submittedAt < 2 * 60_000) {
-        throw new Error(
-          "As propostas candidatas já aparecem em estado terminal, mas a lista ainda aguarda estabilização.",
-        );
+      if (!Number.isFinite(submittedAt)) {
+        throw new Error("O job de reconciliação não possui uma data de envio válida.");
+      }
+      if (Date.now() - submittedAt < 2 * 60_000) {
+        registrarSucessoFilaCancelamento();
+        runtimeState.cancellationExecution = "ok";
+        proximaReconciliacaoLoftEm.set(job.id, submittedAt + 2 * 60_000);
+        return true;
       }
       await persistirSessao();
       await finishAlreadyTerminalLoftReconciliation(job);
+      proximaReconciliacaoLoftEm.delete(job.id);
       runtimeState.cancellationExecution = "ok";
       runtimeState.totalCancellations += 1;
       runtimeState.lastSuccessfulCancellationAt = new Date().toISOString();
@@ -703,6 +723,7 @@ async function reconcilePendingLoftCancellation(
       return true;
     }
     await vincularPropostaAoCancelamento(job.id, resolution.proposalId);
+    proximaReconciliacaoLoftEm.delete(job.id);
     await persistirSessao();
     log("Job de cancelamento reconciliado com a única proposta nova encontrada após o envio.");
     return true;
@@ -1164,6 +1185,7 @@ async function processarConsulta(
   let simulacaoEnviada = false;
   let resultadoObtido = false;
   const cancelamentosAgendados: TrackedLoftCancellation[] = [];
+  const snapshotsEmAndamento = new Set<Promise<unknown>>();
   let ultimoCancelamentoEnviado: TrackedLoftCancellation | null = null;
   const creditSimulationCep = selectRandomCreditSimulationCep();
   try {
@@ -1249,10 +1271,12 @@ async function processarConsulta(
       });
     };
 
-    const prepararCancelamentoAntesDoEnvio = async (submissionToken: string) => {
-      if (!env.loftCancellationEnabled) return null;
+    type SnapshotPropostas =
+      | { ok: true; knownProposalIds: string[]; durationMs: number }
+      | { ok: false; error: unknown; durationMs: number };
+
+    const capturarSnapshotPropostas = async (): Promise<string[]> => {
       let snapshotPage: Page | null = null;
-      let snapshotCaptured = false;
       try {
         let knownProposalIds: string[] | null = null;
         let lastSnapshotError: unknown = null;
@@ -1280,6 +1304,40 @@ async function processarConsulta(
         if (!knownProposalIds) {
           throw lastSnapshotError ?? new Error("A lista de propostas não pôde ser fotografada.");
         }
+        return knownProposalIds;
+      } finally {
+        await snapshotPage?.close().catch(() => {});
+      }
+    };
+
+    const iniciarSnapshotPropostas = (): Promise<SnapshotPropostas> => {
+      const startedAt = Date.now();
+      const snapshot = capturarSnapshotPropostas().then(
+        (knownProposalIds) => ({
+          ok: true,
+          knownProposalIds,
+          durationMs: Date.now() - startedAt,
+        }),
+        (error) => ({ ok: false, error, durationMs: Date.now() - startedAt }),
+      );
+      snapshotsEmAndamento.add(snapshot);
+      void snapshot.finally(() => snapshotsEmAndamento.delete(snapshot));
+      return snapshot;
+    };
+
+    const prepararCancelamentoAntesDoEnvio = async (
+      submissionToken: string,
+      snapshotPrecarregado?: Promise<SnapshotPropostas> | null,
+    ) => {
+      if (!env.loftCancellationEnabled) return null;
+      let snapshotCaptured = false;
+      try {
+        const snapshot = snapshotPrecarregado
+          ? await snapshotPrecarregado
+          : await iniciarSnapshotPropostas();
+        if (!snapshot.ok) throw snapshot.error;
+        const knownProposalIds = snapshot.knownProposalIds;
+        log(`[${cid}] Snapshot de segurança pronto em ${snapshot.durationMs}ms.`);
         snapshotCaptured = true;
         const scheduled = await agendarCancelamentoLoft(
           consulta,
@@ -1309,8 +1367,6 @@ async function processarConsulta(
           );
         }
         return null;
-      } finally {
-        await snapshotPage?.close().catch(() => {});
       }
     };
 
@@ -1376,6 +1432,10 @@ async function processarConsulta(
 
     const executarTentativa = async (tentativa: number) => {
       log(`[${cid}] Preenchendo dados${tentativa > 1 ? ` (recuperação ${tentativa - 1}/1)` : ""}`);
+      // A busca segura de propostas e o preenchimento usam abas separadas. Fazer
+      // ambos em paralelo elimina a maior espera serial do caminho feliz; o job
+      // só e criado no onBeforeClick, depois que o snapshot terminou.
+      let snapshotPrecarregado = env.loftCancellationEnabled ? iniciarSnapshotPropostas() : null;
       await atualizarStep(consulta.id, tentativa > 1 ? "recuperando_portal" : "preenchendo");
       await fillPessoa(executionPage, consulta.tipo_pessoa || "PF");
       await fillDocumento(executionPage, consulta.documento || "", consulta.tipo_pessoa || "PF");
@@ -1415,6 +1475,8 @@ async function processarConsulta(
         ultimoCancelamentoEnviado = null;
         const submissionToken = randomUUID();
         let tracking: TrackedLoftCancellation | null = null;
+        const snapshotDesteClique = snapshotPrecarregado;
+        snapshotPrecarregado = null;
         const registrarEnvioObservado = async () => {
           simulacaoEnviada = true;
           estado.simulationSubmitted = true;
@@ -1428,7 +1490,10 @@ async function processarConsulta(
         try {
           await submitSimulation(executionPage, {
             onBeforeClick: async () => {
-              tracking = await prepararCancelamentoAntesDoEnvio(submissionToken);
+              tracking = await prepararCancelamentoAntesDoEnvio(
+                submissionToken,
+                snapshotDesteClique,
+              );
             },
             onAfterClick: async () => {
               if (!(await aguardarPostDaSimulacao())) {
@@ -1711,6 +1776,9 @@ async function processarConsulta(
       });
     }
   } finally {
+    // Uma falha de preenchimento pode acontecer enquanto a aba paralela ainda
+    // termina o snapshot. Aguarda seu fechamento antes de liberar a sessao.
+    await Promise.allSettled(Array.from(snapshotsEmAndamento));
     for (const tracking of cancelamentosAgendados) {
       if (!tracking.clicked || !tracking.submittedAt || tracking.confirmed) {
         continue;
@@ -1925,6 +1993,7 @@ async function validarSuperficieCancelamento(
     await ensureLoggedIn("CANCEL", page, persistirSessao);
     await probeLoftProposalCancellationPortal(page, env.loftCancellationRequestTimeoutMs);
     await persistirSessao();
+    ultimaAtividadeEm = Date.now();
     runtimeState.cancellationExecution = "ok";
     proximaValidacaoCancelamentoEm = Date.now() + env.authCheckIntervalMs;
     log("Superfície de cancelamento da Loft validada sem alterar propostas.");

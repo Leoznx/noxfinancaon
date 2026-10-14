@@ -134,7 +134,9 @@ export const env = {
   highCpuPercent: percentage("VPS_HIGH_CPU_PERCENT", 90),
   highMemoryPercent: percentage("VPS_HIGH_MEMORY_PERCENT", 90),
   lowDiskUsedPercent: percentage("VPS_LOW_DISK_USED_PERCENT", 90),
-  pollIntervalMs: positiveNumber("AUTOMATION_POLL_INTERVAL_MS", 5000, 500),
+  // A fila tem volume baixo e cada consulta e serializada no portal. Um polling
+  // curto reduz a espera percebida antes do claim sem criar concorrencia externa.
+  pollIntervalMs: positiveNumber("AUTOMATION_POLL_INTERVAL_MS", 1500, 500),
   credpagoUrl:
     !configuredCreditSimulationUrl || usesLegacyCreditSimulationUrl
       ? CURRENT_CREDIT_SIMULATION_URL
