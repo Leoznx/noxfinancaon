@@ -31,6 +31,7 @@ import {
   updateBillingOperation,
 } from "../_shared/contract-billing.ts";
 import { hasOversizedBody, safeEqualSecret } from "../_shared/http-security.ts";
+import { buildPaymentRequestWhatsappContent } from "../_shared/payment-notification-content.ts";
 
 type Body = {
   invoiceIds?: string[];
@@ -568,6 +569,15 @@ async function notifyBatchCreated(admin: any, batch: any, profile: any, raw: any
     })) continue;
     let result: any;
     try {
+      const contractRef = `lote ${String(batch.reference_month).padStart(2, "0")}/${batch.reference_year}`;
+      const whatsappContent = buildPaymentRequestWhatsappContent({
+        name: profile.nome,
+        method: "boleto",
+        amount: Number(batch.total_value || 0),
+        dueDate: batch.due_date,
+        contractRef,
+        paymentUrl,
+      });
       result = channel === "email"
         ? await sendPaymentEmail({
             to: profile.email,
@@ -577,11 +587,14 @@ async function notifyBatchCreated(admin: any, batch: any, profile: any, raw: any
             metodo: "boleto",
             vencimento: batch.due_date,
             boletoUrl: paymentUrl,
-            contratoRef: `lote ${String(batch.reference_month).padStart(2, "0")}/${batch.reference_year}`,
+            contratoRef: contractRef,
           })
         : await sendPaymentWhatsapp({
             to: profile.telefone,
-            mensagem: `Olá, ${profile.nome || "cliente"}. A cobrança consolidada NOX Fiança de ${Number(batch.total_value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}, com vencimento em ${String(batch.due_date).split("-").reverse().join("/")}, está disponível.${paymentUrl ? ` Link seguro: ${paymentUrl}` : " Consulte o painel financeiro."}`,
+            mensagem: whatsappContent.message,
+            title: whatsappContent.title,
+            paymentUrl,
+            buttonLabel: "Pagar",
           });
     } catch (error) {
       result = { sent: false, reason: error instanceof Error ? error.message : String(error) };

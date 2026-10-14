@@ -2145,18 +2145,38 @@ serve(async (req) => {
         initialPaymentUrl: invoice.payment_url,
         recurringCheckoutUrl: updated.checkout_url,
       });
-      for (const notification of notificationPlan) {
-        await sendInvoiceNotifications(supabase, {
-          invoice,
-          recipient,
-          paymentMethod: "credit_card",
-          amount: notification.amount,
-          dueDate: notification.dueDate,
-          paymentUrl: notification.paymentUrl,
-          contractRef: String(proposalId).slice(0, 8).toUpperCase(),
-          cardRegistration: notification.cardRegistration,
-          notificationType: notification.notificationType,
-        });
+      if (mode === "checkout") {
+        const initialNotification = notificationPlan.find((item) => !item.cardRegistration);
+        const recurringNotification = notificationPlan.find((item) => item.cardRegistration);
+        if (initialNotification) {
+          await sendInvoiceNotifications(supabase, {
+            invoice,
+            recipient,
+            paymentMethod: "credit_card",
+            amount: initialNotification.amount,
+            dueDate: initialNotification.dueDate,
+            paymentUrl: initialNotification.paymentUrl,
+            secondaryPaymentUrl: recurringNotification?.paymentUrl || null,
+            secondaryActionLabel: "Ativar mensalidades",
+            contractRef: String(proposalId).slice(0, 8).toUpperCase(),
+            notificationType: "card_registration_requested",
+          });
+        }
+      } else {
+        const notification = notificationPlan[0];
+        if (notification) {
+          await sendInvoiceNotifications(supabase, {
+            invoice,
+            recipient,
+            paymentMethod: "credit_card",
+            amount: notification.amount,
+            dueDate: notification.dueDate,
+            paymentUrl: notification.paymentUrl,
+            contractRef: String(proposalId).slice(0, 8).toUpperCase(),
+            cardRegistration: notification.cardRegistration,
+            notificationType: notification.notificationType,
+          });
+        }
       }
     }
     const recurringReady = recurringSetupAllowsContractActivation(consulta, updated);

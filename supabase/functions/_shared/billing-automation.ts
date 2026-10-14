@@ -215,13 +215,14 @@ export function buildCollectionMessage(params: {
       params.invoiceCount ? ` de ${params.invoiceCount} contratos ativos` : ""
     }`
     : "mensalidade";
-  const greeting = `Olá, ${params.name || "cliente"}.`;
+  const firstName = String(params.name || "cliente").trim().split(/\s+/u)[0] || "cliente";
+  const greeting = `Olá, ${firstName}! 👋`;
 
   if (params.cadence.kind === "pre_due") {
-    return `${greeting}\n\nLembrete NOX Fiança: sua ${reference} de ${amount} vence amanhã, ${dueDate}. O boleto e o Pix estão disponíveis na sua conta. Se o pagamento já foi realizado, desconsidere esta mensagem.`;
+    return `${greeting}\n\nSua ${reference} de ${amount} vence amanhã (${dueDate}).\n\nToque em *Pagar* para abrir o boleto ou Pix. 🔒`;
   }
 
-  return `${greeting}\n\nIdentificamos que sua ${reference} de ${amount}, com vencimento em ${dueDate}, continua em aberto há ${params.cadence.overdueDays} dia${
+  return `${greeting}\n\nSua ${reference} de ${amount}, vencida em ${dueDate}, está em aberto há ${params.cadence.overdueDays} dia${
     params.cadence.overdueDays === 1 ? "" : "s"
-  }. Gere agora o boleto atualizado com juros e multa ou o Pix na sua conta NOX Fiança. Se o pagamento já foi realizado, aguarde a confirmação automática ou fale com nosso atendimento.`;
+  }.\n\nToque em *Pagar* para abrir o boleto atualizado ou Pix. 🔒`;
 }

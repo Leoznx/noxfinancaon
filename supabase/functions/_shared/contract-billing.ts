@@ -6,8 +6,6 @@ import {
   asaasFetch,
   findAsaasPaymentByExternalReference,
   findAsaasSubscriptionByExternalReference,
-  formatBRL,
-  formatDateBr,
   hashPayload,
   logFinancialNotification,
   runInBackground,
@@ -23,6 +21,7 @@ import {
   reducePaymentStatus,
 } from "./billing-state.ts";
 import { dispatchD4SignContract, ensurePendingPolicy } from "./d4sign.ts";
+import { buildPaymentRequestWhatsappContent } from "./payment-notification-content.ts";
 
 function duplicateError(error: any) {
   const message = String(error?.message || "").toLowerCase();
@@ -518,6 +517,8 @@ export async function sendInvoiceNotifications(
     pixCopyPaste?: string | null;
     boletoBarcode?: string | null;
     contractRef: string;
+    secondaryPaymentUrl?: string | null;
+    secondaryActionLabel?: string;
     forceChannel?: "email" | "whatsapp";
     cardRegistration?: boolean;
     notificationType?: string;
@@ -550,6 +551,8 @@ export async function sendInvoiceNotifications(
             boletoBarcode: params.boletoBarcode,
             contratoRef: params.contractRef,
             cardRegistration: params.cardRegistration,
+            secondaryPaymentUrl: params.secondaryPaymentUrl,
+            secondaryActionLabel: params.secondaryActionLabel,
           })
         : { sent: false, reason: "missing_recipient" };
       await logFinancialNotification(supabase, {
@@ -561,13 +564,26 @@ export async function sendInvoiceNotifications(
         result,
       });
     } else {
-      const label = params.cardRegistration
-        ? "cadastro e autorizacao do cartao recorrente"
-        : `pagamento via ${params.paymentMethod === "pix" ? "Pix" : "boleto"}`;
+      const content = buildPaymentRequestWhatsappContent({
+        name: params.recipient.recipientName,
+        method: params.paymentMethod,
+        amount: params.amount,
+        dueDate: params.dueDate,
+        contractRef: params.contractRef,
+        paymentUrl: params.paymentUrl,
+        secondaryPaymentUrl: params.secondaryPaymentUrl,
+        secondaryActionLabel: params.secondaryActionLabel,
+        cardRegistration: params.cardRegistration,
+      });
       const result = params.recipient.recipientPhone
         ? await sendPaymentWhatsapp({
             to: params.recipient.recipientPhone,
-            mensagem: `Olá, ${params.recipient.recipientName || "cliente"}. A NOX Fiança gerou o ${label} do contrato ${params.contractRef}. Valor: ${formatBRL(params.amount)}. Vencimento: ${formatDateBr(params.dueDate)}.${params.paymentUrl ? ` Link seguro: ${params.paymentUrl}` : " Consulte sua conta para acompanhar."}`,
+            mensagem: content.message,
+            title: content.title,
+            paymentUrl: params.paymentUrl,
+            buttonLabel: "Pagar",
+            secondaryPaymentUrl: params.secondaryPaymentUrl,
+            secondaryButtonLabel: params.secondaryActionLabel,
           })
         : { sent: false, reason: "missing_recipient" };
       await logFinancialNotification(supabase, {

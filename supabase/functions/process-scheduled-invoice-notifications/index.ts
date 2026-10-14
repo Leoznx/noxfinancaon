@@ -170,7 +170,7 @@ serve(async (req) => {
       admin
         .from("faturas_inquilino")
         .select(
-          "id, valor, vencimento, status, boleto_url, consolidated_item_id, recipient_user_id, tenant_user_id, asaas_payment:asaas_payments(recipient_type, recipient_user_id, recipient_tenant_id, recipient_name, recipient_email, recipient_phone, boleto_url)",
+          "id, valor, vencimento, status, boleto_url, payment_url, consolidated_item_id, recipient_user_id, tenant_user_id, asaas_payment:asaas_payments(recipient_type, recipient_user_id, recipient_tenant_id, recipient_name, recipient_email, recipient_phone, boleto_url)",
         )
         .gte("vencimento", fromDate)
         .lte("vencimento", toDate)
@@ -211,7 +211,7 @@ serve(async (req) => {
       invoiceId: invoice.id,
       amount: Number(invoice.valor || 0),
       dueDate: invoice.vencimento,
-      paymentUrl: invoice.boleto_url || payment.boleto_url || null,
+      paymentUrl: invoice.payment_url || invoice.boleto_url || payment.boleto_url || null,
       recipient: {
         type: payment.recipient_type === "user" ? "user" : "tenant",
         id: payment.recipient_tenant_id || payment.recipient_user_id || null,
@@ -327,6 +327,8 @@ serve(async (req) => {
         const result = await sendPaymentWhatsapp({
           to: target.recipient.phone,
           mensagem: message,
+          paymentUrl: target.paymentUrl,
+          buttonLabel: "Pagar",
         });
         await logFinancialNotification(admin, {
           ...notificationScope,

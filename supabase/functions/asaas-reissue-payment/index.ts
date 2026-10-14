@@ -328,6 +328,7 @@ serve(async (req) => {
       status: internalStatus,
       amount: target.amount,
       dueDate: target.dueDate,
+      paymentUrl: raw?.invoiceUrl || boletoUrl,
       boleto: method === "boleto"
         ? { pdfUrl: boletoUrl, barcode: boletoBarcode }
         : null,

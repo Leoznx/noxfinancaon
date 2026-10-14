@@ -1,9 +1,8 @@
-import { jsonResponse, supabaseAdmin } from "../_shared/asaas.ts";
+import { jsonResponse, sendPaymentWhatsapp, supabaseAdmin } from "../_shared/asaas.ts";
 import { hashWebhookPayload } from "../_shared/d4sign.ts";
 import {
   normalizeWhatsappPhone,
   resolveZApiDeliveryStatus,
-  sendZApiText,
   type ZApiDeliveryStatus,
 } from "../_shared/zapi.ts";
 import {
@@ -65,8 +64,18 @@ function money(value: unknown) {
   });
 }
 
-async function sendSafeReply(phone: string, message: string) {
-  const result = await sendZApiText({ to: phone, message });
+function dateBr(value: unknown) {
+  const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : String(value || "");
+}
+
+async function sendSafeReply(phone: string, message: string, paymentUrl?: string | null) {
+  const result = await sendPaymentWhatsapp({
+    to: phone,
+    mensagem: message,
+    paymentUrl,
+    buttonLabel: "Pagar",
+  });
   return result.sent
     ? { sent: true }
     : { sent: false, reason: result.reason || "send_failed" };
@@ -268,23 +277,20 @@ async function handleBillingCommand(
     });
   }
 
-  const responseMessage = method === "pix"
-    ? [
-      "Pix atualizado — NOX Fiança",
-      `Valor: ${money(result.amount)}`,
-      `Vencimento: ${result.dueDate}`,
-      `Pix Copia e Cola: ${result.pix?.copyPaste || "consulte no portal NOX"}`,
-    ].join("\n")
-    : [
-      "Boleto atualizado — NOX Fiança",
-      `Valor: ${money(result.amount)}`,
-      `Vencimento: ${result.dueDate}`,
-      `Linha digitável: ${result.boleto?.barcode || "consulte no portal NOX"}`,
-      result.boleto?.pdfUrl ? `Boleto: ${result.boleto.pdfUrl}` : "",
-    ]
-      .filter(Boolean)
-      .join("\n");
-  const reply = await sendSafeReply(phone, responseMessage);
+  const responseMessage = [
+    "Olá! 👋",
+    "",
+    `Seu ${method === "pix" ? "Pix" : "boleto"} atualizado está pronto.`,
+    `• Valor: ${money(result.amount)}`,
+    `• Vencimento: ${dateBr(result.dueDate)}`,
+    "",
+    "Toque em *Pagar* para continuar. 🔒",
+  ].join("\n");
+  const reply = await sendSafeReply(
+    phone,
+    responseMessage,
+    result.paymentUrl || result.boleto?.pdfUrl || null,
+  );
   await admin
     .from("whatsapp_billing_requests")
     .update({

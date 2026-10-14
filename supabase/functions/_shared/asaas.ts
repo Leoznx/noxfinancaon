@@ -1,6 +1,10 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 import { renderNoxEmail } from "./email-branding.ts";
-import { sendZApiText } from "./zapi.ts";
+import {
+  buildPaymentRequestEmailContent,
+  paymentNotificationActions,
+} from "./payment-notification-content.ts";
+import { sendZApiButtonActions, sendZApiText } from "./zapi.ts";
 import { corsHeaders as secureCorsHeaders } from "./http-security.ts";
 import {
   calculateFireInsuranceAmounts,
@@ -615,6 +619,8 @@ export async function sendPaymentEmail(params: {
   boletoBarcode?: string | null;
   contratoRef?: string | null;
   cardRegistration?: boolean;
+  secondaryPaymentUrl?: string | null;
+  secondaryActionLabel?: string;
 }) {
   const apiKey = Deno.env.get("RESEND_API_KEY");
   if (!apiKey || !params.to) {
@@ -630,6 +636,19 @@ export async function sendPaymentEmail(params: {
 
   const from = Deno.env.get("RESEND_FROM_EMAIL") ||
     "NOX FIANÇA <financeiro@noxfianca.com>";
+  const paymentRequest = params.tipo === "criado"
+    ? buildPaymentRequestEmailContent({
+      name: params.nome,
+      method: params.metodo,
+      amount: params.valor,
+      dueDate: params.vencimento,
+      contractRef: params.contratoRef,
+      paymentUrl: params.boletoUrl,
+      secondaryPaymentUrl: params.secondaryPaymentUrl,
+      secondaryActionLabel: params.secondaryActionLabel,
+      cardRegistration: params.cardRegistration,
+    })
+    : null;
   const valorFmt = params.valor.toLocaleString("pt-BR", {
     style: "currency",
     currency: "BRL",
@@ -640,62 +659,9 @@ export async function sendPaymentEmail(params: {
     ? "Boleto"
     : "Cartão de crédito";
 
-  const assunto = params.cardRegistration
-    ? "Autorize o cartão da mensalidade — NOX Fiança"
-    : params.tipo === "criado"
-    ? "Pagamento gerado — NOX Fiança"
-    : "Pagamento confirmado — NOX Fiança";
+  const assunto = paymentRequest?.subject || "Pagamento confirmado — NOX Fiança";
 
-  const conteudo = params.cardRegistration
-    ? `
-        <p>Olá, ${params.nome}.</p>
-        <p>Falta autorizar o cartão que será usado nas mensalidades recorrentes da NOX Fiança.</p>
-        <p>
-          ${params.contratoRef ? `<strong>Contrato:</strong> ${params.contratoRef}<br/>` : ""}
-          <strong>Mensalidade:</strong> ${valorFmt}<br/>
-          ${params.vencimento ? `<strong>Primeira competência recorrente:</strong> ${params.vencimento}<br/>` : ""}
-          <strong>Status:</strong> Aguardando cadastro do cartão
-        </p>
-        ${params.boletoUrl ? `<p><a href="${params.boletoUrl}">Cadastrar cartão com segurança</a></p>` : ""}
-        <p>A cobrança inicial é uma operação separada e pode ser acompanhada na sua conta.</p>
-      `
-    : params.tipo === "criado"
-    ? `
-        <p>Olá, ${params.nome}.</p>
-        <p>Seu pagamento da NOX Fiança foi gerado com sucesso.</p>
-        <p>
-          ${
-      params.contratoRef
-        ? `<strong>Contrato:</strong> ${params.contratoRef}<br/>`
-        : ""
-    }
-          <strong>Forma de pagamento:</strong> ${metodoLabel}<br/>
-          <strong>Valor:</strong> ${valorFmt}<br/>
-          ${
-      params.vencimento
-        ? `<strong>Vencimento:</strong> ${params.vencimento}<br/>`
-        : ""
-    }
-          <strong>Status:</strong> Aguardando pagamento
-        </p>
-        ${
-      params.pixCopyPaste
-        ? `<p><strong>Código Pix copia e cola:</strong><br/><code>${params.pixCopyPaste}</code></p>`
-        : ""
-    }
-        ${
-      params.boletoBarcode
-        ? `<p><strong>Linha digitável:</strong><br/><code>${params.boletoBarcode}</code></p>`
-        : ""
-    }
-        ${
-      params.boletoUrl
-        ? `<p><a href="${params.boletoUrl}">Visualizar boleto</a></p>`
-        : ""
-    }
-        <p>Para acompanhar o pagamento, acesse sua conta na NOX Fiança.</p>
-      `
-    : `
+  const conteudo = paymentRequest?.html || `
         <p>Olá, ${params.nome}.</p>
         <p>Recebemos o pagamento${
       params.contratoRef ? ` da ${params.contratoRef}` : ""
@@ -728,11 +694,7 @@ export async function sendPaymentEmail(params: {
         subject: assunto,
         html: renderNoxEmail(
           conteudo,
-          params.cardRegistration
-            ? "Autorize o cartão das mensalidades recorrentes."
-            : params.tipo === "criado"
-            ? "Seu pagamento da NOX Fiança foi gerado."
-            : "Seu pagamento da NOX Fiança foi confirmado.",
+          paymentRequest?.preheader || "Seu pagamento da NOX Fiança foi confirmado.",
         ),
       }),
     });
@@ -772,12 +734,12 @@ export async function sendCollectionEmail(params: {
   const paragraphs = params.message
     .split("\n")
     .filter(Boolean)
-    .map((line) => `<p>${escapeEmailHtml(line)}</p>`)
+    .map((line) => `<p>${escapeEmailHtml(line.replaceAll("*", ""))}</p>`)
     .join("");
   const action = params.paymentUrl
-    ? `<p><a href="${
+    ? `<p style="margin:20px 0 4px"><a href="${
       escapeEmailHtml(params.paymentUrl)
-    }">Acessar cobrança atualizada</a></p>`
+    }" style="display:inline-block;padding:13px 22px;border-radius:10px;background:#ffd60a;color:#171717;font-weight:800;text-decoration:none">Ir para pagamento</a></p>`
     : `<p>Acesse sua conta NOX Fiança para gerar o boleto atualizado ou o Pix.</p>`;
   try {
     const response = await fetch("https://api.resend.com/emails", {
@@ -1095,11 +1057,29 @@ export async function sendInstallmentScheduleSms(params: {
 export async function sendPaymentWhatsapp(params: {
   to: string;
   mensagem: string;
+  paymentUrl?: string | null;
+  buttonLabel?: string;
+  secondaryPaymentUrl?: string | null;
+  secondaryButtonLabel?: string;
+  title?: string;
 }) {
-  const result = await sendZApiText({
-    to: params.to,
-    message: params.mensagem,
+  const buttonActions = paymentNotificationActions({
+    paymentUrl: params.paymentUrl,
+    primaryActionLabel: params.buttonLabel,
+    secondaryPaymentUrl: params.secondaryPaymentUrl,
+    secondaryActionLabel: params.secondaryButtonLabel,
   });
+  const result = buttonActions.length
+    ? await sendZApiButtonActions({
+      to: params.to,
+      message: params.mensagem,
+      title: params.title || "NOX Fiança • Pagamento",
+      buttonActions,
+    })
+    : await sendZApiText({
+      to: params.to,
+      message: params.mensagem,
+    });
   if (!result.sent) {
     console.error("[asaas] WhatsApp financeiro nao enviado", {
       reason: result.reason,

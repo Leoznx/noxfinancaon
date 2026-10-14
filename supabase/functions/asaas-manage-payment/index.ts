@@ -31,6 +31,7 @@ import {
   publicRecipient,
   sendInvoiceNotifications,
 } from "../_shared/contract-billing.ts";
+import { buildPaymentRequestWhatsappContent } from "../_shared/payment-notification-content.ts";
 import { dispatchD4SignContract, finalizeD4SignContract } from "../_shared/d4sign.ts";
 
 type Body = {
@@ -145,6 +146,15 @@ async function manageBatch(supabase: any, userId: string, body: Body) {
       const paymentUrl = batch.bank_slip_url || batch.invoice_url || null;
       let result: any;
       try {
+        const contractRef = `lote ${String(batch.reference_month).padStart(2, "0")}/${batch.reference_year}`;
+        const whatsappContent = buildPaymentRequestWhatsappContent({
+          name: recipient?.nome,
+          method: batch.billing_method || "boleto",
+          amount: Number(batch.total_value || 0),
+          dueDate: batch.due_date,
+          contractRef,
+          paymentUrl,
+        });
         result =
           channel === "email"
             ? recipient?.email
@@ -156,13 +166,16 @@ async function manageBatch(supabase: any, userId: string, body: Body) {
                   metodo: batch.billing_method || "boleto",
                   vencimento: batch.due_date,
                   boletoUrl: paymentUrl,
-                  contratoRef: `lote ${String(batch.reference_month).padStart(2, "0")}/${batch.reference_year}`,
+                  contratoRef: contractRef,
                 })
               : { sent: false, reason: "missing_recipient" }
             : recipient?.telefone
               ? await sendPaymentWhatsapp({
                   to: recipient.telefone,
-                  mensagem: `Olá, ${recipient.nome || "cliente"}. A cobrança consolidada NOX Fiança de ${Number(batch.total_value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} está disponível.${paymentUrl ? ` Link seguro: ${paymentUrl}` : " Consulte o painel financeiro."}`,
+                  mensagem: whatsappContent.message,
+                  title: whatsappContent.title,
+                  paymentUrl,
+                  buttonLabel: "Pagar",
                 })
               : { sent: false, reason: "missing_recipient" };
       } catch (error) {

@@ -6,20 +6,14 @@ import {
   calculateMonthlyInstallmentValue,
   corsHeaders,
   describePaymentError,
-  formatBRL,
-  formatDateBr,
   jsonResponse,
-  logFinancialNotification,
   mapAsaasStatus,
   paymentErrorStatus,
   requireUser,
   resolvePaymentRecipientFromContract,
   sanitizeAsaasResponse,
-  sendInstallmentScheduleEmail,
-  sendPaymentWhatsapp,
   supabaseAdmin,
   toMoney,
-  wasNotificationSent,
 } from "../_shared/asaas.ts";
 import { ensureAsaasCustomer } from "../_shared/asaas-customer.ts";
 import {
@@ -493,59 +487,6 @@ serve(async (req) => {
     }
 
     const invoices = schedule.map((item) => byKey.get(item.billingKey)).filter(Boolean);
-    if (invoices.length === installmentTotal) {
-      const anchor = initialInvoice;
-      if (
-        recipient.recipientEmail &&
-        !(await wasNotificationSent(supabase, {
-          invoiceId: anchor.id,
-          channel: "email",
-          notificationType: "billing_schedule_created",
-        }))
-      ) {
-        const result = await sendInstallmentScheduleEmail({
-          to: recipient.recipientEmail,
-          nome: recipient.recipientName || "cliente",
-          installments: schedule.map((item, index) => ({
-            installmentNumber: item.installmentNumber,
-            dueDate: item.dueDate,
-            referenceMonth: Number(item.dueDate.slice(5, 7)),
-            referenceYear: Number(item.dueDate.slice(0, 4)),
-            value: index === 0 ? Number(initialInvoice.valor) : monthlyValue,
-          })),
-        });
-        await logFinancialNotification(supabase, {
-          invoiceId: anchor.id,
-          recipientType: recipient.recipientType,
-          recipientId: recipient.recipientTenantId || recipient.recipientUserId,
-          channel: "email",
-          notificationType: "billing_schedule_created",
-          result,
-        });
-      }
-      if (
-        recipient.recipientPhone &&
-        !(await wasNotificationSent(supabase, {
-          invoiceId: anchor.id,
-          channel: "whatsapp",
-          notificationType: "billing_schedule_created",
-        }))
-      ) {
-        const result = await sendPaymentWhatsapp({
-          to: recipient.recipientPhone,
-          mensagem: `Ola, ${recipient.recipientName || "cliente"}. O cronograma da NOX Fianca foi gerado sem duplicar a primeira mensalidade: inicial ${formatBRL(Number(initialInvoice.valor))} em ${formatDateBr(initialInvoice.vencimento)} e ${Math.max(installmentTotal - 1, 0)} mensalidades futuras de ${formatBRL(monthlyValue)}.`,
-        });
-        await logFinancialNotification(supabase, {
-          invoiceId: anchor.id,
-          recipientType: recipient.recipientType,
-          recipientId: recipient.recipientTenantId || recipient.recipientUserId,
-          channel: "whatsapp",
-          notificationType: "billing_schedule_created",
-          result,
-        });
-      }
-    }
-
     queuePendingContractFlow(supabase, proposalId);
     return jsonResponse(req, {
       success: true,
