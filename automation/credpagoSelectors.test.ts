@@ -452,12 +452,12 @@ test("desliga coberturas ERP sem valor para liberar o formulário", async () => 
   assert.equal(await page.locator("#aluguel").inputValue(), "1880,00");
   assert.equal(await page.locator("#condominio").isEnabled(), false);
   assert.equal(await page.locator("#iptu").isEnabled(), false);
-  assert.equal(await page.locator("#condominio").inputValue(), "");
-  assert.equal(await page.locator("#iptu").inputValue(), "");
+  assert.equal(await page.locator("#condominio").inputValue(), "1,00");
+  assert.equal(await page.locator("#iptu").inputValue(), "1,00");
   await page.close();
 });
 
-test("não alterna coberturas ERP que já estão desligadas", async () => {
+test("inicializa coberturas ERP sem valor antes de desligá-las", async () => {
   const url = "https://app.loft.com.br/erp/proposta/analise-de-credito";
   const page = await pageWithHtml(
     url,
@@ -480,8 +480,10 @@ test("não alterna coberturas ERP que já estão desligadas", async () => {
 
   assert.equal(await page.locator("#condominio-toggle").isChecked(), false);
   assert.equal(await page.locator("#iptu-toggle").isChecked(), false);
-  assert.equal(await page.locator("#condominio-toggle").getAttribute("data-change-count"), null);
-  assert.equal(await page.locator("#iptu-toggle").getAttribute("data-change-count"), null);
+  assert.equal(await page.locator("#condominio-toggle").getAttribute("data-change-count"), "2");
+  assert.equal(await page.locator("#iptu-toggle").getAttribute("data-change-count"), "2");
+  assert.equal(await page.locator("#condominio").inputValue(), "1,00");
+  assert.equal(await page.locator("#iptu").inputValue(), "1,00");
   await page.close();
 });
 

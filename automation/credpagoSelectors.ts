@@ -434,6 +434,31 @@ async function fillCoveredValue(
     label: RegExp;
   },
 ): Promise<void> {
+  // Desde a v1.57.37, o ERP só registra corretamente uma cobertura opcional
+  // desligada depois que o respectivo campo monetário foi validado ao menos
+  // uma vez. Desligar o switch com o campo vazio deixa o estado visual correto,
+  // mas mantém o botão "Fazer análise" desabilitado. Inicializamos o campo com
+  // um valor técnico, então desligamos a cobertura; o valor deixa de compor a
+  // proposta porque o estado final do switch é `false`.
+  if (options.value <= 0 && isErpCreditSimulationUrl(page.url())) {
+    const hasErpToggle = await setCoverageToggle(
+      page,
+      options.toggleTestId,
+      options.valueTestId,
+      true,
+    );
+    if (hasErpToggle) {
+      const field = await locateField(page, {
+        label: options.label,
+        placeholder: options.label,
+        role: { name: options.label },
+      });
+      await fillCurrencyField(field, 1);
+      await setCoverageToggle(page, options.toggleTestId, options.valueTestId, false);
+      return;
+    }
+  }
+
   const hasErpToggle = await setCoverageToggle(
     page,
     options.toggleTestId,
