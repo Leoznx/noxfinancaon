@@ -28,6 +28,7 @@ import {
 } from "@/lib/withdrawals";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useEssentialLoading } from "@/components/GlobalLoading";
 import {
   Table,
   TableBody,
@@ -158,6 +159,8 @@ export function FinanceiroDashboard() {
   const [error, setError] = useState<string | null>(null);
   const hasLoaded = useRef(false);
   const requestInFlight = useRef(false);
+
+  useEssentialLoading(loading && !hasLoaded.current);
 
   const load = useCallback(async () => {
     if (requestInFlight.current) return;
@@ -498,7 +501,9 @@ export function FinanceiroDashboard() {
         {/* Mobile/tablet estreito (< md): cards empilhados, sem tabela pra arrastar. */}
         <div className="md:hidden divide-y divide-neutral-100">
           {!priorities.length ? (
-            <p className="py-12 text-center text-neutral-500">Nenhuma prioridade financeira no momento.</p>
+            <p className="py-12 text-center text-neutral-500">
+              Nenhuma prioridade financeira no momento.
+            </p>
           ) : (
             priorities.map((priority) => (
               <div
@@ -510,14 +515,20 @@ export function FinanceiroDashboard() {
                     <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
                       {priority.type}
                     </p>
-                    <p className="font-semibold text-neutral-900 truncate mt-0.5">{priority.name}</p>
+                    <p className="font-semibold text-neutral-900 truncate mt-0.5">
+                      {priority.name}
+                    </p>
                     <p className="text-xs text-neutral-500 truncate">{priority.document}</p>
                   </div>
                   <Link
                     to={priority.kind === "invoice" ? "/admin/faturamento" : "/admin/financeiro"}
                     className="shrink-0"
                   >
-                    <Button size="sm" variant="ghost" aria-label={`Ver ${priority.type.toLowerCase()}`}>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      aria-label={`Ver ${priority.type.toLowerCase()}`}
+                    >
                       <Eye size={14} />
                     </Button>
                   </Link>
@@ -525,7 +536,9 @@ export function FinanceiroDashboard() {
                 <div className="mt-2 flex items-center justify-between text-xs">
                   <span className="text-neutral-500">{formatDate(priority.date)}</span>
                   {priority.delayDays > 0 && (
-                    <span className="font-semibold text-red-700">{priority.delayDays}d de atraso</span>
+                    <span className="font-semibold text-red-700">
+                      {priority.delayDays}d de atraso
+                    </span>
                   )}
                   <span className="font-semibold tabular-nums text-neutral-900">
                     {formatCents(priority.valueCents)}

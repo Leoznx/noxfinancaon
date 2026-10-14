@@ -32,6 +32,7 @@ import {
 } from "recharts";
 
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { useEssentialLoading } from "@/components/GlobalLoading";
 import { Button } from "@/components/ui/button";
 import {
   fetchOwnerDashboard,
@@ -93,6 +94,8 @@ export function OwnerDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [period, setPeriod] = useState<OwnerDashboardPeriod>("6");
+
+  useEssentialLoading(loading && !data);
 
   const load = useCallback(async () => {
     setError(null);
@@ -269,10 +272,7 @@ function OwnerSummaryGrid({ data }: { data: OwnerDashboardData }) {
           ) : (
             <span>
               Você ainda não possui imóveis cadastrados.{" "}
-              <Link
-                to="/imoveis"
-                className="font-extrabold text-amber-600 hover:text-amber-700"
-              >
+              <Link to="/imoveis" className="font-extrabold text-amber-600 hover:text-amber-700">
                 Cadastrar imóvel
               </Link>
             </span>

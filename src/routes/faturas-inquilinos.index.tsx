@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { useEssentialLoading } from "@/components/GlobalLoading";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { supabase } from "@/integrations/supabase/client";
@@ -34,15 +35,17 @@ type Linha = {
 
 const formatBRL = (v: number) =>
   (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-const formatDate = (d: string | null) =>
-  d ? new Date(d).toLocaleDateString("pt-BR") : "—";
+const formatDate = (d: string | null) => (d ? new Date(d).toLocaleDateString("pt-BR") : "—");
 
 function extrairCidade(im: any): string {
   if (!im) return "Cidade não informada";
   if (im.cidade) return im.cidade;
   const end = im.endereco || im.logradouro;
   if (typeof end === "string" && end.includes(",")) {
-    const partes = end.split(",").map((s: string) => s.trim()).filter(Boolean);
+    const partes = end
+      .split(",")
+      .map((s: string) => s.trim())
+      .filter(Boolean);
     if (partes.length >= 2) return partes[partes.length - 2] || partes[partes.length - 1];
   }
   return "Cidade não informada";
@@ -51,6 +54,7 @@ function extrairCidade(im: any): string {
 function FaturasInquilinosLista() {
   const [linhas, setLinhas] = useState<Linha[]>([]);
   const [loading, setLoading] = useState(true);
+  useEssentialLoading(loading && linhas.length === 0);
   const [erro, setErro] = useState<string | null>(null);
 
   async function load() {
@@ -59,13 +63,15 @@ function FaturasInquilinosLista() {
     try {
       const { data: aps, error: apErr } = await supabase
         .from("apolices")
-        .select(`
+        .select(
+          `
           id, numero, status,
           consulta:consultas_credito(
             inquilino:inquilinos(nome, cpf, cnpj, razao_social),
             imovel:imoveis(endereco, logradouro, numero, bairro, cidade, estado)
           )
-        `)
+        `,
+        )
         .order("created_at", { ascending: false });
       if (apErr) throw apErr;
 
@@ -93,9 +99,7 @@ function FaturasInquilinosLista() {
         const pendentes = parcelas
           .filter((p) => p.status !== "pago" && p.status !== "cancelado")
           .sort(
-            (x, y) =>
-              new Date(x.data_vencimento).getTime() -
-              new Date(y.data_vencimento).getTime(),
+            (x, y) => new Date(x.data_vencimento).getTime() - new Date(y.data_vencimento).getTime(),
           );
 
         const vencida = pendentes.find((p) => new Date(p.data_vencimento) < hoje);
@@ -110,8 +114,7 @@ function FaturasInquilinosLista() {
         return {
           apolice_id: a.id,
           numero: a.numero,
-          inquilino_nome:
-            inq?.nome || inq?.razao_social || "Inquilino não informado",
+          inquilino_nome: inq?.nome || inq?.razao_social || "Inquilino não informado",
           inquilino_doc: inq?.cpf || inq?.cnpj || "",
           cidade: extrairCidade(im),
           valor_parcela: Number(referencia?.valor || 0),
@@ -166,8 +169,7 @@ function FaturasInquilinosLista() {
             <Receipt className="w-12 h-12 text-neutral-300 mx-auto mb-3" />
             <p className="font-black text-neutral-900">Nenhuma fatura encontrada</p>
             <p className="text-sm text-neutral-500 mt-1">
-              As faturas dos inquilinos vinculados aparecerão aqui quando houver
-              contratos ativos.
+              As faturas dos inquilinos vinculados aparecerão aqui quando houver contratos ativos.
             </p>
           </Card>
         ) : (
@@ -194,9 +196,7 @@ function FaturasInquilinosLista() {
                             {l.inquilino_nome}
                           </p>
                           {l.inquilino_doc && (
-                            <p className="text-xs text-neutral-500 truncate">
-                              {l.inquilino_doc}
-                            </p>
+                            <p className="text-xs text-neutral-500 truncate">{l.inquilino_doc}</p>
                           )}
                           {l.numero && (
                             <p className="text-[10px] text-neutral-400 uppercase tracking-widest font-bold mt-0.5 truncate">
@@ -204,9 +204,7 @@ function FaturasInquilinosLista() {
                             </p>
                           )}
                         </td>
-                        <td className="px-5 py-3 text-sm text-neutral-700">
-                          {l.cidade}
-                        </td>
+                        <td className="px-5 py-3 text-sm text-neutral-700">{l.cidade}</td>
                         <td className="px-5 py-3 text-right font-bold text-neutral-900 text-sm">
                           {formatBRL(l.valor_parcela)}
                         </td>
@@ -223,10 +221,7 @@ function FaturasInquilinosLista() {
                             variant="outline"
                             className="rounded-lg h-8 gap-1.5 font-bold"
                           >
-                            <Link
-                              to="/faturas-inquilinos/$id"
-                              params={{ id: l.apolice_id }}
-                            >
+                            <Link to="/faturas-inquilinos/$id" params={{ id: l.apolice_id }}>
                               <Eye size={12} /> Ver faturas
                             </Link>
                           </Button>
@@ -241,18 +236,13 @@ function FaturasInquilinosLista() {
             {/* Mobile */}
             <div className="grid gap-3 md:hidden">
               {linhas.map((l) => (
-                <Card
-                  key={l.apolice_id}
-                  className="p-4 bg-white border-neutral-200 shadow-sm"
-                >
+                <Card key={l.apolice_id} className="p-4 bg-white border-neutral-200 shadow-sm">
                   <div className="flex items-start justify-between gap-3 mb-3">
                     <div className="min-w-0">
                       <p className="font-black text-neutral-900 text-sm line-clamp-2">
                         {l.inquilino_nome}
                       </p>
-                      <p className="text-xs text-neutral-500 truncate">
-                        {l.cidade}
-                      </p>
+                      <p className="text-xs text-neutral-500 truncate">{l.cidade}</p>
                     </div>
                     <StatusBadge status={l.status} />
                   </div>
@@ -280,10 +270,7 @@ function FaturasInquilinosLista() {
                     variant="outline"
                     className="w-full rounded-lg gap-1.5 font-bold"
                   >
-                    <Link
-                      to="/faturas-inquilinos/$id"
-                      params={{ id: l.apolice_id }}
-                    >
+                    <Link to="/faturas-inquilinos/$id" params={{ id: l.apolice_id }}>
                       <Eye size={12} /> Ver faturas
                     </Link>
                   </Button>

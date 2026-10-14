@@ -11,6 +11,7 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import { AuthProvider, useAuth } from "@/components/AuthProvider";
+import { GlobalLoadingProvider } from "@/components/GlobalLoading";
 import { Toaster } from "@/components/ui/sonner";
 import { hasAuthEmailCallback, parseAuthEmailCallback } from "@/lib/auth-email-links";
 import { GOOGLE_ADS_TAG_ID, META_PIXEL_ID, trackPageView } from "@/lib/tracking";
@@ -344,11 +345,13 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <PageTitleSync />
-        <PageViewTracker />
-        <PrimeiroAcessoRedirect />
-        <Outlet />
-        <Toaster richColors position="top-right" />
+        <GlobalLoadingProvider>
+          <PageTitleSync />
+          <PageViewTracker />
+          <PrimeiroAcessoRedirect />
+          <Outlet />
+          <Toaster richColors position="top-right" />
+        </GlobalLoadingProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

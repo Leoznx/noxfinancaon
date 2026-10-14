@@ -2,8 +2,13 @@ import React from "react";
 import { useEffect, useState } from "react";
 import { useLocation } from "@tanstack/react-router";
 import { useAuth } from "./AuthProvider";
-import { getCachedPermissoesCargo, loadPermissoesCargo, podeVerModulo } from "@/lib/permissoes-cache";
+import {
+  getCachedPermissoesCargo,
+  loadPermissoesCargo,
+  podeVerModulo,
+} from "@/lib/permissoes-cache";
 import { loadBrokerCommissionAccess } from "@/lib/broker-commission-policy";
+import { useEssentialLoading } from "@/components/GlobalLoading";
 
 const CARGOS_INTERNOS_GATEADOS = ["juridico", "financeiro", "marketing", "suporte", "vendedor"];
 
@@ -31,7 +36,9 @@ export function ProtectedRoute({
   };
   const isSellerAccount = user?.role === "vendedor" || user?.internalRole === "vendedor";
   const isSellerTypeAllowed =
-    !sellerTypes || !isSellerAccount || (!!user?.sellerType && sellerTypes.includes(user.sellerType));
+    !sellerTypes ||
+    !isSellerAccount ||
+    (!!user?.sellerType && sellerTypes.includes(user.sellerType));
 
   // Não basta esconder a aba do menu — a rota também precisa recusar acesso
   // direto (digitando a URL) pra quem não tem a permissão real do cargo.
@@ -53,6 +60,9 @@ export function ProtectedRoute({
     requiresBrokerFinancialAccess && user?.role === "corretor",
   );
   const [brokerAccessAllowed, setBrokerAccessAllowed] = useState(true);
+  const accessLoading = isLoading || permissoesCarregando || brokerAccessLoading;
+
+  useEssentialLoading(accessLoading);
 
   useEffect(() => {
     if (!cargoGateado || !moduleKey) {
@@ -107,19 +117,26 @@ export function ProtectedRoute({
       window.location.replace(`/login?returnTo=${encodeURIComponent(location.pathname)}`);
       return;
     }
-    if (user && (!isAllowed(user) || !temPermissaoModulo || !isSellerTypeAllowed || !brokerAccessAllowed)) {
+    if (
+      user &&
+      (!isAllowed(user) || !temPermissaoModulo || !isSellerTypeAllowed || !brokerAccessAllowed)
+    ) {
       window.location.replace(isSellerAccount ? "/vendedor" : "/dashboard");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoading, permissoesCarregando, brokerAccessLoading, brokerAccessAllowed, location.pathname, roles, user, temPermissaoModulo, isSellerTypeAllowed]);
+  }, [
+    isLoading,
+    permissoesCarregando,
+    brokerAccessLoading,
+    brokerAccessAllowed,
+    location.pathname,
+    roles,
+    user,
+    temPermissaoModulo,
+    isSellerTypeAllowed,
+  ]);
 
-  if (isLoading || permissoesCarregando || brokerAccessLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    );
-  }
+  if (accessLoading) return null;
 
   if (!user) {
     return null;

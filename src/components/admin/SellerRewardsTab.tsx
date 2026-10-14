@@ -15,6 +15,7 @@ import {
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/components/AuthProvider";
+import { useEssentialLoading } from "@/components/GlobalLoading";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -68,6 +69,7 @@ export function SellerRewardsTab() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  useEssentialLoading(loading && rewards.length === 0);
   const month = period.getMonth() + 1;
   const year = period.getFullYear();
 

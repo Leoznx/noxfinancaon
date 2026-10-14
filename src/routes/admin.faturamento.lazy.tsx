@@ -1,5 +1,6 @@
 import { createLazyFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { useEssentialLoading } from "@/components/GlobalLoading";
 import { useAuth } from "@/components/AuthProvider";
 import { AdminAreaSwitcher } from "@/components/admin/AdminAreaSwitcher";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -159,6 +160,7 @@ function FaturamentoAdminPage() {
   const [parcelas, setParcelas] = useState<any[]>([]);
   const [lotes, setLotes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  useEssentialLoading(loading && parcelas.length === 0 && lotes.length === 0);
   const [busca, setBusca] = useState("");
   const [atualizandoId, setAtualizandoId] = useState<string | null>(null);
   const [acaoId, setAcaoId] = useState<string | null>(null);

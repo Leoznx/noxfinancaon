@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { useEssentialLoading } from "@/components/GlobalLoading";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useAuth } from "@/components/AuthProvider";
@@ -25,6 +26,7 @@ function ApolicesList() {
   const { user } = useAuth();
   const [apolices, setApolices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  useEssentialLoading(loading && apolices.length === 0);
   const [erro, setErro] = useState<string | null>(null);
   const [busca, setBusca] = useState("");
 
@@ -93,7 +95,8 @@ function ApolicesList() {
 
         let query = supabase
           .from("apolices")
-          .select(`
+          .select(
+            `
             id, numero, status, vigencia_inicio, vigencia_fim, valor_premio,
             consulta:consultas_credito(
               inquilino:inquilinos(nome, cpf),
@@ -102,7 +105,8 @@ function ApolicesList() {
               solicitante:profiles!profile_id_solicitante(nome)
             ),
             imobiliaria:profiles!apolices_imobiliaria_profile_id_fkey(nome)
-          `)
+          `,
+          )
           .order("created_at", { ascending: false });
 
         if (consultaIdsPermitidos) {
@@ -119,7 +123,9 @@ function ApolicesList() {
       }
     }
     load();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [user?.email, user?.role]);
 
   const filtradas = apolices.filter((a) => {
@@ -135,8 +141,7 @@ function ApolicesList() {
 
   const formatBRL = (v: number) =>
     (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-  const formatDate = (d: string) =>
-    d ? new Date(d).toLocaleDateString("pt-BR") : "—";
+  const formatDate = (d: string) => (d ? new Date(d).toLocaleDateString("pt-BR") : "—");
 
   return (
     <DashboardLayout>
@@ -188,7 +193,7 @@ function ApolicesList() {
                 <div className="min-w-0">
                   <p className="font-black text-neutral-900">#{a.numero}</p>
                   <p className="text-[10px] uppercase tracking-widest text-neutral-400 mt-0.5 truncate">
-                    {a.consulta?.plano?.nome || 'Plano padrão'}
+                    {a.consulta?.plano?.nome || "Plano padrão"}
                   </p>
                 </div>
                 <div className="shrink-0">
@@ -197,22 +202,35 @@ function ApolicesList() {
               </div>
 
               <div className="mt-3.5 space-y-1">
-                <p className="font-bold text-neutral-900 text-sm truncate">{a.consulta?.inquilino?.nome || '—'}</p>
-                <p className="text-xs text-neutral-500 truncate">{a.consulta?.imovel?.endereco || ''}</p>
+                <p className="font-bold text-neutral-900 text-sm truncate">
+                  {a.consulta?.inquilino?.nome || "—"}
+                </p>
+                <p className="text-xs text-neutral-500 truncate">
+                  {a.consulta?.imovel?.endereco || ""}
+                </p>
                 <p className="text-xs text-neutral-600">
                   {user?.role === "imobiliaria" ? "Corretor: " : "Imobiliária: "}
                   <span className="font-medium">
-                    {user?.role === "imobiliaria" ? (a.consulta?.solicitante?.nome || '—') : (a.imobiliaria?.nome || 'Autônomo')}
+                    {user?.role === "imobiliaria"
+                      ? a.consulta?.solicitante?.nome || "—"
+                      : a.imobiliaria?.nome || "Autônomo"}
                   </span>
                 </p>
                 <p className="text-xs text-neutral-600">
-                  {formatDate(a.vigencia_inicio)} <span className="text-neutral-300">→</span> {formatDate(a.vigencia_fim)}
+                  {formatDate(a.vigencia_inicio)} <span className="text-neutral-300">→</span>{" "}
+                  {formatDate(a.vigencia_fim)}
                 </p>
               </div>
 
               <div className="mt-3.5 flex items-center justify-between border-t border-neutral-100 pt-3">
-                <span className="font-black text-neutral-900">{formatBRL(Number(a.valor_premio))}</span>
-                <Button asChild size="sm" className="bg-neutral-900 hover:bg-neutral-800 text-white rounded-lg gap-1.5 font-bold text-xs h-9 px-3">
+                <span className="font-black text-neutral-900">
+                  {formatBRL(Number(a.valor_premio))}
+                </span>
+                <Button
+                  asChild
+                  size="sm"
+                  className="bg-neutral-900 hover:bg-neutral-800 text-white rounded-lg gap-1.5 font-bold text-xs h-9 px-3"
+                >
                   <Link to="/apolices/$id" params={{ id: a.id }}>
                     Ver contrato <ArrowRight size={14} />
                   </Link>
@@ -231,7 +249,9 @@ function ApolicesList() {
               <tr>
                 <th className="px-6 py-5">Nº Apólice</th>
                 <th className="px-6 py-5">Inquilino</th>
-                <th className="px-6 py-5">{user?.role === "imobiliaria" ? "Corretor" : "Imobiliária"}</th>
+                <th className="px-6 py-5">
+                  {user?.role === "imobiliaria" ? "Corretor" : "Imobiliária"}
+                </th>
                 <th className="px-6 py-5">Vigência</th>
                 <th className="px-6 py-5 text-right">Prêmio</th>
                 <th className="px-6 py-5 text-center">Status</th>
@@ -240,7 +260,11 @@ function ApolicesList() {
             </thead>
             <tbody className="divide-y border-t">
               {loading ? (
-                <tr><td colSpan={7} className="text-center py-20 text-neutral-400">Carregando contratos...</td></tr>
+                <tr>
+                  <td colSpan={7} className="text-center py-20 text-neutral-400">
+                    Carregando contratos...
+                  </td>
+                </tr>
               ) : filtradas.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="text-center py-20">
@@ -248,39 +272,58 @@ function ApolicesList() {
                       <div className="w-14 h-14 rounded-full bg-neutral-50 flex items-center justify-center text-neutral-300">
                         <FileText size={28} />
                       </div>
-                      <p className="text-neutral-900 font-bold">Nenhum contrato ativo encontrado.</p>
+                      <p className="text-neutral-900 font-bold">
+                        Nenhum contrato ativo encontrado.
+                      </p>
                     </div>
                   </td>
                 </tr>
-              ) : filtradas.map((a) => (
-                <tr key={a.id} className="hover:bg-neutral-50/50 transition-colors">
-                  <td className="px-6 py-5">
-                    <p className="font-black text-neutral-900">#{a.numero}</p>
-                    <p className="text-[10px] uppercase tracking-widest text-neutral-400 mt-0.5">{a.consulta?.plano?.nome || 'Plano padrão'}</p>
-                  </td>
-                  <td className="px-6 py-5">
-                    <p className="font-bold text-neutral-900 text-sm">{a.consulta?.inquilino?.nome || '—'}</p>
-                    <p className="text-xs text-neutral-500">{a.consulta?.imovel?.endereco || ''}</p>
-                  </td>
-                  <td className="px-6 py-5 text-sm text-neutral-600">
-                    {user?.role === "imobiliaria" ? (a.consulta?.solicitante?.nome || '—') : (a.imobiliaria?.nome || 'Autônomo')}
-                  </td>
-                  <td className="px-6 py-5 text-sm text-neutral-600">
-                    {formatDate(a.vigencia_inicio)} <span className="text-neutral-300">→</span> {formatDate(a.vigencia_fim)}
-                  </td>
-                  <td className="px-6 py-5 text-right font-black text-neutral-900">{formatBRL(Number(a.valor_premio))}</td>
-                  <td className="px-6 py-5 text-center">
-                    <StatusBadge status={a.status} />
-                  </td>
-                  <td className="px-6 py-5 text-right">
-                    <Button asChild size="sm" className="bg-neutral-900 hover:bg-neutral-800 text-white rounded-lg gap-2 font-bold">
-                      <Link to="/apolices/$id" params={{ id: a.id }}>
-                        Ver contrato <ArrowRight size={14} />
-                      </Link>
-                    </Button>
-                  </td>
-                </tr>
-              ))}
+              ) : (
+                filtradas.map((a) => (
+                  <tr key={a.id} className="hover:bg-neutral-50/50 transition-colors">
+                    <td className="px-6 py-5">
+                      <p className="font-black text-neutral-900">#{a.numero}</p>
+                      <p className="text-[10px] uppercase tracking-widest text-neutral-400 mt-0.5">
+                        {a.consulta?.plano?.nome || "Plano padrão"}
+                      </p>
+                    </td>
+                    <td className="px-6 py-5">
+                      <p className="font-bold text-neutral-900 text-sm">
+                        {a.consulta?.inquilino?.nome || "—"}
+                      </p>
+                      <p className="text-xs text-neutral-500">
+                        {a.consulta?.imovel?.endereco || ""}
+                      </p>
+                    </td>
+                    <td className="px-6 py-5 text-sm text-neutral-600">
+                      {user?.role === "imobiliaria"
+                        ? a.consulta?.solicitante?.nome || "—"
+                        : a.imobiliaria?.nome || "Autônomo"}
+                    </td>
+                    <td className="px-6 py-5 text-sm text-neutral-600">
+                      {formatDate(a.vigencia_inicio)} <span className="text-neutral-300">→</span>{" "}
+                      {formatDate(a.vigencia_fim)}
+                    </td>
+                    <td className="px-6 py-5 text-right font-black text-neutral-900">
+                      {formatBRL(Number(a.valor_premio))}
+                    </td>
+                    <td className="px-6 py-5 text-center">
+                      <StatusBadge status={a.status} />
+                    </td>
+                    <td className="px-6 py-5 text-right">
+                      <Button
+                        asChild
+                        size="sm"
+                        className="bg-neutral-900 hover:bg-neutral-800 text-white rounded-lg gap-2 font-bold"
+                      >
+                        <Link to="/apolices/$id" params={{ id: a.id }}>
+                          Ver contrato <ArrowRight size={14} />
+                        </Link>
+                      </Button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
@@ -297,7 +340,9 @@ function StatusBadge({ status }: { status: string }) {
     encerrada: "bg-neutral-100 text-neutral-600 border-neutral-200",
   };
   return (
-    <Badge className={`${map[status] || map.pendente} border text-[10px] uppercase font-black px-2.5 py-0.5`}>
+    <Badge
+      className={`${map[status] || map.pendente} border text-[10px] uppercase font-black px-2.5 py-0.5`}
+    >
       {status}
     </Badge>
   );

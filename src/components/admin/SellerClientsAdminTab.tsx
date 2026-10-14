@@ -23,6 +23,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useEssentialLoading } from "@/components/GlobalLoading";
 import { supabase } from "@/integrations/supabase/client";
 import {
   fetchAdminSellerPortfolioClients,
@@ -41,6 +42,8 @@ export function SellerClientsAdminTab() {
   const [loadingClients, setLoadingClients] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [pendingRemoval, setPendingRemoval] = useState<AdminSellerPortfolioClient | null>(null);
+
+  useEssentialLoading(loading || (loadingClients && clients.length === 0));
 
   const loadSellers = useCallback(async () => {
     try {
@@ -134,8 +137,8 @@ export function SellerClientsAdminTab() {
               Clientes dos vendedores
             </h2>
             <p className="mt-1 text-sm text-neutral-500">
-              Selecione um Vendedor ou Closer para consultar sua carteira e corrigir vínculos feitos por
-              engano.
+              Selecione um Vendedor ou Closer para consultar sua carteira e corrigir vínculos feitos
+              por engano.
             </p>
           </div>
           <Button variant="outline" onClick={() => void loadSellers()}>

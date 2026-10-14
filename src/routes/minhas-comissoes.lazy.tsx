@@ -18,6 +18,7 @@ import {
 import { toast } from "sonner";
 
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { useEssentialLoading } from "@/components/GlobalLoading";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { WithdrawalDetailsDialog } from "@/components/comissoes/WithdrawalDetailsDialog";
@@ -49,7 +50,10 @@ import {
 
 export const Route = createLazyFileRoute("/minhas-comissoes")({
   component: () => (
-    <ProtectedRoute roles={["corretor", "imobiliaria", "proprietario"]} requiresBrokerFinancialAccess>
+    <ProtectedRoute
+      roles={["corretor", "imobiliaria", "proprietario"]}
+      requiresBrokerFinancialAccess
+    >
       <ErrorBoundary nome="comissões">
         <CommissionsPage />
       </ErrorBoundary>
@@ -105,6 +109,9 @@ function CommissionsPage() {
   const [contracts, setContracts] = useState<CommissionContract[]>([]);
   const [level, setLevel] = useState<NivelInfo | null>(null);
   const [loading, setLoading] = useState(true);
+  useEssentialLoading(
+    loading && commissions.length === 0 && withdrawals.length === 0 && contracts.length === 0,
+  );
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("contracts");

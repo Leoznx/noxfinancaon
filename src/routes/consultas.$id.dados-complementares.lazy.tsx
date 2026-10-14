@@ -2,6 +2,7 @@ import { createLazyFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { useEssentialLoading } from "@/components/GlobalLoading";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { supabase } from "@/integrations/supabase/client";
 import { ensureTenantUser } from "@/lib/proposta.functions";
@@ -65,6 +66,7 @@ function DadosComplementaresPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [consulta, setConsulta] = useState<any>(null);
+  useEssentialLoading(loading || !consulta);
   const [demoMode, setDemoMode] = useState(false);
   const [existingDocs, setExistingDocs] = useState<any[]>([]);
   const [formError, setFormError] = useState("");

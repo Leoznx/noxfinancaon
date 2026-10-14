@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useState, type ComponentType } from "react";
 import { Button } from "@/components/ui/button";
+import { useEssentialLoading } from "@/components/GlobalLoading";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Select,
@@ -44,6 +45,8 @@ export function ImobiliariaDashboard({ profileId, email }: { profileId: string; 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [chartPeriod, setChartPeriod] = useState("6");
+
+  useEssentialLoading(loading && !data);
 
   const load = useCallback(async () => {
     setError(null);
@@ -67,11 +70,31 @@ export function ImobiliariaDashboard({ profileId, email }: { profileId: string; 
     window.addEventListener("focus", onFocus);
     const channel = supabase
       .channel(`agency-dashboard-live-${profileId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "consultas_credito" }, () => void load())
-      .on("postgres_changes", { event: "*", schema: "public", table: "apolices" }, () => void load())
-      .on("postgres_changes", { event: "*", schema: "public", table: "comissoes" }, () => void load())
-      .on("postgres_changes", { event: "*", schema: "public", table: "documentos_contrato" }, () => void load())
-      .on("postgres_changes", { event: "*", schema: "public", table: "faturas_inquilino" }, () => void load())
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "consultas_credito" },
+        () => void load(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "apolices" },
+        () => void load(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "comissoes" },
+        () => void load(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "documentos_contrato" },
+        () => void load(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "faturas_inquilino" },
+        () => void load(),
+      )
       .subscribe();
     return () => {
       window.removeEventListener("focus", onFocus);
@@ -80,7 +103,8 @@ export function ImobiliariaDashboard({ profileId, email }: { profileId: string; 
   }, [load, profileId]);
 
   if (loading) return <DashboardSkeleton />;
-  if (error || !data) return <DashboardError message={error ?? "Dados indisponíveis."} onRetry={load} />;
+  if (error || !data)
+    return <DashboardError message={error ?? "Dados indisponíveis."} onRetry={load} />;
 
   const displayedMonths = data.months.slice(-Number(chartPeriod));
 
@@ -89,27 +113,87 @@ export function ImobiliariaDashboard({ profileId, email }: { profileId: string; 
       <HeroBanner />
 
       <section className="grid grid-cols-2 gap-3 xl:h-full xl:grid-cols-4 xl:gap-2.5">
-        <MetricCard icon={Search} label="Consultas pendentes" value={String(data.stats.consultasPendentes)} trend={data.trends.consultas} />
-        <MetricCard icon={FileText} label="Apólices ativas" value={String(data.stats.apolicesAtivas)} trend={data.trends.apolices} />
-        <MetricCard icon={Users} label="Inquilinos sob gestão" value={String(data.stats.inquilinosGestao)} trend={data.trends.inquilinos} />
-        <MetricCard icon={DollarSign} label="Comissões acumuladas" value={formatCurrency(data.stats.comissoesAcumuladas)} trend={data.trends.comissoes} />
+        <MetricCard
+          icon={Search}
+          label="Consultas pendentes"
+          value={String(data.stats.consultasPendentes)}
+          trend={data.trends.consultas}
+        />
+        <MetricCard
+          icon={FileText}
+          label="Apólices ativas"
+          value={String(data.stats.apolicesAtivas)}
+          trend={data.trends.apolices}
+        />
+        <MetricCard
+          icon={Users}
+          label="Inquilinos sob gestão"
+          value={String(data.stats.inquilinosGestao)}
+          trend={data.trends.inquilinos}
+        />
+        <MetricCard
+          icon={DollarSign}
+          label="Comissões acumuladas"
+          value={formatCurrency(data.stats.comissoesAcumuladas)}
+          trend={data.trends.comissoes}
+        />
       </section>
 
       <section className="grid gap-3 xl:min-h-0 xl:grid-cols-[1.18fr_0.9fr_1fr] xl:gap-2.5">
         <DashboardPanel className="min-h-[360px] sm:min-h-[420px] xl:flex xl:h-full xl:min-h-0 xl:flex-col xl:overflow-hidden">
           <PanelHeader title="Consultas e contratos por mês">
-            <CompactSelect value={chartPeriod} onValueChange={setChartPeriod} items={[{ value: "6", label: "Últimos 6 meses" }, { value: "12", label: "Últimos 12 meses" }]} />
+            <CompactSelect
+              value={chartPeriod}
+              onValueChange={setChartPeriod}
+              items={[
+                { value: "6", label: "Últimos 6 meses" },
+                { value: "12", label: "Últimos 12 meses" },
+              ]}
+            />
           </PanelHeader>
           <div className="mt-3 h-[290px] min-h-0 sm:h-[350px] xl:mt-2 xl:h-auto xl:flex-1">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={displayedMonths} margin={{ top: 20, right: 14, left: -18, bottom: 12 }}>
+              <LineChart
+                data={displayedMonths}
+                margin={{ top: 20, right: 14, left: -18, bottom: 12 }}
+              >
                 <CartesianGrid stroke="#EEEEEE" strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "#858585", fontSize: 10 }} />
-                <YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={{ fill: "#A3A3A3", fontSize: 10 }} />
+                <XAxis
+                  dataKey="label"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: "#858585", fontSize: 10 }}
+                />
+                <YAxis
+                  allowDecimals={false}
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: "#A3A3A3", fontSize: 10 }}
+                />
                 <Tooltip content={<ChartTooltip />} />
-                <Legend iconType="circle" iconSize={7} wrapperStyle={{ fontSize: 10, paddingTop: 8 }} />
-                <Line type="monotone" dataKey="consultas" name="Consultas" stroke="#FFC400" strokeWidth={2.5} dot={{ r: 3, fill: "#FFC400", strokeWidth: 0 }} activeDot={{ r: 5 }} />
-                <Line type="monotone" dataKey="contratos" name="Contratos fechados" stroke="#171717" strokeWidth={2.5} dot={{ r: 3, fill: "#171717", strokeWidth: 0 }} activeDot={{ r: 5 }} />
+                <Legend
+                  iconType="circle"
+                  iconSize={7}
+                  wrapperStyle={{ fontSize: 10, paddingTop: 8 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="consultas"
+                  name="Consultas"
+                  stroke="#FFC400"
+                  strokeWidth={2.5}
+                  dot={{ r: 3, fill: "#FFC400", strokeWidth: 0 }}
+                  activeDot={{ r: 5 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="contratos"
+                  name="Contratos fechados"
+                  stroke="#171717"
+                  strokeWidth={2.5}
+                  dot={{ r: 3, fill: "#171717", strokeWidth: 0 }}
+                  activeDot={{ r: 5 }}
+                />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -129,7 +213,10 @@ export function ImobiliariaDashboard({ profileId, email }: { profileId: string; 
 function HeroBanner() {
   return (
     <section className="relative min-h-[330px] overflow-hidden rounded-[24px] border border-amber-100 bg-[radial-gradient(circle_at_88%_85%,rgba(255,196,0,0.2),transparent_34%),linear-gradient(112deg,#fffdf8_0%,#ffffff_54%,#fff7d8_100%)] shadow-[0_8px_30px_rgba(0,0,0,0.035)] sm:min-h-[350px] xl:h-full xl:min-h-0">
-      <div aria-hidden="true" className="pointer-events-none absolute -bottom-[28%] -left-[6%] z-0 h-[125%] w-[58%] rounded-full bg-[radial-gradient(ellipse_at_center,rgba(255,196,0,0.52)_0%,rgba(255,211,61,0.28)_42%,rgba(255,233,151,0.12)_62%,transparent_78%)] blur-2xl" />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -bottom-[28%] -left-[6%] z-0 h-[125%] w-[58%] rounded-full bg-[radial-gradient(ellipse_at_center,rgba(255,196,0,0.52)_0%,rgba(255,211,61,0.28)_42%,rgba(255,233,151,0.12)_62%,transparent_78%)] blur-2xl"
+      />
       <img
         src="/dashboard/agency-panel-art.png"
         alt="Equipe da imobiliária NOX diante de um empreendimento"
@@ -144,7 +231,17 @@ function HeroBanner() {
   );
 }
 
-function MetricCard({ icon: Icon, label, value, trend: trendValue }: { icon: Icon; label: string; value: string; trend: number }) {
+function MetricCard({
+  icon: Icon,
+  label,
+  value,
+  trend: trendValue,
+}: {
+  icon: Icon;
+  label: string;
+  value: string;
+  trend: number;
+}) {
   const positive = trendValue >= 0;
   return (
     <article className="group min-w-0 rounded-2xl border border-neutral-200/80 bg-white p-3 shadow-[0_5px_22px_rgba(0,0,0,0.035)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_28px_rgba(0,0,0,0.06)] sm:p-4 xl:h-full xl:overflow-hidden xl:p-2.5">
@@ -154,10 +251,15 @@ function MetricCard({ icon: Icon, label, value, trend: trendValue }: { icon: Ico
         </div>
         <div className="min-w-0">
           <p className="line-clamp-2 text-xs font-medium leading-tight text-neutral-500">{label}</p>
-          <p className="mt-1 truncate text-[clamp(17px,4.8vw,24px)] font-black tracking-tight tabular-nums text-neutral-950 xl:text-xl">{value}</p>
-          <p className={`mt-1 flex items-center gap-1 text-[10px] font-semibold xl:mt-0.5 xl:text-[9px] ${positive ? "text-emerald-600" : "text-red-500"}`}>
+          <p className="mt-1 truncate text-[clamp(17px,4.8vw,24px)] font-black tracking-tight tabular-nums text-neutral-950 xl:text-xl">
+            {value}
+          </p>
+          <p
+            className={`mt-1 flex items-center gap-1 text-[10px] font-semibold xl:mt-0.5 xl:text-[9px] ${positive ? "text-emerald-600" : "text-red-500"}`}
+          >
             <TrendingUp size={11} className={positive ? "" : "rotate-180"} />
-            {positive ? "+" : ""}{trendValue}% <span className="font-normal text-neutral-400">vs mês anterior</span>
+            {positive ? "+" : ""}
+            {trendValue}% <span className="font-normal text-neutral-400">vs mês anterior</span>
           </p>
         </div>
       </div>
@@ -165,8 +267,20 @@ function MetricCard({ icon: Icon, label, value, trend: trendValue }: { icon: Ico
   );
 }
 
-function DashboardPanel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <article className={`rounded-2xl border border-neutral-200/80 bg-white p-4 shadow-[0_5px_22px_rgba(0,0,0,0.035)] xl:p-3 ${className}`}>{children}</article>;
+function DashboardPanel({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <article
+      className={`rounded-2xl border border-neutral-200/80 bg-white p-4 shadow-[0_5px_22px_rgba(0,0,0,0.035)] xl:p-3 ${className}`}
+    >
+      {children}
+    </article>
+  );
 }
 
 function PanelHeader({ title, children }: { title: string; children?: React.ReactNode }) {
@@ -178,14 +292,26 @@ function PanelHeader({ title, children }: { title: string; children?: React.Reac
   );
 }
 
-function CompactSelect({ value, onValueChange, items }: { value: string; onValueChange: (value: string) => void; items: { value: string; label: string }[] }) {
+function CompactSelect({
+  value,
+  onValueChange,
+  items,
+}: {
+  value: string;
+  onValueChange: (value: string) => void;
+  items: { value: string; label: string }[];
+}) {
   return (
     <Select value={value} onValueChange={onValueChange}>
       <SelectTrigger className="h-8 w-auto min-w-[112px] rounded-lg border-neutral-200 bg-white px-2.5 text-[10px] shadow-none">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        {items.map((item) => <SelectItem key={item.value} value={item.value} className="text-xs">{item.label}</SelectItem>)}
+        {items.map((item) => (
+          <SelectItem key={item.value} value={item.value} className="text-xs">
+            {item.label}
+          </SelectItem>
+        ))}
       </SelectContent>
     </Select>
   );
@@ -193,9 +319,8 @@ function CompactSelect({ value, onValueChange, items }: { value: string; onValue
 
 function PolicyStatusChart({ data }: { data: ImobiliariaDashboardData["policyStatus"] }) {
   const total = data.reduce((sum, item) => sum + item.value, 0);
-  const chartData = total > 0
-    ? data
-    : [{ key: "empty", label: "Sem apólices", value: 1, color: "#E8E8E8" }];
+  const chartData =
+    total > 0 ? data : [{ key: "empty", label: "Sem apólices", value: 1, color: "#E8E8E8" }];
   return (
     <div
       className="mt-3 flex min-h-[330px] flex-1 flex-col sm:min-h-[390px] xl:mt-2 xl:min-h-0"
@@ -205,8 +330,20 @@ function PolicyStatusChart({ data }: { data: ImobiliariaDashboardData["policySta
       <div className="relative h-[220px] shrink-0 sm:h-[270px] xl:h-auto xl:min-h-[210px] xl:flex-1">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
-            <Pie data={chartData} dataKey="value" nameKey="label" innerRadius="55%" outerRadius="78%" paddingAngle={total > 0 ? 1 : 0} stroke="#FFFFFF" strokeWidth={2} animationDuration={650}>
-              {chartData.map((item) => <Cell key={item.key} fill={item.color} />)}
+            <Pie
+              data={chartData}
+              dataKey="value"
+              nameKey="label"
+              innerRadius="55%"
+              outerRadius="78%"
+              paddingAngle={total > 0 ? 1 : 0}
+              stroke="#FFFFFF"
+              strokeWidth={2}
+              animationDuration={650}
+            >
+              {chartData.map((item) => (
+                <Cell key={item.key} fill={item.color} />
+              ))}
             </Pie>
             {total > 0 ? <Tooltip content={<ChartTooltip />} /> : null}
           </PieChart>
@@ -222,7 +359,9 @@ function PolicyStatusChart({ data }: { data: ImobiliariaDashboardData["policySta
             <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: item.color }} />
             <p className="min-w-0 text-[10px] text-neutral-600">
               <strong className="font-extrabold text-neutral-800">{item.label}</strong>{" "}
-              <span className="tabular-nums">{item.value} ({total ? Math.round((item.value / total) * 100) : 0}%)</span>
+              <span className="tabular-nums">
+                {item.value} ({total ? Math.round((item.value / total) * 100) : 0}%)
+              </span>
             </p>
           </div>
         ))}
@@ -235,7 +374,12 @@ function InvoicePanel({ invoices }: { invoices: ImobiliariaDashboardData["invoic
   return (
     <DashboardPanel className="flex min-h-[390px] flex-col overflow-hidden sm:min-h-[460px] xl:h-full xl:min-h-0">
       <PanelHeader title="Próximos vencimentos">
-        <Button asChild variant="ghost" size="sm" className="h-7 rounded-lg px-2 text-[10px] text-neutral-500">
+        <Button
+          asChild
+          variant="ghost"
+          size="sm"
+          className="h-7 rounded-lg px-2 text-[10px] text-neutral-500"
+        >
           <Link to="/faturas-inquilinos">Ver todos</Link>
         </Button>
       </PanelHeader>
@@ -243,18 +387,29 @@ function InvoicePanel({ invoices }: { invoices: ImobiliariaDashboardData["invoic
         {invoices.length ? (
           <div className="space-y-2.5">
             {invoices.map((invoice) => (
-              <article key={invoice.id} className="flex items-center gap-3 rounded-xl border border-neutral-100 bg-neutral-50/70 p-3 transition-colors hover:border-amber-200 hover:bg-amber-50/40">
+              <article
+                key={invoice.id}
+                className="flex items-center gap-3 rounded-xl border border-neutral-100 bg-neutral-50/70 p-3 transition-colors hover:border-amber-200 hover:bg-amber-50/40"
+              >
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-neutral-200 bg-white text-neutral-700">
                   <CalendarDays size={17} strokeWidth={1.8} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[11px] font-bold text-neutral-800">Fatura #{invoice.number}</p>
-                  <p className="mt-0.5 text-[10px] text-neutral-400">Vencimento: {formatDate(invoice.dueDate)}</p>
+                  <p className="truncate text-[11px] font-bold text-neutral-800">
+                    Fatura #{invoice.number}
+                  </p>
+                  <p className="mt-0.5 text-[10px] text-neutral-400">
+                    Vencimento: {formatDate(invoice.dueDate)}
+                  </p>
                 </div>
                 <div className="shrink-0 text-right">
-                  <p className="text-[11px] font-black tabular-nums text-neutral-900">{formatCurrency(invoice.value)}</p>
+                  <p className="text-[11px] font-black tabular-nums text-neutral-900">
+                    {formatCurrency(invoice.value)}
+                  </p>
                   <span className="mt-1 inline-flex rounded-full bg-amber-50 px-2 py-1 text-[9px] font-bold text-amber-700">
-                    {invoice.daysUntilDue <= 0 ? "Vence hoje" : `Em ${invoice.daysUntilDue} ${invoice.daysUntilDue === 1 ? "dia" : "dias"}`}
+                    {invoice.daysUntilDue <= 0
+                      ? "Vence hoje"
+                      : `Em ${invoice.daysUntilDue} ${invoice.daysUntilDue === 1 ? "dia" : "dias"}`}
                   </span>
                 </div>
               </article>
@@ -266,7 +421,9 @@ function InvoicePanel({ invoices }: { invoices: ImobiliariaDashboardData["invoic
               <CalendarDays size={27} strokeWidth={1.6} />
             </div>
             <p className="text-sm font-black text-neutral-800">Nenhum vencimento futuro</p>
-            <p className="mt-1 max-w-[240px] text-[11px] leading-relaxed text-neutral-400">As próximas faturas aparecerão aqui em ordem de vencimento.</p>
+            <p className="mt-1 max-w-[240px] text-[11px] leading-relaxed text-neutral-400">
+              As próximas faturas aparecerão aqui em ordem de vencimento.
+            </p>
           </div>
         )}
       </div>
@@ -280,7 +437,11 @@ function ChartTooltip({ active, payload, label, currency = false }: any) {
     <div className="rounded-xl border border-neutral-200 bg-white p-3 shadow-xl">
       {label && <p className="mb-1.5 text-[10px] font-bold text-neutral-500">{label}</p>}
       {payload.map((item: any) => (
-        <p key={item.dataKey || item.name} className="text-[11px] font-semibold" style={{ color: item.color || item.payload?.color }}>
+        <p
+          key={item.dataKey || item.name}
+          className="text-[11px] font-semibold"
+          style={{ color: item.color || item.payload?.color }}
+        >
           {item.name}: {currency ? formatCurrency(Number(item.value || 0)) : item.value}
         </p>
       ))}
@@ -292,8 +453,16 @@ function DashboardSkeleton() {
   return (
     <div className="mx-auto max-w-[1580px] animate-pulse space-y-3.5">
       <div className="h-[420px] rounded-[24px] bg-neutral-100 sm:h-[350px] xl:h-[320px]" />
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{Array.from({ length: 4 }, (_, index) => <div key={index} className="h-24 rounded-2xl bg-neutral-100" />)}</div>
-      <div className="grid gap-3 xl:grid-cols-3">{Array.from({ length: 3 }, (_, index) => <div key={index} className="h-[520px] rounded-2xl bg-neutral-100" />)}</div>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {Array.from({ length: 4 }, (_, index) => (
+          <div key={index} className="h-24 rounded-2xl bg-neutral-100" />
+        ))}
+      </div>
+      <div className="grid gap-3 xl:grid-cols-3">
+        {Array.from({ length: 3 }, (_, index) => (
+          <div key={index} className="h-[520px] rounded-2xl bg-neutral-100" />
+        ))}
+      </div>
     </div>
   );
 }
@@ -304,7 +473,9 @@ function DashboardError({ message, onRetry }: { message: string; onRetry: () => 
       <ShieldCheck className="mb-3 h-10 w-10 text-neutral-300" />
       <h2 className="font-black text-neutral-950">Não foi possível abrir o painel</h2>
       <p className="mt-1 text-sm text-neutral-500">{message}</p>
-      <Button onClick={() => void onRetry()} className="mt-4 rounded-lg bg-neutral-950 text-white">Tentar novamente</Button>
+      <Button onClick={() => void onRetry()} className="mt-4 rounded-lg bg-neutral-950 text-white">
+        Tentar novamente
+      </Button>
     </div>
   );
 }

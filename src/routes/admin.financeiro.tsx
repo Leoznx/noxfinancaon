@@ -23,6 +23,7 @@ import {
 import { toast } from "sonner";
 
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { useEssentialLoading } from "@/components/GlobalLoading";
 import { AdminAreaSwitcher } from "@/components/admin/AdminAreaSwitcher";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { WithdrawalDetailsDialog } from "@/components/comissoes/WithdrawalDetailsDialog";
@@ -90,9 +91,7 @@ type FinanceTabKey = (typeof FINANCE_TABS)[number];
 
 export const Route = createFileRoute("/admin/financeiro")({
   validateSearch: (search): { tab?: FinanceTabKey } =>
-    FINANCE_TABS.includes(search.tab as FinanceTabKey)
-      ? { tab: search.tab as FinanceTabKey }
-      : {},
+    FINANCE_TABS.includes(search.tab as FinanceTabKey) ? { tab: search.tab as FinanceTabKey } : {},
   component: () => (
     <ProtectedRoute roles={["admin", "admin_master", "financeiro"]} moduleKey="financeiro">
       <FinanceiroAdminPage />
@@ -200,6 +199,9 @@ function FinanceiroAdminPage() {
   const [draftFilters, setDraftFilters] = useState<FinanceFilters>(EMPTY_FILTERS);
   const [filters, setFilters] = useState<FinanceFilters>(EMPTY_FILTERS);
   const [loading, setLoading] = useState(true);
+  useEssentialLoading(
+    loading && openWithdrawals.length === 0 && payments.length === 0 && commissions.length === 0,
+  );
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detailsId, setDetailsId] = useState<string | null>(null);
@@ -1415,7 +1417,11 @@ function CardsLoading() {
 }
 
 function CardsEmpty({ children }: { children: React.ReactNode }) {
-  return <div className="flex h-44 items-center justify-center px-4 text-center text-neutral-500">{children}</div>;
+  return (
+    <div className="flex h-44 items-center justify-center px-4 text-center text-neutral-500">
+      {children}
+    </div>
+  );
 }
 
 /** Par label/valor compacto para os cards do mobile — mesmo conteúdo que uma célula da tabela. */

@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { useEssentialLoading } from "@/components/GlobalLoading";
 import { CobrancasAvulsasAbertas } from "@/components/CobrancasAvulsasAbertas";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useAuth } from "@/components/AuthProvider";
@@ -105,6 +106,7 @@ function CarteiraCobrancas() {
   const [faturas, setFaturas] = useState<any[]>([]);
   const [batches, setBatches] = useState<ConsolidatedBillingBatch[]>([]);
   const [loading, setLoading] = useState(true);
+  useEssentialLoading(loading && faturas.length === 0 && batches.length === 0);
   const [busca, setBusca] = useState("");
   const [statusFiltro, setStatusFiltro] = useState("todos");
   const now = new Date();

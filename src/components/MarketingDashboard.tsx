@@ -15,6 +15,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useEssentialLoading } from "@/components/GlobalLoading";
 import {
   Table,
   TableBody,
@@ -68,6 +69,8 @@ export function MarketingDashboard() {
   const [loading, setLoading] = useState(true);
   const [usingDemo, setUsingDemo] = useState(false);
 
+  useEssentialLoading(loading);
+
   const load = async () => {
     const { data } = await supabase
       .from("leads")
@@ -106,7 +109,6 @@ export function MarketingDashboard() {
       clearInterval(interval);
       supabase.removeChannel(ch);
     };
-
   }, []);
 
   const stats = useMemo(() => {

@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { useEssentialLoading } from "@/components/GlobalLoading";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -121,6 +122,7 @@ function UsuariosUnificadosPage() {
   const [promovendoLoading, setPromovendoLoading] = useState(false);
   const [excluindo, setExcluindo] = useState<UsuarioLinha | null>(null);
   const [excluindoLoading, setExcluindoLoading] = useState(false);
+  useEssentialLoading(loading && usuarios.length === 0);
 
   const carregar = async () => {
     setLoading(true);

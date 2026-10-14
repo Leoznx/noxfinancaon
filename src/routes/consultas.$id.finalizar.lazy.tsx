@@ -2,6 +2,7 @@ import { createLazyFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { useEssentialLoading } from "@/components/GlobalLoading";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useAuth } from "@/components/AuthProvider";
 import { supabase } from "@/integrations/supabase/client";
@@ -299,6 +300,7 @@ function FinalizarPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [consulta, setConsulta] = useState<any>(null);
+  useEssentialLoading(loading || !consulta);
   const [documentos, setDocumentos] = useState<any[]>([]);
   const [historico, setHistorico] = useState<any[]>([]);
   const [etapa, setEtapa] = useState<EtapaKey>("resumo");

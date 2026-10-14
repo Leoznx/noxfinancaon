@@ -1,9 +1,13 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { useEssentialLoading } from "@/components/GlobalLoading";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { ResultadoAutomacao } from "@/components/simulacao/ResultadoAutomacao";
-import type { ExtrasSelecionados, PlanoSelecionadoCalculo } from "@/components/simulacao/SeletorPlanos";
+import type {
+  ExtrasSelecionados,
+  PlanoSelecionadoCalculo,
+} from "@/components/simulacao/SeletorPlanos";
 import { supabase } from "@/integrations/supabase/client";
 import { isNomeValido, reenviarConsulta, registrarEventoProposta } from "@/lib/consultasCredito";
 import { normalizeContractPeriodMonths } from "@/lib/contract-period";
@@ -29,6 +33,7 @@ function ConsultaResultado() {
   const navigate = useNavigate();
   const [consulta, setConsulta] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  useEssentialLoading(loading || !consulta);
   const [submitting, setSubmitting] = useState(false);
 
   const carregarConsulta = useCallback(async () => {
@@ -78,21 +83,20 @@ function ConsultaResultado() {
       const periodoContrato = normalizeContractPeriodMonths(contractPeriodMonths);
       if (!periodoContrato) throw new Error("Selecione um período de contrato válido.");
 
-      const { data: plano } = await supabase
-        .from("planos")
-        .select("*")
-        .eq("id", planoId)
-        .single();
+      const { data: plano } = await supabase.from("planos").select("*").eq("id", planoId).single();
       if (!plano) throw new Error("Plano não encontrado");
 
       const aluguel = Number(consulta.imoveis?.valor_aluguel ?? consulta.valor_aluguel) || 0;
-      const condominio = Number(consulta.imoveis?.valor_condominio ?? consulta.valor_condominio) || 0;
+      const condominio =
+        Number(consulta.imoveis?.valor_condominio ?? consulta.valor_condominio) || 0;
       const taxas = Number(consulta.imoveis?.valor_taxas ?? consulta.valor_taxas) || 0;
-      const cobreTaxas = planoCalculado?.cobre_taxas_condominio ?? (plano as any).cobre_taxas_condominio;
+      const cobreTaxas =
+        planoCalculado?.cobre_taxas_condominio ?? (plano as any).cobre_taxas_condominio;
       const taxaPremio = Number(planoCalculado?.taxa_premio ?? (plano as any).taxa_premio);
-      const base = planoCalculado?.baseCalculo ?? (cobreTaxas ? aluguel + condominio + taxas : aluguel);
-      const premioMensal = planoCalculado?.mensal ?? (base * (taxaPremio / 100));
-      const anual = planoCalculado?.totalAnual ?? (premioMensal * 12);
+      const base =
+        planoCalculado?.baseCalculo ?? (cobreTaxas ? aluguel + condominio + taxas : aluguel);
+      const premioMensal = planoCalculado?.mensal ?? base * (taxaPremio / 100);
+      const anual = planoCalculado?.totalAnual ?? premioMensal * 12;
 
       const updatePayload: any = {
         plano_id: planoId,
@@ -101,19 +105,15 @@ function ConsultaResultado() {
         valor_anual: anual,
         status: "pendente_documentacao",
       };
-      const previousDocumentos = consulta?.documentos && typeof consulta.documentos === "object"
-        ? consulta.documentos
-        : {};
+      const previousDocumentos =
+        consulta?.documentos && typeof consulta.documentos === "object" ? consulta.documentos : {};
       updatePayload.documentos = {
         ...previousDocumentos,
         extras: extras ?? {},
         plano_calculado: planoCalculado ?? null,
       };
 
-      const { error } = await supabase
-        .from("consultas_credito")
-        .update(updatePayload)
-        .eq("id", id);
+      const { error } = await supabase.from("consultas_credito").update(updatePayload).eq("id", id);
       if (error) throw error;
 
       // Passo a passo do funil — é o que o administrador lê em Consultas > Ver mais.
@@ -138,7 +138,11 @@ function ConsultaResultado() {
     }
   };
 
-  const handleAtualizarValores = async (v: { aluguel: number; condominio: number; taxas: number }) => {
+  const handleAtualizarValores = async (v: {
+    aluguel: number;
+    condominio: number;
+    taxas: number;
+  }) => {
     const imovelId = consulta?.imoveis?.id ?? consulta?.imovel_id;
     if (!imovelId) throw new Error("Imóvel não encontrado para esta consulta.");
     const { error: errImovel } = await supabase
@@ -158,7 +162,12 @@ function ConsultaResultado() {
 
     setConsulta((prev: any) => ({
       ...prev,
-      imoveis: { ...(prev?.imoveis ?? {}), valor_aluguel: v.aluguel, valor_condominio: v.condominio, valor_taxas: v.taxas },
+      imoveis: {
+        ...(prev?.imoveis ?? {}),
+        valor_aluguel: v.aluguel,
+        valor_condominio: v.condominio,
+        valor_taxas: v.taxas,
+      },
     }));
   };
 
@@ -184,8 +193,10 @@ function ConsultaResultado() {
   // tenant_name/documento (colunas da automação) são a fonte mais confiável; o join com
   // inquilinos/imoveis só entra como fallback para consultas que nunca passaram pela
   // automação (nunca tiveram esses campos preenchidos).
-  const nomeResolvido = [consulta.tenant_name, inquilino.nome, inquilino.razao_social].find(isNomeValido) || null;
-  const documentoResolvido = consulta.documento || consulta.tenant_document || inquilino.cpf || inquilino.cnpj || null;
+  const nomeResolvido =
+    [consulta.tenant_name, inquilino.nome, inquilino.razao_social].find(isNomeValido) || null;
+  const documentoResolvido =
+    consulta.documento || consulta.tenant_document || inquilino.cpf || inquilino.cnpj || null;
 
   const consultaParaResultado = {
     ...consulta,
@@ -211,12 +222,34 @@ function ConsultaResultado() {
             planoIdInicial={consulta.plano_id ?? null}
             contractPeriodMonthsInitial={consulta.contract_period_months ?? null}
             extrasIniciais={{
-              external_painting_enabled: !!(consulta.external_painting_enabled ?? consulta.documentos?.extras?.external_painting_enabled),
-              external_painting_total: Number(consulta.external_painting_total ?? consulta.documentos?.extras?.external_painting_total) || 0,
-              external_painting_installment: Number(consulta.external_painting_installment ?? consulta.documentos?.extras?.external_painting_installment) || 0,
-              activation_fee_enabled: !!(consulta.activation_fee_enabled ?? consulta.documentos?.extras?.activation_fee_enabled),
-              activation_fee_amount: Number(consulta.activation_fee_amount ?? consulta.documentos?.extras?.activation_fee_amount) || 0,
-              activation_fee_commission: Number(consulta.activation_fee_commission ?? consulta.documentos?.extras?.activation_fee_commission) || 0,
+              external_painting_enabled: !!(
+                consulta.external_painting_enabled ??
+                consulta.documentos?.extras?.external_painting_enabled
+              ),
+              external_painting_total:
+                Number(
+                  consulta.external_painting_total ??
+                    consulta.documentos?.extras?.external_painting_total,
+                ) || 0,
+              external_painting_installment:
+                Number(
+                  consulta.external_painting_installment ??
+                    consulta.documentos?.extras?.external_painting_installment,
+                ) || 0,
+              activation_fee_enabled: !!(
+                consulta.activation_fee_enabled ??
+                consulta.documentos?.extras?.activation_fee_enabled
+              ),
+              activation_fee_amount:
+                Number(
+                  consulta.activation_fee_amount ??
+                    consulta.documentos?.extras?.activation_fee_amount,
+                ) || 0,
+              activation_fee_commission:
+                Number(
+                  consulta.activation_fee_commission ??
+                    consulta.documentos?.extras?.activation_fee_commission,
+                ) || 0,
             }}
           />
         </div>
