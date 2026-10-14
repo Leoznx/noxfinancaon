@@ -71,6 +71,9 @@ static_files = ["./functions/_shared/contract-templates/*.docx"]
 [functions.asaas-get-payment]
 verify_jwt = true
 
+[functions.asaas-reconcile-billing]
+verify_jwt = false
+
 [functions.sync-marketing-ads]
 verify_jwt = true
 

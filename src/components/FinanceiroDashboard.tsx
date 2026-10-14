@@ -75,6 +75,10 @@ const EMPTY_SUMMARY: FinanceSummary = {
   paid_withdrawals: 0,
   commission_count: 0,
   payment_count: 0,
+  active_contracts: 0,
+  pending_contracts: 0,
+  contracts_missing_billing: 0,
+  reconciliation_required: 0,
 };
 
 const PAID_INVOICE_STATUSES = new Set(["paid", "pago", "received", "paid_via_consolidated"]);

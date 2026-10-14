@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import {
   AlertTriangle,
   Banknote,
@@ -8,6 +8,7 @@ import {
   ExternalLink,
   Eye,
   FileCheck2,
+  FileText,
   History,
   Loader2,
   RefreshCw,
@@ -59,6 +60,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { validateWithdrawalReceiptFile } from "@/lib/withdrawal-pix";
 import {
+  CONTRACT_BILLING_STATUS_LABELS,
+  listAdminContractBilling,
+  reconcileAsaasBilling,
+  type AdminContractBillingRow,
+  type ContractBillingStatus,
+} from "@/lib/admin-contract-billing";
+import {
   approveWithdrawal,
   COMMISSION_STATUS_LABELS,
   formatCents,
@@ -77,7 +85,7 @@ import {
   type WithdrawalStatus,
 } from "@/lib/withdrawals";
 
-const FINANCE_TABS = ["withdrawals", "commissions", "payments"] as const;
+const FINANCE_TABS = ["billing", "withdrawals", "commissions", "payments"] as const;
 type FinanceTabKey = (typeof FINANCE_TABS)[number];
 
 export const Route = createFileRoute("/admin/financeiro")({
@@ -124,6 +132,10 @@ const EMPTY_SUMMARY: FinanceSummary = {
   paid_withdrawals: 0,
   commission_count: 0,
   payment_count: 0,
+  active_contracts: 0,
+  pending_contracts: 0,
+  contracts_missing_billing: 0,
+  reconciliation_required: 0,
 };
 
 const WITHDRAWAL_TONES: Record<WithdrawalStatus, string> = {
@@ -179,11 +191,12 @@ function withdrawalParams(filters: FinanceFilters) {
 function FinanceiroAdminPage() {
   const navigate = useNavigate();
   const search = useSearch({ from: "/admin/financeiro" });
-  const activeTab: FinanceTabKey = (search.tab as FinanceTabKey) ?? "withdrawals";
+  const activeTab: FinanceTabKey = (search.tab as FinanceTabKey) ?? "billing";
   const [summary, setSummary] = useState<FinanceSummary>(EMPTY_SUMMARY);
   const [openWithdrawals, setOpenWithdrawals] = useState<FinanceWithdrawal[]>([]);
   const [payments, setPayments] = useState<FinanceWithdrawal[]>([]);
   const [commissions, setCommissions] = useState<FinanceCommission[]>([]);
+  const [contractBilling, setContractBilling] = useState<AdminContractBillingRow[]>([]);
   const [draftFilters, setDraftFilters] = useState<FinanceFilters>(EMPTY_FILTERS);
   const [filters, setFilters] = useState<FinanceFilters>(EMPTY_FILTERS);
   const [loading, setLoading] = useState(true);
@@ -193,6 +206,7 @@ function FinanceiroAdminPage() {
   const [approveTarget, setApproveTarget] = useState<FinanceWithdrawal | null>(null);
   const [rejectTarget, setRejectTarget] = useState<FinanceWithdrawal | null>(null);
   const [paymentTarget, setPaymentTarget] = useState<FinanceWithdrawal | null>(null);
+  const [reconciling, setReconciling] = useState<string | null>(null);
 
   const loadData = useCallback(async (activeFilters: FinanceFilters, quiet = false) => {
     if (quiet) setRefreshing(true);
@@ -200,16 +214,42 @@ function FinanceiroAdminPage() {
     setError(null);
     try {
       const params = withdrawalParams(activeFilters);
-      const [nextSummary, nextOpen, nextPayments, nextCommissions] = await Promise.all([
+      const [nextSummary, nextOpen, nextPayments, nextCommissions, nextContractBilling] = await Promise.all([
         getFinanceSummary(),
         listFinanceWithdrawals({ ...params, scope: "OPEN" }),
         listFinanceWithdrawals({ ...params, scope: "PAID" }),
         listFinanceCommissions(),
+        listAdminContractBilling(),
       ]);
-      setSummary(nextSummary);
+      const activeContracts = nextContractBilling.filter((row) =>
+        ["active", "ativa", "ativo"].includes(
+          String(row.policy_status || row.contract_status || "").toLowerCase(),
+        ),
+      ).length;
+      const pendingContracts = nextContractBilling.length - activeContracts;
+      setSummary({
+        ...nextSummary,
+        revenue_received_cents: Math.max(
+          nextSummary.revenue_received_cents,
+          nextContractBilling.reduce((sum, row) => sum + row.received_cents, 0),
+        ),
+        revenue_pending_cents: Math.max(
+          nextSummary.revenue_pending_cents,
+          nextContractBilling.reduce((sum, row) => sum + row.outstanding_cents, 0),
+        ),
+        active_contracts: activeContracts,
+        pending_contracts: pendingContracts,
+        contracts_missing_billing: nextContractBilling.filter(
+          (row) => row.billing_status === "awaiting_billing",
+        ).length,
+        reconciliation_required: nextContractBilling.filter(
+          (row) => row.billing_status === "reconciliation_required",
+        ).length,
+      });
       setOpenWithdrawals(nextOpen);
       setPayments(nextPayments);
       setCommissions(nextCommissions);
+      setContractBilling(nextContractBilling);
     } catch (loadError) {
       const message = toWithdrawalError(loadError).message;
       setError(message);
@@ -245,6 +285,16 @@ function FinanceiroAdminPage() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "consolidated_invoice_batches" },
+        () => void loadData(filters, true),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "faturas_inquilino" },
+        () => void loadData(filters, true),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "asaas_subscriptions" },
         () => void loadData(filters, true),
       )
       .subscribe();
@@ -287,6 +337,31 @@ function FinanceiroAdminPage() {
     setFilters(EMPTY_FILTERS);
   };
 
+  const reconcile = async (consultationId?: string) => {
+    const target = consultationId || "all";
+    setReconciling(target);
+    try {
+      const result = await reconcileAsaasBilling(consultationId);
+      const checked = result.checkedPayments + result.checkedSubscriptions;
+      if (result.failures.length) {
+        toast.warning(
+          `Conciliação parcial: ${checked} recurso(s) consultado(s) e ${result.failures.length} falha(s).`,
+        );
+      } else {
+        toast.success(`Asaas conciliado: ${checked} recurso(s) consultado(s).`);
+      }
+      await loadData(filters, true);
+    } catch (reconcileError) {
+      toast.error(
+        reconcileError instanceof Error
+          ? reconcileError.message
+          : "Não foi possível conciliar com o Asaas.",
+      );
+    } finally {
+      setReconciling(null);
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-7 pb-10">
@@ -298,7 +373,7 @@ function FinanceiroAdminPage() {
             </p>
             <h1 className="mt-1 text-3xl font-black tracking-tight text-neutral-950">Financeiro</h1>
             <p className="mt-2 text-sm text-neutral-500">
-              Saques manuais, comissões e comprovantes com dados reais e trilha auditável.
+              Contratos, cobranças Asaas, saques e comissões em uma trilha financeira única.
             </p>
           </div>
           <Button
@@ -313,14 +388,16 @@ function FinanceiroAdminPage() {
 
         <SummaryGrid summary={summary} loading={loading} />
 
-        <FilterPanel
-          filters={draftFilters}
-          onChange={setDraftFilters}
-          payerOptions={payerOptions}
-          loading={loading}
-          onSubmit={applyFilters}
-          onClear={clearFilters}
-        />
+        {activeTab !== "billing" && (
+          <FilterPanel
+            filters={draftFilters}
+            onChange={setDraftFilters}
+            payerOptions={payerOptions}
+            loading={loading}
+            onSubmit={applyFilters}
+            onClear={clearFilters}
+          />
+        )}
 
         {error && !loading && (
           <div className="flex flex-col gap-3 rounded-2xl border border-red-200 bg-red-50 p-5 text-red-900 sm:flex-row sm:items-center sm:justify-between">
@@ -350,6 +427,12 @@ function FinanceiroAdminPage() {
         >
           <TabsList className="h-auto w-full flex-wrap justify-start gap-1 rounded-2xl border border-neutral-200 bg-white p-1.5 shadow-sm">
             <FinanceTab
+              value="billing"
+              icon={FileText}
+              label="Faturamento"
+              count={summary.active_contracts + summary.pending_contracts}
+            />
+            <FinanceTab
               value="withdrawals"
               icon={Banknote}
               label="Saques"
@@ -368,6 +451,15 @@ function FinanceiroAdminPage() {
               count={summary.paid_withdrawals}
             />
           </TabsList>
+
+          <TabsContent value="billing">
+            <ContractBillingTable
+              rows={contractBilling}
+              loading={loading}
+              reconciling={reconciling}
+              onReconcile={(consultationId) => void reconcile(consultationId)}
+            />
+          </TabsContent>
 
           <TabsContent value="withdrawals">
             <WithdrawalsTable
@@ -415,6 +507,188 @@ function FinanceiroAdminPage() {
   );
 }
 
+const BILLING_STATUS_TONES: Record<ContractBillingStatus, string> = {
+  reconciliation_required: "border-red-200 bg-red-50 text-red-800",
+  awaiting_billing: "border-orange-200 bg-orange-50 text-orange-800",
+  awaiting_asaas: "border-blue-200 bg-blue-50 text-blue-800",
+  overdue: "border-red-200 bg-red-50 text-red-800",
+  pending: "border-amber-200 bg-amber-50 text-amber-800",
+  paid: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  ready: "border-emerald-200 bg-emerald-50 text-emerald-800",
+};
+
+function ContractBillingTable({
+  rows,
+  loading,
+  reconciling,
+  onReconcile,
+}: {
+  rows: AdminContractBillingRow[];
+  loading: boolean;
+  reconciling: string | null;
+  onReconcile: (consultationId?: string) => void;
+}) {
+  const [search, setSearch] = useState("");
+  const filtered = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return rows;
+    return rows.filter((row) =>
+      [
+        row.contract_number,
+        row.tenant_name,
+        row.tenant_document,
+        row.property_address,
+        row.contract_status,
+        CONTRACT_BILLING_STATUS_LABELS[row.billing_status],
+      ].some((value) => String(value || "").toLowerCase().includes(query)),
+    );
+  }, [rows, search]);
+
+  const statusBadge = (row: AdminContractBillingRow) => (
+    <Badge className={BILLING_STATUS_TONES[row.billing_status]}>
+      {CONTRACT_BILLING_STATUS_LABELS[row.billing_status]}
+    </Badge>
+  );
+  const actions = (row: AdminContractBillingRow) => (
+    <div className="flex flex-wrap justify-end gap-1.5">
+      {row.policy_id ? (
+        <Button asChild size="sm" variant="outline">
+          <Link to="/apolices/$id" params={{ id: row.policy_id }}>
+            <Eye className="mr-1.5 h-4 w-4" /> Detalhes
+          </Link>
+        </Button>
+      ) : (
+        <Button asChild size="sm" variant="outline">
+          <Link to="/consultas/$id/resultado" params={{ id: row.consultation_id }}>
+            <Eye className="mr-1.5 h-4 w-4" /> Proposta
+          </Link>
+        </Button>
+      )}
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={Boolean(reconciling)}
+        onClick={() => onReconcile(row.consultation_id)}
+      >
+        <RefreshCw
+          className={`mr-1.5 h-4 w-4 ${reconciling === row.consultation_id ? "animate-spin" : ""}`}
+        />
+        Conciliar
+      </Button>
+    </div>
+  );
+
+  return (
+    <DataTable
+      title="Contratos e cobranças Asaas"
+      description="Contratos ativos e pendentes continuam visíveis mesmo antes da materialização da cobrança."
+    >
+      <div className="flex flex-col gap-3 border-b border-neutral-100 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative w-full max-w-md">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+          <Input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            className="pl-9"
+            placeholder="Contrato, inquilino, CPF ou endereço"
+          />
+        </div>
+        <Button
+          variant="outline"
+          disabled={Boolean(reconciling)}
+          onClick={() => onReconcile()}
+        >
+          <RefreshCw className={`mr-2 h-4 w-4 ${reconciling === "all" ? "animate-spin" : ""}`} />
+          Conciliar tudo com Asaas
+        </Button>
+      </div>
+
+      <div className="divide-y divide-neutral-100 md:hidden">
+        {loading ? (
+          <CardsLoading />
+        ) : filtered.length === 0 ? (
+          <CardsEmpty>Nenhum contrato faturável encontrado.</CardsEmpty>
+        ) : (
+          filtered.map((row) => (
+            <div key={row.consultation_id} className="space-y-3 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <PersonCell
+                  name={row.tenant_name || "Inquilino não informado"}
+                  secondary={row.contract_number ? `Contrato ${row.contract_number}` : "Contrato pendente"}
+                />
+                {statusBadge(row)}
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <MiniValue label="Recebido" value={formatCents(row.received_cents)} />
+                <MiniValue label="A receber" value={formatCents(row.outstanding_cents)} />
+                <MiniValue label="Faturas" value={String(row.invoice_count)} />
+                <MiniValue
+                  label="Próximo vencimento"
+                  value={row.next_due_date ? new Date(`${row.next_due_date}T12:00:00`).toLocaleDateString("pt-BR") : "—"}
+                />
+              </div>
+              {actions(row)}
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="hidden overflow-x-auto md:block">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="pl-5">Contrato / inquilino</TableHead>
+              <TableHead>Status do contrato</TableHead>
+              <TableHead>Integração</TableHead>
+              <TableHead>Faturas</TableHead>
+              <TableHead>Recebido</TableHead>
+              <TableHead>A receber</TableHead>
+              <TableHead>Próximo vencimento</TableHead>
+              <TableHead className="pr-5 text-right">Ações</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              <EmptyRow columns={8} loading />
+            ) : filtered.length === 0 ? (
+              <EmptyRow columns={8}>Nenhum contrato faturável encontrado.</EmptyRow>
+            ) : (
+              filtered.map((row) => (
+                <TableRow key={row.consultation_id}>
+                  <TableCell className="pl-5">
+                    <PersonCell
+                      name={row.tenant_name || "Inquilino não informado"}
+                      secondary={row.contract_number ? `Contrato ${row.contract_number}` : "Contrato pendente"}
+                    />
+                  </TableCell>
+                  <TableCell className="capitalize">{row.contract_status.replaceAll("_", " ")}</TableCell>
+                  <TableCell>{statusBadge(row)}</TableCell>
+                  <TableCell>
+                    <span className="font-bold">{row.invoice_count}</span>
+                    <span className="ml-1 text-xs text-neutral-400">
+                      ({row.paid_count} pagas · {row.pending_count + row.overdue_count} abertas)
+                    </span>
+                  </TableCell>
+                  <TableCell className="font-semibold text-emerald-700">
+                    {formatCents(row.received_cents)}
+                  </TableCell>
+                  <TableCell className="font-semibold">{formatCents(row.outstanding_cents)}</TableCell>
+                  <TableCell className="whitespace-nowrap text-sm text-neutral-600">
+                    {row.next_due_date
+                      ? new Date(`${row.next_due_date}T12:00:00`).toLocaleDateString("pt-BR")
+                      : "—"}
+                  </TableCell>
+                  <TableCell className="pr-5">{actions(row)}</TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+    </DataTable>
+  );
+}
+
 function SummaryGrid({ summary, loading }: { summary: FinanceSummary; loading: boolean }) {
   const cards = [
     {
@@ -445,10 +719,24 @@ function SummaryGrid({ summary, loading }: { summary: FinanceSummary; loading: b
       detail: "Disponíveis mais reservas ainda não pagas",
       tone: "bg-yellow-50 text-yellow-700",
     },
+    {
+      icon: FileText,
+      label: "Contratos ativos",
+      value: String(summary.active_contracts),
+      detail: `${summary.contracts_missing_billing} sem cobrança materializada`,
+      tone: "bg-blue-50 text-blue-700",
+    },
+    {
+      icon: AlertTriangle,
+      label: "Contratos pendentes",
+      value: String(summary.pending_contracts),
+      detail: `${summary.reconciliation_required} exigem conciliação`,
+      tone: "bg-orange-50 text-orange-700",
+    },
   ];
 
   return (
-    <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
       {cards.map((card) => (
         <Card key={card.label} className="rounded-2xl border-neutral-200 shadow-sm">
           <CardContent className="p-5">

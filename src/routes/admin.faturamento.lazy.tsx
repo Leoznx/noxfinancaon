@@ -50,7 +50,7 @@ import { manageAsaasSubscription, managePersistedAsaasPayment } from "@/lib/asaa
 
 export const Route = createLazyFileRoute("/admin/faturamento")({
   component: () => (
-    <ProtectedRoute roles={["admin", "analista", "financeiro"]} moduleKey="faturamento">
+    <ProtectedRoute roles={["admin", "admin_master", "analista", "financeiro"]} moduleKey="faturamento">
       <FaturamentoAdminPage />
     </ProtectedRoute>
   ),

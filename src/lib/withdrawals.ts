@@ -112,6 +112,10 @@ export interface FinanceSummary {
   paid_withdrawals: number;
   commission_count: number;
   payment_count: number;
+  active_contracts: number;
+  pending_contracts: number;
+  contracts_missing_billing: number;
+  reconciliation_required: number;
 }
 
 export interface FinanceWithdrawal extends UserWithdrawal {
@@ -308,7 +312,24 @@ export const revealWithdrawalPix = (withdrawalId: string) =>
     holder_name: string;
   }>("reveal_withdrawal_pix", { p_withdrawal_id: withdrawalId });
 
-export const getFinanceSummary = () => rpc<FinanceSummary>("get_finance_dashboard_summary");
+export async function getFinanceSummary() {
+  const summary = await rpc<Partial<FinanceSummary>>("get_finance_dashboard_summary");
+  return {
+    revenue_received_cents: Number(summary.revenue_received_cents ?? 0),
+    revenue_pending_cents: Number(summary.revenue_pending_cents ?? 0),
+    commissions_paid_cents: Number(summary.commissions_paid_cents ?? 0),
+    commissions_payable_cents: Number(summary.commissions_payable_cents ?? 0),
+    open_withdrawals: Number(summary.open_withdrawals ?? 0),
+    pending_review_withdrawals: Number(summary.pending_review_withdrawals ?? 0),
+    paid_withdrawals: Number(summary.paid_withdrawals ?? 0),
+    commission_count: Number(summary.commission_count ?? 0),
+    payment_count: Number(summary.payment_count ?? 0),
+    active_contracts: Number(summary.active_contracts ?? 0),
+    pending_contracts: Number(summary.pending_contracts ?? 0),
+    contracts_missing_billing: Number(summary.contracts_missing_billing ?? 0),
+    reconciliation_required: Number(summary.reconciliation_required ?? 0),
+  } satisfies FinanceSummary;
+}
 
 export const listFinanceWithdrawals = (
   params: {

@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
+import { useAuth } from "@/components/AuthProvider";
 
 export const Route = createLazyFileRoute("/apolices/$id")({
   component: () => (
@@ -32,6 +33,7 @@ const TIPOS_DOC = [
 
 function ApoliceDetalhe() {
   const { id } = Route.useParams();
+  const { user } = useAuth();
   const [apolice, setApolice] = useState<any>(null);
   const [documentos, setDocumentos] = useState<any[]>([]);
   const [faturas, setFaturas] = useState<any[]>([]);
@@ -62,21 +64,44 @@ function ApoliceDetalhe() {
         if (apErr) throw apErr;
         if (!ap) throw new Error("Apólice não encontrada ou sem acesso.");
 
-        const { data: docs } = await supabase
+        const { data: docs, error: docsError } = await supabase
           .from("documentos_contrato")
           .select("*")
           .eq("apolice_id", id);
 
-        const { data: fts } = await supabase
-          .from("mensalidades")
-          .select("*")
+        const { data: fts, error: invoicesError } = await (supabase as any)
+          .from("faturas_inquilino")
+          .select(`
+            id, numero_parcela, installment_total, vencimento, valor, status,
+            pago_em, confirmed_at, payment_url, boleto_url, linha_digitavel,
+            asaas_payment:asaas_payments(invoice_url, boleto_url, boleto_barcode, pix_copy_paste)
+          `)
           .eq("apolice_id", id)
-          .order("data_vencimento", { ascending: true });
+          .order("vencimento", { ascending: true });
+        if (docsError) throw docsError;
+        if (invoicesError) throw invoicesError;
 
         if (!cancelled) {
           setApolice(ap);
           setDocumentos(docs || []);
-          setFaturas(fts || []);
+          setFaturas(
+            (fts || []).map((invoice: any) => ({
+              ...invoice,
+              data_vencimento: invoice.vencimento,
+              data_pagamento: invoice.pago_em || invoice.confirmed_at,
+              boleto_url:
+                invoice.payment_url ||
+                invoice.boleto_url ||
+                invoice.asaas_payment?.invoice_url ||
+                invoice.asaas_payment?.boleto_url ||
+                null,
+              linha_digitavel:
+                invoice.linha_digitavel ||
+                invoice.asaas_payment?.boleto_barcode ||
+                invoice.asaas_payment?.pix_copy_paste ||
+                null,
+            })),
+          );
         }
       } catch (e: any) {
         if (!cancelled) setErro(e.message || "Erro ao carregar contrato");
@@ -128,11 +153,15 @@ function ApoliceDetalhe() {
         .filter(Boolean).join(", ")
     : "Endereço não cadastrado";
 
+  const isStaff = ["admin", "admin_master", "analista", "juridico", "financeiro"].includes(
+    user?.internalRole || user?.role || "",
+  );
+
   return (
     <DashboardLayout>
       <div className="space-y-6 animate-fade-in">
         {/* Voltar */}
-        <Link to="/apolices" className="inline-flex items-center gap-2 text-sm text-neutral-500 hover:text-neutral-900 font-bold">
+        <Link to={isStaff ? "/admin/contratos" : "/apolices"} className="inline-flex items-center gap-2 text-sm text-neutral-500 hover:text-neutral-900 font-bold">
           <ArrowLeft size={16} /> Voltar para contratos
         </Link>
 
@@ -230,6 +259,11 @@ function ApoliceDetalhe() {
           })}
         </div>
 
+        <div className="pt-2">
+          <h2 className="mb-4 text-lg font-black text-neutral-900">Faturamento do contrato</h2>
+          <FaturasView faturas={faturas} apolice={apolice} />
+        </div>
+
       </div>
     </DashboardLayout>
   );
@@ -253,8 +287,14 @@ function FaturasView({ faturas, apolice }: { faturas: any[]; apolice: any }) {
   const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
   const enriquecidas = faturas.map((f) => {
     const venc = new Date(f.data_vencimento);
-    const vencido = f.status === "pendente" && venc < hoje;
-    return { ...f, statusReal: vencido ? "vencido" : f.status };
+    const status = String(f.status || "pending").toLowerCase();
+    const pago = ["pago", "paid", "received", "confirmed", "paid_via_consolidated"].includes(status);
+    const aberto = [
+      "pendente", "pending", "created", "waiting_payment", "processing",
+      "risk_analysis", "approved", "awaiting_consolidation", "scheduled",
+    ].includes(status);
+    const vencido = status === "overdue" || status === "vencido" || (aberto && venc < hoje);
+    return { ...f, statusReal: pago ? "pago" : vencido ? "vencido" : aberto ? "pendente" : status };
   });
 
   const total = enriquecidas.reduce((s, f) => s + Number(f.valor || 0), 0);
