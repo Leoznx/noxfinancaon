@@ -170,6 +170,25 @@ test("preenche e valida o formulário ERP incluindo o CEP abaixo da dobra", asyn
   await page.close();
 });
 
+test("reconhece o endereço do CEP no formato Cidade - UF sem consumir o teto de espera", async () => {
+  const page = await pageWithHtml(
+    "https://app.loft.com.br/erp/proposta/analise-de-credito",
+    `<main>
+      <label>CEP<input id="cep" placeholder="00000-000"
+        oninput="document.querySelector('#cidade').textContent = 'Blumenau - SC'" /></label>
+      <span id="cidade"></span>
+      <h2>Valores</h2>
+    </main>`,
+  );
+  const startedAt = Date.now();
+
+  await fillCep(page, "89055001");
+
+  assert.equal(await page.locator("#cep").inputValue(), "89055001");
+  assert.ok(Date.now() - startedAt < 1_000);
+  await page.close();
+});
+
 test("envia pelo botão Fazer análise sem clicar no texto explicativo que contém simular o crédito", async () => {
   const url = "https://app.loft.com.br/erp/proposta/analise-de-credito";
   const page = await pageWithHtml(
@@ -418,11 +437,11 @@ test("desliga coberturas ERP sem valor para liberar o formulário", async () => 
     `<main>
       <label>Valor mensal do aluguel<input id="aluguel" placeholder="R$ 0.000,00" /></label>
       <label data-testid="property-condominium-coverage-toggle">
-        Incluir cobertura<input id="condominio-toggle" type="checkbox" onchange="if (!this.checked) document.querySelector('#condominio').disabled = true" />
+        Incluir cobertura<input id="condominio-toggle" type="checkbox" checked onchange="if (!this.checked) document.querySelector('#condominio').disabled = true" />
       </label>
       <label>Condomínio<input data-testid="property-condominium-value" id="condominio" placeholder="R$ 0.000,00" /></label>
       <label data-testid="property-iptu-coverage-toggle">
-        Incluir cobertura<input id="iptu-toggle" type="checkbox" onchange="if (!this.checked) document.querySelector('#iptu').disabled = true" />
+        Incluir cobertura<input id="iptu-toggle" type="checkbox" checked onchange="if (!this.checked) document.querySelector('#iptu').disabled = true" />
       </label>
       <label>IPTU<input data-testid="property-iptu-value" id="iptu" placeholder="R$ 0.000,00" /></label>
     </main>`,
@@ -435,6 +454,34 @@ test("desliga coberturas ERP sem valor para liberar o formulário", async () => 
   assert.equal(await page.locator("#iptu").isEnabled(), false);
   assert.equal(await page.locator("#condominio").inputValue(), "");
   assert.equal(await page.locator("#iptu").inputValue(), "");
+  await page.close();
+});
+
+test("não alterna coberturas ERP que já estão desligadas", async () => {
+  const url = "https://app.loft.com.br/erp/proposta/analise-de-credito";
+  const page = await pageWithHtml(
+    url,
+    `<main>
+      <label>Valor mensal do aluguel<input id="aluguel" placeholder="R$ 0.000,00" /></label>
+      <label data-testid="property-condominium-coverage-toggle">
+        Incluir cobertura<input id="condominio-toggle" type="checkbox"
+          onchange="this.dataset.changeCount = String(Number(this.dataset.changeCount || 0) + 1)" />
+      </label>
+      <label>Condomínio<input data-testid="property-condominium-value" id="condominio" placeholder="R$ 0.000,00" /></label>
+      <label data-testid="property-iptu-coverage-toggle">
+        Incluir cobertura<input id="iptu-toggle" type="checkbox"
+          onchange="this.dataset.changeCount = String(Number(this.dataset.changeCount || 0) + 1)" />
+      </label>
+      <label>IPTU<input data-testid="property-iptu-value" id="iptu" placeholder="R$ 0.000,00" /></label>
+    </main>`,
+  );
+
+  await fillValores(page, { aluguel: 1880, condominio: 0, taxas: 0 });
+
+  assert.equal(await page.locator("#condominio-toggle").isChecked(), false);
+  assert.equal(await page.locator("#iptu-toggle").isChecked(), false);
+  assert.equal(await page.locator("#condominio-toggle").getAttribute("data-change-count"), null);
+  assert.equal(await page.locator("#iptu-toggle").getAttribute("data-change-count"), null);
   await page.close();
 });
 

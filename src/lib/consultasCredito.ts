@@ -136,51 +136,36 @@ interface CriarConsultaParams {
  */
 export async function criarConsultaParaAutomacao({
   dados,
-  userEmail,
-  userRole,
 }: CriarConsultaParams): Promise<string> {
-  // Reusa o upsert existente: mantém vínculo com inquilinos/imóveis e deduplicação.
-  const consultaId = await upsertConsultaCredito({
-    dados,
-    userEmail,
-    userRole,
-    deferQueue: true,
-  });
-
   const rawDoc = dados.tipoInquilino === "PF" ? dados.inquilinos[0]?.cpf || "" : dados.cnpj || "";
   const documento = normalizeDocumento(rawDoc);
-
-  const payload: Record<string, unknown> = {
-    correlation_id: createSimulationCorrelationId(),
-    tipo_pessoa: dados.tipoInquilino,
-    documento,
-    documento_masked: maskDocumento(documento),
-    tipo_imovel: dados.tipoImovel,
-    // Compatibilidade com workers já implantados: `cep` é o campo técnico da
-    // fila; o CEP digitado permanece separado em `imovel_cep`/`imoveis.cep`.
-    cep: selectOperationalCreditSimulationCep(),
-    imovel_cep: dados.cep || null,
-    valor_aluguel: dados.valores.aluguel,
-    valor_condominio: dados.valores.condominio,
-    valor_taxas: dados.valores.taxas,
-    status: "pendente",
-    origem: "nox_financa",
-    resultado: null,
-    mensagem: null,
-    error_message: null,
-    automation_started_at: null,
-    automation_finished_at: null,
-    automation_step: null,
-    raw_response: null,
-  };
-
-  const { error } = await supabase
-    .from("consultas_credito")
-    .update(payload as any)
-    .eq("id", consultaId);
+  const tenantName =
+    dados.tipoInquilino === "PF"
+      ? dados.inquilinos[0]?.nome || ""
+      : dados.razaoSocial || "";
+  const propertyAddress =
+    [dados.endereco?.cidade, dados.endereco?.uf].filter(Boolean).join(", ") ||
+    (dados.cep ? `CEP ${dados.cep}` : "");
+  const { data, error } = await (supabase as any).rpc("enqueue_credit_simulation", {
+    p_tenant_type: dados.tipoInquilino,
+    p_tenant_name: tenantName,
+    p_tenant_document: documento,
+    p_property_type: dados.tipoImovel,
+    p_property_zip: dados.cep || "",
+    p_property_city: dados.endereco?.cidade || "",
+    p_property_state: dados.endereco?.uf || "",
+    p_property_address: propertyAddress,
+    p_rent_value: dados.valores.aluguel,
+    p_condominium_value: dados.valores.condominio,
+    p_fee_value: dados.valores.taxas,
+    p_operational_zip: selectOperationalCreditSimulationCep(),
+    p_correlation_id: createSimulationCorrelationId(),
+  });
   if (error) throw error;
-
-  return consultaId;
+  if (typeof data !== "string" || !data) {
+    throw new Error("Não foi possível colocar a consulta na fila.");
+  }
+  return data;
 }
 
 /**

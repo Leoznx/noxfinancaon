@@ -8,6 +8,7 @@ import {
   LOFT_PROPOSALS_URL,
   LoftPortalCancellationError,
   isLoftProposalReconciliationExpired,
+  parseLoftProposalApiResponses,
   probeLoftProposalCancellationPortal,
   resolveLoftProposalReconciliation,
   resolveSingleNewLoftProposalId,
@@ -26,6 +27,48 @@ before(async () => {
 
 after(async () => {
   await browser?.close();
+});
+
+test("converte a API da lista em snapshot sem misturar documentos", () => {
+  const result = parseLoftProposalApiResponses(
+    [
+      {
+        data: {
+          propostas: [
+            {
+              id: "4677001",
+              status: "Aguardando ativação",
+              inquilino_principal: { cpf: "111.444.777-35" },
+              outros_inquilinos: [],
+            },
+            {
+              id: "4677002",
+              status: "Cancelada",
+              cancelado_em: "2026-10-14T12:00:00Z",
+              inquilino_principal: { cpf: "039.438.389-35" },
+              outros_inquilinos: [],
+            },
+          ],
+        },
+      },
+      {
+        data: {
+          propostas: [
+            {
+              id: "4677001",
+              status: "Cancelada",
+              inquilino_principal: { cpf: "11144477735" },
+              outros_inquilinos: [],
+            },
+          ],
+        },
+      },
+      null,
+    ],
+    "11144477735",
+  );
+
+  assert.deepEqual(result, [{ proposalId: "4677001", terminal: true }]);
 });
 
 function proposalRow(input: {
@@ -131,6 +174,9 @@ function pageHtml(
 
 async function pageWithHtml(html: string): Promise<Page> {
   const page = await browser.newPage();
+  await page.route("**/fianca-aluguel/imobiliaria/api/solicitacao/imovel?*", (route) =>
+    route.fulfill({ status: 503, contentType: "application/json", body: "{}" }),
+  );
   await page.route(LOFT_PROPOSALS_URL, (route) =>
     route.fulfill({ status: 200, contentType: "text/html; charset=utf-8", body: html }),
   );

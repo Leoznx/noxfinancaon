@@ -29,6 +29,7 @@ const IMAGENS_RESULTADO = [
  * (redirecionamento) ou pelo estado de erro.
  */
 function etapaLabel(etapa?: string | null): string {
+  if (etapa === "preparando_envio") return "Enviando a consulta";
   if (etapa === "pendente") return "Preparando a análise";
   if (etapa === "preenchendo") return "Preenchendo os dados da consulta";
   if (etapa === "enviando") return "Enviando a simulação";

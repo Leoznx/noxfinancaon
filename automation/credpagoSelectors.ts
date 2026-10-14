@@ -351,6 +351,13 @@ async function setCoverageToggle(
   for (let attempt = 0; attempt < 4; attempt += 1) {
     const fieldEnabled = await valueField.isEnabled().catch(() => !enabled);
     const semanticState = await coverageSemanticState(root);
+    // No ERP atual o checkbox e o campo monetário permanecem montados e
+    // habilitados mesmo quando a cobertura está desligada. O `checked` do
+    // controle é a fonte de verdade. Exigir também `disabled` fazia dois
+    // campos já desligados serem alternados quatro vezes, somando ~9s ao fluxo.
+    if (isErpCreditSimulationUrl(page.url()) && semanticState === enabled) {
+      return true;
+    }
     if (fieldEnabled === enabled && (semanticState === null || semanticState === enabled)) {
       return true;
     }
@@ -507,7 +514,10 @@ export async function fillCep(page: Page, cep: string): Promise<void> {
     // CredPago mostra a cidade/UF resolvida, ex.: "Blumenau, SC") — evita falso
     // positivo com algum outro "Texto, UF" que já exista em outra parte da página.
     const trechoCep = texto.split(/\bCEP\b/i)[1]?.split(/\bValores\b/i)[0] ?? "";
-    if (/[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s]*,\s*[A-Z]{2}\b/.test(trechoCep)) return;
+    // O portal já exibiu tanto "Blumenau, SC" quanto "Blumenau - SC".
+    // Aceitar os dois formatos evita consumir o teto inteiro mesmo depois de
+    // o endereço já ter sido resolvido.
+    if (/[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s]*(?:,|\s+-)\s*[A-Z]{2}\b/.test(trechoCep)) return;
     await page.waitForTimeout(POLL_MS);
   }
 }

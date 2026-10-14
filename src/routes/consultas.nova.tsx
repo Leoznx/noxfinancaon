@@ -111,7 +111,10 @@ function NovaConsulta() {
     setIsSubmitting(true);
     setErroAutomacao(null);
     setProgresso(5);
-    setEtapaAutomacao(null);
+    // Abre o feedback bloqueante no mesmo clique. Antes o usuário permanecia
+    // olhando o formulário em "Enviando consulta" até todas as gravações
+    // preparatórias terminarem.
+    setEtapaAutomacao("preparando_envio");
     try {
       const criarConsulta = demoSession ? criarConsultaDemonstrativa : criarConsultaParaAutomacao;
       const id = await criarConsulta({
@@ -148,7 +151,7 @@ function NovaConsulta() {
     setEtapaAutomacao(null);
   };
 
-  const modalAberto = consultaId !== null;
+  const modalAberto = isSubmitting || consultaId !== null;
 
   return (
     <DashboardLayout>

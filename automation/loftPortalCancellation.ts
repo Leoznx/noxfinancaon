@@ -92,6 +92,57 @@ export interface LoftProposalSummary {
   terminal: boolean;
 }
 
+/**
+ * Converte somente os campos técnicos necessários da resposta da lista. O
+ * documento é conferido novamente porque algumas versões do portal aplicaram
+ * o parâmetro `query` apenas depois de renderizar a primeira página.
+ */
+export function parseLoftProposalApiResponses(
+  responses: readonly unknown[],
+  document: string,
+): LoftProposalSummary[] {
+  const normalizedDocument = normalizeDocument(document);
+  if (!normalizedDocument) {
+    throw new LoftPortalCancellationError("Informe um CPF/CNPJ válido para criar o snapshot.");
+  }
+
+  const proposals = new Map<string, LoftProposalSummary>();
+  for (const response of responses) {
+    const root = response && typeof response === "object" ? (response as Record<string, unknown>) : {};
+    const data = root.data && typeof root.data === "object" ? (root.data as Record<string, unknown>) : {};
+    const rows = Array.isArray(data.propostas) ? data.propostas : [];
+    for (const row of rows) {
+      if (!row || typeof row !== "object") continue;
+      const proposal = row as Record<string, unknown>;
+      const principal =
+        proposal.inquilino_principal && typeof proposal.inquilino_principal === "object"
+          ? (proposal.inquilino_principal as Record<string, unknown>)
+          : {};
+      const others = Array.isArray(proposal.outros_inquilinos) ? proposal.outros_inquilinos : [];
+      const documents = [principal, ...others]
+        .flatMap((tenant) => {
+          if (!tenant || typeof tenant !== "object") return [];
+          const values = tenant as Record<string, unknown>;
+          return [values.cpf, values.cnpj, values.documento].map(digits);
+        })
+        .filter(Boolean);
+      if (!documents.includes(normalizedDocument)) continue;
+
+      const proposalId = normalizeProposalId(proposal.id);
+      if (!proposalId) continue;
+      const statusText = String(proposal.status ?? "");
+      const terminal =
+        TERMINAL_PROPOSAL_PATTERN.test(statusText) || Boolean(String(proposal.cancelado_em ?? ""));
+      const previous = proposals.get(proposalId);
+      proposals.set(proposalId, {
+        proposalId,
+        terminal: Boolean(previous?.terminal || terminal),
+      });
+    }
+  }
+  return Array.from(proposals.values());
+}
+
 export type LoftProposalReconciliation =
   { kind: "attach"; proposalId: string } | { kind: "already-terminal"; proposalIds: string[] };
 
@@ -391,6 +442,17 @@ const ACTIVE_PROPOSAL_TAB_PATTERNS = [
   /^enviadas\s+aguardando\s+ativa[cç][aã]o(?:\s*\d+)?$/i,
 ] as const;
 
+// Os três agrupamentos usados pela própria tela da Loft. A leitura direta da
+// mesma API autenticada evita abrir e pesquisar cada aba sequencialmente
+// (~13s). Se esse contrato externo mudar, o fluxo visual abaixo continua sendo
+// o fallback seguro.
+const PROPOSAL_STATUS_GROUPS = [
+  "20,54,16,41,56,1,18,51,52,49,43,55,11,0,4,47",
+  "2,5",
+  "7,9,12,13,14,23,27,28,29,30,34,38,45,46,48,55,3,6,50",
+] as const;
+const PROPOSALS_API_PATH = "/fianca-aluguel/imobiliaria/api/solicitacao/imovel";
+
 async function findProposalTab(page: Page, name: RegExp): Promise<Locator | null> {
   return firstVisible([
     page.getByRole("tab", { name }),
@@ -427,9 +489,8 @@ async function searchOtherActiveTabsForExactCandidate(
   return null;
 }
 
-async function navigateAndSearchProposals(
+async function navigateToProposalsPage(
   page: Page,
-  query: string,
   timeoutMs: number,
   proposalsUrl = LOFT_PROPOSALS_URL,
 ): Promise<void> {
@@ -455,10 +516,60 @@ async function navigateAndSearchProposals(
       "A sessão não permaneceu na lista de propostas da Loft; verifique a autenticação antes de cancelar.",
     );
   }
+}
+
+async function navigateAndSearchProposals(
+  page: Page,
+  query: string,
+  timeoutMs: number,
+  proposalsUrl = LOFT_PROPOSALS_URL,
+): Promise<void> {
+  await navigateToProposalsPage(page, timeoutMs, proposalsUrl);
 
   const searchInput = await findSearchInput(page, timeoutMs);
   await searchInput.fill(query);
   await submitSearch(page, searchInput);
+}
+
+async function listLoftProposalsViaApi(
+  page: Page,
+  document: string,
+  timeoutMs: number,
+): Promise<LoftProposalSummary[]> {
+  const responses = await page.evaluate(
+    async ({ apiPath, document, statusGroups, timeoutMs }) => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        return await Promise.all(
+          statusGroups.map(async (status) => {
+            const query = new URLSearchParams({
+              offset: "0",
+              status,
+              query: document,
+              filtrar_simulacao_origem_planilha: "true",
+              sort: "criado_em:DESC",
+              limit: "100",
+              version: "1",
+            });
+            const response = await fetch(`${apiPath}?${query}`, { signal: controller.signal });
+            if (response.status === 204) return null;
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return response.json();
+          }),
+        );
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+    {
+      apiPath: PROPOSALS_API_PATH,
+      document,
+      statusGroups: [...PROPOSAL_STATUS_GROUPS],
+      timeoutMs,
+    },
+  );
+  return parseLoftProposalApiResponses(responses, document);
 }
 
 async function searchCancelledTab(
@@ -980,7 +1091,14 @@ export async function listLoftProposalsForDocument(
     throw new LoftPortalCancellationError("Informe um CPF/CNPJ válido para criar o snapshot.");
   }
   const boundedTimeout = Math.max(500, timeoutMs);
-  await navigateAndSearchProposals(page, normalizedDocument, boundedTimeout);
+  await navigateToProposalsPage(page, boundedTimeout);
+  try {
+    return await listLoftProposalsViaApi(page, normalizedDocument, boundedTimeout);
+  } catch {
+    // Contrato privado do parceiro: qualquer alteração volta automaticamente
+    // para a navegação visual já validada, sem impedir cancelamentos seguros.
+    await navigateAndSearchProposals(page, normalizedDocument, boundedTimeout);
+  }
   const proposals = new Map<string, LoftProposalSummary>();
 
   const collectCurrentTab = async (): Promise<void> => {
