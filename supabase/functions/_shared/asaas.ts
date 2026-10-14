@@ -425,10 +425,13 @@ export function resolvePaymentRecipient(
   };
 }
 
+const ACCOUNT_PAYER_ROLES = new Set(["imobiliaria", "corretor", "proprietario"]);
+
 /**
- * Resolve o pagador a partir do contrato, inclusive quando o solicitante e um
- * corretor vinculado. Nao usa o usuario logado e nunca troca silenciosamente
- * para o inquilino quando a imobiliaria esta configurada como responsavel.
+ * Resolve o pagador a partir do contrato. O valor legado `agency` significa
+ * "pela conta cadastrada": imobiliaria, corretor ou proprietario, conforme o
+ * perfil que abriu a proposta. Nao usa o usuario logado e nunca troca
+ * silenciosamente para o inquilino.
  */
 export async function resolvePaymentRecipientFromContract(
   supabase: any,
@@ -455,7 +458,6 @@ export async function resolvePaymentRecipientFromContract(
     };
   }
 
-  let agencyUserId = consulta?.billing_responsible_user_id || null;
   let requesterProfile: any = consulta?.responsavel_profile || null;
   if (!requesterProfile && consulta?.profile_id_solicitante) {
     const result = await supabase
@@ -465,60 +467,67 @@ export async function resolvePaymentRecipientFromContract(
       .maybeSingle();
     requesterProfile = result.data;
   }
-  if (!agencyUserId && requesterProfile?.role === "imobiliaria") {
-    agencyUserId = requesterProfile.id || consulta?.profile_id_solicitante || null;
-  }
-  if (!agencyUserId && consulta?.profile_id_solicitante) {
-    const { data } = await supabase.rpc("imobiliaria_profile_id_do_corretor", {
-      p_profile_id_corretor: consulta.profile_id_solicitante,
-    });
-    agencyUserId = data || null;
-  }
 
-  let agencyProfile: any = null;
-  if (agencyUserId) {
+  const explicitUserId = consulta?.billing_responsible_user_id || null;
+  let payerProfile: any = null;
+  if (explicitUserId && requesterProfile?.id === explicitUserId) {
+    payerProfile = requesterProfile;
+  } else if (explicitUserId) {
     const result = await supabase
       .from("profiles")
       .select("id, nome, email, telefone, cnpj, role")
-      .eq("id", agencyUserId)
+      .eq("id", explicitUserId)
       .maybeSingle();
-    agencyProfile = result.data;
+    payerProfile = result.data;
   }
+  // Registros antigos podiam guardar o usuario inquilino neste campo. Quando
+  // isso acontece, a conta que criou a proposta continua sendo a fonte certa.
+  if (!payerProfile || !ACCOUNT_PAYER_ROLES.has(String(payerProfile.role))) {
+    payerProfile = ACCOUNT_PAYER_ROLES.has(String(requesterProfile?.role))
+      ? requesterProfile
+      : null;
+  }
+  const payerUserId = payerProfile?.id || null;
+  const payerRole = String(payerProfile?.role || "");
 
   let agency: any = null;
-  if (consulta?.profile_id_solicitante) {
-    const brokerResult = await supabase
-      .from("corretores")
-      .select("imobiliaria_id")
-      .eq("profile_id", consulta.profile_id_solicitante)
-      .maybeSingle();
-    if (brokerResult.data?.imobiliaria_id) {
-      const agencyResult = await supabase
-        .from("imobiliarias")
-        .select("*")
-        .eq("id", brokerResult.data.imobiliaria_id)
-        .maybeSingle();
-      agency = agencyResult.data;
-    }
-  }
-  if (!agency && agencyProfile?.email) {
+  let broker: any = null;
+  let owner: any = null;
+  if (payerRole === "imobiliaria" && payerProfile?.email) {
     const agencyResult = await supabase
       .from("imobiliarias")
       .select("*")
-      .ilike("contato_email", agencyProfile.email)
+      .ilike("contato_email", payerProfile.email)
       .maybeSingle();
     agency = agencyResult.data;
+  } else if (payerRole === "corretor" && payerUserId) {
+    const brokerResult = await supabase
+      .from("corretores")
+      .select("cpf, cidade, estado")
+      .eq("profile_id", payerUserId)
+      .maybeSingle();
+    broker = brokerResult.data;
+  } else if (payerRole === "proprietario" && payerUserId) {
+    const ownerResult = await supabase
+      .from("proprietarios")
+      .select("nome, cpf_cnpj, email, telefone")
+      .eq("profile_id", payerUserId)
+      .limit(1)
+      .maybeSingle();
+    owner = ownerResult.data;
   }
 
   const resolved: PaymentRecipient = {
     paymentResponsible: "agency",
     recipientType: "user",
-    recipientUserId: agencyUserId,
+    recipientUserId: payerUserId,
     recipientTenantId: null,
-    recipientName: agency?.razao_social || agency?.nome_fantasia || agencyProfile?.nome || null,
-    recipientEmail: agency?.contato_email || agencyProfile?.email || null,
-    recipientPhone: agency?.contato_telefone || agencyProfile?.telefone || null,
-    recipientDocument: agency?.cnpj || agencyProfile?.cnpj || null,
+    recipientName:
+      agency?.razao_social || agency?.nome_fantasia || owner?.nome || payerProfile?.nome || null,
+    recipientEmail: agency?.contato_email || owner?.email || payerProfile?.email || null,
+    recipientPhone: agency?.contato_telefone || owner?.telefone || payerProfile?.telefone || null,
+    recipientDocument:
+      agency?.cnpj || broker?.cpf || owner?.cpf_cnpj || payerProfile?.cnpj || null,
     recipientAddress: {
       address: agency?.endereco || null,
       addressNumber: agency?.numero || null,
@@ -532,7 +541,7 @@ export async function resolvePaymentRecipientFromContract(
   if (!resolved.recipientUserId || !resolved.recipientDocument) {
     throw new HttpError(
       409,
-      "A imobiliaria responsavel precisa ter conta, CNPJ e contato financeiro cadastrados.",
+      "A conta responsavel precisa ter CPF/CNPJ e contato financeiro cadastrados.",
     );
   }
   if (consulta?.billing_responsible_user_id !== resolved.recipientUserId) {

@@ -43,6 +43,7 @@ import type {
 } from "@/lib/asaas-payment";
 import { checkoutActionsForMethod, checkoutMethodSelection } from "@/lib/asaas-payment";
 import { formatContractPeriodMonths, normalizeContractPeriodMonths } from "@/lib/contract-period";
+import { billingAccountCopy } from "@/lib/billing-account";
 import {
   AsaasCheckoutError,
   createAsaasPayment,
@@ -344,7 +345,7 @@ function FinalizarPage() {
         const [consultaRes, docsRes, histRes] = await Promise.all([
           supabase
             .from("consultas_credito")
-            .select(`*, inquilinos(*), imoveis(*), planos(*)`)
+            .select(`*, inquilinos(*), imoveis(*), planos(*), responsavel_profile:profiles!consultas_credito_profile_id_solicitante_fkey(id, role)`)
             .eq("id", id)
             .single(),
           supabase
@@ -950,8 +951,9 @@ function ResumoPropostaLoft(p: any) {
     ? new Date(`${consulta.tenant_data_nascimento}T00:00:00`).toLocaleDateString("pt-BR")
     : "—";
   const planoNome = (plano?.nome ?? "—").replace(/^NOX\s+/i, "");
+  const contaPagadora = billingAccountCopy(consulta?.responsavel_profile?.role ?? user?.role);
   const tipoPagador = isAgencyBilling(consulta)
-    ? "Recorrência via Imobiliária"
+    ? `Recorrência via ${contaPagadora.title}`
     : "Recorrência via Inquilino";
   const solicitacao =
     String(id).slice(0, 8).replace(/\D/g, "") || numeroProposta.replace("NOX-", "");
@@ -1667,8 +1669,9 @@ function ResumoPropostaLoft(p: any) {
                   <h3 className="text-lg font-bold text-neutral-950">Pagamento</h3>
                   <p className="mt-1 text-sm text-slate-600">
                     Escolha a forma de pagamento e como cobrar o seguro incêndio. Boleto, Pix e
-                    cartão preenchido agora serão cobrados da{" "}
-                    {pagamentoViaImobiliaria ? "imobiliária" : "pessoa inquilina"}.
+                    cartão preenchido agora usam os dados cadastrados {pagamentoViaImobiliaria
+                      ? contaPagadora.dataOwner
+                      : "da pessoa inquilina"}.
                   </p>
                 </div>
 
@@ -2386,6 +2389,7 @@ function EtapaResumo(p: any) {
     onVoltar,
     onAvancar,
   } = p;
+  const contaPagadora = billingAccountCopy(consulta?.responsavel_profile?.role);
   return (
     <div className="space-y-6">
       <div>
@@ -2440,10 +2444,10 @@ function EtapaResumo(p: any) {
             className={`p-3 rounded-xl border-2 ${isAgencyBilling(consulta) ? "border-yellow-400 bg-yellow-50" : "border-neutral-200"} mb-2`}
           >
             <p className="text-xs font-black flex items-center gap-1">
-              <Building2 size={14} /> Via imobiliária
+              <Building2 size={14} /> Via {contaPagadora.title}
             </p>
             <p className="text-[11px] text-neutral-600">
-              Boleto, Pix e cartão preenchido agora ficam para a imobiliária; o link de cartão pode
+              Boleto, Pix e cartão preenchido agora usam os dados {contaPagadora.dataOwner}; o link de cartão pode
               ser enviado ao inquilino.
             </p>
           </div>

@@ -3,10 +3,12 @@ import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { useAuth } from "@/components/AuthProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { ensureTenantUser } from "@/lib/proposta.functions";
 import { DEMO_COMPLEMENTARY_DATA } from "@/lib/demo-accounts";
 import { isDemoSession } from "@/lib/demo-session";
+import { billingAccountCopy } from "@/lib/billing-account";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -61,6 +63,7 @@ function maskCEP(v: string) {
 function DadosComplementaresPage() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const ensureTenantFn = useServerFn(ensureTenantUser);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -108,7 +111,7 @@ function DadosComplementaresPage() {
       try {
         const { data, error } = await supabase
           .from("consultas_credito")
-          .select(`*, inquilinos(*), imoveis(*)`)
+          .select(`*, inquilinos(*), imoveis(*), responsavel_profile:profiles!consultas_credito_profile_id_solicitante_fkey(id, role)`)
           .eq("id", id)
           .single();
         if (error) throw error;
@@ -301,7 +304,9 @@ function DadosComplementaresPage() {
 
       // 2. Atualiza consulta
       const billingRole = paymentType === "imobiliaria" ? "imobiliaria" : "inquilino";
-      const billingUserId = paymentType === "inquilino" ? tenantUserId : null;
+      const billingUserId = paymentType === "inquilino"
+        ? tenantUserId
+        : (consulta as any)?.profile_id_solicitante ?? null;
       const previousDocumentos = ((consulta as any)?.documentos && typeof (consulta as any).documentos === "object")
         ? (consulta as any).documentos
         : {};
@@ -407,6 +412,10 @@ function DadosComplementaresPage() {
     return <DashboardLayout><div className="p-10 text-sm text-neutral-500">Carregando...</div></DashboardLayout>;
   }
 
+  const contaPagadora = billingAccountCopy(
+    (consulta as any)?.responsavel_profile?.role ?? user?.role,
+  );
+
   return (
     <DashboardLayout>
       <div className="flex-1 flex flex-col px-4 sm:px-6 py-6 pb-28">
@@ -476,8 +485,8 @@ function DadosComplementaresPage() {
                 onClick={() => { setPaymentType("imobiliaria"); setErrors(p => ({ ...p, paymentType: false })); }}
                 className={`text-left p-5 rounded-xl border-2 transition-all ${paymentType === "imobiliaria" ? "border-yellow-400 bg-yellow-50" : "border-neutral-200 bg-white hover:border-neutral-300"}`}
               >
-                <div className="flex items-center gap-2 mb-2"><Building2 size={18} /><span className="font-black text-sm">Pagamento via Imobiliária</span></div>
-                <p className="text-xs text-neutral-600 leading-relaxed">O inquilino paga a 1ª parcela e a taxa de ativação. As demais parcelas são cobradas da imobiliária em um único boleto mensal, reunindo todos os contratos ativos.</p>
+                <div className="flex items-center gap-2 mb-2"><Building2 size={18} /><span className="font-black text-sm">Pagamento via {contaPagadora.title}</span></div>
+                <p className="text-xs text-neutral-600 leading-relaxed">Boleto, Pix e cartão preenchido em “Pagar agora” usam os dados cadastrados {contaPagadora.dataOwner}. No cartão, o link também pode ser enviado ao inquilino.</p>
               </button>
               <button
                 type="button"
