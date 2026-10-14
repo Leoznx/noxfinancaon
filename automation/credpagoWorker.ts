@@ -681,7 +681,8 @@ async function reconcilePendingLoftCancellation(
         )
       ) {
         registrarSucessoFilaCancelamento();
-        return false;
+        runtimeState.cancellationExecution = "ok";
+        return true;
       }
       await persistirSessao();
       await finishMissingLoftReconciliation(job);
@@ -2150,22 +2151,24 @@ async function loop(once: boolean): Promise<void> {
       // novas consultas enquanto a tela de propostas estiver em uso.
       if (env.loftCancellationEnabled && !cancelamentoEmAndamento && emAndamento.size === 0) {
         try {
-          await reconcilePendingLoftCancellation(
+          const reconciliationPending = await reconcilePendingLoftCancellation(
             contextoAberto.context,
             contextoAberto.persistirSessao,
           );
-          const job = await claimNextLoftCancellation();
-          if (job) {
-            runtimeState.activeCancellation = true;
-            const task = processLoftCancellation(
-              job,
-              contextoAberto.context,
-              contextoAberto.persistirSessao,
-            ).finally(() => {
-              if (cancelamentoEmAndamento === task) cancelamentoEmAndamento = null;
-              runtimeState.activeCancellation = false;
-            });
-            cancelamentoEmAndamento = task;
+          if (!reconciliationPending) {
+            const job = await claimNextLoftCancellation();
+            if (job) {
+              runtimeState.activeCancellation = true;
+              const task = processLoftCancellation(
+                job,
+                contextoAberto.context,
+                contextoAberto.persistirSessao,
+              ).finally(() => {
+                if (cancelamentoEmAndamento === task) cancelamentoEmAndamento = null;
+                runtimeState.activeCancellation = false;
+              });
+              cancelamentoEmAndamento = task;
+            }
           }
         } catch (error) {
           registrarFalhaFilaCancelamento("Falha ao consultar a fila de cancelamentos", error);

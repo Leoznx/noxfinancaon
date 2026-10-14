@@ -49,6 +49,16 @@ test("reconcilia automaticamente somente a única proposta nova após o envio", 
   assert.match(worker, /finishAlreadyTerminalLoftReconciliation/);
 });
 
+test("não tenta retirar outro cancelamento enquanto uma submissão aguarda reconciliação", async () => {
+  const worker = await readFile(workerUrl, "utf8");
+
+  assert.match(worker, /const reconciliationPending = await reconcilePendingLoftCancellation/);
+  assert.match(
+    worker,
+    /if \(!reconciliationPending\) \{\s*const job = await claimNextLoftCancellation/,
+  );
+});
+
 test("encerra reparos sem lease depois que todas as tentativas foram consumidas", async () => {
   const migration = await readFile(exhaustedRepairsMigrationUrl, "utf8");
 
