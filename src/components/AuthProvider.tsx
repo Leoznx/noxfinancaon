@@ -1,6 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from "react";
 import { setCachedHeaderProfile } from "@/lib/profile-cache";
-import { getPreferredStorage, clearAuthTokensFromBothStorages } from "@/lib/authStorage";
+import {
+  clearAuthTokensFromBothStorages,
+  clearCachedAuthUserFromBothStorages,
+  getPreferredStorage,
+} from "@/lib/authStorage";
 import { clearDemoSession, isDemoSession } from "@/lib/demo-session";
 
 export type Role =
@@ -70,13 +74,13 @@ const LOGOUT_IN_PROGRESS_KEY = "nox_logout_in_progress";
 function clearStoredAuth() {
   if (typeof window === "undefined") return;
 
-  try {
-    if (isDemoSession()) window.sessionStorage.removeItem("nox_user");
-    else {
-      window.localStorage.removeItem("nox_user");
+  if (isDemoSession()) {
+    try {
       window.sessionStorage.removeItem("nox_user");
-    }
-  } catch {}
+    } catch {}
+  } else {
+    clearCachedAuthUserFromBothStorages();
+  }
   clearAuthTokensFromBothStorages();
 }
 
@@ -271,9 +275,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const synced = await syncFromSession(session.user.id, session.user.email, session.user);
         if (!active || isLoggingOutRef.current) return;
         if (!synced) {
-          await supabase.auth.signOut({ scope: "local" });
+          // Uma indisponibilidade momentânea ao carregar o perfil não invalida a
+          // sessão já confirmada pelo Supabase. Remove apenas o cache visual para
+          // impedir acesso com cargo antigo e preserva o token para a próxima carga.
           setUser(null);
-          clearStoredAuth();
+          clearCachedAuthUserFromBothStorages();
         }
       } else if (!isLoggingOutRef.current) {
         authVersionRef.current += 1;
