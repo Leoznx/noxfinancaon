@@ -7,6 +7,7 @@ import {
   LOFT_PROPOSALS_URL,
   LoftPortalCancellationError,
   probeLoftProposalCancellationPortal,
+  resolveSingleNewLoftProposalId,
 } from "./loftPortalCancellation";
 
 let browser: Browser;
@@ -320,6 +321,19 @@ test("aceita a linha vazia usada atualmente pela Loft como snapshot sem proposta
 
   assert.deepEqual(ids, []);
   await page.close();
+});
+
+test("resolve somente uma proposta nova em relação ao snapshot anterior", () => {
+  assert.equal(
+    resolveSingleNewLoftProposalId(["4788303", "4789594", "4789594"], ["4788303"]),
+    "4789594",
+  );
+  assert.equal(resolveSingleNewLoftProposalId(["4788303"], ["4788303"]), null);
+  assert.throws(
+    () => resolveSingleNewLoftProposalId(["4789594", "4789700"], []),
+    (error: unknown) =>
+      error instanceof LoftPortalCancellationError && /mais de uma proposta nova/i.test(error.message),
+  );
 });
 
 test("sem ID exato falha fechado mesmo quando o CPF possui propostas novas", async () => {

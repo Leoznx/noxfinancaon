@@ -39,6 +39,7 @@ import {
   cancelLoftProposalViaPortal,
   listLoftProposalIdsForDocument,
   probeLoftProposalCancellationPortal,
+  resolveSingleNewLoftProposalId,
 } from "./loftPortalCancellation";
 import { selectRandomCreditSimulationCep } from "./creditSimulationCep";
 import { observeCreditSimulationApi } from "./creditSimulationApiObserver";
@@ -586,6 +587,51 @@ async function loadLoftCancellationDocument(job: LoftCancellationJob): Promise<s
     throw new Error("A consulta vinculada não possui CPF/CNPJ válido para localizar a proposta.");
   }
   return document;
+}
+
+async function reconcilePendingLoftCancellation(
+  context: BrowserContext,
+  persistirSessao: () => Promise<void>,
+): Promise<boolean> {
+  const { data, error } = await supabaseAdmin
+    .from("loft_proposal_cancellations")
+    .select(
+      "id,consultation_id,correlation_id,proposal_id,known_proposal_ids,attempt_count,max_attempts",
+    )
+    .in("status", ["scheduled", "retry"])
+    .is("proposal_id", null)
+    .not("submitted_at", "is", null)
+    .order("created_at", { ascending: true })
+    .limit(1);
+  if (error) throw error;
+  const job = Array.isArray(data) && data.length ? (data[0] as LoftCancellationJob) : null;
+  if (!job) return false;
+
+  const document = await loadLoftCancellationDocument(job);
+  let page: Page | null = null;
+  try {
+    page = await context.newPage();
+    const visibleProposalIds = await listLoftProposalIdsForDocument(
+      page,
+      document,
+      env.loftCancellationRequestTimeoutMs,
+    );
+    const proposalId = resolveSingleNewLoftProposalId(
+      visibleProposalIds,
+      job.known_proposal_ids ?? [],
+    );
+    if (!proposalId) {
+      throw new Error(
+        "A lista ainda não exibiu uma proposta nova e inequívoca para reconciliar o envio.",
+      );
+    }
+    await vincularPropostaAoCancelamento(job.id, proposalId);
+    await persistirSessao();
+    log("Job de cancelamento reconciliado com a única proposta nova encontrada após o envio.");
+    return true;
+  } finally {
+    await page?.close().catch(() => {});
+  }
 }
 
 async function processLoftCancellation(
@@ -1976,6 +2022,10 @@ async function loop(once: boolean): Promise<void> {
       // novas consultas enquanto a tela de propostas estiver em uso.
       if (env.loftCancellationEnabled && !cancelamentoEmAndamento && emAndamento.size === 0) {
         try {
+          await reconcilePendingLoftCancellation(
+            contextoAberto.context,
+            contextoAberto.persistirSessao,
+          );
           const job = await claimNextLoftCancellation();
           if (job) {
             runtimeState.activeCancellation = true;

@@ -60,6 +60,32 @@ function normalizeProposalId(value: unknown): string | null {
   return /^\d{4,12}$/.test(normalized) ? normalized : null;
 }
 
+export function resolveSingleNewLoftProposalId(
+  visibleProposalIds: readonly string[],
+  knownProposalIds: readonly string[],
+): string | null {
+  const known = new Set(
+    knownProposalIds
+      .map((proposalId) => normalizeProposalId(proposalId))
+      .filter((proposalId): proposalId is string => Boolean(proposalId)),
+  );
+  const newProposalIds = Array.from(
+    new Set(
+      visibleProposalIds
+        .map((proposalId) => normalizeProposalId(proposalId))
+        .filter((proposalId): proposalId is string => Boolean(proposalId)),
+    ),
+  ).filter((proposalId) => !known.has(proposalId));
+
+  if (newProposalIds.length === 0) return null;
+  if (newProposalIds.length > 1) {
+    throw new LoftPortalCancellationError(
+      "A lista exibiu mais de uma proposta nova para o mesmo CPF/CNPJ; nenhuma identidade foi presumida.",
+    );
+  }
+  return newProposalIds[0];
+}
+
 function normalizeDocument(value: unknown): string | null {
   const normalized = digits(value);
   return /^(?:\d{11}|\d{14})$/.test(normalized) ? normalized : null;
