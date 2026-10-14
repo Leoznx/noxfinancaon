@@ -549,7 +549,10 @@ async function listLoftProposalsViaApi(
               query: document,
               filtrar_simulacao_origem_planilha: "true",
               sort: "criado_em:DESC",
-              limit: "100",
+              // O endpoint do portal rejeita qualquer limite acima de 10.
+              // A busca já é exata por documento e ordenada pelo mais recente,
+              // então a primeira página contém toda candidata nova relevante.
+              limit: "10",
               version: "1",
             });
             const response = await fetch(`${apiPath}?${query}`, { signal: controller.signal });

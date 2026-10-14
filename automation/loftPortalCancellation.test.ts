@@ -71,6 +71,41 @@ test("converte a API da lista em snapshot sem misturar documentos", () => {
   assert.deepEqual(result, [{ proposalId: "4677001", terminal: true }]);
 });
 
+test("consulta a API com o limite aceito pelo portal sem cair no fluxo visual", async () => {
+  const page = await browser.newPage();
+  const apiUrls: string[] = [];
+  await page.route("**/fianca-aluguel/imobiliaria/api/solicitacao/imovel?*", (route) => {
+    apiUrls.push(route.request().url());
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        data: {
+          propostas: [
+            {
+              id: "4677003",
+              status: "Aguardando ativação",
+              inquilino_principal: { cpf: "111.444.777-35" },
+              outros_inquilinos: [],
+            },
+          ],
+          total: 1,
+        },
+      }),
+    });
+  });
+  await page.route(LOFT_PROPOSALS_URL, (route) =>
+    route.fulfill({ status: 200, contentType: "text/html; charset=utf-8", body: "<main></main>" }),
+  );
+
+  const proposals = await listLoftProposalsForDocument(page, "11144477735", 1_000);
+
+  assert.deepEqual(proposals, [{ proposalId: "4677003", terminal: false }]);
+  assert.equal(apiUrls.length, 3);
+  assert.ok(apiUrls.every((url) => new URL(url).searchParams.get("limit") === "10"));
+  await page.close();
+});
+
 function proposalRow(input: {
   id: string;
   document: string;
