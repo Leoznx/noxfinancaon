@@ -6,42 +6,20 @@ import { GLOBAL_LOADING_TIMEOUT_MS, LoadingTokenRegistry } from "@/lib/global-lo
 type GlobalLoadingContextValue = {
   beginEssentialLoad: () => number;
   endEssentialLoad: (token: number) => void;
+  beginDashboardScope: () => number;
+  endDashboardScope: (token: number) => void;
 };
 
 const GlobalLoadingContext = React.createContext<GlobalLoadingContextValue | null>(null);
 const FADE_OUT_MS = 80;
 const SHOW_DELAY_MS = 90;
 
-function useInitialDocumentLoading() {
-  const [loading, setLoading] = React.useState(true);
-
-  React.useEffect(() => {
-    let frame = 0;
-
-    const finish = () => {
-      frame = window.requestAnimationFrame(() => setLoading(false));
-    };
-
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", finish, { once: true });
-    } else {
-      finish();
-    }
-
-    return () => {
-      document.removeEventListener("DOMContentLoaded", finish);
-      window.cancelAnimationFrame(frame);
-    };
-  }, []);
-
-  return loading;
-}
-
 export function GlobalLoadingProvider({ children }: { children: React.ReactNode }) {
   const routerLoading = useRouterState({ select: (state) => state.isLoading });
-  const documentLoading = useInitialDocumentLoading();
   const registryRef = React.useRef(new LoadingTokenRegistry());
+  const dashboardScopeRegistryRef = React.useRef(new LoadingTokenRegistry());
   const [essentialLoadCount, setEssentialLoadCount] = React.useState(0);
+  const [dashboardScopeCount, setDashboardScopeCount] = React.useState(0);
 
   const beginEssentialLoad = React.useCallback(() => {
     const token = registryRef.current.begin();
@@ -54,11 +32,22 @@ export function GlobalLoadingProvider({ children }: { children: React.ReactNode 
     setEssentialLoadCount(registryRef.current.size);
   }, []);
 
+  const beginDashboardScope = React.useCallback(() => {
+    const token = dashboardScopeRegistryRef.current.begin();
+    setDashboardScopeCount(dashboardScopeRegistryRef.current.size);
+    return token;
+  }, []);
+
+  const endDashboardScope = React.useCallback((token: number) => {
+    if (!dashboardScopeRegistryRef.current.end(token)) return;
+    setDashboardScopeCount(dashboardScopeRegistryRef.current.size);
+  }, []);
+
   const context = React.useMemo(
-    () => ({ beginEssentialLoad, endEssentialLoad }),
-    [beginEssentialLoad, endEssentialLoad],
+    () => ({ beginEssentialLoad, endEssentialLoad, beginDashboardScope, endDashboardScope }),
+    [beginDashboardScope, beginEssentialLoad, endDashboardScope, endEssentialLoad],
   );
-  const active = documentLoading || routerLoading || essentialLoadCount > 0;
+  const active = dashboardScopeCount > 0 && (routerLoading || essentialLoadCount > 0);
 
   return (
     <GlobalLoadingContext.Provider value={context}>
@@ -80,8 +69,20 @@ export function useEssentialLoading(active: boolean) {
   }, [active, context]);
 }
 
+/** Enables the global loader only while an authenticated dashboard surface is mounted. */
+// eslint-disable-next-line react-refresh/only-export-components
+export function useDashboardLoadingScope() {
+  const context = React.useContext(GlobalLoadingContext);
+
+  React.useEffect(() => {
+    if (!context) return;
+    const token = context.beginDashboardScope();
+    return () => context.endDashboardScope(token);
+  }, [context]);
+}
+
 function GlobalLoadingOverlay({ active }: { active: boolean }) {
-  const [rendered, setRendered] = React.useState(true);
+  const [rendered, setRendered] = React.useState(active);
   const [exiting, setExiting] = React.useState(false);
   const [timedOut, setTimedOut] = React.useState(false);
   const [videoFailed, setVideoFailed] = React.useState(false);

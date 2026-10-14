@@ -8,7 +8,7 @@ import {
   podeVerModulo,
 } from "@/lib/permissoes-cache";
 import { loadBrokerCommissionAccess } from "@/lib/broker-commission-policy";
-import { useEssentialLoading } from "@/components/GlobalLoading";
+import { useDashboardLoadingScope, useEssentialLoading } from "@/components/GlobalLoading";
 
 const CARGOS_INTERNOS_GATEADOS = ["juridico", "financeiro", "marketing", "suporte", "vendedor"];
 
@@ -25,6 +25,7 @@ export function ProtectedRoute({
   sellerTypes?: Array<"sdr" | "closer">;
   requiresBrokerFinancialAccess?: boolean;
 }) {
+  useDashboardLoadingScope();
   const { user, isLoading } = useAuth();
   const location = useLocation();
 

@@ -66,6 +66,7 @@ import {
 import { isDemoSession } from "@/lib/demo-session";
 import { loadBrokerCommissionAccess } from "@/lib/broker-commission-policy";
 import { useAdminAttention } from "@/hooks/useAdminAttention";
+import { useDashboardLoadingScope } from "@/components/GlobalLoading";
 
 const CARGOS_INTERNOS_GATEADOS = [
   "juridico",
@@ -376,6 +377,7 @@ export function DashboardLayout({
   lockDesktopViewport?: boolean;
   lockViewport?: boolean;
 }) {
+  useDashboardLoadingScope();
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
