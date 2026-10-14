@@ -348,6 +348,7 @@ body:has(.nox-dashboard-shell) .nox-global-loading {
 
 .nox-global-loading--exiting {
   opacity: 0;
+  pointer-events: none;
 }
 
 .nox-global-loading__indicator {

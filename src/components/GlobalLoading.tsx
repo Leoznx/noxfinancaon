@@ -9,28 +9,28 @@ type GlobalLoadingContextValue = {
 };
 
 const GlobalLoadingContext = React.createContext<GlobalLoadingContextValue | null>(null);
-const FADE_OUT_MS = 120;
+const FADE_OUT_MS = 80;
+const SHOW_DELAY_MS = 90;
 
 function useInitialDocumentLoading() {
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
-    let firstFrame = 0;
-    let secondFrame = 0;
+    let frame = 0;
 
     const finish = () => {
-      firstFrame = window.requestAnimationFrame(() => {
-        secondFrame = window.requestAnimationFrame(() => setLoading(false));
-      });
+      frame = window.requestAnimationFrame(() => setLoading(false));
     };
 
-    if (document.readyState === "complete") finish();
-    else window.addEventListener("load", finish, { once: true });
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", finish, { once: true });
+    } else {
+      finish();
+    }
 
     return () => {
-      window.removeEventListener("load", finish);
-      window.cancelAnimationFrame(firstFrame);
-      window.cancelAnimationFrame(secondFrame);
+      document.removeEventListener("DOMContentLoaded", finish);
+      window.cancelAnimationFrame(frame);
     };
   }, []);
 
@@ -88,15 +88,26 @@ function GlobalLoadingOverlay({ active }: { active: boolean }) {
 
   React.useEffect(() => {
     if (active) {
-      setRendered(true);
-      setExiting(false);
-      return;
+      if (rendered) {
+        setExiting(false);
+        return;
+      }
+
+      const timer = window.setTimeout(() => {
+        setRendered(true);
+        setExiting(false);
+      }, SHOW_DELAY_MS);
+      return () => window.clearTimeout(timer);
     }
 
+    if (!rendered) return;
     setExiting(true);
-    const timer = window.setTimeout(() => setRendered(false), FADE_OUT_MS);
+    const timer = window.setTimeout(() => {
+      setRendered(false);
+      setExiting(false);
+    }, FADE_OUT_MS);
     return () => window.clearTimeout(timer);
-  }, [active]);
+  }, [active, rendered]);
 
   React.useEffect(() => {
     if (!active) {
@@ -109,14 +120,14 @@ function GlobalLoadingOverlay({ active }: { active: boolean }) {
   }, [active]);
 
   React.useLayoutEffect(() => {
-    const shouldLock = rendered || timedOut;
+    const shouldLock = (active && rendered) || timedOut;
     document.documentElement.classList.toggle("nox-loading-locked", shouldLock);
     document.body.classList.toggle("nox-loading-locked", shouldLock);
     return () => {
       document.documentElement.classList.remove("nox-loading-locked");
       document.body.classList.remove("nox-loading-locked");
     };
-  }, [rendered, timedOut]);
+  }, [active, rendered, timedOut]);
 
   if (!rendered && !timedOut) return null;
 
