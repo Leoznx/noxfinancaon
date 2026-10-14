@@ -7,6 +7,7 @@ import {
   buildSubscriptionNotificationPlan,
   billingDueDateError,
   calculateBillingAmounts,
+  canManageIndividualInvoiceAction,
   checkoutStatusFromEvent,
   contractActivationDecision,
   hasDirectBillingOwnership,
@@ -15,6 +16,7 @@ import {
   reduceConsolidatedBatchStatus,
   reducePaymentStatus,
   reduceSubscriptionStatus,
+  resolveCheckoutPaymentResponsible,
   shouldAttemptNotification,
   shouldDispatchContractAfterPayment,
   shouldReconcileBillingOperation,
@@ -43,19 +45,49 @@ test("matriz de 16 cenarios Pix/boleto materializa a inicial sem duplicar cobran
   for (const scenario of scenarios) {
     const decision = planInitialBilling(scenario);
     assert.equal(decision.createInvoice, true, JSON.stringify(scenario));
-    assert.equal(
-      decision.createIndividualProviderCharge,
-      scenario.payer === "tenant",
-      JSON.stringify(scenario),
-    );
-    assert.equal(
-      decision.invoiceStatus,
-      scenario.payer === "agency" ? "awaiting_consolidation" : "pending",
-      JSON.stringify(scenario),
-    );
+    assert.equal(decision.createIndividualProviderCharge, true, JSON.stringify(scenario));
+    assert.equal(decision.invoiceStatus, "pending", JSON.stringify(scenario));
     assert.deepEqual(decision.notificationChannels, ["email", "whatsapp"]);
     assert.equal(decision.dispatchPendingDocuments, true);
   }
+});
+
+test("matriz de pagador preserva a escolha e so envia cartao remoto ao inquilino", () => {
+  const scenarios = [
+    ["agency", "pix", null, "agency"],
+    ["agency", "boleto", null, "agency"],
+    ["agency", "credit_card", "direct", "agency"],
+    ["agency", "credit_card", "checkout", "tenant"],
+    ["tenant", "pix", null, "tenant"],
+    ["tenant", "boleto", null, "tenant"],
+    ["tenant", "credit_card", "direct", "tenant"],
+    ["tenant", "credit_card", "checkout", "tenant"],
+  ] as const;
+
+  for (const [selectedPayer, paymentMethod, cardMode, expected] of scenarios) {
+    assert.equal(
+      resolveCheckoutPaymentResponsible({ selectedPayer, paymentMethod, cardMode }),
+      expected,
+      JSON.stringify({ selectedPayer, paymentMethod, cardMode }),
+    );
+  }
+});
+
+test("cobranca individual da imobiliaria permite reenvio e segunda via", () => {
+  assert.equal(
+    canManageIndividualInvoiceAction(
+      { payment_responsible: "agency", status: "pending", consolidated_item_id: null },
+      "resend_whatsapp",
+    ),
+    true,
+  );
+  assert.equal(
+    canManageIndividualInvoiceAction(
+      { payment_responsible: "agency", status: "awaiting_consolidation" },
+      "reissue",
+    ),
+    false,
+  );
 });
 
 test("dia de vencimento configuravel governa cronograma, assinatura e consolidacao", () => {
@@ -279,8 +311,8 @@ test("os 16 cenarios obrigatorios possuem expectativas deterministicas", async (
       payer: "agency",
       fireMode: "avista",
     });
-    assert.equal(result.invoiceStatus, "awaiting_consolidation");
-    assert.equal(result.createIndividualProviderCharge, false);
+    assert.equal(result.invoiceStatus, "pending");
+    assert.equal(result.createIndividualProviderCharge, true);
   });
 
   await t.test("04 Boleto + Pagar agora + inquilino", () => {
@@ -302,7 +334,7 @@ test("os 16 cenarios obrigatorios possuem expectativas deterministicas", async (
       fireMode: "embutido",
     });
     assert.equal(result.createInvoice, true);
-    assert.equal(result.createIndividualProviderCharge, false);
+    assert.equal(result.createIndividualProviderCharge, true);
   });
 
   await t.test("06 Cartao + preenchimento imediato", () => {

@@ -102,7 +102,10 @@ export function ModalEnvioAutomatizadoSucesso({
               <div className="min-w-0">
                 <p className="text-xs font-bold uppercase tracking-wide text-slate-400">WhatsApp</p>
                 <p className="truncate text-sm font-semibold text-neutral-900">
-                  {phoneMasked || "Envio solicitado para o contato do inquilino"}
+                  {phoneMasked ||
+                    (isCardCheckout
+                      ? "Envio solicitado para o contato do inquilino"
+                      : "Envio solicitado para o responsável financeiro")}
                 </p>
               </div>
             </div>

@@ -55,13 +55,17 @@ import {
 
 export const Route = createFileRoute("/carteira-cobrancas")({
   component: () => (
-    <ProtectedRoute roles={["corretor", "imobiliaria", "proprietario"]} requiresBrokerFinancialAccess>
+    <ProtectedRoute
+      roles={["corretor", "imobiliaria", "proprietario"]}
+      requiresBrokerFinancialAccess
+    >
       <CarteiraCobrancas />
     </ProtectedRoute>
   ),
 });
 
-const brl = (n: number) => `R$ ${Number(n || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
+const brl = (n: number) =>
+  `R$ ${Number(n || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 
 const STATUS_CLASS: Record<string, string> = {
   paid: "bg-emerald-100 text-emerald-700 border-emerald-200",
@@ -82,7 +86,10 @@ const STATUS_ABERTO = [
 ];
 
 function statusInfo(s: string) {
-  return { label: statusPagamentoLabel(s), cls: STATUS_CLASS[s] || "bg-amber-100 text-amber-700 border-amber-200" };
+  return {
+    label: statusPagamentoLabel(s),
+    cls: STATUS_CLASS[s] || "bg-amber-100 text-amber-700 border-amber-200",
+  };
 }
 
 type Contrato = {
@@ -115,13 +122,16 @@ function CarteiraCobrancas() {
     setLoading(true);
     try {
       const [invoiceResult, batchRows, subscriptionResult] = await Promise.all([
-        supabase.from("faturas_inquilino").select(
-          `*, consulta:consultas_credito(
+        supabase
+          .from("faturas_inquilino")
+          .select(
+            `*, consulta:consultas_credito(
             id, tenant_name,
             inquilino:inquilinos(nome, cpf, cnpj, razao_social),
             imovel:imoveis(endereco, cidade, estado)
           ), asaas_payment:asaas_payments(*), notifications:financial_notifications(*)`,
-        ).order("numero_parcela", { ascending: true }),
+          )
+          .order("numero_parcela", { ascending: true }),
         fetchOwnConsolidatedBatches(),
         (supabase as any)
           .from("asaas_subscriptions")
@@ -160,22 +170,21 @@ function CarteiraCobrancas() {
     // acima), so refazendo a busca quando algo mudar.
     const channel = supabase
       .channel(`carteira-cobrancas-realtime-${user.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "faturas_inquilino" }, () => {
+        carregar();
+      })
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "faturas_inquilino" },
-        () => {
-          carregar();
+        {
+          event: "*",
+          schema: "public",
+          table: "consolidated_invoice_batches",
+          filter: `agency_user_id=eq.${user.id}`,
         },
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "consolidated_invoice_batches", filter: `agency_user_id=eq.${user.id}` },
         () => carregar(),
       )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "asaas_subscriptions" },
-        () => carregar(),
+      .on("postgres_changes", { event: "*", schema: "public", table: "asaas_subscriptions" }, () =>
+        carregar(),
       )
       .subscribe();
 
@@ -193,7 +202,9 @@ function CarteiraCobrancas() {
         await carregar();
         toast.success("Status da assinatura atualizado.");
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Não foi possível consultar a assinatura.");
+        toast.error(
+          error instanceof Error ? error.message : "Não foi possível consultar a assinatura.",
+        );
       } finally {
         setAtualizandoId(null);
       }
@@ -220,19 +231,15 @@ function CarteiraCobrancas() {
 
   async function executarAcaoFatura(
     fatura: any,
-    action:
-      | "resend_email"
-      | "resend_whatsapp"
-      | "reissue"
-      | "reissue_initial"
-      | "reissue_checkout",
+    action: "resend_email" | "resend_whatsapp" | "reissue" | "reissue_initial" | "reissue_checkout",
   ) {
     const key = `${fatura.id}:${action}`;
     setAcaoId(key);
     try {
       const method = fatura.payment_method || fatura.asaas_payment?.payment_method;
       if (method === "credit_card") {
-        if (action === "reissue") throw new Error("Segunda via não se aplica ao cartão recorrente.");
+        if (action === "reissue")
+          throw new Error("Segunda via não se aplica ao cartão recorrente.");
         await executarAcaoAssinatura(fatura, action);
       } else {
         if (action === "reissue_initial" || action === "reissue_checkout") {
@@ -253,9 +260,9 @@ function CarteiraCobrancas() {
             ? "Cobrança reenviada por WhatsApp."
             : action === "reissue_initial"
               ? "Novo link inicial gerado e enviado."
-            : action === "reissue_checkout"
-              ? "Novo link de cadastro recorrente gerado e enviado."
-            : "Segunda via gerada.",
+              : action === "reissue_checkout"
+                ? "Novo link de cadastro recorrente gerado e enviado."
+                : "Segunda via gerada.",
       );
       await carregar();
     } catch (error) {
@@ -267,12 +274,7 @@ function CarteiraCobrancas() {
 
   async function executarAcaoAssinatura(
     fatura: any,
-    action:
-      | "refresh"
-      | "resend_email"
-      | "resend_whatsapp"
-      | "reissue_initial"
-      | "reissue_checkout",
+    action: "refresh" | "resend_email" | "resend_whatsapp" | "reissue_initial" | "reissue_checkout",
   ) {
     const subscription = fatura.asaas_subscription;
     if (!subscription?.id || !subscription.mode) {
@@ -299,7 +301,8 @@ function CarteiraCobrancas() {
         const inquilino = f.consulta?.inquilino;
         grupos.set(consultaId, {
           consultaId,
-          tenantNome: f.consulta?.tenant_name || inquilino?.razao_social || inquilino?.nome || "Inquilino",
+          tenantNome:
+            f.consulta?.tenant_name || inquilino?.razao_social || inquilino?.nome || "Inquilino",
           tenantDocumento: inquilino?.cpf || inquilino?.cnpj || "",
           endereco: imovel ? `${imovel.endereco}, ${imovel.cidade}/${imovel.estado}` : "Imóvel",
           parcelas: [],
@@ -316,7 +319,9 @@ function CarteiraCobrancas() {
     );
     const pagas = faturas.filter((f) => isPagamentoConcluido(f.status) && !f.consolidated_item_id);
     const vencidas = faturas.filter((f) => f.status === "overdue" && !f.consolidated_item_id);
-    const lotesAbertos = batches.filter((batch) => batch.status === "active" || batch.status === "partial");
+    const lotesAbertos = batches.filter(
+      (batch) => batch.status === "active" || batch.status === "partial",
+    );
     const lotesPagos = batches.filter((batch) => batch.status === "paid");
     const valorParcialRecebido = batches
       .filter((batch) => batch.status === "partial")
@@ -324,8 +329,16 @@ function CarteiraCobrancas() {
     return {
       qtdAberto: abertas.length + lotesAbertos.length,
       qtdPago: pagas.length + lotesPagos.length,
-      valorAberto: abertas.reduce((s, f) => s + Number(f.valor || 0), 0) + lotesAbertos.reduce((s, b) => s + Math.max(Number(b.total_value || 0) - Number(b.received_value || 0), 0), 0),
-      valorPago: pagas.reduce((s, f) => s + Number(f.valor || 0), 0) + lotesPagos.reduce((s, b) => s + Number(b.total_value || 0), 0) + valorParcialRecebido,
+      valorAberto:
+        abertas.reduce((s, f) => s + Number(f.valor || 0), 0) +
+        lotesAbertos.reduce(
+          (s, b) => s + Math.max(Number(b.total_value || 0) - Number(b.received_value || 0), 0),
+          0,
+        ),
+      valorPago:
+        pagas.reduce((s, f) => s + Number(f.valor || 0), 0) +
+        lotesPagos.reduce((s, b) => s + Number(b.total_value || 0), 0) +
+        valorParcialRecebido,
       qtdVencidas: vencidas.length,
     };
   }, [batches, faturas]);
@@ -356,7 +369,7 @@ function CarteiraCobrancas() {
       if (f.payment_responsible !== "agency") return false;
       if (f.recipient_user_id !== user?.id) return false;
       if (f.consolidated_item_id) return false;
-      if (!STATUS_ABERTO.includes(f.status)) return false;
+      if (f.status !== "awaiting_consolidation") return false;
       const [fAno, fMes] = String(f.vencimento).split("-").map(Number);
       return fMes === mes && fAno === ano;
     });
@@ -398,7 +411,9 @@ function CarteiraCobrancas() {
       if (error) throw new Error(error.message);
       if ((data as any)?.error) throw new Error((data as any).error);
       if (!(data as any)?.success) throw new Error("Nao foi possivel gerar o boleto consolidado.");
-      toast.success(`Boleto consolidado gerado: ${brl((data as any).totalValue)} (${(data as any).invoiceCount} faturas).`);
+      toast.success(
+        `Boleto consolidado gerado: ${brl((data as any).totalValue)} (${(data as any).invoiceCount} faturas).`,
+      );
       setConfirmandoAberto(false);
       setSelecionadas(new Set());
       await carregar();
@@ -424,7 +439,9 @@ function CarteiraCobrancas() {
         toast.success("Cobrança atualizada.");
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Não foi possível atualizar a cobrança.");
+      toast.error(
+        error instanceof Error ? error.message : "Não foi possível atualizar a cobrança.",
+      );
     } finally {
       setReissuingBatch(null);
     }
@@ -434,9 +451,12 @@ function CarteiraCobrancas() {
     <DashboardLayout>
       <div className="max-w-6xl mx-auto space-y-6">
         <div>
-          <h1 className="text-3xl font-black tracking-tight text-neutral-900">Carteira de Cobranças</h1>
+          <h1 className="text-3xl font-black tracking-tight text-neutral-900">
+            Carteira de Cobranças
+          </h1>
           <p className="text-sm text-neutral-500 mt-1">
-            Acompanhe as mensalidades da sua carteira de inquilinos e gere um boleto consolidado do mês.
+            Acompanhe as mensalidades da sua carteira de inquilinos e gere um boleto consolidado do
+            mês.
           </p>
         </div>
 
@@ -445,27 +465,53 @@ function CarteiraCobrancas() {
         {batchesPeriodo.map((batch) => {
           const open = batch.status === "active";
           return (
-            <section key={batch.id} className="rounded-2xl border border-yellow-300 bg-gradient-to-r from-yellow-50 to-white p-5 shadow-sm">
+            <section
+              key={batch.id}
+              className="rounded-2xl border border-yellow-300 bg-gradient-to-r from-yellow-50 to-white p-5 shadow-sm"
+            >
               <div className="flex flex-col gap-4 md:flex-row md:items-center">
                 <div className="flex-1">
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-yellow-700">Cobrança consolidada mensal</p>
-                  <h2 className="mt-1 text-xl font-black text-neutral-900">{brl(batch.total_value)}</h2>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-yellow-700">
+                    Cobrança consolidada mensal
+                  </p>
+                  <h2 className="mt-1 text-xl font-black text-neutral-900">
+                    {brl(batch.total_value)}
+                  </h2>
                   <p className="mt-1 text-sm text-neutral-600">
-                    {batch.invoice_count} contrato(s) · vencimento {new Date(`${batch.due_date}T00:00:00`).toLocaleDateString("pt-BR")} · {statusPagamentoLabel(batch.status)}
+                    {batch.invoice_count} contrato(s) · vencimento{" "}
+                    {new Date(`${batch.due_date}T00:00:00`).toLocaleDateString("pt-BR")} ·{" "}
+                    {statusPagamentoLabel(batch.status)}
                   </p>
                 </div>
                 {open && (
                   <div className="flex flex-wrap gap-2">
                     {(batch.bank_slip_url || batch.invoice_url) && (
-                      <a href={batch.bank_slip_url || batch.invoice_url || "#"} target="_blank" rel="noreferrer">
-                        <Button variant="outline"><FileText className="mr-2" size={15} />Ver boleto</Button>
+                      <a
+                        href={batch.bank_slip_url || batch.invoice_url || "#"}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <Button variant="outline">
+                          <FileText className="mr-2" size={15} />
+                          Ver boleto
+                        </Button>
                       </a>
                     )}
-                    <Button variant="outline" onClick={() => gerarSegundaViaLote(batch, "boleto")} disabled={reissuingBatch === `${batch.id}:boleto`}>
-                      <RefreshCw className="mr-2" size={15} />Boleto atualizado
+                    <Button
+                      variant="outline"
+                      onClick={() => gerarSegundaViaLote(batch, "boleto")}
+                      disabled={reissuingBatch === `${batch.id}:boleto`}
+                    >
+                      <RefreshCw className="mr-2" size={15} />
+                      Boleto atualizado
                     </Button>
-                    <Button className="bg-neutral-900 text-white hover:bg-neutral-800" onClick={() => gerarSegundaViaLote(batch, "pix")} disabled={reissuingBatch === `${batch.id}:pix`}>
-                      <QrCode className="mr-2" size={15} />Gerar Pix
+                    <Button
+                      className="bg-neutral-900 text-white hover:bg-neutral-800"
+                      onClick={() => gerarSegundaViaLote(batch, "pix")}
+                      disabled={reissuingBatch === `${batch.id}:pix`}
+                    >
+                      <QrCode className="mr-2" size={15} />
+                      Gerar Pix
                     </Button>
                   </div>
                 )}
@@ -476,28 +522,45 @@ function CarteiraCobrancas() {
 
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <div className="rounded-2xl border border-neutral-200 bg-white p-4">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">Em aberto</p>
-            <p className="text-xl font-black tracking-tight text-neutral-900">{resumoCarteira.qtdAberto}</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
+              Em aberto
+            </p>
+            <p className="text-xl font-black tracking-tight text-neutral-900">
+              {resumoCarteira.qtdAberto}
+            </p>
             <p className="text-xs text-neutral-500">{brl(resumoCarteira.valorAberto)}</p>
           </div>
           <div className="rounded-2xl border border-neutral-200 bg-white p-4">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">Pagas</p>
-            <p className="text-xl font-black tracking-tight text-neutral-900">{resumoCarteira.qtdPago}</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
+              Pagas
+            </p>
+            <p className="text-xl font-black tracking-tight text-neutral-900">
+              {resumoCarteira.qtdPago}
+            </p>
             <p className="text-xs text-neutral-500">{brl(resumoCarteira.valorPago)}</p>
           </div>
           <div className="rounded-2xl border border-neutral-200 bg-white p-4">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">Vencidas</p>
-            <p className="text-xl font-black tracking-tight text-red-600">{resumoCarteira.qtdVencidas}</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
+              Vencidas
+            </p>
+            <p className="text-xl font-black tracking-tight text-red-600">
+              {resumoCarteira.qtdVencidas}
+            </p>
           </div>
           <div className="rounded-2xl border border-neutral-200 bg-white p-4">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">Contratos na carteira</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
+              Contratos na carteira
+            </p>
             <p className="text-xl font-black tracking-tight text-neutral-900">{contratos.length}</p>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[220px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
+            <Search
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400"
+              size={16}
+            />
             <Input
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
@@ -506,7 +569,9 @@ function CarteiraCobrancas() {
             />
           </div>
           <Select value={statusFiltro} onValueChange={setStatusFiltro}>
-            <SelectTrigger className="w-[180px]"><SelectValue placeholder="Status" /></SelectTrigger>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="todos">Todos os status</SelectItem>
               <SelectItem value="pending">Aguardando pagamento</SelectItem>
@@ -517,18 +582,26 @@ function CarteiraCobrancas() {
             </SelectContent>
           </Select>
           <Select value={String(mes)} onValueChange={(v) => setMes(Number(v))}>
-            <SelectTrigger className="w-[150px]"><SelectValue placeholder="Mês" /></SelectTrigger>
+            <SelectTrigger className="w-[150px]">
+              <SelectValue placeholder="Mês" />
+            </SelectTrigger>
             <SelectContent>
               {MESES_PT.map((nome, i) => (
-                <SelectItem key={i + 1} value={String(i + 1)}>{nome}</SelectItem>
+                <SelectItem key={i + 1} value={String(i + 1)}>
+                  {nome}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
           <Select value={String(ano)} onValueChange={(v) => setAno(Number(v))}>
-            <SelectTrigger className="w-[110px]"><SelectValue placeholder="Ano" /></SelectTrigger>
+            <SelectTrigger className="w-[110px]">
+              <SelectValue placeholder="Ano" />
+            </SelectTrigger>
             <SelectContent>
               {[now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1].map((a) => (
-                <SelectItem key={a} value={String(a)}>{a}</SelectItem>
+                <SelectItem key={a} value={String(a)}>
+                  {a}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -538,8 +611,8 @@ function CarteiraCobrancas() {
           <div className="bg-white border border-neutral-200 rounded-2xl p-4 flex flex-wrap items-center gap-3">
             <Wallet className="text-neutral-700" size={20} />
             <p className="text-sm text-neutral-700 flex-1">
-              {elegiveisMes.length} fatura(s) elegível(is) para consolidar em {MESES_PT[mes - 1]}/{ano} — marque as
-              linhas abaixo ou selecione todas.
+              {elegiveisMes.length} fatura(s) elegível(is) para consolidar em {MESES_PT[mes - 1]}/
+              {ano} — marque as linhas abaixo ou selecione todas.
             </p>
             <Button size="sm" variant="outline" onClick={selecionarTodasElegiveis}>
               Selecionar todas elegíveis
@@ -566,7 +639,10 @@ function CarteiraCobrancas() {
           contratosFiltrados.map((contrato) => {
             const aberto = expandidos.has(contrato.consultaId);
             return (
-              <div key={contrato.consultaId} className="bg-white border border-neutral-200 rounded-2xl overflow-hidden shadow-sm">
+              <div
+                key={contrato.consultaId}
+                className="bg-white border border-neutral-200 rounded-2xl overflow-hidden shadow-sm"
+              >
                 <button
                   type="button"
                   onClick={() =>
@@ -604,7 +680,7 @@ function CarteiraCobrancas() {
                           f.asaas_subscription?.checkout_status,
                         );
                         const managedByConsolidatedBatch =
-                          f.payment_responsible === "agency" || f.status === "awaiting_consolidation";
+                          f.status === "awaiting_consolidation" || !!f.consolidated_item_id;
                         const validCheckoutLink = !recurringLinkExpired
                           ? f.asaas_subscription?.checkout_url
                           : !initialLinkExpired
@@ -615,7 +691,7 @@ function CarteiraCobrancas() {
                           f.payment_responsible === "agency" &&
                           f.recipient_user_id === user?.id &&
                           !f.consolidated_item_id &&
-                          STATUS_ABERTO.includes(f.status) &&
+                          f.status === "awaiting_consolidation" &&
                           fMes === mes &&
                           fAno === ano;
                         return (
@@ -631,19 +707,27 @@ function CarteiraCobrancas() {
                                   />
                                 )}
                                 <div className="min-w-0">
-                                  <p className="font-bold text-sm">Mês {f.numero_parcela} de {f.installment_total}</p>
-                                  <p className="text-xs text-neutral-500">{MESES_PT[fMes - 1]} de {fAno}</p>
+                                  <p className="font-bold text-sm">
+                                    Mês {f.numero_parcela} de {f.installment_total}
+                                  </p>
+                                  <p className="text-xs text-neutral-500">
+                                    {MESES_PT[fMes - 1]} de {fAno}
+                                  </p>
                                 </div>
                               </div>
                               <div className="text-right shrink-0">
                                 <Badge className={`${s.cls} border`}>{s.label}</Badge>
                                 {f.consolidated_item_id && (
-                                  <span className="block text-[10px] text-neutral-400 mt-0.5">Em lote consolidado</span>
+                                  <span className="block text-[10px] text-neutral-400 mt-0.5">
+                                    Em lote consolidado
+                                  </span>
                                 )}
                               </div>
                             </div>
                             <div className="flex items-center justify-between text-xs text-neutral-600">
-                              <span>Vence {new Date(f.vencimento).toLocaleDateString("pt-BR")}</span>
+                              <span>
+                                Vence {new Date(f.vencimento).toLocaleDateString("pt-BR")}
+                              </span>
                               <span className="font-black text-neutral-900">{brl(f.valor)}</span>
                             </div>
                             <p className="text-xs text-neutral-500">
@@ -651,7 +735,8 @@ function CarteiraCobrancas() {
                               {" · "}
                               {(f.payment_method || f.asaas_payment?.payment_method) === "pix"
                                 ? "Pix"
-                                : (f.payment_method || f.asaas_payment?.payment_method) === "credit_card"
+                                : (f.payment_method || f.asaas_payment?.payment_method) ===
+                                    "credit_card"
                                   ? "Cartão"
                                   : "Boleto"}
                             </p>
@@ -662,12 +747,16 @@ function CarteiraCobrancas() {
                             )}
                             {f.asaas_subscription && (
                               <p className="break-all text-[10px] text-neutral-500">
-                                Assinatura {f.asaas_subscription.asaas_subscription_id || f.asaas_subscription.id}
+                                Assinatura{" "}
+                                {f.asaas_subscription.asaas_subscription_id ||
+                                  f.asaas_subscription.id}
                                 {` · ${subscriptionStatusLabel(f.asaas_subscription.status)}`}
                                 {` · ${cardRegistrationStatusLabel(f.asaas_subscription.card_registration_status)}`}
                               </p>
                             )}
-                            {(f.confirmed_at || f.asaas_payment?.confirmed_at || f.asaas_payment?.received_at) && (
+                            {(f.confirmed_at ||
+                              f.asaas_payment?.confirmed_at ||
+                              f.asaas_payment?.received_at) && (
                               <p className="text-[10px] text-emerald-700">
                                 Confirmada em{" "}
                                 {new Date(
@@ -683,18 +772,30 @@ function CarteiraCobrancas() {
                               </p>
                             )}
                             <div className="flex flex-wrap items-center gap-2 pt-1">
-                                {!managedByConsolidatedBatch && f.boleto_url && (
-                                  <a href={f.boleto_url} target="_blank" rel="noreferrer" className="flex-1">
-                                    <Button size="sm" variant="outline" className="w-full"><FileText size={14} /></Button>
-                                  </a>
-                                )}
-                                {!managedByConsolidatedBatch && f.linha_digitavel && (
-                                  <Button size="sm" variant="outline" className="flex-1" onClick={() => copiar(f.linha_digitavel)}>
-                                    <Copy size={14} />
+                              {!managedByConsolidatedBatch && f.boleto_url && (
+                                <a
+                                  href={f.boleto_url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="flex-1"
+                                >
+                                  <Button size="sm" variant="outline" className="w-full">
+                                    <FileText size={14} />
                                   </Button>
-                                )}
-                                {!managedByConsolidatedBatch &&
-                                  (f.asaas_payment?.asaas_payment_id || f.asaas_subscription) && (
+                                </a>
+                              )}
+                              {!managedByConsolidatedBatch && f.linha_digitavel && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="flex-1"
+                                  onClick={() => copiar(f.linha_digitavel)}
+                                >
+                                  <Copy size={14} />
+                                </Button>
+                              )}
+                              {!managedByConsolidatedBatch &&
+                                (f.asaas_payment?.asaas_payment_id || f.asaas_subscription) && (
                                   <Button
                                     size="sm"
                                     variant="outline"
@@ -703,73 +804,82 @@ function CarteiraCobrancas() {
                                     disabled={atualizandoId === f.id}
                                     title="Atualizar status"
                                   >
-                                    <RefreshCw size={14} className={atualizandoId === f.id ? "animate-spin" : ""} />
+                                    <RefreshCw
+                                      size={14}
+                                      className={atualizandoId === f.id ? "animate-spin" : ""}
+                                    />
                                   </Button>
                                 )}
-                                {!managedByConsolidatedBatch && validCheckoutLink && (
-                                  <a
-                                    href={validCheckoutLink}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                  >
-                                    <Button size="sm" variant="outline" title="Abrir cobrança">
-                                      <ExternalLink size={14} />
-                                    </Button>
-                                  </a>
-                                )}
-                                {!managedByConsolidatedBatch && !initialLinkExpired && !recurringLinkExpired && <Button
-                                  size="sm"
-                                  variant="outline"
-                                  disabled={acaoId !== null}
-                                  onClick={() => void executarAcaoFatura(f, "resend_whatsapp")}
-                                  title="Reenviar WhatsApp"
-                                >
-                                  <MessageCircle size={14} />
-                                </Button>}
-                                {!managedByConsolidatedBatch && !initialLinkExpired && !recurringLinkExpired && <Button
-                                  size="sm"
-                                  variant="outline"
-                                  disabled={acaoId !== null}
-                                  onClick={() => void executarAcaoFatura(f, "resend_email")}
-                                  title="Reenviar e-mail"
-                                >
-                                  <Mail size={14} />
-                                </Button>}
-                                {!managedByConsolidatedBatch && initialLinkExpired && (
+                              {!managedByConsolidatedBatch && validCheckoutLink && (
+                                <a href={validCheckoutLink} target="_blank" rel="noreferrer">
+                                  <Button size="sm" variant="outline" title="Abrir cobrança">
+                                    <ExternalLink size={14} />
+                                  </Button>
+                                </a>
+                              )}
+                              {!managedByConsolidatedBatch &&
+                                !initialLinkExpired &&
+                                !recurringLinkExpired && (
                                   <Button
                                     size="sm"
                                     variant="outline"
                                     disabled={acaoId !== null}
-                                    onClick={() => void executarAcaoFatura(f, "reissue_initial")}
-                                    title="Gerar novo link inicial"
+                                    onClick={() => void executarAcaoFatura(f, "resend_whatsapp")}
+                                    title="Reenviar WhatsApp"
                                   >
-                                    <RotateCw size={14} />
+                                    <MessageCircle size={14} />
                                   </Button>
                                 )}
-                                {!managedByConsolidatedBatch && recurringLinkExpired && (
+                              {!managedByConsolidatedBatch &&
+                                !initialLinkExpired &&
+                                !recurringLinkExpired && (
                                   <Button
                                     size="sm"
                                     variant="outline"
                                     disabled={acaoId !== null}
-                                    onClick={() => void executarAcaoFatura(f, "reissue_checkout")}
-                                    title="Gerar novo link de cadastro"
+                                    onClick={() => void executarAcaoFatura(f, "resend_email")}
+                                    title="Reenviar e-mail"
+                                  >
+                                    <Mail size={14} />
+                                  </Button>
+                                )}
+                              {!managedByConsolidatedBatch && initialLinkExpired && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={acaoId !== null}
+                                  onClick={() => void executarAcaoFatura(f, "reissue_initial")}
+                                  title="Gerar novo link inicial"
+                                >
+                                  <RotateCw size={14} />
+                                </Button>
+                              )}
+                              {!managedByConsolidatedBatch && recurringLinkExpired && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={acaoId !== null}
+                                  onClick={() => void executarAcaoFatura(f, "reissue_checkout")}
+                                  title="Gerar novo link de cadastro"
+                                >
+                                  <RotateCw size={14} />
+                                </Button>
+                              )}
+                              {!managedByConsolidatedBatch &&
+                                isReissuablePaymentStatus(f.status) &&
+                                (f.payment_method || f.asaas_payment?.payment_method) !==
+                                  "credit_card" && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={acaoId !== null}
+                                    onClick={() => void executarAcaoFatura(f, "reissue")}
+                                    title="Gerar segunda via"
                                   >
                                     <RotateCw size={14} />
                                   </Button>
                                 )}
-                                {!managedByConsolidatedBatch && isReissuablePaymentStatus(f.status) &&
-                                  (f.payment_method || f.asaas_payment?.payment_method) !== "credit_card" && (
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      disabled={acaoId !== null}
-                                      onClick={() => void executarAcaoFatura(f, "reissue")}
-                                      title="Gerar segunda via"
-                                    >
-                                      <RotateCw size={14} />
-                                    </Button>
-                                  )}
-                              </div>
+                            </div>
                           </div>
                         );
                       })}
@@ -798,7 +908,7 @@ function CarteiraCobrancas() {
                               f.asaas_subscription?.checkout_status,
                             );
                             const managedByConsolidatedBatch =
-                              f.payment_responsible === "agency" || f.status === "awaiting_consolidation";
+                              f.status === "awaiting_consolidation" || !!f.consolidated_item_id;
                             const validCheckoutLink = !recurringLinkExpired
                               ? f.asaas_subscription?.checkout_url
                               : !initialLinkExpired
@@ -809,7 +919,7 @@ function CarteiraCobrancas() {
                               f.payment_responsible === "agency" &&
                               f.recipient_user_id === user?.id &&
                               !f.consolidated_item_id &&
-                              STATUS_ABERTO.includes(f.status) &&
+                              f.status === "awaiting_consolidation" &&
                               fMes === mes &&
                               fAno === ano;
                             return (
@@ -829,24 +939,34 @@ function CarteiraCobrancas() {
                                     {MESES_PT[fMes - 1]} de {fAno}
                                   </span>
                                   {f.asaas_payment?.asaas_payment_id && (
-                                    <span className="block max-w-40 truncate text-[10px] font-normal text-neutral-400" title={f.asaas_payment.asaas_payment_id}>
+                                    <span
+                                      className="block max-w-40 truncate text-[10px] font-normal text-neutral-400"
+                                      title={f.asaas_payment.asaas_payment_id}
+                                    >
                                       Asaas {f.asaas_payment.asaas_payment_id}
                                     </span>
                                   )}
                                   {f.asaas_subscription && (
                                     <span className="block max-w-40 truncate text-[10px] font-normal text-neutral-500">
-                                      Assinatura {f.asaas_subscription.asaas_subscription_id || f.asaas_subscription.id}
+                                      Assinatura{" "}
+                                      {f.asaas_subscription.asaas_subscription_id ||
+                                        f.asaas_subscription.id}
                                     </span>
                                   )}
                                 </td>
-                                <td className="px-4 py-3 text-neutral-700">{new Date(f.vencimento).toLocaleDateString("pt-BR")}</td>
-                                <td className="px-4 py-3 font-black text-neutral-900">{brl(f.valor)}</td>
+                                <td className="px-4 py-3 text-neutral-700">
+                                  {new Date(f.vencimento).toLocaleDateString("pt-BR")}
+                                </td>
+                                <td className="px-4 py-3 font-black text-neutral-900">
+                                  {brl(f.valor)}
+                                </td>
                                 <td className="px-4 py-3 text-neutral-600">
                                   {f.payment_responsible === "agency" ? "Imobiliária" : "Inquilino"}
                                   <span className="block text-[10px] text-neutral-500">
                                     {(f.payment_method || f.asaas_payment?.payment_method) === "pix"
                                       ? "Pix"
-                                      : (f.payment_method || f.asaas_payment?.payment_method) === "credit_card"
+                                      : (f.payment_method || f.asaas_payment?.payment_method) ===
+                                          "credit_card"
                                         ? "Cartão"
                                         : "Boleto"}
                                   </span>
@@ -854,9 +974,13 @@ function CarteiraCobrancas() {
                                 <td className="px-4 py-3">
                                   <Badge className={`${s.cls} border`}>{s.label}</Badge>
                                   {f.consolidated_item_id && (
-                                    <span className="block text-[10px] text-neutral-400 mt-0.5">Em lote consolidado</span>
+                                    <span className="block text-[10px] text-neutral-400 mt-0.5">
+                                      Em lote consolidado
+                                    </span>
                                   )}
-                                  {(f.confirmed_at || f.asaas_payment?.confirmed_at || f.asaas_payment?.received_at) && (
+                                  {(f.confirmed_at ||
+                                    f.asaas_payment?.confirmed_at ||
+                                    f.asaas_payment?.received_at) && (
                                     <span className="mt-1 block text-[10px] text-emerald-700">
                                       {new Date(
                                         f.confirmed_at ||
@@ -874,20 +998,22 @@ function CarteiraCobrancas() {
                                 <td className="px-4 py-3 text-right space-x-1 whitespace-nowrap">
                                   {!managedByConsolidatedBatch && f.boleto_url && (
                                     <a href={f.boleto_url} target="_blank" rel="noreferrer">
-                                      <Button size="sm" variant="outline"><FileText size={14} /></Button>
+                                      <Button size="sm" variant="outline">
+                                        <FileText size={14} />
+                                      </Button>
                                     </a>
                                   )}
                                   {!managedByConsolidatedBatch && f.linha_digitavel && (
-                                    <Button size="sm" variant="ghost" onClick={() => copiar(f.linha_digitavel)}>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => copiar(f.linha_digitavel)}
+                                    >
                                       <Copy size={14} />
                                     </Button>
                                   )}
                                   {!managedByConsolidatedBatch && validCheckoutLink && (
-                                    <a
-                                      href={validCheckoutLink}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                    >
+                                    <a href={validCheckoutLink} target="_blank" rel="noreferrer">
                                       <Button size="sm" variant="ghost" title="Abrir cobrança">
                                         <ExternalLink size={14} />
                                       </Button>
@@ -895,34 +1021,47 @@ function CarteiraCobrancas() {
                                   )}
                                   {!managedByConsolidatedBatch &&
                                     (f.asaas_payment?.asaas_payment_id || f.asaas_subscription) && (
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      onClick={() => atualizarStatus(f)}
-                                      disabled={atualizandoId === f.id}
-                                      title="Atualizar status"
-                                    >
-                                      <RefreshCw size={14} className={atualizandoId === f.id ? "animate-spin" : ""} />
-                                    </Button>
-                                  )}
-                                  {!managedByConsolidatedBatch && !initialLinkExpired && !recurringLinkExpired && <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => void executarAcaoFatura(f, "resend_whatsapp")}
-                                    disabled={acaoId !== null}
-                                    title="Reenviar WhatsApp"
-                                  >
-                                    <MessageCircle size={14} />
-                                  </Button>}
-                                  {!managedByConsolidatedBatch && !initialLinkExpired && !recurringLinkExpired && <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => void executarAcaoFatura(f, "resend_email")}
-                                    disabled={acaoId !== null}
-                                    title="Reenviar e-mail"
-                                  >
-                                    <Mail size={14} />
-                                  </Button>}
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => atualizarStatus(f)}
+                                        disabled={atualizandoId === f.id}
+                                        title="Atualizar status"
+                                      >
+                                        <RefreshCw
+                                          size={14}
+                                          className={atualizandoId === f.id ? "animate-spin" : ""}
+                                        />
+                                      </Button>
+                                    )}
+                                  {!managedByConsolidatedBatch &&
+                                    !initialLinkExpired &&
+                                    !recurringLinkExpired && (
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() =>
+                                          void executarAcaoFatura(f, "resend_whatsapp")
+                                        }
+                                        disabled={acaoId !== null}
+                                        title="Reenviar WhatsApp"
+                                      >
+                                        <MessageCircle size={14} />
+                                      </Button>
+                                    )}
+                                  {!managedByConsolidatedBatch &&
+                                    !initialLinkExpired &&
+                                    !recurringLinkExpired && (
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => void executarAcaoFatura(f, "resend_email")}
+                                        disabled={acaoId !== null}
+                                        title="Reenviar e-mail"
+                                      >
+                                        <Mail size={14} />
+                                      </Button>
+                                    )}
                                   {!managedByConsolidatedBatch && initialLinkExpired && (
                                     <Button
                                       size="sm"
@@ -945,8 +1084,10 @@ function CarteiraCobrancas() {
                                       <RotateCw size={14} />
                                     </Button>
                                   )}
-                                  {!managedByConsolidatedBatch && isReissuablePaymentStatus(f.status) &&
-                                    (f.payment_method || f.asaas_payment?.payment_method) !== "credit_card" && (
+                                  {!managedByConsolidatedBatch &&
+                                    isReissuablePaymentStatus(f.status) &&
+                                    (f.payment_method || f.asaas_payment?.payment_method) !==
+                                      "credit_card" && (
                                       <Button
                                         size="sm"
                                         variant="ghost"
@@ -976,17 +1117,31 @@ function CarteiraCobrancas() {
         <DialogContent className="max-w-md">
           <DialogTitle>Confirmar boleto consolidado</DialogTitle>
           <DialogDescription>
-            {selecionadas.size} fatura(s) de {MESES_PT[mes - 1]}/{ano} serão reunidas em um único boleto.
-            As cobranças individuais correspondentes serão canceladas imediatamente para impedir pagamento duplicado.
+            {selecionadas.size} fatura(s) de {MESES_PT[mes - 1]}/{ano} serão reunidas em um único
+            boleto. As cobranças individuais correspondentes serão canceladas imediatamente para
+            impedir pagamento duplicado.
           </DialogDescription>
           <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-sm">
-            <p className="flex justify-between"><span>Total do boleto</span><span className="font-black">{brl(totalSelecionado)}</span></p>
+            <p className="flex justify-between">
+              <span>Total do boleto</span>
+              <span className="font-black">{brl(totalSelecionado)}</span>
+            </p>
           </div>
           <DialogFooter className="gap-2 sm:gap-2">
-            <Button type="button" variant="outline" onClick={() => setConfirmandoAberto(false)} disabled={gerando}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setConfirmandoAberto(false)}
+              disabled={gerando}
+            >
               Cancelar
             </Button>
-            <Button type="button" onClick={gerarConsolidado} disabled={gerando} className="bg-neutral-900 hover:bg-neutral-800 text-white">
+            <Button
+              type="button"
+              onClick={gerarConsolidado}
+              disabled={gerando}
+              className="bg-neutral-900 hover:bg-neutral-800 text-white"
+            >
               {gerando ? <Loader2 className="animate-spin mr-2" size={14} /> : null}
               Confirmar geração
             </Button>

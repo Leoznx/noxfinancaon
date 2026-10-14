@@ -157,9 +157,9 @@ export function canManageIndividualInvoiceAction(
   action: "refresh" | "resend_email" | "resend_whatsapp" | "reissue",
 ) {
   if (action === "refresh") return true;
-  const agencyPays =
-    invoice?.payment_responsible === "agency" || invoice?.status === "awaiting_consolidation";
-  return !agencyPays;
+  const belongsToConsolidatedBatch =
+    invoice?.status === "awaiting_consolidation" || !!invoice?.consolidated_item_id;
+  return !belongsToConsolidatedBatch;
 }
 
 export function shouldAttemptNotification(
@@ -645,6 +645,27 @@ export type InitialBillingDecision = {
   notificationChannels: readonly ["email", "whatsapp"];
 };
 
+export type CheckoutPaymentMethod = "pix" | "boleto" | "credit_card";
+export type CheckoutCardMode = "direct" | "checkout";
+
+/**
+ * Matriz canonica de destinatario do checkout.
+ *
+ * Pix, boleto e cartao preenchido no atendimento respeitam o pagador escolhido
+ * na proposta. Somente a acao explicita "Enviar para o inquilino" troca o
+ * destinatario da cobranca de cartao para o inquilino.
+ */
+export function resolveCheckoutPaymentResponsible(input: {
+  selectedPayer: "tenant" | "agency";
+  paymentMethod: CheckoutPaymentMethod;
+  cardMode?: CheckoutCardMode | null;
+}): "tenant" | "agency" {
+  if (input.paymentMethod === "credit_card" && input.cardMode === "checkout") {
+    return "tenant";
+  }
+  return input.selectedPayer;
+}
+
 /** Regra pura compartilhada pela matriz Pix/boleto do checkout. */
 export function planInitialBilling(input: {
   paymentMethod: "pix" | "boleto";
@@ -657,11 +678,11 @@ export function planInitialBilling(input: {
   void input.paymentMethod;
   void input.deferPayment;
   void input.fireMode;
-  const consolidated = input.payer === "agency";
+  void input.payer;
   return {
     createInvoice: true,
-    createIndividualProviderCharge: !consolidated,
-    invoiceStatus: consolidated ? "awaiting_consolidation" : "pending",
+    createIndividualProviderCharge: true,
+    invoiceStatus: "pending",
     dispatchPendingDocuments: true,
     notificationChannels: ["email", "whatsapp"],
   };

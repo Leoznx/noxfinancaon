@@ -17,7 +17,6 @@ import {
   wasNotificationSent,
 } from "../_shared/asaas.ts";
 import {
-  CONSOLIDATABLE_INVOICE_STATUSES,
   asaasLateFeePayload,
   consolidatedDueDate,
   isCollectableStatus,
@@ -99,9 +98,7 @@ serve(async (req) => {
       .limit(1)
       .maybeSingle();
     if (latestBatchError) throw latestBatchError;
-    const existingBatch = ["active", "partial"].includes(latestBatch?.status)
-      ? latestBatch
-      : null;
+    const existingBatch = ["active", "partial"].includes(latestBatch?.status) ? latestBatch : null;
 
     const invoiceIds = Array.isArray(body.invoiceIds)
       ? [...new Set(body.invoiceIds.filter(Boolean))]
@@ -114,10 +111,12 @@ serve(async (req) => {
         .eq("batch_id", existingBatch.id)
         .eq("status", "active");
       if (currentItemsError) throw currentItemsError;
-      scopedInvoiceIds = [...new Set([
-        ...invoiceIds,
-        ...(currentItems || []).map((item: any) => item.fatura_id).filter(Boolean),
-      ])];
+      scopedInvoiceIds = [
+        ...new Set([
+          ...invoiceIds,
+          ...(currentItems || []).map((item: any) => item.fatura_id).filter(Boolean),
+        ]),
+      ];
     }
 
     let candidateQuery = admin
@@ -127,7 +126,8 @@ serve(async (req) => {
       )
       .eq("recipient_user_id", agencyUserId)
       .eq("payment_responsible", "agency")
-      .in("status", CONSOLIDATABLE_INVOICE_STATUSES);
+      .eq("status", "awaiting_consolidation")
+      .is("asaas_payment_id", null);
     if (scopedInvoiceIds.length) candidateQuery = candidateQuery.in("id", scopedInvoiceIds);
     const { data: candidates, error: candidateError } = await candidateQuery;
     if (candidateError) throw candidateError;
@@ -141,16 +141,23 @@ serve(async (req) => {
       if (existingBatch?.asaas_payment_id && existingBatch.status === "active") {
         const cancellation = await cancelAsaasPayment(existingBatch.asaas_payment_id);
         if (!cancellation.cancelled) {
-          await admin.from("consolidated_invoice_batches").update({
-            reconciliation_status: "manual_review",
-            reconciliation_error: cancellation.error || "provider_cancellation_failed",
-          }).eq("id", existingBatch.id);
-          return jsonResponse(req, {
-            ok: false,
-            error:
-              "O lote continua vinculado porque o cancelamento no Asaas nao foi confirmado. Revisao financeira necessaria.",
-            manualReview: true,
-          }, 502);
+          await admin
+            .from("consolidated_invoice_batches")
+            .update({
+              reconciliation_status: "manual_review",
+              reconciliation_error: cancellation.error || "provider_cancellation_failed",
+            })
+            .eq("id", existingBatch.id);
+          return jsonResponse(
+            req,
+            {
+              ok: false,
+              error:
+                "O lote continua vinculado porque o cancelamento no Asaas nao foi confirmado. Revisao financeira necessaria.",
+              manualReview: true,
+            },
+            502,
+          );
         }
         await releaseBatch(admin, existingBatch.id);
       } else if (existingBatch?.id) {
@@ -207,12 +214,7 @@ serve(async (req) => {
       eligible.reduce((sum: number, invoice: any) => sum + Number(invoice.valor || 0), 0),
     );
     const dueDay = await resolveBillingDueDay(admin);
-    const dueDate = consolidatedDueDate(
-      referenceYear,
-      referenceMonth,
-      dueDay,
-      clock.date,
-    );
+    const dueDate = consolidatedDueDate(referenceYear, referenceMonth, dueDay, clock.date);
     let customerId = existingBatch?.asaas_customer_id || null;
     if (!customerId) {
       const found = await asaasFetch(`/customers?cpfCnpj=${encodeURIComponent(cpfCnpj)}`);
@@ -234,10 +236,14 @@ serve(async (req) => {
     if (!customerId) throw new Error("asaas_customer_missing");
 
     const previousGeneration = Math.max(1, Number(latestBatch?.automation_version || 1));
-    const generation = existingBatch ? previousGeneration : latestBatch ? previousGeneration + 1 : 1;
-    const baseExternalReference =
-      `nox:lote:${agencyUserId}:${referenceYear}:${String(referenceMonth).padStart(2, "0")}`;
-    const externalReference = existingBatch?.external_reference ||
+    const generation = existingBatch
+      ? previousGeneration
+      : latestBatch
+        ? previousGeneration + 1
+        : 1;
+    const baseExternalReference = `nox:lote:${agencyUserId}:${referenceYear}:${String(referenceMonth).padStart(2, "0")}`;
+    const externalReference =
+      existingBatch?.external_reference ||
       (generation === 1 ? baseExternalReference : `${baseExternalReference}:attempt:${generation}`);
     const paymentPayload = {
       customer: customerId,
@@ -266,29 +272,40 @@ serve(async (req) => {
       if (!raw && !claimed) {
         const reclaimed = await reclaimStaleBillingOperation(admin, operation);
         if (!reclaimed) {
-          return jsonResponse(req, {
-            ok: false,
-            error: "A cobranca consolidada esta em conciliacao. Nenhum boleto novo foi criado.",
-            operationState: operation.state,
-            retryable: true,
-          }, 409);
+          return jsonResponse(
+            req,
+            {
+              ok: false,
+              error: "A cobranca consolidada esta em conciliacao. Nenhum boleto novo foi criado.",
+              operationState: operation.state,
+              retryable: true,
+            },
+            409,
+          );
         }
       }
     }
-    if (!existingBatch && ["CANCELLED", "CANCELED", "DELETED", "REFUNDED"].includes(
-      String(raw?.status || "").toUpperCase(),
-    )) {
+    if (
+      !existingBatch &&
+      ["CANCELLED", "CANCELED", "DELETED", "REFUNDED"].includes(
+        String(raw?.status || "").toUpperCase(),
+      )
+    ) {
       await updateBillingOperation(admin, operation.id, {
         state: "failed",
         provider_id: raw?.id || operation.provider_id || null,
         provider_response: sanitizeAsaasResponse(raw),
         last_error: "recovered_consolidated_payment_is_terminal",
       });
-      return jsonResponse(req, {
-        ok: false,
-        error: "A tentativa anterior do lote foi cancelada. Solicite uma nova geracao.",
-        retryable: true,
-      }, 409);
+      return jsonResponse(
+        req,
+        {
+          ok: false,
+          error: "A tentativa anterior do lote foi cancelada. Solicite uma nova geracao.",
+          retryable: true,
+        },
+        409,
+      );
     }
     try {
       raw = existingBatch?.asaas_payment_id
@@ -296,10 +313,11 @@ serve(async (req) => {
             method: "PUT",
             body: JSON.stringify(paymentPayload),
           })
-        : raw || await asaasFetch("/payments", {
+        : raw ||
+          (await asaasFetch("/payments", {
             method: "POST",
             body: JSON.stringify(paymentPayload),
-          });
+          }));
       if (!existingBatch?.asaas_payment_id) {
         await updateBillingOperation(admin, operation.id, {
           state: "provider_created",
@@ -456,11 +474,13 @@ serve(async (req) => {
             completed_at: new Date().toISOString(),
           });
         } else {
-          await admin.from("consolidated_invoice_batches").update({
-            reconciliation_status: "manual_review",
-            reconciliation_error:
-              `individual:${payment.asaas_payment_id};batch:${batch.asaas_payment_id}`,
-          }).eq("id", batch.id);
+          await admin
+            .from("consolidated_invoice_batches")
+            .update({
+              reconciliation_status: "manual_review",
+              reconciliation_error: `individual:${payment.asaas_payment_id};batch:${batch.asaas_payment_id}`,
+            })
+            .eq("id", batch.id);
           await updateBillingOperation(admin, operation.id, {
             state: "ambiguous",
             provider_id: batch.asaas_payment_id,
@@ -495,9 +515,10 @@ serve(async (req) => {
     } catch (notificationError) {
       console.error("[asaas-create-consolidated-invoice] notification_error", {
         batchId: batch.id,
-        message: notificationError instanceof Error
-          ? notificationError.message
-          : String(notificationError),
+        message:
+          notificationError instanceof Error
+            ? notificationError.message
+            : String(notificationError),
       });
     }
 
@@ -559,14 +580,17 @@ async function resolveProfileDocument(admin: any, profile: any) {
 
 async function notifyBatchCreated(admin: any, batch: any, profile: any, raw: any) {
   const notificationType = "consolidated_payment_created";
-  const paymentUrl = raw?.bankSlipUrl || raw?.invoiceUrl || batch.bank_slip_url ||
-    batch.invoice_url || null;
+  const paymentUrl =
+    raw?.bankSlipUrl || raw?.invoiceUrl || batch.bank_slip_url || batch.invoice_url || null;
   for (const channel of ["email", "whatsapp"] as const) {
-    if (await wasNotificationSent(admin, {
-      batchId: batch.id,
-      channel,
-      notificationType,
-    })) continue;
+    if (
+      await wasNotificationSent(admin, {
+        batchId: batch.id,
+        channel,
+        notificationType,
+      })
+    )
+      continue;
     let result: any;
     try {
       const contractRef = `lote ${String(batch.reference_month).padStart(2, "0")}/${batch.reference_year}`;
@@ -578,24 +602,25 @@ async function notifyBatchCreated(admin: any, batch: any, profile: any, raw: any
         contractRef,
         paymentUrl,
       });
-      result = channel === "email"
-        ? await sendPaymentEmail({
-            to: profile.email,
-            nome: profile.nome || "cliente",
-            tipo: "criado",
-            valor: Number(batch.total_value || 0),
-            metodo: "boleto",
-            vencimento: batch.due_date,
-            boletoUrl: paymentUrl,
-            contratoRef: contractRef,
-          })
-        : await sendPaymentWhatsapp({
-            to: profile.telefone,
-            mensagem: whatsappContent.message,
-            title: whatsappContent.title,
-            paymentUrl,
-            buttonLabel: "Pagar",
-          });
+      result =
+        channel === "email"
+          ? await sendPaymentEmail({
+              to: profile.email,
+              nome: profile.nome || "cliente",
+              tipo: "criado",
+              valor: Number(batch.total_value || 0),
+              metodo: "boleto",
+              vencimento: batch.due_date,
+              boletoUrl: paymentUrl,
+              contratoRef: contractRef,
+            })
+          : await sendPaymentWhatsapp({
+              to: profile.telefone,
+              mensagem: whatsappContent.message,
+              title: whatsappContent.title,
+              paymentUrl,
+              buttonLabel: "Pagar",
+            });
     } catch (error) {
       result = { sent: false, reason: error instanceof Error ? error.message : String(error) };
     }

@@ -262,7 +262,7 @@ serve(async (req) => {
       let payment = existingInvoice.asaas_payment || null;
       let raw = payment?.raw_response || {};
       if (
-        recipient.paymentResponsible === "agency" &&
+        existingInvoice.status === "awaiting_consolidation" &&
         (action === "resend_email" || action === "resend_whatsapp")
       ) {
         return jsonResponse(

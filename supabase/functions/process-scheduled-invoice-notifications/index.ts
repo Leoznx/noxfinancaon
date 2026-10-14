@@ -9,7 +9,6 @@ import {
   wasNotificationSent,
 } from "../_shared/asaas.ts";
 import {
-  CONSOLIDATABLE_INVOICE_STATUSES,
   buildCollectionMessage,
   collectionCadence,
   monthlyDueDate,
@@ -117,7 +116,7 @@ serve(async (req) => {
         .eq("payment_responsible", "agency")
         .gte("vencimento", targetMonthStart)
         .lte("vencimento", targetMonthEnd)
-        .in("status", CONSOLIDATABLE_INVOICE_STATUSES)
+        .eq("status", "awaiting_consolidation")
         .not("recipient_user_id", "is", null),
       admin
         .from("consolidated_invoice_batches")

@@ -7,10 +7,23 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Search,
   AlertTriangle,
@@ -43,9 +56,13 @@ export const Route = createLazyFileRoute("/admin/faturamento")({
   ),
 });
 
-const brl = (n: number) => `R$ ${Number(n || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
+const brl = (n: number) =>
+  `R$ ${Number(n || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 const hoje = () => new Date().toISOString().slice(0, 10);
-function formatEndereco(imovel: { endereco?: string | null; cidade?: string | null; estado?: string | null } | null | undefined) {
+function formatEndereco(
+  imovel:
+    { endereco?: string | null; cidade?: string | null; estado?: string | null } | null | undefined,
+) {
   if (!imovel) return "—";
   const cidadeEstado = [imovel.cidade, imovel.estado].filter(Boolean).join("/");
   return [imovel.endereco, cidadeEstado].filter(Boolean).join(", ") || "—";
@@ -64,7 +81,9 @@ function metodoLabel(value?: string | null) {
 function dadosCobranca(p: any) {
   const payment = p.asaas_payment || {};
   const subscription = p.asaas_subscription || {};
-  const initialLinkExpired = ["cancelled", "expired"].includes(subscription.initial_checkout_status);
+  const initialLinkExpired = ["cancelled", "expired"].includes(
+    subscription.initial_checkout_status,
+  );
   const recurringLinkExpired = ["cancelled", "expired"].includes(subscription.checkout_status);
   const notifications = Array.isArray(p.notifications) ? p.notifications : [];
   const latestNotification = [...notifications].sort((a, b) =>
@@ -92,7 +111,20 @@ function apoliceDaFatura(p: any) {
   const policies = p.consulta?.apolices;
   return Array.isArray(policies) ? policies[0] || null : policies || null;
 }
-const meses = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+const meses = [
+  "Janeiro",
+  "Fevereiro",
+  "Março",
+  "Abril",
+  "Maio",
+  "Junho",
+  "Julho",
+  "Agosto",
+  "Setembro",
+  "Outubro",
+  "Novembro",
+  "Dezembro",
+];
 const mesLabel = (y: number, m: number) => `${meses[m]}/${y}`;
 const ymKey = (d: string) => d.slice(0, 7); // YYYY-MM
 
@@ -100,8 +132,23 @@ const ymKey = (d: string) => d.slice(0, 7); // YYYY-MM
 // fonte de verdade usada em Minhas Faturas / Carteira de Cobranças. "Pago"
 // cobre confirmed/paid/paid_via_consolidated (ver PAYMENT_STATUS_SYNC); status
 // cancelado/estornado/recusado ficam fora dos 3 totais (nem devido nem pago).
-const STATUS_ABERTO = ["pending", "processing", "risk_analysis", "approved", "awaiting_consolidation"];
-const STATUS_EXCLUIDOS_DOS_TOTAIS = ["cancelled", "refunded", "partially_refunded", "refused", "chargeback", "chargeback_dispute", "refund_processing", "refund_denied"];
+const STATUS_ABERTO = [
+  "pending",
+  "processing",
+  "risk_analysis",
+  "approved",
+  "awaiting_consolidation",
+];
+const STATUS_EXCLUIDOS_DOS_TOTAIS = [
+  "cancelled",
+  "refunded",
+  "partially_refunded",
+  "refused",
+  "chargeback",
+  "chargeback_dispute",
+  "refund_processing",
+  "refund_denied",
+];
 
 function FaturamentoAdminPage() {
   const navigate = useNavigate();
@@ -117,7 +164,9 @@ function FaturamentoAdminPage() {
   const [acaoId, setAcaoId] = useState<string | null>(null);
   const now = useMemo(() => new Date(), []);
   // selectedYM: 'YYYY-MM' OR 'all'
-  const [selectedYM, setSelectedYM] = useState<string>(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
+  const [selectedYM, setSelectedYM] = useState<string>(
+    `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`,
+  );
   const tab = routeSearch.tab ?? "receber";
   const setTab = (nextTab: string) =>
     navigate({
@@ -129,8 +178,10 @@ function FaturamentoAdminPage() {
   const carregar = async () => {
     setLoading(true);
     const [invoiceResult, batchResult, subscriptionResult] = await Promise.all([
-      (supabase as any).from("faturas_inquilino").select(
-        `*,
+      (supabase as any)
+        .from("faturas_inquilino")
+        .select(
+          `*,
          apolice:apolices(numero, status, imobiliaria:profiles!apolices_imobiliaria_profile_id_fkey(nome)),
          asaas_payment:asaas_payments(*),
          notifications:financial_notifications(*),
@@ -139,11 +190,21 @@ function FaturamentoAdminPage() {
            imovel:imoveis(endereco, cidade, estado),
            apolices(numero, status, imobiliaria:profiles!apolices_imobiliaria_profile_id_fkey(nome))
          )`,
-      ).order("vencimento", { ascending: false }).limit(5000),
-      (supabase as any).from("consolidated_invoice_batches").select("id, total_value, received_value, due_date, paid_at, status, invoice_count, bank_slip_url, identification_field, asaas_payment_id, reference_month, reference_year, agency:profiles!consolidated_invoice_batches_agency_user_id_fkey(nome)"),
-      (supabase as any).from("asaas_subscriptions").select("*").order("created_at", { ascending: false }),
+        )
+        .order("vencimento", { ascending: false })
+        .limit(5000),
+      (supabase as any)
+        .from("consolidated_invoice_batches")
+        .select(
+          "id, total_value, received_value, due_date, paid_at, status, invoice_count, bank_slip_url, identification_field, asaas_payment_id, reference_month, reference_year, agency:profiles!consolidated_invoice_batches_agency_user_id_fkey(nome)",
+        ),
+      (supabase as any)
+        .from("asaas_subscriptions")
+        .select("*")
+        .order("created_at", { ascending: false }),
     ]);
-    if (invoiceResult.error || batchResult.error || subscriptionResult.error) toast.error("Erro ao carregar faturas");
+    if (invoiceResult.error || batchResult.error || subscriptionResult.error)
+      toast.error("Erro ao carregar faturas");
     else {
       const subscriptions = new Map<string, any>();
       for (const subscription of subscriptionResult.data ?? []) {
@@ -166,79 +227,105 @@ function FaturamentoAdminPage() {
     carregar();
     const channel = supabase
       .channel("admin-faturamento-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "faturas_inquilino" }, carregar)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "faturas_inquilino" },
+        carregar,
+      )
       .on("postgres_changes", { event: "*", schema: "public", table: "asaas_payments" }, carregar)
-      .on("postgres_changes", { event: "*", schema: "public", table: "consolidated_invoice_batches" }, carregar)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "consolidated_invoice_batches" },
+        carregar,
+      )
       .subscribe();
-    return () => { void supabase.removeChannel(channel); };
+    return () => {
+      void supabase.removeChannel(channel);
+    };
   }, []);
 
-  const linhasFinanceiras = useMemo(() => [
-    ...parcelas.filter((p) => !p.consolidated_item_id),
-    ...lotes.flatMap((batch) => {
-      const base = {
-        vencimento: batch.due_date,
-        numero_parcela: 1,
-        installment_total: 1,
-        boleto_url: batch.bank_slip_url,
-        payment_url: batch.bank_slip_url,
-        linha_digitavel: batch.identification_field,
-        payment_method: "boleto",
-        payment_responsible: "agency",
-        asaas_payment: { asaas_payment_id: batch.asaas_payment_id },
-        asaas_subscription: null,
-        notifications: [],
-        apolice: null,
-        agency_name: batch.agency?.nome || null,
-        consulta: { tenant_name: `Lote consolidado (${batch.invoice_count} contratos)`, tenant_document: "", imovel: null },
-      };
-      if (batch.status !== "partial") {
-        return [{
-          ...base,
-          id: `batch:${batch.id}`,
-          valor: batch.total_value,
-          pago_em: batch.paid_at,
-          status: batch.status === "active" ? "pending" : batch.status,
-        }];
-      }
-      return [
-        {
-          ...base,
-          id: `batch:${batch.id}:remaining`,
-          valor: Math.max(Number(batch.total_value || 0) - Number(batch.received_value || 0), 0),
-          pago_em: null,
-          status: "pending",
-        },
-        {
-          ...base,
-          id: `batch:${batch.id}:received`,
-          valor: Number(batch.received_value || 0),
-          pago_em: batch.paid_at,
-          status: "paid_via_consolidated",
-        },
-      ];
-    }),
-  ], [lotes, parcelas]);
+  const linhasFinanceiras = useMemo(
+    () => [
+      ...parcelas.filter((p) => !p.consolidated_item_id),
+      ...lotes.flatMap((batch) => {
+        const base = {
+          vencimento: batch.due_date,
+          numero_parcela: 1,
+          installment_total: 1,
+          boleto_url: batch.bank_slip_url,
+          payment_url: batch.bank_slip_url,
+          linha_digitavel: batch.identification_field,
+          payment_method: "boleto",
+          payment_responsible: "agency",
+          asaas_payment: { asaas_payment_id: batch.asaas_payment_id },
+          asaas_subscription: null,
+          notifications: [],
+          apolice: null,
+          agency_name: batch.agency?.nome || null,
+          consulta: {
+            tenant_name: `Lote consolidado (${batch.invoice_count} contratos)`,
+            tenant_document: "",
+            imovel: null,
+          },
+        };
+        if (batch.status !== "partial") {
+          return [
+            {
+              ...base,
+              id: `batch:${batch.id}`,
+              valor: batch.total_value,
+              pago_em: batch.paid_at,
+              status: batch.status === "active" ? "pending" : batch.status,
+            },
+          ];
+        }
+        return [
+          {
+            ...base,
+            id: `batch:${batch.id}:remaining`,
+            valor: Math.max(Number(batch.total_value || 0) - Number(batch.received_value || 0), 0),
+            pago_em: null,
+            status: "pending",
+          },
+          {
+            ...base,
+            id: `batch:${batch.id}:received`,
+            valor: Number(batch.received_value || 0),
+            pago_em: batch.paid_at,
+            status: "paid_via_consolidated",
+          },
+        ];
+      }),
+    ],
+    [lotes, parcelas],
+  );
 
-  const enriched = useMemo(() => linhasFinanceiras.map(p => {
-    const status: "pago" | "vencido" | "a_vencer" | "outro" = isPagamentoConcluido(p.status)
-      ? "pago"
-      : p.status === "overdue"
-        ? "vencido"
-        : STATUS_ABERTO.includes(p.status)
-          ? "a_vencer"
-          : "outro";
-    return { ...p, _status: status, _ym: ymKey(p.vencimento) };
-  }), [linhasFinanceiras]);
+  const enriched = useMemo(
+    () =>
+      linhasFinanceiras.map((p) => {
+        const status: "pago" | "vencido" | "a_vencer" | "outro" = isPagamentoConcluido(p.status)
+          ? "pago"
+          : p.status === "overdue"
+            ? "vencido"
+            : STATUS_ABERTO.includes(p.status)
+              ? "a_vencer"
+              : "outro";
+        return { ...p, _status: status, _ym: ymKey(p.vencimento) };
+      }),
+    [linhasFinanceiras],
+  );
 
   // Meses disponíveis ordenados desc
   const mesesDisponiveis = useMemo(() => {
     const set = new Set<string>();
-    enriched.forEach(p => set.add(p._ym));
+    enriched.forEach((p) => set.add(p._ym));
     // garantir mês vigente + próximo + anterior
-    const y = now.getFullYear(); const m = now.getMonth();
+    const y = now.getFullYear();
+    const m = now.getMonth();
     const add = (yy: number, mm: number) => set.add(`${yy}-${String(mm + 1).padStart(2, "0")}`);
-    add(y, m); add(y, m + 1 > 11 ? 0 : m + 1); add(y, m - 1 < 0 ? 11 : m - 1);
+    add(y, m);
+    add(y, m + 1 > 11 ? 0 : m + 1);
+    add(y, m - 1 < 0 ? 11 : m - 1);
     return Array.from(set).sort((a, b) => b.localeCompare(a));
   }, [enriched, now]);
 
@@ -256,9 +343,9 @@ function FaturamentoAdminPage() {
     });
   }, [enriched, selectedYM, busca]);
 
-  const vencidas = doMes.filter(p => p._status === "vencido");
-  const aReceber = doMes.filter(p => p._status === "a_vencer");
-  const pagas = doMes.filter(p => p._status === "pago");
+  const vencidas = doMes.filter((p) => p._status === "vencido");
+  const aReceber = doMes.filter((p) => p._status === "a_vencer");
+  const pagas = doMes.filter((p) => p._status === "pago");
 
   const totVencido = vencidas.reduce((s, p) => s + Number(p.valor), 0);
   const totReceber = aReceber.reduce((s, p) => s + Number(p.valor), 0);
@@ -267,8 +354,11 @@ function FaturamentoAdminPage() {
 
   // resumo por mês (outros meses) — exclui o selecionado
   const resumoMeses = useMemo(() => {
-    const map = new Map<string, { ym: string; venc: number; rec: number; pago: number; total: number }>();
-    enriched.forEach(p => {
+    const map = new Map<
+      string,
+      { ym: string; venc: number; rec: number; pago: number; total: number }
+    >();
+    enriched.forEach((p) => {
       if (p._status === "outro") return;
       const cur = map.get(p._ym) ?? { ym: p._ym, venc: 0, rec: 0, pago: 0, total: 0 };
       const v = Number(p.valor);
@@ -279,7 +369,7 @@ function FaturamentoAdminPage() {
       map.set(p._ym, cur);
     });
     return Array.from(map.values())
-      .filter(r => selectedYM === "all" || r.ym !== selectedYM)
+      .filter((r) => selectedYM === "all" || r.ym !== selectedYM)
       .sort((a, b) => b.ym.localeCompare(a.ym))
       .slice(0, 12);
   }, [enriched, selectedYM]);
@@ -292,7 +382,9 @@ function FaturamentoAdminPage() {
     setAtualizandoId(p.id);
     try {
       if (String(p.id).startsWith("batch:")) {
-        const { data, error } = await supabase.functions.invoke("asaas-get-payment", { body: { paymentId } });
+        const { data, error } = await supabase.functions.invoke("asaas-get-payment", {
+          body: { paymentId },
+        });
         if (error) throw new Error(error.message);
         if ((data as any)?.error) throw new Error((data as any).error);
       } else if (method === "credit_card" && subscription?.id) {
@@ -366,11 +458,7 @@ function FaturamentoAdminPage() {
           action,
         });
       } else {
-        if (
-          action === "reissue_initial" ||
-          action === "reissue_checkout" ||
-          action === "cancel"
-        ) {
+        if (action === "reissue_initial" || action === "reissue_checkout" || action === "cancel") {
           throw new Error("Reemissão de Checkout se aplica somente ao cartão recorrente.");
         }
         await managePersistedAsaasPayment({
@@ -389,11 +477,11 @@ function FaturamentoAdminPage() {
             ? "Cobrança reenviada por WhatsApp."
             : action === "reissue_initial"
               ? "Novo link inicial gerado e enviado."
-            : action === "reissue_checkout"
-              ? "Novo link de cadastro recorrente gerado e enviado."
-            : action === "cancel"
-              ? "Assinatura recorrente cancelada no Asaas."
-            : "Segunda via gerada.",
+              : action === "reissue_checkout"
+                ? "Novo link de cadastro recorrente gerado e enviado."
+                : action === "cancel"
+                  ? "Assinatura recorrente cancelada no Asaas."
+                  : "Segunda via gerada.",
       );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Não foi possível concluir a ação.");
@@ -415,9 +503,13 @@ function FaturamentoAdminPage() {
     setSelectedYM(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
   };
 
-  const tituloPeriodo = selectedYM === "all"
-    ? "Faturamento — Todos os meses"
-    : (() => { const [y, m] = selectedYM.split("-").map(Number); return `Faturamento de ${mesLabel(y, m - 1)}`; })();
+  const tituloPeriodo =
+    selectedYM === "all"
+      ? "Faturamento — Todos os meses"
+      : (() => {
+          const [y, m] = selectedYM.split("-").map(Number);
+          return `Faturamento de ${mesLabel(y, m - 1)}`;
+        })();
 
   const ymVigente = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const dProx = new Date(now.getFullYear(), now.getMonth() + 1, 1);
@@ -433,49 +525,110 @@ function FaturamentoAdminPage() {
         <AdminAreaSwitcher area="financeiro" />
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Faturamento</h1>
-          <p className="text-neutral-500 mt-2">Visão financeira por mês, vencidos, a receber e pagos.</p>
+          <p className="text-neutral-500 mt-2">
+            Visão financeira por mês, vencidos, a receber e pagos.
+          </p>
         </div>
 
         {/* Filtros de período */}
         <div className="flex flex-wrap items-center gap-2">
-          <PeriodoBtn active={selectedYM === ymVigente} onClick={() => setSelectedYM(ymVigente)}>Mês vigente</PeriodoBtn>
-          <PeriodoBtn active={selectedYM === ymProx} onClick={() => setSelectedYM(ymProx)}>Próximo mês</PeriodoBtn>
-          <PeriodoBtn active={selectedYM === ymAnt} onClick={() => setSelectedYM(ymAnt)}>Mês anterior</PeriodoBtn>
-          <PeriodoBtn active={selectedYM === "all"} onClick={() => setSelectedYM("all")}>Todos os meses</PeriodoBtn>
+          <PeriodoBtn active={selectedYM === ymVigente} onClick={() => setSelectedYM(ymVigente)}>
+            Mês vigente
+          </PeriodoBtn>
+          <PeriodoBtn active={selectedYM === ymProx} onClick={() => setSelectedYM(ymProx)}>
+            Próximo mês
+          </PeriodoBtn>
+          <PeriodoBtn active={selectedYM === ymAnt} onClick={() => setSelectedYM(ymAnt)}>
+            Mês anterior
+          </PeriodoBtn>
+          <PeriodoBtn active={selectedYM === "all"} onClick={() => setSelectedYM("all")}>
+            Todos os meses
+          </PeriodoBtn>
 
           <div className="flex items-center gap-1 ml-auto">
-            <Button variant="outline" size="icon" onClick={() => navegarMes(-1)} disabled={selectedYM === "all"}><ChevronLeft size={16} /></Button>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => navegarMes(-1)}
+              disabled={selectedYM === "all"}
+            >
+              <ChevronLeft size={16} />
+            </Button>
             <Select value={selectedYM} onValueChange={setSelectedYM}>
-              <SelectTrigger className="w-[200px] h-10"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-[200px] h-10">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os meses</SelectItem>
-                {mesesDisponiveis.map(ym => {
+                {mesesDisponiveis.map((ym) => {
                   const [y, m] = ym.split("-").map(Number);
-                  return <SelectItem key={ym} value={ym}>{mesLabel(y, m - 1)}</SelectItem>;
+                  return (
+                    <SelectItem key={ym} value={ym}>
+                      {mesLabel(y, m - 1)}
+                    </SelectItem>
+                  );
                 })}
               </SelectContent>
             </Select>
-            <Button variant="outline" size="icon" onClick={() => navegarMes(1)} disabled={selectedYM === "all"}><ChevronRight size={16} /></Button>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => navegarMes(1)}
+              disabled={selectedYM === "all"}
+            >
+              <ChevronRight size={16} />
+            </Button>
           </div>
         </div>
 
         <div>
           <h2 className="text-lg font-bold">{tituloPeriodo}</h2>
-          <p className="text-sm text-neutral-500">Acompanhe as parcelas vencidas, a vencer e pagas deste período.</p>
+          <p className="text-sm text-neutral-500">
+            Acompanhe as parcelas vencidas, a vencer e pagas deste período.
+          </p>
         </div>
 
         {/* Cards de resumo */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card titulo="A receber" valor={totReceber} cor="bg-amber-50 border-amber-200 text-amber-700" icone={<Clock size={20} />} qtd={aReceber.length} />
-          <Card titulo="Vencidos" valor={totVencido} cor="bg-red-50 border-red-200 text-red-700" icone={<AlertTriangle size={20} />} qtd={vencidas.length} />
-          <Card titulo="Pagos" valor={totPago} cor="bg-emerald-50 border-emerald-200 text-emerald-700" icone={<CheckCircle2 size={20} />} qtd={pagas.length} />
-          <Card titulo="Total do mês" valor={totGeral} cor="bg-neutral-50 border-neutral-200 text-neutral-700" icone={<Wallet size={20} />} qtd={vencidas.length + aReceber.length + pagas.length} />
+          <Card
+            titulo="A receber"
+            valor={totReceber}
+            cor="bg-amber-50 border-amber-200 text-amber-700"
+            icone={<Clock size={20} />}
+            qtd={aReceber.length}
+          />
+          <Card
+            titulo="Vencidos"
+            valor={totVencido}
+            cor="bg-red-50 border-red-200 text-red-700"
+            icone={<AlertTriangle size={20} />}
+            qtd={vencidas.length}
+          />
+          <Card
+            titulo="Pagos"
+            valor={totPago}
+            cor="bg-emerald-50 border-emerald-200 text-emerald-700"
+            icone={<CheckCircle2 size={20} />}
+            qtd={pagas.length}
+          />
+          <Card
+            titulo="Total do mês"
+            valor={totGeral}
+            cor="bg-neutral-50 border-neutral-200 text-neutral-700"
+            icone={<Wallet size={20} />}
+            qtd={vencidas.length + aReceber.length + pagas.length}
+          />
         </div>
 
         {/* Busca */}
         <div className="relative max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={18} />
-          <Input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar inquilino, CPF, endereço ou nº contrato..." className="pl-10 h-11" />
+          <Input
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Buscar inquilino, CPF, endereço ou nº contrato..."
+            className="pl-10 h-11"
+          />
         </div>
 
         <Tabs value={tab} onValueChange={setTab}>
@@ -524,7 +677,10 @@ function FaturamentoAdminPage() {
                         size="sm"
                         variant="outline"
                         className="mt-2"
-                        onClick={() => { setSelectedYM(r.ym); setTab("receber"); }}
+                        onClick={() => {
+                          setSelectedYM(r.ym);
+                          setTab("receber");
+                        }}
                       >
                         Ver mês
                       </Button>
@@ -536,37 +692,54 @@ function FaturamentoAdminPage() {
 
             {/* Tablet/desktop (md:+): tabela completa. */}
             <div className="hidden md:block overflow-x-auto">
-            <Table>
-              <TableHeader className="bg-neutral-50">
-                <TableRow>
-                  <TableHead className="px-6">Mês</TableHead>
-                  <TableHead className="text-right">Vencidos</TableHead>
-                  <TableHead className="text-right">A receber</TableHead>
-                  <TableHead className="text-right">Pagos</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                  <TableHead className="pr-6 text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {resumoMeses.length === 0 ? (
-                  <TableRow><TableCell colSpan={6} className="text-center py-12 text-neutral-400">Sem outros meses para exibir.</TableCell></TableRow>
-                ) : resumoMeses.map(r => {
-                  const [y, m] = r.ym.split("-").map(Number);
-                  return (
-                    <TableRow key={r.ym}>
-                      <TableCell className="px-6 font-semibold">{mesLabel(y, m - 1)}</TableCell>
-                      <TableCell className="text-right text-red-700">{brl(r.venc)}</TableCell>
-                      <TableCell className="text-right text-amber-700">{brl(r.rec)}</TableCell>
-                      <TableCell className="text-right text-emerald-700">{brl(r.pago)}</TableCell>
-                      <TableCell className="text-right font-semibold">{brl(r.total)}</TableCell>
-                      <TableCell className="pr-6 text-right">
-                        <Button size="sm" variant="outline" onClick={() => { setSelectedYM(r.ym); setTab("receber"); }}>Ver mês</Button>
+              <Table>
+                <TableHeader className="bg-neutral-50">
+                  <TableRow>
+                    <TableHead className="px-6">Mês</TableHead>
+                    <TableHead className="text-right">Vencidos</TableHead>
+                    <TableHead className="text-right">A receber</TableHead>
+                    <TableHead className="text-right">Pagos</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
+                    <TableHead className="pr-6 text-right">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {resumoMeses.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-12 text-neutral-400">
+                        Sem outros meses para exibir.
                       </TableCell>
                     </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+                  ) : (
+                    resumoMeses.map((r) => {
+                      const [y, m] = r.ym.split("-").map(Number);
+                      return (
+                        <TableRow key={r.ym}>
+                          <TableCell className="px-6 font-semibold">{mesLabel(y, m - 1)}</TableCell>
+                          <TableCell className="text-right text-red-700">{brl(r.venc)}</TableCell>
+                          <TableCell className="text-right text-amber-700">{brl(r.rec)}</TableCell>
+                          <TableCell className="text-right text-emerald-700">
+                            {brl(r.pago)}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold">{brl(r.total)}</TableCell>
+                          <TableCell className="pr-6 text-right">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setSelectedYM(r.ym);
+                                setTab("receber");
+                              }}
+                            >
+                              Ver mês
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
             </div>
           </div>
         </div>
@@ -575,16 +748,38 @@ function FaturamentoAdminPage() {
   );
 }
 
-function PeriodoBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+function PeriodoBtn({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
   return (
     <button
       onClick={onClick}
       className={`h-10 px-4 rounded-lg text-sm font-semibold transition-all ${active ? "bg-neutral-900 text-white" : "bg-white border border-neutral-200 text-neutral-700 hover:bg-neutral-50"}`}
-    >{children}</button>
+    >
+      {children}
+    </button>
   );
 }
 
-function Card({ titulo, valor, cor, icone, qtd }: { titulo: string; valor: number; cor: string; icone: React.ReactNode; qtd: number }) {
+function Card({
+  titulo,
+  valor,
+  cor,
+  icone,
+  qtd,
+}: {
+  titulo: string;
+  valor: number;
+  cor: string;
+  icone: React.ReactNode;
+  qtd: number;
+}) {
   return (
     <div className={`border rounded-xl p-5 ${cor}`}>
       <div className="flex items-center justify-between">
@@ -592,7 +787,9 @@ function Card({ titulo, valor, cor, icone, qtd }: { titulo: string; valor: numbe
         {icone}
       </div>
       <p className="text-2xl font-bold mt-2">{brl(valor)}</p>
-      <p className="text-xs mt-1 opacity-75">{qtd} {qtd === 1 ? "parcela" : "parcelas"}</p>
+      <p className="text-xs mt-1 opacity-75">
+        {qtd} {qtd === 1 ? "parcela" : "parcelas"}
+      </p>
     </div>
   );
 }
@@ -636,18 +833,20 @@ function TabelaFaturas({
         ) : (
           parcelas.map((p) => {
             const resp = p.payment_responsible;
-            const respLabel = resp === "agency" ? "Imobiliária" : resp === "tenant" ? "Inquilino" : "—";
-            const respCls = resp === "agency"
-              ? "bg-blue-50 text-blue-700 border-blue-200"
-              : resp === "tenant"
-                ? "bg-purple-50 text-purple-700 border-purple-200"
-                : "bg-neutral-50 text-neutral-500 border-neutral-200";
+            const respLabel =
+              resp === "agency" ? "Imobiliária" : resp === "tenant" ? "Inquilino" : "—";
+            const respCls =
+              resp === "agency"
+                ? "bg-blue-50 text-blue-700 border-blue-200"
+                : resp === "tenant"
+                  ? "bg-purple-50 text-purple-700 border-purple-200"
+                  : "bg-neutral-50 text-neutral-500 border-neutral-200";
             const imovel = p.consulta?.imovel;
             const billing = dadosCobranca(p);
             const policy = apoliceDaFatura(p);
             const isBatch = String(p.id).startsWith("batch:");
             const isConsolidatedItem =
-              isBatch || p.payment_responsible === "agency" || p.status === "awaiting_consolidation";
+              isBatch || p.status === "awaiting_consolidation" || !!p.consolidated_item_id;
             const managedIndividual = !isBatch && isConsolidatedItem;
             const busy = atualizandoId === p.id || acaoId?.startsWith(`${p.id}:`);
             const initialLinkExpired =
@@ -668,8 +867,8 @@ function TabelaFaturas({
                 <p className="mt-1 text-xs text-neutral-500 truncate">{formatEndereco(imovel)}</p>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <span className="text-xs text-neutral-600">
-                    {p.numero_parcela ? `Parcela ${p.numero_parcela}/${p.installment_total}` : "—"} ·{" "}
-                    {new Date(p.vencimento).toLocaleDateString("pt-BR")}
+                    {p.numero_parcela ? `Parcela ${p.numero_parcela}/${p.installment_total}` : "—"}{" "}
+                    · {new Date(p.vencimento).toLocaleDateString("pt-BR")}
                   </span>
                 </div>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -677,13 +876,34 @@ function TabelaFaturas({
                   <StatusFat status={p.status} />
                 </div>
                 <div className="mt-3 space-y-1 border-t border-neutral-100 pt-3 text-xs text-neutral-600">
-                  <p><strong>Meio:</strong> {metodoLabel(billing.method)}</p>
-                  <p><strong>Imobiliária:</strong> {p.agency_name || policy?.imobiliaria?.nome || "Não vinculada"}</p>
-                  <p><strong>Apólice:</strong> {policy?.numero || "Aguardando emissão"}</p>
-                  <p><strong>ID Asaas:</strong> {billing.providerId || "Aguardando materialização"}</p>
-                  {billing.subscriptionStatus && <p><strong>Assinatura:</strong> {statusPagamentoLabel(billing.subscriptionStatus)}</p>}
-                  {p.asaas_subscription?.checkout_status && <p><strong>Cadastro recorrente:</strong> {statusPagamentoLabel(p.asaas_subscription.checkout_status)}</p>}
-                  <p><strong>Confirmado em:</strong> {formatDataHora(billing.confirmedAt)}</p>
+                  <p>
+                    <strong>Meio:</strong> {metodoLabel(billing.method)}
+                  </p>
+                  <p>
+                    <strong>Imobiliária:</strong>{" "}
+                    {p.agency_name || policy?.imobiliaria?.nome || "Não vinculada"}
+                  </p>
+                  <p>
+                    <strong>Apólice:</strong> {policy?.numero || "Aguardando emissão"}
+                  </p>
+                  <p>
+                    <strong>ID Asaas:</strong> {billing.providerId || "Aguardando materialização"}
+                  </p>
+                  {billing.subscriptionStatus && (
+                    <p>
+                      <strong>Assinatura:</strong>{" "}
+                      {statusPagamentoLabel(billing.subscriptionStatus)}
+                    </p>
+                  )}
+                  {p.asaas_subscription?.checkout_status && (
+                    <p>
+                      <strong>Cadastro recorrente:</strong>{" "}
+                      {statusPagamentoLabel(p.asaas_subscription.checkout_status)}
+                    </p>
+                  )}
+                  <p>
+                    <strong>Confirmado em:</strong> {formatDataHora(billing.confirmedAt)}
+                  </p>
                   <p>
                     <strong>Histórico:</strong> {billing.notificationCount} notificação(ões)
                     {billing.latestNotification
@@ -694,40 +914,105 @@ function TabelaFaturas({
                 <div className="mt-3 flex flex-wrap items-center gap-1 border-t border-neutral-100 pt-3">
                   {!managedIndividual && billing.link && (
                     <a href={billing.link} target="_blank" rel="noreferrer">
-                      <Button size="sm" variant="ghost" title="Abrir cobrança"><ExternalLink size={14} /></Button>
+                      <Button size="sm" variant="ghost" title="Abrir cobrança">
+                        <ExternalLink size={14} />
+                      </Button>
                     </a>
                   )}
                   {!managedIndividual && billing.copyValue && (
-                    <Button size="sm" variant="ghost" onClick={() => onCopiar(billing.copyValue)} title="Copiar código"><Copy size={14} /></Button>
-                  )}
-                  {canManageBilling && !isConsolidatedItem &&
-                    (p.asaas_payment?.asaas_payment_id || p.asaas_subscription?.id) && (
                     <Button
                       size="sm"
-                      variant="outline"
-                      disabled={atualizandoId === p.id}
-                      onClick={() => onAtualizar(p)}
-                      title="Atualizar status"
+                      variant="ghost"
+                      onClick={() => onCopiar(billing.copyValue)}
+                      title="Copiar código"
                     >
-                      <RefreshCw size={14} className={atualizandoId === p.id ? "animate-spin" : ""} />
+                      <Copy size={14} />
                     </Button>
                   )}
+                  {canManageBilling &&
+                    !isConsolidatedItem &&
+                    (p.asaas_payment?.asaas_payment_id || p.asaas_subscription?.id) && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={atualizandoId === p.id}
+                        onClick={() => onAtualizar(p)}
+                        title="Atualizar status"
+                      >
+                        <RefreshCw
+                          size={14}
+                          className={atualizandoId === p.id ? "animate-spin" : ""}
+                        />
+                      </Button>
+                    )}
                   {canManageBilling && !isConsolidatedItem && (
                     <>
-                      {!initialLinkExpired && !recurringLinkExpired && <Button size="sm" variant="outline" disabled={busy} onClick={() => onAcao(p, "resend_email")} title="Reenviar por e-mail"><Mail size={14} /></Button>}
-                      {!initialLinkExpired && !recurringLinkExpired && <Button size="sm" variant="outline" disabled={busy} onClick={() => onAcao(p, "resend_whatsapp")} title="Reenviar por WhatsApp"><MessageCircle size={14} /></Button>}
+                      {!initialLinkExpired && !recurringLinkExpired && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={busy}
+                          onClick={() => onAcao(p, "resend_email")}
+                          title="Reenviar por e-mail"
+                        >
+                          <Mail size={14} />
+                        </Button>
+                      )}
+                      {!initialLinkExpired && !recurringLinkExpired && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={busy}
+                          onClick={() => onAcao(p, "resend_whatsapp")}
+                          title="Reenviar por WhatsApp"
+                        >
+                          <MessageCircle size={14} />
+                        </Button>
+                      )}
                       {initialLinkExpired && (
-                        <Button size="sm" variant="outline" disabled={busy} onClick={() => onAcao(p, "reissue_initial")} title="Gerar novo link inicial"><RotateCcw size={14} /></Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={busy}
+                          onClick={() => onAcao(p, "reissue_initial")}
+                          title="Gerar novo link inicial"
+                        >
+                          <RotateCcw size={14} />
+                        </Button>
                       )}
                       {recurringLinkExpired && (
-                        <Button size="sm" variant="outline" disabled={busy} onClick={() => onAcao(p, "reissue_checkout")} title="Gerar novo link de cadastro"><RotateCcw size={14} /></Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={busy}
+                          onClick={() => onAcao(p, "reissue_checkout")}
+                          title="Gerar novo link de cadastro"
+                        >
+                          <RotateCcw size={14} />
+                        </Button>
                       )}
                       {billing.method === "credit_card" &&
                         p.asaas_subscription?.status !== "cancelled" && (
-                          <Button size="sm" variant="outline" disabled={busy} onClick={() => onAcao(p, "cancel")} title="Cancelar recorrência"><XCircle size={14} /></Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={busy}
+                            onClick={() => onAcao(p, "cancel")}
+                            title="Cancelar recorrência"
+                          >
+                            <XCircle size={14} />
+                          </Button>
                         )}
                       {billing.method !== "credit_card" && isReissuablePaymentStatus(p.status) && (
-                        <Button size="sm" variant="outline" disabled={busy} onClick={() => onAcao(p, "reissue")} title="Gerar segunda via"><RotateCcw size={14} /></Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={busy}
+                          onClick={() => onAcao(p, "reissue")}
+                          title="Gerar segunda via"
+                        >
+                          <RotateCcw size={14} />
+                        </Button>
                       )}
                     </>
                   )}
@@ -740,120 +1025,217 @@ function TabelaFaturas({
 
       {/* Tablet/desktop (md:+): tabela completa. */}
       <div className="hidden md:block overflow-x-auto">
-      <Table>
-        <TableHeader className="bg-neutral-50">
-          <TableRow>
-            <TableHead className="px-6">Inquilino</TableHead>
-            <TableHead>Imóvel</TableHead>
-            <TableHead>Parcela</TableHead>
-            <TableHead>Valor</TableHead>
-            <TableHead>Vencimento</TableHead>
-            <TableHead>Responsável pelo pagamento</TableHead>
-            <TableHead>Cobrança</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead className="pr-6 text-right">Ações</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {loading ? (
-            <TableRow><TableCell colSpan={9} className="text-center py-16 text-neutral-400">Carregando...</TableCell></TableRow>
-          ) : !parcelas.length ? (
-            <TableRow><TableCell colSpan={9} className="text-center py-16 text-neutral-500">Nenhuma parcela no período.</TableCell></TableRow>
-          ) : parcelas.map(p => {
-            const resp = p.payment_responsible;
-            const respLabel = resp === "agency" ? "Imobiliária" : resp === "tenant" ? "Inquilino" : "—";
-            const respCls = resp === "agency"
-              ? "bg-blue-50 text-blue-700 border-blue-200"
-              : resp === "tenant"
-                ? "bg-purple-50 text-purple-700 border-purple-200"
-                : "bg-neutral-50 text-neutral-500 border-neutral-200";
-            const imovel = p.consulta?.imovel;
-            const billing = dadosCobranca(p);
-            const policy = apoliceDaFatura(p);
-            const isBatch = String(p.id).startsWith("batch:");
-            const isConsolidatedItem =
-              isBatch || p.payment_responsible === "agency" || p.status === "awaiting_consolidation";
-            const managedIndividual = !isBatch && isConsolidatedItem;
-            const busy = atualizandoId === p.id || acaoId?.startsWith(`${p.id}:`);
-            const initialLinkExpired =
-              billing.method === "credit_card" &&
-              ["cancelled", "expired"].includes(p.asaas_subscription?.initial_checkout_status);
-            const recurringLinkExpired =
-              billing.method === "credit_card" &&
-              ["cancelled", "expired"].includes(p.asaas_subscription?.checkout_status);
-            return (
-            <TableRow key={p.id}>
-              <TableCell className="px-6">
-                <p className="font-semibold">{p.consulta?.tenant_name ?? "—"}</p>
-                <p className="text-xs text-neutral-500">{p.consulta?.tenant_document ?? ""}</p>
-              </TableCell>
-              <TableCell className="text-xs">{formatEndereco(imovel)}</TableCell>
-              <TableCell>{p.numero_parcela ? `${p.numero_parcela}/${p.installment_total}` : "—"}</TableCell>
-              <TableCell className="font-semibold">{brl(p.valor)}</TableCell>
-              <TableCell className="text-xs">{new Date(p.vencimento).toLocaleDateString("pt-BR")}</TableCell>
-              <TableCell><Badge className={respCls}>{respLabel}</Badge></TableCell>
-              <TableCell className="min-w-[210px] text-xs">
-                <p className="font-semibold">{metodoLabel(billing.method)}</p>
-                <p>Imobiliária: {p.agency_name || policy?.imobiliaria?.nome || "não vinculada"}</p>
-                <p>Apólice: {policy?.numero || "aguardando"}</p>
-                <p>ID Asaas: {billing.providerId || "aguardando"}</p>
-                {billing.subscriptionStatus && <p>Assinatura: {statusPagamentoLabel(billing.subscriptionStatus)}</p>}
-                {p.asaas_subscription?.checkout_status && <p>Cadastro recorrente: {statusPagamentoLabel(p.asaas_subscription.checkout_status)}</p>}
-                <p>Confirmação: {formatDataHora(billing.confirmedAt)}</p>
-                <p>
-                  Notificações: {billing.notificationCount}
-                  {billing.latestNotification
-                    ? ` · ${billing.latestNotification.channel || "tentativa"}/${billing.latestNotification.status || "registrada"}`
-                    : ""}
-                </p>
-              </TableCell>
-              <TableCell><StatusFat status={p.status} /></TableCell>
-              <TableCell className="pr-6 text-right space-x-1 whitespace-nowrap">
-                {!managedIndividual && billing.link && (
-                  <a href={billing.link} target="_blank" rel="noreferrer">
-                    <Button size="sm" variant="ghost" title="Abrir cobrança"><ExternalLink size={14} /></Button>
-                  </a>
-                )}
-                {!managedIndividual && billing.copyValue && (
-                  <Button size="sm" variant="ghost" onClick={() => onCopiar(billing.copyValue)} title="Copiar código"><Copy size={14} /></Button>
-                )}
-                {canManageBilling && !isConsolidatedItem &&
-                  (p.asaas_payment?.asaas_payment_id || p.asaas_subscription?.id) && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={atualizandoId === p.id}
-                    onClick={() => onAtualizar(p)}
-                    title="Atualizar status"
-                  >
-                    <RefreshCw size={14} className={atualizandoId === p.id ? "animate-spin" : ""} />
-                  </Button>
-                )}
-                {canManageBilling && !isConsolidatedItem && (
-                  <>
-                    {!initialLinkExpired && !recurringLinkExpired && <Button size="sm" variant="outline" disabled={busy} onClick={() => onAcao(p, "resend_email")} title="Reenviar por e-mail"><Mail size={14} /></Button>}
-                    {!initialLinkExpired && !recurringLinkExpired && <Button size="sm" variant="outline" disabled={busy} onClick={() => onAcao(p, "resend_whatsapp")} title="Reenviar por WhatsApp"><MessageCircle size={14} /></Button>}
-                    {initialLinkExpired && (
-                      <Button size="sm" variant="outline" disabled={busy} onClick={() => onAcao(p, "reissue_initial")} title="Gerar novo link inicial"><RotateCcw size={14} /></Button>
-                    )}
-                    {recurringLinkExpired && (
-                      <Button size="sm" variant="outline" disabled={busy} onClick={() => onAcao(p, "reissue_checkout")} title="Gerar novo link de cadastro"><RotateCcw size={14} /></Button>
-                    )}
-                    {billing.method === "credit_card" &&
-                      p.asaas_subscription?.status !== "cancelled" && (
-                        <Button size="sm" variant="outline" disabled={busy} onClick={() => onAcao(p, "cancel")} title="Cancelar recorrência"><XCircle size={14} /></Button>
-                      )}
-                    {billing.method !== "credit_card" && isReissuablePaymentStatus(p.status) && (
-                      <Button size="sm" variant="outline" disabled={busy} onClick={() => onAcao(p, "reissue")} title="Gerar segunda via"><RotateCcw size={14} /></Button>
-                    )}
-                  </>
-                )}
-              </TableCell>
+        <Table>
+          <TableHeader className="bg-neutral-50">
+            <TableRow>
+              <TableHead className="px-6">Inquilino</TableHead>
+              <TableHead>Imóvel</TableHead>
+              <TableHead>Parcela</TableHead>
+              <TableHead>Valor</TableHead>
+              <TableHead>Vencimento</TableHead>
+              <TableHead>Responsável pelo pagamento</TableHead>
+              <TableHead>Cobrança</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="pr-6 text-right">Ações</TableHead>
             </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              <TableRow>
+                <TableCell colSpan={9} className="text-center py-16 text-neutral-400">
+                  Carregando...
+                </TableCell>
+              </TableRow>
+            ) : !parcelas.length ? (
+              <TableRow>
+                <TableCell colSpan={9} className="text-center py-16 text-neutral-500">
+                  Nenhuma parcela no período.
+                </TableCell>
+              </TableRow>
+            ) : (
+              parcelas.map((p) => {
+                const resp = p.payment_responsible;
+                const respLabel =
+                  resp === "agency" ? "Imobiliária" : resp === "tenant" ? "Inquilino" : "—";
+                const respCls =
+                  resp === "agency"
+                    ? "bg-blue-50 text-blue-700 border-blue-200"
+                    : resp === "tenant"
+                      ? "bg-purple-50 text-purple-700 border-purple-200"
+                      : "bg-neutral-50 text-neutral-500 border-neutral-200";
+                const imovel = p.consulta?.imovel;
+                const billing = dadosCobranca(p);
+                const policy = apoliceDaFatura(p);
+                const isBatch = String(p.id).startsWith("batch:");
+                const isConsolidatedItem =
+                  isBatch || p.status === "awaiting_consolidation" || !!p.consolidated_item_id;
+                const managedIndividual = !isBatch && isConsolidatedItem;
+                const busy = atualizandoId === p.id || acaoId?.startsWith(`${p.id}:`);
+                const initialLinkExpired =
+                  billing.method === "credit_card" &&
+                  ["cancelled", "expired"].includes(p.asaas_subscription?.initial_checkout_status);
+                const recurringLinkExpired =
+                  billing.method === "credit_card" &&
+                  ["cancelled", "expired"].includes(p.asaas_subscription?.checkout_status);
+                return (
+                  <TableRow key={p.id}>
+                    <TableCell className="px-6">
+                      <p className="font-semibold">{p.consulta?.tenant_name ?? "—"}</p>
+                      <p className="text-xs text-neutral-500">
+                        {p.consulta?.tenant_document ?? ""}
+                      </p>
+                    </TableCell>
+                    <TableCell className="text-xs">{formatEndereco(imovel)}</TableCell>
+                    <TableCell>
+                      {p.numero_parcela ? `${p.numero_parcela}/${p.installment_total}` : "—"}
+                    </TableCell>
+                    <TableCell className="font-semibold">{brl(p.valor)}</TableCell>
+                    <TableCell className="text-xs">
+                      {new Date(p.vencimento).toLocaleDateString("pt-BR")}
+                    </TableCell>
+                    <TableCell>
+                      <Badge className={respCls}>{respLabel}</Badge>
+                    </TableCell>
+                    <TableCell className="min-w-[210px] text-xs">
+                      <p className="font-semibold">{metodoLabel(billing.method)}</p>
+                      <p>
+                        Imobiliária: {p.agency_name || policy?.imobiliaria?.nome || "não vinculada"}
+                      </p>
+                      <p>Apólice: {policy?.numero || "aguardando"}</p>
+                      <p>ID Asaas: {billing.providerId || "aguardando"}</p>
+                      {billing.subscriptionStatus && (
+                        <p>Assinatura: {statusPagamentoLabel(billing.subscriptionStatus)}</p>
+                      )}
+                      {p.asaas_subscription?.checkout_status && (
+                        <p>
+                          Cadastro recorrente:{" "}
+                          {statusPagamentoLabel(p.asaas_subscription.checkout_status)}
+                        </p>
+                      )}
+                      <p>Confirmação: {formatDataHora(billing.confirmedAt)}</p>
+                      <p>
+                        Notificações: {billing.notificationCount}
+                        {billing.latestNotification
+                          ? ` · ${billing.latestNotification.channel || "tentativa"}/${billing.latestNotification.status || "registrada"}`
+                          : ""}
+                      </p>
+                    </TableCell>
+                    <TableCell>
+                      <StatusFat status={p.status} />
+                    </TableCell>
+                    <TableCell className="pr-6 text-right space-x-1 whitespace-nowrap">
+                      {!managedIndividual && billing.link && (
+                        <a href={billing.link} target="_blank" rel="noreferrer">
+                          <Button size="sm" variant="ghost" title="Abrir cobrança">
+                            <ExternalLink size={14} />
+                          </Button>
+                        </a>
+                      )}
+                      {!managedIndividual && billing.copyValue && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => onCopiar(billing.copyValue)}
+                          title="Copiar código"
+                        >
+                          <Copy size={14} />
+                        </Button>
+                      )}
+                      {canManageBilling &&
+                        !isConsolidatedItem &&
+                        (p.asaas_payment?.asaas_payment_id || p.asaas_subscription?.id) && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={atualizandoId === p.id}
+                            onClick={() => onAtualizar(p)}
+                            title="Atualizar status"
+                          >
+                            <RefreshCw
+                              size={14}
+                              className={atualizandoId === p.id ? "animate-spin" : ""}
+                            />
+                          </Button>
+                        )}
+                      {canManageBilling && !isConsolidatedItem && (
+                        <>
+                          {!initialLinkExpired && !recurringLinkExpired && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={busy}
+                              onClick={() => onAcao(p, "resend_email")}
+                              title="Reenviar por e-mail"
+                            >
+                              <Mail size={14} />
+                            </Button>
+                          )}
+                          {!initialLinkExpired && !recurringLinkExpired && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={busy}
+                              onClick={() => onAcao(p, "resend_whatsapp")}
+                              title="Reenviar por WhatsApp"
+                            >
+                              <MessageCircle size={14} />
+                            </Button>
+                          )}
+                          {initialLinkExpired && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={busy}
+                              onClick={() => onAcao(p, "reissue_initial")}
+                              title="Gerar novo link inicial"
+                            >
+                              <RotateCcw size={14} />
+                            </Button>
+                          )}
+                          {recurringLinkExpired && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={busy}
+                              onClick={() => onAcao(p, "reissue_checkout")}
+                              title="Gerar novo link de cadastro"
+                            >
+                              <RotateCcw size={14} />
+                            </Button>
+                          )}
+                          {billing.method === "credit_card" &&
+                            p.asaas_subscription?.status !== "cancelled" && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={busy}
+                                onClick={() => onAcao(p, "cancel")}
+                                title="Cancelar recorrência"
+                              >
+                                <XCircle size={14} />
+                              </Button>
+                            )}
+                          {billing.method !== "credit_card" &&
+                            isReissuablePaymentStatus(p.status) && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={busy}
+                                onClick={() => onAcao(p, "reissue")}
+                                title="Gerar segunda via"
+                              >
+                                <RotateCcw size={14} />
+                              </Button>
+                            )}
+                        </>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            )}
+          </TableBody>
+        </Table>
       </div>
     </div>
   );
@@ -870,5 +1252,11 @@ const STATUS_CLASS: Record<string, string> = {
 };
 
 function StatusFat({ status }: { status: string }) {
-  return <Badge className={`${STATUS_CLASS[status] || "bg-amber-100 text-amber-700 border-amber-200"} border`}>{statusPagamentoLabel(status)}</Badge>;
+  return (
+    <Badge
+      className={`${STATUS_CLASS[status] || "bg-amber-100 text-amber-700 border-amber-200"} border`}
+    >
+      {statusPagamentoLabel(status)}
+    </Badge>
+  );
 }

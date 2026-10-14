@@ -12,6 +12,7 @@ import {
   mapAsaasStatus,
   paymentErrorStatus,
   requireUser,
+  resolvePaymentRecipient,
   resolvePaymentRecipientFromContract,
   sanitizeAsaasResponse,
   supabaseAdmin,
@@ -42,6 +43,7 @@ import {
   reducePaymentStatus,
   reduceSubscriptionStatus,
   recurringSetupAllowsContractActivation,
+  resolveCheckoutPaymentResponsible,
   shouldDispatchContractAfterPayment,
   subscriptionStatusFromEvent,
 } from "../_shared/billing-state.ts";
@@ -376,18 +378,13 @@ serve(async (req) => {
     if (!consulta) return jsonResponse(req, { ok: false, error: "Proposta nao encontrada." }, 404);
     await assertCanManageConsultationBilling(supabase, user.id, consulta);
     if (action !== "cancel") await assertContractAcceptsBilling(supabase, consulta);
-    const recipient = await resolvePaymentRecipientFromContract(supabase, consulta);
-    if (recipient.paymentResponsible !== "tenant") {
-      return jsonResponse(
-        req,
-        {
-          ok: false,
-          error:
-            "Cartao recorrente requer o inquilino como responsavel financeiro. Para imobiliaria, use a cobranca consolidada.",
-        },
-        409,
-      );
-    }
+    const selectedPayer = resolvePaymentRecipient(consulta).paymentResponsible;
+    const effectivePayer = resolveCheckoutPaymentResponsible({
+      selectedPayer,
+      paymentMethod: "credit_card",
+      cardMode: mode,
+    });
+    const recipient = await resolvePaymentRecipientFromContract(supabase, consulta, effectivePayer);
 
     let existing = await loadSubscription(supabase, proposalId);
     if (existing && (existing.mode !== mode || existing.fire_insurance_payment_mode !== fireMode)) {

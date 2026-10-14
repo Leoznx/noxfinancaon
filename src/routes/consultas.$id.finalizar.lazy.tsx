@@ -985,19 +985,11 @@ function ResumoPropostaLoft(p: any) {
   );
   const valorCobradoAgora = toMoney(mensalidadeFinal + pagamentoInicial);
   const pagamentoSelecionado = PAGAMENTOS.find((item) => item.id === pagamento);
-  const faturamentoConsolidado = isAgencyBilling(consulta);
-  const checkoutActions = faturamentoConsolidado
-    ? { canPayNow: false, canPayLater: false }
-    : checkoutActionsForMethod(pagamento);
-  const pagamentoOpcoes = (faturamentoConsolidado ? ["boleto"] : ["boleto", "pix", "credit_card"])
+  const pagamentoViaImobiliaria = isAgencyBilling(consulta);
+  const checkoutActions = checkoutActionsForMethod(pagamento);
+  const pagamentoOpcoes = ["boleto", "pix", "credit_card"]
     .map((id) => PAGAMENTOS.find((item) => item.id === id))
     .filter(Boolean) as typeof PAGAMENTOS;
-  useEffect(() => {
-    if (faturamentoConsolidado && pagamento !== "boleto") {
-      setPagamento("boleto");
-      setCardSetupMode(null);
-    }
-  }, [faturamentoConsolidado, pagamento, setPagamento]);
   const irParaPagamento = () => {
     setPagamentoAberto(true);
     window.setTimeout(
@@ -1051,17 +1043,15 @@ function ResumoPropostaLoft(p: any) {
     else if (pagamentoAsaasResultado) setModalAsaasAberto(true);
   };
 
-  // Quando o responsavel pelo pagamento e o inquilino e a forma e boleto, a
-  // contratacao gera todas as mensalidades do periodo de uma vez (asaas-create-installment-
-  // plan) em vez de uma cobranca unica - nenhuma outra combinacao muda.
-  const ehParceladoInquilino = !faturamentoConsolidado && pagamento === "boleto";
+  // O boleto gera todas as mensalidades do periodo para o pagador selecionado.
+  const ehParceladoBoleto = pagamento === "boleto";
   const cronogramaPreview = useMemo(() => {
-    if (!ehParceladoInquilino) return [];
+    if (!ehParceladoBoleto) return [];
     return generateInstallmentSchedulePreview({
       firstDueDate: addBusinessDaysPreview(3),
       count: contractPeriodMonths,
     });
-  }, [contractPeriodMonths, ehParceladoInquilino]);
+  }, [contractPeriodMonths, ehParceladoBoleto]);
 
   useEffect(() => {
     writeCheckoutPreferences(id, {
@@ -1195,25 +1185,27 @@ function ResumoPropostaLoft(p: any) {
 
   function normalizarCartao() {
     const { email, telefone, documento } = dadosDoInquilino();
+    const usarDadosInquilino = !pagamentoViaImobiliaria;
     return {
       holderName: cartao.holderName.trim(),
       number: cartao.number.replace(/\D/g, ""),
       expiryMonth: cartao.expiryMonth.replace(/\D/g, ""),
       expiryYear: cartao.expiryYear.replace(/\D/g, ""),
       ccv: cartao.ccv.replace(/\D/g, ""),
-      holderDocument: (cartao.holderDocument || documento).replace(/\D/g, ""),
-      holderPhone: (cartao.holderPhone || telefone).replace(/\D/g, ""),
-      holderEmail: (cartao.holderEmail || email).trim().toLowerCase(),
+      holderDocument: (cartao.holderDocument || (usarDadosInquilino ? documento : "")).replace(
+        /\D/g,
+        "",
+      ),
+      holderPhone: (cartao.holderPhone || (usarDadosInquilino ? telefone : "")).replace(/\D/g, ""),
+      holderEmail: (cartao.holderEmail || (usarDadosInquilino ? email : "")).trim().toLowerCase(),
       holderPostalCode: (
         cartao.holderPostalCode ||
-        consulta?.imovel_cep ||
-        imovel?.cep ||
+        (usarDadosInquilino ? consulta?.imovel_cep || imovel?.cep : "") ||
         ""
       ).replace(/\D/g, ""),
       holderAddressNumber: (
         cartao.holderAddressNumber ||
-        consulta?.imovel_numero ||
-        imovel?.numero ||
+        (usarDadosInquilino ? consulta?.imovel_numero || imovel?.numero : "") ||
         ""
       ).trim(),
     };
@@ -1306,21 +1298,19 @@ function ResumoPropostaLoft(p: any) {
       await registrarPropostaEnviada();
       setCheckoutIntent(intent);
       setPagamentoAsaasResultado(data);
-      setModalAsaasAberto(intent === "pay_now" || faturamentoConsolidado);
+      setModalAsaasAberto(intent === "pay_now");
       try {
         await criarParcelasFuturas(pagamento as "pix" | "boleto");
       } catch {
         // A cobrança inicial continua válida e o modal oferece retry somente do cronograma.
       }
-      if (intent === "pay_later" && !faturamentoConsolidado) {
+      if (intent === "pay_later") {
         setModalEnvioSucesso("pay_later");
       }
       toast.success(
-        faturamentoConsolidado
-          ? "Proposta enviada ao faturamento consolidado da imobiliária. A cobrança individual não será duplicada."
-          : intent === "pay_later"
-            ? "Cobrança gerada com sucesso. O processo de contratação continuará normalmente. O pagamento está pendente."
-            : "Cobrança criada. Use os dados exibidos para pagar agora.",
+        intent === "pay_later"
+          ? "Cobrança gerada e enviada ao responsável pelo pagamento."
+          : "Cobrança criada. Use os dados exibidos para pagar agora.",
       );
     } catch (e: any) {
       console.error("Erro ao criar pagamento Asaas:", e);
@@ -1524,7 +1514,7 @@ function ResumoPropostaLoft(p: any) {
         <ResumoBox title="Dados do inquilino" onEdit={onEditarDados}>
           <div className="rounded-sm border border-slate-300">
             <span className="inline-flex bg-sky-700 px-2 py-1 text-xs font-bold text-white">
-              Pagador
+              {pagamentoViaImobiliaria ? "Inquilino" : "Pagador"}
             </span>
             <div className="grid gap-4 p-5 text-sm sm:grid-cols-[1.5fr_0.8fr_0.8fr_0.8fr]">
               <div>
@@ -1691,9 +1681,9 @@ function ResumoPropostaLoft(p: any) {
                 <div>
                   <h3 className="text-lg font-bold text-neutral-950">Pagamento</h3>
                   <p className="mt-1 text-sm text-slate-600">
-                    {faturamentoConsolidado
-                      ? "Esta proposta seguirá para o faturamento consolidado da imobiliária, sem cobrança individual duplicada."
-                      : "Escolha a forma de pagamento e como cobrar o seguro incêndio."}
+                    Escolha a forma de pagamento e como cobrar o seguro incêndio. Boleto, Pix e
+                    cartão preenchido agora serão cobrados da{" "}
+                    {pagamentoViaImobiliaria ? "imobiliária" : "pessoa inquilina"}.
                   </p>
                 </div>
 
@@ -1720,9 +1710,7 @@ function ResumoPropostaLoft(p: any) {
                   </div>
                 )}
 
-                <div
-                  className={`grid grid-cols-1 gap-3 ${faturamentoConsolidado ? "" : "sm:grid-cols-3"}`}
-                >
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   {pagamentoOpcoes.map((opcao) => {
                     const Icon = opcao.icon;
                     const selected = pagamento === opcao.id;
@@ -1763,12 +1751,12 @@ function ResumoPropostaLoft(p: any) {
                   })}
                 </div>
 
-                {ehParceladoInquilino && (
+                {ehParceladoBoleto && (
                   <div className="rounded-md border border-slate-300 bg-slate-50 p-4">
                     <p className="text-sm font-bold text-neutral-950">
                       {contractPeriodMonths === 1
-                        ? "O inquilino paga por boleto: 1 boleto mensal será gerado agora"
-                        : `O inquilino paga por boleto: ${contractPeriodMonths} boletos mensais serão gerados agora`}
+                        ? `${pagamentoViaImobiliaria ? "A imobiliária" : "O inquilino"} paga por boleto: 1 boleto mensal será gerado agora`
+                        : `${pagamentoViaImobiliaria ? "A imobiliária" : "O inquilino"} paga por boleto: ${contractPeriodMonths} boletos mensais serão gerados agora`}
                     </p>
                     <p className="mt-1 text-xs text-slate-600">
                       Cada mensalidade vira uma cobrança independente, visível em "Minhas Faturas".
@@ -2043,17 +2031,6 @@ function ResumoPropostaLoft(p: any) {
               </Button>
             ) : (
               <div className="ml-auto flex flex-1 flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                {faturamentoConsolidado && (
-                  <Button
-                    type="button"
-                    onClick={() => void executarPagamento("pay_later")}
-                    disabled={pagando || enviando || !seguroConcluido || !pagamento}
-                    className="h-11 rounded-md bg-yellow-400 px-6 font-bold text-neutral-900 hover:bg-yellow-300 disabled:opacity-50"
-                  >
-                    {pagando ? "Processando..." : "Continuar para faturamento consolidado"}
-                    <ArrowRight size={16} className="ml-2" />
-                  </Button>
-                )}
                 {checkoutActions.canPayLater && (
                   <Button
                     type="button"
@@ -2108,7 +2085,7 @@ function ResumoPropostaLoft(p: any) {
           if (cronogramaResultado) setModalCronogramaAberto(true);
         }}
         onAtualizarStatus={() => atualizarPagamento("refresh")}
-        onReemitir={faturamentoConsolidado ? undefined : reemitirPagamento}
+        onReemitir={reemitirPagamento}
         onReenviar={(channel) =>
           atualizarPagamento(channel === "email" ? "resend_email" : "resend_whatsapp").then(
             () => undefined,
@@ -2503,7 +2480,8 @@ function EtapaResumo(p: any) {
               <Building2 size={14} /> Via imobiliária
             </p>
             <p className="text-[11px] text-neutral-600">
-              Imobiliária recebe boleto único mensal com todos os contratos.
+              Boleto, Pix e cartão preenchido agora ficam para a imobiliária; o link de cartão pode
+              ser enviado ao inquilino.
             </p>
           </div>
           <div

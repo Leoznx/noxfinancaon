@@ -275,34 +275,10 @@ serve(async (req) => {
     const byKey = new Map((existingRows || []).map((row: any) => [row.billing_key, row]));
     byKey.set(initialKey, initialInvoice);
 
-    let customerId: string | null = null;
-    if (recipient.paymentResponsible === "tenant") {
-      customerId = await ensureAsaasCustomer(supabase, consulta, recipient);
-    }
+    const customerId = await ensureAsaasCustomer(supabase, consulta, recipient);
 
     for (const item of schedule.slice(1)) {
       if (byKey.has(item.billingKey)) continue;
-      const status =
-        recipient.paymentResponsible === "agency" ? "awaiting_consolidation" : "pending";
-      if (recipient.paymentResponsible === "agency") {
-        const invoice = await materializeInvoice(supabase, {
-          consultation: consulta,
-          recipient,
-          billingKey: item.billingKey,
-          installmentNumber: item.installmentNumber,
-          installmentTotal,
-          dueDate: item.dueDate,
-          value: monthlyValue,
-          status,
-          chargeKind: "monthly",
-          paymentMethod,
-          components: { fireMode, monthlyAmount: monthlyValue, contractMonths: installmentTotal },
-          referenceMonth: item.referenceMonth,
-        });
-        byKey.set(item.billingKey, invoice);
-        continue;
-      }
-
       const { operation, claimed } = await claimBillingOperation(supabase, {
         consultationId: proposalId,
         operationType: "installment",
