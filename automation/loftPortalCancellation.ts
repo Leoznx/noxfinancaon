@@ -199,88 +199,97 @@ async function proposalRows(page: Page): Promise<Locator> {
 }
 
 async function readRowSnapshot(row: Locator): Promise<ProposalRowSnapshot> {
-  return row.evaluate((element) => {
-    // Keep this browser callback free of named local helpers. Transpilers such as
-    // esbuild/tsx can otherwise inject Node-only `__name` references into it.
-    const text = String(element.textContent ?? "")
-      .replace(/\s+/g, " ")
-      .trim();
-    const table = element.closest("table");
-    const headers = table
-      ? Array.from(table.querySelectorAll("thead th, thead [role='columnheader']")).map((header) =>
-          String(header.textContent ?? "")
-            .replace(/\s+/g, " ")
-            .trim(),
-        )
-      : [];
-    const cells = Array.from(element.querySelectorAll(":scope > td, :scope > [role='cell']"));
-    const proposalColumn = headers.findIndex((header) => /^proposta$/i.test(header));
-    const createdColumn = headers.findIndex((header) =>
-      /cria(?:ç|c)[aã]o|criado\s+em/i.test(header),
-    );
-    const statusColumn = headers.findIndex((header) =>
-      /^(?:status|situa(?:ç|c)[aã]o|resultado)$/i.test(header),
-    );
-
-    let proposalId: string | null = null;
-    for (const anchor of Array.from(element.querySelectorAll("a[href]"))) {
-      const href = anchor.getAttribute("href") ?? "";
-      const hrefMatch =
-        href.match(/\/(?:proposta|proposal)(?:\/[^/?#]+)*\/(\d{4,12})(?:\/|$|[?#])/i) ??
-        href.match(/[?&](?:proposalId|proposal_id|proposta|id_proposta)=(\d{4,12})(?:&|$)/i);
-      const anchorDigits = String(anchor.textContent ?? "").replace(/\D/g, "");
-      if (hrefMatch) {
-        proposalId = hrefMatch[1];
-        break;
-      }
-      if (/^\d{4,12}$/.test(anchorDigits)) {
-        proposalId = anchorDigits;
-        break;
-      }
-    }
-    if (!proposalId && proposalColumn >= 0 && cells[proposalColumn]) {
-      const proposalDigits = String(cells[proposalColumn].textContent ?? "").replace(/\D/g, "");
-      if (/^\d{4,12}$/.test(proposalDigits)) proposalId = proposalDigits;
-    }
-    if (!proposalId) {
-      proposalId = text.match(/\bproposta\s*(?:n[º°o.]*)?\s*[:#-]?\s*(\d{4,12})\b/i)?.[1] ?? null;
-    }
-
-    const documents = new Set<string>();
-    for (const match of text.matchAll(/(?:CPF|CNPJ)\s*:?\s*([0-9.\-/]{11,20})/gi)) {
-      const document = String(match[1] ?? "").replace(/\D/g, "");
-      if (document.length === 11 || document.length === 14) documents.add(document);
-    }
-    for (const match of text.matchAll(
-      /\b(\d{3}\.\d{3}\.\d{3}-\d{2}|\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})\b/g,
-    )) {
-      documents.add(String(match[1] ?? "").replace(/\D/g, ""));
-    }
-
-    const explicitCreatedAt =
-      element.getAttribute("data-created-at") ??
-      element.querySelector("time[datetime]")?.getAttribute("datetime") ??
-      null;
-    const createdText =
-      String(explicitCreatedAt ?? "")
+  return row.evaluate(
+    (element) => {
+      // Keep this browser callback free of named local helpers. Transpilers such as
+      // esbuild/tsx can otherwise inject Node-only `__name` references into it.
+      const text = String(element.textContent ?? "")
         .replace(/\s+/g, " ")
-        .trim() ||
-      (createdColumn >= 0 && cells[createdColumn]
-        ? String(cells[createdColumn].textContent ?? "")
-            .replace(/\s+/g, " ")
-            .trim()
-        : (text.match(/\b\d{1,2}\/\d{1,2}\/\d{4}(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?\b/)?.[0] ?? "")) ||
-      null;
+        .trim();
+      const table = element.closest("table");
+      const headers = table
+        ? Array.from(table.querySelectorAll("thead th, thead [role='columnheader']")).map(
+            (header) =>
+              String(header.textContent ?? "")
+                .replace(/\s+/g, " ")
+                .trim(),
+          )
+        : [];
+      const cells = Array.from(element.querySelectorAll(":scope > td, :scope > [role='cell']"));
+      const proposalColumn = headers.findIndex((header) => /^proposta$/i.test(header));
+      const createdColumn = headers.findIndex((header) =>
+        /cria(?:ç|c)[aã]o|criado\s+em/i.test(header),
+      );
+      const statusColumn = headers.findIndex((header) =>
+        /^(?:status|situa(?:ç|c)[aã]o|resultado)$/i.test(header),
+      );
 
-    const statusText =
-      statusColumn >= 0 && cells[statusColumn]
-        ? String(cells[statusColumn].textContent ?? "")
-            .replace(/\s+/g, " ")
-            .trim() || null
-        : null;
+      let proposalId: string | null = null;
+      for (const anchor of Array.from(element.querySelectorAll("a[href]"))) {
+        const href = anchor.getAttribute("href") ?? "";
+        const hrefMatch =
+          href.match(/\/(?:proposta|proposal)(?:\/[^/?#]+)*\/(\d{4,12})(?:\/|$|[?#])/i) ??
+          href.match(/[?&](?:proposalId|proposal_id|proposta|id_proposta)=(\d{4,12})(?:&|$)/i);
+        const anchorDigits = String(anchor.textContent ?? "").replace(/\D/g, "");
+        if (hrefMatch) {
+          proposalId = hrefMatch[1];
+          break;
+        }
+        if (/^\d{4,12}$/.test(anchorDigits)) {
+          proposalId = anchorDigits;
+          break;
+        }
+      }
+      if (!proposalId && proposalColumn >= 0 && cells[proposalColumn]) {
+        const proposalDigits = String(cells[proposalColumn].textContent ?? "").replace(/\D/g, "");
+        if (/^\d{4,12}$/.test(proposalDigits)) proposalId = proposalDigits;
+      }
+      if (!proposalId) {
+        proposalId = text.match(/\bproposta\s*(?:n[º°o.]*)?\s*[:#-]?\s*(\d{4,12})\b/i)?.[1] ?? null;
+      }
 
-    return { proposalId, documents: Array.from(documents), createdText, statusText, text };
-  });
+      const documents = new Set<string>();
+      for (const match of text.matchAll(/(?:CPF|CNPJ)\s*:?\s*([0-9.\-/]{11,20})/gi)) {
+        const document = String(match[1] ?? "").replace(/\D/g, "");
+        if (document.length === 11 || document.length === 14) documents.add(document);
+      }
+      for (const match of text.matchAll(
+        /\b(\d{3}\.\d{3}\.\d{3}-\d{2}|\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})\b/g,
+      )) {
+        documents.add(String(match[1] ?? "").replace(/\D/g, ""));
+      }
+
+      const explicitCreatedAt =
+        element.getAttribute("data-created-at") ??
+        element.querySelector("time[datetime]")?.getAttribute("datetime") ??
+        null;
+      const createdText =
+        String(explicitCreatedAt ?? "")
+          .replace(/\s+/g, " ")
+          .trim() ||
+        (createdColumn >= 0 && cells[createdColumn]
+          ? String(cells[createdColumn].textContent ?? "")
+              .replace(/\s+/g, " ")
+              .trim()
+          : (text.match(/\b\d{1,2}\/\d{1,2}\/\d{4}(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?\b/)?.[0] ??
+            "")) ||
+        null;
+
+      const statusText =
+        statusColumn >= 0 && cells[statusColumn]
+          ? String(cells[statusColumn].textContent ?? "")
+              .replace(/\s+/g, " ")
+              .trim() || null
+          : null;
+
+      return { proposalId, documents: Array.from(documents), createdText, statusText, text };
+    },
+    undefined,
+    // A busca substitui as linhas da tabela de forma assíncrona. Uma linha que
+    // sumiu entre count()/isVisible() e evaluate() não pode segurar a fila pelo
+    // timeout padrão de 30s; o chamador simplesmente descarta esse snapshot.
+    { timeout: 500 },
+  );
 }
 
 function isTerminalProposal(candidate: ProposalRowSnapshot): boolean {
@@ -294,7 +303,8 @@ async function readVisibleCandidates(page: Page): Promise<ProposalCandidate[]> {
   for (let index = 0; index < count; index += 1) {
     const row = rows.nth(index);
     if (!(await row.isVisible().catch(() => false))) continue;
-    const snapshot = await readRowSnapshot(row);
+    const snapshot = await readRowSnapshot(row).catch(() => null);
+    if (!snapshot) continue;
     if (!snapshot.proposalId && snapshot.documents.length === 0) continue;
     candidates.push({ ...snapshot, row });
   }
