@@ -28,6 +28,18 @@ const LEGACY_CREDIT_SIMULATION_PATH_PATTERN =
 const SUBMIT_CREDIT_BUTTON_PATTERN =
   /(?:simular(?:\s+an[aá]lise\s+de)?\s+cr[ée]dito|(?:fazer|iniciar)\s+(?:a\s+)?an[aá]lise(?:\s+de\s+cr[ée]dito)?)/i;
 
+/**
+ * O portal renderizou o botão final, mas não concluiu a hidratação/validação
+ * interna do formulário. Como nenhum clique ocorreu, o worker pode recarregar
+ * e preencher tudo novamente sem risco de duplicar uma proposta.
+ */
+export class CreditSimulationFormNotReadyError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CreditSimulationFormNotReadyError";
+  }
+}
+
 export function isCreditSimulationUrl(value: string): boolean {
   try {
     const url = new URL(value);
@@ -531,7 +543,17 @@ export async function submitSimulation(
   page: Page,
   options: ClickButtonOptions = {},
 ): Promise<void> {
-  await clickButtonByText(page, [SUBMIT_CREDIT_BUTTON_PATTERN], options);
+  try {
+    await clickButtonByText(page, [SUBMIT_CREDIT_BUTTON_PATTERN], options);
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message.startsWith("Botão encontrado, mas permaneceu desabilitado")
+    ) {
+      throw new CreditSimulationFormNotReadyError(error.message);
+    }
+    throw error;
+  }
 }
 
 async function hasLegacyCreditSimulationForm(page: Page): Promise<boolean> {

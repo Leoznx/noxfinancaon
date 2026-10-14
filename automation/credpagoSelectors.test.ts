@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { chromium, type Browser } from "playwright";
 import {
+  CreditSimulationFormNotReadyError,
   detectAuthenticationState,
   fillCep,
   fillDocumento,
@@ -342,6 +343,17 @@ test("aguarda o botão Fazer análise ficar habilitado antes de enviar", async (
   await submitSimulation(page);
 
   assert.equal(await page.locator("body").getAttribute("data-submitted"), "true");
+  await page.close();
+});
+
+test("distingue formulário hidratado mas ainda inválido para permitir recuperação segura", async () => {
+  const url = "https://app.loft.com.br/erp/proposta/analise-de-credito";
+  const page = await pageWithHtml(
+    url,
+    `<main><button type="button" disabled>Fazer análise</button></main>`,
+  );
+
+  await assert.rejects(() => submitSimulation(page), CreditSimulationFormNotReadyError);
   await page.close();
 });
 

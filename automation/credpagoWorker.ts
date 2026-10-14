@@ -19,6 +19,7 @@ import {
   loginWithCredentials,
   detectAuthenticationState,
   isCreditSimulationUrl,
+  CreditSimulationFormNotReadyError,
 } from "./credpagoSelectors";
 import { parseResultado } from "./credpagoParser";
 import { isTransientPortalError, validateConsultaForAutomation } from "./errorPolicy";
@@ -1437,7 +1438,32 @@ async function processarConsulta(
       }
     };
 
-    let resultado = await executarTentativa(1);
+    let resultado: Awaited<ReturnType<typeof executarTentativa>>;
+    try {
+      resultado = await executarTentativa(1);
+    } catch (error) {
+      if (
+        !(error instanceof CreditSimulationFormNotReadyError) ||
+        simulacaoEnviada ||
+        ultimoCancelamentoEnviado
+      ) {
+        throw error;
+      }
+
+      log(
+        `[${cid}] O portal não concluiu a validação do formulário — recarregando e preenchendo novamente uma única vez.`,
+      );
+      await atualizarStep(consulta.id, "recuperando_formulario");
+      await navegarParaPortal(page);
+      await ensureLoggedIn(cid, page, persistirSessao);
+      await prepararFormularioDaConsulta();
+      await assertCreditSimulationAvailable(page);
+      resultado = await executarTentativa(2);
+      resultado.rawSummary = {
+        ...resultado.rawSummary,
+        recuperacaoFormularioTentada: true,
+      };
+    }
     if (
       resultado.status === "erro" &&
       resultado.rawSummary.motivoTecnico === "provider_internal_error"
