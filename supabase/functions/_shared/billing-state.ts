@@ -156,6 +156,7 @@ export function canManageIndividualInvoiceAction(
   invoice: any,
   action: "refresh" | "resend_email" | "resend_whatsapp" | "reissue",
 ) {
+  if (String(invoice?.status || "").toLowerCase() === "scheduled") return false;
   if (action === "refresh") return true;
   const belongsToConsolidatedBatch =
     invoice?.status === "awaiting_consolidation" || !!invoice?.consolidated_item_id;

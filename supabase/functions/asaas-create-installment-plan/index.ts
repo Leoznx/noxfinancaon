@@ -21,7 +21,13 @@ import {
   assertContractAcceptsBilling,
 } from "../_shared/billing-auth.ts";
 import { buildBillingKey, buildBillingSchedule } from "../_shared/billing-state.ts";
-import { asaasLateFeePayload, resolveBillingDueDay } from "../_shared/billing-automation.ts";
+import {
+  BOLETO_ISSUANCE_LEAD_DAYS,
+  asaasLateFeePayload,
+  resolveBillingDueDay,
+  scheduledBoletoIssueDate,
+  shouldMaterializeScheduledBoleto,
+} from "../_shared/billing-automation.ts";
 import {
   CONTRACT_PERIOD_LOCK_CONFLICT_CODE,
   ContractPeriodLockError,
@@ -279,6 +285,30 @@ serve(async (req) => {
 
     for (const item of schedule.slice(1)) {
       if (byKey.has(item.billingKey)) continue;
+      if (paymentMethod === "boleto" && !shouldMaterializeScheduledBoleto(item.dueDate)) {
+        const invoice = await materializeInvoice(supabase, {
+          consultation: consulta,
+          recipient,
+          billingKey: item.billingKey,
+          installmentNumber: item.installmentNumber,
+          installmentTotal,
+          dueDate: item.dueDate,
+          value: monthlyValue,
+          status: "scheduled",
+          chargeKind: "monthly",
+          paymentMethod,
+          components: {
+            fireMode,
+            monthlyAmount: monthlyValue,
+            contractMonths: installmentTotal,
+            boletoIssueLeadDays: BOLETO_ISSUANCE_LEAD_DAYS,
+            scheduledIssueDate: scheduledBoletoIssueDate(item.dueDate),
+          },
+          referenceMonth: item.referenceMonth,
+        });
+        byKey.set(item.billingKey, { ...invoice, asaas_payment: null });
+        continue;
+      }
       const { operation, claimed } = await claimBillingOperation(supabase, {
         consultationId: proposalId,
         operationType: "installment",

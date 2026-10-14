@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -24,8 +25,12 @@ import {
   webhookEventCanBeClaimed,
 } from "../supabase/functions/_shared/billing-state";
 import {
+  BOLETO_ISSUANCE_LEAD_DAYS,
+  initialBoletoDueDate,
   monthlyDueDate,
   normalizeBillingDueDay,
+  scheduledBoletoIssueDate,
+  shouldMaterializeScheduledBoleto,
 } from "../supabase/functions/_shared/billing-automation";
 
 test("matriz de 16 cenarios Pix/boleto materializa a inicial sem duplicar cobranca", () => {
@@ -164,6 +169,40 @@ test("cronograma de 12 competencias inclui a inicial exatamente uma vez", () => 
   assert.equal(schedule.at(-1)?.dueDate, "2027-09-10");
   assert.equal(new Set(schedule.map((item) => item.billingKey)).size, 12);
   assert.equal(schedule[0].billingKey, buildBillingKey(consultationId, "initial", 1));
+});
+
+test("boleto inicial e mensalidades futuras respeitam antecedencia de sete dias", () => {
+  const now = new Date("2026-10-14T15:00:00.000Z");
+  assert.equal(BOLETO_ISSUANCE_LEAD_DAYS, 7);
+  assert.equal(initialBoletoDueDate(now), "2026-10-21");
+  assert.equal(scheduledBoletoIssueDate("2026-11-19"), "2026-11-12");
+  assert.equal(
+    shouldMaterializeScheduledBoleto("2026-11-19", new Date("2026-11-12T15:00:00.000Z")),
+    true,
+  );
+  assert.equal(
+    shouldMaterializeScheduledBoleto("2026-11-19", new Date("2026-11-11T15:00:00.000Z")),
+    false,
+  );
+});
+
+test("plano agenda boleto futuro e o worker materializa sem liberar acao manual", () => {
+  assert.equal(canManageIndividualInvoiceAction({ status: "scheduled" }, "refresh"), false);
+  assert.equal(canManageIndividualInvoiceAction({ status: "scheduled" }, "reissue"), false);
+  const installmentPlan = readFileSync(
+    new URL("../supabase/functions/asaas-create-installment-plan/index.ts", import.meta.url),
+    "utf8",
+  );
+  const scheduler = readFileSync(
+    new URL(
+      "../supabase/functions/process-scheduled-invoice-notifications/index.ts",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  assert.match(installmentPlan, /status: "scheduled"/);
+  assert.match(installmentPlan, /shouldMaterializeScheduledBoleto/);
+  assert.match(scheduler, /materializeScheduledBoletoInvoice/);
 });
 
 test("redutor de pagamento ignora redelivery antiga e nunca regride quitacao", () => {

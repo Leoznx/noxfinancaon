@@ -8,7 +8,10 @@ import {
   findAsaasSubscriptionByExternalReference,
   hashPayload,
   logFinancialNotification,
+  mapAsaasStatus,
+  resolvePaymentRecipientFromContract,
   runInBackground,
+  sanitizeAsaasResponse,
   sendPaymentEmail,
   sendPaymentWhatsapp,
   wasNotificationSent,
@@ -20,6 +23,8 @@ import {
   persistProviderTransition,
   reducePaymentStatus,
 } from "./billing-state.ts";
+import { ensureAsaasCustomer } from "./asaas-customer.ts";
+import { asaasLateFeePayload } from "./billing-automation.ts";
 import { dispatchD4SignContract, ensurePendingPolicy } from "./d4sign.ts";
 import { buildPaymentRequestWhatsappContent } from "./payment-notification-content.ts";
 
@@ -345,6 +350,158 @@ export async function recoverSubscriptionForOperation(operation: any, externalRe
   return await findAsaasSubscriptionByExternalReference(externalReference);
 }
 
+export async function materializeScheduledBoletoInvoice(
+  supabase: any,
+  params: { invoice: any; consultation: any },
+) {
+  const invoice = params.invoice;
+  const consultation = params.consultation;
+  if (
+    String(invoice?.status || "").toLowerCase() !== "scheduled" ||
+    invoice?.payment_method !== "boleto" ||
+    invoice?.asaas_payment_id
+  ) {
+    return { status: "skipped" as const, invoice };
+  }
+
+  const recipient = await resolvePaymentRecipientFromContract(supabase, consultation);
+  const customerId = await ensureAsaasCustomer(supabase, consultation, recipient);
+  const billingKey = String(invoice.billing_key || "");
+  if (!billingKey) throw new Error("scheduled_invoice_without_billing_key");
+
+  const request = {
+    invoiceId: invoice.id,
+    proposalId: consultation.id,
+    installmentNumber: Number(invoice.numero_parcela),
+    paymentMethod: "boleto",
+    value: Number(invoice.valor),
+    dueDate: invoice.vencimento,
+    payer: recipient.paymentResponsible,
+  };
+  const { operation: claimedOperation, claimed } = await claimBillingOperation(supabase, {
+    consultationId: consultation.id,
+    invoiceId: invoice.id,
+    operationType: "installment",
+    idempotencyKey: billingKey,
+    request,
+    userId: consultation.profile_id_solicitante || recipient.recipientUserId || null,
+  });
+  let operation = claimedOperation;
+
+  let raw: any = null;
+  if (!claimed) {
+    if (["reserved", "provider_created", "ambiguous", "persisted"].includes(operation.state)) {
+      raw = await recoverPaymentForOperation(operation, billingKey);
+    }
+    if (!raw) {
+      const reclaimed = await reclaimStaleBillingOperation(supabase, operation);
+      if (!reclaimed) return { status: "in_progress" as const, invoice };
+      operation = reclaimed;
+    }
+  }
+
+  if (!raw) {
+    try {
+      raw = await asaasFetch("/payments", {
+        method: "POST",
+        body: JSON.stringify({
+          customer: customerId,
+          billingType: "BOLETO",
+          value: Number(invoice.valor),
+          dueDate: invoice.vencimento,
+          description: `NOX Fianca - mensalidade ${invoice.numero_parcela}/${invoice.installment_total}`,
+          externalReference: billingKey,
+          ...asaasLateFeePayload(),
+        }),
+      });
+    } catch (error) {
+      await updateBillingOperation(supabase, operation.id, {
+        state: error instanceof AsaasApiError && error.status < 500 ? "failed" : "ambiguous",
+        last_error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  await updateBillingOperation(supabase, operation.id, {
+    state: "provider_created",
+    provider_id: raw?.id || operation.provider_id || null,
+    provider_response: sanitizeAsaasResponse(raw),
+    last_error: null,
+  });
+
+  const internalStatus = mapAsaasStatus(raw?.status);
+  const boletoUrl = raw?.bankSlipUrl || raw?.invoiceUrl || null;
+  const boletoBarcode = raw?.identificationField || raw?.nossoNumero || null;
+  const { data: payment, error: paymentError } = await supabase
+    .from("asaas_payments")
+    .upsert(
+      {
+        consultation_id: consultation.id,
+        proposal_id: consultation.id,
+        plan_id: consultation.plano_id,
+        user_id: consultation.profile_id_solicitante || recipient.recipientUserId || null,
+        tenant_user_id: consultation.tenant_user_id,
+        asaas_customer_id: customerId,
+        asaas_payment_id: raw?.id || null,
+        external_reference: billingKey,
+        idempotency_key: billingKey,
+        billing_operation_id: operation.id,
+        charge_kind: "monthly",
+        payment_method: "boleto",
+        value: Number(invoice.valor),
+        status: internalStatus,
+        due_date: invoice.vencimento,
+        boleto_url: boletoUrl,
+        boleto_barcode: boletoBarcode,
+        raw_response: sanitizeAsaasResponse(raw),
+        payment_responsible: recipient.paymentResponsible,
+        recipient_type: recipient.recipientType,
+        recipient_user_id: recipient.recipientUserId,
+        recipient_tenant_id: recipient.recipientTenantId,
+        recipient_name: recipient.recipientName,
+        recipient_email: recipient.recipientEmail,
+        recipient_phone: recipient.recipientPhone,
+      },
+      { onConflict: "idempotency_key" },
+    )
+    .select("*")
+    .maybeSingle();
+  if (paymentError || !payment) {
+    await updateBillingOperation(supabase, operation.id, {
+      state: "provider_created",
+      last_error: paymentError?.message || "local_payment_missing",
+    });
+    throw paymentError || new Error("scheduled_payment_not_persisted");
+  }
+
+  const materialized = await materializeInvoice(supabase, {
+    consultation,
+    recipient,
+    billingKey,
+    installmentNumber: Number(invoice.numero_parcela),
+    installmentTotal: Number(invoice.installment_total),
+    dueDate: invoice.vencimento,
+    value: Number(invoice.valor),
+    status: internalStatus,
+    chargeKind: "monthly",
+    paymentMethod: "boleto",
+    components: invoice.components || {},
+    paymentUrl: boletoUrl,
+    boletoBarcode,
+    localPaymentId: payment.id,
+    referenceMonth: invoice.reference_month,
+    providerEventAt: new Date().toISOString(),
+  });
+  await updateBillingOperation(supabase, operation.id, {
+    invoice_id: materialized.id,
+    state: "persisted",
+    completed_at: new Date().toISOString(),
+    last_error: null,
+  });
+  return { status: "materialized" as const, invoice: materialized, payment };
+}
+
 export async function materializeInvoice(
   supabase: any,
   params: {
@@ -360,6 +517,7 @@ export async function materializeInvoice(
     paymentMethod: PaymentMethod | "consolidated";
     components?: Record<string, unknown>;
     paymentUrl?: string | null;
+    boletoBarcode?: string | null;
     localPaymentId?: string | null;
     subscriptionId?: string | null;
     referenceMonth?: string | null;
@@ -383,6 +541,7 @@ export async function materializeInvoice(
     valor: params.value,
     status: params.status,
     boleto_url: params.paymentMethod === "boleto" ? params.paymentUrl || null : null,
+    linha_digitavel: params.paymentMethod === "boleto" ? params.boletoBarcode || null : null,
     payment_responsible: params.recipient.paymentResponsible,
     recipient_user_id: params.recipient.recipientUserId,
     asaas_payment_id: params.localPaymentId || null,
@@ -416,6 +575,7 @@ export async function materializeInvoice(
     asaas_payment_id: payload.asaas_payment_id || existing.asaas_payment_id,
     asaas_subscription_id: payload.asaas_subscription_id || existing.asaas_subscription_id,
     boleto_url: payload.boleto_url || existing.boleto_url,
+    linha_digitavel: payload.linha_digitavel || existing.linha_digitavel,
     payment_url: payload.payment_url || existing.payment_url,
     payment_method: payload.payment_method || existing.payment_method,
     components: {

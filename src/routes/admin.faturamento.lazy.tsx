@@ -848,6 +848,8 @@ function TabelaFaturas({
             const isConsolidatedItem =
               isBatch || p.status === "awaiting_consolidation" || !!p.consolidated_item_id;
             const managedIndividual = !isBatch && isConsolidatedItem;
+            const isScheduledBoleto =
+              billing.method === "boleto" && String(p.status).toLowerCase() === "scheduled";
             const busy = atualizandoId === p.id || acaoId?.startsWith(`${p.id}:`);
             const initialLinkExpired =
               billing.method === "credit_card" &&
@@ -945,7 +947,7 @@ function TabelaFaturas({
                         />
                       </Button>
                     )}
-                  {canManageBilling && !isConsolidatedItem && (
+                  {canManageBilling && !isConsolidatedItem && !isScheduledBoleto && (
                     <>
                       {!initialLinkExpired && !recurringLinkExpired && (
                         <Button
@@ -1070,6 +1072,8 @@ function TabelaFaturas({
                 const isConsolidatedItem =
                   isBatch || p.status === "awaiting_consolidation" || !!p.consolidated_item_id;
                 const managedIndividual = !isBatch && isConsolidatedItem;
+                const isScheduledBoleto =
+                  billing.method === "boleto" && String(p.status).toLowerCase() === "scheduled";
                 const busy = atualizandoId === p.id || acaoId?.startsWith(`${p.id}:`);
                 const initialLinkExpired =
                   billing.method === "credit_card" &&
@@ -1157,7 +1161,7 @@ function TabelaFaturas({
                             />
                           </Button>
                         )}
-                      {canManageBilling && !isConsolidatedItem && (
+                      {canManageBilling && !isConsolidatedItem && !isScheduledBoleto && (
                         <>
                           {!initialLinkExpired && !recurringLinkExpired && (
                             <Button
@@ -1242,6 +1246,7 @@ function TabelaFaturas({
 }
 
 const STATUS_CLASS: Record<string, string> = {
+  scheduled: "bg-sky-100 text-sky-700 border-sky-200",
   paid: "bg-emerald-100 text-emerald-700 border-emerald-200",
   confirmed: "bg-emerald-100 text-emerald-700 border-emerald-200",
   paid_via_consolidated: "bg-emerald-100 text-emerald-700 border-emerald-200",

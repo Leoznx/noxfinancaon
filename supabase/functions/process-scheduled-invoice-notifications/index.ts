@@ -9,6 +9,7 @@ import {
   wasNotificationSent,
 } from "../_shared/asaas.ts";
 import {
+  BOLETO_ISSUANCE_LEAD_DAYS,
   buildCollectionMessage,
   collectionCadence,
   monthlyDueDate,
@@ -16,6 +17,7 @@ import {
   resolveBillingDueDay,
   saoPauloClock,
 } from "../_shared/billing-automation.ts";
+import { materializeScheduledBoletoInvoice } from "../_shared/contract-billing.ts";
 import { getZApiConnectionStatus } from "../_shared/zapi.ts";
 import { hasOversizedBody, safeEqualSecret } from "../_shared/http-security.ts";
 
@@ -94,6 +96,61 @@ serve(async (req) => {
   const clock = saoPauloClock(now);
   const fromDate = addDays(clock.date, -14);
   const toDate = addDays(clock.date, 1);
+  const boletoIssueThrough = addDays(clock.date, BOLETO_ISSUANCE_LEAD_DAYS);
+  const boletoMaterialization = {
+    leadDays: BOLETO_ISSUANCE_LEAD_DAYS,
+    throughDate: boletoIssueThrough,
+    candidates: 0,
+    materialized: 0,
+    inProgress: 0,
+    failed: 0,
+  };
+  const { data: scheduledBoletos, error: scheduledBoletosError } = await admin
+    .from("faturas_inquilino")
+    .select(
+      "id, consulta_id, asaas_payment_id, billing_key, numero_parcela, installment_total, vencimento, valor, status, payment_method, components, reference_month",
+    )
+    .eq("status", "scheduled")
+    .eq("payment_method", "boleto")
+    .is("asaas_payment_id", null)
+    .lte("vencimento", boletoIssueThrough)
+    .order("vencimento", { ascending: true })
+    .limit(100);
+  if (scheduledBoletosError) {
+    console.error("[billing-automation] falha ao carregar boletos programados", {
+      message: scheduledBoletosError.message,
+    });
+    return jsonResponse(req, { ok: false, error: "Falha ao preparar boletos programados." }, 500);
+  }
+  boletoMaterialization.candidates = scheduledBoletos?.length || 0;
+  if (!dryRun) {
+    for (const invoice of scheduledBoletos ?? []) {
+      try {
+        const { data: consultation, error: consultationError } = await admin
+          .from("consultas_credito")
+          .select(
+            "*, inquilinos(*), imoveis(*), planos(*), responsavel_profile:profiles!consultas_credito_profile_id_solicitante_fkey(id, nome, email, telefone, cnpj, role)",
+          )
+          .eq("id", invoice.consulta_id)
+          .maybeSingle();
+        if (consultationError || !consultation) {
+          throw consultationError || new Error("scheduled_consultation_not_found");
+        }
+        const result = await materializeScheduledBoletoInvoice(admin, {
+          invoice,
+          consultation,
+        });
+        if (result.status === "materialized") boletoMaterialization.materialized += 1;
+        else boletoMaterialization.inProgress += 1;
+      } catch (error) {
+        boletoMaterialization.failed += 1;
+        console.error("[billing-automation] falha ao materializar boleto programado", {
+          invoiceId: invoice.id,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+  }
   const consolidation = {
     planned: 0,
     synchronized: 0,
@@ -250,6 +307,7 @@ serve(async (req) => {
     whatsappSent: 0,
     skippedDuplicate: 0,
     failures: 0,
+    boletoMaterialization,
     consolidation,
     plans: [] as Array<{ scope: string; cadence: string; slot: number; channels: string[] }>,
   };

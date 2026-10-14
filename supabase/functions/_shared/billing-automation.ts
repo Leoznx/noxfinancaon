@@ -2,6 +2,7 @@ export const BILLING_TIME_ZONE = "America/Sao_Paulo";
 export const BILLING_DUE_DAY = 10;
 export const BILLING_FINE_PERCENT = 2;
 export const BILLING_MONTHLY_INTEREST_PERCENT = 1;
+export const BOLETO_ISSUANCE_LEAD_DAYS = 7;
 export const CONSOLIDATABLE_INVOICE_STATUSES = [
   "awaiting_consolidation",
   "pending",
@@ -17,10 +18,7 @@ export function isConsolidatableInvoiceStatus(status: unknown) {
   return CONSOLIDATABLE_INVOICE_STATUSES.includes(String(status || "").toLowerCase());
 }
 
-export function normalizeBillingDueDay(
-  value: unknown,
-  fallback = BILLING_DUE_DAY,
-) {
+export function normalizeBillingDueDay(value: unknown, fallback = BILLING_DUE_DAY) {
   const parsed = Number(value);
   if (Number.isSafeInteger(parsed) && parsed >= 1 && parsed <= 28) return parsed;
   return fallback;
@@ -98,6 +96,18 @@ export function addIsoDays(isoDate: string, days: number) {
   return date.toISOString().slice(0, 10);
 }
 
+export function initialBoletoDueDate(now = new Date()) {
+  return addIsoDays(saoPauloClock(now).date, BOLETO_ISSUANCE_LEAD_DAYS);
+}
+
+export function scheduledBoletoIssueDate(dueDate: string) {
+  return addIsoDays(dueDate, -BOLETO_ISSUANCE_LEAD_DAYS);
+}
+
+export function shouldMaterializeScheduledBoleto(dueDate: string, now = new Date()) {
+  return scheduledBoletoIssueDate(dueDate) <= saoPauloClock(now).date;
+}
+
 export function differenceInIsoDays(later: string, earlier: string) {
   const toUtc = (value: string) => {
     const [year, month, day] = value.split("-").map(Number);
@@ -106,15 +116,12 @@ export function differenceInIsoDays(later: string, earlier: string) {
   return Math.round((toUtc(later) - toUtc(earlier)) / 86_400_000);
 }
 
-export function monthlyDueDate(
-  year: number,
-  month: number,
-  dueDay = BILLING_DUE_DAY,
-) {
+export function monthlyDueDate(year: number, month: number, dueDay = BILLING_DUE_DAY) {
   const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
-  return `${year}-${String(month).padStart(2, "0")}-${
-    String(Math.min(dueDay, lastDay)).padStart(2, "0")
-  }`;
+  return `${year}-${String(month).padStart(2, "0")}-${String(Math.min(dueDay, lastDay)).padStart(
+    2,
+    "0",
+  )}`;
 }
 
 function addBusinessDaysFrom(isoDate: string, days: number) {
@@ -149,10 +156,7 @@ export function nextMonthlyDueDate(now = new Date(), monthsAhead = 1) {
 // The scheduler runs hourly during business hours. Only these four local
 // hours are dispatch windows; the notification idempotency key prevents a
 // retry from becoming a duplicate contact.
-export function collectionCadence(params: {
-  dueDate: string;
-  now?: Date;
-}): BillingCadence | null {
+export function collectionCadence(params: { dueDate: string; now?: Date }): BillingCadence | null {
   const clock = saoPauloClock(params.now);
   const overdueDays = differenceInIsoDays(clock.date, params.dueDate);
   if (overdueDays === -1 && clock.hour === 9) {
@@ -184,14 +188,7 @@ export function asaasLateFeePayload() {
 }
 
 export function isCollectableStatus(status: string | null | undefined) {
-  return [
-    "pending",
-    "created",
-    "waiting_payment",
-    "overdue",
-    "risk_analysis",
-    "approved",
-  ].includes(
+  return ["pending", "created", "waiting_payment", "overdue", "risk_analysis", "approved"].includes(
     String(status || "").toLowerCase(),
   );
 }
@@ -212,10 +209,13 @@ export function buildCollectionMessage(params: {
   const dueDate = `${day}/${month}/${year}`;
   const reference = params.consolidated
     ? `cobrança consolidada${
-      params.invoiceCount ? ` de ${params.invoiceCount} contratos ativos` : ""
-    }`
+        params.invoiceCount ? ` de ${params.invoiceCount} contratos ativos` : ""
+      }`
     : "mensalidade";
-  const firstName = String(params.name || "cliente").trim().split(/\s+/u)[0] || "cliente";
+  const firstName =
+    String(params.name || "cliente")
+      .trim()
+      .split(/\s+/u)[0] || "cliente";
   const greeting = `Olá, ${firstName}! 👋`;
 
   if (params.cadence.kind === "pre_due") {

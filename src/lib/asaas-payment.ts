@@ -3,12 +3,7 @@ export type AsaasPaymentMethod = "pix" | "boleto" | "credit_card";
 export type CheckoutIntent = "pay_now" | "pay_later";
 export type CardSetupMode = "direct" | "checkout";
 export type PaymentFlowStatus =
-  | "pending"
-  | "overdue"
-  | "confirmed"
-  | "cancelled"
-  | "refunded"
-  | "awaiting_consolidation";
+  "pending" | "overdue" | "confirmed" | "cancelled" | "refunded" | "awaiting_consolidation";
 export type SignatureFlowStatus = "pending" | "sent" | "signed" | "error";
 export type PolicyFlowStatus = "draft" | "issued_pending" | "active" | "cancelled";
 export type NotificationDeliveryStatus = "queued" | "sent" | "failed" | "skipped";
@@ -140,8 +135,7 @@ export function hasIncompleteInstallmentPlan(
 ) {
   const initial = invoices.find(
     (invoice) =>
-      invoice.charge_kind === "initial" ||
-      String(invoice.billing_key || "").includes(":initial:"),
+      invoice.charge_kind === "initial" || String(invoice.billing_key || "").includes(":initial:"),
   );
   if (!initial || (initial.payment_method !== "pix" && initial.payment_method !== "boleto")) {
     return false;
@@ -300,6 +294,7 @@ export async function getEdgeFunctionErrorDetails(
 
 export function statusPagamentoLabel(status?: string | null) {
   const labels: Record<string, string> = {
+    scheduled: "Boleto programado",
     pending: "Aguardando pagamento",
     risk_analysis: "Em analise",
     approved: "Aprovado",

@@ -61,35 +61,46 @@ export function ModalCronogramaBoletos({
             <CalendarClock className="h-6 w-6 text-yellow-600" />
           </div>
           <DialogTitle className="text-xl font-bold text-neutral-900">
-            {resultado.installmentTotal} boletos gerados
+            Cronograma de {resultado.installmentTotal} mensalidades preparado
           </DialogTitle>
           <DialogDescription className="text-sm text-neutral-600">
-            Cada mensalidade é uma cobrança independente no Asaas — pode ser paga separadamente.
+            Os boletos futuros são gerados automaticamente 7 dias antes de cada vencimento.
           </DialogDescription>
         </div>
 
-        {resultado.recipient && (resultado.recipient.emailMasked || resultado.recipient.phoneMasked) && (
-          <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-xs text-neutral-600">
-            <p className="font-semibold text-neutral-800">
-              Responsável pelo pagamento: {resultado.recipient.responsible === "agency" ? "Imobiliária" : "Inquilino"}
-            </p>
-            {resultado.recipient.emailMasked && <p>Cobranças enviadas para: {resultado.recipient.emailMasked}</p>}
-            {resultado.recipient.phoneMasked && <p>WhatsApp: {resultado.recipient.phoneMasked}</p>}
-          </div>
-        )}
+        {resultado.recipient &&
+          (resultado.recipient.emailMasked || resultado.recipient.phoneMasked) && (
+            <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-xs text-neutral-600">
+              <p className="font-semibold text-neutral-800">
+                Responsável pelo pagamento:{" "}
+                {resultado.recipient.responsible === "agency" ? "Imobiliária" : "Inquilino"}
+              </p>
+              {resultado.recipient.emailMasked && (
+                <p>Cobranças enviadas para: {resultado.recipient.emailMasked}</p>
+              )}
+              {resultado.recipient.phoneMasked && (
+                <p>WhatsApp: {resultado.recipient.phoneMasked}</p>
+              )}
+            </div>
+          )}
 
         <div className="max-h-[420px] space-y-2 overflow-y-auto pr-1">
           {resultado.installments.map((parcela) => (
-            <ParcelaLinha key={parcela.faturaId} parcela={parcela} total={resultado.installmentTotal} valorFmt={valorFmt} />
+            <ParcelaLinha
+              key={parcela.faturaId}
+              parcela={parcela}
+              total={resultado.installmentTotal}
+              valorFmt={valorFmt}
+            />
           ))}
         </div>
 
         {deferPayment && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-            <p className="font-bold">Cobranças geradas com sucesso</p>
+            <p className="font-bold">Cronograma preparado com sucesso</p>
             <p className="mt-1 leading-relaxed">
-              O processo de contratação continuará normalmente. O pagamento está pendente e os
-              boletos permanecem disponíveis em faturas.
+              O processo de contratação continuará normalmente. A cobrança inicial fica disponível
+              agora e as próximas serão liberadas 7 dias antes do vencimento.
             </p>
           </div>
         )}

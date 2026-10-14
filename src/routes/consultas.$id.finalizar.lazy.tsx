@@ -41,14 +41,7 @@ import type {
   NormalizedAsaasPayment,
   NormalizedAsaasSubscription,
 } from "@/lib/asaas-payment";
-import {
-  MESES_PT,
-  addBusinessDaysPreview,
-  checkoutActionsForMethod,
-  checkoutMethodSelection,
-  formatDateBr,
-  generateInstallmentSchedulePreview,
-} from "@/lib/asaas-payment";
+import { checkoutActionsForMethod, checkoutMethodSelection } from "@/lib/asaas-payment";
 import { formatContractPeriodMonths, normalizeContractPeriodMonths } from "@/lib/contract-period";
 import {
   AsaasCheckoutError,
@@ -1045,16 +1038,6 @@ function ResumoPropostaLoft(p: any) {
     else if (pagamentoAsaasResultado) setModalAsaasAberto(true);
   };
 
-  // O boleto gera todas as mensalidades do periodo para o pagador selecionado.
-  const ehParceladoBoleto = pagamento === "boleto";
-  const cronogramaPreview = useMemo(() => {
-    if (!ehParceladoBoleto) return [];
-    return generateInstallmentSchedulePreview({
-      firstDueDate: addBusinessDaysPreview(3),
-      count: contractPeriodMonths,
-    });
-  }, [contractPeriodMonths, ehParceladoBoleto]);
-
   useEffect(() => {
     writeCheckoutPreferences(id, {
       paymentMethod: pagamento,
@@ -1752,28 +1735,6 @@ function ResumoPropostaLoft(p: any) {
                     );
                   })}
                 </div>
-
-                {ehParceladoBoleto && (
-                  <div className="rounded-md border border-slate-300 bg-slate-50 p-4">
-                    <p className="text-sm font-bold text-neutral-950">
-                      {contractPeriodMonths === 1
-                        ? `${pagamentoViaImobiliaria ? "A imobiliária" : "O inquilino"} paga por boleto: 1 boleto mensal será gerado agora`
-                        : `${pagamentoViaImobiliaria ? "A imobiliária" : "O inquilino"} paga por boleto: ${contractPeriodMonths} boletos mensais serão gerados agora`}
-                    </p>
-                    <p className="mt-1 text-xs text-slate-600">
-                      Cada mensalidade vira uma cobrança independente, visível em "Minhas Faturas".
-                    </p>
-                    <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-700 sm:grid-cols-3">
-                      {cronogramaPreview.map((parcela) => (
-                        <div key={parcela.installmentNumber}>
-                          {parcela.installmentNumber}/{contractPeriodMonths} —{" "}
-                          {MESES_PT[parcela.referenceMonth - 1]}/{parcela.referenceYear} ·{" "}
-                          {formatDateBr(parcela.dueDate)}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
 
                 {pagamento === "credit_card" && cardSetupMode === "direct" && (
                   <div className="rounded-md border border-slate-300 bg-slate-50 p-4">

@@ -3,7 +3,6 @@ import {
   AsaasApiError,
   FireMode,
   PaymentMethod,
-  addBusinessDays,
   asaasFetch,
   calculateExpectedPayment,
   calculateMonthlyInstallmentValue,
@@ -52,6 +51,7 @@ import {
   updateBillingOperation,
 } from "../_shared/contract-billing.ts";
 import { ensurePendingPolicy } from "../_shared/d4sign.ts";
+import { initialBoletoDueDate } from "../_shared/billing-automation.ts";
 
 type Action = "create" | "refresh" | "resend_email" | "resend_whatsapp";
 
@@ -406,7 +406,8 @@ serve(async (req) => {
       const dueDateError = billingDueDateError(body.dueDate, todayDate());
       if (dueDateError) return jsonResponse(req, { ok: false, error: dueDateError }, 400);
     }
-    const dueDate = body.dueDate || (paymentMethod === "boleto" ? addBusinessDays(3) : todayDate());
+    const dueDate =
+      body.dueDate || (paymentMethod === "boleto" ? initialBoletoDueDate() : todayDate());
     const contractMonths = contractPeriodMonths;
     const billingKey = buildBillingKey(proposalId, "initial", 1);
     // A mesma chave usada na reserva local vai ao provedor. Assim uma resposta
