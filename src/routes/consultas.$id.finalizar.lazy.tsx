@@ -672,6 +672,7 @@ function FinalizarPage() {
         abrirTermos={() => setTermosOpen(true)}
         seguroConcluido={seguroConcluido}
         onEditarDados={() => navigate({ to: `/consultas/${id}/dados-complementares` as any })}
+        onVoltar={() => navigate({ to: `/consultas/${id}/dados-complementares` as any })}
         onCancelar={() => navigate({ to: `/consultas/${id}/resultado` as any })}
         onEnviar={handleEnviar}
         fnSalvarConfig={fnSalvarConfig}
@@ -944,6 +945,7 @@ function ResumoPropostaLoft(p: any) {
     abrirTermos,
     seguroConcluido,
     onEditarDados,
+    onVoltar,
     onCancelar,
     onEnviar,
     fnSalvarConfig,
@@ -2016,7 +2018,7 @@ function ResumoPropostaLoft(p: any) {
             <Button
               type="button"
               variant="outline"
-              onClick={pagamentoAberto ? voltarParaResumo : onCancelar}
+              onClick={pagamentoAberto ? voltarParaResumo : onVoltar}
               className="h-11 rounded-md border-slate-300 bg-white px-5 font-bold text-neutral-900 hover:bg-slate-50"
             >
               <ArrowLeft size={16} className="mr-2" /> Voltar
