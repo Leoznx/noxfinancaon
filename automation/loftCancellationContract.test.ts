@@ -50,14 +50,22 @@ test("reconcilia automaticamente somente a única proposta nova após o envio", 
   assert.doesNotMatch(worker, /fluxo legado de CNPJ não devolve um ID causal/);
 });
 
-test("não tenta retirar outro cancelamento enquanto uma submissão aguarda reconciliação", async () => {
+test("prioriza cancelamentos vencidos antes de reconciliar submissões mais novas", async () => {
   const worker = await readFile(workerUrl, "utf8");
-
-  assert.match(worker, /const reconciliationPending = await reconcilePendingLoftCancellation/);
-  assert.match(
-    worker,
-    /if \(!reconciliationPending\) \{\s*const job = await claimNextLoftCancellation/,
+  const loopStart = worker.indexOf(
+    "if (env.loftCancellationEnabled && !cancelamentoEmAndamento && emAndamento.size === 0)",
   );
+  const loopEnd = worker.indexOf("if (cancelamentoEmAndamento)", loopStart);
+  const cancellationLoop = worker.slice(loopStart, loopEnd);
+
+  assert.ok(loopStart >= 0 && loopEnd > loopStart);
+  assert.ok(
+    cancellationLoop.indexOf("await claimNextLoftCancellation()") <
+      cancellationLoop.indexOf("await reconcilePendingLoftCancellation("),
+  );
+  assert.match(worker, /function isPendingLoftReconciliationError/);
+  assert.match(worker, /String\(candidate\.code \?\? ""\) !== "55000"/);
+  assert.match(worker, /reconcilia\[cç\]\[aã\]o\\s\+necess\[aá\]ria/);
 });
 
 test("faz o snapshot em paralelo e evita reabrir a lista durante a estabilização", async () => {

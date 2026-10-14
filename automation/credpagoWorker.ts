@@ -540,6 +540,16 @@ async function claimNextLoftCancellation(): Promise<LoftCancellationJob | null> 
   return row ? (row as LoftCancellationJob) : null;
 }
 
+function isPendingLoftReconciliationError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as Record<string, unknown>;
+  if (String(candidate.code ?? "") !== "55000") return false;
+  const detail = [candidate.message, candidate.details, candidate.hint]
+    .map((value) => String(value ?? ""))
+    .join(" ");
+  return /reconcilia[cç][aã]o\s+necess[aá]ria/i.test(detail);
+}
+
 async function finishLoftCancellation(
   job: LoftCancellationJob,
   result:
@@ -2209,24 +2219,33 @@ async function loop(once: boolean): Promise<void> {
       if (env.loftCancellationEnabled && !cancelamentoEmAndamento && emAndamento.size === 0) {
         runtimeState.activeCancellation = true;
         try {
-          const reconciliationPending = await reconcilePendingLoftCancellation(
-            contextoAberto.context,
-            contextoAberto.persistirSessao,
-          );
-          if (!reconciliationPending) {
-            const job = await claimNextLoftCancellation();
-            if (job) {
-              runtimeState.activeCancellation = true;
-              const task = processLoftCancellation(
-                job,
-                contextoAberto.context,
-                contextoAberto.persistirSessao,
-              ).finally(() => {
-                if (cancelamentoEmAndamento === task) cancelamentoEmAndamento = null;
-                runtimeState.activeCancellation = false;
-              });
-              cancelamentoEmAndamento = task;
-            }
+          // A RPC sempre prioriza jobs com ID exato cujo prazo venceu. Chamá-la
+          // antes da reconciliação impede que um envio mais novo, ainda sem ID,
+          // adie o cancelamento seguro de uma proposta anterior. Quando não há
+          // job vencido, o sinal 55000 apenas transfere o controle ao reconciliador.
+          let job: LoftCancellationJob | null = null;
+          try {
+            job = await claimNextLoftCancellation();
+          } catch (error) {
+            if (!isPendingLoftReconciliationError(error)) throw error;
+          }
+
+          if (job) {
+            runtimeState.activeCancellation = true;
+            const task = processLoftCancellation(
+              job,
+              contextoAberto.context,
+              contextoAberto.persistirSessao,
+            ).finally(() => {
+              if (cancelamentoEmAndamento === task) cancelamentoEmAndamento = null;
+              runtimeState.activeCancellation = false;
+            });
+            cancelamentoEmAndamento = task;
+          } else {
+            await reconcilePendingLoftCancellation(
+              contextoAberto.context,
+              contextoAberto.persistirSessao,
+            );
           }
         } catch (error) {
           registrarFalhaFilaCancelamento("Falha ao consultar a fila de cancelamentos", error);
