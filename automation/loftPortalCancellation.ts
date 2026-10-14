@@ -540,9 +540,32 @@ async function waitForVisibleProposalIdsForDocument(
       page.getByText(/carregando|buscando propostas/i),
     ]);
     const explicitEmptyTable = Boolean(resultsTable && !loading && visibleRowCount === 0);
+    const searchInput = await firstVisible([
+      page.getByRole("textbox", {
+        name: /proposta|nome|raz[aã]o social|cpf\/?cnpj|cpf|cnpj|tag/i,
+      }),
+      page.getByPlaceholder(/proposta|nome|raz[aã]o social|cpf\/?cnpj|cpf|cnpj|tag/i),
+      page.locator('input[type="search"]'),
+    ]);
+    const searchQueryMatches = searchInput
+      ? normalizeDocument(await searchInput.inputValue().catch(() => "")) === document
+      : false;
+    const stableUnrelatedTable = Boolean(
+      resultsTable &&
+      !loading &&
+      searchQueryMatches &&
+      visibleRowCount > 0 &&
+      candidates.length === visibleRowCount &&
+      candidates.every(
+        (candidate) =>
+          Boolean(candidate.proposalId) &&
+          candidate.documents.length > 0 &&
+          !candidate.documents.includes(document),
+      ),
+    );
     if (Date.now() - stableSince >= stableWindowMs) {
       if (ids.length > 0) return ids;
-      if (noResults || explicitEmptyTable) return [];
+      if (noResults || explicitEmptyTable || stableUnrelatedTable) return [];
     }
     await page.waitForTimeout(POLL_INTERVAL_MS);
   } while (Date.now() < deadline);

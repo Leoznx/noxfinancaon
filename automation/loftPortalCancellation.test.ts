@@ -394,6 +394,27 @@ test("aceita a linha vazia usada atualmente pela Loft como snapshot sem proposta
   await page.close();
 });
 
+test("aceita a tabela padrão estável quando todas as linhas pertencem a outros documentos", async () => {
+  const page = await pageWithHtml(`<!doctype html><html lang="pt-BR"><body>
+    <label>Proposta, nome/razão social, CPF/CNPJ ou tag
+      <input id="search" placeholder="Proposta, nome/razão social, CPF/CNPJ ou tag" />
+    </label>
+    <button type="button">Pesquisar</button>
+    <table>
+      <thead><tr><th>Proposta</th><th>Cliente</th><th>Situação</th></tr></thead>
+      <tbody>
+        ${proposalRow({ id: "4789594", document: "792.531.729-91", createdAt: "13/10/2026" })}
+        ${proposalRow({ id: "4789700", document: "023.640.362-16", createdAt: "13/10/2026" })}
+      </tbody>
+    </table>
+  </body></html>`);
+
+  const ids = await listLoftProposalIdsForDocument(page, "11144477735", 2_500);
+
+  assert.deepEqual(ids, []);
+  await page.close();
+});
+
 test("resolve somente uma proposta nova em relação ao snapshot anterior", () => {
   assert.equal(
     resolveSingleNewLoftProposalId(["4788303", "4789594", "4789594"], ["4788303"]),
