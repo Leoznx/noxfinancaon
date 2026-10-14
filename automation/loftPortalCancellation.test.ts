@@ -4,9 +4,11 @@ import { chromium, type Browser, type Page } from "playwright";
 import {
   cancelLoftProposalViaPortal,
   listLoftProposalIdsForDocument,
+  listLoftProposalsForDocument,
   LOFT_PROPOSALS_URL,
   LoftPortalCancellationError,
   probeLoftProposalCancellationPortal,
+  resolveLoftProposalReconciliation,
   resolveSingleNewLoftProposalId,
 } from "./loftPortalCancellation";
 
@@ -337,6 +339,40 @@ test("cria o snapshot reunindo propostas iniciadas, enviadas e canceladas", asyn
   await page.close();
 });
 
+test("classifica como terminais todas as propostas encontradas na aba Canceladas", async () => {
+  const page = await pageWithHtml(
+    pageHtml(
+      proposalRow({ id: "4788303", document: "792.531.729-91", createdAt: "10/10/2026" }),
+      true,
+      [
+        proposalRow({
+          id: "4789594",
+          document: "792.531.729-91",
+          createdAt: "13/10/2026",
+          status: "Reprovado",
+          tab: "cancelled",
+        }),
+        proposalRow({
+          id: "4787000",
+          document: "792.531.729-91",
+          createdAt: "09/10/2026",
+          status: "Cancelada",
+          tab: "cancelled",
+        }),
+      ].join(""),
+    ),
+  );
+
+  const proposals = await listLoftProposalsForDocument(page, "79253172991", 1_000);
+
+  assert.deepEqual(proposals, [
+    { proposalId: "4788303", terminal: false },
+    { proposalId: "4789594", terminal: true },
+    { proposalId: "4787000", terminal: true },
+  ]);
+  await page.close();
+});
+
 test("aceita uma tabela carregada e vazia como snapshot sem propostas anteriores", async () => {
   const page = await pageWithHtml(pageHtml(""));
 
@@ -366,7 +402,47 @@ test("resolve somente uma proposta nova em relação ao snapshot anterior", () =
   assert.throws(
     () => resolveSingleNewLoftProposalId(["4789594", "4789700"], []),
     (error: unknown) =>
-      error instanceof LoftPortalCancellationError && /mais de uma proposta nova/i.test(error.message),
+      error instanceof LoftPortalCancellationError &&
+      /mais de uma proposta nova/i.test(error.message),
+  );
+});
+
+test("encerra sem clique quando todas as novas candidatas já são terminais", () => {
+  assert.deepEqual(
+    resolveLoftProposalReconciliation(
+      [
+        { proposalId: "4789594", terminal: true },
+        { proposalId: "4789700", terminal: true },
+      ],
+      [],
+    ),
+    {
+      kind: "already-terminal",
+      proposalIds: ["4789594", "4789700"],
+    },
+  );
+  assert.deepEqual(
+    resolveLoftProposalReconciliation(
+      [
+        { proposalId: "4788303", terminal: true },
+        { proposalId: "4789594", terminal: false },
+      ],
+      ["4788303"],
+    ),
+    { kind: "attach", proposalId: "4789594" },
+  );
+  assert.throws(
+    () =>
+      resolveLoftProposalReconciliation(
+        [
+          { proposalId: "4789594", terminal: true },
+          { proposalId: "4789700", terminal: false },
+        ],
+        [],
+      ),
+    (error: unknown) =>
+      error instanceof LoftPortalCancellationError &&
+      /ao menos uma ainda ativa/i.test(error.message),
   );
 });
 

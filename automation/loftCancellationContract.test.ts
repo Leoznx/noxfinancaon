@@ -23,7 +23,10 @@ test("usa uma RPC exclusiva para o ID causal devolvido pela submissão", async (
   ]);
 
   assert.match(worker, /attach_loft_proposal_id_from_submission/);
-  assert.match(migration, /CREATE OR REPLACE FUNCTION public\.attach_loft_proposal_id_from_submission/);
+  assert.match(
+    migration,
+    /CREATE OR REPLACE FUNCTION public\.attach_loft_proposal_id_from_submission/,
+  );
   assert.match(migration, /v_job\.submitted_at IS NULL/);
   assert.doesNotMatch(migration, /ANY\(v_job\.known_proposal_ids\)/);
   assert.match(migration, /GRANT EXECUTE[\s\S]*TO service_role/);
@@ -40,9 +43,10 @@ test("reconcilia automaticamente somente a única proposta nova após o envio", 
   const worker = await readFile(workerUrl, "utf8");
 
   assert.match(worker, /reconcilePendingLoftCancellation/);
-  assert.match(worker, /resolveSingleNewLoftProposalId/);
+  assert.match(worker, /resolveLoftProposalReconciliation/);
   assert.match(worker, /\.is\("proposal_id", null\)/);
-  assert.match(worker, /await vincularPropostaAoCancelamento\(job\.id, proposalId\)/);
+  assert.match(worker, /await vincularPropostaAoCancelamento\(job\.id, resolution\.proposalId\)/);
+  assert.match(worker, /finishAlreadyTerminalLoftReconciliation/);
 });
 
 test("encerra reparos sem lease depois que todas as tentativas foram consumidas", async () => {

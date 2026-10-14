@@ -44,6 +44,7 @@ interface ProposalRowSnapshot {
   proposalId: string | null;
   documents: string[];
   createdText: string | null;
+  statusText: string | null;
   text: string;
 }
 
@@ -84,6 +85,50 @@ export function resolveSingleNewLoftProposalId(
     );
   }
   return newProposalIds[0];
+}
+
+export interface LoftProposalSummary {
+  proposalId: string;
+  terminal: boolean;
+}
+
+export type LoftProposalReconciliation =
+  { kind: "attach"; proposalId: string } | { kind: "already-terminal"; proposalIds: string[] };
+
+export function resolveLoftProposalReconciliation(
+  visibleProposals: readonly LoftProposalSummary[],
+  knownProposalIds: readonly string[],
+): LoftProposalReconciliation | null {
+  const known = new Set(
+    knownProposalIds
+      .map((proposalId) => normalizeProposalId(proposalId))
+      .filter((proposalId): proposalId is string => Boolean(proposalId)),
+  );
+  const unseen = new Map<string, LoftProposalSummary>();
+  for (const proposal of visibleProposals) {
+    const proposalId = normalizeProposalId(proposal.proposalId);
+    if (!proposalId || known.has(proposalId)) continue;
+    const previous = unseen.get(proposalId);
+    unseen.set(proposalId, {
+      proposalId,
+      terminal: Boolean(previous?.terminal || proposal.terminal),
+    });
+  }
+
+  const newProposals = Array.from(unseen.values());
+  if (newProposals.length === 0) return null;
+  if (newProposals.length === 1) {
+    return { kind: "attach", proposalId: newProposals[0].proposalId };
+  }
+  if (newProposals.every((proposal) => proposal.terminal)) {
+    return {
+      kind: "already-terminal",
+      proposalIds: newProposals.map((proposal) => proposal.proposalId),
+    };
+  }
+  throw new LoftPortalCancellationError(
+    "A lista exibiu mais de uma proposta nova e ao menos uma ainda ativa; nenhuma identidade foi presumida.",
+  );
 }
 
 function normalizeDocument(value: unknown): string | null {
@@ -159,6 +204,9 @@ async function readRowSnapshot(row: Locator): Promise<ProposalRowSnapshot> {
     const createdColumn = headers.findIndex((header) =>
       /cria(?:ç|c)[aã]o|criado\s+em/i.test(header),
     );
+    const statusColumn = headers.findIndex((header) =>
+      /^(?:status|situa(?:ç|c)[aã]o|resultado)$/i.test(header),
+    );
 
     let proposalId: string | null = null;
     for (const anchor of Array.from(element.querySelectorAll("a[href]"))) {
@@ -210,8 +258,19 @@ async function readRowSnapshot(row: Locator): Promise<ProposalRowSnapshot> {
         : (text.match(/\b\d{1,2}\/\d{1,2}\/\d{4}(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?\b/)?.[0] ?? "")) ||
       null;
 
-    return { proposalId, documents: Array.from(documents), createdText, text };
+    const statusText =
+      statusColumn >= 0 && cells[statusColumn]
+        ? String(cells[statusColumn].textContent ?? "")
+            .replace(/\s+/g, " ")
+            .trim() || null
+        : null;
+
+    return { proposalId, documents: Array.from(documents), createdText, statusText, text };
   });
+}
+
+function isTerminalProposal(candidate: ProposalRowSnapshot): boolean {
+  return TERMINAL_PROPOSAL_PATTERN.test(candidate.statusText ?? candidate.text);
 }
 
 async function readVisibleCandidates(page: Page): Promise<ProposalCandidate[]> {
@@ -396,7 +455,7 @@ async function searchCancelledTab(
   await submitSearch(page, searchInput);
   const candidate = await waitForExactCandidate(page, proposalId, timeoutMs);
   if (!candidate) return null;
-  if (!TERMINAL_PROPOSAL_PATTERN.test(candidate.text)) {
+  if (!isTerminalProposal(candidate)) {
     throw new LoftPortalCancellationError(
       `A aba Canceladas não confirmou o estado terminal da proposta ${proposalId}; nenhuma ação foi presumida como concluída.`,
     );
@@ -741,7 +800,7 @@ async function selectedRowIsCancelled(
           Boolean(document && candidate.documents.includes(document)) &&
           candidate.createdText === selected.createdText,
       );
-  return sameRows.some((candidate) => TERMINAL_PROPOSAL_PATTERN.test(candidate.text));
+  return sameRows.some((candidate) => isTerminalProposal(candidate));
 }
 
 async function waitForCancellationConfirmation(
@@ -802,7 +861,7 @@ async function cancelLoftProposalFromPortal(
   await assertCandidateStillMatches(candidate, proposalId, document);
   await options.onProposalResolved?.(proposalId);
 
-  if (foundInCancelledTab || TERMINAL_PROPOSAL_PATTERN.test(candidate.text)) {
+  if (foundInCancelledTab || isTerminalProposal(candidate)) {
     return {
       proposalId,
       document,
@@ -861,41 +920,61 @@ export interface CancelLoftProposalViaPortalResult {
 }
 
 /**
- * Captura os IDs visíveis que já pertencem ao CPF/CNPJ antes de uma nova simulação.
- * O retorno contém somente IDs exatos extraídos de linhas com documento exato.
+ * Captura as propostas visíveis que já pertencem ao CPF/CNPJ antes de uma nova simulação.
+ * O retorno contém somente IDs exatos e o estado terminal extraído da linha correspondente.
  */
-export async function listLoftProposalIdsForDocument(
+export async function listLoftProposalsForDocument(
   page: Page,
   document: string,
   timeoutMs = DEFAULT_TIMEOUT_MS,
-): Promise<string[]> {
+): Promise<LoftProposalSummary[]> {
   const normalizedDocument = normalizeDocument(document);
   if (!normalizedDocument) {
     throw new LoftPortalCancellationError("Informe um CPF/CNPJ válido para criar o snapshot.");
   }
   const boundedTimeout = Math.max(500, timeoutMs);
   await navigateAndSearchProposals(page, normalizedDocument, boundedTimeout);
-  const proposalIds = new Set(
-    await waitForVisibleProposalIdsForDocument(page, normalizedDocument, boundedTimeout),
-  );
+  const proposals = new Map<string, LoftProposalSummary>();
 
-  const tabPatterns = [
-    ...ACTIVE_PROPOSAL_TAB_PATTERNS,
-    /^canceladas(?:\s*\d+)?$/i,
-  ];
-  for (const pattern of tabPatterns) {
-    const tab = await findProposalTab(page, pattern);
-    if (!tab || (await tab.getAttribute("aria-selected")) === "true") continue;
-    await searchProposalTab(page, tab, normalizedDocument, boundedTimeout);
-    const ids = await waitForVisibleProposalIdsForDocument(
+  const collectCurrentTab = async (): Promise<void> => {
+    const proposalIds = await waitForVisibleProposalIdsForDocument(
       page,
       normalizedDocument,
       boundedTimeout,
     );
-    ids.forEach((proposalId) => proposalIds.add(proposalId));
+    const candidates = await readVisibleCandidates(page);
+    for (const proposalId of proposalIds) {
+      const candidate = candidates.find(
+        (item) => item.proposalId === proposalId && item.documents.includes(normalizedDocument),
+      );
+      const previous = proposals.get(proposalId);
+      proposals.set(proposalId, {
+        proposalId,
+        terminal: Boolean(previous?.terminal || (candidate && isTerminalProposal(candidate))),
+      });
+    }
+  };
+
+  await collectCurrentTab();
+
+  const tabPatterns = [...ACTIVE_PROPOSAL_TAB_PATTERNS, /^canceladas(?:\s*\d+)?$/i];
+  for (const pattern of tabPatterns) {
+    const tab = await findProposalTab(page, pattern);
+    if (!tab || (await tab.getAttribute("aria-selected")) === "true") continue;
+    await searchProposalTab(page, tab, normalizedDocument, boundedTimeout);
+    await collectCurrentTab();
   }
 
-  return Array.from(proposalIds);
+  return Array.from(proposals.values());
+}
+
+export async function listLoftProposalIdsForDocument(
+  page: Page,
+  document: string,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+): Promise<string[]> {
+  const proposals = await listLoftProposalsForDocument(page, document, timeoutMs);
+  return proposals.map((proposal) => proposal.proposalId);
 }
 
 /** Valida URL e busca da superfície de cancelamento sem selecionar nem alterar propostas. */

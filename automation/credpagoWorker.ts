@@ -38,8 +38,9 @@ import { LoftCancellationClient, extractLoftProposalId } from "./loftCancellatio
 import {
   cancelLoftProposalViaPortal,
   listLoftProposalIdsForDocument,
+  listLoftProposalsForDocument,
   probeLoftProposalCancellationPortal,
-  resolveSingleNewLoftProposalId,
+  resolveLoftProposalReconciliation,
 } from "./loftPortalCancellation";
 import { selectRandomCreditSimulationCep } from "./creditSimulationCep";
 import { observeCreditSimulationApi } from "./creditSimulationApiObserver";
@@ -125,6 +126,7 @@ interface LoftCancellationJob {
   correlation_id: string;
   proposal_id: string | null;
   known_proposal_ids: string[];
+  submitted_at: string | null;
   attempt_count: number;
   max_attempts: number;
 }
@@ -589,6 +591,31 @@ async function loadLoftCancellationDocument(job: LoftCancellationJob): Promise<s
   return document;
 }
 
+async function finishAlreadyTerminalLoftReconciliation(job: LoftCancellationJob): Promise<void> {
+  const now = new Date().toISOString();
+  const { data, error } = await supabaseAdmin
+    .from("loft_proposal_cancellations")
+    .update({
+      status: "cancelled",
+      cancellation_reason: null,
+      cancelled_at: now,
+      last_error: null,
+      next_attempt_at: now,
+      worker_id: null,
+      lease_expires_at: null,
+    })
+    .eq("id", job.id)
+    .in("status", ["scheduled", "retry"])
+    .is("proposal_id", null)
+    .eq("attempt_count", job.attempt_count)
+    .select("id");
+  if (error) throw error;
+  if (!data?.length) {
+    throw new Error("O job mudou antes da conclusão da reconciliação terminal.");
+  }
+  registrarSucessoFilaCancelamento();
+}
+
 async function reconcilePendingLoftCancellation(
   context: BrowserContext,
   persistirSessao: () => Promise<void>,
@@ -596,7 +623,7 @@ async function reconcilePendingLoftCancellation(
   const { data, error } = await supabaseAdmin
     .from("loft_proposal_cancellations")
     .select(
-      "id,consultation_id,correlation_id,proposal_id,known_proposal_ids,attempt_count,max_attempts",
+      "id,consultation_id,correlation_id,proposal_id,known_proposal_ids,submitted_at,attempt_count,max_attempts",
     )
     .in("status", ["scheduled", "retry"])
     .is("proposal_id", null)
@@ -611,21 +638,38 @@ async function reconcilePendingLoftCancellation(
   let page: Page | null = null;
   try {
     page = await context.newPage();
-    const visibleProposalIds = await listLoftProposalIdsForDocument(
+    const visibleProposals = await listLoftProposalsForDocument(
       page,
       document,
       env.loftCancellationRequestTimeoutMs,
     );
-    const proposalId = resolveSingleNewLoftProposalId(
-      visibleProposalIds,
+    const resolution = resolveLoftProposalReconciliation(
+      visibleProposals,
       job.known_proposal_ids ?? [],
     );
-    if (!proposalId) {
+    if (!resolution) {
       throw new Error(
         "A lista ainda não exibiu uma proposta nova e inequívoca para reconciliar o envio.",
       );
     }
-    await vincularPropostaAoCancelamento(job.id, proposalId);
+    if (resolution.kind === "already-terminal") {
+      const submittedAt = Date.parse(job.submitted_at ?? "");
+      if (!Number.isFinite(submittedAt) || Date.now() - submittedAt < 2 * 60_000) {
+        throw new Error(
+          "As propostas candidatas já aparecem em estado terminal, mas a lista ainda aguarda estabilização.",
+        );
+      }
+      await persistirSessao();
+      await finishAlreadyTerminalLoftReconciliation(job);
+      runtimeState.cancellationExecution = "ok";
+      runtimeState.totalCancellations += 1;
+      runtimeState.lastSuccessfulCancellationAt = new Date().toISOString();
+      log(
+        `Job de cancelamento concluído sem clique: ${resolution.proposalIds.length} propostas novas já estavam em estado terminal.`,
+      );
+      return true;
+    }
+    await vincularPropostaAoCancelamento(job.id, resolution.proposalId);
     await persistirSessao();
     log("Job de cancelamento reconciliado com a única proposta nova encontrada após o envio.");
     return true;
