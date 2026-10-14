@@ -1265,12 +1265,32 @@ async function processarConsulta(
       let snapshotPage: Page | null = null;
       let snapshotCaptured = false;
       try {
-        snapshotPage = await context.newPage();
-        const knownProposalIds = await listLoftProposalIdsForDocument(
-          snapshotPage,
-          consulta.documento || consulta.tenant_document || "",
-          env.loftCancellationRequestTimeoutMs,
-        );
+        let knownProposalIds: string[] | null = null;
+        let lastSnapshotError: unknown = null;
+        for (let attempt = 1; attempt <= 2; attempt += 1) {
+          await snapshotPage?.close().catch(() => {});
+          snapshotPage = await context.newPage();
+          try {
+            knownProposalIds = await listLoftProposalIdsForDocument(
+              snapshotPage,
+              consulta.documento || consulta.tenant_document || "",
+              env.loftCancellationRequestTimeoutMs,
+            );
+            lastSnapshotError = null;
+            break;
+          } catch (error) {
+            lastSnapshotError = error;
+            if (attempt < 2) {
+              log(
+                `[${cid}] A lista de propostas não estabilizou — repetindo a captura segura uma única vez.`,
+              );
+              await sleep(500);
+            }
+          }
+        }
+        if (!knownProposalIds) {
+          throw lastSnapshotError ?? new Error("A lista de propostas não pôde ser fotografada.");
+        }
         snapshotCaptured = true;
         const scheduled = await agendarCancelamentoLoft(
           consulta,
