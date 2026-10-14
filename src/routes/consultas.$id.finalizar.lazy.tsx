@@ -1730,13 +1730,15 @@ function ResumoPropostaLoft(p: any) {
                         key={opcao.id}
                         type="button"
                         onClick={() => {
-                          if (metodoCobrancaPersistida) {
-                            abrirDetalhesCobrancaPersistida();
-                            return;
-                          }
+                          // Selecionar um método só altera a escolha local. Uma cobrança
+                          // persistida continua acessível exclusivamente pelo botão
+                          // "Ver cobrança atual" e nunca deve abrir ou ser criada aqui.
                           setPagamento(opcao.id);
                           if (opcao.id === "credit_card") {
                             setModalEscolhaCartaoAberto(true);
+                          } else {
+                            setCardSetupMode(null);
+                            setModalEscolhaCartaoAberto(false);
                           }
                         }}
                         className={`flex min-h-[118px] flex-col justify-between rounded-md border p-4 text-left transition ${
