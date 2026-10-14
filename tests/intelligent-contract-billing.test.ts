@@ -16,6 +16,7 @@ import {
   reducePaymentStatus,
   reduceSubscriptionStatus,
   shouldAttemptNotification,
+  shouldDispatchContractAfterPayment,
   shouldReconcileBillingOperation,
   subscriptionStatusFromEvent,
   webhookEventCanBeClaimed,
@@ -226,6 +227,25 @@ test("Checkout hospedado notifica a inicial e o cadastro recorrente com links di
       cardRegistration: true,
     },
   ]);
+});
+
+test("cartao libera o contrato somente depois do pagamento e da recorrencia", () => {
+  assert.equal(
+    shouldDispatchContractAfterPayment({ paymentStatus: "pending", recurringReady: true }),
+    false,
+  );
+  assert.equal(
+    shouldDispatchContractAfterPayment({ paymentStatus: "confirmed", recurringReady: false }),
+    false,
+  );
+  assert.equal(
+    shouldDispatchContractAfterPayment({ paymentStatus: "confirmed", recurringReady: true }),
+    true,
+  );
+  assert.equal(
+    shouldDispatchContractAfterPayment({ paymentStatus: "paid", recurringReady: true }),
+    true,
+  );
 });
 
 test("os 16 cenarios obrigatorios possuem expectativas deterministicas", async (t) => {

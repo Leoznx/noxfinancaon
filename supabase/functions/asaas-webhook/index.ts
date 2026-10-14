@@ -29,6 +29,7 @@ import {
   reduceSubscriptionStatus,
   recurringSetupAllowsContractActivation,
   shouldApplyConsolidatedEvent,
+  shouldDispatchContractAfterPayment,
   subscriptionStatusFromEvent,
 } from "../_shared/billing-state.ts";
 import { materializeInvoice } from "../_shared/contract-billing.ts";
@@ -61,6 +62,64 @@ async function recurringSetupAllowsActivation(supabase: any, consultationId: str
     .maybeSingle();
   if (subscriptionError) throw subscriptionError;
   return recurringSetupAllowsContractActivation(consultation, subscription);
+}
+
+async function dispatchContractWhenBillingIsReady(
+  supabase: any,
+  consultationId: string,
+  paymentStatus: unknown,
+) {
+  const recurringReady = await recurringSetupAllowsActivation(supabase, consultationId);
+  const { data: existingSignature, error: signatureError } = await supabase
+    .from("contract_signatures")
+    .select("*")
+    .eq("consultation_id", consultationId)
+    .maybeSingle();
+  if (signatureError) throw signatureError;
+
+  if (!shouldDispatchContractAfterPayment({ paymentStatus, recurringReady })) {
+    if (
+      ["confirmed", "paid"].includes(normalizePaymentStatus(paymentStatus)) &&
+      !recurringReady &&
+      (existingSignature?.signature_status === "signed" ||
+        ["signed", "active"].includes(existingSignature?.status))
+    ) {
+      const { error } = await supabase
+        .from("consultas_credito")
+        .update({
+          substatus: "assinatura_concluida_aguardando_recorrencia",
+          activation_status: "aguardando_pagamento",
+        })
+        .eq("id", consultationId);
+      if (error) throw error;
+    }
+    return { ok: true, status: "awaiting_billing_requirements" };
+  }
+
+  const contractResult =
+    existingSignature?.signature_status === "signed" ||
+    ["signed", "active"].includes(existingSignature?.status)
+      ? await finalizeD4SignContract(supabase, existingSignature)
+      : await dispatchD4SignContract(supabase, consultationId, {
+          allowPendingPayment: true,
+        });
+
+  if (!contractResult.ok) {
+    const signatureId =
+      "signatureId" in contractResult ? contractResult.signatureId : existingSignature?.id || null;
+    const contractError =
+      "error" in contractResult
+        ? contractResult.error
+        : "status" in contractResult
+          ? contractResult.status
+          : "unknown";
+    console.error("[asaas-webhook] falha ao despachar contrato D4Sign", {
+      consultationId,
+      signatureId,
+      error: contractError || "unknown",
+    });
+  }
+  return contractResult;
 }
 
 async function hasPendingBillingOperation(supabase: any, externalReference?: string | null) {
@@ -613,50 +672,11 @@ serve(async (req) => {
       faturaVinculada.charge_kind === "initial" ||
       (faturaVinculada.charge_kind == null && Number(faturaVinculada.numero_parcela) === 1);
     if (isFirstPayment && (eventType === "PAYMENT_CONFIRMED" || eventType === "PAYMENT_RECEIVED")) {
-      const { data: existingSignature } = await supabase
-        .from("contract_signatures")
-        .select("*")
-        .eq("consultation_id", localPayment.consultation_id)
-        .maybeSingle();
-      const recurringReady = await recurringSetupAllowsActivation(
+      await dispatchContractWhenBillingIsReady(
         supabase,
         localPayment.consultation_id,
+        internalStatus,
       );
-      const contractResult =
-        existingSignature?.status === "signed"
-          ? recurringReady
-            ? await finalizeD4SignContract(supabase, existingSignature)
-            : { ok: true, status: "awaiting_recurring_authorization" }
-          : await dispatchD4SignContract(supabase, localPayment.consultation_id, {
-              allowPendingPayment: true,
-            });
-      if (!recurringReady && existingSignature?.status === "signed") {
-        await supabase
-          .from("consultas_credito")
-          .update({
-            substatus: "assinatura_concluida_aguardando_recorrencia",
-            activation_status: "aguardando_pagamento",
-          })
-          .eq("id", localPayment.consultation_id);
-      }
-      if (!contractResult.ok) {
-        // O evento financeiro continua processado: o pagamento não pode ser
-        // refeito por uma indisponibilidade externa. A tentativa fica salva
-        // em contract_signatures e pode ser retomada com segurança.
-        const signatureId = "signatureId" in contractResult
-          ? contractResult.signatureId
-          : existingSignature?.id || null;
-        const contractError = "error" in contractResult
-          ? contractResult.error
-          : "status" in contractResult
-          ? contractResult.status
-          : "unknown";
-        console.error("[asaas-webhook] falha ao despachar contrato D4Sign", {
-          consultationId: localPayment.consultation_id,
-          signatureId,
-          error: contractError || "unknown",
-        });
-      }
     }
   }
 
@@ -1030,22 +1050,8 @@ async function handleCheckoutEvent(
     .in("state", ["reserved", "provider_created", "ambiguous"]);
   if (aggregateError) throw aggregateError;
 
-  if (
-    initialCheckout &&
-    checkoutState === "paid" &&
-    (await recurringSetupAllowsActivation(supabase, local.consultation_id))
-  ) {
-    const { data: signature } = await supabase
-      .from("contract_signatures")
-      .select("*")
-      .eq("consultation_id", local.consultation_id)
-      .maybeSingle();
-    if (
-      signature?.signature_status === "signed" ||
-      ["signed", "active"].includes(signature?.status)
-    ) {
-      await finalizeD4SignContract(supabase, signature);
-    }
+  if (checkoutState === "paid") {
+    await dispatchContractWhenBillingIsReady(supabase, local.consultation_id, local.payment_status);
   }
   return { ignored: false, checkoutStatus: checkoutState, initialCheckout };
 }
@@ -1143,21 +1149,8 @@ async function handleSubscriptionEvent(
       .eq("idempotency_key", externalReference);
     if (operationError) throw operationError;
   }
-  if (
-    status === "active" &&
-    (await recurringSetupAllowsActivation(supabase, local.consultation_id))
-  ) {
-    const { data: signature } = await supabase
-      .from("contract_signatures")
-      .select("*")
-      .eq("consultation_id", local.consultation_id)
-      .maybeSingle();
-    if (
-      signature?.signature_status === "signed" ||
-      ["signed", "active"].includes(signature?.status)
-    ) {
-      await finalizeD4SignContract(supabase, signature);
-    }
+  if (status === "active") {
+    await dispatchContractWhenBillingIsReady(supabase, local.consultation_id, local.payment_status);
   }
   return { ignored: false, subscriptionStatus: status };
 }

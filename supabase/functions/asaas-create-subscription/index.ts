@@ -41,6 +41,8 @@ import {
   persistProviderTransition,
   reducePaymentStatus,
   reduceSubscriptionStatus,
+  recurringSetupAllowsContractActivation,
+  shouldDispatchContractAfterPayment,
   subscriptionStatusFromEvent,
 } from "../_shared/billing-state.ts";
 import { resolveBillingDueDay } from "../_shared/billing-automation.ts";
@@ -1081,7 +1083,15 @@ serve(async (req) => {
       const contractMonths = strictContractPeriodMonths(consulta);
       assertStoredContractPeriod(existing, contractMonths);
       await acquireContractPeriodLock(supabase, proposalId, contractMonths);
-      queuePendingContractFlow(supabase, proposalId);
+      const recurringReady = recurringSetupAllowsContractActivation(consulta, existing);
+      if (
+        shouldDispatchContractAfterPayment({
+          paymentStatus: existing.payment_status,
+          recurringReady,
+        })
+      ) {
+        queuePendingContractFlow(supabase, proposalId);
+      }
       return jsonResponse(req, await subscriptionResponse(supabase, existing, recipient));
     }
 
@@ -2149,7 +2159,15 @@ serve(async (req) => {
         });
       }
     }
-    queuePendingContractFlow(supabase, proposalId);
+    const recurringReady = recurringSetupAllowsContractActivation(consulta, updated);
+    if (
+      shouldDispatchContractAfterPayment({
+        paymentStatus: updated.payment_status,
+        recurringReady,
+      })
+    ) {
+      queuePendingContractFlow(supabase, proposalId);
+    }
     return jsonResponse(req, await subscriptionResponse(supabase, updated, recipient));
   } catch (error) {
     console.error("[asaas-create-subscription] erro", {

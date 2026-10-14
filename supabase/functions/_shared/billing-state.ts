@@ -213,6 +213,21 @@ export function recurringSetupAllowsContractActivation(
   );
 }
 
+/**
+ * O convite de assinatura só pode sair quando a primeira cobrança estiver
+ * confirmada e, no cartão, a recorrência já estiver pronta. Para Pix/boleto,
+ * `recurringReady` é sempre verdadeiro.
+ */
+export function shouldDispatchContractAfterPayment(input: {
+  paymentStatus: unknown;
+  recurringReady: boolean;
+}) {
+  return (
+    ["confirmed", "paid"].includes(normalizePaymentStatus(input.paymentStatus)) &&
+    input.recurringReady
+  );
+}
+
 export function shouldReconcileBillingOperation(state: unknown) {
   return ["reserved", "provider_created", "ambiguous", "persisted"].includes(String(state || ""));
 }

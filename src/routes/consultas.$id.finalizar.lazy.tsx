@@ -27,6 +27,10 @@ import {
 import { ModalPagamentoAsaas } from "@/components/simulacao/ModalPagamentoAsaas";
 import { ModalAssinaturaAsaas } from "@/components/simulacao/ModalAssinaturaAsaas";
 import {
+  ModalEnvioAutomatizadoSucesso,
+  type AutomatedSuccessKind,
+} from "@/components/simulacao/ModalEnvioAutomatizadoSucesso";
+import {
   ModalCronogramaBoletos,
   type CronogramaResultado,
 } from "@/components/simulacao/ModalCronogramaBoletos";
@@ -270,8 +274,7 @@ function toMoney(value: unknown) {
 
 function isAgencyBilling(consulta: any) {
   return (
-    consulta?.payment_type === "imobiliaria" ||
-    consulta?.billing_responsible_role === "imobiliaria"
+    consulta?.payment_type === "imobiliaria" || consulta?.billing_responsible_role === "imobiliaria"
   );
 }
 
@@ -318,7 +321,7 @@ function FinalizarPage() {
   const [comissaoPct, setComissaoPct] = useState<number>(10);
 
   // Pagamento
-  const [pagamento, setPagamento] = useState<"credit_card" | "pix" | "boleto" | "">("credit_card");
+  const [pagamento, setPagamento] = useState<"credit_card" | "pix" | "boleto" | "">("");
   const [incendioPagamento, setIncendioPagamento] = useState<IncendioPagamento>("parcelado");
   const [aceiteTermos, setAceiteTermos] = useState(false);
   const [tipoSeguroImovel, setTipoSeguroImovel] = useState<"residencial" | "comercial">(
@@ -372,13 +375,16 @@ function FinalizarPage() {
         // O tipo do imóvel é a base da alíquota do seguro incêndio no backend.
         // Começar sempre em "residencial" fazia a tela mostrar um valor e o
         // backend cobrar outro em todo imóvel comercial.
-        const subtipoSalvo = String((data as any).imovel_subtipo || (data as any).imoveis?.tipo || "");
+        const subtipoSalvo = String(
+          (data as any).imovel_subtipo || (data as any).imoveis?.tipo || "",
+        );
         if (subtipoSalvo) {
           const tipoSalvo = classificarTipoSeguro(subtipoSalvo);
           setTipoSeguroImovel(tipoSalvo);
           if (tipoSalvo === "comercial") {
             setComercialSubtipo(
-              COMERCIAL_OPCOES.find((opt) => opt.toLowerCase() === subtipoSalvo.toLowerCase()) ?? "",
+              COMERCIAL_OPCOES.find((opt) => opt.toLowerCase() === subtipoSalvo.toLowerCase()) ??
+                "",
             );
           } else {
             setResidencialSubtipo(
@@ -589,7 +595,9 @@ function FinalizarPage() {
       <DashboardLayout>
         <div className="mx-auto max-w-xl p-6 sm:p-10">
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
-            <h1 className="text-lg font-black text-neutral-900">Período do contrato não informado</h1>
+            <h1 className="text-lg font-black text-neutral-900">
+              Período do contrato não informado
+            </h1>
             <p className="mt-2 text-sm leading-relaxed text-neutral-600">
               Volte à proposta e selecione por quantos meses o contrato ficará vigente antes de
               continuar.
@@ -702,8 +710,8 @@ function FinalizarPage() {
               emissão do seguro, a apólice poderá não ser emitida e a proposta poderá ser cancelada.
             </p>
             <p>
-              <strong>6. Vigência.</strong> A apólice vigora por {contractPeriodLabel} a contar da data de
-              ativação pelo inquilino.
+              <strong>6. Vigência.</strong> A apólice vigora por {contractPeriodLabel} a contar da
+              data de ativação pelo inquilino.
             </p>
             <p>
               <strong>7. Sinistros.</strong> Sinistros devem ser comunicados em até 5 dias úteis
@@ -854,8 +862,8 @@ function FinalizarPage() {
               emissão do seguro, a apólice poderá não ser emitida e a proposta poderá ser cancelada.
             </p>
             <p>
-              <strong>6. Vigência.</strong> A apólice vigora por {contractPeriodLabel} a contar da data de
-              ativação pelo inquilino.
+              <strong>6. Vigência.</strong> A apólice vigora por {contractPeriodLabel} a contar da
+              data de ativação pelo inquilino.
             </p>
             <p>
               <strong>7. Sinistros.</strong> Sinistros devem ser comunicados em até 5 dias úteis
@@ -946,10 +954,9 @@ function ResumoPropostaLoft(p: any) {
     ? new Date(`${consulta.tenant_data_nascimento}T00:00:00`).toLocaleDateString("pt-BR")
     : "—";
   const planoNome = (plano?.nome ?? "—").replace(/^NOX\s+/i, "");
-  const tipoPagador =
-    isAgencyBilling(consulta)
-      ? "Recorrência via Imobiliária"
-      : "Recorrência via Inquilino";
+  const tipoPagador = isAgencyBilling(consulta)
+    ? "Recorrência via Imobiliária"
+    : "Recorrência via Inquilino";
   const solicitacao =
     String(id).slice(0, 8).replace(/\D/g, "") || numeroProposta.replace("NOX-", "");
   const historicoPadrao = `Criada solicitação ${numeroProposta} no produto ${planoNome}. Aluguel ${fmt(aluguel)}, condomínio ${fmt(condominio)}, outras taxas ${fmt(taxas)} e total ${fmt(totalLoc)}.`;
@@ -972,17 +979,16 @@ function ResumoPropostaLoft(p: any) {
     incendioPagamento === "parcelado"
       ? toMoney(mensalidadeBaseComPintura + premioIncendioMensal)
       : mensalidadeBaseComPintura;
-  const pagamentoInicial =
-    toMoney((incendioPagamento === "a_vista" ? premioIncendioAnual : 0) + taxaAtivacao);
+  const pagamentoInicial = toMoney(
+    (incendioPagamento === "a_vista" ? premioIncendioAnual : 0) + taxaAtivacao,
+  );
   const valorCobradoAgora = toMoney(mensalidadeFinal + pagamentoInicial);
   const pagamentoSelecionado = PAGAMENTOS.find((item) => item.id === pagamento);
   const faturamentoConsolidado = isAgencyBilling(consulta);
   const checkoutActions = faturamentoConsolidado
     ? { canPayNow: false, canPayLater: false }
     : checkoutActionsForMethod(pagamento);
-  const pagamentoOpcoes = (faturamentoConsolidado
-    ? ["boleto"]
-    : ["boleto", "pix", "credit_card"])
+  const pagamentoOpcoes = (faturamentoConsolidado ? ["boleto"] : ["boleto", "pix", "credit_card"])
     .map((id) => PAGAMENTOS.find((item) => item.id === id))
     .filter(Boolean) as typeof PAGAMENTOS;
   useEffect(() => {
@@ -993,7 +999,6 @@ function ResumoPropostaLoft(p: any) {
   }, [faturamentoConsolidado, pagamento, setPagamento]);
   const irParaPagamento = () => {
     setPagamentoAberto(true);
-    if (pagamento === "credit_card" && !cardSetupMode) setModalEscolhaCartaoAberto(true);
     window.setTimeout(
       () =>
         document
@@ -1030,11 +1035,20 @@ function ResumoPropostaLoft(p: any) {
   const [assinaturaAsaasResultado, setAssinaturaAsaasResultado] =
     useState<NormalizedAsaasSubscription | null>(null);
   const [modalAssinaturaAberto, setModalAssinaturaAberto] = useState(false);
+  const [modalEnvioSucesso, setModalEnvioSucesso] = useState<AutomatedSuccessKind | null>(null);
   const [cronogramaResultado, setCronogramaResultado] = useState<CronogramaResultado | null>(null);
   const [modalCronogramaAberto, setModalCronogramaAberto] = useState(false);
   const [parcelasFuturasPendentes, setParcelasFuturasPendentes] = useState(false);
   const pagandoRef = useRef(false);
   const reidratadoRef = useRef(false);
+  const metodoCobrancaPersistida = assinaturaAsaasResultado
+    ? "credit_card"
+    : (pagamentoAsaasResultado?.paymentMethod ?? null);
+
+  const abrirDetalhesCobrancaPersistida = () => {
+    if (assinaturaAsaasResultado) setModalAssinaturaAberto(true);
+    else if (pagamentoAsaasResultado) setModalAsaasAberto(true);
+  };
 
   // Quando o responsavel pelo pagamento e o inquilino e a forma e boleto, a
   // contratacao gera todas as mensalidades do periodo de uma vez (asaas-create-installment-
@@ -1073,7 +1087,6 @@ function ResumoPropostaLoft(p: any) {
         setCardSetupMode(subscription.mode);
         setPagamento("credit_card");
         setPagamentoAberto(true);
-        setModalAssinaturaAberto(true);
         if (subscription.selectedFireInsuranceMode) {
           setIncendioPagamento(
             subscription.selectedFireInsuranceMode === "avista" ? "a_vista" : "parcelado",
@@ -1086,7 +1099,6 @@ function ResumoPropostaLoft(p: any) {
         setPagamento(payment.paymentMethod);
         setPagamentoAberto(true);
         setCheckoutIntent(payment.deferPayment ? "pay_later" : "pay_now");
-        setModalAsaasAberto(true);
         setParcelasFuturasPendentes(installmentPlanPending);
         if (payment.selectedFireInsuranceMode) {
           setIncendioPagamento(
@@ -1293,18 +1305,21 @@ function ResumoPropostaLoft(p: any) {
       await registrarPropostaEnviada();
       setCheckoutIntent(intent);
       setPagamentoAsaasResultado(data);
-      setModalAsaasAberto(true);
+      setModalAsaasAberto(intent === "pay_now" || faturamentoConsolidado);
       try {
         await criarParcelasFuturas(pagamento as "pix" | "boleto");
       } catch {
         // A cobrança inicial continua válida e o modal oferece retry somente do cronograma.
       }
+      if (intent === "pay_later" && !faturamentoConsolidado) {
+        setModalEnvioSucesso("pay_later");
+      }
       toast.success(
         faturamentoConsolidado
           ? "Proposta enviada ao faturamento consolidado da imobiliária. A cobrança individual não será duplicada."
           : intent === "pay_later"
-          ? "Cobrança gerada com sucesso. O processo de contratação continuará normalmente. O pagamento está pendente."
-          : "Cobrança criada. Use os dados exibidos para pagar agora.",
+            ? "Cobrança gerada com sucesso. O processo de contratação continuará normalmente. O pagamento está pendente."
+            : "Cobrança criada. Use os dados exibidos para pagar agora.",
       );
     } catch (e: any) {
       console.error("Erro ao criar pagamento Asaas:", e);
@@ -1359,7 +1374,11 @@ function ResumoPropostaLoft(p: any) {
       await registrarPropostaEnviada();
       setCartao(emptyCardForm);
       setAssinaturaAsaasResultado(data);
-      setModalAssinaturaAberto(true);
+      if (mode === "checkout") {
+        setModalEnvioSucesso("card_checkout");
+      } else {
+        setModalAssinaturaAberto(true);
+      }
       toast.success(
         mode === "checkout"
           ? "Link seguro criado e enviado ao inquilino."
@@ -1406,12 +1425,7 @@ function ResumoPropostaLoft(p: any) {
   }
 
   async function atualizarAssinatura(
-    action:
-      | "refresh"
-      | "resend_email"
-      | "resend_whatsapp"
-      | "reissue_initial"
-      | "reissue_checkout",
+    action: "refresh" | "resend_email" | "resend_whatsapp" | "reissue_initial" | "reissue_checkout",
   ) {
     if (!assinaturaAsaasResultado) return;
     const atualizado = await manageAsaasSubscription({
@@ -1682,7 +1696,32 @@ function ResumoPropostaLoft(p: any) {
                   </p>
                 </div>
 
-                <div className={`grid grid-cols-1 gap-3 ${faturamentoConsolidado ? "" : "sm:grid-cols-3"}`}>
+                {metodoCobrancaPersistida && (
+                  <div className="flex flex-col gap-3 rounded-md border border-emerald-200 bg-emerald-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm font-bold text-emerald-950">
+                        Cobrança já preparada com segurança
+                      </p>
+                      <p className="mt-1 text-xs leading-relaxed text-emerald-800">
+                        Os detalhes ficam disponíveis sem abrir a cobrança automaticamente nem gerar
+                        uma duplicidade.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="shrink-0 border-emerald-300 bg-white"
+                      onClick={abrirDetalhesCobrancaPersistida}
+                    >
+                      Ver cobrança atual
+                    </Button>
+                  </div>
+                )}
+
+                <div
+                  className={`grid grid-cols-1 gap-3 ${faturamentoConsolidado ? "" : "sm:grid-cols-3"}`}
+                >
                   {pagamentoOpcoes.map((opcao) => {
                     const Icon = opcao.icon;
                     const selected = pagamento === opcao.id;
@@ -1691,6 +1730,10 @@ function ResumoPropostaLoft(p: any) {
                         key={opcao.id}
                         type="button"
                         onClick={() => {
+                          if (metodoCobrancaPersistida) {
+                            abrirDetalhesCobrancaPersistida();
+                            return;
+                          }
                           setPagamento(opcao.id);
                           if (opcao.id === "credit_card") {
                             setModalEscolhaCartaoAberto(true);
@@ -1732,8 +1775,9 @@ function ResumoPropostaLoft(p: any) {
                     <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-700 sm:grid-cols-3">
                       {cronogramaPreview.map((parcela) => (
                         <div key={parcela.installmentNumber}>
-                          {parcela.installmentNumber}/{contractPeriodMonths} — {MESES_PT[parcela.referenceMonth - 1]}/
-                          {parcela.referenceYear} · {formatDateBr(parcela.dueDate)}
+                          {parcela.installmentNumber}/{contractPeriodMonths} —{" "}
+                          {MESES_PT[parcela.referenceMonth - 1]}/{parcela.referenceYear} ·{" "}
+                          {formatDateBr(parcela.dueDate)}
                         </div>
                       ))}
                     </div>
@@ -2071,8 +2115,7 @@ function ResumoPropostaLoft(p: any) {
         }
         onRetryInstallments={
           parcelasFuturasPendentes && pagamento !== "credit_card"
-            ? () =>
-                criarParcelasFuturas(pagamento as "pix" | "boleto").then(() => undefined)
+            ? () => criarParcelasFuturas(pagamento as "pix" | "boleto").then(() => undefined)
             : undefined
         }
         onIrParaFaturas={() => navigate({ to: rotaFaturasAbertas as any })}
@@ -2116,6 +2159,34 @@ function ResumoPropostaLoft(p: any) {
         onIrParaFaturas={() => navigate({ to: rotaFaturasAbertas as any })}
       />
 
+      <ModalEnvioAutomatizadoSucesso
+        open={modalEnvioSucesso !== null}
+        kind={modalEnvioSucesso}
+        paymentMethodLabel={
+          modalEnvioSucesso === "card_checkout"
+            ? "Cartão de crédito"
+            : pagamentoSelecionado?.label || "Pagamento"
+        }
+        contractPeriodLabel={contractPeriodLabel}
+        emailMasked={
+          modalEnvioSucesso === "card_checkout"
+            ? assinaturaAsaasResultado?.recipient?.emailMasked
+            : pagamentoAsaasResultado?.recipient?.emailMasked
+        }
+        phoneMasked={
+          modalEnvioSucesso === "card_checkout"
+            ? assinaturaAsaasResultado?.recipient?.phoneMasked
+            : pagamentoAsaasResultado?.recipient?.phoneMasked
+        }
+        onClose={() => setModalEnvioSucesso(null)}
+        onViewDetails={() => {
+          const kind = modalEnvioSucesso;
+          setModalEnvioSucesso(null);
+          if (kind === "card_checkout") setModalAssinaturaAberto(true);
+          else setModalAsaasAberto(true);
+        }}
+      />
+
       <Dialog open={modalEscolhaCartaoAberto} onOpenChange={setModalEscolhaCartaoAberto}>
         <DialogContent className="max-w-md rounded-2xl">
           <DialogHeader>
@@ -2135,7 +2206,7 @@ function ResumoPropostaLoft(p: any) {
                 setModalEscolhaCartaoAberto(false);
               }}
             >
-              <CreditCard className="mr-2 h-5 w-5 shrink-0" /> Preencher cartão agora
+              <CreditCard className="mr-2 h-5 w-5 shrink-0" /> Pagar agora
             </Button>
             <Button
               type="button"
@@ -2145,7 +2216,7 @@ function ResumoPropostaLoft(p: any) {
                 setModalEscolhaCartaoAberto(false);
               }}
             >
-              <Send className="mr-2 h-5 w-5 shrink-0" /> Enviar link ao inquilino
+              <Send className="mr-2 h-5 w-5 shrink-0" /> Enviar para o inquilino
             </Button>
           </div>
         </DialogContent>
@@ -2624,8 +2695,9 @@ function EtapaPersonalizar(p: any) {
                 <div className="p-3 rounded-lg bg-neutral-50 border border-neutral-200 mb-2">
                   <p className="text-xs font-black">Pintura externa — {fmt(pinturaTotal)}</p>
                   <p className="text-[11px] text-neutral-500">
-                    Cobertura válida somente para pintura externa de casas, com danos por mau uso ou vontade própria.
-                    Apartamentos não possuem esta cobertura; desgaste natural de uso não é coberto.
+                    Cobertura válida somente para pintura externa de casas, com danos por mau uso ou
+                    vontade própria. Apartamentos não possuem esta cobertura; desgaste natural de
+                    uso não é coberto.
                   </p>
                 </div>
               )}
