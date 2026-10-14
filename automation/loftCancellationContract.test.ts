@@ -47,6 +47,7 @@ test("reconcilia automaticamente somente a única proposta nova após o envio", 
   assert.match(worker, /\.is\("proposal_id", null\)/);
   assert.match(worker, /await vincularPropostaAoCancelamento\(job\.id, resolution\.proposalId\)/);
   assert.match(worker, /finishAlreadyTerminalLoftReconciliation/);
+  assert.doesNotMatch(worker, /fluxo legado de CNPJ não devolve um ID causal/);
 });
 
 test("não tenta retirar outro cancelamento enquanto uma submissão aguarda reconciliação", async () => {

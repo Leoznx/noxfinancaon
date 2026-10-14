@@ -104,13 +104,6 @@ class LoftCancellationUnavailableError extends Error {
   }
 }
 
-class LoftCancellationIdentityUnavailableError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "LoftCancellationIdentityUnavailableError";
-  }
-}
-
 class ConsultaStateConflictError extends Error {
   constructor(message: string) {
     super(message);
@@ -1258,11 +1251,6 @@ async function processarConsulta(
 
     const prepararCancelamentoAntesDoEnvio = async (submissionToken: string) => {
       if (!env.loftCancellationEnabled) return null;
-      if (consulta.tipo_pessoa === "PJ" && env.loftCancellationRequired) {
-        throw new LoftCancellationIdentityUnavailableError(
-          "O fluxo legado de CNPJ não devolve um ID causal da proposta; o envio foi bloqueado antes do clique para não cancelar uma proposta externa por inferência.",
-        );
-      }
       let snapshotPage: Page | null = null;
       let snapshotCaptured = false;
       try {
