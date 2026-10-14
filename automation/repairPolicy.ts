@@ -14,7 +14,8 @@ export function activeCreditConsultationCount(
     Number.isFinite(runtimeCount) && runtimeCount > 0 ? Math.floor(runtimeCount) : 0;
   const safeDatabaseCount =
     Number.isFinite(databaseCount) && databaseCount > 0 ? Math.floor(databaseCount) : 0;
-  return Math.max(safeRuntimeCount, safeDatabaseCount);
+  const activeCancellationCount = creditWorkerHealth.activeCancellation === true ? 1 : 0;
+  return Math.max(safeRuntimeCount, safeDatabaseCount, activeCancellationCount);
 }
 
 /**

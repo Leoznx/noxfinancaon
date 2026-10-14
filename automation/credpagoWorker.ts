@@ -2150,6 +2150,7 @@ async function loop(once: boolean): Promise<void> {
       // cancelamento quando nenhuma consulta está usando a sessão e não retira
       // novas consultas enquanto a tela de propostas estiver em uso.
       if (env.loftCancellationEnabled && !cancelamentoEmAndamento && emAndamento.size === 0) {
+        runtimeState.activeCancellation = true;
         try {
           const reconciliationPending = await reconcilePendingLoftCancellation(
             contextoAberto.context,
@@ -2172,6 +2173,8 @@ async function loop(once: boolean): Promise<void> {
           }
         } catch (error) {
           registrarFalhaFilaCancelamento("Falha ao consultar a fila de cancelamentos", error);
+        } finally {
+          if (!cancelamentoEmAndamento) runtimeState.activeCancellation = false;
         }
       }
 

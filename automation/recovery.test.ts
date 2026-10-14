@@ -157,6 +157,10 @@ test("considera a atividade informada pelo proprio worker antes de permitir rest
   assert.equal(activeCreditConsultationCount({ activeConsultations: "2" }, 1), 2);
   assert.equal(activeCreditConsultationCount({ activeConsultations: 0 }, 3), 3);
   assert.equal(activeCreditConsultationCount({ activeConsultations: "invalido" }, 0), 0);
+  assert.equal(
+    activeCreditConsultationCount({ activeConsultations: 0, activeCancellation: true }, 0),
+    1,
+  );
 });
 
 test("analise automatica seleciona somente runbooks permitidos a partir da saude atual", () => {
