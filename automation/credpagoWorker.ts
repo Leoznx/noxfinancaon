@@ -41,6 +41,7 @@ import {
   listLoftProposalIdsForDocument,
   listLoftProposalsForDocument,
   probeLoftProposalCancellationPortal,
+  isLoftProposalReconciliationExpired,
   resolveLoftProposalReconciliation,
 } from "./loftPortalCancellation";
 import { selectRandomCreditSimulationCep } from "./creditSimulationCep";
@@ -617,6 +618,30 @@ async function finishAlreadyTerminalLoftReconciliation(job: LoftCancellationJob)
   registrarSucessoFilaCancelamento();
 }
 
+async function finishMissingLoftReconciliation(job: LoftCancellationJob): Promise<void> {
+  const now = new Date().toISOString();
+  const { data, error } = await supabaseAdmin
+    .from("loft_proposal_cancellations")
+    .update({
+      status: "aborted",
+      last_error: null,
+      next_attempt_at: now,
+      worker_id: null,
+      lease_expires_at: null,
+    })
+    .eq("id", job.id)
+    .in("status", ["scheduled", "retry"])
+    .is("proposal_id", null)
+    .is("worker_id", null)
+    .eq("attempt_count", job.attempt_count)
+    .select("id");
+  if (error) throw error;
+  if (!data?.length) {
+    throw new Error("O job mudou antes da conclusão da reconciliação vazia.");
+  }
+  registrarSucessoFilaCancelamento();
+}
+
 async function reconcilePendingLoftCancellation(
   context: BrowserContext,
   persistirSessao: () => Promise<void>,
@@ -649,9 +674,22 @@ async function reconcilePendingLoftCancellation(
       job.known_proposal_ids ?? [],
     );
     if (!resolution) {
-      throw new Error(
-        "A lista ainda não exibiu uma proposta nova e inequívoca para reconciliar o envio.",
+      if (
+        !isLoftProposalReconciliationExpired(
+          job.submitted_at,
+          Math.max(2 * 60_000, env.loftCancellationDelayMs),
+        )
+      ) {
+        registrarSucessoFilaCancelamento();
+        return false;
+      }
+      await persistirSessao();
+      await finishMissingLoftReconciliation(job);
+      runtimeState.cancellationExecution = "ok";
+      log(
+        "Job de cancelamento encerrado sem clique: nenhuma proposta nova apareceu após o prazo completo de reconciliação.",
       );
+      return true;
     }
     if (resolution.kind === "already-terminal") {
       const submittedAt = Date.parse(job.submitted_at ?? "");

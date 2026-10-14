@@ -7,6 +7,7 @@ import {
   listLoftProposalsForDocument,
   LOFT_PROPOSALS_URL,
   LoftPortalCancellationError,
+  isLoftProposalReconciliationExpired,
   probeLoftProposalCancellationPortal,
   resolveLoftProposalReconciliation,
   resolveSingleNewLoftProposalId,
@@ -444,6 +445,19 @@ test("encerra sem clique quando todas as novas candidatas já são terminais", (
       error instanceof LoftPortalCancellationError &&
       /ao menos uma ainda ativa/i.test(error.message),
   );
+});
+
+test("só encerra uma reconciliação vazia depois do prazo completo de estabilização", () => {
+  const now = Date.parse("2026-10-14T10:00:00.000Z");
+  assert.equal(
+    isLoftProposalReconciliationExpired("2026-10-14T09:31:00.000Z", 30 * 60_000, now),
+    false,
+  );
+  assert.equal(
+    isLoftProposalReconciliationExpired("2026-10-14T09:30:00.000Z", 30 * 60_000, now),
+    true,
+  );
+  assert.equal(isLoftProposalReconciliationExpired(null, 30 * 60_000, now), false);
 });
 
 test("sem ID exato falha fechado mesmo quando o CPF possui propostas novas", async () => {

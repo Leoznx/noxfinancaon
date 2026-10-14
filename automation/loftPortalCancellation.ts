@@ -95,6 +95,20 @@ export interface LoftProposalSummary {
 export type LoftProposalReconciliation =
   { kind: "attach"; proposalId: string } | { kind: "already-terminal"; proposalIds: string[] };
 
+export function isLoftProposalReconciliationExpired(
+  submittedAt: string | null | undefined,
+  settleMs: number,
+  nowMs = Date.now(),
+): boolean {
+  const submittedAtMs = Date.parse(String(submittedAt ?? ""));
+  return (
+    Number.isFinite(submittedAtMs) &&
+    Number.isFinite(settleMs) &&
+    settleMs >= 0 &&
+    nowMs - submittedAtMs >= settleMs
+  );
+}
+
 export function resolveLoftProposalReconciliation(
   visibleProposals: readonly LoftProposalSummary[],
   knownProposalIds: readonly string[],
