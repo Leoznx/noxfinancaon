@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   cardRegistrationStatusLabel,
   checkoutActionsForMethod,
+  checkoutMethodSelection,
   hasIncompleteInstallmentPlan,
   paymentLink,
   policyStatusLabel,
@@ -31,6 +32,21 @@ test("cartão nunca expõe pagar depois e exige escolha de cadastro", () => {
   assert.equal(shouldCollectCardData(null), false);
   assert.equal(shouldCollectCardData("checkout"), false);
   assert.equal(shouldCollectCardData("direct"), true);
+});
+
+test("selecionar ou repetir um método nunca abre uma cobrança persistida", () => {
+  for (const method of ["boleto", "pix", "credit_card"] as const) {
+    const firstSelection = checkoutMethodSelection(method);
+    const repeatedSelection = checkoutMethodSelection(method);
+
+    assert.equal(firstSelection.openPersistedDetails, false);
+    assert.equal(repeatedSelection.openPersistedDetails, false);
+    assert.equal(firstSelection.paymentMethod, method);
+    assert.deepEqual(repeatedSelection, firstSelection);
+  }
+  assert.equal(checkoutMethodSelection("credit_card").openCardOptions, true);
+  assert.equal(checkoutMethodSelection("boleto").openCardOptions, false);
+  assert.equal(checkoutMethodSelection("pix").openCardOptions, false);
 });
 
 test("link persistido prioriza invoiceUrl sem perder boleto legado", () => {

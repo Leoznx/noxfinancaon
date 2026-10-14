@@ -104,6 +104,20 @@ export function checkoutActionsForMethod(method: AsaasPaymentMethod | "") {
   };
 }
 
+/**
+ * Selecionar ou selecionar novamente um método nunca é uma ação financeira.
+ * Os detalhes persistidos só podem ser abertos pelo botão dedicado, enquanto
+ * o cartão pode apresentar apenas a escolha local de cadastro.
+ */
+export function checkoutMethodSelection(method: AsaasPaymentMethod) {
+  return {
+    paymentMethod: method,
+    openPersistedDetails: false,
+    openCardOptions: method === "credit_card",
+    clearCardMode: method !== "credit_card",
+  } as const;
+}
+
 export function isReissuablePaymentStatus(status: unknown) {
   return ["pending", "processing", "overdue", "risk_analysis", "approved"].includes(
     String(status || "").toLowerCase(),
