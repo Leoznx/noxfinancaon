@@ -3,6 +3,7 @@ import os from "node:os";
 import { env } from "./env";
 import { inspectAutomationLock } from "./automationLock";
 import { redactObject } from "./redaction";
+import { activeCreditConsultationCount } from "./repairPolicy";
 import type { DiagnosticSnapshot, HealthStatus } from "./recoveryTypes";
 import { supabaseAdmin } from "./supabaseAdmin";
 
@@ -71,20 +72,29 @@ export async function collectSystemDiagnostics(): Promise<DiagnosticSnapshot> {
   } catch {
     databaseReachable = false;
   }
+  activeConsultations = activeCreditConsultationCount(creditHealth ?? {}, activeConsultations);
 
-  const memoryLimit = cgroupLimit && cgroupLimit < Number.MAX_SAFE_INTEGER ? cgroupLimit : os.totalmem();
+  const memoryLimit =
+    cgroupLimit && cgroupLimit < Number.MAX_SAFE_INTEGER ? cgroupLimit : os.totalmem();
   const memoryUsed = cgroupUsed ?? os.totalmem() - os.freemem();
-  const memoryPercent = memoryLimit > 0 ? Math.round((memoryUsed / memoryLimit) * 10_000) / 100 : null;
+  const memoryPercent =
+    memoryLimit > 0 ? Math.round((memoryUsed / memoryLimit) * 10_000) / 100 : null;
   const load = os.loadavg()[0];
-  const cpuPercent = os.cpus().length > 0 ? Math.min(100, Math.round((load / os.cpus().length) * 10_000) / 100) : null;
+  const cpuPercent =
+    os.cpus().length > 0
+      ? Math.min(100, Math.round((load / os.cpus().length) * 10_000) / 100)
+      : null;
 
   let diskUsedPercent: number | null = null;
   let diskFreeBytes: number | null = null;
   try {
-    const stats = await fs.statfs(env.repairArtifactDir).catch(() => fs.statfs(pathRoot(env.repairArtifactDir)));
+    const stats = await fs
+      .statfs(env.repairArtifactDir)
+      .catch(() => fs.statfs(pathRoot(env.repairArtifactDir)));
     const total = Number(stats.blocks) * Number(stats.bsize);
     diskFreeBytes = Number(stats.bavail) * Number(stats.bsize);
-    diskUsedPercent = total > 0 ? Math.round(((total - diskFreeBytes) / total) * 10_000) / 100 : null;
+    diskUsedPercent =
+      total > 0 ? Math.round(((total - diskFreeBytes) / total) * 10_000) / 100 : null;
   } catch {
     // Mantem null: falta de metrica nunca vira zero saudavel.
   }
@@ -128,7 +138,8 @@ export function overallHealthStatus(snapshot: DiagnosticSnapshot): HealthStatus 
     (snapshot.cpuPercent != null && snapshot.cpuPercent >= env.highCpuPercent) ||
     (snapshot.memoryPercent != null && snapshot.memoryPercent >= env.highMemoryPercent) ||
     (snapshot.diskUsedPercent != null && snapshot.diskUsedPercent >= env.lowDiskUsedPercent)
-  ) return "UNSTABLE";
+  )
+    return "UNSTABLE";
   return "ONLINE";
 }
 
@@ -144,24 +155,40 @@ export function healthComponents(snapshot: DiagnosticSnapshot): Array<{
     {
       component: "automation",
       status: overallHealthStatus(snapshot),
-      summary: snapshot.creditWorkerReady ? "Automacao pronta para novas simulacoes." : "Automacao requer atencao.",
+      summary: snapshot.creditWorkerReady
+        ? "Automacao pronta para novas simulacoes."
+        : "Automacao requer atencao.",
       metrics: { activeConsultations: snapshot.activeConsultations },
     },
     {
       component: "credit-worker",
-      status: !snapshot.creditWorkerReachable ? "OFFLINE" : snapshot.creditWorkerReady ? "ONLINE" : "UNSTABLE",
-      summary: !snapshot.creditWorkerReachable ? "Worker de credito sem resposta." : snapshot.creditWorkerReady ? "Worker e navegador prontos." : "Worker ativo, mas ainda nao pronto.",
+      status: !snapshot.creditWorkerReachable
+        ? "OFFLINE"
+        : snapshot.creditWorkerReady
+          ? "ONLINE"
+          : "UNSTABLE",
+      summary: !snapshot.creditWorkerReachable
+        ? "Worker de credito sem resposta."
+        : snapshot.creditWorkerReady
+          ? "Worker e navegador prontos."
+          : "Worker ativo, mas ainda nao pronto.",
       metrics: snapshot.creditWorkerHealth,
     },
     {
       component: "database",
       status: snapshot.databaseReachable ? "ONLINE" : "OFFLINE",
-      summary: snapshot.databaseReachable ? "Fila Supabase acessivel." : "Fila Supabase indisponivel.",
+      summary: snapshot.databaseReachable
+        ? "Fila Supabase acessivel."
+        : "Fila Supabase indisponivel.",
       metrics: {},
     },
     {
       component: "portal",
-      status: !snapshot.portalReachable ? "OFFLINE" : snapshot.portalBlocked ? "UNSTABLE" : "ONLINE",
+      status: !snapshot.portalReachable
+        ? "OFFLINE"
+        : snapshot.portalBlocked
+          ? "UNSTABLE"
+          : "ONLINE",
       summary: !snapshot.portalReachable
         ? "Portal de credito sem resposta."
         : snapshot.portalBlocked
@@ -175,7 +202,9 @@ export function healthComponents(snapshot: DiagnosticSnapshot): Array<{
         thresholdStatus(snapshot.cpuPercent, env.highCpuPercent),
         thresholdStatus(snapshot.memoryPercent, env.highMemoryPercent),
         thresholdStatus(snapshot.diskUsedPercent, env.lowDiskUsedPercent),
-      ].includes("UNSTABLE") ? "UNSTABLE" : "ONLINE",
+      ].includes("UNSTABLE")
+        ? "UNSTABLE"
+        : "ONLINE",
       summary: "CPU, memoria e disco monitorados pelo cgroup/container.",
       metrics: {
         cpuPercent: snapshot.cpuPercent,

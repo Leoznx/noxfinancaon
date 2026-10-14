@@ -135,17 +135,20 @@ async function applyRunbook(
   switch (runbook) {
     case "VALIDATE_SESSION":
     case "RESTART_CREDIT_WORKER": {
-      if (shouldSkipHealthyCreditWorkerRestart(runbook, snapshot)) {
+      // O snapshot do motor pode ter sido coletado antes de uma nova consulta
+      // começar. Revalida imediatamente antes do único passo destrutivo para
+      // nunca encerrar um navegador que passou a estar em uso.
+      const currentSnapshot = await collectSystemDiagnostics();
+      if (shouldSkipHealthyCreditWorkerRestart(runbook, currentSnapshot)) {
         return {
-          summary:
-            "Worker de credito ja esta autenticado e saudavel; reinicio historico ignorado.",
+          summary: "Worker de credito ja esta autenticado e saudavel; reinicio historico ignorado.",
           changed: false,
           rollbackAvailable: false,
         };
       }
-      if (snapshot.activeConsultations > 0) {
+      if (currentSnapshot.activeConsultations > 0) {
         throw new RetryableRepairError(
-          `Ha ${snapshot.activeConsultations} consulta(s) em andamento; restart adiado para evitar duplicidade.`,
+          `Ha ${currentSnapshot.activeConsultations} consulta(s) em andamento; restart adiado para evitar duplicidade.`,
         );
       }
       await requestCreditWorkerRestart(`${runbook}:${error.correlation_id}`);

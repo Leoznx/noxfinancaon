@@ -5,6 +5,18 @@ const CREDIT_RESTART_RUNBOOKS: ReadonlySet<RepairRunbook> = new Set([
   "RESTART_CREDIT_WORKER",
 ]);
 
+export function activeCreditConsultationCount(
+  creditWorkerHealth: Record<string, unknown>,
+  databaseCount = 0,
+): number {
+  const runtimeCount = Number(creditWorkerHealth.activeConsultations);
+  const safeRuntimeCount =
+    Number.isFinite(runtimeCount) && runtimeCount > 0 ? Math.floor(runtimeCount) : 0;
+  const safeDatabaseCount =
+    Number.isFinite(databaseCount) && databaseCount > 0 ? Math.floor(databaseCount) : 0;
+  return Math.max(safeRuntimeCount, safeDatabaseCount);
+}
+
 /**
  * Incidentes antigos podem continuar na fila depois que o worker já se recuperou
  * ou uma nova versão foi publicada. Nessa situação, reiniciá-lo novamente só

@@ -5,6 +5,7 @@ import { env } from "./env";
 import { reportAutomationError } from "./errorReporter";
 import { analyzeWorkerLogLine } from "./logIncidentMonitor";
 import { log, logErro, logStructured } from "./logger";
+import { activeCreditConsultationCount } from "./repairPolicy";
 
 const baseDir = path.dirname(fileURLToPath(import.meta.url));
 let stopping = false;
@@ -131,6 +132,23 @@ async function stopChild(child: ChildProcess | null, timeoutMs = 20_000): Promis
   if (child.exitCode == null) child.kill("SIGKILL");
 }
 
+async function creditWorkerHasActiveConsultation(): Promise<boolean> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5_000);
+  try {
+    const response = await fetch(`http://127.0.0.1:${env.healthPort}/health`, {
+      signal: controller.signal,
+    });
+    if (!response.ok) return false;
+    const health = (await response.json()) as Record<string, unknown>;
+    return activeCreditConsultationCount(health) > 0;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function controlledCreditRestart(requestId: string, reason: string): Promise<void> {
   if (creditRestarting) {
     repair?.send?.({
@@ -143,6 +161,15 @@ async function controlledCreditRestart(requestId: string, reason: string): Promi
   }
   creditRestarting = true;
   try {
+    if (await creditWorkerHasActiveConsultation()) {
+      repair?.send?.({
+        type: "restart-credit-result",
+        requestId,
+        ok: false,
+        error: "Restart recusado porque existe uma consulta em andamento.",
+      });
+      return;
+    }
     logStructured("supervisor_credit_restart_requested", { requestId, reason });
     const current = credit;
     await stopChild(current);

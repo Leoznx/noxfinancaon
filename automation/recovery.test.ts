@@ -9,7 +9,10 @@ import {
 import { classifyAutomationError, runbookForCategory } from "./errorClassifier";
 import { planAiRecovery } from "./aiRecoveryPlanner";
 import { analyzeWorkerLogLine } from "./logIncidentMonitor";
-import { shouldSkipHealthyCreditWorkerRestart } from "./repairPolicy";
+import {
+  activeCreditConsultationCount,
+  shouldSkipHealthyCreditWorkerRestart,
+} from "./repairPolicy";
 import { redactObject, redactSensitiveText, sanitizeUrl } from "./redaction";
 import type { AutomationErrorRecord, DiagnosticSnapshot } from "./recoveryTypes";
 
@@ -147,6 +150,13 @@ test("reparo historico nao reinicia um worker que ja esta saudavel", () => {
     false,
   );
   assert.equal(shouldSkipHealthyCreditWorkerRestart("VALIDATE_SELECTORS", snapshot), false);
+});
+
+test("considera a atividade informada pelo proprio worker antes de permitir restart", () => {
+  assert.equal(activeCreditConsultationCount({ activeConsultations: 1 }, 0), 1);
+  assert.equal(activeCreditConsultationCount({ activeConsultations: "2" }, 1), 2);
+  assert.equal(activeCreditConsultationCount({ activeConsultations: 0 }, 3), 3);
+  assert.equal(activeCreditConsultationCount({ activeConsultations: "invalido" }, 0), 0);
 });
 
 test("analise automatica seleciona somente runbooks permitidos a partir da saude atual", () => {
