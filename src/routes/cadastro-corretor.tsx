@@ -25,6 +25,7 @@ const searchSchema = z.object({
     .string()
     .regex(/^[a-f0-9]{48}$/i)
     .optional(),
+  al: z.string().regex(/^[a-f0-9]{48}$/i).optional(),
   ma: z.string().uuid().optional(),
 });
 

@@ -20,7 +20,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
-import { UserPlus, Mail, Phone, Trash2, Info, Eye, IdCard, CheckCircle2, Pencil, Split } from "lucide-react";
+import { UserPlus, Mail, Phone, Trash2, Info, Eye, IdCard, CheckCircle2, Pencil, Split, Send, Copy, Link2 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -33,6 +33,7 @@ import {
   createBrokerAgencyInvitation,
   listMyBrokerAgencyMembers,
 } from "@/lib/broker-agency-invitations";
+import { buildBrokerAgencySignupUrl, getOrCreateMyBrokerAgencySignupLink } from "@/lib/broker-agency-signup-links";
 
 export const Route = createLazyFileRoute("/corretores-admin")({
   component: () => (
@@ -91,6 +92,11 @@ function CorretoresAdmin() {
   const [commissionMode, setCommissionMode] = useState<BrokerCommissionAllocationMode>("broker_full");
   const [editingCommissionOf, setEditingCommissionOf] = useState<any | null>(null);
   const [savingCommissionMode, setSavingCommissionMode] = useState(false);
+  const [signupLinkOpen, setSignupLinkOpen] = useState(false);
+  const [signupLinkLoading, setSignupLinkLoading] = useState(false);
+  const [signupLink, setSignupLink] = useState("");
+  const [signupLinkAgencyName, setSignupLinkAgencyName] = useState("");
+  const [signupLinkUsageCount, setSignupLinkUsageCount] = useState(0);
 
   const isImobiliaria = user?.role === "imobiliaria";
 
@@ -270,6 +276,42 @@ function CorretoresAdmin() {
     }
   };
 
+  const handleOpenSignupLink = async () => {
+    setSignupLinkLoading(true);
+    try {
+      const result = await getOrCreateMyBrokerAgencySignupLink();
+      if (!result.data) {
+        toast.error(result.error || "Não foi possível gerar o link de cadastro.");
+        return;
+      }
+      setSignupLink(buildBrokerAgencySignupUrl(result.data.token, window.location.origin));
+      setSignupLinkAgencyName(result.data.agencyName);
+      setSignupLinkUsageCount(result.data.usageCount);
+      setSignupLinkOpen(true);
+    } finally {
+      setSignupLinkLoading(false);
+    }
+  };
+
+  const copySignupLink = async () => {
+    if (!signupLink) return;
+    await navigator.clipboard.writeText(signupLink);
+    toast.success("Link de cadastro copiado.");
+  };
+
+  const shareSignupLink = async () => {
+    if (!signupLink) return;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: `Cadastro de corretor — ${signupLinkAgencyName}`, text: `Cadastre-se como corretor vinculado à ${signupLinkAgencyName}:`, url: signupLink });
+        return;
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+      }
+    }
+    await copySignupLink();
+  };
+
   const handleUpdateCommissionMode = async () => {
     if (!editingCommissionOf) return;
     setSavingCommissionMode(true);
@@ -361,7 +403,12 @@ function CorretoresAdmin() {
         </div>
 
         {isImobiliaria && (
-          <Dialog
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Button type="button" variant="outline" onClick={handleOpenSignupLink} disabled={signupLinkLoading} className="border-yellow-400 bg-yellow-50 hover:bg-yellow-100 text-neutral-900 font-bold h-12 px-6 rounded-xl flex items-center gap-2">
+              <Send size={19} />
+              {signupLinkLoading ? "GERANDO..." : "ENVIAR LINK"}
+            </Button>
+            <Dialog
             open={open}
             onOpenChange={(v) => {
               setOpen(v);
@@ -489,9 +536,36 @@ function CorretoresAdmin() {
                 </div>
               )}
             </DialogContent>
-          </Dialog>
+            </Dialog>
+          </div>
         )}
       </div>
+
+      <Dialog open={signupLinkOpen} onOpenChange={setSignupLinkOpen}>
+        <DialogContent className="sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-2xl font-bold">
+              <Link2 className="text-yellow-600" size={24} />
+              Link para novos corretores
+            </DialogTitle>
+            <DialogDescription>
+              Quem se cadastrar por este link será vinculado automaticamente à {signupLinkAgencyName || "sua imobiliária"}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-950">
+            Este link é permanente, não expira e pode ser usado por quantos corretores forem necessários.
+            {signupLinkUsageCount > 0 && <span className="mt-1 block font-bold">{signupLinkUsageCount} cadastro(s) já concluído(s) por este link.</span>}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="broker-signup-link">Link de cadastro</Label>
+            <Input id="broker-signup-link" value={signupLink} readOnly className="h-12" />
+          </div>
+          <DialogFooter className="gap-2 sm:justify-between">
+            <Button type="button" variant="outline" onClick={copySignupLink} className="h-11 gap-2"><Copy size={17} />Copiar link</Button>
+            <Button type="button" onClick={shareSignupLink} className="h-11 gap-2 bg-neutral-900 text-white hover:bg-neutral-800"><Send size={17} />Enviar link</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Card className="border-neutral-200 shadow-sm overflow-hidden bg-white">
         {/* Mobile/tablet estreito: cards empilhados, sem tabela pra arrastar. */}

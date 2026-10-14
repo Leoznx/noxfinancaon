@@ -5,6 +5,7 @@ import { linkTenantRecordsByCpf } from "@/lib/inquilino-signup.functions";
 import { defaultAvatarForName } from "@/lib/gender-avatar";
 import { buildAuthEmailCallbackUrl } from "@/lib/auth-email-links";
 import { enforceSecurityRateLimit } from "@/lib/security-rate-limit.server";
+import { normalizeBrokerAgencySignupToken } from "@/lib/broker-agency-signup-token";
 
 function buildVerificationLink(properties: { hashed_token: string; verification_type: string }) {
   const appUrl =
@@ -154,6 +155,7 @@ const profissionalSchema = z
     // tem acesso à lista de imobiliárias, então precisa identificar a empresa
     // por um dado que ele já sabe (CNPJ ou e-mail de contato).
     imobiliariaIdentificador: z.string().optional(),
+    agencySignupToken: z.string().regex(/^[a-f0-9]{48}$/i).optional(),
     // Proprietário
     cpfCnpj: z.string().optional(),
     // Comuns a corretor/proprietário
@@ -169,12 +171,20 @@ const profissionalSchema = z
     if (
       data.role === "corretor" &&
       data.vinculadoImobiliaria &&
+      !data.agencySignupToken &&
       !data.imobiliariaIdentificador?.trim()
     ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["imobiliariaIdentificador"],
         message: "Informe o CNPJ ou o e-mail da imobiliária à qual o corretor está vinculado.",
+      });
+    }
+    if (data.agencySignupToken && data.role !== "corretor") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["agencySignupToken"],
+        message: "O link da imobiliária só pode ser usado no cadastro de corretor.",
       });
     }
     if (data.sellerMeetingId && !data.sellerLinkToken) {
@@ -228,11 +238,28 @@ export const signUpProfissional = createServerFn({ method: "POST" })
       return { ok: false as const, error: "erro" as const };
     }
 
+    const agencySignupToken = normalizeBrokerAgencySignupToken(data.agencySignupToken);
+
+    // O link permanente resolve a imobiliária exclusivamente no servidor. O
+    // cliente recebe apenas o nome de exibição e nunca escolhe o id do vínculo.
+    let imobiliariaIdResolvida: string | null = null;
+    if (data.role === "corretor" && agencySignupToken) {
+      const { data: agencyLink, error: agencyLinkError } = await supabaseAdmin
+        .from("broker_agency_signup_links")
+        .select("imobiliaria_id")
+        .eq("token", agencySignupToken)
+        .eq("active", true)
+        .maybeSingle();
+      if (agencyLinkError || !agencyLink?.imobiliaria_id) {
+        return { ok: false as const, error: "link_imobiliaria_invalido" as const };
+      }
+      imobiliariaIdResolvida = agencyLink.imobiliaria_id;
+    }
+
     // Vinculado por CNPJ ou e-mail de contato (nunca por id vindo do cliente —
     // o visitante nunca recebe a lista de imobiliárias). O CNPJ é comparado só
     // pelos dígitos porque a coluna guarda o valor mascarado ("00.000.000/0000-00").
-    let imobiliariaIdResolvida: string | null = null;
-    if (data.role === "corretor" && data.vinculadoImobiliaria) {
+    if (data.role === "corretor" && data.vinculadoImobiliaria && !agencySignupToken) {
       const identificador = (data.imobiliariaIdentificador || "").trim();
       const isEmail = identificador.includes("@");
       const digitosIdentificador = identificador.replace(/\D/g, "");
@@ -332,14 +359,24 @@ export const signUpProfissional = createServerFn({ method: "POST" })
           creci: data.creci,
           cidade: data.cidade,
           estado: data.estado,
-          vinculado_imobiliaria: data.vinculadoImobiliaria ?? false,
-          imobiliaria_id: data.vinculadoImobiliaria ? imobiliariaIdResolvida : null,
+          vinculado_imobiliaria: !!agencySignupToken || (data.vinculadoImobiliaria ?? false),
+          imobiliaria_id: agencySignupToken || data.vinculadoImobiliaria ? imobiliariaIdResolvida : null,
         } as any,
         { onConflict: "profile_id" },
       );
       if (corretorError) {
         await supabaseAdmin.auth.admin.deleteUser(userId);
         return { ok: false as const, error: "erro" as const };
+      }
+      if (agencySignupToken) {
+        const { error: claimError } = await (supabaseAdmin as any).rpc(
+          "claim_broker_agency_signup_link",
+          { p_token: agencySignupToken, p_profile_id: userId },
+        );
+        if (claimError) {
+          await supabaseAdmin.auth.admin.deleteUser(userId);
+          return { ok: false as const, error: "link_imobiliaria_invalido" as const };
+        }
       }
     } else if (data.role === "proprietario") {
       await supabaseAdmin.from("proprietarios").insert({

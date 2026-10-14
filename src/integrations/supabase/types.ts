@@ -1007,6 +1007,93 @@ export type Database = {
           },
         ]
       }
+      broker_agency_signup_attributions: {
+        Row: {
+          created_at: string
+          id: string
+          link_id: string
+          registered_profile_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          link_id: string
+          registered_profile_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          link_id?: string
+          registered_profile_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "broker_agency_signup_attributions_link_id_fkey"
+            columns: ["link_id"]
+            isOneToOne: false
+            referencedRelation: "broker_agency_signup_links"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "broker_agency_signup_attributions_registered_profile_id_fkey"
+            columns: ["registered_profile_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      broker_agency_signup_links: {
+        Row: {
+          active: boolean
+          created_at: string
+          created_by: string | null
+          id: string
+          imobiliaria_id: string
+          last_used_at: string | null
+          token: string
+          updated_at: string
+          usage_count: number
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          imobiliaria_id: string
+          last_used_at?: string | null
+          token?: string
+          updated_at?: string
+          usage_count?: number
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          imobiliaria_id?: string
+          last_used_at?: string | null
+          token?: string
+          updated_at?: string
+          usage_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "broker_agency_signup_links_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "broker_agency_signup_links_imobiliaria_id_fkey"
+            columns: ["imobiliaria_id"]
+            isOneToOne: true
+            referencedRelation: "imobiliarias"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       corretores: {
         Row: {
           cidade: string | null
@@ -3364,6 +3451,25 @@ export type Database = {
         Returns: number
       }
       current_imobiliaria_id: { Args: never; Returns: string }
+      get_or_create_my_broker_agency_signup_link: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          agency_name: string
+          token: string
+          usage_count: number
+        }[]
+      }
+      resolve_broker_agency_signup_link: {
+        Args: { p_token: string }
+        Returns: { agency_name: string }[]
+      }
+      claim_broker_agency_signup_link: {
+        Args: { p_profile_id: string; p_token: string }
+        Returns: {
+          agency_name: string
+          imobiliaria_id: string
+        }[]
+      }
       create_my_broker_agency_invitation: {
         Args: {
           p_agency_profile_id: string

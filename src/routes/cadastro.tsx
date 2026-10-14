@@ -43,6 +43,7 @@ import {
   fetchBrazilianCities,
   type BrazilianCity,
 } from "@/lib/brazilian-locations";
+import { normalizeBrokerAgencySignupToken, resolveBrokerAgencySignupLink } from "@/lib/broker-agency-signup-links";
 
 const cadastroSearchSchema = z.object({
   returnTo: z.string().optional(),
@@ -68,6 +69,7 @@ const cadastroSearchSchema = z.object({
     .string()
     .regex(/^[a-f0-9]{48}$/i)
     .optional(),
+  al: z.string().regex(/^[a-f0-9]{48}$/i).optional(),
   ma: z.string().uuid().optional(),
 });
 
@@ -153,6 +155,7 @@ const corretorSchema = z
     estado: z.string().length(2, "Selecione o estado"),
     vinculadoImobiliaria: z.enum(["sim", "nao"]),
     imobiliariaIdentificador: z.string().optional(),
+    agencySignupToken: z.string().regex(/^[a-f0-9]{48}$/i).optional(),
     senha: strongPasswordSchema,
     confirmarSenha: z.string(),
     termos: z.boolean().refine((val) => val === true, "Você deve aceitar os termos"),
@@ -162,7 +165,7 @@ const corretorSchema = z
     path: ["confirmarSenha"],
   })
   .refine(
-    (data) => data.vinculadoImobiliaria === "nao" || !!data.imobiliariaIdentificador?.trim(),
+    (data) => data.vinculadoImobiliaria === "nao" || !!data.agencySignupToken || !!data.imobiliariaIdentificador?.trim(),
     {
       message: "Informe o CNPJ ou o e-mail da imobiliária à qual você está vinculado",
       path: ["imobiliariaIdentificador"],
@@ -304,6 +307,9 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
   // o campo de CRECI vira "Treinamento" em vez de exigir um número que ele
   // ainda não tem.
   const [possuiCreci, setPossuiCreci] = useState<"sim" | "nao">("sim");
+  const [agencyLinkName, setAgencyLinkName] = useState<string | null>(null);
+  const [agencyLinkLoading, setAgencyLinkLoading] = useState(Boolean(search.al));
+  const [agencyLinkInvalid, setAgencyLinkInvalid] = useState(false);
   const navigate = useNavigate();
   const returnTo = search.returnTo || "/dashboard";
   const signUpInquilinoFn = useServerFn(signUpInquilino);
@@ -323,6 +329,7 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
         sl_proprietario: search.sl_proprietario,
         sl_imobiliaria: search.sl_imobiliaria,
         sl_corretor: search.sl_corretor,
+        al: search.al,
         ma: search.ma,
         ...(!perfilInicial && search.perfil ? { perfil: search.perfil } : {}),
       } as any,
@@ -331,6 +338,7 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
   }, [
     navigate,
     perfilInicial,
+    search.al,
     search.ma,
     search.perfil,
     search.ref,
@@ -386,6 +394,7 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
         sl_proprietario: search.sl_proprietario,
         sl_imobiliaria: search.sl_imobiliaria,
         sl_corretor: search.sl_corretor,
+        al: type === "corretor" ? search.al : undefined,
       } as any,
     });
   };
@@ -421,11 +430,41 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
       estado: "",
       vinculadoImobiliaria: "nao" as const,
       imobiliariaIdentificador: "",
+      agencySignupToken: undefined as string | undefined,
       senha: "",
       confirmarSenha: "",
       termos: false,
     },
   });
+
+  useEffect(() => {
+    const token = normalizeBrokerAgencySignupToken(search.al);
+    if (!token) {
+      setAgencyLinkLoading(false);
+      setAgencyLinkName(null);
+      setAgencyLinkInvalid(Boolean(search.al));
+      formCorretor.setValue("agencySignupToken", undefined);
+      return;
+    }
+    let cancelled = false;
+    setAgencyLinkLoading(true);
+    setAgencyLinkInvalid(false);
+    void resolveBrokerAgencySignupLink(token).then((result) => {
+      if (cancelled) return;
+      setAgencyLinkLoading(false);
+      if (!result.agencyName) {
+        setAgencyLinkName(null);
+        setAgencyLinkInvalid(true);
+        formCorretor.setValue("agencySignupToken", undefined);
+        return;
+      }
+      setAgencyLinkName(result.agencyName);
+      formCorretor.setValue("vinculadoImobiliaria", "sim", { shouldValidate: true });
+      formCorretor.setValue("imobiliariaIdentificador", "", { shouldValidate: true });
+      formCorretor.setValue("agencySignupToken", token, { shouldValidate: true });
+    });
+    return () => { cancelled = true; };
+  }, [formCorretor, search.al]);
 
   const formProprietario = useForm({
     resolver: zodResolver(proprietarioSchema),
@@ -520,6 +559,7 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
           creci: accountType === "corretor" ? data.creci : undefined,
           vinculadoImobiliaria: data.vinculadoImobiliaria === "sim",
           imobiliariaIdentificador: data.imobiliariaIdentificador,
+          agencySignupToken: data.agencySignupToken,
           cpfCnpj: data.cpfCnpj,
           cidade: data.cidade,
           estado: data.estado,
@@ -532,6 +572,8 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
         toast.error(
           result.error === "imobiliaria_nao_encontrada"
             ? "A imobiliária selecionada não está mais disponível. Atualize a página e escolha novamente."
+            : result.error === "link_imobiliaria_invalido"
+              ? "Este link da imobiliária não é mais válido. Solicite o link novamente."
             : result.error === "link_vendedor_invalido"
               ? "Este link de cadastro não é válido para o perfil escolhido. Solicite um novo link ao consultor."
               : "Não foi possível criar a conta com os dados informados.",
@@ -1121,7 +1163,32 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
                               </>
                             ) : accountType === "corretor" ? (
                               <>
-                                <div className="space-y-1">
+                                <input type="hidden" {...formCorretor.register("agencySignupToken")} />
+                                {agencyLinkLoading ? (
+                                  <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-4">
+                                    <p className="text-sm font-bold text-neutral-900">Validando o vínculo com a imobiliária...</p>
+                                  </div>
+                                ) : agencyLinkName ? (
+                                  <div className="rounded-xl border border-yellow-300 bg-yellow-50 p-4">
+                                    <div className="flex items-start gap-3">
+                                      <Building2 className="mt-0.5 text-yellow-700" size={20} />
+                                      <div>
+                                        <p className="text-xs font-black uppercase tracking-wider text-yellow-800">Vinculado automaticamente</p>
+                                        <p className="mt-1 text-sm font-bold text-neutral-900">{agencyLinkName}</p>
+                                        <p className="mt-1 text-[11px] leading-relaxed text-neutral-600">
+                                          Ao concluir o cadastro, seu acesso aparecerá automaticamente na equipe desta imobiliária.
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <>
+                                    {agencyLinkInvalid && (
+                                      <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+                                        O link informado é inválido. Você ainda pode continuar e informar manualmente sua imobiliária.
+                                      </div>
+                                    )}
+                                    <div className="space-y-1">
                                   <Label className="text-xs font-medium text-neutral-700">
                                     Vinculado a uma imobiliária?
                                   </Label>
@@ -1147,10 +1214,10 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
                                       <SelectItem value="nao">Não, sou autônomo</SelectItem>
                                     </SelectContent>
                                   </Select>
-                                </div>
+                                    </div>
 
-                                {formCorretor.watch("vinculadoImobiliaria") === "sim" && (
-                                  <div className="space-y-1">
+                                    {formCorretor.watch("vinculadoImobiliaria") === "sim" && (
+                                      <div className="space-y-1">
                                     <Label className="text-xs font-medium text-neutral-700">
                                       CNPJ ou e-mail da Imobiliária
                                     </Label>
@@ -1169,7 +1236,9 @@ export function CadastroPage({ perfilInicial }: { perfilInicial?: CadastroPerfil
                                         {errors.imobiliariaIdentificador.message}
                                       </p>
                                     )}
-                                  </div>
+                                      </div>
+                                    )}
+                                  </>
                                 )}
 
                                 <Input

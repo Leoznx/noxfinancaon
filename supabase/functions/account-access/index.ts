@@ -118,6 +118,11 @@ Deno.serve(async (request) => {
       await enforceRateLimit(request, "mobile-agencies", "public", 20, 3600);
       return json(request, await listSignupAgencies());
     }
+    if (action === "resolve-agency-signup-link") {
+      const token = normalizeAgencySignupToken(payload?.token);
+      await enforceRateLimit(request, "mobile-agency-signup-link", token || "invalid", 60, 3600);
+      return json(request, await resolveAgencySignupLink(token));
+    }
     if (action === "signup") return json(request, await signup(payload, request));
     if (action === "password-reset") {
       await passwordReset(String(payload?.email ?? ""), request);
@@ -151,6 +156,14 @@ async function listSignupAgencies() {
   };
 }
 
+async function resolveAgencySignupLink(token: string | null) {
+  if (!token) return { ok: false, error: "link_imobiliaria_invalido" };
+  const { data, error } = await admin.rpc("resolve_broker_agency_signup_link", { p_token: token });
+  const row = Array.isArray(data) ? data[0] : null;
+  if (error || !row?.agency_name) return { ok: false, error: "link_imobiliaria_invalido" };
+  return { ok: true, agencyName: String(row.agency_name) };
+}
+
 function json(request: Request, body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -165,10 +178,29 @@ async function signup(input: any, request: Request) {
     .toLowerCase();
   const senha = String(input?.senha ?? "");
   const telefone = String(input?.telefone ?? "");
+  const rawAgencySignupToken = String(input?.agencySignupToken ?? "").trim();
+  const agencySignupToken = normalizeAgencySignupToken(rawAgencySignupToken);
+  if (rawAgencySignupToken && (!agencySignupToken || role !== "corretor")) {
+    return { ok: false, error: "link_imobiliaria_invalido" };
+  }
   if (!validSignupInput(input, role, email, senha, telefone)) {
     return { ok: false, error: "dados_invalidos" };
   }
   await enforceRateLimit(request, "mobile-signup", email, 5, 3600);
+
+  let agencyIdFromSignupLink: string | null = null;
+  if (agencySignupToken) {
+    const { data: agencyLink, error: agencyLinkError } = await admin
+      .from("broker_agency_signup_links")
+      .select("imobiliaria_id")
+      .eq("token", agencySignupToken)
+      .eq("active", true)
+      .maybeSingle();
+    if (agencyLinkError || !agencyLink?.imobiliaria_id) {
+      return { ok: false, error: "link_imobiliaria_invalido" };
+    }
+    agencyIdFromSignupLink = agencyLink.imobiliaria_id;
+  }
 
   const { data: existing } = await admin
     .from("profiles")
@@ -251,15 +283,29 @@ async function signup(input: any, request: Request) {
       contato_telefone: telefone,
     });
   } else if (role === "corretor") {
-    await admin.from("corretores").insert({
+    const { error: brokerError } = await admin.from("corretores").insert({
       profile_id: userId,
       cpf: input.cpf,
       creci: input.creci,
       cidade: input.cidade,
       estado: input.estado,
-      vinculado_imobiliaria: Boolean(input.vinculadoImobiliaria),
-      imobiliaria_id: input.imobiliariaId || null,
+      vinculado_imobiliaria: Boolean(agencySignupToken || input.vinculadoImobiliaria),
+      imobiliaria_id: agencyIdFromSignupLink || input.imobiliariaId || null,
     });
+    if (brokerError) {
+      await admin.auth.admin.deleteUser(userId);
+      return { ok: false, error: "erro" };
+    }
+    if (agencySignupToken) {
+      const { error: claimError } = await admin.rpc("claim_broker_agency_signup_link", {
+        p_token: agencySignupToken,
+        p_profile_id: userId,
+      });
+      if (claimError) {
+        await admin.auth.admin.deleteUser(userId);
+        return { ok: false, error: "link_imobiliaria_invalido" };
+      }
+    }
   } else {
     await admin
       .from("proprietarios")
@@ -397,6 +443,11 @@ function digits(value: unknown) {
   return String(value ?? "").replace(/\D/g, "");
 }
 
+function normalizeAgencySignupToken(value: unknown) {
+  const token = String(value ?? "").trim().toLowerCase();
+  return /^[a-f0-9]{48}$/.test(token) ? token : null;
+}
+
 async function enforceRateLimit(
   request: Request,
   scope: string,
@@ -454,7 +505,7 @@ function validSignupInput(
       String(input.creci ?? "").trim().length >= 4 &&
       String(input.cidade ?? "").trim().length >= 2 &&
       String(input.estado ?? "").length === 2 &&
-      (!input.vinculadoImobiliaria || Boolean(input.imobiliariaId))
+      (!input.vinculadoImobiliaria || Boolean(input.imobiliariaId || input.agencySignupToken))
     );
   }
   if (role === "proprietario") {
