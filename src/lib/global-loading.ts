@@ -1,4 +1,5 @@
 export const GLOBAL_LOADING_TIMEOUT_MS = 20_000;
+export const DASHBOARD_ROUTE_LOADING_MAX_VISIBLE_MS = 1_800;
 
 /**
  * Keeps concurrent loading operations isolated. Finishing an old request cannot

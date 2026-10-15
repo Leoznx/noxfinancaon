@@ -83,6 +83,13 @@ const CARGOS_INTERNOS_GATEADOS = [
   "vendedor",
 ] as const;
 
+const PRIORITY_DASHBOARD_ROUTES = new Set([
+  "/dashboard",
+  "/consultas/nova",
+  "/consultas",
+  "/apolices",
+]);
+
 type MenuItem = {
   icon: LucideIcon;
   label: string;
@@ -677,12 +684,18 @@ export function DashboardLayout({
     .filter((href) => !href.startsWith(location.pathname + "?") && href !== location.pathname)
     .join("\n");
 
-  // Os chunks das próximas páginas são baixados um por vez quando o navegador
-  // está ocioso. O clique continua prioritário, mas normalmente a rota já está
-  // em memória quando o usuário troca de aba.
+  // As abas mais usadas são aquecidas imediatamente e antes das demais. O
+  // restante continua sendo baixado um por vez quando o navegador está ocioso,
+  // sem disputar banda com a Nova Consulta ou com a rota clicada pelo usuário.
   useEffect(() => {
     if (!routePreloadKey || typeof window === "undefined") return;
     const targets = routePreloadKey.split("\n");
+    const priorityTargets = targets.filter((href) =>
+      PRIORITY_DASHBOARD_ROUTES.has(href.split("?")[0]),
+    );
+    const backgroundTargets = targets.filter(
+      (href) => !PRIORITY_DASHBOARD_ROUTES.has(href.split("?")[0]),
+    );
     let cancelled = false;
     let timeoutId: number | undefined;
     let idleId: number | undefined;
@@ -696,14 +709,18 @@ export function DashboardLayout({
     };
 
     const preloadNext = (index: number) => {
-      if (cancelled || index >= targets.length) return;
+      if (cancelled || index >= backgroundTargets.length) return;
       void router
-        .preloadRoute({ to: targets[index] as any })
+        .preloadRoute({ to: backgroundTargets[index] as any })
         .catch(() => undefined)
         .finally(() => schedule(() => preloadNext(index + 1)));
     };
 
-    schedule(() => preloadNext(0));
+    void Promise.allSettled(
+      priorityTargets.map((href) => router.preloadRoute({ to: href as any })),
+    ).finally(() => {
+      if (!cancelled) schedule(() => preloadNext(0));
+    });
     return () => {
       cancelled = true;
       if (timeoutId !== undefined) window.clearTimeout(timeoutId);
@@ -901,6 +918,7 @@ export function DashboardLayout({
                 <div key={`${item.href}-${item.parentLabel ?? "principal"}`} className="relative">
                   <Link
                     to={item.href}
+                    preload={PRIORITY_DASHBOARD_ROUTES.has(itemPath) ? "render" : "intent"}
                     className={`flex items-center gap-3 rounded-xl border-l-4 py-3 pl-3 transition-all ${item.parentLabel ? "ml-5 pr-3" : item.hasChildren ? "pr-11" : "pr-4"} ${
                       isDarkHighlight
                         ? "bg-black border-yellow-400 text-yellow-400 font-bold shadow-sm shadow-black/30 hover:bg-neutral-900"

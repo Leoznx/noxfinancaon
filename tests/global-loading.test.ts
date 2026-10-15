@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { LoadingTokenRegistry } from "../src/lib/global-loading";
+import {
+  DASHBOARD_ROUTE_LOADING_MAX_VISIBLE_MS,
+  LoadingTokenRegistry,
+} from "../src/lib/global-loading";
+
+test("a transição visual do dashboard respeita o limite de dois segundos", () => {
+  assert.ok(DASHBOARD_ROUTE_LOADING_MAX_VISIBLE_MS <= 2_000);
+});
 
 test("mantém o loading enquanto existir uma operação concorrente", () => {
   const registry = new LoadingTokenRegistry();

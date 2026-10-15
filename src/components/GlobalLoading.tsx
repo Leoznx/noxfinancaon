@@ -1,7 +1,11 @@
 import * as React from "react";
 import { useRouterState } from "@tanstack/react-router";
 
-import { GLOBAL_LOADING_TIMEOUT_MS, LoadingTokenRegistry } from "@/lib/global-loading";
+import {
+  DASHBOARD_ROUTE_LOADING_MAX_VISIBLE_MS,
+  GLOBAL_LOADING_TIMEOUT_MS,
+  LoadingTokenRegistry,
+} from "@/lib/global-loading";
 
 type GlobalLoadingContextValue = {
   beginEssentialLoad: () => number;
@@ -48,11 +52,12 @@ export function GlobalLoadingProvider({ children }: { children: React.ReactNode 
     [beginDashboardScope, beginEssentialLoad, endDashboardScope, endEssentialLoad],
   );
   const active = dashboardScopeCount > 0 && (routerLoading || essentialLoadCount > 0);
+  const routeTransitionOnly = dashboardScopeCount > 0 && routerLoading && essentialLoadCount === 0;
 
   return (
     <GlobalLoadingContext.Provider value={context}>
       {children}
-      <GlobalLoadingOverlay active={active} />
+      <GlobalLoadingOverlay active={active} routeTransitionOnly={routeTransitionOnly} />
     </GlobalLoadingContext.Provider>
   );
 }
@@ -81,14 +86,22 @@ export function useDashboardLoadingScope() {
   }, [context]);
 }
 
-function GlobalLoadingOverlay({ active }: { active: boolean }) {
+function GlobalLoadingOverlay({
+  active,
+  routeTransitionOnly,
+}: {
+  active: boolean;
+  routeTransitionOnly: boolean;
+}) {
   const [rendered, setRendered] = React.useState(active);
   const [exiting, setExiting] = React.useState(false);
   const [timedOut, setTimedOut] = React.useState(false);
   const [videoFailed, setVideoFailed] = React.useState(false);
+  const [routeDisplayExpired, setRouteDisplayExpired] = React.useState(false);
+  const visibleActive = active && !routeDisplayExpired;
 
   React.useEffect(() => {
-    if (active) {
+    if (visibleActive) {
       if (rendered) {
         setExiting(false);
         return;
@@ -108,7 +121,20 @@ function GlobalLoadingOverlay({ active }: { active: boolean }) {
       setExiting(false);
     }, FADE_OUT_MS);
     return () => window.clearTimeout(timer);
-  }, [active, rendered]);
+  }, [rendered, visibleActive]);
+
+  React.useEffect(() => {
+    if (!active || !routeTransitionOnly) {
+      setRouteDisplayExpired(false);
+      return;
+    }
+
+    const timer = window.setTimeout(
+      () => setRouteDisplayExpired(true),
+      DASHBOARD_ROUTE_LOADING_MAX_VISIBLE_MS,
+    );
+    return () => window.clearTimeout(timer);
+  }, [active, routeTransitionOnly]);
 
   React.useEffect(() => {
     if (!active) {
@@ -121,14 +147,14 @@ function GlobalLoadingOverlay({ active }: { active: boolean }) {
   }, [active]);
 
   React.useLayoutEffect(() => {
-    const shouldLock = (active && rendered) || timedOut;
+    const shouldLock = (visibleActive && rendered) || timedOut;
     document.documentElement.classList.toggle("nox-loading-locked", shouldLock);
     document.body.classList.toggle("nox-loading-locked", shouldLock);
     return () => {
       document.documentElement.classList.remove("nox-loading-locked");
       document.body.classList.remove("nox-loading-locked");
     };
-  }, [active, rendered, timedOut]);
+  }, [rendered, timedOut, visibleActive]);
 
   if (!rendered && !timedOut) return null;
 
