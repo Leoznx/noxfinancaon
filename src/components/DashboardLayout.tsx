@@ -51,10 +51,14 @@ import { SinoNotificacoes } from "./SinoNotificacoes";
 import { useState, useEffect } from "react";
 
 import { LogoNox } from "./LogoNox";
-import { Link, useLocation, useNavigate } from "@tanstack/react-router";
+import { Link, useLocation, useNavigate, useRouter } from "@tanstack/react-router";
 import { Button } from "./ui/button";
 import { useAuth } from "./AuthProvider";
-import { getCachedHeaderProfile, setCachedHeaderProfile } from "@/lib/profile-cache";
+import {
+  getCachedHeaderProfile,
+  isCachedHeaderProfileFresh,
+  setCachedHeaderProfile,
+} from "@/lib/profile-cache";
 import { getCachedNivelInfo, loadNivelInfo } from "@/lib/nivel-cache";
 import type { NivelInfo } from "@/lib/niveis-parceria";
 import {
@@ -64,7 +68,10 @@ import {
   type PermissoesPorModulo,
 } from "@/lib/permissoes-cache";
 import { isDemoSession } from "@/lib/demo-session";
-import { loadBrokerCommissionAccess } from "@/lib/broker-commission-policy";
+import {
+  getCachedBrokerCommissionAccess,
+  loadBrokerCommissionAccess,
+} from "@/lib/broker-commission-policy";
 import { useAdminAttention } from "@/hooks/useAdminAttention";
 import { useDashboardLoadingScope } from "@/components/GlobalLoading";
 
@@ -196,7 +203,11 @@ const adminItems: MenuItem[] = [
       { label: "Notificações", href: "/configuracoes?tab=notificacoes" },
       { label: "Plano e Nível", href: "/configuracoes?tab=comissoes" },
       { label: "Aprovações de Documentos", href: "/admin/verificacoes" },
-      { label: "Central de Erros", href: "/admin/central-erros", keywords: ["automação", "reparo", "saúde"] },
+      {
+        label: "Central de Erros",
+        href: "/admin/central-erros",
+        keywords: ["automação", "reparo", "saúde"],
+      },
     ],
   },
 ];
@@ -207,11 +218,33 @@ const adminItems: MenuItem[] = [
 // cargos já enxergavam nos arrays estáticos antigos.
 const ADMIN_CATALOG = [
   ...adminItems,
-  { icon: IdCard, label: "Aprovações de Documentos", href: "/admin/verificacoes", module: "documentos" },
-  { icon: Wrench, label: "Central de Erros", href: "/admin/central-erros", module: "central_erros", adminOnly: true },
-  { icon: UserPlus, label: "Leads e Distribuição", href: "/admin/leads", module: "leads", modules: ["leads", "distribuicao_leads"] },
+  {
+    icon: IdCard,
+    label: "Aprovações de Documentos",
+    href: "/admin/verificacoes",
+    module: "documentos",
+  },
+  {
+    icon: Wrench,
+    label: "Central de Erros",
+    href: "/admin/central-erros",
+    module: "central_erros",
+    adminOnly: true,
+  },
+  {
+    icon: UserPlus,
+    label: "Leads e Distribuição",
+    href: "/admin/leads",
+    module: "leads",
+    modules: ["leads", "distribuicao_leads"],
+  },
   { icon: Briefcase, label: "Vagas abertas", href: "/admin/vagas", module: "vagas_abertas" },
-  { icon: CalendarRange, label: "Agenda dos Closers", href: "/admin/agenda-closers", module: "equipe_nox" },
+  {
+    icon: CalendarRange,
+    label: "Agenda dos Closers",
+    href: "/admin/agenda-closers",
+    module: "equipe_nox",
+  },
   { icon: Receipt, label: "Faturas Inquilinos", href: "/faturas-inquilinos", module: "faturas" },
   { icon: Headphones, label: "Chamados", href: "/suporte", module: "tickets" },
 ];
@@ -380,6 +413,7 @@ export function DashboardLayout({
   useDashboardLoadingScope();
   const location = useLocation();
   const navigate = useNavigate();
+  const router = useRouter();
   const { user, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [menuSearch, setMenuSearch] = useState("");
@@ -422,22 +456,33 @@ export function DashboardLayout({
         setAvatarUrl(perfilCache.avatarUrl || null);
       }
 
+      // O AuthProvider já atualiza esse cache ao confirmar a sessão. Evita repetir
+      // getUser + profiles em toda troca de rota, que competia com os dados da página.
+      if (
+        isCachedHeaderProfileFresh(perfilCache) &&
+        (user.role !== "imobiliaria" || perfilCache?.agencyNameResolved)
+      ) {
+        return;
+      }
+
       try {
         const { supabase } = await import("@/integrations/supabase/client");
-        const {
-          data: { user: authUser },
-        } = await supabase.auth.getUser();
-
-        const nomeMetadata = authUser?.user_metadata?.nome || authUser?.user_metadata?.full_name;
-        let perfil: { nome: string | null; avatar_url: string | null } | null = null;
-        if (authUser?.id) {
-          const { data } = await supabase
-            .from("profiles")
-            .select("nome, avatar_url")
-            .eq("id", authUser.id)
-            .maybeSingle();
-          perfil = data;
-        }
+        const [profileResult, agencyResult] = await Promise.all([
+          supabase.from("profiles").select("nome, avatar_url").eq("id", user.id).maybeSingle(),
+          user.role === "imobiliaria"
+            ? supabase
+                .from("imobiliarias")
+                .select("razao_social, nome_fantasia")
+                .ilike("contato_email", user.email)
+                .order("created_at", { ascending: false })
+                .limit(1)
+                .maybeSingle()
+            : Promise.resolve({ data: null }),
+        ]);
+        let perfil = profileResult.data as {
+          nome: string | null;
+          avatar_url: string | null;
+        } | null;
 
         if (!perfil) {
           const { data } = await supabase
@@ -449,21 +494,20 @@ export function DashboardLayout({
         }
 
         if (!ativo) return;
-        let nomeFinal = perfil?.nome || nomeMetadata || user.email.split("@")[0] || "Usuário";
+        let nomeFinal = perfil?.nome || perfilCache?.nome || user.email.split("@")[0] || "Usuário";
         if (user.role === "imobiliaria") {
-          const { data: agency } = await supabase
-            .from("imobiliarias")
-            .select("razao_social, nome_fantasia")
-            .ilike("contato_email", user.email)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
+          const agency = agencyResult.data;
           nomeFinal = agency?.nome_fantasia || agency?.razao_social || nomeFinal;
         }
         const avatarFinal = perfil?.avatar_url || perfilCache?.avatarUrl || null;
         setNomeUsuario(nomeFinal);
         setAvatarUrl(avatarFinal);
-        setCachedHeaderProfile({ email: user.email, nome: nomeFinal, avatarUrl: avatarFinal });
+        setCachedHeaderProfile({
+          email: user.email,
+          nome: nomeFinal,
+          avatarUrl: avatarFinal,
+          agencyNameResolved: user.role === "imobiliaria",
+        });
       } catch {
         if (!ativo) return;
         const nomeFallback = perfilCache?.nome || user.email.split("@")[0] || "Usuário";
@@ -476,15 +520,16 @@ export function DashboardLayout({
     return () => {
       ativo = false;
     };
-  }, [user?.email, user?.role]);
+  }, [user?.email, user?.id, user?.role]);
 
   const isCorretor = user?.role === "corretor";
   const isImobiliaria = user?.role === "imobiliaria";
   const isProprietario = user?.role === "proprietario";
   const isInquilino = user?.role === "inquilino";
   const isAnalista = user?.role === "analista";
-  const [brokerFinancialAccess, setBrokerFinancialAccess] = useState<boolean | undefined>(
-    user?.role === "corretor" ? undefined : true,
+  const brokerAccessInicial = getCachedBrokerCommissionAccess(user?.id);
+  const [brokerFinancialAccess, setBrokerFinancialAccess] = useState<boolean | undefined>(() =>
+    user?.role === "corretor" ? brokerAccessInicial?.canAccessFinancialModules : true,
   );
 
   useEffect(() => {
@@ -503,7 +548,8 @@ export function DashboardLayout({
         });
     };
 
-    setBrokerFinancialAccess(undefined);
+    const cached = getCachedBrokerCommissionAccess(user.id);
+    setBrokerFinancialAccess(cached?.canAccessFinancialModules);
     refreshAccess();
     const handleWindowFocus = () => refreshAccess(true);
     window.addEventListener("focus", handleWindowFocus);
@@ -622,6 +668,50 @@ export function DashboardLayout({
   // Nunca mostra um menu parcial. Enquanto as permissões são resolvidas, o
   // espaço das abas fica reservado e todas aparecem juntas no resultado final.
   if (menuPermissionsLoading) menuItems = [];
+
+  const routePreloadKey = Array.from(
+    new Set(
+      menuItems.flatMap((item) => [item.href, ...(item.children ?? []).map((child) => child.href)]),
+    ),
+  )
+    .filter((href) => !href.startsWith(location.pathname + "?") && href !== location.pathname)
+    .join("\n");
+
+  // Os chunks das próximas páginas são baixados um por vez quando o navegador
+  // está ocioso. O clique continua prioritário, mas normalmente a rota já está
+  // em memória quando o usuário troca de aba.
+  useEffect(() => {
+    if (!routePreloadKey || typeof window === "undefined") return;
+    const targets = routePreloadKey.split("\n");
+    let cancelled = false;
+    let timeoutId: number | undefined;
+    let idleId: number | undefined;
+
+    const schedule = (callback: () => void) => {
+      if (typeof window.requestIdleCallback === "function") {
+        idleId = window.requestIdleCallback(callback, { timeout: 1_500 });
+      } else {
+        timeoutId = window.setTimeout(callback, 250);
+      }
+    };
+
+    const preloadNext = (index: number) => {
+      if (cancelled || index >= targets.length) return;
+      void router
+        .preloadRoute({ to: targets[index] as any })
+        .catch(() => undefined)
+        .finally(() => schedule(() => preloadNext(index + 1)));
+    };
+
+    schedule(() => preloadNext(0));
+    return () => {
+      cancelled = true;
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+      if (idleId !== undefined && typeof window.cancelIdleCallback === "function") {
+        window.cancelIdleCallback(idleId);
+      }
+    };
+  }, [routePreloadKey, router]);
 
   const nomeTopo = nomeUsuario || user?.email?.split("@")[0] || "Usuário";
   const canSearchAdminMenu =
@@ -812,20 +902,20 @@ export function DashboardLayout({
                   <Link
                     to={item.href}
                     className={`flex items-center gap-3 rounded-xl border-l-4 py-3 pl-3 transition-all ${item.parentLabel ? "ml-5 pr-3" : item.hasChildren ? "pr-11" : "pr-4"} ${
-                    isDarkHighlight
-                      ? "bg-black border-yellow-400 text-yellow-400 font-bold shadow-sm shadow-black/30 hover:bg-neutral-900"
-                      : isActive
-                        ? cargoInterno === "juridico" ||
-                          isImobiliaria ||
-                          isProprietario ||
-                          isInquilino
-                          ? "bg-yellow-400 border-yellow-400 text-neutral-950 font-bold shadow-sm shadow-yellow-400/20"
-                          : "bg-white/10 border-yellow-400 text-white font-semibold"
-                        : isHighlight && !isImobiliaria
-                          ? "bg-yellow-400 border-transparent text-neutral-900 font-bold hover:bg-yellow-500 shadow-sm shadow-yellow-400/20"
-                          : "border-transparent text-neutral-400 hover:bg-white/5 hover:text-white"
-                  }`}
-                    >
+                      isDarkHighlight
+                        ? "bg-black border-yellow-400 text-yellow-400 font-bold shadow-sm shadow-black/30 hover:bg-neutral-900"
+                        : isActive
+                          ? cargoInterno === "juridico" ||
+                            isImobiliaria ||
+                            isProprietario ||
+                            isInquilino
+                            ? "bg-yellow-400 border-yellow-400 text-neutral-950 font-bold shadow-sm shadow-yellow-400/20"
+                            : "bg-white/10 border-yellow-400 text-white font-semibold"
+                          : isHighlight && !isImobiliaria
+                            ? "bg-yellow-400 border-transparent text-neutral-900 font-bold hover:bg-yellow-500 shadow-sm shadow-yellow-400/20"
+                            : "border-transparent text-neutral-400 hover:bg-white/5 hover:text-white"
+                    }`}
+                  >
                     <item.icon
                       size={item.parentLabel ? 16 : 20}
                       strokeWidth={isActive || isHighlight || isDarkHighlight ? 2.2 : 1.5}

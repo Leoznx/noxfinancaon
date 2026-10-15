@@ -12,7 +12,8 @@ export const BROKER_COMMISSION_OPTIONS: Array<{
     value: "broker_full",
     label: "Repassar ao corretor",
     shortLabel: "100% corretor",
-    description: "O corretor recebe 100% da comissão e a imobiliária não recebe parte desse contrato.",
+    description:
+      "O corretor recebe 100% da comissão e a imobiliária não recebe parte desse contrato.",
   },
   {
     value: "split_50",
@@ -24,12 +25,16 @@ export const BROKER_COMMISSION_OPTIONS: Array<{
     value: "agency_full",
     label: "Não repassar",
     shortLabel: "100% imobiliária",
-    description: "A imobiliária recebe 100%. As áreas financeiras ficam indisponíveis para o corretor.",
+    description:
+      "A imobiliária recebe 100%. As áreas financeiras ficam indisponíveis para o corretor.",
   },
 ];
 
 export function getBrokerCommissionOption(mode?: string | null) {
-  return BROKER_COMMISSION_OPTIONS.find((option) => option.value === mode) ?? BROKER_COMMISSION_OPTIONS[0];
+  return (
+    BROKER_COMMISSION_OPTIONS.find((option) => option.value === mode) ??
+    BROKER_COMMISSION_OPTIONS[0]
+  );
 }
 
 export type BrokerCommissionAccess = {
@@ -39,10 +44,22 @@ export type BrokerCommissionAccess = {
 };
 
 const accessCache = new Map<string, Promise<BrokerCommissionAccess>>();
+const resolvedAccessCache = new Map<string, BrokerCommissionAccess>();
+
+export function getCachedBrokerCommissionAccess(
+  userId: string | null | undefined,
+): BrokerCommissionAccess | undefined {
+  return userId ? resolvedAccessCache.get(userId) : undefined;
+}
 
 export function clearBrokerCommissionAccessCache(userId?: string) {
-  if (userId) accessCache.delete(userId);
-  else accessCache.clear();
+  if (userId) {
+    accessCache.delete(userId);
+    resolvedAccessCache.delete(userId);
+  } else {
+    accessCache.clear();
+    resolvedAccessCache.clear();
+  }
 }
 
 export function loadBrokerCommissionAccess(
@@ -57,11 +74,14 @@ export function loadBrokerCommissionAccess(
     const { data, error } = await supabase.rpc("get_my_broker_commission_access");
     if (error) throw error;
     const row = Array.isArray(data) ? data[0] : data;
-    return {
-      commissionAllocationMode: (row?.commission_allocation_mode || "broker_full") as BrokerCommissionAllocationMode,
+    const access = {
+      commissionAllocationMode: (row?.commission_allocation_mode ||
+        "broker_full") as BrokerCommissionAllocationMode,
       canAccessFinancialModules: row?.can_access_financial_modules !== false,
       agencyProfileId: row?.agency_profile_id || null,
     };
+    resolvedAccessCache.set(userId, access);
+    return access;
   })();
 
   accessCache.set(userId, request);

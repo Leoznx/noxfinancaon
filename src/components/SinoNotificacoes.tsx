@@ -32,6 +32,13 @@ type Notificacao = {
   created_at: string;
 };
 
+const NOTIFICATION_CACHE_MS = 60_000;
+let notificationCache: {
+  userId: string;
+  items: Notificacao[];
+  cachedAt: number;
+} | null = null;
+
 const ICONES_NOTIFICACAO: Record<string, LucideIcon> = {
   comissao_nova: DollarSign,
   nova_comissao: DollarSign,
@@ -74,87 +81,104 @@ const CORES_NOTIFICACAO: Record<string, { fundo: string; icone: string }> = {
 export function SinoNotificacoes() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const cachedNotifications = notificationCache;
+  const initialNotifications =
+    cachedNotifications && cachedNotifications.userId === user?.id
+      ? cachedNotifications.items
+      : null;
   const [aberto, setAberto] = useState(false);
-  const [notificacoes, setNotificacoes] = useState<Notificacao[]>([]);
-  const [carregando, setCarregando] = useState(true);
+  const [notificacoes, setNotificacoes] = useState<Notificacao[]>(() => initialNotifications ?? []);
+  const [carregando, setCarregando] = useState(initialNotifications === null);
 
   const naoLidas = notificacoes.filter((notificacao) => !notificacao.lida).length;
 
-  const carregarNotificacoes = useCallback(async () => {
-    if (!user) return;
+  const carregarNotificacoes = useCallback(
+    async (force = false) => {
+      if (!user) {
+        setNotificacoes([]);
+        setCarregando(false);
+        return;
+      }
 
-    const {
-      data: { user: authUser },
-    } = await supabase.auth.getUser();
-    if (!authUser) return;
+      if (
+        !force &&
+        notificationCache?.userId === user.id &&
+        Date.now() - notificationCache.cachedAt < NOTIFICATION_CACHE_MS
+      ) {
+        setNotificacoes(notificationCache.items);
+        setCarregando(false);
+        return;
+      }
 
-    const { data } = await supabase
-      .from("notificacoes")
-      .select("*")
-      .eq("user_id", authUser.id)
-      .order("created_at", { ascending: false })
-      .limit(10);
+      const { data } = await supabase
+        .from("notificacoes")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(10);
 
-    setNotificacoes((data || []) as Notificacao[]);
-    setCarregando(false);
-  }, [user]);
+      const items = (data || []) as Notificacao[];
+      notificationCache = { userId: user.id, items, cachedAt: Date.now() };
+      setNotificacoes(items);
+      setCarregando(false);
+    },
+    [user],
+  );
 
   useEffect(() => {
     if (!user) return;
-    let channel: ReturnType<typeof supabase.channel> | null = null;
-
-    (async () => {
-      const {
-        data: { user: authUser },
-      } = await supabase.auth.getUser();
-      if (!authUser) return;
-
-      await carregarNotificacoes();
-
-      channel = supabase
-        .channel(`notificacoes-realtime-${authUser.id}`)
-        .on(
-          "postgres_changes",
-          {
-            event: "INSERT",
-            schema: "public",
-            table: "notificacoes",
-            filter: `user_id=eq.${authUser.id}`,
-          },
-          (payload) => {
-            const notificacao = payload.new as Notificacao;
-            setNotificacoes((prev) => [notificacao, ...prev]);
-            toast(notificacao.titulo, {
-              description: notificacao.mensagem,
-            });
-          },
-        )
-        .subscribe();
-    })();
+    void carregarNotificacoes();
+    const channel = supabase
+      .channel(`notificacoes-realtime-${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notificacoes",
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          const notificacao = payload.new as Notificacao;
+          setNotificacoes((prev) => {
+            const items = [notificacao, ...prev].slice(0, 10);
+            notificationCache = { userId: user.id, items, cachedAt: Date.now() };
+            return items;
+          });
+          toast(notificacao.titulo, {
+            description: notificacao.mensagem,
+          });
+        },
+      )
+      .subscribe();
 
     return () => {
-      if (channel) supabase.removeChannel(channel);
+      void supabase.removeChannel(channel);
     };
   }, [carregarNotificacoes, user]);
 
   async function marcarComoLidas() {
     if (!user) return;
-    const {
-      data: { user: authUser },
-    } = await supabase.auth.getUser();
-    if (!authUser) return;
 
     await supabase
       .from("notificacoes")
       .update({ lida: true, lida_em: new Date().toISOString() })
-      .eq("user_id", authUser.id)
+      .eq("user_id", user.id)
       .eq("lida", false);
 
-    setNotificacoes((prev) => prev.map((n) => ({ ...n, lida: true })));
+    setNotificacoes((prev) => {
+      const items = prev.map((n) => ({ ...n, lida: true }));
+      notificationCache = { userId: user.id, items, cachedAt: Date.now() };
+      return items;
+    });
   }
 
   async function marcarUmaComoLida(id: string) {
-    setNotificacoes((prev) => prev.map((n) => (n.id === id ? { ...n, lida: true } : n)));
+    setNotificacoes((prev) => {
+      const items = prev.map((n) => (n.id === id ? { ...n, lida: true } : n));
+      if (user) notificationCache = { userId: user.id, items, cachedAt: Date.now() };
+      return items;
+    });
     await supabase
       .from("notificacoes")
       .update({ lida: true, lida_em: new Date().toISOString() })

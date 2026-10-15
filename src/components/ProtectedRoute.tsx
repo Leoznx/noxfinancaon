@@ -7,7 +7,10 @@ import {
   loadPermissoesCargo,
   podeVerModulo,
 } from "@/lib/permissoes-cache";
-import { loadBrokerCommissionAccess } from "@/lib/broker-commission-policy";
+import {
+  getCachedBrokerCommissionAccess,
+  loadBrokerCommissionAccess,
+} from "@/lib/broker-commission-policy";
 import { useDashboardLoadingScope, useEssentialLoading } from "@/components/GlobalLoading";
 
 const CARGOS_INTERNOS_GATEADOS = ["juridico", "financeiro", "marketing", "suporte", "vendedor"];
@@ -55,12 +58,21 @@ export function ProtectedRoute({
           : null
       : null;
 
-  const [permissoesCarregando, setPermissoesCarregando] = useState(!!cargoGateado);
-  const [temPermissaoModulo, setTemPermissaoModulo] = useState<boolean>(!cargoGateado);
-  const [brokerAccessLoading, setBrokerAccessLoading] = useState(
-    requiresBrokerFinancialAccess && user?.role === "corretor",
+  const permissoesIniciais = cargoGateado ? getCachedPermissoesCargo(cargoGateado) : undefined;
+  const brokerAccessInicial = getCachedBrokerCommissionAccess(user?.id);
+  const [permissoesCarregando, setPermissoesCarregando] = useState(
+    !!cargoGateado && permissoesIniciais === undefined,
   );
-  const [brokerAccessAllowed, setBrokerAccessAllowed] = useState(true);
+  const [temPermissaoModulo, setTemPermissaoModulo] = useState<boolean>(
+    !cargoGateado ||
+      (permissoesIniciais !== undefined && podeVerModulo(permissoesIniciais, moduleKey)),
+  );
+  const [brokerAccessLoading, setBrokerAccessLoading] = useState(
+    requiresBrokerFinancialAccess && user?.role === "corretor" && brokerAccessInicial === undefined,
+  );
+  const [brokerAccessAllowed, setBrokerAccessAllowed] = useState(
+    brokerAccessInicial?.canAccessFinancialModules ?? true,
+  );
   const accessLoading = isLoading || permissoesCarregando || brokerAccessLoading;
 
   useEssentialLoading(accessLoading);
@@ -92,6 +104,12 @@ export function ProtectedRoute({
   useEffect(() => {
     if (!requiresBrokerFinancialAccess || user?.role !== "corretor" || !user.id) {
       setBrokerAccessAllowed(true);
+      setBrokerAccessLoading(false);
+      return;
+    }
+    const cached = getCachedBrokerCommissionAccess(user.id);
+    if (cached) {
+      setBrokerAccessAllowed(cached.canAccessFinancialModules);
       setBrokerAccessLoading(false);
       return;
     }
