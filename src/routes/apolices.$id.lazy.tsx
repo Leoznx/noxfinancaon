@@ -67,7 +67,10 @@ function ApoliceDetalhe() {
           .select(`
             id, consulta_id, numero, status, vigencia_inicio, vigencia_fim, valor_premio, created_at,
             consulta:consultas_credito(
-              inquilino:inquilinos(nome, cpf, cnpj, razao_social, tipo, profile:profiles(nome, email, telefone)),
+              inquilino:inquilinos(
+                nome, cpf, cnpj, razao_social, tipo,
+                profile:profiles!inquilinos_profile_id_fkey(nome, email, telefone)
+              ),
               imovel:imoveis(endereco, logradouro, numero, bairro, cidade, estado, cep, valor_aluguel),
               plano:planos(nome)
             ),
