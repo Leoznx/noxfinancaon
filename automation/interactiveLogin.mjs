@@ -79,6 +79,34 @@ async function isAuthenticated() {
   ) {
     return true;
   }
+
+  if (erpCreditSimulationPath.test(url.pathname)) {
+    const analysisHeading = page.getByRole("heading", {
+      name: /an[aá]lise\s+de\s+cr[ée]dito/i,
+    });
+    const tenantSection = page.getByText(/dados\s+do\s+inquilino/i);
+    const analysisButton = page.getByRole("button", {
+      name: /fazer\s+an[aá]lise/i,
+    });
+    const authenticatedSurfaceVisible = await Promise.all([
+      analysisHeading
+        .first()
+        .isVisible()
+        .catch(() => false),
+      tenantSection
+        .first()
+        .isVisible()
+        .catch(() => false),
+      analysisButton
+        .first()
+        .isVisible()
+        .catch(() => false),
+    ]);
+    if (authenticatedSurfaceVisible.filter(Boolean).length >= 2) {
+      return true;
+    }
+  }
+
   const simulationButton = page.getByRole("button", {
     name: /simular(?:\s+an[aá]lise\s+de)?\s+cr[ée]dito/i,
   });
