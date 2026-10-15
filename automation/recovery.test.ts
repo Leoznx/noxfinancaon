@@ -195,6 +195,13 @@ test("reconciliacao causal protegida nao provoca ciclo de reinicio", () => {
   } as DiagnosticSnapshot;
 
   assert.equal(isExpectedCreditReconciliationPending(creditWorkerHealth), true);
+  assert.equal(
+    isExpectedCreditReconciliationPending({
+      ...creditWorkerHealth,
+      activeCancellation: true,
+    }),
+    true,
+  );
   assert.equal(shouldSkipHealthyCreditWorkerRestart("RESTART_CREDIT_WORKER", snapshot), true);
   assert.equal(
     shouldSkipHealthyCreditWorkerRestart("RESTART_CREDIT_WORKER", {
