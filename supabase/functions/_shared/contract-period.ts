@@ -78,7 +78,8 @@ export function resolveContractPeriodMonths(
  * efeito externo, nenhuma das integrações continua com um valor obsoleto.
  *
  * O cliente recebido precisa usar a service role. Uma segunda aquisição com
- * o mesmo prazo é idempotente; um prazo diferente é sempre conflito.
+ * o mesmo prazo é idempotente. Uma troca de prazo só volta a ser possível
+ * quando o banco identifica uma reserva antiga sem efeito externo.
  */
 export async function lockContractPeriod(
   supabase: any,

@@ -10,6 +10,7 @@ import type {
 } from "@/components/simulacao/SeletorPlanos";
 import { supabase } from "@/integrations/supabase/client";
 import { isNomeValido, reenviarConsulta, registrarEventoProposta } from "@/lib/consultasCredito";
+import { buildPlanSelectionUpdate } from "@/lib/plan-selection";
 import { normalizeContractPeriodMonths } from "@/lib/contract-period";
 import { toast } from "sonner";
 
@@ -98,39 +99,51 @@ function ConsultaResultado() {
       const premioMensal = planoCalculado?.mensal ?? base * (taxaPremio / 100);
       const anual = planoCalculado?.totalAnual ?? premioMensal * 12;
 
-      const updatePayload: any = {
-        plano_id: planoId,
-        contract_period_months: periodoContrato,
-        valor_premio_mensal: premioMensal,
-        valor_anual: anual,
-        status: "pendente_documentacao",
-      };
-      const previousDocumentos =
-        consulta?.documentos && typeof consulta.documentos === "object" ? consulta.documentos : {};
-      updatePayload.documentos = {
-        ...previousDocumentos,
+      const selectionUpdate = buildPlanSelectionUpdate(consulta, {
+        planId: planoId,
+        contractPeriodMonths: periodoContrato,
+        monthlyAmount: premioMensal,
+        annualAmount: anual,
         extras: extras ?? {},
-        plano_calculado: planoCalculado ?? null,
-      };
+        calculatedPlan: planoCalculado,
+      });
 
-      const { error } = await supabase.from("consultas_credito").update(updatePayload).eq("id", id);
+      const { error } = await supabase
+        .from("consultas_credito")
+        .update(selectionUpdate.payload as any)
+        .eq("id", id);
       if (error) throw error;
 
       // Passo a passo do funil — é o que o administrador lê em Consultas > Ver mais.
-      await registrarEventoProposta(
-        id,
-        "plano_selecionado",
-        `Plano ${(plano as any).nome} selecionado. Prêmio mensal de ${premioMensal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}.`,
-        {
-          plano_id: planoId,
-          contract_period_months: periodoContrato,
-          valor_premio_mensal: premioMensal,
-          valor_anual: anual,
-        },
-      );
+      if (!selectionUpdate.resumed || selectionUpdate.periodChanged) {
+        await registrarEventoProposta(
+          id,
+          selectionUpdate.resumed ? "periodo_contrato_atualizado" : "plano_selecionado",
+          selectionUpdate.resumed
+            ? `Período do contrato atualizado para ${periodoContrato} ${periodoContrato === 1 ? "mês" : "meses"}.`
+            : `Plano ${(plano as any).nome} selecionado. Prêmio mensal de ${premioMensal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}.`,
+          {
+            plano_id: planoId,
+            contract_period_months: periodoContrato,
+            valor_premio_mensal: premioMensal,
+            valor_anual: anual,
+          },
+        );
+      }
 
-      toast.success("Plano selecionado! Vamos completar os dados da proposta.");
-      navigate({ to: `/consultas/${id}/dados-complementares` as any });
+      toast.success(
+        selectionUpdate.resumed
+          ? selectionUpdate.periodChanged
+            ? "Período atualizado! Continuando de onde você parou."
+            : "Dados já salvos. Continuando de onde você parou."
+          : "Plano selecionado! Vamos completar os dados da proposta.",
+      );
+      navigate({
+        to:
+          selectionUpdate.resumed && consulta.dados_complementares_em
+            ? (`/consultas/${id}/finalizar` as any)
+            : (`/consultas/${id}/dados-complementares` as any),
+      });
     } catch (e: any) {
       toast.error("Erro ao salvar plano: " + e.message);
     } finally {

@@ -7,7 +7,10 @@ import { Settings } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { ResultadoAutomacao } from "@/components/simulacao/ResultadoAutomacao";
-import type { ExtrasSelecionados, PlanoSelecionadoCalculo } from "@/components/simulacao/SeletorPlanos";
+import type {
+  ExtrasSelecionados,
+  PlanoSelecionadoCalculo,
+} from "@/components/simulacao/SeletorPlanos";
 import {
   getConsultaCredito,
   registrarEventoProposta,
@@ -16,6 +19,7 @@ import {
   type ConsultaCredito,
 } from "@/lib/consultasCredito";
 import { normalizeContractPeriodMonths } from "@/lib/contract-period";
+import { buildPlanSelectionUpdate } from "@/lib/plan-selection";
 
 /**
  * Tela de resultado da automação local CredPago (worker Playwright).
@@ -61,7 +65,10 @@ function StatusConsulta() {
     return (
       <DashboardLayout>
         <div className="flex-1 flex items-center justify-center py-24">
-          <Settings className="w-10 h-10 text-neutral-300 animate-spin" style={{ animationDuration: "2.5s" }} />
+          <Settings
+            className="w-10 h-10 text-neutral-300 animate-spin"
+            style={{ animationDuration: "2.5s" }}
+          />
         </div>
       </DashboardLayout>
     );
@@ -72,8 +79,13 @@ function StatusConsulta() {
       <DashboardLayout>
         <div className="flex-1 px-6 py-12 max-w-3xl mx-auto w-full text-center">
           <h1 className="text-2xl font-bold text-neutral-900 mb-2">Consulta não encontrada</h1>
-          <p className="text-neutral-600 mb-8">Verifique se o link está correto ou consulte o histórico.</p>
-          <Button asChild className="bg-neutral-900 hover:bg-neutral-800 text-white font-bold rounded-xl h-12 px-6">
+          <p className="text-neutral-600 mb-8">
+            Verifique se o link está correto ou consulte o histórico.
+          </p>
+          <Button
+            asChild
+            className="bg-neutral-900 hover:bg-neutral-800 text-white font-bold rounded-xl h-12 px-6"
+          >
             <Link to="/consultas">Ver minhas consultas</Link>
           </Button>
         </div>
@@ -106,46 +118,59 @@ function StatusConsulta() {
       const aluguel = Number(consulta.valor_aluguel) || 0;
       const condominio = Number(consulta.valor_condominio) || 0;
       const taxas = Number(consulta.valor_taxas) || 0;
-      const cobreTaxas = planoCalculado?.cobre_taxas_condominio ?? (plano as any).cobre_taxas_condominio;
+      const cobreTaxas =
+        planoCalculado?.cobre_taxas_condominio ?? (plano as any).cobre_taxas_condominio;
       const taxaPremio = Number(planoCalculado?.taxa_premio ?? (plano as any).taxa_premio);
-      const base = planoCalculado?.baseCalculo ?? (cobreTaxas ? aluguel + condominio + taxas : aluguel);
-      const premioMensal = planoCalculado?.mensal ?? (base * (taxaPremio / 100));
-      const anual = planoCalculado?.totalAnual ?? (premioMensal * 12);
+      const base =
+        planoCalculado?.baseCalculo ?? (cobreTaxas ? aluguel + condominio + taxas : aluguel);
+      const premioMensal = planoCalculado?.mensal ?? base * (taxaPremio / 100);
+      const anual = planoCalculado?.totalAnual ?? premioMensal * 12;
 
-      const updatePayload: any = {
-        plano_id: planoId,
-        contract_period_months: periodoContrato,
-        valor_premio_mensal: premioMensal,
-        valor_anual: anual,
-        status: "pendente_documentacao",
-      };
-      const previousDocumentos = (consulta as any)?.documentos && typeof (consulta as any).documentos === "object"
-        ? (consulta as any).documentos
-        : {};
-      updatePayload.documentos = {
-        ...previousDocumentos,
+      const selectionUpdate = buildPlanSelectionUpdate(consulta, {
+        planId: planoId,
+        contractPeriodMonths: periodoContrato,
+        monthlyAmount: premioMensal,
+        annualAmount: anual,
         extras: extras ?? {},
-        plano_calculado: planoCalculado ?? null,
-      };
+        calculatedPlan: planoCalculado,
+      });
 
-      const { error } = await supabase.from("consultas_credito").update(updatePayload).eq("id", id);
+      const { error } = await supabase
+        .from("consultas_credito")
+        .update(selectionUpdate.payload as any)
+        .eq("id", id);
       if (error) throw error;
 
       // Passo a passo do funil — é o que o administrador lê em Consultas > Ver mais.
-      await registrarEventoProposta(
-        id,
-        "plano_selecionado",
-        `Plano ${(plano as any).nome} selecionado. Prêmio mensal de ${premioMensal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}.`,
-        {
-          plano_id: planoId,
-          contract_period_months: periodoContrato,
-          valor_premio_mensal: premioMensal,
-          valor_anual: anual,
-        },
-      );
+      if (!selectionUpdate.resumed || selectionUpdate.periodChanged) {
+        await registrarEventoProposta(
+          id,
+          selectionUpdate.resumed ? "periodo_contrato_atualizado" : "plano_selecionado",
+          selectionUpdate.resumed
+            ? `Período do contrato atualizado para ${periodoContrato} ${periodoContrato === 1 ? "mês" : "meses"}.`
+            : `Plano ${(plano as any).nome} selecionado. Prêmio mensal de ${premioMensal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}.`,
+          {
+            plano_id: planoId,
+            contract_period_months: periodoContrato,
+            valor_premio_mensal: premioMensal,
+            valor_anual: anual,
+          },
+        );
+      }
 
-      toast.success("Plano selecionado! Vamos completar os dados da proposta.");
-      navigate({ to: `/consultas/${id}/dados-complementares` as any });
+      toast.success(
+        selectionUpdate.resumed
+          ? selectionUpdate.periodChanged
+            ? "Período atualizado! Continuando de onde você parou."
+            : "Dados já salvos. Continuando de onde você parou."
+          : "Plano selecionado! Vamos completar os dados da proposta.",
+      );
+      navigate({
+        to:
+          selectionUpdate.resumed && consulta.dados_complementares_em
+            ? (`/consultas/${id}/finalizar` as any)
+            : (`/consultas/${id}/dados-complementares` as any),
+      });
     } catch (e: any) {
       toast.error("Erro ao salvar plano: " + (e?.message || "desconhecido"));
     } finally {
@@ -166,7 +191,8 @@ function StatusConsulta() {
             contractPeriodMonthsInitial={consulta.contract_period_months ?? null}
             extrasIniciais={
               consulta.documentos && typeof consulta.documentos === "object"
-                ? ((consulta.documentos as Record<string, unknown>).extras as Partial<ExtrasSelecionados> | null)
+                ? ((consulta.documentos as Record<string, unknown>)
+                    .extras as Partial<ExtrasSelecionados> | null)
                 : null
             }
           />
