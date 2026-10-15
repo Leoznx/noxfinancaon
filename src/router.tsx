@@ -1,6 +1,9 @@
 import { QueryClient } from "@tanstack/react-query";
 import { createRouter } from "@tanstack/react-router";
+import { installNavigationRecovery } from "./lib/navigation-recovery";
 import { routeTree } from "./routeTree.gen";
+
+installNavigationRecovery();
 
 export const getRouter = () => {
   const queryClient = new QueryClient({

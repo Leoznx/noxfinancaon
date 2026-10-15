@@ -48,6 +48,7 @@ export function applySecurityHeaders(request: Request, response: Response) {
   headers.set("Cross-Origin-Resource-Policy", "same-site");
 
   const pathname = new URL(request.url).pathname;
+  const isHtml = headers.get("content-type")?.toLowerCase().includes("text/html") ?? false;
   const isPrivate =
     !["GET", "HEAD"].includes(request.method.toUpperCase()) ||
     headers.has("set-cookie") ||
@@ -58,6 +59,10 @@ export function applySecurityHeaders(request: Request, response: Response) {
     headers.set("Cache-Control", "private, no-store, max-age=0");
     headers.set("Pragma", "no-cache");
     headers.set("Expires", "0");
+  } else if (isHtml) {
+    // O HTML precisa sempre ser revalidado: os assets têm hash e podem ser
+    // substituídos em um novo deploy enquanto uma aba antiga ainda está aberta.
+    headers.set("Cache-Control", "no-cache, max-age=0, must-revalidate");
   }
 
   return new Response(response.body, {

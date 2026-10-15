@@ -14,6 +14,10 @@ import { AuthProvider, useAuth } from "@/components/AuthProvider";
 import { GlobalLoadingProvider } from "@/components/GlobalLoading";
 import { Toaster } from "@/components/ui/sonner";
 import { hasAuthEmailCallback, parseAuthEmailCallback } from "@/lib/auth-email-links";
+import {
+  isRecoverableNavigationError,
+  reloadCurrentDocumentForNavigationError,
+} from "@/lib/navigation-recovery";
 import { GOOGLE_ADS_TAG_ID, META_PIXEL_ID, trackPageView } from "@/lib/tracking";
 import { ROTA_CADASTRO_CONCLUIDO, precisaMostrarCadastroConcluido } from "@/lib/primeiroAcesso";
 
@@ -138,31 +142,58 @@ function NotFoundComponent() {
 function ErrorComponent({ error, reset }: { error: unknown; reset: () => void }) {
   console.error(error);
   const router = useRouter();
+  const [retrying, setRetrying] = React.useState(false);
+  const recoverableNavigationError = isRecoverableNavigationError(error);
+
+  React.useEffect(() => {
+    if (!recoverableNavigationError) return;
+    setRetrying(true);
+    if (!reloadCurrentDocumentForNavigationError(error)) setRetrying(false);
+  }, [error, recoverableNavigationError]);
+
+  const retry = async () => {
+    setRetrying(true);
+
+    if (recoverableNavigationError) {
+      reloadCurrentDocumentForNavigationError(error, { force: true });
+      return;
+    }
+
+    try {
+      await router.invalidate({ sync: true, forcePending: true });
+      reset();
+    } catch (retryError) {
+      console.error(retryError);
+    } finally {
+      setRetrying(false);
+    }
+  };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+    <div className="flex min-h-screen items-center justify-center bg-background px-4" role="alert">
       <div className="max-w-md text-center">
         <h1 className="text-xl font-semibold tracking-tight text-foreground">
-          This page didn't load
+          {retrying ? "Atualizando o site…" : "Não foi possível abrir esta página"}
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Something went wrong on our end. You can try refreshing or head back home.
+          {retrying
+            ? "Estamos carregando a versão mais recente. Você continuará no mesmo lugar."
+            : "Tente novamente. Se o problema continuar, volte ao início."}
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
-            onClick={() => {
-              router.invalidate();
-              reset();
-            }}
+            type="button"
+            disabled={retrying}
+            onClick={() => void retry()}
             className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
-            Try again
+            {retrying ? "Atualizando…" : "Tentar novamente"}
           </button>
           <a
             href="/"
             className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
           >
-            Go home
+            Ir para o início
           </a>
         </div>
       </div>
