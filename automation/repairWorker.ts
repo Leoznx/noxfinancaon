@@ -23,7 +23,10 @@ import {
   type ValidationResult,
 } from "./repairEngine";
 import { redactObject, redactSensitiveText } from "./redaction";
-import { shouldSkipHealthyCreditWorkerRestart } from "./repairPolicy";
+import {
+  isExpectedCreditReconciliationPending,
+  shouldSkipHealthyCreditWorkerRestart,
+} from "./repairPolicy";
 import type {
   AutomationErrorRecord,
   DiagnosticSnapshot,
@@ -246,6 +249,17 @@ async function validateRepair(): Promise<ValidationResult> {
     return { ok: false, summary: "Worker de credito ainda sem resposta." };
   if (!snapshot.creditWorkerReady) {
     const auth = String(snapshot.creditWorkerHealth.auth ?? "");
+    if (isExpectedCreditReconciliationPending(snapshot.creditWorkerHealth)) {
+      return {
+        ok: true,
+        summary:
+          "Worker autenticado e filas acessiveis; uma submissao sem ID externo aguarda reconciliacao segura, sem reinicio ou reenvio.",
+        details: {
+          protectedReconciliationPending: true,
+          submittedAgain: false,
+        },
+      };
+    }
     return {
       ok: false,
       summary:
@@ -347,6 +361,9 @@ async function runHealthCycle(): Promise<void> {
     runtime.databaseReachable = snapshot.databaseReachable;
     runtime.status = overallHealthStatus(snapshot);
     if (snapshot.databaseReachable) await persistHealth(snapshot);
+    const protectedReconciliationPending = isExpectedCreditReconciliationPending(
+      snapshot.creditWorkerHealth,
+    );
 
     await Promise.all([
       observeIncident(
@@ -356,7 +373,10 @@ async function runHealthCycle(): Promise<void> {
       ),
       observeIncident(
         "worker-not-ready",
-        snapshot.creditWorkerReachable && !snapshot.creditWorkerReady && !snapshot.portalBlocked,
+        snapshot.creditWorkerReachable &&
+          !snapshot.creditWorkerReady &&
+          !snapshot.portalBlocked &&
+          !protectedReconciliationPending,
         String(snapshot.creditWorkerHealth.auth || "") === "required"
           ? "Authentication error: a sessao do portal requer renovacao automatica."
           : "Worker offline: processo ativo, mas a fila nao esta pronta.",

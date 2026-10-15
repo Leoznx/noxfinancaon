@@ -11,6 +11,7 @@ import { planAiRecovery } from "./aiRecoveryPlanner";
 import { analyzeWorkerLogLine } from "./logIncidentMonitor";
 import {
   activeCreditConsultationCount,
+  isExpectedCreditReconciliationPending,
   shouldSkipHealthyCreditWorkerRestart,
 } from "./repairPolicy";
 import { redactObject, redactSensitiveText, sanitizeUrl } from "./redaction";
@@ -97,6 +98,16 @@ test("classifica bloqueio comercial do parceiro sem confundir com seletor", () =
   assert.equal(result.runbook, "WAIT_EXTERNAL_DEPENDENCY");
 });
 
+test("classifica erro interno do parceiro como dependencia externa sem reiniciar o worker", () => {
+  const result = classifyAutomationError(
+    new Error(
+      "A parceiro de crédito retornou erro interno sem um ID causal; o job foi preservado para reconciliação.",
+    ),
+  );
+  assert.equal(result.category, "CREDPAGO_UNAVAILABLE");
+  assert.equal(result.runbook, "WAIT_EXTERNAL_DEPENDENCY");
+});
+
 test("monitor transforma qualquer linha real de erro em incidente e ignora evento ja tratado", () => {
   const when = new Date("2026-09-11T12:00:00Z");
   assert.match(
@@ -164,6 +175,34 @@ test("reparo historico nao reinicia um worker que ja esta saudavel", () => {
     false,
   );
   assert.equal(shouldSkipHealthyCreditWorkerRestart("VALIDATE_SELECTORS", snapshot), false);
+});
+
+test("reconciliacao causal protegida nao provoca ciclo de reinicio", () => {
+  const creditWorkerHealth = {
+    ready: false,
+    auth: "ok",
+    queue: "ok",
+    browser: "ok",
+    cancellationQueue: "ok",
+    cancellationExecution: "checking",
+    activeConsultations: 0,
+    activeCancellation: false,
+  };
+  const snapshot = {
+    creditWorkerReachable: true,
+    creditWorkerReady: false,
+    creditWorkerHealth,
+  } as DiagnosticSnapshot;
+
+  assert.equal(isExpectedCreditReconciliationPending(creditWorkerHealth), true);
+  assert.equal(shouldSkipHealthyCreditWorkerRestart("RESTART_CREDIT_WORKER", snapshot), true);
+  assert.equal(
+    shouldSkipHealthyCreditWorkerRestart("RESTART_CREDIT_WORKER", {
+      ...snapshot,
+      creditWorkerHealth: { ...creditWorkerHealth, cancellationExecution: "unavailable" },
+    }),
+    false,
+  );
 });
 
 test("considera a atividade informada pelo proprio worker antes de permitir restart", () => {

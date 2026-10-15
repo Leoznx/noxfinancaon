@@ -37,8 +37,19 @@ const CREDPAGO_ACCOUNT_BLOCKED_RULE: ClassificationRule = {
   runbook: "WAIT_EXTERNAL_DEPENDENCY",
 };
 
+const CREDPAGO_INTERNAL_ERROR_RULE: ClassificationRule = {
+  category: "CREDPAGO_UNAVAILABLE",
+  severity: "ERROR",
+  pattern:
+    /parceir[oa] de cr[eé]dito.{0,160}erro interno|erro interno.{0,160}(?:parceir[oa] de cr[eé]dito|credpago|loft)/i,
+  diagnosis:
+    "O parceiro confirmou o envio, mas devolveu uma falha interna; a reconciliacao causal deve terminar antes de qualquer nova tentativa.",
+  runbook: "WAIT_EXTERNAL_DEPENDENCY",
+};
+
 const RULES: ClassificationRule[] = [
   CREDPAGO_ACCOUNT_BLOCKED_RULE,
+  CREDPAGO_INTERNAL_ERROR_RULE,
   {
     category: "BROWSER_PROFILE_LOCKED",
     severity: "ERROR",

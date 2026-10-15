@@ -5,6 +5,20 @@ const CREDIT_RESTART_RUNBOOKS: ReadonlySet<RepairRunbook> = new Set([
   "RESTART_CREDIT_WORKER",
 ]);
 
+export function isExpectedCreditReconciliationPending(
+  creditWorkerHealth: Record<string, unknown>,
+): boolean {
+  return (
+    creditWorkerHealth.auth === "ok" &&
+    creditWorkerHealth.queue === "ok" &&
+    creditWorkerHealth.browser === "ok" &&
+    creditWorkerHealth.cancellationQueue === "ok" &&
+    creditWorkerHealth.cancellationExecution === "checking" &&
+    creditWorkerHealth.activeCancellation !== true &&
+    Number(creditWorkerHealth.activeConsultations ?? 0) === 0
+  );
+}
+
 export function activeCreditConsultationCount(
   creditWorkerHealth: Record<string, unknown>,
   databaseCount = 0,
@@ -28,11 +42,16 @@ export function shouldSkipHealthyCreditWorkerRestart(
   snapshot: DiagnosticSnapshot,
 ): boolean {
   if (!CREDIT_RESTART_RUNBOOKS.has(runbook)) return false;
-  if (!snapshot.creditWorkerReachable || !snapshot.creditWorkerReady) return false;
+  if (!snapshot.creditWorkerReachable) return false;
 
-  return (
+  const coreHealthy =
     snapshot.creditWorkerHealth.auth === "ok" &&
     snapshot.creditWorkerHealth.queue === "ok" &&
-    snapshot.creditWorkerHealth.browser === "ok"
+    snapshot.creditWorkerHealth.browser === "ok";
+
+  return (
+    coreHealthy &&
+    (snapshot.creditWorkerReady ||
+      isExpectedCreditReconciliationPending(snapshot.creditWorkerHealth))
   );
 }
