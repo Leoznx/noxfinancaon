@@ -131,6 +131,7 @@ import { Route as ConsultasIdResultadoRouteImport } from './routes/consultas.$id
 import { Route as ConsultasIdFinalizarRouteImport } from './routes/consultas.$id.finalizar'
 import { Route as ConsultasIdDocumentosRouteImport } from './routes/consultas.$id.documentos'
 import { Route as ConsultasIdDadosComplementaresRouteImport } from './routes/consultas.$id.dados-complementares'
+import { Route as ConsultasIdContratoRealizadoRouteImport } from './routes/consultas.$id.contrato-realizado'
 
 const VendedorRoute = VendedorRouteImport.update({
   id: '/vendedor',
@@ -767,6 +768,12 @@ const ConsultasIdDadosComplementaresRoute =
       (d) => d.Route,
     ),
   )
+const ConsultasIdContratoRealizadoRoute =
+  ConsultasIdContratoRealizadoRouteImport.update({
+    id: '/$id/contrato-realizado',
+    path: '/$id/contrato-realizado',
+    getParentRoute: () => ConsultasRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -886,6 +893,7 @@ export interface FileRoutesByFullPath {
   '/inquilino/': typeof InquilinoIndexRoute
   '/simular/': typeof SimularIndexRoute
   '/vendedor/': typeof VendedorIndexRoute
+  '/consultas/$id/contrato-realizado': typeof ConsultasIdContratoRealizadoRoute
   '/consultas/$id/dados-complementares': typeof ConsultasIdDadosComplementaresRoute
   '/consultas/$id/documentos': typeof ConsultasIdDocumentosRoute
   '/consultas/$id/finalizar': typeof ConsultasIdFinalizarRoute
@@ -1006,6 +1014,7 @@ export interface FileRoutesByTo {
   '/inquilino': typeof InquilinoIndexRoute
   '/simular': typeof SimularIndexRoute
   '/vendedor': typeof VendedorIndexRoute
+  '/consultas/$id/contrato-realizado': typeof ConsultasIdContratoRealizadoRoute
   '/consultas/$id/dados-complementares': typeof ConsultasIdDadosComplementaresRoute
   '/consultas/$id/documentos': typeof ConsultasIdDocumentosRoute
   '/consultas/$id/finalizar': typeof ConsultasIdFinalizarRoute
@@ -1131,6 +1140,7 @@ export interface FileRoutesById {
   '/inquilino/': typeof InquilinoIndexRoute
   '/simular/': typeof SimularIndexRoute
   '/vendedor/': typeof VendedorIndexRoute
+  '/consultas/$id/contrato-realizado': typeof ConsultasIdContratoRealizadoRoute
   '/consultas/$id/dados-complementares': typeof ConsultasIdDadosComplementaresRoute
   '/consultas/$id/documentos': typeof ConsultasIdDocumentosRoute
   '/consultas/$id/finalizar': typeof ConsultasIdFinalizarRoute
@@ -1257,6 +1267,7 @@ export interface FileRouteTypes {
     | '/inquilino/'
     | '/simular/'
     | '/vendedor/'
+    | '/consultas/$id/contrato-realizado'
     | '/consultas/$id/dados-complementares'
     | '/consultas/$id/documentos'
     | '/consultas/$id/finalizar'
@@ -1377,6 +1388,7 @@ export interface FileRouteTypes {
     | '/inquilino'
     | '/simular'
     | '/vendedor'
+    | '/consultas/$id/contrato-realizado'
     | '/consultas/$id/dados-complementares'
     | '/consultas/$id/documentos'
     | '/consultas/$id/finalizar'
@@ -1501,6 +1513,7 @@ export interface FileRouteTypes {
     | '/inquilino/'
     | '/simular/'
     | '/vendedor/'
+    | '/consultas/$id/contrato-realizado'
     | '/consultas/$id/dados-complementares'
     | '/consultas/$id/documentos'
     | '/consultas/$id/finalizar'
@@ -2461,6 +2474,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ConsultasIdDadosComplementaresRouteImport
       parentRoute: typeof ConsultasRoute
     }
+    '/consultas/$id/contrato-realizado': {
+      id: '/consultas/$id/contrato-realizado'
+      path: '/$id/contrato-realizado'
+      fullPath: '/consultas/$id/contrato-realizado'
+      preLoaderRoute: typeof ConsultasIdContratoRealizadoRouteImport
+      parentRoute: typeof ConsultasRoute
+    }
   }
 }
 
@@ -2493,6 +2513,7 @@ const ConfiguracoesRouteWithChildren = ConfiguracoesRoute._addFileChildren(
 interface ConsultasRouteChildren {
   ConsultasNovaRoute: typeof ConsultasNovaRoute
   ConsultasIndexRoute: typeof ConsultasIndexRoute
+  ConsultasIdContratoRealizadoRoute: typeof ConsultasIdContratoRealizadoRoute
   ConsultasIdDadosComplementaresRoute: typeof ConsultasIdDadosComplementaresRoute
   ConsultasIdDocumentosRoute: typeof ConsultasIdDocumentosRoute
   ConsultasIdFinalizarRoute: typeof ConsultasIdFinalizarRoute
@@ -2503,6 +2524,7 @@ interface ConsultasRouteChildren {
 const ConsultasRouteChildren: ConsultasRouteChildren = {
   ConsultasNovaRoute: ConsultasNovaRoute,
   ConsultasIndexRoute: ConsultasIndexRoute,
+  ConsultasIdContratoRealizadoRoute: ConsultasIdContratoRealizadoRoute,
   ConsultasIdDadosComplementaresRoute: ConsultasIdDadosComplementaresRoute,
   ConsultasIdDocumentosRoute: ConsultasIdDocumentosRoute,
   ConsultasIdFinalizarRoute: ConsultasIdFinalizarRoute,

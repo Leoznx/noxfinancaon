@@ -1314,13 +1314,14 @@ function ResumoPropostaLoft(p: any) {
         // A cobrança inicial continua válida e o modal oferece retry somente do cronograma.
       }
       if (intent === "pay_later") {
-        setModalEnvioSucesso("pay_later");
+        navigate({
+          to: "/consultas/$id/contrato-realizado",
+          params: { id },
+          replace: true,
+        });
+        return;
       }
-      toast.success(
-        intent === "pay_later"
-          ? "Cobrança gerada e enviada ao responsável pelo pagamento."
-          : "Cobrança criada. Use os dados exibidos para pagar agora.",
-      );
+      toast.success("Cobrança criada. Use os dados exibidos para pagar agora.");
     } catch (e: any) {
       console.error("Erro ao criar pagamento Asaas:", e);
       toast.error(e?.message || "Não foi possível gerar o pagamento agora. Tente novamente.");
