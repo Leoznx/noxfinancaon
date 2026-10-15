@@ -22,6 +22,7 @@ import {
   normalizePaymentStatus,
   persistProviderTransition,
   reducePaymentStatus,
+  shouldSwitchInitialPaymentMethod,
 } from "./billing-state.ts";
 import { ensureAsaasCustomer } from "./asaas-customer.ts";
 import { asaasLateFeePayload } from "./billing-automation.ts";
@@ -500,6 +501,137 @@ export async function materializeScheduledBoletoInvoice(
     last_error: null,
   });
   return { status: "materialized" as const, invoice: materialized, payment };
+}
+
+/**
+ * Troca Pix/boleto na cobrança inicial já aberta sem emitir uma segunda
+ * cobrança. O provedor é atualizado primeiro e as duas projeções locais só
+ * aceitam a mudança enquanto o pagamento continuar cobrável.
+ */
+export async function switchOpenInvoicePaymentMethod(
+  supabase: any,
+  params: {
+    invoice: any;
+    payment: any;
+    method: "pix" | "boleto";
+    dueDate: string;
+  },
+) {
+  const currentMethod = params.payment?.payment_method || params.invoice?.payment_method;
+  const currentStatus = params.payment?.status || params.invoice?.status;
+  if (
+    !shouldSwitchInitialPaymentMethod({
+      currentMethod,
+      requestedMethod: params.method,
+      status: currentStatus,
+    })
+  ) {
+    return { changed: false, invoice: params.invoice, payment: params.payment, raw: null };
+  }
+  if (!params.payment?.id || !params.payment?.asaas_payment_id) {
+    throw new HttpError(
+      409,
+      "A cobrança atual ainda não pode trocar de forma de pagamento. Consulte o financeiro.",
+    );
+  }
+
+  const raw = await asaasFetch(`/payments/${params.payment.asaas_payment_id}`, {
+    method: "PUT",
+    body: JSON.stringify({
+      billingType: params.method === "pix" ? "PIX" : "BOLETO",
+      value: Number(params.invoice.valor || params.payment.value || 0),
+      dueDate: params.dueDate,
+      ...asaasLateFeePayload(),
+    }),
+  });
+  const pix =
+    params.method === "pix"
+      ? await asaasFetch(`/payments/${params.payment.asaas_payment_id}/pixQrCode`)
+      : null;
+  const incomingStatus = normalizePaymentStatus(mapAsaasStatus(raw?.status));
+  const providerEventAt = new Date().toISOString();
+  const safeRaw = sanitizeAsaasResponse(raw);
+  const paymentTransition = await persistProviderTransition({
+    supabase,
+    table: "asaas_payments",
+    rowId: params.payment.id,
+    current: params.payment,
+    incomingEventAt: providerEventAt,
+    reduce: (status, currentEventAt, incomingEventAt) =>
+      reducePaymentStatus(status as string, incomingStatus, currentEventAt, incomingEventAt),
+    buildPatch: ({ current, nextStatus, staleEvent }) =>
+      !staleEvent &&
+      normalizePaymentStatus(nextStatus) === incomingStatus &&
+      shouldSwitchInitialPaymentMethod({
+        currentMethod: current.payment_method,
+        requestedMethod: params.method,
+        status: current.status,
+      })
+        ? {
+            payment_method: params.method,
+            due_date: params.dueDate,
+            raw_response: safeRaw,
+            boleto_url:
+              params.method === "boleto" ? raw?.bankSlipUrl || raw?.invoiceUrl || null : null,
+            boleto_barcode:
+              params.method === "boleto"
+                ? raw?.identificationField || raw?.nossoNumero || null
+                : null,
+            pix_qr_code: params.method === "pix" ? pix?.encodedImage || null : null,
+            pix_copy_paste: params.method === "pix" ? pix?.payload || null : null,
+            pix_expires_at: params.method === "pix" ? pix?.expirationDate || null : null,
+          }
+        : { raw_response: current.raw_response },
+  });
+  const payment = paymentTransition.row;
+  if (payment.payment_method !== params.method) {
+    throw new HttpError(
+      409,
+      "A cobrança mudou de estado antes da troca do meio de pagamento. Atualize e tente novamente.",
+    );
+  }
+
+  const invoiceTransition = await persistProviderTransition({
+    supabase,
+    table: "faturas_inquilino",
+    rowId: params.invoice.id,
+    current: params.invoice,
+    incomingEventAt: providerEventAt,
+    reduce: (status, currentEventAt, incomingEventAt) =>
+      reducePaymentStatus(
+        status as string,
+        normalizePaymentStatus(payment.status),
+        currentEventAt,
+        incomingEventAt,
+      ),
+    buildPatch: ({ current, staleEvent }) =>
+      !staleEvent &&
+      shouldSwitchInitialPaymentMethod({
+        currentMethod: current.payment_method,
+        requestedMethod: params.method,
+        status: current.status,
+      })
+        ? {
+            payment_method: params.method,
+            vencimento: params.dueDate,
+            payment_url: raw?.invoiceUrl || raw?.bankSlipUrl || null,
+            boleto_url:
+              params.method === "boleto" ? raw?.bankSlipUrl || raw?.invoiceUrl || null : null,
+            linha_digitavel:
+              params.method === "boleto"
+                ? raw?.identificationField || raw?.nossoNumero || null
+                : null,
+          }
+        : {},
+  });
+
+  return {
+    changed: true,
+    invoice: { ...invoiceTransition.row, asaas_payment: payment },
+    payment,
+    raw,
+    providerEventAt,
+  };
 }
 
 export async function materializeInvoice(

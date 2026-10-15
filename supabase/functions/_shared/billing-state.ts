@@ -473,6 +473,22 @@ export function normalizePaymentStatus(value: unknown): CanonicalPaymentStatus {
   return "pending";
 }
 
+/**
+ * Uma cobrança inicial aberta pode trocar de meio sem criar outro recurso no
+ * Asaas. Estados financeiros terminais nunca podem ser reinterpretados como
+ * uma nova escolha feita na tela.
+ */
+export function shouldSwitchInitialPaymentMethod(input: {
+  currentMethod: unknown;
+  requestedMethod: unknown;
+  status: unknown;
+}) {
+  const currentMethod = String(input.currentMethod || "").toLowerCase();
+  const requestedMethod = String(input.requestedMethod || "").toLowerCase();
+  if (!currentMethod || !requestedMethod || currentMethod === requestedMethod) return false;
+  return ["pending", "overdue"].includes(normalizePaymentStatus(input.status));
+}
+
 export function paymentStatusFromEvent(eventType: unknown, providerStatus?: unknown) {
   const event = String(eventType || "").toUpperCase();
   const map: Record<string, CanonicalPaymentStatus> = {

@@ -48,6 +48,7 @@ import {
   reclaimStaleBillingOperation,
   recoverPaymentForOperation,
   sendInvoiceNotifications,
+  switchOpenInvoicePaymentMethod,
   updateBillingOperation,
 } from "../_shared/contract-billing.ts";
 import { ensurePendingPolicy } from "../_shared/d4sign.ts";
@@ -388,6 +389,33 @@ serve(async (req) => {
 
     if (existingInvoice) {
       let payment = existingInvoice.asaas_payment || null;
+      const currentMethod = payment?.payment_method || existingInvoice.payment_method;
+      if (currentMethod && currentMethod !== paymentMethod) {
+        const switched = await switchOpenInvoicePaymentMethod(supabase, {
+          invoice: existingInvoice,
+          payment,
+          method: paymentMethod,
+          dueDate: paymentMethod === "boleto" ? initialBoletoDueDate() : todayDate(),
+        });
+        existingInvoice = switched.invoice;
+        payment = switched.payment;
+        if (switched.changed) {
+          await persistConsultationPaymentState(
+            supabase,
+            proposalId,
+            normalizePaymentStatus(payment.status),
+            switched.providerEventAt || new Date().toISOString(),
+            () => ({
+              payment_method: paymentMethod,
+              payment_due_date: payment.due_date,
+              payment_data: sanitizeAsaasResponse(switched.raw),
+              payment_deferred: deferred,
+              payment_deferred_at: deferred ? new Date().toISOString() : null,
+              fire_insurance_payment_mode: fireMode,
+            }),
+          );
+        }
+      }
       if (payment?.payment_method === "pix") payment = await refetchPixQrCode(supabase, payment);
       queuePendingContractFlow(supabase, proposalId);
       return jsonResponse(

@@ -21,6 +21,7 @@ import {
   shouldAttemptNotification,
   shouldDispatchContractAfterPayment,
   shouldReconcileBillingOperation,
+  shouldSwitchInitialPaymentMethod,
   subscriptionStatusFromEvent,
   webhookEventCanBeClaimed,
 } from "../supabase/functions/_shared/billing-state";
@@ -32,6 +33,41 @@ import {
   scheduledBoletoIssueDate,
   shouldMaterializeScheduledBoleto,
 } from "../supabase/functions/_shared/billing-automation";
+
+test("troca o meio da cobrança inicial somente enquanto ela está aberta", () => {
+  assert.equal(
+    shouldSwitchInitialPaymentMethod({
+      currentMethod: "boleto",
+      requestedMethod: "pix",
+      status: "pending",
+    }),
+    true,
+  );
+  assert.equal(
+    shouldSwitchInitialPaymentMethod({
+      currentMethod: "pix",
+      requestedMethod: "credit_card",
+      status: "overdue",
+    }),
+    true,
+  );
+  assert.equal(
+    shouldSwitchInitialPaymentMethod({
+      currentMethod: "boleto",
+      requestedMethod: "boleto",
+      status: "pending",
+    }),
+    false,
+  );
+  assert.equal(
+    shouldSwitchInitialPaymentMethod({
+      currentMethod: "boleto",
+      requestedMethod: "pix",
+      status: "confirmed",
+    }),
+    false,
+  );
+});
 
 test("matriz de 16 cenarios Pix/boleto materializa a inicial sem duplicar cobranca", () => {
   const methods = ["pix", "boleto"] as const;

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Check,
   Copy,
@@ -75,14 +75,33 @@ export function ModalPagamentoAsaas({
   const codigoCopiar = useCopiar();
   const linkCopiar = useCopiar();
   const [busy, setBusy] = useState<"refresh" | "reissue" | Channel | null>(null);
+  const atualizacaoAutomaticaRef = useRef(false);
+
+  const status = resultado?.paymentStatus || resultado?.status;
+  const concluido = isPagamentoConcluido(status);
+  const adiado = intent === "pay_later" || resultado?.deferPayment;
+  const consolidado = status === "awaiting_consolidation";
+
+  useEffect(() => {
+    if (!open || concluido || consolidado || adiado) return;
+    const interval = window.setInterval(() => {
+      if (atualizacaoAutomaticaRef.current) return;
+      atualizacaoAutomaticaRef.current = true;
+      void onAtualizarStatus()
+        .then((atualizado) => {
+          if (atualizado) onAtualizarResultado(atualizado);
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          atualizacaoAutomaticaRef.current = false;
+        });
+    }, 5_000);
+    return () => window.clearInterval(interval);
+  }, [adiado, concluido, consolidado, onAtualizarResultado, onAtualizarStatus, open]);
 
   if (!resultado) return null;
 
   const isPix = resultado.paymentMethod === "pix";
-  const status = resultado.paymentStatus || resultado.status;
-  const concluido = isPagamentoConcluido(status);
-  const adiado = intent === "pay_later" || resultado.deferPayment;
-  const consolidado = status === "awaiting_consolidation";
   const link = paymentLink(resultado);
   const codigo = isPix ? resultado.pix?.qrCode : resultado.boleto?.barcode;
   const valor = resultado.amount.toLocaleString("pt-BR", {
@@ -107,7 +126,9 @@ export function ModalPagamentoAsaas({
       if (atualizado) onAtualizarResultado(atualizado);
       toast.success(success);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Não foi possível concluir a ação agora.");
+      toast.error(
+        error instanceof Error ? error.message : "Não foi possível concluir a ação agora.",
+      );
     } finally {
       setBusy(null);
     }
@@ -128,21 +149,21 @@ export function ModalPagamentoAsaas({
             {consolidado
               ? "Enviado ao faturamento consolidado"
               : adiado
-              ? "Cobrança gerada com sucesso"
-              : concluido
-                ? "Pagamento identificado"
-                : isPix
-                  ? "Pague com Pix"
-                  : "Boleto gerado"}
+                ? "Cobrança gerada com sucesso"
+                : concluido
+                  ? "Pagamento identificado"
+                  : isPix
+                    ? "Pague com Pix"
+                    : "Boleto gerado"}
           </DialogTitle>
           <DialogDescription className="text-sm text-neutral-600">
             {consolidado
               ? "A parcela foi registrada no financeiro da imobiliária e será incluída no lote, sem cobrança individual duplicada."
               : adiado
-              ? "O processo de contratação continuará normalmente. O pagamento está pendente."
-              : isPix
-                ? "Escaneie o QR Code ou copie o código no aplicativo do banco."
-                : "Copie a linha digitável ou abra o boleto para pagar."}
+                ? "O processo de contratação continuará normalmente. O pagamento está pendente."
+                : isPix
+                  ? "Escaneie o QR Code ou copie o código no aplicativo do banco."
+                  : "Copie a linha digitável ou abra o boleto para pagar."}
           </DialogDescription>
         </div>
 
@@ -299,9 +320,7 @@ export function ModalPagamentoAsaas({
                 disabled={busy !== null}
                 onClick={() => void executar("reissue", onReemitir, "Segunda via gerada.")}
               >
-                <RotateCw
-                  className={`mr-2 h-4 w-4 ${busy === "reissue" ? "animate-spin" : ""}`}
-                />
+                <RotateCw className={`mr-2 h-4 w-4 ${busy === "reissue" ? "animate-spin" : ""}`} />
                 Gerar segunda via
               </Button>
             )}
@@ -322,11 +341,7 @@ export function ModalPagamentoAsaas({
               className="mt-2 border-amber-300 bg-white"
               disabled={busy !== null}
               onClick={() =>
-                void executar(
-                  "reissue",
-                  onRetryInstallments,
-                  "Mensalidades futuras preparadas.",
-                )
+                void executar("reissue", onRetryInstallments, "Mensalidades futuras preparadas.")
               }
             >
               <RefreshCw className="mr-2 h-4 w-4" /> Tentar mensalidades novamente
@@ -339,17 +354,9 @@ export function ModalPagamentoAsaas({
             type="button"
             variant="outline"
             disabled={busy !== null}
-            onClick={() =>
-              void executar(
-                "refresh",
-                onAtualizarStatus,
-                "Status atualizado.",
-              )
-            }
+            onClick={() => void executar("refresh", onAtualizarStatus, "Status atualizado.")}
           >
-            <RefreshCw
-              className={`mr-2 h-4 w-4 ${busy === "refresh" ? "animate-spin" : ""}`}
-            />
+            <RefreshCw className={`mr-2 h-4 w-4 ${busy === "refresh" ? "animate-spin" : ""}`} />
             Atualizar status
           </Button>
           {onIrParaFaturas && (

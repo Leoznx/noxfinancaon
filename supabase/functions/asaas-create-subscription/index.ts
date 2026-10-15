@@ -45,6 +45,7 @@ import {
   recurringSetupAllowsContractActivation,
   resolveCheckoutPaymentResponsible,
   shouldDispatchContractAfterPayment,
+  shouldSwitchInitialPaymentMethod,
   subscriptionStatusFromEvent,
 } from "../_shared/billing-state.ts";
 import { resolveBillingDueDay } from "../_shared/billing-automation.ts";
@@ -1393,10 +1394,15 @@ serve(async (req) => {
           });
           invoice = { ...invoiceTransition.row, asaas_payment: payment };
 
-          // Uma recusa conhecida admite outra tentativa no MESMO recurso.
-          // O endpoint oficial payWithCreditCard nao cria nova cobranca; cada
-          // tentativa recebe reserva propria e sempre exige PAN/CVV novos.
-          if (refreshedStatus === "refused") {
+          // Uma cobrança inicial aberta em boleto/Pix e uma recusa conhecida
+          // podem ser pagas no MESMO recurso pelo endpoint oficial de cartão.
+          // A operação não cria outra cobrança e sempre exige PAN/CVV novos.
+          const switchingToCard = shouldSwitchInitialPaymentMethod({
+            currentMethod: payment.payment_method,
+            requestedMethod: "credit_card",
+            status: refreshedStatus,
+          });
+          if (refreshedStatus === "refused" || switchingToCard) {
             const retryKey = `${initialKey}:card-retry:${providerEventAt}`;
             const { operation: retryOperation, claimed: retryClaimed } =
               await claimBillingOperation(supabase, {
@@ -1407,7 +1413,7 @@ serve(async (req) => {
                 request: {
                   proposalId,
                   providerPaymentId: payment.asaas_payment_id,
-                  purpose: "retry_refused_card",
+                  purpose: switchingToCard ? "switch_open_payment_to_card" : "retry_refused_card",
                 },
                 userId: user.id,
               });
@@ -1479,12 +1485,18 @@ serve(async (req) => {
                     currentEventAt,
                     incomingEventAt,
                   ),
-                buildPatch: ({ current, nextStatus, staleEvent }) => ({
-                  raw_response:
-                    !staleEvent && normalizePaymentStatus(nextStatus) === incomingRetryStatus
-                      ? safeRetry
-                      : current.raw_response,
-                }),
+                buildPatch: ({ current, nextStatus, staleEvent }) =>
+                  !staleEvent && normalizePaymentStatus(nextStatus) === incomingRetryStatus
+                    ? {
+                        payment_method: "credit_card",
+                        raw_response: safeRetry,
+                        boleto_url: null,
+                        boleto_barcode: null,
+                        pix_qr_code: null,
+                        pix_copy_paste: null,
+                        pix_expires_at: null,
+                      }
+                    : { raw_response: current.raw_response },
               });
               retriedPayment = retryPaymentTransition.row;
             } catch (retryPaymentError) {
@@ -1508,7 +1520,18 @@ serve(async (req) => {
               incomingEventAt: retryEventAt,
               reduce: (currentStatus, currentEventAt, incomingEventAt) =>
                 reduceCardRetryStatus(currentStatus, retryStatus, currentEventAt, incomingEventAt),
-              buildPatch: () => ({}),
+              buildPatch: ({ current, nextStatus, staleEvent }) =>
+                !staleEvent && normalizePaymentStatus(nextStatus) === retryStatus
+                  ? {
+                      payment_method: "credit_card",
+                      vencimento: todayDate(),
+                      payment_url: initialRaw?.invoiceUrl || null,
+                      boleto_url: null,
+                      linha_digitavel: null,
+                    }
+                  : {
+                      payment_method: current.payment_method,
+                    },
             });
             invoice = { ...retryInvoiceTransition.row, asaas_payment: payment };
             await updateBillingOperation(supabase, retryOperation.id, {

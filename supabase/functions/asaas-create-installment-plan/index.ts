@@ -42,6 +42,7 @@ import {
   queuePendingContractFlow,
   reclaimStaleBillingOperation,
   recoverPaymentForOperation,
+  switchOpenInvoicePaymentMethod,
   updateBillingOperation,
 } from "../_shared/contract-billing.ts";
 
@@ -278,7 +279,50 @@ serve(async (req) => {
       );
     }
 
-    const byKey = new Map((existingRows || []).map((row: any) => [row.billing_key, row]));
+    const byKey = new Map<string, any>();
+    for (const row of existingRows || []) {
+      const materializedMonthlyCanSwitch =
+        row.charge_kind === "monthly" &&
+        row.payment_method !== paymentMethod &&
+        row.asaas_payment?.asaas_payment_id;
+      if (materializedMonthlyCanSwitch) {
+        const switched = await switchOpenInvoicePaymentMethod(supabase, {
+          invoice: row,
+          payment: row.asaas_payment,
+          method: paymentMethod,
+          dueDate: row.vencimento,
+        });
+        byKey.set(row.billing_key, switched.invoice);
+        continue;
+      }
+      const scheduledBoletoCanBecomePix =
+        paymentMethod === "pix" &&
+        row.charge_kind === "monthly" &&
+        row.payment_method === "boleto" &&
+        row.status === "scheduled" &&
+        !row.asaas_payment_id;
+      if (scheduledBoletoCanBecomePix) {
+        const { error: conversionError } = await supabase
+          .from("faturas_inquilino")
+          .update({
+            payment_method: "pix",
+            status: "pending",
+            components: {
+              ...(row.components || {}),
+              boletoIssueLeadDays: null,
+              scheduledIssueDate: null,
+            },
+          })
+          .eq("id", row.id)
+          .eq("status", "scheduled")
+          .is("asaas_payment_id", null);
+        if (conversionError) throw conversionError;
+        // Sem adicionar ao mapa: o laço abaixo materializa o Pix usando a
+        // mesma chave e repara esta fatura, sem criar uma linha duplicada.
+        continue;
+      }
+      byKey.set(row.billing_key, row);
+    }
     byKey.set(initialKey, initialInvoice);
 
     const customerId = await ensureAsaasCustomer(supabase, consulta, recipient);
