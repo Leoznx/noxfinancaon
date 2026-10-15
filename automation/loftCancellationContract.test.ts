@@ -15,6 +15,10 @@ const exhaustedRepairsMigrationUrl = new URL(
   "../supabase/migrations/20261014003000_finish_exhausted_repair_jobs.sql",
   import.meta.url,
 );
+const stabilizationMigrationUrl = new URL(
+  "../supabase/migrations/20261015193000_stabilize_credit_automation.sql",
+  import.meta.url,
+);
 
 test("usa uma RPC exclusiva para o ID causal devolvido pela submissão", async () => {
   const [worker, migration] = await Promise.all([
@@ -47,6 +51,10 @@ test("reconcilia automaticamente somente a única proposta nova após o envio", 
   assert.match(worker, /\.is\("proposal_id", null\)/);
   assert.match(worker, /await vincularPropostaAoCancelamento\(job\.id, resolution\.proposalId\)/);
   assert.match(worker, /finishAlreadyTerminalLoftReconciliation/);
+  assert.match(worker, /\.in\("status", \["prepared", "scheduled", "retry"\]\)/);
+  assert.match(worker, /await ensureLoggedIn\("reconcile-cancellation"/);
+  assert.match(worker, /reconcilePreparedLoftCancellation/);
+  assert.match(worker, /abortPreparedLoftCancellation/);
   assert.doesNotMatch(worker, /fluxo legado de CNPJ não devolve um ID causal/);
 });
 
@@ -87,4 +95,44 @@ test("encerra reparos sem lease depois que todas as tentativas foram consumidas"
   assert.match(migration, /lease_expires_at IS NULL OR lease_expires_at < v_now/);
   assert.match(migration, /status = 'FAILED'/);
   assert.match(migration, /CREATE OR REPLACE FUNCTION public\.claim_next_repair_job/);
+});
+
+test("valida a autenticação antes de tocar a fila de cancelamentos", async () => {
+  const worker = await readFile(workerUrl, "utf8");
+  const loopStart = worker.indexOf("for (;;) {");
+  const loop = worker.slice(loopStart);
+
+  assert.ok(loopStart >= 0);
+  assert.ok(
+    loop.indexOf("await validarAutenticacao(") <
+      loop.indexOf("if (env.loftCancellationEnabled && !cancelamentoEmAndamento"),
+  );
+  assert.match(worker, /if \(reconciliacaoCancelamentoPendente\)[\s\S]*continue;/);
+  assert.match(worker, /error instanceof LoftCancellationQueueError/);
+});
+
+test("não transforma falha terminal identificada em indisponibilidade global", async () => {
+  const migration = await readFile(stabilizationMigrationUrl, "utf8");
+  const claimStart = migration.lastIndexOf(
+    "CREATE OR REPLACE FUNCTION public.claim_next_loft_proposal_cancellation",
+  );
+  const claim = migration.slice(claimStart);
+
+  assert.ok(claimStart >= 0);
+  assert.match(claim, /status = 'prepared'/);
+  assert.match(claim, /status IN \('scheduled', 'retry'\)[\s\S]*proposal_id IS NULL/);
+  assert.doesNotMatch(claim, /status = 'failed'/);
+  assert.doesNotMatch(claim, /status IN \('processing', 'retry'\)/);
+});
+
+test("renova consulta órfã sem perder a idempotência de uma execução recente", async () => {
+  const migration = await readFile(stabilizationMigrationUrl, "utf8");
+
+  assert.match(migration, /interval '12 minutes'/);
+  assert.match(migration, /interval '15 minutes'/);
+  assert.match(migration, /coalesce\(v_consultation\.automation_started_at, v_consultation\.updated_at\)/);
+  assert.doesNotMatch(
+    migration,
+    /v_consultation\.status = 'processando'\s+OR \(v_consultation\.status = 'pendente'/,
+  );
 });

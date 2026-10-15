@@ -104,6 +104,13 @@ class LoftCancellationUnavailableError extends Error {
   }
 }
 
+class LoftCancellationQueueError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "LoftCancellationQueueError";
+  }
+}
+
 class ConsultaStateConflictError extends Error {
   constructor(message: string) {
     super(message);
@@ -119,8 +126,11 @@ interface LoftCancellationJob {
   id: string;
   consultation_id: string;
   correlation_id: string;
+  submission_token: string;
   proposal_id: string | null;
   known_proposal_ids: string[];
+  status: "prepared" | "scheduled" | "processing" | "retry" | "failed";
+  created_at: string;
   submitted_at: string | null;
   attempt_count: number;
   max_attempts: number;
@@ -529,12 +539,26 @@ async function claimNextLoftCancellation(): Promise<LoftCancellationJob | null> 
   const { error: recoveryError } = await (supabaseAdmin as any).rpc(
     "recover_expired_loft_proposal_cancellations",
   );
-  if (recoveryError) throw recoveryError;
+  if (recoveryError) {
+    throw new LoftCancellationQueueError(
+      "Não foi possível recuperar leases expirados da fila de cancelamentos.",
+      { cause: recoveryError },
+    );
+  }
   const { data, error } = await (supabaseAdmin as any).rpc(
     "claim_next_loft_proposal_cancellation",
     { p_worker_id: env.vpsId },
   );
-  if (error) throw error;
+  if (error) {
+    if (isPendingLoftReconciliationError(error)) {
+      registrarSucessoFilaCancelamento();
+      throw error;
+    }
+    throw new LoftCancellationQueueError(
+      "Não foi possível reservar o próximo cancelamento.",
+      { cause: error },
+    );
+  }
   registrarSucessoFilaCancelamento();
   const row = Array.isArray(data) ? data[0] : null;
   return row ? (row as LoftCancellationJob) : null;
@@ -598,7 +622,12 @@ async function loadLoftCancellationDocument(job: LoftCancellationJob): Promise<s
     .select("documento,tenant_document")
     .eq("id", job.consultation_id)
     .maybeSingle();
-  if (error) throw error;
+  if (error) {
+    throw new LoftCancellationQueueError(
+      "Não foi possível carregar o documento vinculado ao cancelamento.",
+      { cause: error },
+    );
+  }
   const document = String(data?.documento || data?.tenant_document || "").replace(/\D/g, "");
   if (!/^(?:\d{11}|\d{14})$/.test(document)) {
     throw new Error("A consulta vinculada não possui CPF/CNPJ válido para localizar a proposta.");
@@ -620,11 +649,16 @@ async function finishAlreadyTerminalLoftReconciliation(job: LoftCancellationJob)
       lease_expires_at: null,
     })
     .eq("id", job.id)
-    .in("status", ["scheduled", "retry"])
+    .in("status", ["prepared", "scheduled", "retry"])
     .is("proposal_id", null)
     .eq("attempt_count", job.attempt_count)
     .select("id");
-  if (error) throw error;
+  if (error) {
+    throw new LoftCancellationQueueError(
+      "Não foi possível concluir a reconciliação terminal.",
+      { cause: error },
+    );
+  }
   if (!data?.length) {
     throw new Error("O job mudou antes da conclusão da reconciliação terminal.");
   }
@@ -648,9 +682,71 @@ async function finishMissingLoftReconciliation(job: LoftCancellationJob): Promis
     .is("worker_id", null)
     .eq("attempt_count", job.attempt_count)
     .select("id");
-  if (error) throw error;
+  if (error) {
+    throw new LoftCancellationQueueError(
+      "Não foi possível concluir a reconciliação sem proposta nova.",
+      { cause: error },
+    );
+  }
   if (!data?.length) {
     throw new Error("O job mudou antes da conclusão da reconciliação vazia.");
+  }
+  registrarSucessoFilaCancelamento();
+}
+
+async function reconcilePreparedLoftCancellation(
+  job: LoftCancellationJob,
+  proposalId: string,
+): Promise<void> {
+  const { data, error } = await (supabaseAdmin as any).rpc(
+    "reconcile_loft_proposal_cancellation",
+    {
+      p_job_id: job.id,
+      p_proposal_id: proposalId,
+      p_submitted_at: job.created_at,
+    },
+  );
+  if (error) {
+    throw new LoftCancellationQueueError(
+      "Não foi possível vincular a proposta encontrada ao preparo interrompido.",
+      { cause: error },
+    );
+  }
+  const row = (Array.isArray(data) ? data[0] : data) as {
+    id?: unknown;
+    proposal_id?: unknown;
+  } | null;
+  if (row?.id !== job.id || extractLoftProposalId(row?.proposal_id) !== proposalId) {
+    throw new LoftCancellationQueueError(
+      "A fila não confirmou a reconciliação do preparo interrompido.",
+    );
+  }
+  registrarSucessoFilaCancelamento();
+}
+
+async function abortPreparedLoftCancellation(job: LoftCancellationJob): Promise<void> {
+  const { data, error } = await (supabaseAdmin as any).rpc(
+    "abort_loft_proposal_preparation",
+    {
+      p_consultation_id: job.consultation_id,
+      p_submission_token: job.submission_token,
+      p_known_proposal_ids: job.known_proposal_ids ?? [],
+    },
+  );
+  if (error) {
+    throw new LoftCancellationQueueError(
+      "Não foi possível encerrar o preparo sem envio confirmado.",
+      { cause: error },
+    );
+  }
+  const row = (Array.isArray(data) ? data[0] : data) as {
+    id?: unknown;
+    status?: unknown;
+  } | null;
+  if (row?.id !== job.id || row.status !== "aborted") {
+    throw new LoftCancellationQueueError(
+      "A fila não confirmou o encerramento do preparo sem envio.",
+    );
   }
   registrarSucessoFilaCancelamento();
 }
@@ -662,14 +758,19 @@ async function reconcilePendingLoftCancellation(
   const { data, error } = await supabaseAdmin
     .from("loft_proposal_cancellations")
     .select(
-      "id,consultation_id,correlation_id,proposal_id,known_proposal_ids,submitted_at,attempt_count,max_attempts",
+      "id,consultation_id,correlation_id,submission_token,proposal_id,known_proposal_ids,status,created_at,submitted_at,attempt_count,max_attempts",
     )
-    .in("status", ["scheduled", "retry"])
+    .in("status", ["prepared", "scheduled", "retry"])
     .is("proposal_id", null)
-    .not("submitted_at", "is", null)
     .order("created_at", { ascending: true })
     .limit(1);
-  if (error) throw error;
+  if (error) {
+    throw new LoftCancellationQueueError(
+      "Não foi possível consultar os cancelamentos que exigem reconciliação.",
+      { cause: error },
+    );
+  }
+  registrarSucessoFilaCancelamento();
   const job = Array.isArray(data) && data.length ? (data[0] as LoftCancellationJob) : null;
   if (!job) return false;
 
@@ -680,6 +781,8 @@ async function reconcilePendingLoftCancellation(
   let page: Page | null = null;
   try {
     page = await context.newPage();
+    await navegarParaPortal(page);
+    await ensureLoggedIn("reconcile-cancellation", page, persistirSessao);
     const visibleProposals = await listLoftProposalsForDocument(
       page,
       document,
@@ -692,17 +795,18 @@ async function reconcilePendingLoftCancellation(
     if (!resolution) {
       if (
         !isLoftProposalReconciliationExpired(
-          job.submitted_at,
+          job.submitted_at ?? job.created_at,
           Math.max(2 * 60_000, env.loftCancellationDelayMs),
         )
       ) {
         registrarSucessoFilaCancelamento();
-        runtimeState.cancellationExecution = "ok";
+        runtimeState.cancellationExecution = "checking";
         proximaReconciliacaoLoftEm.set(job.id, Date.now() + RECONCILIATION_RETRY_MS);
         return true;
       }
       await persistirSessao();
-      await finishMissingLoftReconciliation(job);
+      if (job.status === "prepared") await abortPreparedLoftCancellation(job);
+      else await finishMissingLoftReconciliation(job);
       proximaReconciliacaoLoftEm.delete(job.id);
       runtimeState.cancellationExecution = "ok";
       log(
@@ -711,7 +815,7 @@ async function reconcilePendingLoftCancellation(
       return true;
     }
     if (resolution.kind === "already-terminal") {
-      const submittedAt = Date.parse(job.submitted_at ?? "");
+      const submittedAt = Date.parse(job.submitted_at ?? job.created_at);
       if (!Number.isFinite(submittedAt)) {
         throw new Error("O job de reconciliação não possui uma data de envio válida.");
       }
@@ -732,9 +836,14 @@ async function reconcilePendingLoftCancellation(
       );
       return true;
     }
-    await vincularPropostaAoCancelamento(job.id, resolution.proposalId);
+    if (job.status === "prepared") {
+      await reconcilePreparedLoftCancellation(job, resolution.proposalId);
+    } else {
+      await vincularPropostaAoCancelamento(job.id, resolution.proposalId);
+    }
     proximaReconciliacaoLoftEm.delete(job.id);
     await persistirSessao();
+    runtimeState.cancellationExecution = "ok";
     log("Job de cancelamento reconciliado com a única proposta nova encontrada após o envio.");
     return true;
   } finally {
@@ -815,7 +924,13 @@ async function processLoftCancellation(
       durationMs: Date.now() - startedAt,
     });
   } catch (error) {
-    runtimeState.cancellationExecution = "unavailable";
+    if (error instanceof LoftCancellationQueueError) {
+      registrarFalhaFilaCancelamento("Falha de persistência no cancelamento", error);
+    } else {
+      // Uma proposta específica pode falhar sem provar que a superfície inteira
+      // está indisponível. A sonda independente decide isso no próximo ciclo.
+      proximaValidacaoCancelamentoEm = 0;
+    }
     runtimeState.totalCancellationFailures += 1;
     await finishLoftCancellation(job, { success: false, error }).catch((persistenceError) =>
       registrarFalhaFilaCancelamento(
@@ -2213,65 +2328,9 @@ async function loop(once: boolean): Promise<void> {
         registrarFalhaFila("Falha ao recuperar consultas interrompidas", error),
       );
 
-      // O modo portal usa o mesmo BrowserContext da simulação. Só inicia um
-      // cancelamento quando nenhuma consulta está usando a sessão e não retira
-      // novas consultas enquanto a tela de propostas estiver em uso.
-      if (env.loftCancellationEnabled && !cancelamentoEmAndamento && emAndamento.size === 0) {
-        runtimeState.activeCancellation = true;
-        try {
-          // A RPC sempre prioriza jobs com ID exato cujo prazo venceu. Chamá-la
-          // antes da reconciliação impede que um envio mais novo, ainda sem ID,
-          // adie o cancelamento seguro de uma proposta anterior. Quando não há
-          // job vencido, o sinal 55000 apenas transfere o controle ao reconciliador.
-          let job: LoftCancellationJob | null = null;
-          try {
-            job = await claimNextLoftCancellation();
-          } catch (error) {
-            if (!isPendingLoftReconciliationError(error)) throw error;
-          }
-
-          if (job) {
-            runtimeState.activeCancellation = true;
-            const task = processLoftCancellation(
-              job,
-              contextoAberto.context,
-              contextoAberto.persistirSessao,
-            ).finally(() => {
-              if (cancelamentoEmAndamento === task) cancelamentoEmAndamento = null;
-              runtimeState.activeCancellation = false;
-            });
-            cancelamentoEmAndamento = task;
-          } else {
-            await reconcilePendingLoftCancellation(
-              contextoAberto.context,
-              contextoAberto.persistirSessao,
-            );
-          }
-        } catch (error) {
-          registrarFalhaFilaCancelamento("Falha ao consultar a fila de cancelamentos", error);
-        } finally {
-          if (!cancelamentoEmAndamento) runtimeState.activeCancellation = false;
-        }
-      }
-
-      if (cancelamentoEmAndamento) {
-        if (once) await Promise.allSettled([cancelamentoEmAndamento]);
-        else await sleep(env.pollIntervalMs);
-        continue;
-      }
-
-      const filaCancelamentoOperacional = !env.loftCancellationEnabled
-        ? !env.loftCancellationRequired
-        : runtimeState.cancellationQueue === "ok";
-      if (!filaCancelamentoOperacional) {
-        if (once) {
-          log("Fila obrigatória de cancelamentos indisponível — nenhuma consulta foi enviada.");
-          break;
-        }
-        await sleep(env.pollIntervalMs);
-        continue;
-      }
-
+      // Autenticação vem antes da fila de cancelamentos. Se a sessão expirar,
+      // a própria rotina de recuperação precisa rodar antes de qualquer acesso
+      // à lista de propostas; caso contrário um job ambíguo cria um deadlock.
       const autenticacaoPronta = await validarAutenticacao(
         contextoAberto.context,
         contextoAberto.persistirSessao,
@@ -2309,7 +2368,91 @@ async function loop(once: boolean): Promise<void> {
           }
         }
 
-        await new Promise((r) => setTimeout(r, env.pollIntervalMs));
+        await sleep(env.pollIntervalMs);
+        continue;
+      }
+
+      // O modo portal usa o mesmo BrowserContext da simulação. Só inicia um
+      // cancelamento quando nenhuma consulta está usando a sessão e não retira
+      // novas consultas enquanto a tela de propostas estiver em uso.
+      let reconciliacaoCancelamentoPendente = false;
+      if (env.loftCancellationEnabled && !cancelamentoEmAndamento && emAndamento.size === 0) {
+        runtimeState.activeCancellation = true;
+        try {
+          // A RPC sempre prioriza jobs com ID exato cujo prazo venceu. Chamá-la
+          // antes da reconciliação impede que um envio mais novo, ainda sem ID,
+          // adie o cancelamento seguro de uma proposta anterior. Quando não há
+          // job vencido, o sinal 55000 apenas transfere o controle ao reconciliador.
+          let job: LoftCancellationJob | null = null;
+          let exigeReconciliacao = false;
+          try {
+            job = await claimNextLoftCancellation();
+          } catch (error) {
+            if (!isPendingLoftReconciliationError(error)) throw error;
+            exigeReconciliacao = true;
+          }
+
+          if (job) {
+            runtimeState.activeCancellation = true;
+            const task = processLoftCancellation(
+              job,
+              contextoAberto.context,
+              contextoAberto.persistirSessao,
+            ).finally(() => {
+              if (cancelamentoEmAndamento === task) cancelamentoEmAndamento = null;
+              runtimeState.activeCancellation = false;
+            });
+            cancelamentoEmAndamento = task;
+          } else {
+            const encontrouReconciliacao = await reconcilePendingLoftCancellation(
+              contextoAberto.context,
+              contextoAberto.persistirSessao,
+            );
+            reconciliacaoCancelamentoPendente = exigeReconciliacao || encontrouReconciliacao;
+          }
+        } catch (error) {
+          // Falha fechada: qualquer erro neste bloco impede uma nova proposta
+          // até a próxima passagem confirmar a fila e a identidade causal.
+          reconciliacaoCancelamentoPendente = true;
+          if (error instanceof LoftCancellationQueueError) {
+            registrarFalhaFilaCancelamento("Falha ao consultar a fila de cancelamentos", error);
+          } else {
+            runtimeState.cancellationExecution = "unavailable";
+            proximaValidacaoCancelamentoEm = 0;
+            logErro("Falha ao reconciliar um cancelamento pendente", error);
+          }
+        } finally {
+          if (!cancelamentoEmAndamento) runtimeState.activeCancellation = false;
+        }
+      }
+
+      if (cancelamentoEmAndamento) {
+        if (once) await Promise.allSettled([cancelamentoEmAndamento]);
+        else await sleep(env.pollIntervalMs);
+        continue;
+      }
+
+      // Enquanto um envio sem ID exato ainda está sendo reconciliado, não cria
+      // novas propostas para o mesmo portal. Isso preserva a causalidade sem
+      // transformar a espera normal em falha da fila do Supabase.
+      if (reconciliacaoCancelamentoPendente) {
+        if (once) {
+          log("Reconciliação de cancelamento pendente — nenhuma consulta nova foi enviada.");
+          break;
+        }
+        await sleep(env.pollIntervalMs);
+        continue;
+      }
+
+      const filaCancelamentoOperacional = !env.loftCancellationEnabled
+        ? !env.loftCancellationRequired
+        : runtimeState.cancellationQueue === "ok";
+      if (!filaCancelamentoOperacional) {
+        if (once) {
+          log("Fila obrigatória de cancelamentos indisponível — nenhuma consulta foi enviada.");
+          break;
+        }
+        await sleep(env.pollIntervalMs);
         continue;
       }
 

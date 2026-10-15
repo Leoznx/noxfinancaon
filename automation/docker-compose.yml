@@ -50,7 +50,9 @@ services:
         reservations:
           memory: 1g
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      # Verifica os dois processos do supervisor. /health mede liveness do worker
+      # de crédito sem reiniciar o container por indisponibilidade externa.
+      test: ["CMD", "node", "-e", "Promise.all([fetch('http://127.0.0.1:3000/health'),fetch('http://127.0.0.1:3001/live')]).then(rs=>process.exit(rs.every(r=>r.ok)?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
       timeout: 5s
       start_period: 30s

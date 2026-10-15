@@ -18,7 +18,9 @@ import {
 import { DEMO_SIMULATION_DATA } from "@/lib/demo-accounts";
 import { isDemoSession } from "@/lib/demo-session";
 
-const TEMPO_LIMITE_ACOMPANHAMENTO_MS = 360_000;
+// Maior que o timeout máximo do worker (7 min). Ao atingir o limite, a consulta
+// continua salva e abrimos seu acompanhamento; nunca a reenfileiramos às cegas.
+const TEMPO_LIMITE_ACOMPANHAMENTO_MS = 540_000;
 
 export const Route = createFileRoute("/consultas/nova")({
   component: () => (
@@ -82,24 +84,19 @@ function NovaConsulta() {
       },
       {
         onError: () => {
-          setErroAutomacao(
-            "A conexão para acompanhar a consulta ficou indisponível. Verifique sua internet e tente continuar.",
-          );
           pararEscuta();
+          setConsultaId(null);
+          navigate({ to: "/consultas/$id/resultado", params: { id } });
         },
       },
     );
 
-    // Rede de segurança: se por algum motivo o worker não responder (ex.: automação
-    // temporariamente fora do ar), não deixamos o modal "Consultando crédito" girar
-    // pra sempre. Depois de um tempo maior que o processamento normal, o timeout do
-    // worker e uma tentativa de reconexão, mostramos uma mensagem clara para reenviar —
-    // reaproveitando a mesma UI de erro (a consulta continua salva e pode ser reenviada).
+    // Rede de segurança visual. A fila continua sendo a fonte da verdade: em vez
+    // de um retry que poderia duplicar o envio, abrimos o acompanhamento salvo.
     timeoutRef.current = setTimeout(() => {
-      setErroAutomacao(
-        "A consulta está demorando mais que o normal. Pode ser uma instabilidade momentânea — tente reenviar em instantes.",
-      );
       pararEscuta();
+      setConsultaId(null);
+      navigate({ to: "/consultas/$id/resultado", params: { id } });
     }, TEMPO_LIMITE_ACOMPANHAMENTO_MS);
   };
 
