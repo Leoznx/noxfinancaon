@@ -67,6 +67,7 @@ LOFT_CANCELLATION_REASON="Inquilino desistiu do aluguel"
 LOFT_CANCELLATION_COMMENT=""
 LOFT_CANCELLATION_DELAY_MS=1800000
 LOFT_CANCELLATION_REQUEST_TIMEOUT_MS=45000
+LOFT_CANCELLATION_VALIDATION_TIMEOUT_MS=120000
 ```
 
 O modo `portal` não exige OAuth, mas exige que `CREDPAGO_STORAGE_STATE_PATH` ou o perfil
@@ -209,6 +210,8 @@ dois endpoints expõem:
 
 - `cancellationEnabled`, `cancellationRequired` e `cancellationMode`;
 - `cancellationQueue`, `cancellationExecution` e `cancellationReady`;
+- `cancellationCheckStartedAt` e `cancellationCheckStalled`, para distinguir a checagem normal
+  de um travamento acima do prazo total configurado;
 - horários do último sucesso/erro da fila e falhas consecutivas;
 - no `/health`, cancelamento ativo, totais de sucessos/falhas e horário do último sucesso.
 

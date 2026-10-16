@@ -198,6 +198,13 @@ test("reconciliacao causal protegida nao provoca ciclo de reinicio", () => {
   assert.equal(
     isExpectedCreditReconciliationPending({
       ...creditWorkerHealth,
+      cancellationCheckStalled: true,
+    }),
+    false,
+  );
+  assert.equal(
+    isExpectedCreditReconciliationPending({
+      ...creditWorkerHealth,
       activeCancellation: true,
     }),
     true,

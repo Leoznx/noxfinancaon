@@ -14,6 +14,7 @@ export function isExpectedCreditReconciliationPending(
     creditWorkerHealth.browser === "ok" &&
     creditWorkerHealth.cancellationQueue === "ok" &&
     creditWorkerHealth.cancellationExecution === "checking" &&
+    creditWorkerHealth.cancellationCheckStalled !== true &&
     Number(creditWorkerHealth.activeConsultations ?? 0) === 0
   );
 }

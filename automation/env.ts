@@ -171,6 +171,12 @@ export const env = {
     45_000,
     3_000,
   ),
+  /** Prazo total externo para navegação, autenticação e probe da tela de cancelamento. */
+  loftCancellationValidationTimeoutMs: positiveNumber(
+    "LOFT_CANCELLATION_VALIDATION_TIMEOUT_MS",
+    120_000,
+    15_000,
+  ),
   /** O cancelamento é operacionalmente obrigatório por padrão; use false só em manutenção. */
   loftCancellationEnabled,
   loftCancellationRequired,

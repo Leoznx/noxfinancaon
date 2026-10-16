@@ -44,6 +44,7 @@ import {
   isLoftProposalReconciliationExpired,
   resolveLoftProposalReconciliation,
 } from "./loftPortalCancellation";
+import { runWithRuntimeWatchdog } from "./runtimeWatchdog";
 import { selectRandomCreditSimulationCep } from "./creditSimulationCep";
 import { observeCreditSimulationApi } from "./creditSimulationApiObserver";
 
@@ -170,6 +171,7 @@ const runtimeState: {
   consecutiveQueueFailures: number;
   cancellationQueue: QueueRuntimeStatus;
   cancellationExecution: QueueRuntimeStatus;
+  cancellationCheckStartedAt: string | null;
   lastCancellationQueueSuccessAt: string | null;
   lastCancellationQueueErrorAt: string | null;
   consecutiveCancellationQueueFailures: number;
@@ -205,6 +207,7 @@ const runtimeState: {
   consecutiveQueueFailures: 0,
   cancellationQueue: "checking",
   cancellationExecution: "checking",
+  cancellationCheckStartedAt: null,
   lastCancellationQueueSuccessAt: null,
   lastCancellationQueueErrorAt: null,
   consecutiveCancellationQueueFailures: 0,
@@ -2177,10 +2180,21 @@ async function validarSuperficieCancelamento(
 
   let page: Page | null = null;
   try {
-    page = await context.newPage();
-    await navegarParaPortal(page);
-    await ensureLoggedIn("CANCEL", page, persistirSessao);
-    await probeLoftProposalCancellationPortal(page, env.loftCancellationRequestTimeoutMs);
+    runtimeState.cancellationExecution = "checking";
+    runtimeState.cancellationCheckStartedAt = new Date().toISOString();
+    const validacao = (async () => {
+      page = await context.newPage();
+      await navegarParaPortal(page);
+      await ensureLoggedIn("CANCEL", page, persistirSessao);
+      await probeLoftProposalCancellationPortal(page, env.loftCancellationRequestTimeoutMs);
+    })();
+    await runWithRuntimeWatchdog(validacao, {
+      timeoutMs: env.loftCancellationValidationTimeoutMs,
+      message:
+        `A validação da superfície de cancelamento excedeu ` +
+        `${Math.round(env.loftCancellationValidationTimeoutMs / 1000)}s e foi abortada.`,
+      abort: () => page?.close(),
+    });
     await persistirSessao();
     ultimaAtividadeEm = Date.now();
     runtimeState.cancellationExecution = "ok";
@@ -2196,6 +2210,7 @@ async function validarSuperficieCancelamento(
     }
     return false;
   } finally {
+    runtimeState.cancellationCheckStartedAt = null;
     await page?.close().catch(() => {});
   }
 }
@@ -2208,11 +2223,25 @@ function avaliarProntidaoRuntime(agora = Date.now()) {
   const authCheckAgeMs = runtimeState.authCheckStartedAt
     ? agora - Date.parse(runtimeState.authCheckStartedAt)
     : 0;
+  const cancellationCheckAgeMs = runtimeState.cancellationCheckStartedAt
+    ? agora - Date.parse(runtimeState.cancellationCheckStartedAt)
+    : 0;
   const loopAgeMs = runtimeState.lastLoopAt ? agora - Date.parse(runtimeState.lastLoopAt) : 0;
   const authTravada = authCheckAgeMs > env.authValidationTimeoutMs + 15_000;
+  const cancellationCheckTravada =
+    cancellationCheckAgeMs > env.loftCancellationValidationTimeoutMs + 15_000;
   const loopTravado =
-    loopAgeMs > Math.max(env.authValidationTimeoutMs + 30_000, env.pollIntervalMs * 12);
-  const healthy = !authTravada && !loopTravado && runtimeState.browser !== "unavailable";
+    loopAgeMs >
+    Math.max(
+      env.authValidationTimeoutMs + 30_000,
+      env.loftCancellationValidationTimeoutMs + 30_000,
+      env.pollIntervalMs * 12,
+    );
+  const healthy =
+    !authTravada &&
+    !cancellationCheckTravada &&
+    !loopTravado &&
+    runtimeState.browser !== "unavailable";
   const cancellationReady =
     !env.loftCancellationRequired ||
     (env.loftCancellationEnabled &&
@@ -2224,13 +2253,21 @@ function avaliarProntidaoRuntime(agora = Date.now()) {
     runtimeState.queue === "ok" &&
     runtimeState.browser === "ok" &&
     cancellationReady;
-  return { authTravada, loopTravado, healthy, cancellationReady, ready };
+  return {
+    authTravada,
+    cancellationCheckTravada,
+    loopTravado,
+    healthy,
+    cancellationReady,
+    ready,
+  };
 }
 
 function iniciarServidorHealth(): http.Server {
   const server = http.createServer((req, res) => {
     if (req.method === "GET" && req.url === "/health") {
-      const { healthy, cancellationReady, ready } = avaliarProntidaoRuntime();
+      const { healthy, cancellationCheckTravada, cancellationReady, ready } =
+        avaliarProntidaoRuntime();
 
       res.writeHead(healthy ? 200 : 503, { "Content-Type": "application/json" });
       res.end(
@@ -2266,6 +2303,8 @@ function iniciarServidorHealth(): http.Server {
           cancellationMode: env.loftCancellationMode,
           cancellationQueue: runtimeState.cancellationQueue,
           cancellationExecution: runtimeState.cancellationExecution,
+          cancellationCheckStartedAt: runtimeState.cancellationCheckStartedAt,
+          cancellationCheckStalled: cancellationCheckTravada,
           cancellationReady,
           lastCancellationQueueSuccessAt: runtimeState.lastCancellationQueueSuccessAt,
           lastCancellationQueueErrorAt: runtimeState.lastCancellationQueueErrorAt,
@@ -2282,7 +2321,7 @@ function iniciarServidorHealth(): http.Server {
       return;
     }
     if (req.method === "GET" && req.url === "/ready") {
-      const { cancellationReady, ready } = avaliarProntidaoRuntime();
+      const { cancellationCheckTravada, cancellationReady, ready } = avaliarProntidaoRuntime();
       res.writeHead(ready ? 200 : 503, { "Content-Type": "application/json" });
       res.end(
         JSON.stringify({
@@ -2295,6 +2334,8 @@ function iniciarServidorHealth(): http.Server {
           cancellationMode: env.loftCancellationMode,
           cancellationQueue: runtimeState.cancellationQueue,
           cancellationExecution: runtimeState.cancellationExecution,
+          cancellationCheckStartedAt: runtimeState.cancellationCheckStartedAt,
+          cancellationCheckStalled: cancellationCheckTravada,
           cancellationReady,
           lastCancellationQueueSuccessAt: runtimeState.lastCancellationQueueSuccessAt,
           lastCancellationQueueErrorAt: runtimeState.lastCancellationQueueErrorAt,

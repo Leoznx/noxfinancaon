@@ -10,6 +10,10 @@ const migrationPath = path.resolve(
   baseDir,
   "../supabase/migrations/20261016183000_credit_automation_durable_queue.sql",
 );
+const staleQueueMigrationPath = path.resolve(
+  baseDir,
+  "../supabase/migrations/20261016233000_quarantine_stale_legacy_credit_queue.sql",
+);
 const workerPath = path.resolve(baseDir, "credpagoWorker.ts");
 
 test("falhas anteriores ao envio usam backoff limitado", () => {
@@ -106,4 +110,14 @@ test("worker não abre outra página da sessão enquanto uma simulação está a
   assert.ok(authProbe > guard);
   assert.ok(cancellationProbe > guard);
   assert.match(worker.slice(guard, authProbe), /continue;/);
+});
+
+test("migration isola solicitações legadas antigas sem reenviá-las", async () => {
+  const sql = await readFile(staleQueueMigrationPath, "utf8");
+  assert.match(sql, /technical_status\s*=\s*'requires_verification'/i);
+  assert.match(sql, /status\s*=\s*'requer_verificacao'/i);
+  assert.match(sql, /provider_submission_state\s*=\s*'not_submitted'/i);
+  assert.match(sql, /attempt_count\s*=\s*0/i);
+  assert.match(sql, /created_at\s*<\s*clock_timestamp\(\)\s*-\s*interval\s*'24 hours'/i);
+  assert.doesNotMatch(sql, /delete\s+from/i);
 });
