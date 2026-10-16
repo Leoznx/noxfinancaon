@@ -25,12 +25,12 @@ O `.env` da raiz alimenta tanto o frontend (bundle do navegador, via `import.met
 quanto o código servidor desta mesma app (SSR do TanStack Start, via `process.env.*` sem
 prefixo). Copie `.env.example` para `.env` e preencha:
 
-| Variável | Uso | Onde conseguir |
-|---|---|---|
-| `VITE_SUPABASE_URL` / `SUPABASE_URL` | URL do projeto (frontend / SSR) | Painel Supabase → Project Settings → API |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` / `SUPABASE_PUBLISHABLE_KEY` | Chave pública anon/publishable (frontend / SSR) | Painel Supabase → Project Settings → API |
-| `VITE_SUPABASE_PROJECT_ID` / `SUPABASE_PROJECT_ID` | Ref do projeto | Painel Supabase → Project Settings → General |
-| `SUPABASE_SERVICE_ROLE_KEY` | Secreta — só usada em código server-side desta app (`client.server.ts`) | Painel Supabase → Project Settings → API → `service_role` |
+| Variável                                                     | Uso                                                                     | Onde conseguir                                            |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------- | --------------------------------------------------------- |
+| `VITE_SUPABASE_URL` / `SUPABASE_URL`                         | URL do projeto (frontend / SSR)                                         | Painel Supabase → Project Settings → API                  |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` / `SUPABASE_PUBLISHABLE_KEY` | Chave pública anon/publishable (frontend / SSR)                         | Painel Supabase → Project Settings → API                  |
+| `VITE_SUPABASE_PROJECT_ID` / `SUPABASE_PROJECT_ID`           | Ref do projeto                                                          | Painel Supabase → Project Settings → General              |
+| `SUPABASE_SERVICE_ROLE_KEY`                                  | Secreta — só usada em código server-side desta app (`client.server.ts`) | Painel Supabase → Project Settings → API → `service_role` |
 
 **Nunca** prefixe `SUPABASE_SERVICE_ROLE_KEY` com `VITE_` — isso a exporia no bundle do
 navegador. O `.env` real nunca deve ser commitado (já está no `.gitignore`).
@@ -121,14 +121,12 @@ formulário sem resultado.
   da linha do Supabase) e seu próprio bloco de log prefixado com os 8 primeiros caracteres do
   `id` (ex.: `[4dfbfa8f] Preenchendo dados`) — dá pra acompanhar várias consultas ao mesmo tempo
   no terminal sem confundir uma com a outra.
-- **Reivindicação atômica**: antes de processar, o worker faz um `UPDATE ... WHERE status =
-  'pendente'` condicional — se duas execuções tentarem pegar a mesma consulta ao mesmo tempo,
-  só uma consegue: a outra recebe zero linhas afetadas e segue para a próxima. Isso é o que
-  garante que o resultado nunca vai parar na consulta errada.
-- **Timeout por consulta** (`CONSULTA_TIMEOUT_MS`, padrão `420000` = 420s): se uma consulta travar
-  no portal, só ela é marcada como `erro`; a próxima começa automaticamente. Se o portal voltar
-  ao formulário depois de confirmar o processamento, o worker encerra em poucos segundos sem
-  reenviar e sem arriscar duplicidade.
+- **Reivindicação atômica**: `claim_next_credit_simulation` usa lock transacional e
+  `FOR UPDATE SKIP LOCKED`, grava `worker_id`, `lease_token` e `execution_version` e serializa a
+  credencial externa. Heartbeats renovam o lease; somente o mesmo token/versão pode finalizar.
+- **Timeout por consulta** (`CONSULTA_TIMEOUT_MS`, padrão `420000` = 420s): antes do envio, uma
+  falha temporária usa backoff limitado; depois de `submitting`, `submitted` ou estado incerto, a
+  consulta vai para `requer_verificacao` e nunca é reenviada cegamente. Timeout não é recusa.
 - **Fechamento seguro**: só a aba da consulta que terminou é fechada (`page.close()`). O
   navegador/contexto inteiro só fecha quando o worker inteiro é encerrado (Ctrl+C ou fim do
   `--once`), e mesmo aí ele espera todas as consultas em andamento terminarem antes de fechar.
@@ -194,22 +192,24 @@ cp automation/.env.example automation/.env
 
 Preencha:
 
-| Variável                      | Onde conseguir                                                                      |
-| ----------------------------- | ----------------------------------------------------------------------------------- |
-| `SUPABASE_URL`                | Mesma URL do projeto usado no frontend (`https://njheoytyidsghittjilr.supabase.co`) |
-| `SUPABASE_SERVICE_ROLE_KEY`   | Painel Supabase → Project Settings → API → `service_role` (secreta!)                |
-| `CREDPAGO_PROFILE_DIR`        | Pasta do perfil do Chrome (padrão: `./automation/chrome-profile-credpago`)          |
-| `AUTOMATION_POLL_INTERVAL_MS` | Intervalo de verificação de novas consultas (padrão: `5000`)                        |
-| `CREDPAGO_URL`                | `https://app.loft.com.br/erp/proposta/analise-de-credito`                           |
-| `MAX_CONCURRENT_CONSULTAS`    | Concorrência pedida; limitada a `1` pela sessão do parceiro (padrão: `1`)           |
-| `CONSULTA_TIMEOUT_MS`         | Tempo máximo por consulta antes de marcar erro (padrão: `420000`)                   |
-| `STALE_CONSULTA_MS`           | Recupera consultas interrompidas; deve ser maior que o timeout (padrão: `600000`)   |
-| `LOFT_CANCELLATION_ENABLED`   | Ativa o cancelamento programado de propostas (padrão: `true`)                       |
-| `LOFT_CANCELLATION_REQUIRED`  | Inclui a fila de cancelamentos na prontidão do worker (padrão: `true`)              |
-| `LOFT_CANCELLATION_MODE`      | `portal` usa a sessão Playwright; `api` exige OAuth homologado (padrão: `portal`)   |
-| `LOFT_CANCELLATION_REASON`    | Preferência de motivo; o rótulo efetivamente escolhido é auditado                   |
-| `LOFT_CANCELLATION_DELAY_MS`  | Prazo contado de cada envio real até o cancelamento (padrão: `1800000`)             |
-| `HEADLESS`                    | `true` para rodar sem janela visível (requer sessão já logada) — padrão `false`     |
+| Variável                         | Onde conseguir                                                                        |
+| -------------------------------- | ------------------------------------------------------------------------------------- |
+| `SUPABASE_URL`                   | Mesma URL do projeto usado no frontend (`https://njheoytyidsghittjilr.supabase.co`)   |
+| `SUPABASE_SERVICE_ROLE_KEY`      | Painel Supabase → Project Settings → API → `service_role` (secreta!)                  |
+| `CREDPAGO_PROFILE_DIR`           | Pasta do perfil do Chrome (padrão: `./automation/chrome-profile-credpago`)            |
+| `AUTOMATION_POLL_INTERVAL_MS`    | Intervalo de verificação de novas consultas (padrão: `5000`)                          |
+| `CREDIT_PROVIDER_CREDENTIAL_KEY` | Identidade da credencial externa serializada no banco (padrão: `loft-primary`)        |
+| `CREDIT_HEARTBEAT_INTERVAL_MS`   | Renovação do lease da consulta em processamento (padrão: `15000`)                     |
+| `QUEUE_METRICS_INTERVAL_MS`      | Atualiza tamanho/idade/falhas da fila no health (padrão: `60000`)                     |
+| `CREDPAGO_URL`                   | `https://app.loft.com.br/erp/proposta/analise-de-credito`                             |
+| `MAX_CONCURRENT_CONSULTAS`       | Concorrência pedida; limitada a `1` pela sessão do parceiro (padrão: `1`)             |
+| `CONSULTA_TIMEOUT_MS`            | Prazo total; envio incerto termina em verificação, nunca em recusa (padrão: `420000`) |
+| `LOFT_CANCELLATION_ENABLED`      | Ativa o cancelamento programado de propostas (padrão: `true`)                         |
+| `LOFT_CANCELLATION_REQUIRED`     | Inclui a fila de cancelamentos na prontidão do worker (padrão: `true`)                |
+| `LOFT_CANCELLATION_MODE`         | `portal` usa a sessão Playwright; `api` exige OAuth homologado (padrão: `portal`)     |
+| `LOFT_CANCELLATION_REASON`       | Preferência de motivo; o rótulo efetivamente escolhido é auditado                     |
+| `LOFT_CANCELLATION_DELAY_MS`     | Prazo contado de cada envio real até o cancelamento (padrão: `1800000`)               |
+| `HEADLESS`                       | `true` para rodar sem janela visível (requer sessão já logada) — padrão `false`       |
 
 > Nota: o `.env.example` sugerido para este tipo de automação às vezes cita
 > `CHROME_USER_DATA_DIR`/`CHROME_PROFILE_DIRECTORY` (nomenclatura de Selenium/Chrome puro).
@@ -341,6 +341,9 @@ Isso aplica (idempotentemente):
   envio real, prepara/confirma o job em duas fases, preserva o snapshot dos IDs anteriores,
   permite múltiplas propostas por consulta e exige o ID exato devolvido por cada envio antes
   de qualquer cancelamento.
+- `20261016183000_credit_automation_durable_queue.sql` — adiciona idempotência por operação,
+  fila persistente com claim/lease/heartbeat versionados, estados técnicos separados, backoff,
+  limite de admissão, circuito persistente e quarentena de resultados incertos.
 
 ### Operação contínua em produção
 
@@ -364,7 +367,8 @@ As proteções contra fila travada são complementares:
   automática (novo carregamento, novo preenchimento e novo envio), sem ciclo infinito;
 - falhas do Supabase têm retentativa, não encerram o processo e preservam um resultado já lido;
 - uma aba que excede o timeout é fechada antes de liberar a vaga, impedindo envio duplicado;
-- linhas antigas em `processando` voltam automaticamente à fila após queda/reinício;
+- leases interrompidos antes do envio voltam à fila; depois do início do envio ficam em
+  `requer_verificacao`, impedindo duplicação por reenvio cego;
 - `/health` mede se o loop está vivo e também expõe a prontidão e as métricas das duas filas;
   `/ready` exige autenticação, navegador, fila de simulações e, quando
   `LOFT_CANCELLATION_REQUIRED=true`, cancelamento habilitado, fila acessível e nenhuma falha
@@ -383,12 +387,12 @@ que a sessão válida é carregada.
 
 ## Scripts disponíveis
 
-| Script | Descrição |
-|---|---|
-| `npm run dev` | Sobe o frontend (Vite dev server) |
-| `npm run build` | Build de produção |
-| `npm run automation:credpago` | Inicia o worker local em loop contínuo |
-| `npm run automation:once` | Processa uma consulta pendente e encerra |
-| `npm run automation:install-browsers` | Baixa o Chromium do Playwright |
-| `npm run automation:interactive-login` | Renova a sessão com janela visível quando houver CAPTCHA/OTP |
-| `npm run test:automation` | Testa detecção de login/sessão sem acessar dados reais de clientes |
+| Script                                 | Descrição                                                          |
+| -------------------------------------- | ------------------------------------------------------------------ |
+| `npm run dev`                          | Sobe o frontend (Vite dev server)                                  |
+| `npm run build`                        | Build de produção                                                  |
+| `npm run automation:credpago`          | Inicia o worker local em loop contínuo                             |
+| `npm run automation:once`              | Processa uma consulta pendente e encerra                           |
+| `npm run automation:install-browsers`  | Baixa o Chromium do Playwright                                     |
+| `npm run automation:interactive-login` | Renova a sessão com janela visível quando houver CAPTCHA/OTP       |
+| `npm run test:automation`              | Testa detecção de login/sessão sem acessar dados reais de clientes |

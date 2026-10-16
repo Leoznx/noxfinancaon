@@ -118,6 +118,13 @@ class ConsultaStateConflictError extends Error {
   }
 }
 
+class ConsultaLeaseLostError extends ConsultaStateConflictError {
+  constructor() {
+    super("O lease da consulta foi perdido para outra execução.");
+    this.name = "ConsultaLeaseLostError";
+  }
+}
+
 type AuthRuntimeStatus = "checking" | "ok" | "required" | "unavailable" | "blocked";
 type QueueRuntimeStatus = "checking" | "ok" | "unavailable";
 type BrowserRuntimeStatus = "checking" | "ok" | "unavailable";
@@ -176,6 +183,14 @@ const runtimeState: {
   totalCancellations: number;
   totalCancellationFailures: number;
   lastSuccessfulCancellationAt: string | null;
+  queueDepth: number;
+  retryingConsultations: number;
+  requiresVerification: number;
+  expiredLeases: number;
+  oldestQueueAgeSeconds: number;
+  providerConsecutiveFailures: number;
+  circuitOpen: boolean;
+  circuitOpenUntil: string | null;
 } = {
   auth: "checking",
   lastAuthCheckAt: null,
@@ -203,6 +218,14 @@ const runtimeState: {
   totalCancellations: 0,
   totalCancellationFailures: 0,
   lastSuccessfulCancellationAt: null,
+  queueDepth: 0,
+  retryingConsultations: 0,
+  requiresVerification: 0,
+  expiredLeases: 0,
+  oldestQueueAgeSeconds: 0,
+  providerConsecutiveFailures: 0,
+  circuitOpen: false,
+  circuitOpenUntil: null,
 };
 
 const recentDurations: number[] = [];
@@ -554,10 +577,9 @@ async function claimNextLoftCancellation(): Promise<LoftCancellationJob | null> 
       registrarSucessoFilaCancelamento();
       throw error;
     }
-    throw new LoftCancellationQueueError(
-      "Não foi possível reservar o próximo cancelamento.",
-      { cause: error },
-    );
+    throw new LoftCancellationQueueError("Não foi possível reservar o próximo cancelamento.", {
+      cause: error,
+    });
   }
   registrarSucessoFilaCancelamento();
   const row = Array.isArray(data) ? data[0] : null;
@@ -654,10 +676,9 @@ async function finishAlreadyTerminalLoftReconciliation(job: LoftCancellationJob)
     .eq("attempt_count", job.attempt_count)
     .select("id");
   if (error) {
-    throw new LoftCancellationQueueError(
-      "Não foi possível concluir a reconciliação terminal.",
-      { cause: error },
-    );
+    throw new LoftCancellationQueueError("Não foi possível concluir a reconciliação terminal.", {
+      cause: error,
+    });
   }
   if (!data?.length) {
     throw new Error("O job mudou antes da conclusão da reconciliação terminal.");
@@ -698,14 +719,11 @@ async function reconcilePreparedLoftCancellation(
   job: LoftCancellationJob,
   proposalId: string,
 ): Promise<void> {
-  const { data, error } = await (supabaseAdmin as any).rpc(
-    "reconcile_loft_proposal_cancellation",
-    {
-      p_job_id: job.id,
-      p_proposal_id: proposalId,
-      p_submitted_at: job.created_at,
-    },
-  );
+  const { data, error } = await (supabaseAdmin as any).rpc("reconcile_loft_proposal_cancellation", {
+    p_job_id: job.id,
+    p_proposal_id: proposalId,
+    p_submitted_at: job.created_at,
+  });
   if (error) {
     throw new LoftCancellationQueueError(
       "Não foi possível vincular a proposta encontrada ao preparo interrompido.",
@@ -725,14 +743,11 @@ async function reconcilePreparedLoftCancellation(
 }
 
 async function abortPreparedLoftCancellation(job: LoftCancellationJob): Promise<void> {
-  const { data, error } = await (supabaseAdmin as any).rpc(
-    "abort_loft_proposal_preparation",
-    {
-      p_consultation_id: job.consultation_id,
-      p_submission_token: job.submission_token,
-      p_known_proposal_ids: job.known_proposal_ids ?? [],
-    },
-  );
+  const { data, error } = await (supabaseAdmin as any).rpc("abort_loft_proposal_preparation", {
+    p_consultation_id: job.consultation_id,
+    p_submission_token: job.submission_token,
+    p_known_proposal_ids: job.known_proposal_ids ?? [],
+  });
   if (error) {
     throw new LoftCancellationQueueError(
       "Não foi possível encerrar o preparo sem envio confirmado.",
@@ -969,37 +984,34 @@ async function processLoftCancellation(
   }
 }
 
-async function fetchConsultasPendentes(limite: number): Promise<ConsultaCreditoRow[]> {
-  if (limite <= 0) return [];
-  const { data, error } = await supabaseAdmin
-    .from("consultas_credito")
-    .select(
-      "id, correlation_id, profile_id_solicitante, created_at, tipo_pessoa, documento, documento_masked, tenant_name, tenant_document, tipo_imovel, valor_aluguel, valor_condominio, valor_taxas, status, inquilino:inquilinos(nome, razao_social, cpf, cnpj)",
-    )
-    .eq("status", "pendente")
-    .eq("origem", "nox_financa")
-    .order("created_at", { ascending: true })
-    .limit(limite);
+async function claimNextConsulta(): Promise<ConsultaCreditoRow | null> {
+  const { data, error } = await supabaseAdmin.rpc("claim_next_credit_simulation", {
+    p_worker_id: env.vpsId,
+    p_provider_credential_key: env.creditProviderCredentialKey,
+  });
   if (error) throw error;
   registrarSucessoFila();
-  return (data as unknown as ConsultaCreditoRow[]) || [];
+  const row = Array.isArray(data) ? data[0] : null;
+  return row ? ({ ...row, inquilino: null } as unknown as ConsultaCreditoRow) : null;
 }
 
-/** Atualização condicional (status ainda 'pendente') evita que duas execuções peguem a mesma consulta. */
-async function marcarProcessando(id: string): Promise<boolean> {
-  const { data, error } = await supabaseAdmin
-    .from("consultas_credito")
-    .update({
-      status: "processando",
-      automation_step: "abrindo",
-      automation_started_at: new Date().toISOString(),
-    })
-    .eq("id", id)
-    .eq("status", "pendente")
-    .select("id");
+async function renovarLease(
+  consulta: ConsultaCreditoRow,
+  step: string,
+  providerSubmissionState?: ConsultaCreditoRow["provider_submission_state"],
+): Promise<void> {
+  const { data, error } = await supabaseAdmin.rpc("heartbeat_credit_simulation", {
+    p_consultation_id: consulta.id,
+    p_worker_id: consulta.worker_id,
+    p_lease_token: consulta.lease_token,
+    p_execution_version: consulta.execution_version,
+    p_step: step,
+    p_provider_submission_state: providerSubmissionState ?? null,
+  });
   if (error) throw error;
+  if (data !== true) throw new ConsultaLeaseLostError();
+  if (providerSubmissionState) consulta.provider_submission_state = providerSubmissionState;
   registrarSucessoFila();
-  return Array.isArray(data) && data.length > 0;
 }
 
 /**
@@ -1008,7 +1020,7 @@ async function marcarProcessando(id: string): Promise<boolean> {
  * derrubar a consulta — é só um indicador visual, não parte do resultado.
  */
 async function atualizarStep(
-  id: string,
+  consulta: ConsultaCreditoRow,
   step:
     | "abrindo"
     | "preenchendo"
@@ -1018,65 +1030,41 @@ async function atualizarStep(
     | "reenviando"
     | "aguardando_recuperacao_portal",
 ): Promise<void> {
-  try {
-    const { error } = await supabaseAdmin
-      .from("consultas_credito")
-      .update({ automation_step: step })
-      .eq("id", id)
-      .eq("status", "processando");
-    if (error) throw error;
-    registrarSucessoFila();
-  } catch (error) {
-    registrarFalhaFila("Falha ao atualizar o progresso visual da consulta", error);
-    // indicador visual apenas — nunca deve derrubar a consulta
-  }
+  await renovarLease(consulta, step);
 }
 
 async function atualizarResultado(
-  id: string,
+  consulta: ConsultaCreditoRow,
   resultado: {
     status: "aprovado" | "recusado" | "em_analise" | "erro";
     mensagem: string;
     rawSummary: unknown;
     clienteNome?: string | null;
     clienteDocumento?: string | null;
+    proposalId?: string | null;
   },
 ): Promise<void> {
-  const payload: Record<string, unknown> = {
-    status: resultado.status,
-    resultado: resultado.status,
-    mensagem: resultado.mensagem,
-    error_message: resultado.status === "erro" ? resultado.mensagem : null,
-    raw_response: resultado.rawSummary as any,
-    automacao_origem: "automacao_local",
-    automation_step: null,
-    automation_finished_at: new Date().toISOString(),
-  };
-
-  // A CredPago retorna o nome/documento cadastrado para o CPF/CNPJ consultado — usamos
-  // isso para corrigir o nome do cliente na consulta (o formulário da Nova Consulta só
-  // coleta o documento, não o nome, então sem isso a lista mostraria o CPF como nome).
-  if (resultado.clienteNome) payload.tenant_name = resultado.clienteNome;
-  if (resultado.clienteDocumento) {
-    payload.documento = resultado.clienteDocumento;
-    payload.documento_masked = maskDocumento(resultado.clienteDocumento);
+  if (resultado.status === "erro") {
+    throw new Error(resultado.mensagem || "O portal devolveu um resultado não reconhecido.");
   }
 
   let ultimoErro: unknown;
   for (let tentativa = 1; tentativa <= 5; tentativa += 1) {
     try {
-      const { data, error } = await supabaseAdmin
-        .from("consultas_credito")
-        .update(payload)
-        .eq("id", id)
-        .eq("status", "processando")
-        .select("id");
+      const { data, error } = await supabaseAdmin.rpc("finish_credit_simulation", {
+        p_consultation_id: consulta.id,
+        p_worker_id: consulta.worker_id,
+        p_lease_token: consulta.lease_token,
+        p_execution_version: consulta.execution_version,
+        p_credit_result: resultado.status,
+        p_message: resultado.mensagem,
+        p_raw_response: resultado.rawSummary,
+        p_customer_name: resultado.clienteNome ?? null,
+        p_customer_document: resultado.clienteDocumento ?? null,
+        p_provider_external_id: resultado.proposalId ?? null,
+      });
       if (error) throw error;
-      if (!data?.length) {
-        throw new ConsultaStateConflictError(
-          "A consulta não estava mais em processamento ao salvar o resultado.",
-        );
-      }
+      if (data !== true) throw new ConsultaLeaseLostError();
       registrarSucessoFila();
       return;
     } catch (error) {
@@ -1089,18 +1077,48 @@ async function atualizarResultado(
   throw ultimoErro;
 }
 
-async function marcarErro(id: string, erroTecnico: string): Promise<void> {
+const PROVIDER_HEALTH_CATEGORIES = new Set([
+  "AUTHENTICATION_ERROR",
+  "SESSION_EXPIRED",
+  "BROWSER_CRASH",
+  "PLAYWRIGHT_TIMEOUT",
+  "NETWORK_ERROR",
+  "CREDPAGO_UNAVAILABLE",
+  "INTERNAL_SERVER_ERROR",
+]);
+
+async function marcarErro(
+  consulta: ConsultaCreditoRow,
+  erroTecnico: string,
+  options: {
+    retryable: boolean;
+    providerSubmissionState: ConsultaCreditoRow["provider_submission_state"];
+    rawResponse?: Record<string, unknown>;
+  },
+): Promise<"queued" | "technical_failure" | "requires_verification" | "lease_lost"> {
   const mensagemSegura = mensagemSeguraParaErro(erroTecnico);
   const classified = classifyAutomationError(erroTecnico);
-  await atualizarResultado(id, {
-    status: "erro",
-    mensagem: mensagemSegura,
-    rawSummary: {
+  const { data, error } = await supabaseAdmin.rpc("fail_credit_simulation", {
+    p_consultation_id: consulta.id,
+    p_worker_id: consulta.worker_id,
+    p_lease_token: consulta.lease_token,
+    p_execution_version: consulta.execution_version,
+    p_error_category: classified.category,
+    p_technical_detail: redactSensitiveText(erroTecnico, 2_000),
+    p_user_message: mensagemSegura,
+    p_raw_response: {
+      ...(options.rawResponse ?? {}),
       erroTecnico: redactSensitiveText(erroTecnico, 2_000),
       categoria: classified.category,
       capturadoEm: new Date().toISOString(),
     },
+    p_retryable: options.retryable,
+    p_provider_submission_state: options.providerSubmissionState,
+    p_affects_provider_health: PROVIDER_HEALTH_CATEGORIES.has(classified.category),
   });
+  if (error) throw error;
+  registrarSucessoFila();
+  return String(data) as "queued" | "technical_failure" | "requires_verification" | "lease_lost";
 }
 
 /**
@@ -1109,67 +1127,42 @@ async function marcarErro(id: string, erroTecnico: string): Promise<void> {
  * erro ao corretor no site ou no aplicativo.
  */
 async function recolocarNaFilaAguardandoServico(
-  id: string,
+  consulta: ConsultaCreditoRow,
   step:
     | "aguardando_autenticacao"
     | "aguardando_liberacao_parceiro"
     | "aguardando_cancelamento" = "aguardando_autenticacao",
-): Promise<void> {
-  const { error } = await supabaseAdmin
-    .from("consultas_credito")
-    .update({
-      status: "pendente",
-      resultado: null,
-      mensagem: null,
-      error_message: null,
-      automation_started_at: null,
-      automation_finished_at: null,
-      automation_step: step,
-    })
-    .eq("id", id)
-    .eq("status", "processando");
-  if (error) throw error;
-  registrarSucessoFila();
+): Promise<"queued" | "technical_failure" | "requires_verification" | "lease_lost"> {
+  const technicalDetail =
+    step === "aguardando_cancelamento"
+      ? "A fila causal de cancelamento está temporariamente indisponível."
+      : step === "aguardando_liberacao_parceiro"
+        ? "A conta do parceiro está temporariamente indisponível."
+        : "A autenticação do parceiro precisa ser renovada.";
+  return marcarErro(consulta, technicalDetail, {
+    retryable: true,
+    providerSubmissionState: "not_submitted",
+    rawResponse: { step },
+  });
 }
 
-/**
- * Se o processo/container cair depois do claim, a linha ficava eternamente em
- * "processando" e nenhum worker voltava a enxergá-la. Este lease temporal devolve
- * somente consultas antigas à fila; consultas ativas ficam protegidas pelo corte.
- */
-async function recuperarConsultasTravadas(idsEmAndamento: ReadonlySet<string>): Promise<void> {
+async function atualizarMetricasFila(): Promise<void> {
   const agora = Date.now();
-  if (agora - ultimaRecuperacaoConsultasEm < env.staleRecoveryIntervalMs) return;
+  if (agora - ultimaRecuperacaoConsultasEm < env.queueMetricsIntervalMs) return;
   ultimaRecuperacaoConsultasEm = agora;
-
-  const cutoff = new Date(agora - env.staleConsultaMs).toISOString();
-  let query = supabaseAdmin
-    .from("consultas_credito")
-    .update({
-      status: "pendente",
-      resultado: null,
-      mensagem: null,
-      error_message: null,
-      automation_started_at: null,
-      automation_finished_at: null,
-      automation_step: "recuperada_automaticamente",
-    })
-    .eq("status", "processando")
-    .eq("origem", "nox_financa")
-    .lt("automation_started_at", cutoff);
-
-  // A própria instância conhece suas abas ativas. Isso evita reencaminhar uma
-  // resposta lenta enquanto ela está sendo persistida no banco.
-  if (idsEmAndamento.size > 0) {
-    query = query.not("id", "in", `(${Array.from(idsEmAndamento).join(",")})`);
-  }
-  const { data, error } = await query.select("id");
-
+  const { data, error } = await supabaseAdmin.rpc("get_credit_automation_metrics");
   if (error) throw error;
+  const metrics = (data ?? {}) as Record<string, unknown>;
+  runtimeState.queueDepth = Number(metrics.queued) || 0;
+  runtimeState.retryingConsultations = Number(metrics.retrying) || 0;
+  runtimeState.requiresVerification = Number(metrics.requiresVerification) || 0;
+  runtimeState.expiredLeases = Number(metrics.expiredLeases) || 0;
+  runtimeState.oldestQueueAgeSeconds = Number(metrics.oldestQueueAgeSeconds) || 0;
+  runtimeState.providerConsecutiveFailures = Number(metrics.providerConsecutiveFailures) || 0;
+  runtimeState.circuitOpen = metrics.circuitOpen === true;
+  runtimeState.circuitOpenUntil =
+    typeof metrics.circuitOpenUntil === "string" ? metrics.circuitOpenUntil : null;
   registrarSucessoFila();
-  if (data?.length) {
-    log(`${data.length} consulta(s) interrompida(s) recuperada(s) automaticamente para a fila.`);
-  }
 }
 
 /**
@@ -1288,6 +1281,8 @@ interface EstadoConsulta {
   lastSuccessfulStep: string | null;
   startedAt: number;
   simulationSubmitted: boolean;
+  currentStep: string;
+  leaseLost: boolean;
 }
 
 async function processarConsulta(
@@ -1313,6 +1308,19 @@ async function processarConsulta(
   const snapshotsEmAndamento = new Set<Promise<unknown>>();
   let ultimoCancelamentoEnviado: TrackedLoftCancellation | null = null;
   const creditSimulationCep = selectRandomCreditSimulationCep();
+  const atualizarEtapa = async (
+    step:
+      | "abrindo"
+      | "preenchendo"
+      | "enviando"
+      | "aguardando_resultado"
+      | "recuperando_portal"
+      | "reenviando"
+      | "aguardando_recuperacao_portal",
+  ) => {
+    estado.currentStep = step;
+    await atualizarStep(consulta, step);
+  };
   try {
     const erroValidacao = validateConsultaForAutomation(consulta);
     if (erroValidacao) throw new Error(`Dados da consulta inválidos: ${erroValidacao}.`);
@@ -1437,13 +1445,13 @@ async function processarConsulta(
 
     const iniciarSnapshotPropostas = (): Promise<SnapshotPropostas> => {
       const startedAt = Date.now();
-      const snapshot = capturarSnapshotPropostas().then(
+      const snapshot: Promise<SnapshotPropostas> = capturarSnapshotPropostas().then(
         (knownProposalIds) => ({
-          ok: true,
+          ok: true as const,
           knownProposalIds,
           durationMs: Date.now() - startedAt,
         }),
-        (error) => ({ ok: false, error, durationMs: Date.now() - startedAt }),
+        (error) => ({ ok: false as const, error, durationMs: Date.now() - startedAt }),
       );
       snapshotsEmAndamento.add(snapshot);
       void snapshot.finally(() => snapshotsEmAndamento.delete(snapshot));
@@ -1452,14 +1460,12 @@ async function processarConsulta(
 
     const prepararCancelamentoAntesDoEnvio = async (
       submissionToken: string,
-      snapshotPrecarregado?: Promise<SnapshotPropostas> | null,
+      snapshotPrecarregado?: SnapshotPropostas | null,
     ) => {
       if (!env.loftCancellationEnabled) return null;
       let snapshotCaptured = false;
       try {
-        const snapshot = snapshotPrecarregado
-          ? await snapshotPrecarregado
-          : await iniciarSnapshotPropostas();
+        const snapshot = snapshotPrecarregado ?? (await iniciarSnapshotPropostas());
         if (!snapshot.ok) throw snapshot.error;
         const knownProposalIds = snapshot.knownProposalIds;
         log(`[${cid}] Snapshot de segurança pronto em ${snapshot.durationMs}ms.`);
@@ -1557,11 +1563,13 @@ async function processarConsulta(
 
     const executarTentativa = async (tentativa: number) => {
       log(`[${cid}] Preenchendo dados${tentativa > 1 ? ` (recuperação ${tentativa - 1}/1)` : ""}`);
-      // A busca segura de propostas e o preenchimento usam abas separadas. Fazer
-      // ambos em paralelo elimina a maior espera serial do caminho feliz; o job
-      // só e criado no onBeforeClick, depois que o snapshot terminou.
-      let snapshotPrecarregado = env.loftCancellationEnabled ? iniciarSnapshotPropostas() : null;
-      await atualizarStep(consulta.id, tentativa > 1 ? "recuperando_portal" : "preenchendo");
+      // A Loft mantém estado mutável no contexto autenticado. Concluímos e fechamos
+      // a página do snapshot antes de começar a preencher a simulação para que duas
+      // superfícies do portal nunca disputem a mesma sessão.
+      let snapshotPrecarregado = env.loftCancellationEnabled
+        ? await iniciarSnapshotPropostas()
+        : null;
+      await atualizarEtapa(tentativa > 1 ? "recuperando_portal" : "preenchendo");
       await fillPessoa(executionPage, consulta.tipo_pessoa || "PF");
       await fillDocumento(executionPage, consulta.documento || "", consulta.tipo_pessoa || "PF");
       await fillTipoImovel(
@@ -1579,7 +1587,7 @@ async function processarConsulta(
       estado.lastSuccessfulStep = tentativa > 1 ? "recovery-form-filled" : "form-filled";
 
       log(`[${cid}] Enviando simulação${tentativa > 1 ? " novamente" : ""}`);
-      await atualizarStep(consulta.id, tentativa > 1 ? "reenviando" : "enviando");
+      await atualizarEtapa(tentativa > 1 ? "reenviando" : "enviando");
       let apiObserver: ReturnType<typeof observeCreditSimulationApi> | null = null;
       const enviarSimulacaoComCancelamento = async () => {
         apiObserver?.dispose();
@@ -1605,6 +1613,8 @@ async function processarConsulta(
         const registrarEnvioObservado = async () => {
           simulacaoEnviada = true;
           estado.simulationSubmitted = true;
+          estado.currentStep = "aguardando_resultado";
+          await renovarLease(consulta, estado.currentStep, "submitted");
           if (tracking) {
             tracking.clicked = true;
             tracking.submittedAt ??= new Date().toISOString();
@@ -1619,6 +1629,9 @@ async function processarConsulta(
                 submissionToken,
                 snapshotDesteClique,
               );
+              // Persist this before the mouse event. A crash after this point is
+              // uncertain and must be reconciled instead of blindly retried.
+              await renovarLease(consulta, estado.currentStep, "submitting");
             },
             onAfterClick: async () => {
               if (!(await aguardarPostDaSimulacao())) {
@@ -1649,7 +1662,7 @@ async function processarConsulta(
           tentativa > 1 ? "recovery-simulation-submitted" : "simulation-submitted";
 
         log(`[${cid}] Aguardando resultado`);
-        await atualizarStep(consulta.id, "aguardando_resultado");
+        await atualizarEtapa("aguardando_resultado");
         return await parseResultado(executionPage, {
           tipoPessoa: consulta.tipo_pessoa === "PJ" ? "PJ" : "PF",
           onLog: (msg) => log(`[${cid}] ${msg}`),
@@ -1690,7 +1703,7 @@ async function processarConsulta(
       log(
         `[${cid}] O portal não concluiu a validação do formulário — recarregando e preenchendo novamente uma única vez.`,
       );
-      await atualizarStep(consulta.id, "recuperando_formulario");
+      await atualizarEtapa("recuperando_portal");
       await navegarParaPortal(page);
       await ensureLoggedIn(cid, page, persistirSessao);
       await prepararFormularioDaConsulta();
@@ -1723,7 +1736,7 @@ async function processarConsulta(
       log(
         `[${cid}] O portal informou erro interno — aguardando 5s e refazendo a análise uma única vez.`,
       );
-      await atualizarStep(consulta.id, "aguardando_recuperacao_portal");
+      await atualizarEtapa("aguardando_recuperacao_portal");
       await page.waitForTimeout(5_000);
       await navegarParaPortal(page);
       await ensureLoggedIn(cid, page, persistirSessao);
@@ -1743,6 +1756,24 @@ async function processarConsulta(
     estado.lastSuccessfulStep = "result-read";
     log(`[${cid}] Resultado identificado: ${resultado.status}`);
 
+    if (resultado.status === "erro") {
+      const technicalReason = String(
+        resultado.rawSummary.motivoTecnico || resultado.mensagem || "result_not_recognized",
+      );
+      const disposition = await marcarErro(consulta, technicalReason, {
+        retryable: false,
+        providerSubmissionState: simulacaoEnviada ? "submitted" : "not_submitted",
+        rawResponse: resultado.rawSummary,
+      });
+      estado.finalizado = true;
+      runtimeState.totalProcessed += 1;
+      runtimeState.totalFailed += 1;
+      log(
+        `[${cid}] Resultado técnico finalizado como ${disposition}; nenhuma decisão de crédito foi gravada.`,
+      );
+      return;
+    }
+
     if (estado.finalizado) {
       log(
         `[${cid}] Resultado chegou após o tempo limite já ter marcado erro — descartando para não sobrescrever.`,
@@ -1751,7 +1782,7 @@ async function processarConsulta(
     }
     estado.persistindoResultado = true;
     try {
-      await atualizarResultado(consulta.id, {
+      await atualizarResultado(consulta, {
         ...resultado,
         // O portal é a fonte principal. Se uma versão da tela não renderizar o
         // nome, o cadastro vinculado pelo CPF mantém o resultado identificável.
@@ -1781,22 +1812,7 @@ async function processarConsulta(
     runtimeState.averageDurationMs = Math.round(
       recentDurations.reduce((sum, value) => sum + value, 0) / recentDurations.length,
     );
-    if (resultado.status !== "erro")
-      runtimeState.lastSuccessfulSimulationAt = new Date().toISOString();
-    if (resultado.status === "erro") {
-      runtimeState.totalFailed += 1;
-      await reportAutomationError({
-        correlationId,
-        simulationId: consulta.id,
-        initiatingUserId: consulta.profile_id_solicitante,
-        environment: env.automationEnvironment,
-        step: "aguardando_resultado",
-        lastSuccessfulStep: estado.lastSuccessfulStep,
-        error: new Error(resultado.mensagem),
-        durationMs,
-        artifacts: await captureSafeErrorArtifacts(page, true),
-      });
-    }
+    runtimeState.lastSuccessfulSimulationAt = new Date().toISOString();
     logStructured("credit_simulation_finished", {
       correlationId,
       simulationId: consulta.id,
@@ -1854,12 +1870,18 @@ async function processarConsulta(
       }
       const artifacts = await captureSafeErrorArtifacts(page, false);
       const returnedToQueue = await recolocarNaFilaAguardandoServico(
-        consulta.id,
+        consulta,
         falhaDeCancelamento ? "aguardando_cancelamento" : "aguardando_liberacao_parceiro",
       )
-        .then(() => {
-          log(`[${cid}] Consulta preservada na fila enquanto o serviço é recuperado.`);
-          return true;
+        .then((value) => {
+          if (value === "queued") {
+            log(`[${cid}] Consulta preservada na fila enquanto o serviço é recuperado.`);
+            return true;
+          }
+          runtimeState.totalProcessed += 1;
+          runtimeState.totalFailed += 1;
+          log(`[${cid}] Consulta finalizada tecnicamente como ${value}.`);
+          return false;
         })
         .catch((e) => {
           logErro(`[${cid}] Falha ao devolver consulta para a fila`, e);
@@ -1879,7 +1901,10 @@ async function processarConsulta(
       });
     } else {
       const artifacts = await captureSafeErrorArtifacts(page, simulacaoEnviada);
-      const persisted = await marcarErro(consulta.id, erroTecnico)
+      const persisted = await marcarErro(consulta, erroTecnico, {
+        retryable: false,
+        providerSubmissionState: simulacaoEnviada ? "submitted" : "not_submitted",
+      })
         .then(() => true)
         .catch((e) => {
           logErro(`[${cid}] Falha ao gravar erro no Supabase`, e);
@@ -1949,10 +1974,40 @@ async function processarConsultaComTimeout(
     lastSuccessfulStep: "claimed",
     startedAt: Date.now(),
     simulationSubmitted: false,
+    currentStep: "abrindo",
+    leaseLost: false,
   };
 
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let heartbeatInFlight = false;
+  let heartbeatFailures = 0;
   let timeoutAtingido = false;
+  const heartbeatTimer = setInterval(() => {
+    if (heartbeatInFlight || estado.finalizado || estado.leaseLost) return;
+    heartbeatInFlight = true;
+    void renovarLease(
+      consulta,
+      estado.currentStep,
+      estado.simulationSubmitted ? "submitted" : undefined,
+    )
+      .then(() => {
+        heartbeatFailures = 0;
+      })
+      .catch(async (error) => {
+        heartbeatFailures += 1;
+        registrarFalhaFila(
+          `[${cid}] Falha no heartbeat da consulta (${heartbeatFailures}/3)`,
+          error,
+        );
+        if (error instanceof ConsultaLeaseLostError || heartbeatFailures >= 3) {
+          estado.leaseLost = true;
+          await estado.page?.close().catch(() => {});
+        }
+      })
+      .finally(() => {
+        heartbeatInFlight = false;
+      });
+  }, env.creditHeartbeatIntervalMs);
   const timeoutPromise = new Promise<void>((resolve) => {
     timer = setTimeout(async () => {
       if (estado.finalizado) return;
@@ -1980,11 +2035,17 @@ async function processarConsultaComTimeout(
       // Interrompe de verdade a aba desta consulta. Antes, o trabalho continuava em
       // segundo plano e um retry podia enviar a mesma simulação duas vezes.
       await estado.page?.close().catch(() => {});
-      await marcarErro(consulta.id, timeoutError.message).catch((e) =>
-        logErro(`[${cid}] Falha ao gravar erro de timeout no Supabase`, e),
-      );
-      runtimeState.totalProcessed += 1;
-      runtimeState.totalFailed += 1;
+      const disposition = await marcarErro(consulta, timeoutError.message, {
+        retryable: !estado.simulationSubmitted,
+        providerSubmissionState: estado.simulationSubmitted ? "submitted" : "not_submitted",
+      }).catch((e) => {
+        logErro(`[${cid}] Falha ao gravar o estado de timeout no Supabase`, e);
+        return "lease_lost" as const;
+      });
+      if (disposition === "technical_failure" || disposition === "requires_verification") {
+        runtimeState.totalProcessed += 1;
+        runtimeState.totalFailed += 1;
+      }
       await reportAutomationError({
         correlationId,
         simulationId: consulta.id,
@@ -2000,11 +2061,14 @@ async function processarConsultaComTimeout(
     }, env.consultaTimeoutMs);
   });
 
-  const trabalho = processarConsulta(context, consulta, estado, persistirSessao).finally(() =>
-    clearTimeout(timer),
-  );
+  const trabalho = processarConsulta(context, consulta, estado, persistirSessao);
 
-  await Promise.race([trabalho, timeoutPromise]);
+  try {
+    await Promise.race([trabalho, timeoutPromise]);
+  } finally {
+    clearTimeout(timer);
+    clearInterval(heartbeatTimer);
+  }
   if (timeoutAtingido) {
     // Fechar a aba faz as operações Playwright pendentes rejeitarem rapidamente. O
     // teto abaixo evita reter para sempre uma vaga por uma dependência externa ruim.
@@ -2189,6 +2253,14 @@ function iniciarServidorHealth(): http.Server {
           totalFailed: runtimeState.totalFailed,
           lastSuccessfulSimulationAt: runtimeState.lastSuccessfulSimulationAt,
           averageDurationMs: runtimeState.averageDurationMs,
+          queueDepth: runtimeState.queueDepth,
+          retryingConsultations: runtimeState.retryingConsultations,
+          requiresVerification: runtimeState.requiresVerification,
+          expiredLeases: runtimeState.expiredLeases,
+          oldestQueueAgeSeconds: runtimeState.oldestQueueAgeSeconds,
+          providerConsecutiveFailures: runtimeState.providerConsecutiveFailures,
+          circuitOpen: runtimeState.circuitOpen,
+          circuitOpenUntil: runtimeState.circuitOpenUntil,
           cancellationEnabled: env.loftCancellationEnabled,
           cancellationRequired: env.loftCancellationRequired,
           cancellationMode: env.loftCancellationMode,
@@ -2324,9 +2396,17 @@ async function loop(once: boolean): Promise<void> {
       if (desligando) break;
       runtimeState.lastLoopAt = new Date().toISOString();
 
-      await recuperarConsultasTravadas(new Set(emAndamento.keys())).catch((error) =>
-        registrarFalhaFila("Falha ao recuperar consultas interrompidas", error),
+      await atualizarMetricasFila().catch((error) =>
+        registrarFalhaFila("Falha ao atualizar métricas da fila persistente", error),
       );
+
+      // A sessão da Loft guarda estado mutável da proposta no BrowserContext.
+      // Enquanto uma simulação está ativa, nem o probe de autenticação nem a
+      // reconciliação/cancelamento podem abrir outra página nesse contexto.
+      if (emAndamento.size > 0) {
+        await sleep(env.pollIntervalMs);
+        continue;
+      }
 
       // Autenticação vem antes da fila de cancelamentos. Se a sessão expirar,
       // a própria rotina de recuperação precisa rodar antes de qualquer acesso
@@ -2478,29 +2558,16 @@ async function loop(once: boolean): Promise<void> {
 
       const vagas = env.maxConcurrentConsultas - emAndamento.size;
       if (vagas > 0) {
-        let pendentes: ConsultaCreditoRow[] = [];
-        try {
-          pendentes = await fetchConsultasPendentes(vagas);
-        } catch (error) {
-          registrarFalhaFila("Falha ao consultar a fila do Supabase", error);
-          if (once) break;
-          await sleep(env.pollIntervalMs);
-          continue;
-        }
-        for (const consulta of pendentes) {
+        for (let slot = 0; slot < vagas; slot += 1) {
           if (emAndamento.size >= env.maxConcurrentConsultas) break;
-
-          let reservou = false;
+          let consulta: ConsultaCreditoRow | null = null;
           try {
-            reservou = await marcarProcessando(consulta.id);
+            consulta = await claimNextConsulta();
           } catch (error) {
-            registrarFalhaFila(
-              `Falha ao reservar a consulta ${consulta.id.slice(0, 8)} na fila`,
-              error,
-            );
+            registrarFalhaFila("Falha ao reivindicar a próxima consulta no Supabase", error);
             break;
           }
-          if (!reservou) continue; // outra execução pegou essa consulta primeiro
+          if (!consulta) break;
 
           const contextoDaConsulta = contextoAberto;
           const tarefa = processarConsultaComTimeout(

@@ -57,6 +57,12 @@ const STATUS_UI: Record<
     iconClassName: "text-red-500",
     Icon: AlertTriangle,
   },
+  requer_verificacao: {
+    label: "Verificação necessária",
+    className: "bg-amber-50 border-amber-300 text-amber-950",
+    iconClassName: "text-amber-600",
+    Icon: AlertTriangle,
+  },
   pendente: {
     label: "Pendente",
     className: "bg-yellow-50 border-yellow-200 text-yellow-900",
@@ -100,7 +106,7 @@ export function ResultadoAutomacao({
 }: ResultadoAutomacaoProps) {
   const navigate = useNavigate();
   // `resultado` guarda o veredito da consulta de crédito de forma permanente — a
-  // automação só grava aprovado/recusado/em_analise/erro ali e nunca mais mexe depois.
+  // automação só grava decisões reais (aprovado/recusado/em_analise) ali.
   // Já `consulta.status` é o ponteiro de etapa da proposta inteira (pendente_documentacao,
   // aguardando_ativacao, ativado, etc.) e avança conforme o corretor progride a proposta.
   // Preferir `resultado` aqui evita que essa tela fique presa em "Consultando..." para
@@ -114,12 +120,18 @@ export function ResultadoAutomacao({
   // `resultado` tenha ficado null por ser um registro antigo/manual que nunca passou
   // pela automação de verdade (confirmado com um caso real: status=aguardando_ativacao,
   // resultado=null, ficava preso em "Consultando..." para sempre).
-  const aindaNaAnaliseDeCredito = statusBruto === "" || statusBruto === "pendente" || statusBruto === "processando";
-  const status = (resultadoConhecido
-    ? consulta.resultado
-    : aindaNaAnaliseDeCredito
-      ? consulta.status
-      : "aprovado") as StatusConsulta;
+  const aindaNaAnaliseDeCredito =
+    statusBruto === "" || statusBruto === "pendente" || statusBruto === "processando";
+  const estadoTecnicoFinal = statusBruto === "erro" || statusBruto === "requer_verificacao";
+  const status = (
+    resultadoConhecido
+      ? consulta.resultado
+      : estadoTecnicoFinal
+        ? statusBruto
+        : aindaNaAnaliseDeCredito
+          ? consulta.status
+          : "aprovado"
+  ) as StatusConsulta;
   const aguardandoDisponibilidade = statusBruto === "pendente";
   const emAndamento = !resultadoConhecido && aindaNaAnaliseDeCredito && !aguardandoDisponibilidade;
   const ui = STATUS_UI[status];

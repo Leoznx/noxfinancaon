@@ -52,6 +52,7 @@ const TOM_STATUS: Record<StatusExibicaoConsulta, string> = {
   recusado: "border-red-200 bg-red-50 text-red-700",
   em_analise: "border-amber-200 bg-amber-50 text-amber-700",
   falta_documentos: "border-orange-200 bg-orange-50 text-orange-700",
+  requer_verificacao: "border-violet-200 bg-violet-50 text-violet-700",
   erro: "border-red-200 bg-red-50 text-red-700",
   processando: "border-yellow-200 bg-yellow-50 text-yellow-700",
   pendente: "border-neutral-200 bg-neutral-100 text-neutral-700",

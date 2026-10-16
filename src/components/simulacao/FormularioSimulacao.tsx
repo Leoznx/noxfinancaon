@@ -252,7 +252,8 @@ export function FormularioSimulacao({
         Simule a fiança do seu cliente
       </h1>
       <p className="text-lg text-neutral-600 mb-10">
-        Preencha os dados abaixo. A simulação leva menos de 1 minuto.
+        Preencha os dados abaixo. A solicitação é registrada na hora e o resultado aparece assim
+        que a análise for concluída.
       </p>
 
       <form onSubmit={handleSimular}>

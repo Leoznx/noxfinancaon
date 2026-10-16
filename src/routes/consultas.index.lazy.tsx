@@ -133,7 +133,7 @@ function Consultas() {
   }, [fetchConsultas]);
 
   // `resultado` guarda o veredito da consulta de crédito de forma permanente — a
-  // automação só grava aprovado/recusado/em_analise/erro ali e nunca mais mexe depois.
+  // automação só grava decisões reais (aprovado/recusado/em_analise) ali.
   // Já `status` é o ponteiro de etapa da proposta inteira (pendente, processando,
   // pendente_documentacao, aguardando_ativacao, ativo, etc.) e muda conforme o corretor
   // avança (ex.: escolhe um plano). Preferir `resultado` aqui garante que "Minhas
@@ -147,6 +147,7 @@ function Consultas() {
     if (status === "aprovado") return "aprovado";
     if (status === "recusado" || status === "reprovado") return "recusado";
     if (status === "em_analise") return "em_analise";
+    if (status === "requer_verificacao") return "requer_verificacao";
     if (status === "erro") return "erro";
     if (status === "processando") return "processando";
     if (status === "pendente" || !status) return "pendente";
@@ -163,6 +164,7 @@ function Consultas() {
       recusado: "Recusado",
       em_analise: "Em análise",
       erro: "Erro",
+      requer_verificacao: "Requer verificação",
       processando: "Consultando...",
       pendente: "Pendente",
       falta_documentos: "Falta de documentos",
@@ -210,6 +212,15 @@ function Consultas() {
         return (
           <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 font-bold px-3">
             Erro
+          </Badge>
+        );
+      case "requer_verificacao":
+        return (
+          <Badge
+            variant="outline"
+            className="bg-amber-50 text-amber-800 border-amber-300 font-bold px-3"
+          >
+            Requer verificação
           </Badge>
         );
       case "processando":
@@ -319,6 +330,7 @@ function Consultas() {
             <SelectItem value="aprovado">Aprovados</SelectItem>
             <SelectItem value="recusado">Recusados</SelectItem>
             <SelectItem value="em_analise">Em análise</SelectItem>
+            <SelectItem value="requer_verificacao">Requer verificação</SelectItem>
             <SelectItem value="pendente">Pendentes</SelectItem>
           </SelectContent>
         </Select>

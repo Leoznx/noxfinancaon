@@ -162,7 +162,7 @@ test("reparo historico nao reinicia um worker que ja esta saudavel", () => {
     creditWorkerReachable: true,
     creditWorkerReady: true,
     creditWorkerHealth: { auth: "ok", queue: "ok", browser: "ok" },
-  } as DiagnosticSnapshot;
+  } as unknown as DiagnosticSnapshot;
 
   assert.equal(shouldSkipHealthyCreditWorkerRestart("RESTART_CREDIT_WORKER", snapshot), true);
   assert.equal(shouldSkipHealthyCreditWorkerRestart("VALIDATE_SESSION", snapshot), true);
@@ -192,7 +192,7 @@ test("reconciliacao causal protegida nao provoca ciclo de reinicio", () => {
     creditWorkerReachable: true,
     creditWorkerReady: false,
     creditWorkerHealth,
-  } as DiagnosticSnapshot;
+  } as unknown as DiagnosticSnapshot;
 
   assert.equal(isExpectedCreditReconciliationPending(creditWorkerHealth), true);
   assert.equal(

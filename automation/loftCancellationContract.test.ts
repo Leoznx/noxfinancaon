@@ -76,10 +76,12 @@ test("prioriza cancelamentos vencidos antes de reconciliar submissões mais nova
   assert.match(worker, /reconcilia\[cç\]\[aã\]o\\s\+necess\[aá\]ria/);
 });
 
-test("faz o snapshot em paralelo e evita reabrir a lista durante a estabilização", async () => {
+test("serializa o snapshot na sessão e evita reabrir a lista durante a estabilização", async () => {
   const worker = await readFile(workerUrl, "utf8");
 
-  assert.match(worker, /let snapshotPrecarregado = env\.loftCancellationEnabled/);
+  const snapshot = worker.indexOf("? await iniciarSnapshotPropostas()");
+  const fill = worker.indexOf("await fillPessoa(", snapshot);
+  assert.ok(snapshot >= 0 && fill > snapshot);
   assert.match(worker, /snapshotDesteClique/);
   assert.match(worker, /proximaReconciliacaoLoftEm\.set\(job\.id/);
   assert.doesNotMatch(
@@ -130,7 +132,10 @@ test("renova consulta órfã sem perder a idempotência de uma execução recent
 
   assert.match(migration, /interval '12 minutes'/);
   assert.match(migration, /interval '15 minutes'/);
-  assert.match(migration, /coalesce\(v_consultation\.automation_started_at, v_consultation\.updated_at\)/);
+  assert.match(
+    migration,
+    /coalesce\(v_consultation\.automation_started_at, v_consultation\.updated_at\)/,
+  );
   assert.doesNotMatch(
     migration,
     /v_consultation\.status = 'processando'\s+OR \(v_consultation\.status = 'pendente'/,

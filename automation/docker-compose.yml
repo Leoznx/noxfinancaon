@@ -18,6 +18,8 @@ services:
       DEPLOY_VERSION: "${DEPLOY_VERSION:-unknown}"
       # Evita que um valor legado de 5s no .env atrase cada nova simulacao.
       AUTOMATION_POLL_INTERVAL_MS: "1500"
+      CREDIT_PROVIDER_CREDENTIAL_KEY: "${CREDIT_PROVIDER_CREDENTIAL_KEY:-loft-primary}"
+      CREDIT_HEARTBEAT_INTERVAL_MS: "${CREDIT_HEARTBEAT_INTERVAL_MS:-15000}"
       # O cancelador compartilha a sessão autenticada do Chromium e é parte da
       # prontidão operacional do worker.
       LOFT_CANCELLATION_ENABLED: "${LOFT_CANCELLATION_ENABLED:-true}"
@@ -28,7 +30,7 @@ services:
       # A API de análise da Loft pode levar vários minutos em horário de pico.
       # Estes valores sobrescrevem limites legados que possam permanecer no .env da VPS.
       CONSULTA_TIMEOUT_MS: "420000"
-      STALE_CONSULTA_MS: "600000"
+      QUEUE_METRICS_INTERVAL_MS: "${QUEUE_METRICS_INTERVAL_MS:-60000}"
     volumes:
       # Só o arquivo de sessão (poucos KB) fica persistido no host — nunca o
       # perfil completo do Chrome. Gerado localmente por
@@ -52,7 +54,13 @@ services:
     healthcheck:
       # Verifica os dois processos do supervisor. /health mede liveness do worker
       # de crédito sem reiniciar o container por indisponibilidade externa.
-      test: ["CMD", "node", "-e", "Promise.all([fetch('http://127.0.0.1:3000/health'),fetch('http://127.0.0.1:3001/live')]).then(rs=>process.exit(rs.every(r=>r.ok)?0:1)).catch(()=>process.exit(1))"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "Promise.all([fetch('http://127.0.0.1:3000/health'),fetch('http://127.0.0.1:3001/live')]).then(rs=>process.exit(rs.every(r=>r.ok)?0:1)).catch(()=>process.exit(1))",
+        ]
       interval: 30s
       timeout: 5s
       start_period: 30s

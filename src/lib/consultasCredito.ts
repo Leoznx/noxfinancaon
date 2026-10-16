@@ -6,12 +6,25 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { getDemoDecision } from "@/lib/demo-accounts";
 import { createSimulationCorrelationId } from "@/lib/correlation-id";
 import { selectOperationalCreditSimulationCep } from "@/lib/creditSimulationCep";
+import { getCreditSimulationOperationKey } from "@/lib/credit-simulation-idempotency";
 
 /** Status do fluxo de automação local CredPago. */
 export type StatusConsulta =
-  "pendente" | "processando" | "aprovado" | "recusado" | "em_analise" | "erro";
+  | "pendente"
+  | "processando"
+  | "aprovado"
+  | "recusado"
+  | "em_analise"
+  | "erro"
+  | "requer_verificacao";
 
-export const STATUS_FINAIS: StatusConsulta[] = ["aprovado", "recusado", "em_analise", "erro"];
+export const STATUS_FINAIS: StatusConsulta[] = [
+  "aprovado",
+  "recusado",
+  "em_analise",
+  "erro",
+  "requer_verificacao",
+];
 
 export interface ConsultaCredito {
   id: string;
@@ -137,19 +150,29 @@ interface CriarConsultaParams {
  * worker local de automação CredPago precisa. Deixa a consulta na fila com
  * status "pendente" e origem "nox_financa".
  */
-export async function criarConsultaParaAutomacao({
-  dados,
-}: CriarConsultaParams): Promise<string> {
+export async function criarConsultaParaAutomacao({ dados }: CriarConsultaParams): Promise<string> {
   const rawDoc = dados.tipoInquilino === "PF" ? dados.inquilinos[0]?.cpf || "" : dados.cnpj || "";
   const documento = normalizeDocumento(rawDoc);
   const tenantName =
-    dados.tipoInquilino === "PF"
-      ? dados.inquilinos[0]?.nome || ""
-      : dados.razaoSocial || "";
+    dados.tipoInquilino === "PF" ? dados.inquilinos[0]?.nome || "" : dados.razaoSocial || "";
   const propertyAddress =
     [dados.endereco?.cidade, dados.endereco?.uf].filter(Boolean).join(", ") ||
     (dados.cep ? `CEP ${dados.cep}` : "");
-  const { data, error } = await (supabase as any).rpc("enqueue_credit_simulation", {
+  const operationKey = getCreditSimulationOperationKey({
+    tenantType: dados.tipoInquilino,
+    tenantName,
+    tenantDocument: documento,
+    propertyType: dados.tipoImovel,
+    propertyZip: dados.cep || "",
+    propertyCity: dados.endereco?.cidade || "",
+    propertyState: dados.endereco?.uf || "",
+    propertyAddress,
+    rentValue: dados.valores.aluguel,
+    condominiumValue: dados.valores.condominio,
+    feeValue: dados.valores.taxas,
+  });
+  const correlationId = createSimulationCorrelationId();
+  const rpcPayload = {
     p_tenant_type: dados.tipoInquilino,
     p_tenant_name: tenantName,
     p_tenant_document: documento,
@@ -162,8 +185,22 @@ export async function criarConsultaParaAutomacao({
     p_condominium_value: dados.valores.condominio,
     p_fee_value: dados.valores.taxas,
     p_operational_zip: selectOperationalCreditSimulationCep(),
-    p_correlation_id: createSimulationCorrelationId(),
-  });
+    p_correlation_id: correlationId,
+    p_idempotency_key: operationKey,
+  };
+  let { data, error } = await (supabase as any).rpc("enqueue_credit_simulation", rpcPayload);
+  // Rolling-deploy compatibility: Vercel can publish before the database migration
+  // reaches production. The old overload keeps the site usable during that window.
+  if (
+    error &&
+    /p_idempotency_key|function.*not found|schema cache|PGRST202/i.test(
+      String(error.message || error.code),
+    )
+  ) {
+    const legacyPayload: Record<string, unknown> = { ...rpcPayload };
+    delete legacyPayload.p_idempotency_key;
+    ({ data, error } = await (supabase as any).rpc("enqueue_credit_simulation", legacyPayload));
+  }
   if (error) throw error;
   if (typeof data !== "string" || !data) {
     throw new Error("Não foi possível colocar a consulta na fila.");
@@ -263,6 +300,27 @@ export async function reenviarConsulta(id: string): Promise<void> {
     throw new Error("Esta consulta já foi concluída e não precisa ser reenviada.");
   }
 
+  const { data: retried, error: retryError } = await (supabase as any).rpc(
+    "retry_credit_simulation",
+    { p_consultation_id: id },
+  );
+  if (!retryError) {
+    if (!retried) {
+      throw new Error(
+        "Esta falha não pode ser reenviada automaticamente. Consulte o suporte para verificar o envio anterior.",
+      );
+    }
+    return;
+  }
+  if (
+    !/function.*not found|schema cache|PGRST202/i.test(
+      String(retryError.message || retryError.code),
+    )
+  ) {
+    throw retryError;
+  }
+
+  // Compatibility only until the durable-queue migration is applied.
   const { error } = await supabase
     .from("consultas_credito")
     .update({
@@ -388,7 +446,14 @@ export async function registrarEventoProposta(
 }
 
 export type StatusExibicaoConsulta =
-  "aprovado" | "recusado" | "em_analise" | "falta_documentos" | "erro" | "processando" | "pendente";
+  | "aprovado"
+  | "recusado"
+  | "em_analise"
+  | "falta_documentos"
+  | "erro"
+  | "requer_verificacao"
+  | "processando"
+  | "pendente";
 
 /**
  * `resultado` guarda o veredito da análise de crédito de forma permanente (a automação
@@ -414,6 +479,7 @@ export function resolverStatusConsulta(consulta: {
   if (status === "aprovado") return "aprovado";
   if (status === "recusado" || status === "reprovado") return "recusado";
   if (status === "em_analise") return "em_analise";
+  if (status === "requer_verificacao") return "requer_verificacao";
   if (status === "erro") return "erro";
   if (status === "processando") return "processando";
   if (status === "pendente" || !status) return "pendente";
@@ -430,6 +496,7 @@ export const LABEL_STATUS_CONSULTA: Record<StatusExibicaoConsulta, string> = {
   em_analise: "Em análise",
   falta_documentos: "Falta de documentos",
   erro: "Erro",
+  requer_verificacao: "Requer verificação",
   processando: "Consultando...",
   pendente: "Pendente",
 };

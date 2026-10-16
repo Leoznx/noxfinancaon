@@ -137,6 +137,10 @@ export const env = {
   // A fila tem volume baixo e cada consulta e serializada no portal. Um polling
   // curto reduz a espera percebida antes do claim sem criar concorrencia externa.
   pollIntervalMs: positiveNumber("AUTOMATION_POLL_INTERVAL_MS", 1500, 500),
+  /** Logical provider credential. Claims for the same credential are serialized in Postgres. */
+  creditProviderCredentialKey: process.env.CREDIT_PROVIDER_CREDENTIAL_KEY?.trim() || "loft-primary",
+  /** Renews the versioned database lease while Playwright is executing. */
+  creditHeartbeatIntervalMs: positiveNumber("CREDIT_HEARTBEAT_INTERVAL_MS", 15_000, 5_000),
   credpagoUrl:
     !configuredCreditSimulationUrl || usesLegacyCreditSimulationUrl
       ? CURRENT_CREDIT_SIMULATION_URL
@@ -190,11 +194,12 @@ export const env = {
   maxConcurrentConsultas: Math.min(requestedMaxConcurrentConsultas, SAFE_PROVIDER_CONCURRENCY),
   /** Tempo máximo (ms) para uma consulta individual antes de ser marcada como erro. */
   consultaTimeoutMs: positiveNumber("CONSULTA_TIMEOUT_MS", 420_000, 10_000),
-  /** Recupera leases "processando" deixados por queda/reinício do worker. */
-  // Deve ser maior que CONSULTA_TIMEOUT_MS: nunca recupera uma consulta que ainda
-  // está persistindo o resultado depois de uma resposta lenta do portal.
-  staleConsultaMs: positiveNumber("STALE_CONSULTA_MS", 10 * 60 * 1000, 60_000),
-  staleRecoveryIntervalMs: positiveNumber("STALE_RECOVERY_INTERVAL_MS", 60 * 1000, 10_000),
+  /** Atualiza métricas persistentes; recuperação de lease ocorre atomicamente no claim. */
+  queueMetricsIntervalMs: positiveNumber(
+    "QUEUE_METRICS_INTERVAL_MS",
+    Number(process.env.STALE_RECOVERY_INTERVAL_MS) || 60 * 1000,
+    10_000,
+  ),
   /**
    * Chrome invisível. Login manual exige uma janela visível — se HEADLESS=true e a sessão
    * expirar, o worker falha com uma mensagem clara em vez de travar esperando um Enter que

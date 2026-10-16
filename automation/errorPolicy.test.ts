@@ -16,6 +16,19 @@ const consultaValida: ConsultaCreditoRow = {
   valor_condominio: 300,
   valor_taxas: 100,
   status: "pendente",
+  technical_status: "queued",
+  provider_credential_key: "loft-primary",
+  provider_submission_state: "not_submitted",
+  worker_id: "worker-test",
+  lease_token: "00000000-0000-0000-0000-000000000002",
+  lease_expires_at: "2026-09-11T10:02:00.000Z",
+  heartbeat_at: "2026-09-11T10:00:00.000Z",
+  execution_version: 1,
+  attempt_count: 1,
+  max_attempts: 3,
+  tenant_name: null,
+  tenant_document: "12345678901",
+  inquilino: null,
 };
 
 test("reconhece indisponibilidade temporária do portal", () => {
@@ -30,12 +43,14 @@ test("reconhece indisponibilidade temporária do portal", () => {
 
 test("valida a consulta antes de abrir o portal", () => {
   assert.equal(validateConsultaForAutomation(consultaValida), null);
+  assert.match(validateConsultaForAutomation({ ...consultaValida, documento: "123" }) || "", /CPF/);
   assert.match(
-    validateConsultaForAutomation({ ...consultaValida, documento: "123" }) || "",
-    /CPF/,
-  );
-  assert.match(
-    validateConsultaForAutomation({ ...consultaValida, valor_aluguel: 0, valor_condominio: 0, valor_taxas: 0 }) || "",
+    validateConsultaForAutomation({
+      ...consultaValida,
+      valor_aluguel: 0,
+      valor_condominio: 0,
+      valor_taxas: 0,
+    }) || "",
     /valor mensal/,
   );
 });

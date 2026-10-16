@@ -11,6 +11,16 @@ export interface ConsultaCreditoRow {
   valor_condominio: number | null;
   valor_taxas: number | null;
   status: string;
+  technical_status: string;
+  provider_credential_key: string;
+  provider_submission_state: "not_submitted" | "submitting" | "submitted" | "confirmed" | "unknown";
+  worker_id: string;
+  lease_token: string;
+  lease_expires_at: string;
+  heartbeat_at: string;
+  execution_version: number;
+  attempt_count: number;
+  max_attempts: number;
   tenant_name: string | null;
   tenant_document: string | null;
   inquilino: {
