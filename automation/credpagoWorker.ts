@@ -172,6 +172,7 @@ const runtimeState: {
   cancellationQueue: QueueRuntimeStatus;
   cancellationExecution: QueueRuntimeStatus;
   cancellationCheckStartedAt: string | null;
+  cancellationOperationStartedAt: string | null;
   lastCancellationQueueSuccessAt: string | null;
   lastCancellationQueueErrorAt: string | null;
   consecutiveCancellationQueueFailures: number;
@@ -208,6 +209,7 @@ const runtimeState: {
   cancellationQueue: "checking",
   cancellationExecution: "checking",
   cancellationCheckStartedAt: null,
+  cancellationOperationStartedAt: null,
   lastCancellationQueueSuccessAt: null,
   lastCancellationQueueErrorAt: null,
   consecutiveCancellationQueueFailures: 0,
@@ -798,13 +800,21 @@ async function reconcilePendingLoftCancellation(
   const document = await loadLoftCancellationDocument(job);
   let page: Page | null = null;
   try {
-    page = await context.newPage();
-    await navegarParaPortal(page);
-    await ensureLoggedIn("reconcile-cancellation", page, persistirSessao);
-    const visibleProposals = await listLoftProposalsForDocument(
-      page,
-      document,
-      env.loftCancellationRequestTimeoutMs,
+    runtimeState.cancellationOperationStartedAt = new Date().toISOString();
+    const visibleProposals = await runWithRuntimeWatchdog(
+      (async () => {
+        page = await context.newPage();
+        await navegarParaPortal(page);
+        await ensureLoggedIn("reconcile-cancellation", page, persistirSessao);
+        return listLoftProposalsForDocument(page, document, env.loftCancellationRequestTimeoutMs);
+      })(),
+      {
+        timeoutMs: env.loftCancellationOperationTimeoutMs,
+        message:
+          `A reconciliação do cancelamento excedeu ` +
+          `${Math.round(env.loftCancellationOperationTimeoutMs / 1000)}s e foi abortada.`,
+        abort: () => page?.close(),
+      },
     );
     const resolution = resolveLoftProposalReconciliation(
       visibleProposals,
@@ -865,6 +875,7 @@ async function reconcilePendingLoftCancellation(
     log("Job de cancelamento reconciliado com a única proposta nova encontrada após o envio.");
     return true;
   } finally {
+    runtimeState.cancellationOperationStartedAt = null;
     await page?.close().catch(() => {});
   }
 }
@@ -891,27 +902,28 @@ async function processLoftCancellation(
         "O job não possui o identificador exato devolvido pelo envio; nenhuma proposta foi alterada.",
       );
     }
-    let response: {
+    const operacao = async (): Promise<{
       proposalId: string;
       status: string;
       cancellationReason: string | null;
-    };
-    if (env.loftCancellationMode === "api" && job.proposal_id && loftCancellationClient) {
-      const apiResponse = await loftCancellationClient.cancelProposal(
-        job.proposal_id,
-        env.loftCancellationReason,
-        env.loftCancellationComment,
-      );
-      response = {
-        ...apiResponse,
-        cancellationReason: env.loftCancellationReason,
-      };
-    } else {
+    }> => {
+      if (env.loftCancellationMode === "api" && job.proposal_id && loftCancellationClient) {
+        const apiResponse = await loftCancellationClient.cancelProposal(
+          job.proposal_id,
+          env.loftCancellationReason,
+          env.loftCancellationComment,
+        );
+        return {
+          ...apiResponse,
+          cancellationReason: env.loftCancellationReason,
+        };
+      }
+
       const document = await loadLoftCancellationDocument(job);
       page = await context.newPage();
       await navegarParaPortal(page);
       await ensureLoggedIn(cid, page, persistirSessao);
-      response = await cancelLoftProposalViaPortal(page, {
+      const portalResponse = await cancelLoftProposalViaPortal(page, {
         proposalId: job.proposal_id,
         document,
         reason: env.loftCancellationReason,
@@ -925,7 +937,17 @@ async function processLoftCancellation(
         },
       });
       await persistirSessao();
-    }
+      return portalResponse;
+    };
+
+    runtimeState.cancellationOperationStartedAt = new Date().toISOString();
+    const response = await runWithRuntimeWatchdog(operacao(), {
+      timeoutMs: env.loftCancellationOperationTimeoutMs,
+      message:
+        `O cancelamento da proposta excedeu ` +
+        `${Math.round(env.loftCancellationOperationTimeoutMs / 1000)}s e foi abortado para retentativa segura.`,
+      abort: () => page?.close(),
+    });
     await finishLoftCancellation(job, {
       success: true,
       proposalId: response.proposalId,
@@ -983,6 +1005,7 @@ async function processLoftCancellation(
       });
     }
   } finally {
+    runtimeState.cancellationOperationStartedAt = null;
     await page?.close().catch(() => {});
   }
 }
@@ -2226,20 +2249,27 @@ function avaliarProntidaoRuntime(agora = Date.now()) {
   const cancellationCheckAgeMs = runtimeState.cancellationCheckStartedAt
     ? agora - Date.parse(runtimeState.cancellationCheckStartedAt)
     : 0;
+  const cancellationOperationAgeMs = runtimeState.cancellationOperationStartedAt
+    ? agora - Date.parse(runtimeState.cancellationOperationStartedAt)
+    : 0;
   const loopAgeMs = runtimeState.lastLoopAt ? agora - Date.parse(runtimeState.lastLoopAt) : 0;
   const authTravada = authCheckAgeMs > env.authValidationTimeoutMs + 15_000;
   const cancellationCheckTravada =
     cancellationCheckAgeMs > env.loftCancellationValidationTimeoutMs + 15_000;
+  const cancellationOperationTravada =
+    cancellationOperationAgeMs > env.loftCancellationOperationTimeoutMs + 15_000;
   const loopTravado =
     loopAgeMs >
     Math.max(
       env.authValidationTimeoutMs + 30_000,
       env.loftCancellationValidationTimeoutMs + 30_000,
+      env.loftCancellationOperationTimeoutMs + 30_000,
       env.pollIntervalMs * 12,
     );
   const healthy =
     !authTravada &&
     !cancellationCheckTravada &&
+    !cancellationOperationTravada &&
     !loopTravado &&
     runtimeState.browser !== "unavailable";
   const cancellationReady =
@@ -2256,6 +2286,7 @@ function avaliarProntidaoRuntime(agora = Date.now()) {
   return {
     authTravada,
     cancellationCheckTravada,
+    cancellationOperationTravada,
     loopTravado,
     healthy,
     cancellationReady,
@@ -2266,8 +2297,13 @@ function avaliarProntidaoRuntime(agora = Date.now()) {
 function iniciarServidorHealth(): http.Server {
   const server = http.createServer((req, res) => {
     if (req.method === "GET" && req.url === "/health") {
-      const { healthy, cancellationCheckTravada, cancellationReady, ready } =
-        avaliarProntidaoRuntime();
+      const {
+        healthy,
+        cancellationCheckTravada,
+        cancellationOperationTravada,
+        cancellationReady,
+        ready,
+      } = avaliarProntidaoRuntime();
 
       res.writeHead(healthy ? 200 : 503, { "Content-Type": "application/json" });
       res.end(
@@ -2305,6 +2341,8 @@ function iniciarServidorHealth(): http.Server {
           cancellationExecution: runtimeState.cancellationExecution,
           cancellationCheckStartedAt: runtimeState.cancellationCheckStartedAt,
           cancellationCheckStalled: cancellationCheckTravada,
+          cancellationOperationStartedAt: runtimeState.cancellationOperationStartedAt,
+          cancellationOperationStalled: cancellationOperationTravada,
           cancellationReady,
           lastCancellationQueueSuccessAt: runtimeState.lastCancellationQueueSuccessAt,
           lastCancellationQueueErrorAt: runtimeState.lastCancellationQueueErrorAt,
@@ -2321,7 +2359,8 @@ function iniciarServidorHealth(): http.Server {
       return;
     }
     if (req.method === "GET" && req.url === "/ready") {
-      const { cancellationCheckTravada, cancellationReady, ready } = avaliarProntidaoRuntime();
+      const { cancellationCheckTravada, cancellationOperationTravada, cancellationReady, ready } =
+        avaliarProntidaoRuntime();
       res.writeHead(ready ? 200 : 503, { "Content-Type": "application/json" });
       res.end(
         JSON.stringify({
@@ -2336,6 +2375,8 @@ function iniciarServidorHealth(): http.Server {
           cancellationExecution: runtimeState.cancellationExecution,
           cancellationCheckStartedAt: runtimeState.cancellationCheckStartedAt,
           cancellationCheckStalled: cancellationCheckTravada,
+          cancellationOperationStartedAt: runtimeState.cancellationOperationStartedAt,
+          cancellationOperationStalled: cancellationOperationTravada,
           cancellationReady,
           lastCancellationQueueSuccessAt: runtimeState.lastCancellationQueueSuccessAt,
           lastCancellationQueueErrorAt: runtimeState.lastCancellationQueueErrorAt,

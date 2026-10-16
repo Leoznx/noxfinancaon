@@ -112,6 +112,25 @@ test("worker não abre outra página da sessão enquanto uma simulação está a
   assert.match(worker.slice(guard, authProbe), /continue;/);
 });
 
+test("cancelamento e reconciliação possuem watchdog total menor que o lease", async () => {
+  const worker = await readFile(workerPath, "utf8");
+  const envSource = await readFile(path.resolve(baseDir, "env.ts"), "utf8");
+  const cancellationStart = worker.indexOf("async function processLoftCancellation");
+  const reconciliationStart = worker.indexOf("async function reconcilePendingLoftCancellation");
+
+  assert.ok(cancellationStart >= 0);
+  assert.ok(reconciliationStart >= 0);
+  assert.match(
+    worker.slice(cancellationStart, cancellationStart + 7_000),
+    /runWithRuntimeWatchdog/,
+  );
+  assert.match(
+    worker.slice(reconciliationStart, reconciliationStart + 7_000),
+    /runWithRuntimeWatchdog/,
+  );
+  assert.match(envSource, /LOFT_CANCELLATION_OPERATION_TIMEOUT_MS[\s\S]*240_000/);
+});
+
 test("migration isola solicitações legadas antigas sem reenviá-las", async () => {
   const sql = await readFile(staleQueueMigrationPath, "utf8");
   assert.match(sql, /technical_status\s*=\s*'requires_verification'/i);

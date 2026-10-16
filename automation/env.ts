@@ -177,6 +177,12 @@ export const env = {
     120_000,
     15_000,
   ),
+  /** Menor que o lease de 10 minutos da fila para permitir devolução segura do job. */
+  loftCancellationOperationTimeoutMs: positiveNumber(
+    "LOFT_CANCELLATION_OPERATION_TIMEOUT_MS",
+    240_000,
+    30_000,
+  ),
   /** O cancelamento é operacionalmente obrigatório por padrão; use false só em manutenção. */
   loftCancellationEnabled,
   loftCancellationRequired,
