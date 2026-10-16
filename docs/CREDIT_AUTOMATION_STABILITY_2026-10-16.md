@@ -35,7 +35,7 @@ ou bloqueios da conta.
   uma queda antes do envio de uma queda depois de a Loft possivelmente ter
   recebido o pedido, portanto podia repetir um envio incerto.
 - Uma resposta atrasada não era protegida por token + versão; o `WHERE status =
-  'processando'` reduzia o risco, mas não identificava qual worker possuía a
+'processando'` reduzia o risco, mas não identificava qual worker possuía a
   execução.
 - Falha técnica era persistida também em `resultado = 'erro'`, misturando o
   estado operacional com o veredito de crédito.
@@ -62,27 +62,59 @@ responderam `/health = 200` e `/ready = 200`, versão `391b296`, com:
 - autenticação, navegador e fila reportados como disponíveis;
 - `/metrics` inexistente (HTTP 404).
 
-Esse é um snapshot sanitizado de health, não um log interno da VPS e não prova a
-causa individual das três falhas.
+Esse snapshot inicial, isoladamente, não provava a causa individual das três
+falhas. Depois da autorização operacional, a VPS, o banco e os logs internos
+foram inspecionados e a implantação foi acompanhada ao vivo.
 
 O diagnóstico versionado de 11/09/2026 registrou 198 simulações em 30 dias, 18
-erros finais e ocorrência de Gateway Timeout na fila Supabase. Naquela medição,
-a VPS reportava aproximadamente 7,8 GiB de RAM, 6,9 GiB disponíveis e 12% de
-disco ocupado. Portanto, não há evidência disponível para atribuir as quedas a
-falta de CPU, memória, disco ou à Hostinger.
+erros finais e ocorrência de Gateway Timeout na fila Supabase. Na inspeção de
+16/10, a VPS confirmou 2 vCPU, aproximadamente 8 GiB de RAM e 100 GB de disco.
+Com a versão final, o container mediu aproximadamente 2,7% de CPU e 400 MiB de
+memória (9,8% do limite Docker de 4 GiB). O kernel não registrou OOM kill nas 24
+horas consultadas. As quedas observadas não foram atribuídas à Hostinger nem à
+falta de recursos.
+
+### Causas comprovadas em produção
+
+- a validação obrigatória da superfície de cancelamentos podia ficar em
+  `checking` indefinidamente. O processo e o navegador continuavam vivos, mas
+  `/ready` permanecia falso e nenhuma simulação era reivindicada;
+- cancelamentos e reconciliações reais também não tinham um watchdog total
+  externo aos timeouts internos do Playwright;
+- no timeout seguro de uma simulação, a transição para
+  `requires_verification` limpava corretamente o lease. Um heartbeat que já
+  estava em voo podia então receber `ConsultaLeaseLostError`; o worker marcava
+  isso incorretamente como indisponibilidade da fila;
+- essa indisponibilidade momentânea deixava o worker não pronto. O monitor de
+  logs criava incidentes duplicados e o reparador escolhia
+  `RESTART_CREDIT_WORKER`, gerando reinício desnecessário depois de uma falha já
+  tratada;
+- uma solicitação legada com mais de 13 dias havia sido backfilled como pronta
+  para envio. Ela foi colocada em `requires_verification` antes de o worker ser
+  liberado, evitando envio tardio sem autorização atual.
+
+Evidência sanitizada da primeira execução real observada após a migração:
+
+- a fila passou de 4 para 3 e manteve `activeConsultations = 1` e concorrência
+  efetiva 1;
+- o documento apareceu mascarado no log;
+- o worker abriu o portal, preencheu, criou o snapshot causal, enviou uma única
+  vez e aguardou até 300 segundos sem reclique;
+- como a Loft não devolveu decisão no prazo, a consulta terminou em
+  `technical_status = requires_verification`, `status = requer_verificacao` e
+  `provider_submission_state = submitted`, sem resultado de crédito falso;
+- o container final `545cc54` permaneceu `running/healthy`, com `RestartCount =
+0` durante a observação posterior.
 
 ### Hipóteses ainda não confirmadas
 
-- distribuição por categoria/etapa das três falhas atuais;
-- eventual OOM kill, reinício do host ou limite do processo;
 - frequência real de expiração da sessão e alteração de seletores na Loft;
 - respostas 429/5xx e latência p95/p99 reais do provedor;
 - se o login Loft permite mais de uma operação simultânea na mesma credencial.
 
-Confirmar essas hipóteses exige journal/container logs, eventos do kernel,
-métricas da VPS e traces sanitizados do intervalo da queda. Nenhum acesso SSH,
-painel Hostinger, banco de produção ou credencial Loft estava disponível nesta
-execução.
+Não foi localizado log histórico suficiente para atribuir cada uma das três
+falhas do processo anterior. A sessão compartilhada continuará serializada até
+existir autorização e evidência do provedor para qualquer concorrência maior.
 
 ## Correções implementadas
 
@@ -127,6 +159,15 @@ Redis nem outbox separada.
 - não grava mais timeout, login, navegador, indisponibilidade ou tela desconhecida
   como recusa;
 - expõe no health as métricas da fila e o estado do circuito;
+- aplica watchdog total de 120 s à validação da tela de cancelamentos e de 240 s
+  a cancelamentos/reconciliações, abaixo do lease de 10 minutos dessa fila;
+- expõe início e travamento das checagens/operações de cancelamento no health;
+- trata perda de lease como conflito da execução antiga, sem declarar a fila
+  indisponível;
+- timeouts controlados aguardam a dependência/validação e não acionam reinício
+  do processo de crédito;
+- o supervisor ignora eventos operacionais já tratados e registrados pelo fluxo
+  durável, evitando incidentes duplicados e ciclos de reparo;
 - preserva logs sanitizados com correlation ID, consulta, etapa, tentativa,
   worker, categoria e duração.
 
@@ -147,6 +188,8 @@ Redis nem outbox separada.
 - concorrência efetiva deste worker: **1**;
 - lease: **120 s**, renovado a cada **15 s**;
 - timeout total da consulta: **420 s**;
+- validação total de cancelamento: **120 s**;
+- cancelamento/reconciliação: **240 s**, abaixo do lease de **600 s**;
 - tentativas seguras: **3**;
 - fila ativa por conta: **10**;
 - fila ativa total: **500**;
@@ -172,6 +215,24 @@ credencial sem autorização e evidência do provedor.
 
 O push do site aciona a Vercel, mas não aplica a migração Supabase nem reinicia o
 worker da VPS. Esses dois passos exigem acesso operacional autorizado.
+
+### Implantação executada em 16/10/2026
+
+- backup lógico restrito no schema `ops_backup`: 694 consultas, 84 jobs de
+  cancelamento e 16 definições de funções; RLS permaneceu habilitado;
+- migração `20261016183000_credit_automation_durable_queue.sql` aplicada em
+  transação e validada com 8 overloads de RPC, fila máxima 500 e zero leases
+  expirados;
+- migração de quarentena
+  `20261016233000_quarantine_stale_legacy_credit_queue.sql` aplicada ao único
+  pedido legado antigo elegível;
+- imagem anterior preservada como
+  `nox-automacao-credpago:pre-6310532-20261016` e `.env` anterior salvo com modo
+  600;
+- checkout atualizado por fast-forward, imagem reconstruída e container
+  recriado somente quando não havia simulação ativa;
+- versão final implantada: `545cc54`; Docker `restart: unless-stopped`, health
+  local e dois processos independentes (crédito e reparo) confirmados.
 
 ### Rollback
 
@@ -217,7 +278,7 @@ VPS.
 - TypeScript isolado do worker: aprovado;
 - ESLint dos arquivos alterados do site/worker: aprovado;
 - build Vercel/TanStack: aprovado;
-- suíte de automação Playwright: **131/131** aprovada;
+- suíte de automação Playwright: **137/137** aprovada;
 - testes de idempotência do site: **3/3** aprovados;
 - testes novos de fila/política/carga/falhas estão incluídos na suíte;
 - TypeScript do aplicativo: aprovado;
@@ -228,24 +289,25 @@ VPS.
   não disponibilizava o executável `npm`. O aviso de `.expo` foi verificado como
   falso positivo: `.gitignore` ignora `.expo/` e nenhum arquivo está rastreado.
 
-Os testes intensivos usaram somente um simulador local e dados sintéticos. Não
-foram executadas consulta real, carga contra a Loft, migração em produção, teste
-de reinício real, medição comparativa de recursos nem soak de 24 horas por falta
-de acesso/autorização. Assim, o estado correto desta entrega é: implementado e
-testado localmente; ainda não validado na integração real nem em produção.
+Os testes intensivos usaram somente o simulador local e dados sintéticos; nenhum
+CPF real foi criado para teste de carga. A migração, o rebuild, a recuperação de
+uma reconciliação, um reinício controlado e uma solicitação real já existente na
+fila foram observados em produção. A solicitação chegou ao POST da Loft, mas não
+recebeu decisão dentro do prazo e foi preservada para verificação. Não foi
+executado soak de 24 horas nem uma bateria PF/PJ criada exclusivamente para esta
+validação. O estado correto é: implementado, testado localmente e implantado;
+fluxo de falha/resultado incerto validado em produção; aprovação, recusa e em
+análise ainda não revalidados ponta a ponta nesta versão.
 
 ## Intervenção humana ainda necessária
 
-- aplicar a migração e implantar o worker na VPS;
-- reconciliar qualquer linha que chegar a `requires_verification` consultando a
+- reconciliar as linhas que chegaram a `requires_verification` consultando a
   Loft pelo identificador confiável disponível;
 - renovar sessão manualmente se houver CAPTCHA, MFA, credencial revogada ou
   bloqueio comercial;
 - atualizar seletores/parser quando a Loft fizer mudança incompatível;
-- fornecer os logs sanitizados da queda recente para fechar as hipóteses ainda
-  abertas;
-- executar soak de 24 horas e uma pequena validação real autorizada após a
-  implantação.
+- executar soak de 24 horas e validações reais PF/PJ, em volume controlado e
+  autorizado, para medir p50/p95/p99 e taxa de falha.
 
 Uma única VPS continua sendo ponto único de falha. O lease permite recuperar o
 processo com segurança, mas não torna o host redundante. Redundância de host só
