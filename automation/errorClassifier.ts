@@ -85,8 +85,9 @@ const RULES: ClassificationRule[] = [
     category: "PLAYWRIGHT_TIMEOUT",
     severity: "ERROR",
     pattern: /playwright.*timeout|timeout .*exceeded|tempo limite|timed out|waiting for/i,
-    diagnosis: "Uma etapa Playwright excedeu o tempo maximo controlado.",
-    runbook: "RESTART_CREDIT_WORKER",
+    diagnosis:
+      "Uma etapa Playwright excedeu o tempo maximo controlado; a operacao foi encerrada e a dependencia sera reavaliada sem reiniciar o worker.",
+    runbook: "WAIT_EXTERNAL_DEPENDENCY",
   },
   {
     category: "ELEMENT_NOT_VISIBLE",

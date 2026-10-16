@@ -131,6 +131,18 @@ test("cancelamento e reconciliação possuem watchdog total menor que o lease", 
   assert.match(envSource, /LOFT_CANCELLATION_OPERATION_TIMEOUT_MS[\s\S]*240_000/);
 });
 
+test("perda de lease interrompe só a execução antiga sem derrubar a fila", async () => {
+  const worker = await readFile(workerPath, "utf8");
+  const heartbeatStart = worker.indexOf("const heartbeatTimer = setInterval");
+  const leaseGuard = worker.indexOf("if (error instanceof ConsultaLeaseLostError)", heartbeatStart);
+  const queueFailure = worker.indexOf("registrarFalhaFila(", leaseGuard);
+
+  assert.ok(heartbeatStart >= 0);
+  assert.ok(leaseGuard > heartbeatStart);
+  assert.ok(queueFailure > leaseGuard);
+  assert.match(worker.slice(leaseGuard, queueFailure), /return;/);
+});
+
 test("migration isola solicitações legadas antigas sem reenviá-las", async () => {
   const sql = await readFile(staleQueueMigrationPath, "utf8");
   assert.match(sql, /technical_status\s*=\s*'requires_verification'/i);

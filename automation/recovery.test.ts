@@ -88,6 +88,12 @@ test("falha de banco e worker offline recebem severidade critica", () => {
   assert.equal(classifyAutomationError(new Error("worker offline")).severity, "CRITICAL");
 });
 
+test("timeout controlado aguarda a dependência sem reiniciar o worker", () => {
+  const result = classifyAutomationError(new Error("Tempo limite de 420s excedido ao consultar."));
+  assert.equal(result.category, "PLAYWRIGHT_TIMEOUT");
+  assert.equal(result.runbook, "WAIT_EXTERNAL_DEPENDENCY");
+});
+
 test("classifica bloqueio comercial do parceiro sem confundir com seletor", () => {
   const result = classifyAutomationError(
     new Error(
@@ -151,6 +157,20 @@ test("monitor transforma qualquer linha real de erro em incidente e ignora event
   assert.equal(
     analyzeWorkerLogLine(
       "ERRO: Falha ao salvar sessão atualizada — browserContext.storageState: Protocol error (Storage.getCookies): Failed to find browser context for id ABC",
+      when,
+    ),
+    null,
+  );
+  assert.equal(
+    analyzeWorkerLogLine(
+      "ERRO: [NOX-SIM-20260911-ABCDEF12] Falha no heartbeat da consulta (1/3): ConsultaLeaseLostError: O lease da consulta foi perdido para outra execução.",
+      when,
+    ),
+    null,
+  );
+  assert.equal(
+    analyzeWorkerLogLine(
+      "[NOX-SIM-20260911-ABCDEF12] Tempo limite controlado de 420000ms atingido.",
       when,
     ),
     null,

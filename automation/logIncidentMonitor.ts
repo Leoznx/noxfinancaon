@@ -24,6 +24,9 @@ const ignoredOperationalNoise = [
   /Falha ao preservar erro no spool local/i,
   /dbus\/bus\.cc.*Failed to connect to the bus/i,
   /Falha ao salvar sess[aã]o atualizada.*(?:Failed to find browser context|Target (?:page, )?context or browser has been closed)/i,
+  /Tempo limite controlado de \d+ms atingido/i,
+  /Falha no heartbeat da consulta.*ConsultaLeaseLostError/i,
+  /O lease da consulta foi perdido para outra execu[cç][aã]o/i,
 ];
 
 export function analyzeWorkerLogLine(line: string, date = new Date()): MonitoredLogIncident | null {

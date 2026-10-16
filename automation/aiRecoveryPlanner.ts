@@ -12,7 +12,6 @@ export interface AiRecoveryPlan {
 const restartCategories = new Set([
   "BROWSER_CRASH",
   "BROWSER_PROFILE_LOCKED",
-  "PLAYWRIGHT_TIMEOUT",
   "SESSION_EXPIRED",
   "AUTHENTICATION_ERROR",
   "WORKER_OFFLINE",
@@ -65,9 +64,10 @@ export function planAiRecovery(
   ) {
     return {
       runbook: "WAIT_EXTERNAL_DEPENDENCY",
-      explanation: snapshot.portalBlocked || isCredPagoAccountBlockedError(error.message_redacted)
-        ? "A conta esta bloqueada pelo parceiro e requer liberacao externa antes de retomar as simulacoes."
-        : "A dependencia externa sera consultada novamente com espera controlada.",
+      explanation:
+        snapshot.portalBlocked || isCredPagoAccountBlockedError(error.message_redacted)
+          ? "A conta esta bloqueada pelo parceiro e requer liberacao externa antes de retomar as simulacoes."
+          : "A dependencia externa sera consultada novamente com espera controlada.",
       evidence,
     };
   }

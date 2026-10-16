@@ -2020,12 +2020,22 @@ async function processarConsultaComTimeout(
         heartbeatFailures = 0;
       })
       .catch(async (error) => {
+        if (error instanceof ConsultaLeaseLostError) {
+          estado.leaseLost = true;
+          log(
+            estado.finalizado
+              ? `[${cid}] Heartbeat encerrado após a transição final persistida.`
+              : `[${cid}] Lease transferido ou encerrado; a execução local foi interrompida sem alterar a fila.`,
+          );
+          await estado.page?.close().catch(() => {});
+          return;
+        }
         heartbeatFailures += 1;
         registrarFalhaFila(
           `[${cid}] Falha no heartbeat da consulta (${heartbeatFailures}/3)`,
           error,
         );
-        if (error instanceof ConsultaLeaseLostError || heartbeatFailures >= 3) {
+        if (heartbeatFailures >= 3) {
           estado.leaseLost = true;
           await estado.page?.close().catch(() => {});
         }
@@ -2045,7 +2055,7 @@ async function processarConsultaComTimeout(
       }
       timeoutAtingido = true;
       estado.finalizado = true;
-      logErro(`[${cid}] Tempo limite de ${env.consultaTimeoutMs}ms excedido`);
+      log(`[${cid}] Tempo limite controlado de ${env.consultaTimeoutMs}ms atingido.`);
       const timeoutError = new Error(
         `Tempo limite de ${Math.round(env.consultaTimeoutMs / 1000)}s excedido ao consultar.`,
       );
