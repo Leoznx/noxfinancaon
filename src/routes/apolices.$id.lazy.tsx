@@ -7,7 +7,7 @@ import { type ChangeEvent, useEffect, useRef, useState } from "react";
 import {
   ArrowLeft, FileText, Download, Eye, AlertCircle, MapPin,
   Calendar, User, Building2, Wallet, Copy, FileCheck, Receipt,
-  ClipboardCheck, ShieldCheck, Upload, Loader2,
+  ClipboardCheck, ShieldCheck, Upload, Loader2, Clock3, Home,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -32,8 +32,10 @@ type ContractDocument = {
   id: string;
   file_name?: string | null;
   file_url?: string | null;
+  file_type?: string | null;
   storage_path?: string | null;
   status?: string | null;
+  created_at?: string | null;
   uploaded_at?: string | null;
   updated_at?: string | null;
   tipo?: string | null;
@@ -41,6 +43,72 @@ type ContractDocument = {
   document_subtype?: string | null;
   contract_signature_id?: string | null;
 };
+
+type ProposalHistory = {
+  id: string;
+  tipo_evento: string;
+  descricao: string;
+  created_at: string;
+};
+
+const DOCUMENT_LABELS: Record<string, string> = {
+  vistoria_imovel: "Vistoria do imóvel",
+  contrato_locacao: "Contrato de locação",
+  comprovante_residencia: "Comprovante de residência",
+  comprovante_residencia_imovel: "Comprovante de residência",
+  comprovante_renda: "Comprovante de renda",
+  comprovante_renda_analise: "Comprovante de renda da análise",
+  documento_foto: "Documento com foto",
+  documento_inquilino: "Documento com foto",
+  cnh_analise: "Documento com foto da análise",
+  contrato: "Contrato NOX",
+  apolice: "Apólice NOX",
+  vistoria: "Vistoria do imóvel",
+  outro: "Documento adicional",
+};
+
+function humanize(value?: string | null) {
+  if (!value) return "—";
+  return value
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function documentLabel(document: ContractDocument) {
+  if (document.contract_signature_id) {
+    return document.document_subtype === "contratos-assinados"
+      ? "Contrato NOX assinado"
+      : "Apólice para assinatura";
+  }
+  const type = document.document_type || document.tipo || "outro";
+  return DOCUMENT_LABELS[type] || humanize(type);
+}
+
+function documentDescription(document: ContractDocument) {
+  if (document.contract_signature_id) {
+    return document.document_subtype === "contratos-assinados"
+      ? "Documento final assinado pelo inquilino."
+      : "Documento gerado pela NOX e enviado para assinatura.";
+  }
+  if (document.document_type === "contrato_locacao") {
+    return document.document_subtype === "pendente_assinatura"
+      ? "Contrato informado como não assinado; pode ser atualizado até a conclusão da assinatura."
+      : "Contrato de locação anexado durante a contratação.";
+  }
+  if (document.document_type === "documento_foto" || document.document_type === "documento_inquilino") {
+    return document.document_subtype
+      ? `${humanize(document.document_subtype)} do inquilino.`
+      : "Documento de identificação do inquilino.";
+  }
+  return "Arquivo enviado durante o processo de contratação.";
+}
+
+function documentIcon(document: ContractDocument) {
+  if (document.contract_signature_id || document.tipo === "apolice") return ShieldCheck;
+  if (document.document_type === "contrato_locacao" || document.tipo === "contrato") return FileCheck;
+  if (document.document_type === "vistoria_imovel" || document.tipo === "vistoria") return ClipboardCheck;
+  return FileText;
+}
 
 function ApoliceDetalhe() {
   const { id } = Route.useParams();
@@ -50,8 +118,10 @@ function ApoliceDetalhe() {
   const [documentosProposta, setDocumentosProposta] = useState<ContractDocument[]>([]);
   const [assinatura, setAssinatura] = useState<any>(null);
   const [faturas, setFaturas] = useState<any[]>([]);
+  const [historico, setHistorico] = useState<ProposalHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
+  const [aviso, setAviso] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [replacingDocument, setReplacingDocument] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -61,18 +131,30 @@ function ApoliceDetalhe() {
     async function load() {
       setLoading(true);
       setErro(null);
+      setAviso(null);
       try {
         const { data: ap, error: apErr } = await supabase
           .from("apolices")
           .select(`
             id, consulta_id, numero, status, vigencia_inicio, vigencia_fim, valor_premio, created_at,
             consulta:consultas_credito(
+              id, status, resultado, created_at, approved_at, dados_complementares_em, proposta_enviada_em,
+              payment_status, payment_type, insurance_payment_method_label, contract_period_months,
+              base_calculo, valor_aluguel, valor_condominio, valor_taxas, valor_premio_mensal, valor_anual,
+              selected_exit_cost, insurance_assistance, insurance_coverages,
+              tenant_name, tenant_document, tenant_email, tenant_telefone, tenant_data_nascimento,
+              imovel_subtipo, imovel_cep, imovel_endereco, imovel_numero, imovel_complemento,
+              imovel_bairro, imovel_cidade, imovel_estado,
               inquilino:inquilinos(
-                nome, cpf, cnpj, razao_social, tipo,
+                nome, cpf, cnpj, razao_social, tipo, data_nascimento, estado_civil, profissao, renda, rg, score,
                 profile:profiles!inquilinos_profile_id_fkey(nome, email, telefone)
               ),
-              imovel:imoveis(endereco, logradouro, numero, bairro, cidade, estado, cep, valor_aluguel),
-              plano:planos(nome)
+              imovel:imoveis(
+                endereco, logradouro, numero, complemento, bairro, cidade, estado, cep, tipo,
+                valor_aluguel, valor_condominio, valor_taxas, valor_iptu, valor_fundo_reserva, valor_taxa_lixo
+              ),
+              plano:planos(nome, taxa_premio, cobertura_multiplicador, custo_saida),
+              solicitante:profiles!consultas_credito_profile_id_solicitante_fkey(nome, email, telefone)
             ),
             imobiliaria:profiles!apolices_imobiliaria_profile_id_fkey(nome, email),
             corretor:profiles!apolices_corretor_profile_id_fkey(nome, email),
@@ -83,10 +165,10 @@ function ApoliceDetalhe() {
         if (apErr) throw apErr;
         if (!ap) throw new Error("Apólice não encontrada ou sem acesso.");
 
-        const [docsResult, proposalDocsResult, signatureResult, invoicesResult] = await Promise.all([
+        const [docsResult, proposalDocsResult, signatureResult, invoicesResult, historyResult] = await Promise.all([
           supabase.from("documentos_contrato").select("*").eq("apolice_id", id),
           (supabase.from("documentos_proposta") as any)
-            .select("id, file_name, file_url, file_type, document_type, document_subtype, contract_signature_id, updated_at")
+            .select("id, file_name, file_url, file_type, document_type, document_subtype, contract_signature_id, created_at, updated_at")
             .or(`consulta_id.eq.${ap.consulta_id},apolice_id.eq.${id}`)
             .order("updated_at", { ascending: false }),
           (supabase as any).from("contract_signatures")
@@ -102,15 +184,28 @@ function ApoliceDetalhe() {
             `)
             .eq("apolice_id", id)
             .order("vencimento", { ascending: true }),
+          supabase
+            .from("proposta_historico")
+            .select("id, tipo_evento, descricao, created_at")
+            .eq("consulta_id", ap.consulta_id)
+            .order("created_at", { ascending: false })
+            .limit(100),
         ]);
 
-        if (docsResult.error) throw docsResult.error;
-        if (proposalDocsResult.error) throw proposalDocsResult.error;
-        if (signatureResult.error) throw signatureResult.error;
-        if (invoicesResult.error) throw invoicesResult.error;
+        if (docsResult.error && proposalDocsResult.error) {
+          throw new Error("Não foi possível carregar a documentação deste contrato.");
+        }
+
+        const partialErrors = [
+          docsResult.error,
+          proposalDocsResult.error,
+          signatureResult.error,
+          invoicesResult.error,
+          historyResult.error,
+        ].filter(Boolean);
 
         let proposalDocs = (proposalDocsResult.data || []) as ContractDocument[];
-        const signature = signatureResult.data;
+        const signature = signatureResult.error ? null : signatureResult.data;
         const missingPreparedDocument =
           signature?.id &&
           !["signed", "active"].includes(String(signature.status || "")) &&
@@ -122,10 +217,10 @@ function ApoliceDetalhe() {
           });
           if (materialized?.ok) {
             const refreshed = await (supabase.from("documentos_proposta") as any)
-              .select("id, file_name, file_url, file_type, document_type, document_subtype, contract_signature_id, updated_at")
+              .select("id, file_name, file_url, file_type, document_type, document_subtype, contract_signature_id, created_at, updated_at")
               .or(`consulta_id.eq.${ap.consulta_id},apolice_id.eq.${id}`)
               .order("updated_at", { ascending: false });
-            proposalDocs = (refreshed.data || []) as ContractDocument[];
+            if (!refreshed.error) proposalDocs = (refreshed.data || []) as ContractDocument[];
           }
         }
 
@@ -134,6 +229,12 @@ function ApoliceDetalhe() {
           setDocumentos(docsResult.data || []);
           setDocumentosProposta(proposalDocs);
           setAssinatura(signature || null);
+          setHistorico((historyResult.data || []) as ProposalHistory[]);
+          setAviso(
+            partialErrors.length
+              ? "Algumas informações complementares não puderam ser carregadas. Os dados disponíveis estão exibidos abaixo."
+              : null,
+          );
           setFaturas(
             (invoicesResult.data || []).map((invoice: any) => ({
               ...invoice,
@@ -199,9 +300,18 @@ function ApoliceDetalhe() {
   const formatDate = (d: string) => (d ? new Date(d).toLocaleDateString("pt-BR") : "—");
 
   const endereco = imovel
-    ? [imovel.logradouro || imovel.endereco, imovel.numero, imovel.bairro, imovel.cidade, imovel.estado]
+    ? [imovel.logradouro || imovel.endereco, imovel.numero, imovel.complemento, imovel.bairro, imovel.cidade, imovel.estado]
         .filter(Boolean).join(", ")
     : "Endereço não cadastrado";
+
+  const aluguel = Number(imovel?.valor_aluguel || consulta?.valor_aluguel || 0);
+  const condominio = Number(imovel?.valor_condominio || consulta?.valor_condominio || 0);
+  const taxas = Number(imovel?.valor_taxas || consulta?.valor_taxas || 0);
+  const totalLocacao = aluguel + condominio + taxas;
+  const cobertura = Number(plano?.cobertura_multiplicador || 0) * totalLocacao;
+  const coberturas = Array.isArray(consulta?.insurance_coverages)
+    ? consulta.insurance_coverages.map((item: unknown) => humanize(String(item))).join(", ")
+    : "Não informadas";
 
   const isStaff = ["admin", "admin_master", "analista", "juridico", "financeiro"].includes(
     user?.internalRole || user?.role || "",
@@ -217,42 +327,14 @@ function ApoliceDetalhe() {
     Boolean(contratoLocacao?.id) &&
     contratoLocacao?.document_subtype === "pendente_assinatura" &&
     !assinaturaConcluida;
-
-  const documentCards = [
-    {
-      key: "contrato_locacao",
-      label: "Contrato de locação",
-      icon: FileCheck,
-      description: podeEditarContrato
-        ? "Arquivo informado como não assinado. Você pode substituí-lo até a assinatura ser concluída."
-        : "Contrato de locação anexado durante a contratação.",
-      document: contratoLocacao || documentos.find((document) => document.tipo === "contrato"),
-      editable: podeEditarContrato,
-      pending: Boolean(contratoLocacao) && contratoLocacao?.document_subtype === "pendente_assinatura",
-    },
-    {
-      key: "contrato_nox",
-      label: assinaturaConcluida ? "Contrato NOX assinado" : "Apólice para assinatura",
-      icon: ShieldCheck,
-      description: assinaturaConcluida
-        ? "Documento final assinado pelo inquilino."
-        : "Documento gerado na contratação e enviado ao inquilino para assinatura.",
-      document: documentoD4Sign || documentos.find((document) => document.tipo === "apolice"),
-      editable: false,
-      pending: Boolean(assinatura) && !assinaturaConcluida,
-    },
-    {
-      key: "vistoria",
-      label: "Vistoria do imóvel",
-      icon: ClipboardCheck,
-      description: "Laudo de vistoria anexado à proposta.",
-      document:
-        documentosProposta.find((document) => document.document_type === "vistoria_imovel") ||
-        documentos.find((document) => document.tipo === "vistoria"),
-      editable: false,
-      pending: false,
-    },
-  ];
+  const allDocuments = [
+    ...documentosProposta.map((document) => ({ document, source: "proposal" as const })),
+    ...documentos.map((document) => ({ document: document as ContractDocument, source: "contract" as const })),
+  ].sort((a, b) => {
+    const first = new Date(a.document.updated_at || a.document.uploaded_at || a.document.created_at || 0).getTime();
+    const second = new Date(b.document.updated_at || b.document.uploaded_at || b.document.created_at || 0).getTime();
+    return second - first;
+  });
 
   async function resolveDocumentUrl(document: ContractDocument) {
     const path = document.storage_path || document.file_url;
@@ -360,6 +442,13 @@ function ApoliceDetalhe() {
           <ArrowLeft size={16} /> Voltar para contratos
         </Link>
 
+        {aviso && (
+          <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            <AlertCircle className="mt-0.5 shrink-0" size={18} />
+            <p className="font-semibold">{aviso}</p>
+          </div>
+        )}
+
         {/* RESUMO */}
         <div className="relative bg-gradient-to-br from-neutral-900 via-neutral-900 to-neutral-800 rounded-3xl p-8 overflow-hidden shadow-xl">
           <div className="absolute top-0 right-0 w-64 h-64 bg-yellow-400 opacity-[0.03] rounded-full blur-[100px] -mr-32 -mt-32" />
@@ -382,14 +471,85 @@ function ApoliceDetalhe() {
               <ResumoItem icone={User} label="Corretor" valor={apolice.corretor?.nome || "Corretor não informado"} />
               <ResumoItem icone={Wallet} label="Aluguel" valor={formatBRL(Number(imovel?.valor_aluguel || 0))} />
               <ResumoItem icone={FileText} label="Plano" valor={plano?.nome || "Plano padrão"} />
+               <ResumoItem icone={Wallet} label="Prêmio" valor={formatBRL(Number(apolice.valor_premio || 0))} />
               <ResumoItem icone={Calendar} label="Vigência" valor={`${formatDate(apolice.vigencia_inicio)} → ${formatDate(apolice.vigencia_fim)}`} />
             </div>
           </div>
         </div>
 
-        {/* DOCUMENTOS DO CONTRATO */}
+        <div>
+          <div className="mb-4">
+            <h2 className="text-lg font-black text-neutral-900">Resumo completo da contratação</h2>
+            <p className="mt-1 text-sm text-neutral-500">
+              Dados enviados e decisões registradas durante todo o processo deste cliente.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <DetalheCard icon={ClipboardCheck} title="Processo">
+              <DetalheLinha label="Status da consulta" value={humanize(consulta?.status)} />
+              <DetalheLinha label="Resultado" value={humanize(consulta?.resultado)} />
+              <DetalheLinha label="Criado em" value={formatDate(consulta?.created_at)} />
+              <DetalheLinha label="Aprovado em" value={formatDate(consulta?.approved_at)} />
+              <DetalheLinha label="Dados concluídos" value={formatDate(consulta?.dados_complementares_em)} />
+              <DetalheLinha label="Proposta enviada" value={formatDate(consulta?.proposta_enviada_em)} />
+              <DetalheLinha label="Período" value={consulta?.contract_period_months ? `${consulta.contract_period_months} meses` : "—"} />
+            </DetalheCard>
+
+            <DetalheCard icon={User} title="Cliente">
+              <DetalheLinha label="Nome" value={inquilino?.nome || consulta?.tenant_name || "—"} />
+              <DetalheLinha label="CPF/CNPJ" value={inquilino?.cpf || inquilino?.cnpj || consulta?.tenant_document || "—"} />
+              <DetalheLinha label="Tipo" value={inquilino?.tipo === "pj" ? "Pessoa jurídica" : inquilino?.tipo === "pf" ? "Pessoa física" : humanize(inquilino?.tipo)} />
+              <DetalheLinha label="Razão social" value={inquilino?.razao_social || "—"} />
+              <DetalheLinha label="RG" value={inquilino?.rg || "—"} />
+              <DetalheLinha label="Nascimento" value={formatDate(inquilino?.data_nascimento || consulta?.tenant_data_nascimento)} />
+              <DetalheLinha label="E-mail" value={inquilino?.profile?.email || consulta?.tenant_email || "—"} />
+              <DetalheLinha label="Telefone" value={inquilino?.profile?.telefone || consulta?.tenant_telefone || "—"} />
+              <DetalheLinha label="Profissão" value={inquilino?.profissao || "—"} />
+              <DetalheLinha label="Estado civil" value={humanize(inquilino?.estado_civil)} />
+              <DetalheLinha label="Renda informada" value={inquilino?.renda ? formatBRL(Number(inquilino.renda)) : "—"} />
+              <DetalheLinha label="Score registrado" value={inquilino?.score != null ? String(inquilino.score) : "—"} />
+            </DetalheCard>
+
+            <DetalheCard icon={Wallet} title="Plano e valores">
+              <DetalheLinha label="Plano escolhido" value={plano?.nome || "Plano padrão"} />
+              <DetalheLinha label="Aluguel" value={formatBRL(aluguel)} />
+              <DetalheLinha label="Condomínio" value={formatBRL(condominio)} />
+              <DetalheLinha label="Outras taxas" value={formatBRL(taxas)} />
+              <DetalheLinha label="Total da locação" value={formatBRL(totalLocacao)} strong />
+              <DetalheLinha label="Prêmio mensal" value={formatBRL(Number(consulta?.valor_premio_mensal || 0))} />
+              <DetalheLinha label="Prêmio do contrato" value={formatBRL(Number(apolice.valor_premio || consulta?.valor_anual || 0))} strong />
+              <DetalheLinha label="Cobertura estimada" value={cobertura ? formatBRL(cobertura) : "—"} />
+              <DetalheLinha label="Custo de saída" value={formatBRL(Number(consulta?.selected_exit_cost || plano?.custo_saida || 0))} />
+              <DetalheLinha label="Forma de pagamento" value={consulta?.insurance_payment_method_label || humanize(consulta?.payment_type)} />
+            </DetalheCard>
+
+            <DetalheCard icon={Home} title="Imóvel">
+              <DetalheLinha label="Tipo" value={imovel?.tipo || consulta?.imovel_subtipo || "—"} />
+              <DetalheLinha label="Endereço" value={endereco} />
+              <DetalheLinha label="CEP" value={imovel?.cep || consulta?.imovel_cep || "—"} />
+              <DetalheLinha label="IPTU" value={formatBRL(Number(imovel?.valor_iptu || 0))} />
+              <DetalheLinha label="Fundo de reserva" value={formatBRL(Number(imovel?.valor_fundo_reserva || 0))} />
+              <DetalheLinha label="Taxa de lixo" value={formatBRL(Number(imovel?.valor_taxa_lixo || 0))} />
+            </DetalheCard>
+
+            <DetalheCard icon={ShieldCheck} title="Coberturas e pagamento">
+              <DetalheLinha label="Coberturas" value={coberturas} />
+              <DetalheLinha label="Assistência" value={humanize(consulta?.insurance_assistance)} />
+              <DetalheLinha label="Status do pagamento" value={humanize(consulta?.payment_status)} />
+              <DetalheLinha label="Responsável pela proposta" value={consulta?.solicitante?.nome || "—"} />
+              <DetalheLinha label="E-mail do responsável" value={consulta?.solicitante?.email || "—"} />
+            </DetalheCard>
+          </div>
+        </div>
+
+        {/* DOSSIÊ DE DOCUMENTOS */}
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-black text-neutral-900">Documentos do contrato</h2>
+          <div>
+            <h2 className="text-lg font-black text-neutral-900">Documentação enviada</h2>
+            <p className="mt-1 text-sm text-neutral-500">
+              {allDocuments.length} arquivo(s) anexado(s) à contratação.
+            </p>
+          </div>
           <Button asChild variant="outline" className="rounded-lg gap-2 font-bold">
             <Link to="/faturas-inquilinos/$id" params={{ id: apolice.id }}>
               <Receipt size={14} /> Ver faturas do inquilino
@@ -403,27 +563,36 @@ function ApoliceDetalhe() {
           className="hidden"
           onChange={replaceUnsignedContract}
         />
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {documentCards.map((item) => {
-            const doc = item.document as ContractDocument | undefined;
+        {allDocuments.length === 0 ? (
+          <Card className="border-dashed border-neutral-300 bg-white p-10 text-center">
+            <FileText className="mx-auto mb-3 text-neutral-300" size={34} />
+            <p className="font-bold text-neutral-900">Nenhum documento foi enviado para este processo.</p>
+          </Card>
+        ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {allDocuments.map(({ document: doc, source }) => {
+            const Icon = documentIcon(doc);
             const available = Boolean(doc?.file_url || doc?.storage_path);
+            const pending = doc.document_subtype === "pendente_assinatura" ||
+              (Boolean(doc.contract_signature_id) && !assinaturaConcluida);
+            const editable = source === "proposal" && doc.id === contratoLocacao?.id && podeEditarContrato;
             return (
-              <Card key={item.key} className="p-6 border-neutral-200 rounded-2xl bg-white flex flex-col gap-4">
+              <Card key={`${source}-${doc.id}`} className="p-6 border-neutral-200 rounded-2xl bg-white flex flex-col gap-4">
                 <div className="flex items-start justify-between">
                   <div className="w-12 h-12 rounded-xl bg-yellow-50 border border-yellow-200 flex items-center justify-center">
-                    <item.icon className="w-5 h-5 text-yellow-700" />
+                    <Icon className="w-5 h-5 text-yellow-700" />
                   </div>
-                  <DocStatusBadge status={available ? (item.pending ? "pendente_assinatura" : "disponivel") : "nao_enviado"} />
+                  <DocStatusBadge status={available ? (pending ? "pendente_assinatura" : "disponivel") : "nao_enviado"} />
                 </div>
                 <div className="space-y-1">
-                  <h3 className="font-black text-neutral-900">{item.label}</h3>
-                  <p className="text-xs text-neutral-500 font-medium">{item.description}</p>
+                  <h3 className="font-black text-neutral-900">{documentLabel(doc)}</h3>
+                  <p className="text-xs text-neutral-500 font-medium">{documentDescription(doc)}</p>
                   {doc?.file_name && (
                     <p className="text-xs text-neutral-700 font-bold mt-2 break-all">{doc.file_name}</p>
                   )}
-                  {(doc?.uploaded_at || doc?.updated_at) && (
+                  {(doc?.uploaded_at || doc?.updated_at || doc?.created_at) && (
                     <p className="text-[10px] text-neutral-400 uppercase tracking-widest font-bold mt-2">
-                      Atualizado em {new Date(doc.uploaded_at || doc.updated_at || "").toLocaleDateString("pt-BR")}
+                      Enviado em {new Date(doc.uploaded_at || doc.updated_at || doc.created_at || "").toLocaleDateString("pt-BR")}
                     </p>
                   )}
                 </div>
@@ -445,7 +614,7 @@ function ApoliceDetalhe() {
                   >
                     <Download size={14} /> Baixar
                   </Button>
-                  {item.editable && (
+                  {editable && (
                     <Button
                       size="sm"
                       variant="outline"
@@ -458,16 +627,38 @@ function ApoliceDetalhe() {
                     </Button>
                   )}
                 </div>
-                {!doc && (
-                  <p className="text-xs text-neutral-400 italic">
-                    {item.key === "contrato_nox" && assinatura
-                      ? "O documento está sendo preparado para visualização."
-                      : "Documento ainda não enviado."}
-                  </p>
-                )}
               </Card>
             );
           })}
+        </div>
+        )}
+
+        <div className="pt-2">
+          <h2 className="mb-4 text-lg font-black text-neutral-900">Histórico do processo</h2>
+          <Card className="border-neutral-200 bg-white p-6">
+            {historico.length === 0 ? (
+              <p className="text-sm text-neutral-500">Nenhum evento adicional foi registrado para esta proposta.</p>
+            ) : (
+              <ol className="space-y-4">
+                {historico.map((evento, index) => (
+                  <li key={evento.id} className="flex gap-3">
+                    <div className="flex flex-col items-center">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-yellow-50 text-yellow-700">
+                        <Clock3 size={15} />
+                      </span>
+                      {index < historico.length - 1 && <span className="mt-1 h-full w-px bg-neutral-200" />}
+                    </div>
+                    <div className="min-w-0 pb-2">
+                      <p className="text-sm font-bold text-neutral-900">{evento.descricao}</p>
+                      <p className="mt-1 text-xs text-neutral-400">
+                        {humanize(evento.tipo_evento)} · {new Date(evento.created_at).toLocaleString("pt-BR")}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </Card>
         </div>
 
         <div className="pt-2">
@@ -487,6 +678,47 @@ function ResumoItem({ icone: Icone, label, valor }: any) {
         <Icone size={12} className="text-yellow-400" /> {label}
       </p>
       <p className="text-sm font-bold text-white truncate">{valor}</p>
+    </div>
+  );
+}
+
+function DetalheCard({
+  icon: Icon,
+  title,
+  children,
+}: {
+  icon: typeof FileText;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Card className="rounded-2xl border-neutral-200 bg-white p-5 shadow-sm">
+      <div className="mb-3 flex items-center gap-2">
+        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-yellow-50 text-yellow-700">
+          <Icon size={17} />
+        </span>
+        <h3 className="font-black text-neutral-900">{title}</h3>
+      </div>
+      <div className="divide-y divide-neutral-100">{children}</div>
+    </Card>
+  );
+}
+
+function DetalheLinha({
+  label,
+  value,
+  strong = false,
+}: {
+  label: string;
+  value: React.ReactNode;
+  strong?: boolean;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4 py-2 text-sm">
+      <span className="shrink-0 text-neutral-500">{label}</span>
+      <span className={`text-right text-neutral-900 ${strong ? "font-black" : "font-semibold"}`}>
+        {value || "—"}
+      </span>
     </div>
   );
 }
@@ -645,13 +877,15 @@ function KpiSmall({ label, valor, cor }: { label: string; valor: string; cor: "g
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
     ativa: "bg-green-400/10 text-green-300 border-green-400/30",
+    emitida: "bg-green-400/10 text-green-300 border-green-400/30",
     pendente: "bg-amber-400/10 text-amber-300 border-amber-400/30",
+    emitida_pendente: "bg-amber-400/10 text-amber-300 border-amber-400/30",
     cancelada: "bg-red-400/10 text-red-300 border-red-400/30",
     encerrada: "bg-neutral-400/10 text-neutral-300 border-neutral-400/30",
   };
   return (
     <Badge className={`${map[status] || map.pendente} border text-[10px] uppercase font-black px-2.5 py-0.5`}>
-      {status}
+      {humanize(status)}
     </Badge>
   );
 }
