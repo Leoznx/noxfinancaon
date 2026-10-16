@@ -48,7 +48,11 @@ import {
   shouldSwitchInitialPaymentMethod,
   subscriptionStatusFromEvent,
 } from "../_shared/billing-state.ts";
-import { resolveBillingDueDay } from "../_shared/billing-automation.ts";
+import {
+  nextContractBillingDueDate,
+  normalizeContractBillingDueDay,
+  resolveBillingDueDay,
+} from "../_shared/billing-automation.ts";
 import {
   claimBillingOperation,
   cancelContractSubscription,
@@ -80,6 +84,7 @@ type Body = {
   selectedFireInsuranceMode?: FireMode;
   amount?: number;
   monthlyAmount?: number;
+  billingDueDay?: number;
   action?: Action;
   creditCard?: {
     holderName?: string;
@@ -379,6 +384,20 @@ serve(async (req) => {
     if (!consulta) return jsonResponse(req, { ok: false, error: "Proposta nao encontrada." }, 404);
     await assertCanManageConsultationBilling(supabase, user.id, consulta);
     if (action !== "cancel") await assertContractAcceptsBilling(supabase, consulta);
+    const requestedBillingDueDay =
+      body.billingDueDay === undefined ? null : normalizeContractBillingDueDay(body.billingDueDay);
+    if (body.billingDueDay !== undefined && requestedBillingDueDay === null) {
+      return jsonResponse(
+        req,
+        { ok: false, error: "Escolha o vencimento entre os dias 5, 10, 15, 20, 25 ou 28." },
+        400,
+      );
+    }
+    const storedBillingDueDay = normalizeContractBillingDueDay(consulta.billing_due_day);
+    const dueDay =
+      requestedBillingDueDay ||
+      storedBillingDueDay ||
+      (await resolveBillingDueDay(supabaseAdmin()));
     const selectedPayer = resolvePaymentRecipient(consulta).paymentResponsible;
     const effectivePayer = resolveCheckoutPaymentResponsible({
       selectedPayer,
@@ -388,6 +407,21 @@ serve(async (req) => {
     const recipient = await resolvePaymentRecipientFromContract(supabase, consulta, effectivePayer);
 
     let existing = await loadSubscription(supabase, proposalId);
+    if (
+      existing &&
+      requestedBillingDueDay &&
+      Number(String(existing.recurrence_start_date || existing.next_due_date || "").slice(-2)) !==
+        requestedBillingDueDay
+    ) {
+      return jsonResponse(
+        req,
+        {
+          ok: false,
+          error: "O vencimento desta assinatura já foi definido e não pode ser alterado.",
+        },
+        409,
+      );
+    }
     if (existing && (existing.mode !== mode || existing.fire_insurance_payment_mode !== fireMode)) {
       return jsonResponse(
         req,
@@ -639,7 +673,7 @@ serve(async (req) => {
                 reduceCheckoutRetryPaymentStatus(currentStatus, currentEventAt, incomingEventAt),
               buildPatch: ({ nextStatus }) =>
                 nextStatus === "pending"
-                  ? { vencimento: todayDate(), payment_url: replacementUrl }
+                  ? { vencimento: invoice.vencimento, payment_url: replacementUrl }
                   : {},
             });
           }
@@ -667,7 +701,7 @@ serve(async (req) => {
             recipient,
             paymentMethod: "credit_card",
             amount: Number(existing.initial_amount),
-            dueDate: todayDate(),
+            dueDate: invoice.vencimento,
             paymentUrl: replacementUrl,
             contractRef: String(proposalId).slice(0, 8).toUpperCase(),
             notificationType: "payment_reissued",
@@ -713,7 +747,6 @@ serve(async (req) => {
           /\/$/,
           "",
         );
-        const dueDay = await resolveBillingDueDay(supabaseAdmin());
         const contractMonths = strictContractPeriodMonths(consulta);
         assertStoredContractPeriod(existing, contractMonths);
         const originalStartDate = existing.recurrence_start_date || existing.next_due_date;
@@ -1125,8 +1158,8 @@ serve(async (req) => {
     // Cada criacao/tentativa direta exige que o navegador envie novamente os
     // dados do cartao; PAN/CVV nunca sao recuperados de banco, log ou resposta.
     const directSensitive = mode === "direct" ? directCardPayload(body, req) : null;
-    const dueDay = await resolveBillingDueDay(supabaseAdmin());
-    const computedRecurrenceStart = addCalendarMonths(todayDate(), 1, dueDay);
+    const initialDueDate = nextContractBillingDueDate(todayDate(), dueDay);
+    const computedRecurrenceStart = addCalendarMonths(initialDueDate, 1, dueDay);
     const recurrenceStartDate = existing?.recurrence_start_date || computedRecurrenceStart;
     const recurrenceEndDate =
       existing?.recurrence_end_date ||
@@ -1148,6 +1181,14 @@ serve(async (req) => {
         409,
       );
     }
+    if (requestedBillingDueDay || storedBillingDueDay) {
+      const { error: billingDueDayError } = await supabaseAdmin()
+        .from("consultas_credito")
+        .update({ billing_due_day: dueDay })
+        .eq("id", proposalId);
+      if (billingDueDayError) throw billingDueDayError;
+      consulta.billing_due_day = dueDay;
+    }
     await acquireContractPeriodLock(supabase, proposalId, contractMonths);
 
     const customerId = await ensureAsaasCustomer(supabase, consulta, recipient);
@@ -1166,6 +1207,8 @@ serve(async (req) => {
         recurrenceStartDate,
         recurrenceEndDate,
         recurrenceTotalPayments: contractMonths - 1,
+        billingDueDay: dueDay,
+        initialDueDate,
       },
       userId: user.id,
     });
@@ -1337,6 +1380,8 @@ serve(async (req) => {
             method: "credit_card",
             amount: expectedInitial,
             fireMode,
+            billingDueDay: dueDay,
+            initialDueDate,
           },
           userId: user.id,
         },
@@ -1346,6 +1391,20 @@ serve(async (req) => {
         .select("*, asaas_payment:asaas_payments(*)")
         .eq("billing_key", initialKey)
         .maybeSingle();
+      if (
+        existingInitial &&
+        requestedBillingDueDay &&
+        Number(String(existingInitial.vencimento || "").slice(-2)) !== requestedBillingDueDay
+      ) {
+        return jsonResponse(
+          req,
+          {
+            ok: false,
+            error: "O vencimento da cobrança inicial já foi definido e não pode ser alterado.",
+          },
+          409,
+        );
+      }
       let initialRaw: any = null;
       let payment: any = existingInitial?.asaas_payment || null;
       if (existingInitial) {
@@ -1524,7 +1583,7 @@ serve(async (req) => {
                 !staleEvent && normalizePaymentStatus(nextStatus) === retryStatus
                   ? {
                       payment_method: "credit_card",
-                      vencimento: todayDate(),
+                      vencimento: invoice.vencimento,
                       payment_url: initialRaw?.invoiceUrl || null,
                       boleto_url: null,
                       linha_digitavel: null,
@@ -1576,7 +1635,7 @@ serve(async (req) => {
                 customer: customerId,
                 billingType: "CREDIT_CARD",
                 value: expectedInitial,
-                dueDate: todayDate(),
+                dueDate: initialDueDate,
                 description: `NOX Fianca - pagamento inicial ${String(proposalId).slice(0, 8)}`,
                 externalReference: initialKey,
                 ...(directSensitive || {}),
@@ -1632,7 +1691,7 @@ serve(async (req) => {
               payment_method: "credit_card",
               value: expectedInitial,
               status: initialStatus,
-              due_date: todayDate(),
+              due_date: initialDueDate,
               raw_response: sanitizeAsaasResponse(initialRaw),
               provider_event_at: providerEventAt,
               payment_responsible: recipient.paymentResponsible,
@@ -1662,13 +1721,15 @@ serve(async (req) => {
           billingKey: initialKey,
           installmentNumber: 1,
           installmentTotal: contractMonths,
-          dueDate: todayDate(),
+          dueDate: initialDueDate,
           value: expectedInitial,
           status: initialStatus,
           chargeKind: "initial",
           paymentMethod: "credit_card",
           components: {
             fireMode,
+            billingDueDay: dueDay,
+            initialDueDate,
             initialAmount: expectedInitial,
             monthlyAmount: expectedMonthly,
             includesFirstMonthlyPayment: true,
@@ -1969,13 +2030,15 @@ serve(async (req) => {
             billingKey: buildBillingKey(proposalId, "initial", 1),
             installmentNumber: 1,
             installmentTotal: contractMonths,
-            dueDate: todayDate(),
+            dueDate: initialDueDate,
             value: expectedInitial,
             status: "pending",
             chargeKind: "initial",
             paymentMethod: "credit_card",
             components: {
               fireMode,
+              billingDueDay: dueDay,
+              initialDueDate,
               initialAmount: expectedInitial,
               monthlyAmount: expectedMonthly,
               includesFirstMonthlyPayment: true,
@@ -2138,6 +2201,9 @@ serve(async (req) => {
         payment_status: nextStatus,
         payment_value: expectedInitial,
         payment_due_date: invoice.vencimento,
+        ...((requestedBillingDueDay || storedBillingDueDay)
+          ? { billing_due_day: dueDay }
+          : {}),
         fire_insurance_payment_mode: fireMode,
         card_setup_mode: mode,
         policy_status: ["active", "cancelled"].includes(current.policy_status)

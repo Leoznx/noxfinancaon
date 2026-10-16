@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { PAYMENT_DUE_DAYS } from "@/lib/payment-due-date";
 import { z } from "zod";
 
 const salvarConfigSchema = z.object({
@@ -40,6 +41,11 @@ const salvarPagamentoSchema = z.object({
   payment_type: z.enum(["imobiliaria", "inquilino"]),
   insurance_payment_method: z.enum(["credit_card", "pix", "boleto"]),
   insurance_payment_method_label: z.string(),
+  billing_due_day: z
+    .number()
+    .int()
+    .refine((value) => PAYMENT_DUE_DAYS.includes(value as (typeof PAYMENT_DUE_DAYS)[number]))
+    .optional(),
   property_not_wood_confirmed: z.boolean(),
   terms_accepted: z.boolean(),
 });
@@ -70,6 +76,7 @@ export const salvarFormaPagamento = createServerFn({ method: "POST" })
             : (consulta as any)?.profile_id_solicitante ?? null,
         insurance_payment_method: data.insurance_payment_method,
         insurance_payment_method_label: data.insurance_payment_method_label,
+        ...(data.billing_due_day ? { billing_due_day: data.billing_due_day } : {}),
         property_not_wood_confirmed: true,
         terms_accepted: true,
         terms_accepted_at: new Date().toISOString(),
@@ -81,7 +88,7 @@ export const salvarFormaPagamento = createServerFn({ method: "POST" })
     await context.supabase.from("proposta_historico").insert({
       consulta_id: data.consultaId,
       tipo_evento: "pagamento_selecionado",
-      descricao: `Responsável pelo pagamento: ${data.payment_type === "imobiliaria" ? "imobiliária" : "inquilino"}. Forma de pagamento do seguro selecionada: ${data.insurance_payment_method_label}. Termos aceitos. Confirmação de imóvel não madeirado realizada.`,
+      descricao: `Responsável pelo pagamento: ${data.payment_type === "imobiliaria" ? "imobiliária" : "inquilino"}. Forma de pagamento do seguro selecionada: ${data.insurance_payment_method_label}.${data.billing_due_day ? ` Vencimento escolhido: dia ${data.billing_due_day}.` : ""} Termos aceitos. Confirmação de imóvel não madeirado realizada.`,
       created_by: context.userId,
     } as any);
 

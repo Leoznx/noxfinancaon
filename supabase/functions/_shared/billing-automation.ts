@@ -1,5 +1,6 @@
 export const BILLING_TIME_ZONE = "America/Sao_Paulo";
 export const BILLING_DUE_DAY = 10;
+export const CONTRACT_BILLING_DUE_DAYS = [5, 10, 15, 20, 25, 28] as const;
 export const BILLING_FINE_PERCENT = 2;
 export const BILLING_MONTHLY_INTEREST_PERCENT = 1;
 export const BOLETO_ISSUANCE_LEAD_DAYS = 7;
@@ -22,6 +23,15 @@ export function normalizeBillingDueDay(value: unknown, fallback = BILLING_DUE_DA
   const parsed = Number(value);
   if (Number.isSafeInteger(parsed) && parsed >= 1 && parsed <= 28) return parsed;
   return fallback;
+}
+
+export function normalizeContractBillingDueDay(value: unknown) {
+  const parsed = Number(value);
+  return CONTRACT_BILLING_DUE_DAYS.includes(
+    parsed as (typeof CONTRACT_BILLING_DUE_DAYS)[number],
+  )
+    ? parsed
+    : null;
 }
 
 /**
@@ -122,6 +132,18 @@ export function monthlyDueDate(year: number, month: number, dueDay = BILLING_DUE
     2,
     "0",
   )}`;
+}
+
+export function nextContractBillingDueDate(today: string, dueDay: number) {
+  const [year, month] = today.split("-").map(Number);
+  const sameMonth = monthlyDueDate(year, month, dueDay);
+  if (sameMonth >= today) return sameMonth;
+  const nextMonthIndex = month;
+  return monthlyDueDate(
+    year + Math.floor(nextMonthIndex / 12),
+    (nextMonthIndex % 12) + 1,
+    dueDay,
+  );
 }
 
 function addBusinessDaysFrom(isoDate: string, days: number) {

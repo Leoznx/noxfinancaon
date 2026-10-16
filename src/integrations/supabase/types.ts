@@ -587,6 +587,7 @@ export type Database = {
           automation_started_at: string | null
           automation_step: string | null
           base_calculo: number | null
+          billing_due_day: number | null
           billing_responsible_role: string | null
           billing_responsible_user_id: string | null
           biometria_image_url: string | null
@@ -683,6 +684,7 @@ export type Database = {
           automation_started_at?: string | null
           automation_step?: string | null
           base_calculo?: number | null
+          billing_due_day?: number | null
           billing_responsible_role?: string | null
           billing_responsible_user_id?: string | null
           biometria_image_url?: string | null
@@ -779,6 +781,7 @@ export type Database = {
           automation_started_at?: string | null
           automation_step?: string | null
           base_calculo?: number | null
+          billing_due_day?: number | null
           billing_responsible_role?: string | null
           billing_responsible_user_id?: string | null
           biometria_image_url?: string | null

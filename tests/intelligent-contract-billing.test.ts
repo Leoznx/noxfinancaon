@@ -30,6 +30,8 @@ import {
   initialBoletoDueDate,
   monthlyDueDate,
   normalizeBillingDueDay,
+  nextContractBillingDueDate,
+  normalizeContractBillingDueDay,
   scheduledBoletoIssueDate,
   shouldMaterializeScheduledBoleto,
 } from "../supabase/functions/_shared/billing-automation";
@@ -147,6 +149,18 @@ test("dia de vencimento configuravel governa cronograma, assinatura e consolidac
   assert.equal(normalizeBillingDueDay(0), 10);
   assert.equal(normalizeBillingDueDay(29), 10);
   assert.equal(normalizeBillingDueDay("invalido"), 10);
+});
+
+test("vencimento escolhido aceita somente as seis opcoes e usa a proxima ocorrencia", () => {
+  for (const dueDay of [5, 10, 15, 20, 25, 28]) {
+    assert.equal(normalizeContractBillingDueDay(dueDay), dueDay);
+  }
+  assert.equal(normalizeContractBillingDueDay(18), null);
+  assert.equal(normalizeContractBillingDueDay("invalido"), null);
+  assert.equal(nextContractBillingDueDate("2026-10-16", 20), "2026-10-20");
+  assert.equal(nextContractBillingDueDate("2026-10-20", 20), "2026-10-20");
+  assert.equal(nextContractBillingDueDate("2026-10-21", 20), "2026-11-20");
+  assert.equal(nextContractBillingDueDate("2026-12-29", 5), "2027-01-05");
 });
 
 test("valores separam mensal, taxa inicial e seguro incendio", () => {

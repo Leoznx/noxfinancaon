@@ -24,6 +24,7 @@ import { buildBillingKey, buildBillingSchedule } from "../_shared/billing-state.
 import {
   BOLETO_ISSUANCE_LEAD_DAYS,
   asaasLateFeePayload,
+  normalizeContractBillingDueDay,
   resolveBillingDueDay,
   scheduledBoletoIssueDate,
   shouldMaterializeScheduledBoleto,
@@ -51,6 +52,7 @@ type Body = {
   consultationId?: string;
   paymentMethod?: "pix" | "boleto";
   selectedFireInsuranceMode?: FireMode;
+  billingDueDay?: number;
   amount?: number;
 };
 
@@ -107,6 +109,25 @@ serve(async (req) => {
           error: "Gere primeiro a cobranca inicial. Nenhuma mensalidade futura foi criada.",
           initialRequired: true,
         },
+        409,
+      );
+    }
+    const requestedBillingDueDay =
+      body.billingDueDay === undefined ? null : normalizeContractBillingDueDay(body.billingDueDay);
+    if (body.billingDueDay !== undefined && requestedBillingDueDay === null) {
+      return jsonResponse(
+        req,
+        { ok: false, error: "Escolha o vencimento entre os dias 5, 10, 15, 20, 25 ou 28." },
+        400,
+      );
+    }
+    if (
+      requestedBillingDueDay &&
+      Number(String(initialInvoice.vencimento || "").slice(-2)) !== requestedBillingDueDay
+    ) {
+      return jsonResponse(
+        req,
+        { ok: false, error: "O vencimento da cobrança inicial não corresponde ao dia escolhido." },
         409,
       );
     }
@@ -201,7 +222,10 @@ serve(async (req) => {
       );
     }
 
-    const dueDay = await resolveBillingDueDay(supabaseAdmin());
+    const dueDay =
+      requestedBillingDueDay ||
+      normalizeContractBillingDueDay(consulta.billing_due_day) ||
+      (await resolveBillingDueDay(supabaseAdmin()));
     const schedule = buildBillingSchedule({
       consultationId: proposalId,
       months: installmentTotal,

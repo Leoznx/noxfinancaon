@@ -58,6 +58,7 @@ export type AsaasPaymentRequest = {
   selectedFireInsuranceMode: "avista" | "embutido";
   deferPayment: boolean;
   amount?: number;
+  billingDueDay?: number;
   dueDate?: string;
   creditCard?: CreditCardPayload;
   creditCardHolderInfo?: CreditCardHolderPayload;
@@ -84,6 +85,7 @@ export type AsaasSubscriptionRequest = {
   selectedFireInsuranceMode: "avista" | "embutido";
   amount: number;
   monthlyAmount: number;
+  billingDueDay?: number;
   creditCard?: CreditCardPayload;
   creditCardHolderInfo?: CreditCardHolderPayload;
   action?: SubscriptionAction;
@@ -94,6 +96,7 @@ export type CheckoutPreferences = {
   fireMode: "a_vista" | "parcelado";
   cardMode: CardSetupMode | null;
   paymentOpen: boolean;
+  billingDueDay?: number | null;
 };
 
 export type RehydratedCheckout = {
@@ -180,6 +183,7 @@ export async function ensureFutureInstallments(params: {
   proposalId: string;
   paymentMethod: "pix" | "boleto";
   selectedFireInsuranceMode: "avista" | "embutido";
+  billingDueDay: number;
 }) {
   return invokeCheckoutFunction<Record<string, unknown>>(
     "asaas-create-installment-plan",

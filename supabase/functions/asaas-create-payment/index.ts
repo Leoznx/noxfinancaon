@@ -16,6 +16,7 @@ import {
   requireUser,
   resolvePaymentRecipientFromContract,
   sanitizeAsaasResponse,
+  supabaseAdmin,
   todayDate,
   toMoney,
 } from "../_shared/asaas.ts";
@@ -52,7 +53,11 @@ import {
   updateBillingOperation,
 } from "../_shared/contract-billing.ts";
 import { ensurePendingPolicy } from "../_shared/d4sign.ts";
-import { initialBoletoDueDate } from "../_shared/billing-automation.ts";
+import {
+  nextContractBillingDueDate,
+  normalizeContractBillingDueDay,
+  resolveBillingDueDay,
+} from "../_shared/billing-automation.ts";
 
 type Action = "create" | "refresh" | "resend_email" | "resend_whatsapp";
 
@@ -64,6 +69,7 @@ type Body = {
   deferPayment?: boolean;
   action?: Action;
   amount?: number;
+  billingDueDay?: number;
   dueDate?: string;
   creditCard?: {
     holderName?: string;
@@ -229,6 +235,21 @@ serve(async (req) => {
     await assertCanManageConsultationBilling(supabase, user.id, consulta);
     await assertContractAcceptsBilling(supabase, consulta);
 
+    const requestedBillingDueDay =
+      body.billingDueDay === undefined ? null : normalizeContractBillingDueDay(body.billingDueDay);
+    if (body.billingDueDay !== undefined && requestedBillingDueDay === null) {
+      return jsonResponse(
+        req,
+        { ok: false, error: "Escolha o vencimento entre os dias 5, 10, 15, 20, 25 ou 28." },
+        400,
+      );
+    }
+    const storedBillingDueDay = normalizeContractBillingDueDay(consulta.billing_due_day);
+    const billingDueDay =
+      requestedBillingDueDay ||
+      storedBillingDueDay ||
+      (await resolveBillingDueDay(supabaseAdmin()));
+
     let contractPeriodMonths: number;
     try {
       contractPeriodMonths = resolveContractPeriodMonths(consulta);
@@ -256,6 +277,20 @@ serve(async (req) => {
           });
 
     let existingInvoice = await loadExistingInitial(supabase, proposalId);
+    if (
+      existingInvoice &&
+      requestedBillingDueDay &&
+      Number(String(existingInvoice.vencimento || "").slice(-2)) !== requestedBillingDueDay
+    ) {
+      return jsonResponse(
+        req,
+        {
+          ok: false,
+          error: "O vencimento desta cobrança já foi definido e não pode ser alterado.",
+        },
+        409,
+      );
+    }
     if (action !== "create") {
       if (!existingInvoice) {
         return jsonResponse(req, { ok: false, error: "Cobranca ainda nao foi criada." }, 404);
@@ -395,7 +430,7 @@ serve(async (req) => {
           invoice: existingInvoice,
           payment,
           method: paymentMethod,
-          dueDate: paymentMethod === "boleto" ? initialBoletoDueDate() : todayDate(),
+          dueDate: existingInvoice.vencimento,
         });
         existingInvoice = switched.invoice;
         payment = switched.payment;
@@ -434,8 +469,22 @@ serve(async (req) => {
       const dueDateError = billingDueDateError(body.dueDate, todayDate());
       if (dueDateError) return jsonResponse(req, { ok: false, error: dueDateError }, 400);
     }
-    const dueDate =
-      body.dueDate || (paymentMethod === "boleto" ? initialBoletoDueDate() : todayDate());
+    const dueDate = body.dueDate || nextContractBillingDueDate(todayDate(), billingDueDay);
+    if (Number(dueDate.slice(-2)) !== billingDueDay) {
+      return jsonResponse(
+        req,
+        { ok: false, error: "A data informada não corresponde ao dia de vencimento escolhido." },
+        400,
+      );
+    }
+    if (requestedBillingDueDay || storedBillingDueDay) {
+      const { error: billingDueDayError } = await supabaseAdmin()
+        .from("consultas_credito")
+        .update({ billing_due_day: billingDueDay })
+        .eq("id", proposalId);
+      if (billingDueDayError) throw billingDueDayError;
+      consulta.billing_due_day = billingDueDay;
+    }
     const contractMonths = contractPeriodMonths;
     const billingKey = buildBillingKey(proposalId, "initial", 1);
     // A mesma chave usada na reserva local vai ao provedor. Assim uma resposta
@@ -451,6 +500,7 @@ serve(async (req) => {
         fireMode,
         amount: expectedAmount,
         dueDate,
+        billingDueDay,
         payer: recipient.paymentResponsible,
       },
       userId: user.id,

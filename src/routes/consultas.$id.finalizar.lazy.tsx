@@ -46,6 +46,11 @@ import { checkoutActionsForMethod, checkoutMethodSelection } from "@/lib/asaas-p
 import { formatContractPeriodMonths, normalizeContractPeriodMonths } from "@/lib/contract-period";
 import { billingAccountCopy } from "@/lib/billing-account";
 import {
+  normalizePaymentDueDay,
+  PAYMENT_DUE_DAYS,
+  type PaymentDueDay,
+} from "@/lib/payment-due-date";
+import {
   AsaasCheckoutError,
   createAsaasPayment,
   ensureFutureInstallments,
@@ -316,6 +321,7 @@ function FinalizarPage() {
   const [paymentType, setPaymentType] = useState<PaymentType | "">("");
   const [pagamento, setPagamento] = useState<"credit_card" | "pix" | "boleto" | "">("");
   const [incendioPagamento, setIncendioPagamento] = useState<IncendioPagamento>("parcelado");
+  const [billingDueDay, setBillingDueDay] = useState<PaymentDueDay | null>(null);
   const [aceiteTermos, setAceiteTermos] = useState(false);
   const [tipoSeguroImovel, setTipoSeguroImovel] = useState<"residencial" | "comercial">(
     "residencial",
@@ -334,6 +340,7 @@ function FinalizarPage() {
     if (preferencias) {
       setPagamento(preferencias.paymentMethod);
       setIncendioPagamento(preferencias.fireMode);
+      setBillingDueDay(normalizePaymentDueDay(preferencias.billingDueDay));
     }
     (async () => {
       try {
@@ -364,6 +371,8 @@ function FinalizarPage() {
           setComissaoPct(Number((data as any).insurance_commission_pct));
         if ((data as any).insurance_payment_method)
           setPagamento((data as any).insurance_payment_method);
+        const vencimentoSalvo = normalizePaymentDueDay((data as any).billing_due_day);
+        if (vencimentoSalvo) setBillingDueDay(vencimentoSalvo);
         const responsavelSalvo = (data as any).payment_type || (data as any).billing_responsible_role;
         if (responsavelSalvo === "imobiliaria" || responsavelSalvo === "inquilino")
           setPaymentType(responsavelSalvo);
@@ -672,6 +681,8 @@ function FinalizarPage() {
         setPagamento={setPagamento}
         incendioPagamento={incendioPagamento}
         setIncendioPagamento={setIncendioPagamento}
+        billingDueDay={billingDueDay}
+        setBillingDueDay={setBillingDueDay}
         aceiteTermos={aceiteTermos}
         setAceiteTermos={setAceiteTermos}
         abrirTermos={() => setTermosOpen(true)}
@@ -709,8 +720,9 @@ function FinalizarPage() {
               madeira ou com estrutura predominantemente madeireira não são aceitos.
             </p>
             <p>
-              <strong>4. Pagamento.</strong> O pagamento é realizado conforme a forma escolhida
-              (cartão de crédito, Pix ou boleto). Alterações posteriores podem exigir nova cotação.
+              <strong>4. Pagamento.</strong> O pagamento é realizado conforme a forma e o vencimento
+              escolhidos (cartão de crédito, Pix ou boleto). A cobertura só fica ativa após a
+              confirmação do primeiro pagamento. Alterações posteriores podem exigir nova cotação.
             </p>
             <p>
               <strong>5. Restrições.</strong> Caso seja identificada característica impeditiva para
@@ -861,8 +873,9 @@ function FinalizarPage() {
               madeira ou com estrutura predominantemente madeireira não são aceitos.
             </p>
             <p>
-              <strong>4. Pagamento.</strong> O pagamento é realizado conforme a forma escolhida
-              (cartão de crédito, Pix ou boleto). Alterações posteriores podem exigir nova cotação.
+              <strong>4. Pagamento.</strong> O pagamento é realizado conforme a forma e o vencimento
+              escolhidos (cartão de crédito, Pix ou boleto). A cobertura só fica ativa após a
+              confirmação do primeiro pagamento. Alterações posteriores podem exigir nova cotação.
             </p>
             <p>
               <strong>5. Restrições.</strong> Caso seja identificada característica impeditiva para
@@ -947,6 +960,8 @@ function ResumoPropostaLoft(p: any) {
     setPagamento,
     incendioPagamento,
     setIncendioPagamento,
+    billingDueDay,
+    setBillingDueDay,
     aceiteTermos,
     setAceiteTermos,
     abrirTermos,
@@ -1056,8 +1071,9 @@ function ResumoPropostaLoft(p: any) {
       fireMode: incendioPagamento,
       cardMode: cardSetupMode,
       paymentOpen: pagamentoAberto,
+      billingDueDay,
     });
-  }, [cardSetupMode, id, incendioPagamento, pagamento, pagamentoAberto]);
+  }, [billingDueDay, cardSetupMode, id, incendioPagamento, pagamento, pagamentoAberto]);
 
   useEffect(() => {
     if (reidratadoRef.current) return;
@@ -1068,6 +1084,7 @@ function ResumoPropostaLoft(p: any) {
       fireMode: incendioPagamento,
       cardMode: cardSetupMode,
       paymentOpen: pagamentoAberto,
+      billingDueDay,
     }).then(({ payment, subscription, installmentPlanPending }) => {
       if (!ativo) return;
       if (subscription) {
@@ -1075,6 +1092,10 @@ function ResumoPropostaLoft(p: any) {
         setCardSetupMode(subscription.mode);
         setPagamento("credit_card");
         setPagamentoAberto(true);
+        setBillingDueDay(
+          (current: PaymentDueDay | null) =>
+            current ?? normalizePaymentDueDay(subscription.nextDueDate?.split("-")[2]),
+        );
         if (subscription.selectedFireInsuranceMode) {
           setIncendioPagamento(
             subscription.selectedFireInsuranceMode === "avista" ? "a_vista" : "parcelado",
@@ -1088,6 +1109,10 @@ function ResumoPropostaLoft(p: any) {
         setPagamentoAberto(true);
         setCheckoutIntent(payment.deferPayment ? "pay_later" : "pay_now");
         setParcelasFuturasPendentes(installmentPlanPending);
+        setBillingDueDay(
+          (current: PaymentDueDay | null) =>
+            current ?? normalizePaymentDueDay(payment.dueDate?.split("-")[2]),
+        );
         if (payment.selectedFireInsuranceMode) {
           setIncendioPagamento(
             payment.selectedFireInsuranceMode === "avista" ? "a_vista" : "parcelado",
@@ -1135,6 +1160,7 @@ function ResumoPropostaLoft(p: any) {
           payment_type: paymentType,
           insurance_payment_method: pagamento as any,
           insurance_payment_method_label: params.metodoLabel,
+          billing_due_day: billingDueDay ?? undefined,
           property_not_wood_confirmed: true,
           terms_accepted: aceiteTermos,
         },
@@ -1159,6 +1185,7 @@ function ResumoPropostaLoft(p: any) {
             : consulta?.profile_id_solicitante ?? consulta?.responsavel_profile?.id ?? null,
         insurance_payment_method: pagamento,
         insurance_payment_method_label: params.metodoLabel,
+        billing_due_day: billingDueDay,
         property_not_wood_confirmed: true,
         terms_accepted: true,
         terms_accepted_at: new Date().toISOString(),
@@ -1222,6 +1249,7 @@ function ResumoPropostaLoft(p: any) {
     if (!paymentType)
       return "Escolha se o pagamento será feito pela imobiliária ou pelo inquilino.";
     if (!pagamento) return "Selecione uma forma de pagamento.";
+    if (!billingDueDay) return "Escolha o dia de vencimento do pagamento.";
     if (!aceiteTermos) return "Aceite os Termos e Condições para seguir para o pagamento.";
     if (valorCobradoAgora <= 0) return "Não foi possível calcular o valor do pagamento.";
     const { nome, email, telefone, documento } = dadosDoInquilino();
@@ -1248,6 +1276,7 @@ function ResumoPropostaLoft(p: any) {
         proposalId: id,
         paymentMethod: method,
         selectedFireInsuranceMode: incendioPagamento === "a_vista" ? "avista" : "embutido",
+        billingDueDay: billingDueDay!,
       });
       setParcelasFuturasPendentes(false);
       if (Array.isArray((planoData as any)?.installments)) {
@@ -1288,6 +1317,7 @@ function ResumoPropostaLoft(p: any) {
         selectedFireInsuranceMode: incendioPagamento === "a_vista" ? "avista" : "embutido",
         amount: Number(valorCobradoAgora.toFixed(2)),
         deferPayment: intent === "pay_later",
+        billingDueDay: billingDueDay!,
       };
       let data: NormalizedAsaasPayment;
       try {
@@ -1352,6 +1382,7 @@ function ResumoPropostaLoft(p: any) {
         selectedFireInsuranceMode: incendioPagamento === "a_vista" ? "avista" : "embutido",
         amount: Number(valorCobradoAgora.toFixed(2)),
         monthlyAmount: Number(mensalidadeFinal.toFixed(2)),
+        billingDueDay: billingDueDay!,
       };
       if (mode === "direct") {
         request.creditCard = {
@@ -1435,6 +1466,7 @@ function ResumoPropostaLoft(p: any) {
       selectedFireInsuranceMode: incendioPagamento === "a_vista" ? "avista" : "embutido",
       amount: assinaturaAsaasResultado.initialAmount,
       monthlyAmount: assinaturaAsaasResultado.monthlyAmount,
+      billingDueDay: billingDueDay ?? normalizePaymentDueDay(consulta?.billing_due_day) ?? undefined,
       action,
     });
     setAssinaturaAsaasResultado(atualizado);
@@ -1811,6 +1843,51 @@ function ResumoPropostaLoft(p: any) {
                   })}
                 </div>
 
+                <div className="space-y-3 rounded-md border border-slate-300 bg-slate-50 p-4">
+                  <div className="flex items-start gap-3">
+                    <Clock size={20} className="mt-0.5 shrink-0 text-neutral-800" />
+                    <div>
+                      <h4 className="text-sm font-bold text-neutral-950">
+                        Escolha o dia do vencimento
+                      </h4>
+                      <p className="mt-1 text-xs leading-relaxed text-slate-600">
+                        A primeira cobrança e as mensalidades seguintes usarão o mesmo dia. Se o
+                        dia deste mês já passou, o primeiro vencimento será no mês seguinte.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+                    {PAYMENT_DUE_DAYS.map((day) => {
+                      const selected = billingDueDay === day;
+                      return (
+                        <button
+                          key={day}
+                          type="button"
+                          aria-pressed={selected}
+                          disabled={!!metodoCobrancaPersistida}
+                          onClick={() => setBillingDueDay(day)}
+                          className={`rounded-md border px-3 py-2 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                            selected
+                              ? "border-yellow-400 bg-yellow-100 text-neutral-950 ring-1 ring-yellow-400"
+                              : "border-slate-300 bg-white text-neutral-700 hover:border-slate-400"
+                          }`}
+                        >
+                          Dia {day}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 rounded-md border border-amber-300 bg-amber-50 p-4 text-amber-950">
+                  <ShieldCheck size={20} className="mt-0.5 shrink-0" />
+                  <p className="text-xs leading-relaxed">
+                    <strong>A cobertura só fica ativa após a confirmação do primeiro pagamento.</strong>{" "}
+                    Em &quot;Pagar agora&quot;, o pagamento pode ser antecipado; o dia escolhido continua
+                    sendo a referência dos vencimentos do contrato.
+                  </p>
+                </div>
+
                 {pagamento === "credit_card" && cardSetupMode === "direct" && (
                   <div className="rounded-md border border-slate-300 bg-slate-50 p-4">
                     <div className="mb-3 flex items-center justify-between gap-3">
@@ -2039,6 +2116,11 @@ function ResumoPropostaLoft(p: any) {
                           Forma selecionada: {pagamentoSelecionado.label}.
                         </p>
                       )}
+                      {billingDueDay && (
+                        <p className="mt-1 text-xs text-neutral-300">
+                          Vencimento escolhido: dia {billingDueDay}.
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -2074,7 +2156,14 @@ function ResumoPropostaLoft(p: any) {
                     type="button"
                     variant="outline"
                     onClick={() => void executarPagamento("pay_later")}
-                    disabled={pagando || enviando || !seguroConcluido || !paymentType || !pagamento}
+                    disabled={
+                      pagando ||
+                      enviando ||
+                      !seguroConcluido ||
+                      !paymentType ||
+                      !pagamento ||
+                      !billingDueDay
+                    }
                     className="h-11 rounded-md border-slate-300 bg-white px-6 font-bold text-neutral-900 hover:bg-slate-50 disabled:opacity-50"
                   >
                     {pagando ? "Processando..." : "Pagar depois"}
@@ -2084,7 +2173,14 @@ function ResumoPropostaLoft(p: any) {
                   <Button
                     type="button"
                     onClick={() => void executarPagamento("pay_now")}
-                    disabled={pagando || enviando || !seguroConcluido || !paymentType || !pagamento}
+                    disabled={
+                      pagando ||
+                      enviando ||
+                      !seguroConcluido ||
+                      !paymentType ||
+                      !pagamento ||
+                      !billingDueDay
+                    }
                     className="h-11 rounded-md bg-yellow-400 px-6 font-bold text-neutral-900 hover:bg-yellow-300 disabled:opacity-50"
                   >
                     {pagando
@@ -2114,6 +2210,9 @@ function ResumoPropostaLoft(p: any) {
             <p className="text-xs text-neutral-500">
               Escolha se o pagamento será feito pela imobiliária ou pelo inquilino.
             </p>
+          )}
+          {pagamentoAberto && !billingDueDay && (
+            <p className="text-xs text-neutral-500">Escolha o dia de vencimento do pagamento.</p>
           )}
         </div>
       </div>
