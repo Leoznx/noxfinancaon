@@ -1,11 +1,7 @@
 import * as React from "react";
 import { useRouterState } from "@tanstack/react-router";
 
-import {
-  DASHBOARD_ROUTE_LOADING_MAX_VISIBLE_MS,
-  GLOBAL_LOADING_TIMEOUT_MS,
-  LoadingTokenRegistry,
-} from "@/lib/global-loading";
+import { LoadingTokenRegistry } from "@/lib/global-loading";
 
 type GlobalLoadingContextValue = {
   beginEssentialLoad: () => number;
@@ -15,8 +11,7 @@ type GlobalLoadingContextValue = {
 };
 
 const GlobalLoadingContext = React.createContext<GlobalLoadingContextValue | null>(null);
-const FADE_OUT_MS = 80;
-const SHOW_DELAY_MS = 90;
+const SHOW_DELAY_MS = 180;
 
 export function GlobalLoadingProvider({ children }: { children: React.ReactNode }) {
   const routerLoading = useRouterState({ select: (state) => state.isLoading });
@@ -52,12 +47,11 @@ export function GlobalLoadingProvider({ children }: { children: React.ReactNode 
     [beginDashboardScope, beginEssentialLoad, endDashboardScope, endEssentialLoad],
   );
   const active = dashboardScopeCount > 0 && (routerLoading || essentialLoadCount > 0);
-  const routeTransitionOnly = dashboardScopeCount > 0 && routerLoading && essentialLoadCount === 0;
 
   return (
     <GlobalLoadingContext.Provider value={context}>
       {children}
-      <GlobalLoadingOverlay active={active} routeTransitionOnly={routeTransitionOnly} />
+      <GlobalLoadingIndicator active={active} />
     </GlobalLoadingContext.Provider>
   );
 }
@@ -86,124 +80,33 @@ export function useDashboardLoadingScope() {
   }, [context]);
 }
 
-function GlobalLoadingOverlay({
-  active,
-  routeTransitionOnly,
-}: {
-  active: boolean;
-  routeTransitionOnly: boolean;
-}) {
-  const [rendered, setRendered] = React.useState(active);
-  const [exiting, setExiting] = React.useState(false);
-  const [timedOut, setTimedOut] = React.useState(false);
-  const [videoFailed, setVideoFailed] = React.useState(false);
-  const [routeDisplayExpired, setRouteDisplayExpired] = React.useState(false);
-  const visibleActive = active && !routeDisplayExpired;
-
-  React.useEffect(() => {
-    if (visibleActive) {
-      if (rendered) {
-        setExiting(false);
-        return;
-      }
-
-      const timer = window.setTimeout(() => {
-        setRendered(true);
-        setExiting(false);
-      }, SHOW_DELAY_MS);
-      return () => window.clearTimeout(timer);
-    }
-
-    if (!rendered) return;
-    setExiting(true);
-    const timer = window.setTimeout(() => {
-      setRendered(false);
-      setExiting(false);
-    }, FADE_OUT_MS);
-    return () => window.clearTimeout(timer);
-  }, [rendered, visibleActive]);
-
-  React.useEffect(() => {
-    if (!active || !routeTransitionOnly) {
-      setRouteDisplayExpired(false);
-      return;
-    }
-
-    const timer = window.setTimeout(
-      () => setRouteDisplayExpired(true),
-      DASHBOARD_ROUTE_LOADING_MAX_VISIBLE_MS,
-    );
-    return () => window.clearTimeout(timer);
-  }, [active, routeTransitionOnly]);
+function GlobalLoadingIndicator({ active }: { active: boolean }) {
+  const [rendered, setRendered] = React.useState(false);
 
   React.useEffect(() => {
     if (!active) {
-      setTimedOut(false);
+      setRendered(false);
       return;
     }
 
-    const timer = window.setTimeout(() => setTimedOut(true), GLOBAL_LOADING_TIMEOUT_MS);
+    const timer = window.setTimeout(() => setRendered(true), SHOW_DELAY_MS);
     return () => window.clearTimeout(timer);
   }, [active]);
 
-  React.useLayoutEffect(() => {
-    const shouldLock = (visibleActive && rendered) || timedOut;
-    document.documentElement.classList.toggle("nox-loading-locked", shouldLock);
-    document.body.classList.toggle("nox-loading-locked", shouldLock);
-    return () => {
-      document.documentElement.classList.remove("nox-loading-locked");
-      document.body.classList.remove("nox-loading-locked");
-    };
-  }, [rendered, timedOut, visibleActive]);
-
-  if (!rendered && !timedOut) return null;
+  if (!rendered) return null;
 
   return (
     <div
-      className={`nox-global-loading${exiting && !timedOut ? " nox-global-loading--exiting" : ""}`}
-      role={timedOut ? "alert" : "status"}
+      className="nox-global-loading"
+      role="status"
       aria-live="polite"
-      aria-label={timedOut ? "Falha ao carregar a página" : "Carregando página"}
+      aria-label="Atualizando conteúdo"
     >
-      {timedOut ? (
-        <div className="nox-global-loading__error">
-          <strong>Não foi possível carregar esta página.</strong>
-          <span>Verifique sua conexão e tente novamente.</span>
-          <button type="button" onClick={() => window.location.reload()}>
-            Tentar novamente
-          </button>
-        </div>
-      ) : (
-        <div className="nox-global-loading__indicator" aria-hidden="true">
-          <div className="nox-global-loading__media">
-            {!videoFailed ? (
-              <video
-                className="nox-global-loading__video"
-                src="/media/nox-loading-ping-pong.mp4"
-                poster="/media/nox-loading-static.png"
-                autoPlay
-                muted
-                loop
-                playsInline
-                preload="auto"
-                disablePictureInPicture
-                controlsList="nodownload noplaybackrate noremoteplayback"
-                onError={() => setVideoFailed(true)}
-              />
-            ) : null}
-            <img
-              className={`nox-global-loading__static${videoFailed ? " nox-global-loading__static--visible" : ""}`}
-              src="/media/nox-loading-static.png"
-              alt=""
-            />
-          </div>
-          <span className="nox-global-loading__dots">
-            <i />
-            <i />
-            <i />
-          </span>
-        </div>
-      )}
+      <span className="nox-global-loading__dots" aria-hidden="true">
+        <i />
+        <i />
+        <i />
+      </span>
     </div>
   );
 }
