@@ -14,6 +14,7 @@ import { DadosSimulacao } from "@/components/simulacao/FormularioSimulacao";
 import { registrarEventoProposta } from "@/lib/consultasCredito";
 import { normalizeContractPeriodMonths } from "@/lib/contract-period";
 import { buildPlanSelectionUpdate } from "@/lib/plan-selection";
+import { updateContractPeriodSafely } from "@/lib/contract-period-update";
 
 export const Route = createFileRoute("/simular/resultado")({
   component: SimularResultadoWrapper,
@@ -100,14 +101,18 @@ function SimularResultado() {
       const updatePayload = selectionUpdate.resumed
         ? selectionUpdate.payload
         : { ...selectionUpdate.payload, origem: "simulacao_publica" };
-      const { error } = await supabase
-        .from("consultas_credito")
-        .update(updatePayload as any)
-        .eq("id", consultaId);
-      if (error) throw error;
+      if (selectionUpdate.resumed && selectionUpdate.periodChanged) {
+        await updateContractPeriodSafely(consultaId, periodoContrato);
+      } else {
+        const { error } = await supabase
+          .from("consultas_credito")
+          .update(updatePayload as any)
+          .eq("id", consultaId);
+        if (error) throw error;
+      }
 
       // Passo a passo do funil — é o que o administrador lê em Consultas > Ver mais.
-      if (!selectionUpdate.resumed || selectionUpdate.periodChanged) {
+      if (!selectionUpdate.resumed) {
         await registrarEventoProposta(
           consultaId,
           selectionUpdate.resumed ? "periodo_contrato_atualizado" : "plano_selecionado",

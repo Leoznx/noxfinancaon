@@ -36,6 +36,7 @@ import {
   addCalendarMonths,
   anchoredRecurrencePlan,
   buildBillingKey,
+  buildRevisionedBillingKey,
   buildSubscriptionNotificationPlan,
   canReissueCheckout,
   normalizePaymentStatus,
@@ -457,7 +458,6 @@ serve(async (req) => {
               error:
                 "O cancelamento da recorrencia requer conciliacao com o Asaas. Encaminhe para revisao financeira.",
               manualReview: result.manualReview === true,
-              operationState: result.operationState || null,
             },
             409,
           );
@@ -510,7 +510,12 @@ serve(async (req) => {
         await acquireContractPeriodLock(supabase, proposalId, contractMonths);
 
         const attempt = Number(existing.raw_response?.initialCheckoutAttempt || 0) + 1;
-        const retryKey = buildBillingKey(proposalId, "checkout", `initial-retry-${attempt}`);
+        const retryKey = buildRevisionedBillingKey(
+          proposalId,
+          "checkout",
+          `initial-retry-${attempt}`,
+          consulta,
+        );
         const frontend = (Deno.env.get("FRONTEND_URL") || "https://noxfianca.com").replace(
           /\/$/,
           "",
@@ -742,7 +747,12 @@ serve(async (req) => {
           );
         }
         const attempt = Number(existing.raw_response?.recurrentCheckoutAttempt || 0) + 1;
-        const retryKey = buildBillingKey(proposalId, "checkout", `recurring-retry-${attempt}`);
+        const retryKey = buildRevisionedBillingKey(
+          proposalId,
+          "checkout",
+          `recurring-retry-${attempt}`,
+          consulta,
+        );
         const frontend = (Deno.env.get("FRONTEND_URL") || "https://noxfianca.com").replace(
           /\/$/,
           "",
@@ -987,7 +997,12 @@ serve(async (req) => {
           });
           existing = transition.row;
         } else if (existing.mode === "direct") {
-          const recoveryKey = buildBillingKey(proposalId, "subscription", "direct");
+          const recoveryKey = buildRevisionedBillingKey(
+            proposalId,
+            "subscription",
+            "direct",
+            consulta,
+          );
           const { data: recoveryOperation } = await supabase
             .from("billing_operations")
             .select("*")
@@ -1193,7 +1208,12 @@ serve(async (req) => {
 
     const customerId = await ensureAsaasCustomer(supabase, consulta, recipient);
     const nextDueDate = recurrencePlan.nextDueDate;
-    const subscriptionKey = buildBillingKey(proposalId, "subscription", mode);
+    const subscriptionKey = buildRevisionedBillingKey(
+      proposalId,
+      "subscription",
+      mode,
+      consulta,
+    );
     const { operation, claimed } = await claimBillingOperation(supabase, {
       consultationId: proposalId,
       operationType: mode === "direct" ? "subscription" : "checkout",
@@ -1885,8 +1905,18 @@ serve(async (req) => {
       };
       const checkoutNextDueDate = `${nextDueDate} 12:00:00`;
       const checkoutEndDate = `${recurrencePlan.endDate} 23:59:59`;
-      const initialCheckoutKey = buildBillingKey(proposalId, "checkout", "initial");
-      const recurrentCheckoutKey = buildBillingKey(proposalId, "checkout", "recurring");
+      const initialCheckoutKey = buildRevisionedBillingKey(
+        proposalId,
+        "checkout",
+        "initial",
+        consulta,
+      );
+      const recurrentCheckoutKey = buildRevisionedBillingKey(
+        proposalId,
+        "checkout",
+        "recurring",
+        consulta,
+      );
       const initialPayload = {
         billingTypes: ["CREDIT_CARD"],
         chargeTypes: ["DETACHED"],
@@ -2043,6 +2073,7 @@ serve(async (req) => {
               monthlyAmount: expectedMonthly,
               includesFirstMonthlyPayment: true,
               contractMonths,
+              contractPeriodRevision: Number(consulta.contract_period_revision || 0),
               checkoutSplit: true,
             },
             paymentUrl: initialUrl,
@@ -2060,6 +2091,36 @@ serve(async (req) => {
             throw invoiceCheckpointError || new Error("checkout_invoice_persist_failed");
           }
           localSubscription = invoiceCheckpoint;
+        } else {
+          const { data: refreshedInvoice, error: refreshedInvoiceError } = await supabase
+            .from("faturas_inquilino")
+            .update({
+              installment_total: contractMonths,
+              vencimento: todayDate(),
+              valor: expectedInitial,
+              status: "pending",
+              payment_method: "credit_card",
+              payment_url: initialUrl,
+              boleto_url: null,
+              linha_digitavel: null,
+              components: {
+                ...(invoice.components || {}),
+                fireMode,
+                initialAmount: expectedInitial,
+                monthlyAmount: expectedMonthly,
+                includesFirstMonthlyPayment: true,
+                contractMonths,
+                contractPeriodRevision: Number(consulta.contract_period_revision || 0),
+                checkoutSplit: true,
+              },
+            })
+            .eq("id", invoice.id)
+            .select("*")
+            .maybeSingle();
+          if (refreshedInvoiceError || !refreshedInvoice) {
+            throw refreshedInvoiceError || new Error("checkout_invoice_refresh_failed");
+          }
+          invoice = refreshedInvoice;
         }
 
         const { operation: recurrentCheckoutOperation, claimed: recurrentCheckoutClaimed } =

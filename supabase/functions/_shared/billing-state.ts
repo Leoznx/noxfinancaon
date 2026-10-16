@@ -574,6 +574,29 @@ export function buildBillingKey(
   return `nox:${consultationId}:${kind}:${String(discriminator).toLowerCase()}`;
 }
 
+export function contractPeriodRevision(source: any) {
+  const revision = Number(source?.contract_period_revision ?? source ?? 0);
+  return Number.isSafeInteger(revision) && revision > 0 ? revision : 0;
+}
+
+export function revisionedBillingDiscriminator(discriminator: string | number, source: any) {
+  const revision = contractPeriodRevision(source);
+  return revision > 0 ? `${String(discriminator).toLowerCase()}-r${revision}` : discriminator;
+}
+
+export function buildRevisionedBillingKey(
+  consultationId: string,
+  kind: "initial" | "monthly" | "activation" | "subscription" | "checkout",
+  discriminator: string | number,
+  source: any,
+) {
+  return buildBillingKey(
+    consultationId,
+    kind,
+    revisionedBillingDiscriminator(discriminator, source),
+  );
+}
+
 export function resolveContractMonths(consultation: any) {
   const documents =
     consultation?.documentos && typeof consultation.documentos === "object"
@@ -711,6 +734,7 @@ export function buildBillingSchedule(params: {
   months: number;
   initialDueDate: string;
   monthlyDueDay?: number;
+  contractPeriodRevision?: number;
 }): BillingScheduleItem[] {
   const count = Math.max(1, Math.trunc(params.months));
   const items: BillingScheduleItem[] = [
@@ -733,7 +757,12 @@ export function buildBillingSchedule(params: {
       kind: "monthly",
       dueDate,
       referenceMonth: dueDate.slice(0, 7) + "-01",
-      billingKey: buildBillingKey(params.consultationId, "monthly", installmentNumber),
+      billingKey: buildRevisionedBillingKey(
+        params.consultationId,
+        "monthly",
+        installmentNumber,
+        params.contractPeriodRevision,
+      ),
     });
   }
   return items;

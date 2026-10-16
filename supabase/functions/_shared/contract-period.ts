@@ -13,6 +13,7 @@ type ContractPeriodSource = {
 type ContractPeriodLockRow = {
   contract_period_months?: unknown;
   contract_period_locked_at?: unknown;
+  contract_period_change_pending_at?: unknown;
 };
 
 export class ContractPeriodLockError extends Error {
@@ -94,7 +95,10 @@ export async function lockContractPeriod(
     .eq("id", consultationId)
     .eq("contract_period_months", expectedMonths)
     .is("contract_period_locked_at", null)
-    .select("contract_period_months, contract_period_locked_at")
+    .is("contract_period_change_pending_at", null)
+    .select(
+      "contract_period_months, contract_period_locked_at, contract_period_change_pending_at",
+    )
     .maybeSingle();
 
   if (acquireError) {
@@ -112,7 +116,9 @@ export async function lockContractPeriod(
   // adquiriu o mesmo lock. A leitura confirma isso sem liberar o prazo.
   const { data: current, error: currentError } = await supabase
     .from("consultas_credito")
-    .select("contract_period_months, contract_period_locked_at")
+    .select(
+      "contract_period_months, contract_period_locked_at, contract_period_change_pending_at",
+    )
     .eq("id", consultationId)
     .maybeSingle();
 
@@ -125,6 +131,7 @@ export async function lockContractPeriod(
     !currentRow ||
     parseContractPeriodMonths(currentRow.contract_period_months) !==
       expectedMonths ||
+    currentRow.contract_period_change_pending_at != null ||
     typeof currentRow.contract_period_locked_at !== "string" ||
     !currentRow.contract_period_locked_at
   ) {

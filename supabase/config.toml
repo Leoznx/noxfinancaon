@@ -84,6 +84,9 @@ verify_jwt = true
 [functions.asaas-create-installment-plan]
 verify_jwt = true
 
+[functions.update-contract-period]
+verify_jwt = true
+
 [functions.asaas-create-consolidated-invoice]
 verify_jwt = false
 

@@ -477,6 +477,190 @@ async function d4SignRequest(path: string, init: RequestInit) {
   return body;
 }
 
+function d4SignAlreadyCancelled(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || "");
+  return /already (?:been )?cancell?ed|j[aá] (?:foi|est[aá]|se encontra) cancelad[oa]|cancelad[oa] anteriormente/i.test(
+    message,
+  );
+}
+
+/**
+ * Cancela somente o documento ainda pendente e deixa a mesma linha pronta
+ * para uma nova emissao com o prazo atualizado. O UUID anterior permanece em
+ * uma tabela de supersessao para que o webhook de cancelamento seja aceito sem
+ * cancelar a proposta inteira.
+ */
+export async function supersedePendingD4SignDocument(
+  supabase: any,
+  params: {
+    consultationId: string;
+    previousMonths: number;
+    nextMonths: number;
+  },
+) {
+  const { data: initialSignature, error: signatureError } = await supabase
+    .from("contract_signatures")
+    .select("*")
+    .eq("consultation_id", params.consultationId)
+    .maybeSingle();
+  if (signatureError) throw signatureError;
+  if (!initialSignature) return { superseded: false, reason: "signature_not_found" as const };
+
+  const isSigned = (signature: any) =>
+    Boolean(
+      signature?.signed_at ||
+        signature?.activated_at ||
+        ["signed", "active"].includes(String(signature?.status || "").toLowerCase()) ||
+        String(signature?.signature_status || "").toLowerCase() === "signed",
+    );
+  if (isSigned(initialSignature)) throw new Error("contract_signature_already_signed");
+
+  const documentUuid = String(initialSignature.d4sign_document_uuid || "").trim();
+  if (documentUuid) {
+    const supersessionPayload = {
+      contract_signature_id: initialSignature.id,
+      consultation_id: params.consultationId,
+      d4sign_document_uuid: documentUuid,
+      state: "cancelling",
+      reason: "contract_period_change",
+    };
+    const { data: inserted, error: insertError } = await supabase
+      .from("contract_signature_superseded_documents")
+      .insert(supersessionPayload)
+      .select("*")
+      .maybeSingle();
+    if (insertError && insertError.code !== "23505") throw insertError;
+
+    let supersession = inserted;
+    if (!supersession) {
+      const { data, error } = await supabase
+        .from("contract_signature_superseded_documents")
+        .select("*")
+        .eq("d4sign_document_uuid", documentUuid)
+        .maybeSingle();
+      if (error || !data) throw error || new Error("d4sign_supersession_lookup_failed");
+      supersession = data;
+    }
+
+    if (supersession.state !== "cancelled") {
+      try {
+        await d4SignRequest(`/documents/${encodeURIComponent(documentUuid)}/cancel`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            comment: `Prazo contratual alterado de ${params.previousMonths} para ${params.nextMonths} meses.`,
+          }),
+        });
+      } catch (error) {
+        if (!d4SignAlreadyCancelled(error)) throw error;
+      }
+      const { error: supersessionError } = await supabase
+        .from("contract_signature_superseded_documents")
+        .update({ state: "cancelled", superseded_at: new Date().toISOString() })
+        .eq("id", supersession.id);
+      if (supersessionError) throw supersessionError;
+    }
+  }
+
+  // Um evento de conclusao pode vencer a corrida contra o cancelamento. Nunca
+  // apague esse resultado: o RPC final tambem repete a verificacao atomica.
+  const { data: currentSignature, error: currentError } = await supabase
+    .from("contract_signatures")
+    .select("*")
+    .eq("id", initialSignature.id)
+    .maybeSingle();
+  if (currentError || !currentSignature) {
+    throw currentError || new Error("signature_lookup_after_cancellation_failed");
+  }
+  if (isSigned(currentSignature)) throw new Error("contract_signature_already_signed");
+
+  const { data: document, error: documentError } = await supabase
+    .from("documentos_proposta")
+    .select("id, file_url, document_subtype")
+    .eq("contract_signature_id", currentSignature.id)
+    .maybeSingle();
+  if (documentError) throw documentError;
+  if (document?.document_subtype === SIGNED_CONTRACTS_BUCKET) {
+    throw new Error("contract_signature_already_signed");
+  }
+  if (document?.file_url) {
+    const { error: storageError } = await supabase.storage
+      .from(SIGNED_CONTRACTS_BUCKET)
+      .remove([document.file_url]);
+    if (storageError) throw storageError;
+  }
+  if (document?.id) {
+    const { error: deleteError } = await supabase
+      .from("documentos_proposta")
+      .delete()
+      .eq("id", document.id)
+      .neq("document_subtype", SIGNED_CONTRACTS_BUCKET);
+    if (deleteError) throw deleteError;
+  }
+
+  const { data: resetSignature, error: resetError } = await supabase
+    .from("contract_signatures")
+    .update({
+      d4sign_document_uuid: null,
+      d4sign_signer_key: null,
+      status: "processing",
+      signature_status: "pending",
+      error_code: null,
+      error_message: null,
+      send_attempts: 0,
+      sent_at: null,
+      signed_at: null,
+      activated_at: null,
+      provider_event_at: null,
+      last_webhook_at: null,
+    })
+    .eq("id", currentSignature.id)
+    .is("signed_at", null)
+    .is("activated_at", null)
+    .select("id")
+    .maybeSingle();
+  if (resetError || !resetSignature) {
+    throw resetError || new Error("contract_signature_already_signed");
+  }
+
+  const { error: notificationResetError } = await supabase
+    .from("contract_notification_deliveries")
+    .delete()
+    .eq("contract_signature_id", currentSignature.id)
+    .eq("notification_type", "signature_invite");
+  if (notificationResetError) throw notificationResetError;
+
+  const { error: consultationError } = await supabase
+    .from("consultas_credito")
+    .update({ signature_status: "pending" })
+    .eq("id", params.consultationId);
+  if (consultationError) throw consultationError;
+
+  if (documentUuid) {
+    await supabase.from("contract_signature_events").upsert(
+      {
+        contract_signature_id: currentSignature.id,
+        event_key: `${documentUuid}:period_change_superseded`,
+        event_type: "period_change_superseded",
+        message: `Prazo alterado de ${params.previousMonths} para ${params.nextMonths} meses.`,
+        payload: {
+          previousMonths: params.previousMonths,
+          nextMonths: params.nextMonths,
+        },
+        status: "processed",
+        processed_at: new Date().toISOString(),
+      },
+      { onConflict: "event_key" },
+    );
+  }
+
+  return {
+    superseded: Boolean(documentUuid),
+    signatureId: currentSignature.id,
+    documentUuid: documentUuid || null,
+  };
+}
+
 function decodeD4SignSignerId(signerKey: string) {
   let decoded = "";
   try {

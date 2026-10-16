@@ -231,6 +231,7 @@ serve(async (req) => {
       months: installmentTotal,
       initialDueDate: initialInvoice.vencimento,
       monthlyDueDay: dueDay,
+      contractPeriodRevision: consulta.contract_period_revision,
     });
     const { data: existingRows, error: existingError } = await supabase
       .from("faturas_inquilino")
@@ -239,7 +240,25 @@ serve(async (req) => {
       .in("charge_kind", ["initial", "monthly"]);
     if (existingError) throw existingError;
 
-    for (const invoice of existingRows || []) {
+    const inactiveStatuses = new Set([
+      "cancelled",
+      "canceled",
+      "cancelado",
+      "expired",
+      "refused",
+      "recusado",
+      "failed",
+      "falhou",
+      "refunded",
+      "estornado",
+      "chargeback",
+      "chargeback_dispute",
+    ]);
+    const activeRows = (existingRows || []).filter(
+      (invoice) => !inactiveStatuses.has(String(invoice.status || "pending").toLowerCase()),
+    );
+
+    for (const invoice of activeRows) {
       const frozenTotal = parseContractPeriodMonths(invoice.installment_total);
       const installmentNumber = Number(invoice.numero_parcela);
       if (frozenTotal === null) {
@@ -304,7 +323,7 @@ serve(async (req) => {
     }
 
     const byKey = new Map<string, any>();
-    for (const row of existingRows || []) {
+    for (const row of activeRows) {
       const materializedMonthlyCanSwitch =
         row.charge_kind === "monthly" &&
         row.payment_method !== paymentMethod &&
@@ -369,6 +388,7 @@ serve(async (req) => {
             fireMode,
             monthlyAmount: monthlyValue,
             contractMonths: installmentTotal,
+            contractPeriodRevision: Number(consulta.contract_period_revision || 0),
             boletoIssueLeadDays: BOLETO_ISSUANCE_LEAD_DAYS,
             scheduledIssueDate: scheduledBoletoIssueDate(item.dueDate),
           },
@@ -547,7 +567,12 @@ serve(async (req) => {
         status: internalStatus,
         chargeKind: "monthly",
         paymentMethod,
-        components: { fireMode, monthlyAmount: monthlyValue, contractMonths: installmentTotal },
+        components: {
+          fireMode,
+          monthlyAmount: monthlyValue,
+          contractMonths: installmentTotal,
+          contractPeriodRevision: Number(consulta.contract_period_revision || 0),
+        },
         paymentUrl,
         localPaymentId: payment.id,
         referenceMonth: item.referenceMonth,

@@ -99,4 +99,22 @@ test("retomada identifica apenas cronograma futuro incompleto sem recriar a inic
     hasIncompleteInstallmentPlan([{ ...initial, payment_method: "credit_card" }]),
     false,
   );
+  assert.equal(
+    hasIncompleteInstallmentPlan([
+      initial,
+      {
+        id: "invoice-old-2",
+        billing_key: "contract:monthly:2",
+        charge_kind: "monthly",
+        status: "cancelled",
+      },
+      {
+        id: "invoice-new-2",
+        billing_key: "contract:monthly:2-r1",
+        charge_kind: "monthly",
+        status: "pending",
+      },
+    ]),
+    true,
+  );
 });

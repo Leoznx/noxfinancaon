@@ -95,12 +95,47 @@ serve(async (req) => {
   const message = String(payload?.message || "");
   if (!documentUuid) return jsonResponse(req, { ok: true, ignored: true, reason: "missing_uuid" });
 
+  const normalizedMessage = message.toLowerCase();
+  const finished =
+    eventType === "1" ||
+    normalizedMessage.includes("finished document") ||
+    normalizedMessage.includes("finalizado");
+  const cancelled = normalizedMessage.includes("cancel") || eventType === "3";
+
   const supabase = supabaseAdmin();
   const { data: foundSignature, error } = await supabase
     .from("contract_signatures")
     .select("*")
     .eq("d4sign_document_uuid", documentUuid)
     .maybeSingle();
+  const { data: supersededDocument, error: supersededError } = await supabase
+    .from("contract_signature_superseded_documents")
+    .select("id, state")
+    .eq("d4sign_document_uuid", documentUuid)
+    .maybeSingle();
+  if (supersededError) {
+    console.error("[d4sign-webhook] falha ao consultar documento substituido", {
+      documentUuid,
+      message: supersededError.message,
+    });
+    return jsonResponse(req, { ok: false, retryable: true, reason: "supersession_lookup_failed" }, 503);
+  }
+
+  // O cancelamento solicitado pela troca de prazo nao cancela a proposta. A
+  // linha e criada antes da chamada a D4Sign, portanto ate um webhook imediato
+  // e reconhecido. Um evento de conclusao que vença a corrida continua sendo
+  // processado enquanto o UUID ainda estiver na assinatura principal.
+  if (
+    supersededDocument &&
+    (supersededDocument.state === "cancelled" || cancelled || !foundSignature)
+  ) {
+    return jsonResponse(req, {
+      ok: true,
+      ignored: true,
+      reason: "document_superseded_by_period_change",
+      supersessionState: supersededDocument.state,
+    });
+  }
   if (error || !foundSignature) {
     console.error("[d4sign-webhook] documento nao reconhecido", { documentUuid, eventType });
     // O provedor pode entregar o evento imediatamente, antes do UPDATE que
@@ -160,13 +195,6 @@ serve(async (req) => {
     .from("contract_signatures")
     .update({ last_webhook_at: new Date().toISOString() })
     .eq("id", signature.id);
-
-  const normalizedMessage = message.toLowerCase();
-  const finished =
-    eventType === "1" ||
-    normalizedMessage.includes("finished document") ||
-    normalizedMessage.includes("finalizado");
-  const cancelled = normalizedMessage.includes("cancel") || eventType === "3";
 
   if (cancelled) {
     try {

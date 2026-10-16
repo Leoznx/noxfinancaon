@@ -116,8 +116,11 @@ Deno.test("adquire lock por UPDATE condicionado ao período lido", async () => {
     [["id", "consulta-1"], ["contract_period_months", 24]],
   );
   assertEquals(
-    client.calls.find((call) => call.method === "is")?.args,
-    ["contract_period_locked_at", null],
+    client.calls.filter((call) => call.method === "is").map((call) => call.args),
+    [
+      ["contract_period_locked_at", null],
+      ["contract_period_change_pending_at", null],
+    ],
   );
 });
 
@@ -148,6 +151,23 @@ Deno.test("lock recusa continuar se o período mudou durante a requisição", as
 
   await assertRejects(
     () => lockContractPeriod(client, "consulta-3", 24),
+    Error,
+    CONTRACT_PERIOD_LOCK_CONFLICT_CODE,
+  );
+});
+
+Deno.test("lock recusa criar cobrança durante a troca segura do período", async () => {
+  const client = fakeLockClient({
+    acquired: null,
+    current: {
+      contract_period_months: 24,
+      contract_period_locked_at: "2026-10-16T12:00:00.000Z",
+      contract_period_change_pending_at: "2026-10-16T11:59:59.000Z",
+    },
+  });
+
+  await assertRejects(
+    () => lockContractPeriod(client, "consulta-4", 24),
     Error,
     CONTRACT_PERIOD_LOCK_CONFLICT_CODE,
   );

@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { isNomeValido, reenviarConsulta, registrarEventoProposta } from "@/lib/consultasCredito";
 import { buildPlanSelectionUpdate } from "@/lib/plan-selection";
 import { normalizeContractPeriodMonths } from "@/lib/contract-period";
+import { updateContractPeriodSafely } from "@/lib/contract-period-update";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/consultas/$id/resultado")({
@@ -108,14 +109,18 @@ function ConsultaResultado() {
         calculatedPlan: planoCalculado,
       });
 
-      const { error } = await supabase
-        .from("consultas_credito")
-        .update(selectionUpdate.payload as any)
-        .eq("id", id);
-      if (error) throw error;
+      if (selectionUpdate.resumed && selectionUpdate.periodChanged) {
+        await updateContractPeriodSafely(id, periodoContrato);
+      } else {
+        const { error } = await supabase
+          .from("consultas_credito")
+          .update(selectionUpdate.payload as any)
+          .eq("id", id);
+        if (error) throw error;
+      }
 
       // Passo a passo do funil — é o que o administrador lê em Consultas > Ver mais.
-      if (!selectionUpdate.resumed || selectionUpdate.periodChanged) {
+      if (!selectionUpdate.resumed) {
         await registrarEventoProposta(
           id,
           selectionUpdate.resumed ? "periodo_contrato_atualizado" : "plano_selecionado",

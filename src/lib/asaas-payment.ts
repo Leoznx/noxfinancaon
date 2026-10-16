@@ -130,10 +130,28 @@ export function hasIncompleteInstallmentPlan(
     charge_kind?: string | null;
     installment_total?: number | string | null;
     payment_method?: string | null;
+    status?: string | null;
     components?: { contractMonths?: number | string | null } | null;
   }>,
 ) {
-  const initial = invoices.find(
+  const inactiveStatuses = new Set([
+    "cancelled",
+    "canceled",
+    "cancelado",
+    "expired",
+    "refused",
+    "recusado",
+    "failed",
+    "falhou",
+    "refunded",
+    "estornado",
+    "chargeback",
+    "chargeback_dispute",
+  ]);
+  const activeInvoices = invoices.filter(
+    (invoice) => !inactiveStatuses.has(String(invoice.status || "pending").toLowerCase()),
+  );
+  const initial = activeInvoices.find(
     (invoice) =>
       invoice.charge_kind === "initial" || String(invoice.billing_key || "").includes(":initial:"),
   );
@@ -143,7 +161,7 @@ export function hasIncompleteInstallmentPlan(
   const expected = Number(initial.installment_total || initial.components?.contractMonths || 0);
   if (expected <= 1) return false;
   const materialized = new Set(
-    invoices
+    activeInvoices
       .filter(
         (invoice) =>
           invoice.charge_kind === "initial" ||

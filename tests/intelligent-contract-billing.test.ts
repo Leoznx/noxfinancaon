@@ -221,6 +221,26 @@ test("cronograma de 12 competencias inclui a inicial exatamente uma vez", () => 
   assert.equal(schedule[0].billingKey, buildBillingKey(consultationId, "initial", 1));
 });
 
+test("novo prazo preserva a chave inicial e versiona apenas as mensalidades futuras", () => {
+  const consultationId = "22222222-2222-4222-8222-222222222222";
+  const firstSchedule = buildBillingSchedule({
+    consultationId,
+    months: 3,
+    initialDueDate: "2026-10-20",
+  });
+  const revisedSchedule = buildBillingSchedule({
+    consultationId,
+    months: 6,
+    initialDueDate: "2026-10-20",
+    contractPeriodRevision: 1,
+  });
+
+  assert.equal(revisedSchedule[0].billingKey, firstSchedule[0].billingKey);
+  assert.equal(firstSchedule[1].billingKey, `${buildBillingKey(consultationId, "monthly", 2)}`);
+  assert.equal(revisedSchedule[1].billingKey, `${buildBillingKey(consultationId, "monthly", "2-r1")}`);
+  assert.notEqual(revisedSchedule[1].billingKey, firstSchedule[1].billingKey);
+});
+
 test("boleto inicial e mensalidades futuras respeitam antecedencia de sete dias", () => {
   const now = new Date("2026-10-14T15:00:00.000Z");
   assert.equal(BOLETO_ISSUANCE_LEAD_DAYS, 7);

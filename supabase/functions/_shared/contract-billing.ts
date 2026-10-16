@@ -156,7 +156,7 @@ export async function cancelContractSubscription(
   const cancellationKey = buildBillingKey(
     params.consultationId,
     "subscription",
-    `cancel-${subscription.id}`,
+    `cancel-${subscription.id}-${subscription.external_reference || "legacy"}`,
   );
   const { operation, claimed } = await claimBillingOperation(supabase, {
     consultationId: params.consultationId,
@@ -699,19 +699,63 @@ export async function materializeInvoice(
     .select("*")
     .eq("billing_key", billingKey)
     .maybeSingle();
-  if (findError || !existing) throw findError || error;
+  if (findError) throw findError;
+
+  let reusableExisting = existing;
+  if (!reusableExisting) {
+    const { data: occupiedSlot, error: occupiedSlotError } = await supabase
+      .from("faturas_inquilino")
+      .select("*")
+      .eq("consulta_id", params.consultation.id)
+      .eq("charge_kind", params.chargeKind)
+      .eq("numero_parcela", params.installmentNumber)
+      .maybeSingle();
+    if (occupiedSlotError) throw occupiedSlotError;
+    const occupiedStatus = normalizePaymentStatus(occupiedSlot?.status);
+    const reusable =
+      occupiedSlot &&
+      ["cancelled", "refused"].includes(occupiedStatus) &&
+      !occupiedSlot.confirmed_at &&
+      !occupiedSlot.pago_em;
+    if (!reusable) throw error;
+
+    const { data: recycled, error: recycleError } = await supabase
+      .from("faturas_inquilino")
+      .update({
+        ...payload,
+        components: {
+          ...((payload.components as Record<string, unknown>) || {}),
+          supersededInvoice: {
+            billingKey: occupiedSlot.billing_key || null,
+            localPaymentId: occupiedSlot.asaas_payment_id || null,
+            status: occupiedSlot.status || null,
+            periodChange: occupiedSlot.components?.periodChange || null,
+          },
+        },
+      })
+      .eq("id", occupiedSlot.id)
+      .select("*")
+      .maybeSingle();
+    if (recycleError || !recycled) {
+      throw recycleError || new Error("superseded_invoice_reuse_failed");
+    }
+    reusableExisting = recycled;
+  }
+
+  const existingInvoice = reusableExisting;
 
   const safePatch = {
-    tenant_user_id: existing.tenant_user_id || payload.tenant_user_id,
-    recipient_user_id: existing.recipient_user_id || payload.recipient_user_id,
-    asaas_payment_id: payload.asaas_payment_id || existing.asaas_payment_id,
-    asaas_subscription_id: payload.asaas_subscription_id || existing.asaas_subscription_id,
-    boleto_url: payload.boleto_url || existing.boleto_url,
-    linha_digitavel: payload.linha_digitavel || existing.linha_digitavel,
-    payment_url: payload.payment_url || existing.payment_url,
-    payment_method: payload.payment_method || existing.payment_method,
+    tenant_user_id: existingInvoice.tenant_user_id || payload.tenant_user_id,
+    recipient_user_id: existingInvoice.recipient_user_id || payload.recipient_user_id,
+    asaas_payment_id: payload.asaas_payment_id || existingInvoice.asaas_payment_id,
+    asaas_subscription_id:
+      payload.asaas_subscription_id || existingInvoice.asaas_subscription_id,
+    boleto_url: payload.boleto_url || existingInvoice.boleto_url,
+    linha_digitavel: payload.linha_digitavel || existingInvoice.linha_digitavel,
+    payment_url: payload.payment_url || existingInvoice.payment_url,
+    payment_method: payload.payment_method || existingInvoice.payment_method,
     components: {
-      ...(existing.components || {}),
+      ...(existingInvoice.components || {}),
       ...((payload.components as Record<string, unknown>) || {}),
     },
   };
@@ -719,18 +763,18 @@ export async function materializeInvoice(
     const { data: repaired, error: repairError } = await supabase
       .from("faturas_inquilino")
       .update(safePatch)
-      .eq("id", existing.id)
+      .eq("id", existingInvoice.id)
       .select("*")
       .maybeSingle();
     if (repairError) throw repairError;
-    return repaired || existing;
+    return repaired || existingInvoice;
   }
 
   const transition = await persistProviderTransition({
     supabase,
     table: "faturas_inquilino",
-    rowId: existing.id,
-    current: existing,
+    rowId: existingInvoice.id,
+    current: existingInvoice,
     incomingEventAt: params.providerEventAt,
     reduce: (currentStatus, currentEventAt, incomingEventAt) =>
       reducePaymentStatus(
