@@ -106,6 +106,18 @@ Evidência sanitizada da primeira execução real observada após a migração:
 - o container final `545cc54` permaneceu `running/healthy`, com `RestartCount =
 0` durante a observação posterior.
 
+Uma segunda execução real já existente na fila foi acompanhada até o mesmo
+limite seguro, depois que a reconciliação anterior terminou sem encontrar uma
+nova proposta. Às 23:20 UTC, o worker retomou a fila, preencheu a consulta,
+observou o envio e aguardou a Loft sem reclique. Às 23:25 UTC, como não apareceu
+uma decisão de crédito reconhecida, finalizou tecnicamente em
+`requires_verification`. O reparador classificou o incidente como
+`manual_required`, não emitiu `RESTART_CREDIT_WORKER` e o Docker continuou
+`healthy`, `RestartCount = 0`, versão `545cc54` e zero leases expirados. A
+reconciliação desse envio incerto bloqueou novos claims de propósito; o objetivo
+é impedir uma segunda proposta até que a janela de reconciliação termine, não
+mascarar essa espera como prontidão para novo trabalho.
+
 ### Hipóteses ainda não confirmadas
 
 - frequência real de expiração da sessão e alteração de seletores na Loft;
@@ -291,13 +303,15 @@ VPS.
 
 Os testes intensivos usaram somente o simulador local e dados sintéticos; nenhum
 CPF real foi criado para teste de carga. A migração, o rebuild, a recuperação de
-uma reconciliação, um reinício controlado e uma solicitação real já existente na
-fila foram observados em produção. A solicitação chegou ao POST da Loft, mas não
-recebeu decisão dentro do prazo e foi preservada para verificação. Não foi
-executado soak de 24 horas nem uma bateria PF/PJ criada exclusivamente para esta
-validação. O estado correto é: implementado, testado localmente e implantado;
-fluxo de falha/resultado incerto validado em produção; aprovação, recusa e em
-análise ainda não revalidados ponta a ponta nesta versão.
+uma reconciliação, um reinício controlado e duas solicitações reais já existentes
+na fila foram observados em produção. Nas duas, o POST foi observado, mas a Loft
+não exibiu decisão reconhecida dentro do prazo; ambas foram preservadas para
+verificação, sem decisão de crédito inventada. Na segunda execução, já com a
+correção final, o tratamento não reiniciou o worker. Não foi executado soak de 24
+horas nem uma bateria PF/PJ criada exclusivamente para esta validação. O estado
+correto é: implementado, testado localmente e implantado; fluxo de
+falha/resultado incerto e recuperação sem reinício validados em produção;
+aprovação, recusa e em análise ainda não revalidados ponta a ponta nesta versão.
 
 ## Intervenção humana ainda necessária
 
