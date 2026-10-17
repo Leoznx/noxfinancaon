@@ -92,6 +92,17 @@ falta de recursos.
 - uma solicitação legada com mais de 13 dias havia sido backfilled como pronta
   para envio. Ela foi colocada em `requires_verification` antes de o worker ser
   liberado, evitando envio tardio sem autorização atual.
+- nas duas solicitações reais mais recentes, a Loft exibiu uma nova tela de
+  restrição de acesso: a conta de integração precisa ser liberada para o módulo
+  Fiança no portal Adm Aluguel. O texto sanitizado foi confirmado tanto no
+  estado persistido quanto no terminal da VPS;
+- o parser anterior não reconhecia essa nova mensagem. Como o POST já havia
+  ocorrido, ele aguardava todo o timeout de resultado de 300 segundos e
+  encerrava como `result_not_recognized`, explicando a lentidão percebida e a
+  ausência de uma decisão de crédito;
+- reiniciar navegador, container ou VPS não corrige esse bloqueio de permissão
+  no provedor. Repetir automaticamente também seria inseguro, pois a Loft pode
+  ter recebido o envio antes de mostrar a restrição.
 
 Evidência sanitizada da primeira execução real observada após a migração:
 
@@ -117,6 +128,12 @@ uma decisão de crédito reconhecida, finalizou tecnicamente em
 reconciliação desse envio incerto bloqueou novos claims de propósito; o objetivo
 é impedir uma segunda proposta até que a janela de reconciliação termine, não
 mascarar essa espera como prontidão para novo trabalho.
+
+Em 17/10/2026, a mensagem de restrição foi reclassificada sem expor documentos
+ou credenciais. Três envios incertos existentes ficaram com
+`PROVIDER_ACCESS_RESTRICTED`; duas solicitações ainda não enviadas permaneceram
+duráveis na fila com etapa `aguardando_liberacao_parceiro`. O circuito da
+credencial foi aberto para impedir novo envio cego.
 
 ### Hipóteses ainda não confirmadas
 
@@ -157,6 +174,11 @@ Como fila e registro são a mesma transação PostgreSQL, não existe uma janela
 entre “salvar a consulta” e “publicar o trabalho”; não foi necessário introduzir
 Redis nem outbox separada.
 
+A migração `20261017002000_detect_loft_fianca_access_restriction.sql` preserva
+os envios incertos, classifica a nova restrição de acesso, abre o circuito da
+credencial e sinaliza as linhas ainda em fila como aguardando a liberação do
+parceiro. Ela não apaga, conclui, recusa nem reenvia consultas.
+
 ### Worker
 
 - usa as RPCs de claim, heartbeat, finalização e falha em vez de updates soltos;
@@ -182,6 +204,10 @@ Redis nem outbox separada.
   durável, evitando incidentes duplicados e ciclos de reparo;
 - preserva logs sanitizados com correlation ID, consulta, etapa, tentativa,
   worker, categoria e duração.
+- reconhece imediatamente a nova restrição de acesso ao módulo Fiança e não
+  aguarda o timeout de cinco minutos;
+- persiste `PROVIDER_ACCESS_RESTRICTED`, bloqueia a credencial por um intervalo
+  configurável e restaura esse bloqueio após reinício do processo.
 
 ### Site e aplicativo
 
@@ -193,6 +219,9 @@ Redis nem outbox separada.
   Loft;
 - retry explícito passa por RPC autorizada e só aceita falha anterior ao envio;
 - “Erro” deixou de ser agrupado como “Recusado” no aplicativo.
+- site e aplicativo encerram o modal bloqueante quando a consulta entra em
+  `aguardando_liberacao_parceiro`, abrem o registro persistido pelo mesmo ID e
+  explicam que a execução depende da liberação da Loft.
 
 ## Limites iniciais recomendados
 
@@ -246,6 +275,19 @@ worker da VPS. Esses dois passos exigem acesso operacional autorizado.
 - versão final implantada: `545cc54`; Docker `restart: unless-stopped`, health
   local e dois processos independentes (crédito e reparo) confirmados.
 
+### Correção complementar implantada em 17/10/2026
+
+- migração de classificação da restrição aplicada e validada em produção: duas
+  linhas em `aguardando_liberacao_parceiro`, três em
+  `PROVIDER_ACCESS_RESTRICTED` e circuito persistente aberto;
+- checkout da VPS atualizado por fast-forward, imagem reconstruída e somente o
+  serviço `credpago-worker` recriado, com zero consultas ativas;
+- versão implantada: `c035400`;
+- startup confirmou sessão portátil, mutex exclusivo, concorrência 1 e
+  restauração do bloqueio do provedor sem reivindicar as duas consultas;
+- Docker terminou `running/healthy`, `RestartCount = 0`, zero leases expirados
+  e nenhum processamento ou falha durante a inicialização da nova versão.
+
 ### Rollback
 
 - reimplantar o commit anterior do site/worker;
@@ -290,7 +332,7 @@ VPS.
 - TypeScript isolado do worker: aprovado;
 - ESLint dos arquivos alterados do site/worker: aprovado;
 - build Vercel/TanStack: aprovado;
-- suíte de automação Playwright: **137/137** aprovada;
+- suíte de automação Playwright: **140/140** aprovada;
 - testes de idempotência do site: **3/3** aprovados;
 - testes novos de fila/política/carga/falhas estão incluídos na suíte;
 - TypeScript do aplicativo: aprovado;
@@ -312,9 +354,15 @@ horas nem uma bateria PF/PJ criada exclusivamente para esta validação. O estad
 correto é: implementado, testado localmente e implantado; fluxo de
 falha/resultado incerto e recuperação sem reinício validados em produção;
 aprovação, recusa e em análise ainda não revalidados ponta a ponta nesta versão.
+O reconhecimento da tela de restrição e o bloqueio persistente foram validados
+em produção; a emissão de uma nova decisão continua impossibilitada pelo acesso
+externo da conta ao módulo Fiança.
 
 ## Intervenção humana ainda necessária
 
+- um administrador da conta Loft deve liberar o usuário da integração no módulo
+  Fiança do portal Adm Aluguel. Essa é a dependência comprovada que ainda impede
+  novas decisões de crédito; a permissão não foi alterada automaticamente;
 - reconciliar as linhas que chegaram a `requires_verification` consultando a
   Loft pelo identificador confiável disponível;
 - renovar sessão manualmente se houver CAPTCHA, MFA, credencial revogada ou
