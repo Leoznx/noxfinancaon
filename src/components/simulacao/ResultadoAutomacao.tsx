@@ -132,16 +132,13 @@ export function ResultadoAutomacao({
           ? consulta.status
           : "aprovado"
   ) as StatusConsulta;
-  const aguardandoLiberacaoParceiro = consulta.automation_step === "aguardando_liberacao_parceiro";
   const estadoOperacional = ["erro", "requer_verificacao"].includes(resultadoNormalizado)
     ? resultadoNormalizado
     : statusBruto;
   const semDecisaoReal =
     !resultadoConhecido &&
     ["", "pendente", "processando", "erro", "requer_verificacao"].includes(estadoOperacional);
-  const mensagemAnaliseOperacional = aguardandoLiberacaoParceiro
-    ? "Consulta registrada e em análise. O processamento será retomado assim que a Loft voltar a ficar disponível."
-    : "Consulta registrada e em análise. Esta página será atualizada automaticamente quando houver uma decisão de crédito.";
+  const mensagemAnaliseOperacional = "Sua simulação está em análise.";
   const ui = STATUS_UI[status];
   const statusNormalizado = String(status ?? "").toLowerCase();
   const isRecusado = statusNormalizado.includes("recusado") || statusNormalizado.includes("reprovado");
