@@ -375,9 +375,10 @@ export function ResultadoAutomacao({
     );
   }
 
-  if (isEmAnalise && !semDecisaoReal) {
-    const jaEnviadoParaAprovacao = consulta.substatus === "documentacao_complementar_enviada";
-    const faltaDocumentos = consulta.substatus === "falta_documentos";
+  if (isEmAnalise || semDecisaoReal) {
+    const jaEnviadoParaAprovacao =
+      !semDecisaoReal && consulta.substatus === "documentacao_complementar_enviada";
+    const faltaDocumentos = !semDecisaoReal && consulta.substatus === "falta_documentos";
     const AnaliseIcon = faltaDocumentos ? AlertTriangle : Clock;
     return (
       <div className="space-y-6">
@@ -404,7 +405,9 @@ export function ResultadoAutomacao({
                       <p className="text-amber-800 text-sm sm:text-base leading-tight">
                         {faltaDocumentos
                           ? "O prazo terminou sem o envio da documentação."
-                          : "Sua simulação está em análise."}
+                          : semDecisaoReal
+                            ? mensagemAnaliseOperacional
+                            : "Sua simulação está em análise."}
                       </p>
                     </div>
                   </div>
@@ -453,52 +456,36 @@ export function ResultadoAutomacao({
           </div>
         )}
 
-        <FormularioAnaliseComplementar consulta={consulta} />
+        {!semDecisaoReal && <FormularioAnaliseComplementar consulta={consulta} />}
       </div>
     );
   }
 
   return (
     <div className="space-y-5">
-      {semDecisaoReal ? (
-        <div className="rounded-2xl border border-amber-300 bg-amber-50 p-10 flex flex-col items-center text-center gap-4 text-amber-950">
-          <Clock className="h-14 w-14 text-amber-600" strokeWidth={1.7} />
-          <h1 className="text-3xl font-bold tracking-tight">Em análise</h1>
-          <p className="max-w-lg text-amber-800">{mensagemAnaliseOperacional}</p>
-          {statusBruto === "erro" && onTentarNovamente && (
+      {ui && (
+        <div className={`rounded-2xl border p-10 flex flex-col items-center text-center gap-4 ${ui.className}`}>
+          <ui.Icon className={`w-16 h-16 ${ui.iconClassName}`} strokeWidth={1.5} />
+          <h1 className="text-4xl font-bold tracking-tight">{ui.label}</h1>
+          {(consulta.mensagem || consulta.error_message) && (
+            <p className="text-base max-w-xl leading-relaxed">
+              {consulta.mensagem || consulta.error_message}
+            </p>
+          )}
+          {consulta.automation_finished_at && (
+            <p className="text-xs font-bold uppercase tracking-widest opacity-70">
+              Consultado em {new Date(consulta.automation_finished_at).toLocaleString("pt-BR")}
+            </p>
+          )}
+          {status === "erro" && onTentarNovamente && (
             <Button
               onClick={onTentarNovamente}
-              className="mt-2 h-12 rounded-xl bg-neutral-900 px-6 font-bold text-white hover:bg-neutral-800"
+              className="bg-neutral-900 hover:bg-neutral-800 text-white font-bold h-12 rounded-xl px-6 mt-2"
             >
-              <RotateCcw className="mr-2 h-4 w-4" /> Tentar novamente
+              <RotateCcw className="w-4 h-4 mr-2" /> Tentar novamente
             </Button>
           )}
         </div>
-      ) : (
-        ui && (
-          <div className={`rounded-2xl border p-10 flex flex-col items-center text-center gap-4 ${ui.className}`}>
-            <ui.Icon className={`w-16 h-16 ${ui.iconClassName}`} strokeWidth={1.5} />
-            <h1 className="text-4xl font-bold tracking-tight">{ui.label}</h1>
-            {(consulta.mensagem || consulta.error_message) && (
-              <p className="text-base max-w-xl leading-relaxed">
-                {consulta.mensagem || consulta.error_message}
-              </p>
-            )}
-            {consulta.automation_finished_at && (
-              <p className="text-xs font-bold uppercase tracking-widest opacity-70">
-                Consultado em {new Date(consulta.automation_finished_at).toLocaleString("pt-BR")}
-              </p>
-            )}
-            {status === "erro" && onTentarNovamente && (
-              <Button
-                onClick={onTentarNovamente}
-                className="bg-neutral-900 hover:bg-neutral-800 text-white font-bold h-12 rounded-xl px-6 mt-2"
-              >
-                <RotateCcw className="w-4 h-4 mr-2" /> Tentar novamente
-              </Button>
-            )}
-          </div>
-        )
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
