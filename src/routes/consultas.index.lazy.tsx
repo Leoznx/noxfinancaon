@@ -23,7 +23,11 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { toast } from "sonner";
-import { formatDocumento } from "@/lib/consultasCredito";
+import {
+  formatDocumento,
+  LABEL_STATUS_CONSULTA,
+  resolverStatusConsulta,
+} from "@/lib/consultasCredito";
 import { resolveCreditCustomerName } from "@/lib/credit-customer-name";
 
 export const Route = createLazyFileRoute("/consultas/")({
@@ -132,44 +136,10 @@ function Consultas() {
     fetchConsultas();
   }, [fetchConsultas]);
 
-  // `resultado` guarda o veredito da consulta de crédito de forma permanente — a
-  // automação só grava decisões reais (aprovado/recusado/em_analise) ali.
-  // Já `status` é o ponteiro de etapa da proposta inteira (pendente, processando,
-  // pendente_documentacao, aguardando_ativacao, ativo, etc.) e muda conforme o corretor
-  // avança (ex.: escolhe um plano). Preferir `resultado` aqui garante que "Minhas
-  // Consultas" sempre mostre o resultado real da análise, mesmo depois de a proposta
-  // avançar para as próximas etapas.
-  const getStatusConsulta = (c: any) => {
-    if (c.status === "em_analise" && c.substatus === "falta_documentos") return "falta_documentos";
-    const resultadosFinais = ["aprovado", "recusado", "reprovado", "em_analise"];
-    const status = resultadosFinais.includes(c.resultado) ? c.resultado : c.status;
-
-    if (status === "aprovado") return "aprovado";
-    if (status === "recusado" || status === "reprovado") return "recusado";
-    if (status === "em_analise") return "em_analise";
-    if (status === "requer_verificacao") return "requer_verificacao";
-    if (status === "erro") return "erro";
-    if (status === "processando") return "processando";
-    if (status === "pendente" || !status) return "pendente";
-    // Qualquer outro status (pendente_documentacao, aguardando_ativacao, ativo...) só foi
-    // alcançado porque a consulta já passou pela análise de crédito com aprovação — nunca
-    // deve cair em "Pendente" por falta do campo `resultado` (dados legados/manuais que
-    // avançaram a proposta sem nunca ter passado pela automação de verdade).
-    return "aprovado";
-  };
+  const getStatusConsulta = resolverStatusConsulta;
 
   const getStatusLabel = (status: string) => {
-    const labels: Record<string, string> = {
-      aprovado: "Aprovado",
-      recusado: "Recusado",
-      em_analise: "Em análise",
-      erro: "Erro",
-      requer_verificacao: "Requer verificação",
-      processando: "Consultando...",
-      pendente: "Pendente",
-      falta_documentos: "Falta de documentos",
-    };
-    return labels[status] ?? status;
+    return LABEL_STATUS_CONSULTA[status as keyof typeof LABEL_STATUS_CONSULTA] ?? status;
   };
 
   const getStatusBadge = (c: any) => {
@@ -330,8 +300,6 @@ function Consultas() {
             <SelectItem value="aprovado">Aprovados</SelectItem>
             <SelectItem value="recusado">Recusados</SelectItem>
             <SelectItem value="em_analise">Em análise</SelectItem>
-            <SelectItem value="requer_verificacao">Requer verificação</SelectItem>
-            <SelectItem value="pendente">Pendentes</SelectItem>
           </SelectContent>
         </Select>
       </div>

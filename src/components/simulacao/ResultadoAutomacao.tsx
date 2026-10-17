@@ -13,7 +13,6 @@ import {
   XCircle,
   Clock,
   AlertTriangle,
-  Settings,
   UserRound,
   Building2,
   MapPin,
@@ -25,7 +24,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { STATUS_FINAIS, formatDocumento, type ConsultaCredito, type StatusConsulta } from "@/lib/consultasCredito";
+import { formatDocumento, type ConsultaCredito, type StatusConsulta } from "@/lib/consultasCredito";
 import { resolveCreditCustomerName } from "@/lib/credit-customer-name";
 import { SeletorPlanos, type ExtrasSelecionados, type PlanoSelecionadoCalculo } from "@/components/simulacao/SeletorPlanos";
 
@@ -112,7 +111,8 @@ export function ResultadoAutomacao({
   // Preferir `resultado` aqui evita que essa tela fique presa em "Consultando..." para
   // sempre assim que a proposta avança para as próximas etapas.
   const statusBruto = String(consulta.status ?? "").toLowerCase();
-  const resultadoConhecido = STATUS_FINAIS.includes(String(consulta.resultado ?? "").toLowerCase() as StatusConsulta);
+  const resultadoNormalizado = String(consulta.resultado ?? "").toLowerCase();
+  const resultadoConhecido = ["aprovado", "recusado", "reprovado", "em_analise"].includes(resultadoNormalizado);
   // A automação em si só tem dois estados "ainda rodando": pendente (na fila) e
   // processando (worker aberto). Qualquer outro `status` (pendente_documentacao,
   // aguardando_ativacao, ativado...) significa que a proposta já avançou bem além da
@@ -132,9 +132,16 @@ export function ResultadoAutomacao({
           ? consulta.status
           : "aprovado"
   ) as StatusConsulta;
-  const aguardandoDisponibilidade = statusBruto === "pendente";
   const aguardandoLiberacaoParceiro = consulta.automation_step === "aguardando_liberacao_parceiro";
-  const emAndamento = !resultadoConhecido && aindaNaAnaliseDeCredito && !aguardandoDisponibilidade;
+  const estadoOperacional = ["erro", "requer_verificacao"].includes(resultadoNormalizado)
+    ? resultadoNormalizado
+    : statusBruto;
+  const semDecisaoReal =
+    !resultadoConhecido &&
+    ["", "pendente", "processando", "erro", "requer_verificacao"].includes(estadoOperacional);
+  const mensagemAnaliseOperacional = aguardandoLiberacaoParceiro
+    ? "Consulta registrada e em análise. O processamento será retomado assim que a Loft voltar a ficar disponível."
+    : "Consulta registrada e em análise. Esta página será atualizada automaticamente quando houver uma decisão de crédito.";
   const ui = STATUS_UI[status];
   const statusNormalizado = String(status ?? "").toLowerCase();
   const isRecusado = statusNormalizado.includes("recusado") || statusNormalizado.includes("reprovado");
@@ -368,7 +375,7 @@ export function ResultadoAutomacao({
     );
   }
 
-  if (isEmAnalise) {
+  if (isEmAnalise && !semDecisaoReal) {
     const jaEnviadoParaAprovacao = consulta.substatus === "documentacao_complementar_enviada";
     const faltaDocumentos = consulta.substatus === "falta_documentos";
     const AnaliseIcon = faltaDocumentos ? AlertTriangle : Clock;
@@ -453,18 +460,19 @@ export function ResultadoAutomacao({
 
   return (
     <div className="space-y-5">
-      {emAndamento ? (
-        <div className="rounded-2xl border border-neutral-200 bg-neutral-50 p-10 flex flex-col items-center text-center gap-4">
-          <Settings
-            className="w-14 h-14 text-yellow-500 animate-spin"
-            strokeWidth={1.5}
-            style={{ animationDuration: "2.5s" }}
-          />
-          <h1 className="text-3xl font-bold text-neutral-900 tracking-tight">Consultando...</h1>
-          <p className="text-neutral-600 max-w-lg">
-            A simulação ainda está em andamento. Esta página atualiza automaticamente quando o
-            resultado chegar.
-          </p>
+      {semDecisaoReal ? (
+        <div className="rounded-2xl border border-amber-300 bg-amber-50 p-10 flex flex-col items-center text-center gap-4 text-amber-950">
+          <Clock className="h-14 w-14 text-amber-600" strokeWidth={1.7} />
+          <h1 className="text-3xl font-bold tracking-tight">Em análise</h1>
+          <p className="max-w-lg text-amber-800">{mensagemAnaliseOperacional}</p>
+          {statusBruto === "erro" && onTentarNovamente && (
+            <Button
+              onClick={onTentarNovamente}
+              className="mt-2 h-12 rounded-xl bg-neutral-900 px-6 font-bold text-white hover:bg-neutral-800"
+            >
+              <RotateCcw className="mr-2 h-4 w-4" /> Tentar novamente
+            </Button>
+          )}
         </div>
       ) : (
         ui && (
@@ -474,13 +482,6 @@ export function ResultadoAutomacao({
             {(consulta.mensagem || consulta.error_message) && (
               <p className="text-base max-w-xl leading-relaxed">
                 {consulta.mensagem || consulta.error_message}
-              </p>
-            )}
-            {status === "pendente" && !consulta.mensagem && !consulta.error_message && (
-              <p className="text-base max-w-xl leading-relaxed">
-                {aguardandoLiberacaoParceiro
-                  ? "Sua simulação está salva. A Loft precisa liberar o acesso da conta ao módulo Fiança antes de a automação continuar."
-                  : "Sua simulação está salva e será retomada quando o serviço de análise estiver disponível novamente."}
               </p>
             )}
             {consulta.automation_finished_at && (

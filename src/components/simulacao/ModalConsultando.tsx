@@ -36,7 +36,7 @@ function etapaLabel(etapa?: string | null): string {
   if (etapa === "aguardando_resultado") return "Aguardando o resultado";
   if (etapa === "abrindo") return "Abrindo a consulta";
   if (etapa === "aguardando_autenticacao") return "Preparando a análise";
-  if (etapa === "aguardando_liberacao_parceiro") return "Aguardando liberação da Loft";
+  if (etapa === "aguardando_liberacao_parceiro") return "Em análise";
   if (etapa === "recuperada_automaticamente") return "Consulta recuperada e reenfileirada";
   return "Consulta adicionada à fila";
 }
@@ -67,7 +67,7 @@ export function ModalConsultando({ open, erro, onTentarNovamente, onFechar, prog
               />
             </div>
             <DialogTitle className="text-2xl font-bold text-neutral-900 tracking-tight">
-              Consultando crédito
+              Em análise
             </DialogTitle>
             <DialogDescription className="text-base text-neutral-600 leading-relaxed">
               {etapaLabel(etapa)}. Aguarde um instante.
@@ -80,7 +80,7 @@ export function ModalConsultando({ open, erro, onTentarNovamente, onFechar, prog
             </div>
             <div className="flex items-center gap-2 text-xs font-bold text-neutral-400 uppercase tracking-widest">
               <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
-              Consultando crédito na NOX FIANÇA
+              Simulação em análise na NOX FIANÇA
             </div>
           </div>
         ) : (

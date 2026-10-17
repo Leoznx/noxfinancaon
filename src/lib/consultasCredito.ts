@@ -7,6 +7,10 @@ import { getDemoDecision } from "@/lib/demo-accounts";
 import { createSimulationCorrelationId } from "@/lib/correlation-id";
 import { selectOperationalCreditSimulationCep } from "@/lib/creditSimulationCep";
 import { getCreditSimulationOperationKey } from "@/lib/credit-simulation-idempotency";
+import {
+  resolveCreditStatusPresentation,
+  type CreditStatusPresentation,
+} from "@/lib/credit-status-presentation";
 
 /** Status do fluxo de automação local CredPago. */
 export type StatusConsulta =
@@ -445,15 +449,7 @@ export async function registrarEventoProposta(
   }
 }
 
-export type StatusExibicaoConsulta =
-  | "aprovado"
-  | "recusado"
-  | "em_analise"
-  | "falta_documentos"
-  | "erro"
-  | "requer_verificacao"
-  | "processando"
-  | "pendente";
+export type StatusExibicaoConsulta = CreditStatusPresentation;
 
 /**
  * `resultado` guarda o veredito da análise de crédito de forma permanente (a automação
@@ -468,26 +464,7 @@ export function resolverStatusConsulta(consulta: {
   resultado?: string | null;
   substatus?: string | null;
 }): StatusExibicaoConsulta {
-  if (consulta.status === "em_analise" && consulta.substatus === "falta_documentos")
-    return "falta_documentos";
-
-  const resultadosFinais = ["aprovado", "recusado", "reprovado", "em_analise"];
-  const status = resultadosFinais.includes(consulta.resultado ?? "")
-    ? consulta.resultado
-    : consulta.status;
-
-  if (status === "aprovado") return "aprovado";
-  if (status === "recusado" || status === "reprovado") return "recusado";
-  if (status === "em_analise") return "em_analise";
-  if (status === "requer_verificacao") return "requer_verificacao";
-  if (status === "erro") return "erro";
-  if (status === "processando") return "processando";
-  if (status === "pendente" || !status) return "pendente";
-  // Qualquer outro status (pendente_documentacao, aguardando_ativacao, ativo...) só foi
-  // alcançado porque a consulta passou pela análise com aprovação — nunca deve cair em
-  // "Pendente" por falta do campo `resultado` (dados legados que avançaram a proposta
-  // sem nunca ter passado pela automação de verdade).
-  return "aprovado";
+  return resolveCreditStatusPresentation(consulta);
 }
 
 export const LABEL_STATUS_CONSULTA: Record<StatusExibicaoConsulta, string> = {
