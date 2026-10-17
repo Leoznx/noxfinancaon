@@ -580,6 +580,19 @@ test("reconhece o bloqueio comercial da Loft antes de procurar seletores", async
   await page.close();
 });
 
+test("reconhece a nova tela que exige liberação no Adm Aluguel", async () => {
+  const aviso =
+    "Fale com seu administrador para liberar seu acesso em Fiança no portal Adm Aluguel. Enquanto isso, você também pode seguir com sua proposta digital.";
+  assert.equal(isCreditSimulationAccountBlockedText(aviso), true);
+
+  const page = await pageWithHtml(
+    "https://app.loft.com.br/erp/proposta/analise-de-credito",
+    `<main><h1>Análise de crédito</h1><p>${aviso}</p></main>`,
+  );
+  await assert.rejects(() => assertCreditSimulationAvailable(page), CredPagoAccountBlockedError);
+  await page.close();
+});
+
 test("não confunde o aviso legal do reCAPTCHA com um desafio ativo", async () => {
   const page = await pageWithHtml(
     "https://sso.loft.com.br/realms/loft/login",

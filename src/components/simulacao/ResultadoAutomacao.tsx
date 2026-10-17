@@ -133,6 +133,7 @@ export function ResultadoAutomacao({
           : "aprovado"
   ) as StatusConsulta;
   const aguardandoDisponibilidade = statusBruto === "pendente";
+  const aguardandoLiberacaoParceiro = consulta.automation_step === "aguardando_liberacao_parceiro";
   const emAndamento = !resultadoConhecido && aindaNaAnaliseDeCredito && !aguardandoDisponibilidade;
   const ui = STATUS_UI[status];
   const statusNormalizado = String(status ?? "").toLowerCase();
@@ -477,8 +478,9 @@ export function ResultadoAutomacao({
             )}
             {status === "pendente" && !consulta.mensagem && !consulta.error_message && (
               <p className="text-base max-w-xl leading-relaxed">
-                Sua simulação está salva e será retomada quando o serviço de análise estiver
-                disponível novamente.
+                {aguardandoLiberacaoParceiro
+                  ? "Sua simulação está salva. A Loft precisa liberar o acesso da conta ao módulo Fiança antes de a automação continuar."
+                  : "Sua simulação está salva e será retomada quando o serviço de análise estiver disponível novamente."}
               </p>
             )}
             {consulta.automation_finished_at && (

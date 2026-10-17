@@ -100,7 +100,17 @@ test("classifica bloqueio comercial do parceiro sem confundir com seletor", () =
       "Botão não encontrado. Liberação necessária para criar contratos; solicite a liberação ao time comercial da Loft.",
     ),
   );
-  assert.equal(result.category, "CREDPAGO_UNAVAILABLE");
+  assert.equal(result.category, "PROVIDER_ACCESS_RESTRICTED");
+  assert.equal(result.runbook, "WAIT_EXTERNAL_DEPENDENCY");
+});
+
+test("classifica a nova restrição de acesso ao módulo Fiança", () => {
+  const result = classifyAutomationError(
+    new Error(
+      "Fale com seu administrador para liberar seu acesso em Fiança no portal Adm Aluguel.",
+    ),
+  );
+  assert.equal(result.category, "PROVIDER_ACCESS_RESTRICTED");
   assert.equal(result.runbook, "WAIT_EXTERNAL_DEPENDENCY");
 });
 

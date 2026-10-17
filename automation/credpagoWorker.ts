@@ -1104,6 +1104,7 @@ async function atualizarResultado(
 }
 
 const PROVIDER_HEALTH_CATEGORIES = new Set([
+  "PROVIDER_ACCESS_RESTRICTED",
   "AUTHENTICATION_ERROR",
   "SESSION_EXPIRED",
   "BROWSER_CRASH",
@@ -1112,6 +1113,36 @@ const PROVIDER_HEALTH_CATEGORIES = new Set([
   "CREDPAGO_UNAVAILABLE",
   "INTERNAL_SERVER_ERROR",
 ]);
+
+function registrarBloqueioDeAcessoDoProvedor(): void {
+  runtimeState.auth = "blocked";
+  runtimeState.lastAuthCheckAt = new Date().toISOString();
+  runtimeState.consecutiveAuthFailures += 1;
+  proximaValidacaoAuthEm = Date.now() + env.providerAccessRetryIntervalMs;
+}
+
+async function restaurarBloqueioDeAcessoDoProvedor(): Promise<void> {
+  const { data, error } = await supabaseAdmin
+    .from("credit_automation_provider_state")
+    .select("last_error_category,last_failure_at")
+    .eq("provider_key", env.creditProviderCredentialKey)
+    .maybeSingle();
+  if (error) throw error;
+  if (data?.last_error_category !== "PROVIDER_ACCESS_RESTRICTED") return;
+
+  const lastFailureAt = Date.parse(String(data.last_failure_at ?? ""));
+  if (!Number.isFinite(lastFailureAt)) return;
+  const retryAt = lastFailureAt + env.providerAccessRetryIntervalMs;
+  if (retryAt <= Date.now()) return;
+
+  runtimeState.auth = "blocked";
+  runtimeState.lastAuthCheckAt = new Date(lastFailureAt).toISOString();
+  runtimeState.consecutiveAuthFailures = Math.max(runtimeState.consecutiveAuthFailures, 1);
+  proximaValidacaoAuthEm = retryAt;
+  log(
+    `Fila preservada: acesso ao módulo Fiança aguarda liberação do parceiro; nova validação em até ${Math.ceil((retryAt - Date.now()) / 60000)}min.`,
+  );
+}
 
 async function marcarErro(
   consulta: ConsultaCreditoRow,
@@ -1848,6 +1879,9 @@ async function processarConsulta(
   } catch (err) {
     const erroTecnico = formatErrorDetail(err);
     logErro(`[${cid}] Falha ao processar consulta`, err);
+    if (isCredPagoAccountBlockedError(err)) {
+      registrarBloqueioDeAcessoDoProvedor();
+    }
     if (estado.finalizado) {
       log(
         `[${cid}] Erro chegou após o tempo limite já ter finalizado a consulta — ignorando gravação.`,
@@ -2441,6 +2475,10 @@ async function loop(once: boolean): Promise<void> {
   log(`Mutex adquirido em ${lock.path}.`);
   let contextoAberto = await abrirContexto();
   log(`Chrome iniciado em modo ${env.headless ? "headless (invisível)" : "visível"}`);
+
+  await restaurarBloqueioDeAcessoDoProvedor().catch((error) =>
+    registrarFalhaFila("Falha ao restaurar o bloqueio persistente de acesso do provedor", error),
+  );
 
   const healthServer = once ? null : iniciarServidorHealth();
 

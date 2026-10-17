@@ -61,6 +61,14 @@ function NovaConsulta() {
         const status = consulta.status as StatusConsulta;
         setEtapaAutomacao(consulta.automation_step ?? (status === "pendente" ? "pendente" : null));
         setProgresso(progressoConsulta(consulta.status, consulta.automation_step));
+        if (consulta.automation_step === "aguardando_liberacao_parceiro") {
+          // A solicitação está duravelmente salva, mas depende de uma permissão
+          // externa da Loft. Não prendemos o corretor num spinner de nove minutos.
+          pararEscuta();
+          setConsultaId(null);
+          navigate({ to: "/consultas/$id/resultado", params: { id } });
+          return;
+        }
         if (status === "pendente") {
           return;
         }

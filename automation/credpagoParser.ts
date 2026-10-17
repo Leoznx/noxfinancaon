@@ -4,6 +4,10 @@ import { redactSensitiveText, sanitizeUrl } from "./redaction";
 import { nomeClienteValido, somenteDigitos } from "./customerIdentity";
 import { extractLoftProposalId } from "./loftCancellation";
 import type { ObservedCreditSimulationResult } from "./creditSimulationApiObserver";
+import {
+  CredPagoAccountBlockedError,
+  isCreditSimulationAccountBlockedText,
+} from "./credpagoAvailability";
 
 // Ordem importa: "recusado" (inclui negações como "não aprovado") é checado antes de
 // "aprovado" para não gerar falso-positivo quando o texto for algo como "locatício não aprovado".
@@ -163,6 +167,15 @@ export async function parseResultado(
           resultadoCapturadoVia: "resposta_api",
         }),
       };
+    }
+
+    // A Loft passou a mostrar esta restrição somente depois do POST. Sem esta
+    // checagem, a tela contém as palavras "Análise de crédito" e parecia estar
+    // processando por cinco minutos, embora já dependesse de uma liberação no
+    // Adm Aluguel. Interrompemos imediatamente e deixamos a fila em espera, sem
+    // transformar a restrição operacional em decisão de crédito.
+    if (isCreditSimulationAccountBlockedText(bodyText)) {
+      throw new CredPagoAccountBlockedError();
     }
 
     // Na versão atual do ERP, uma pessoa jurídica não recebe um veredito imediato:

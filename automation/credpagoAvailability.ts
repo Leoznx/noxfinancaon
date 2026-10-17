@@ -20,7 +20,11 @@ export function isCreditSimulationAccountBlockedText(value: string): boolean {
   return (
     text.includes("liberacao necessaria para criar contratos") ||
     /plataforma de fianca.{0,120}bloquead[ao].{0,120}criacao de contratos/.test(text) ||
-    /solicite a liberacao.{0,120}time comercial da loft/.test(text)
+    /solicite a liberacao.{0,120}time comercial da loft/.test(text) ||
+    /fale com (?:o )?seu administrador.{0,120}liberar (?:o )?seu acesso (?:a|em) fianca.{0,120}portal adm aluguel/.test(
+      text,
+    ) ||
+    /liberar (?:o )?seu acesso (?:a|em) fianca.{0,120}adm aluguel/.test(text)
   );
 }
 
@@ -29,7 +33,7 @@ export class CredPagoAccountBlockedError extends Error {
 
   constructor() {
     super(
-      `${CREDPAGO_ACCOUNT_BLOCKED_CODE}: A conta da integracao esta bloqueada pelo parceiro para criar contratos. ` +
+      `${CREDPAGO_ACCOUNT_BLOCKED_CODE}: A conta da integracao esta sem acesso ao modulo Fianca do parceiro. ` +
         "A análise de crédito está temporariamente indisponível; nenhuma simulação será enviada enquanto o bloqueio estiver ativo.",
     );
     this.name = "CredPagoAccountBlockedError";
@@ -40,8 +44,7 @@ export function isCredPagoAccountBlockedError(error: unknown): boolean {
   if (error instanceof CredPagoAccountBlockedError) return true;
   const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error ?? "");
   return (
-    detail.includes(CREDPAGO_ACCOUNT_BLOCKED_CODE) ||
-    isCreditSimulationAccountBlockedText(detail)
+    detail.includes(CREDPAGO_ACCOUNT_BLOCKED_CODE) || isCreditSimulationAccountBlockedText(detail)
   );
 }
 

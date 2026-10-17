@@ -3,6 +3,7 @@ import { after, before, test } from "node:test";
 import { chromium, type Browser } from "playwright";
 import { parseResultado } from "./credpagoParser";
 import { observeCreditSimulationApi } from "./creditSimulationApiObserver";
+import { CredPagoAccountBlockedError } from "./credpagoAvailability";
 
 let browser: Browser;
 
@@ -36,6 +37,26 @@ test("aguarda a análise ativa além do prazo inicial sem repetir o clique", asy
 
   assert.equal(resultado.status, "aprovado");
   assert.equal(recliques, 0);
+  await page.close();
+});
+
+test("interrompe imediatamente quando a Loft exige liberação no Adm Aluguel", async () => {
+  const page = await browser.newPage();
+  await page.setContent(`<main>
+    <h1>Análise de crédito</h1>
+    <p>Fale com seu administrador para liberar seu acesso em Fiança no portal Adm Aluguel.</p>
+    <button>Continuar para proposta</button>
+  </main>`);
+
+  await assert.rejects(
+    () =>
+      parseResultado(page, {
+        processingTimeoutMs: 300_000,
+        pollIntervalMs: 10,
+        hasObservedRequest: () => true,
+      }),
+    CredPagoAccountBlockedError,
+  );
   await page.close();
 });
 

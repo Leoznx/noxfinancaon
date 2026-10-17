@@ -28,10 +28,10 @@ type ClassificationRule = {
 };
 
 const CREDPAGO_ACCOUNT_BLOCKED_RULE: ClassificationRule = {
-  category: "CREDPAGO_UNAVAILABLE",
+  category: "PROVIDER_ACCESS_RESTRICTED",
   severity: "ERROR",
   pattern:
-    /CREDPAGO_ACCOUNT_BLOCKED|libera[cç][aã]o necess[aá]ria para criar contratos|plataforma de fian[cç]a.{0,120}bloquead[ao].{0,120}cria[cç][aã]o de contratos|solicite a libera[cç][aã]o.{0,120}time comercial da loft/i,
+    /CREDPAGO_ACCOUNT_BLOCKED|libera[cç][aã]o necess[aá]ria para criar contratos|plataforma de fian[cç]a.{0,120}bloquead[ao].{0,120}cria[cç][aã]o de contratos|solicite a libera[cç][aã]o.{0,120}time comercial da loft|liberar (?:o )?seu acesso (?:[àa]|em) fian[cç]a.{0,120}adm aluguel/i,
   diagnosis:
     "A conta do parceiro esta autenticada, mas bloqueada para criar contratos; a liberacao externa e necessaria antes de retomar a fila.",
   runbook: "WAIT_EXTERNAL_DEPENDENCY",

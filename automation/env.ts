@@ -190,6 +190,12 @@ export const env = {
   authCheckIntervalMs: positiveNumber("AUTH_CHECK_INTERVAL_MS", 4 * 60 * 1000, 10_000),
   /** Intervalo entre tentativas de recuperar uma autenticação indisponível. */
   authRetryIntervalMs: positiveNumber("AUTH_RETRY_INTERVAL_MS", 30 * 1000, 5_000),
+  /** Restrição comercial/permissão não deve consumir um cliente a cada probe curto. */
+  providerAccessRetryIntervalMs: positiveNumber(
+    "PROVIDER_ACCESS_RETRY_INTERVAL_MS",
+    30 * 60 * 1000,
+    60_000,
+  ),
   /** Teto TOTAL para todas as tentativas de redirecionamento e Login Loft. */
   authLoginTimeoutMs: positiveNumber("AUTH_LOGIN_TIMEOUT_MS", 75 * 1000, 10_000),
   /** Watchdog externo ao fluxo de login: fecha a aba mesmo se o Playwright/SSO não responder. */
