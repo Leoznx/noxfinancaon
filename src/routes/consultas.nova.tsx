@@ -10,7 +10,6 @@ import {
   criarConsultaParaAutomacao,
   criarConsultaDemonstrativa,
 } from "@/lib/consultasCredito";
-import { simularLoftDireto } from "@/lib/simularLoftDireto";
 import { DEMO_SIMULATION_DATA } from "@/lib/demo-accounts";
 import { isDemoSession } from "@/lib/demo-session";
 
@@ -35,30 +34,15 @@ function NovaConsulta() {
     }
     setIsSubmitting(true);
     try {
-      // Modo demo usa o fluxo demonstrativo (sem API real).
-      if (demoSession) {
-        const id = await criarConsultaDemonstrativa({
-          dados,
-          userEmail: user.email,
-          userRole: user.role,
-        });
-        await navigate({ to: "/consultas/$id/status", params: { id } });
-        return;
-      }
-
-      // Tenta a API direta da Loft (sem Playwright, sem fila).
-      const direto = await simularLoftDireto(dados, user.email, user.role);
-      if (direto.ok && direto.consultaId) {
-        await navigate({ to: "/consultas/$id/status", params: { id: direto.consultaId } });
-        return;
-      }
-
-      // Fallback: fila + worker Playwright (caso a API direta falhe).
-      const id = await criarConsultaParaAutomacao({
+      const criarConsulta = demoSession ? criarConsultaDemonstrativa : criarConsultaParaAutomacao;
+      const id = await criarConsulta({
         dados,
         userEmail: user.email,
         userRole: user.role,
       });
+      // A API já confirmou que a solicitação foi registrada de forma durável.
+      // Não prendemos o corretor ao tempo do worker/Loft: o detalhe acompanha
+      // a fila por Realtime e apresenta "Em análise" enquanto não há decisão.
       await navigate({ to: "/consultas/$id/status", params: { id } });
     } catch (e: any) {
       toast.error("Erro ao criar consulta: " + (e?.message || "desconhecido"));
