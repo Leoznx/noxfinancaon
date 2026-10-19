@@ -121,8 +121,10 @@ export async function simularLoftDireto(
           ? "Crédito recusado."
           : "Crédito em análise.";
 
-    // 3. Gravar o resultado no banco
-    await supabase
+    // 3. Gravar o resultado no banco. Mantemos apenas colunas cuja presenca ja
+    //    foi migrada; metadados extras do provedor (external_*) ficam no payload
+    //    do raw_response para nao depender de colunas opcionais.
+    const { error: updateErr } = await supabase
       .from("consultas_credito")
       .update({
         tipo_pessoa: tipoPessoa,
@@ -137,15 +139,20 @@ export async function simularLoftDireto(
         resultado: status,
         mensagem: mensagem,
         origem: "nox_financa_direto",
-        external_provider: "loft_api",
-        external_status: status,
-        external_request_id: data.resultado.proposalId,
-        external_response: data.resultado,
         automation_step: "api_direta",
         automation_started_at: new Date().toISOString(),
         automation_finished_at: new Date().toISOString(),
+        raw_response: {
+          provider: "loft_api",
+          external_status: status,
+          external_request_id: data.resultado.proposalId,
+          external_response: data.resultado,
+        },
       } as never)
       .eq("id", consultaId);
+    if (updateErr) {
+      console.warn("Nao foi possivel gravar o resultado completo:", updateErr);
+    }
 
     return {
       ok: true,

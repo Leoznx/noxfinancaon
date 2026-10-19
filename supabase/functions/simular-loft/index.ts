@@ -200,13 +200,28 @@ serve(async (req) => {
 
     const input = await req.json() as SimularLoftRequest;
 
-    // Validação mínima
-    if (!input.documento || !input.nome || !input.tipoImovel) {
-      return new Response(JSON.stringify({ error: "Dados incompletos" }), {
+    // Validação mínima: só o documento é obrigatório. O nome pode vir vazio
+    // (o formulário da tela "Nova Consulta" só exige CPF/CNPJ nessa etapa);
+    // tipoImovel/cep ficam opcionais em modo preview e são preenchidos com
+    // padrões sensatos quando faltam.
+    if (!input.documento) {
+      return new Response(JSON.stringify({ error: "Documento é obrigatório" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    const nome = (input.nome && input.nome.trim()) || `Inquilino ${input.documento}`;
+    const tipoImovel = input.tipoImovel || "Residencial";
+    const cep = input.cep || "";
+    const payload: SimularLoftRequest = {
+      ...input,
+      nome,
+      tipoImovel,
+      cep,
+      valorAluguel: Number(input.valorAluguel) || 0,
+      valorCondominio: Number(input.valorCondominio) || 0,
+      valorTaxas: Number(input.valorTaxas) || 0,
+    };
 
     const client = createLoftClient();
 
@@ -222,8 +237,8 @@ serve(async (req) => {
         resultado: {
           status: "em_analise",
           proposalId,
-          clienteNome: input.nome,
-          clienteDocumento: input.documento,
+          clienteNome: nome,
+          clienteDocumento: payload.documento,
           statusLoft: "Pendente",
           preview: true,
           mensagem:
@@ -235,7 +250,7 @@ serve(async (req) => {
       });
     }
 
-    const resultado = await simularCredito(client, input);
+    const resultado = await simularCredito(client, payload);
 
     return new Response(JSON.stringify({
       ok: true,
