@@ -4,8 +4,10 @@ import {
   validateLegacySimulationFormReady,
   validateSimulationFormReady,
 } from "./credpagoSelectors";
+import type { PlaywrightStorageState } from "./browserSession";
 import { env } from "./env";
 import { logStructured } from "./logger";
+import { loadStorageStateWithFallback } from "./sessionStore";
 import { collectSystemDiagnostics } from "./systemDiagnostics";
 
 async function main(): Promise<void> {
@@ -15,10 +17,14 @@ async function main(): Promise<void> {
   if (!diagnostics.portalReachable) throw new Error("Portal de credito sem resposta.");
   if (!env.storageStatePath) throw new Error("CREDPAGO_STORAGE_STATE_PATH nao configurado.");
 
+  const loaded = await loadStorageStateWithFallback(env.storageStatePath);
+  if (!loaded.state) {
+    throw new Error(`Nenhuma sessao valida em ${env.storageStatePath} (${loaded.primaryFailure}).`);
+  }
   const browser = await chromium.launch({ headless: true });
   try {
     const context = await browser.newContext({
-      storageState: env.storageStatePath,
+      storageState: loaded.state as unknown as PlaywrightStorageState,
       viewport: { width: 1366, height: 900 },
     });
     const page = await context.newPage();

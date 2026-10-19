@@ -4,6 +4,8 @@ import http from "node:http";
 import path from "node:path";
 import { chromium } from "playwright";
 import { createCorrelationId } from "./correlation";
+import type { PlaywrightStorageState } from "./browserSession";
+import { loadStorageStateWithFallback } from "./sessionStore";
 import {
   openLegacyCreditSimulation,
   validateLegacySimulationFormReady,
@@ -24,6 +26,7 @@ import {
 } from "./repairEngine";
 import { redactObject, redactSensitiveText } from "./redaction";
 import {
+  creditAuthRequiresHuman,
   isExpectedCreditReconciliationPending,
   shouldSkipHealthyCreditWorkerRestart,
 } from "./repairPolicy";
@@ -149,6 +152,13 @@ async function applyRunbook(
           rollbackAvailable: false,
         };
       }
+      if (creditAuthRequiresHuman(currentSnapshot.creditWorkerHealth)) {
+        throw new ManualRepairRequiredError(
+          "O login da Loft precisa de uma pessoa (credencial, CAPTCHA ou código). Reiniciar o worker " +
+            "não resolve: faça login pelo computador (npm run automation:interactive-login) e " +
+            "substitua o arquivo de sessão da VPS; o worker o recarrega sozinho.",
+        );
+      }
       if (currentSnapshot.activeConsultations > 0) {
         throw new RetryableRepairError(
           `Ha ${currentSnapshot.activeConsultations} consulta(s) em andamento; restart adiado para evitar duplicidade.`,
@@ -205,10 +215,18 @@ async function safeBrowserValidation(): Promise<Record<string, unknown>> {
       "Validacao segura aguarda uma sessao exportada disponivel; a automacao tentara novamente.",
     );
   }
+  // O estado é validado antes de chegar ao Chromium: um arquivo corrompido não pode derrubar
+  // o reparo com "Error setting storage state".
+  const loaded = await loadStorageStateWithFallback(env.storageStatePath);
+  if (!loaded.state) {
+    throw new RetryableRepairError(
+      "Validacao segura aguarda uma sessao salva valida; a automacao tentara novamente.",
+    );
+  }
   const browser = await chromium.launch({ headless: true });
   try {
     const context = await browser.newContext({
-      storageState: env.storageStatePath,
+      storageState: loaded.state as unknown as PlaywrightStorageState,
       viewport: { width: 1366, height: 900 },
     });
     const page = await context.newPage();

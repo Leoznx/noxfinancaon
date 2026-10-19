@@ -3,6 +3,10 @@
 Este documento registra evidências, mudanças, validação e operação da fila de
 simulações NOX → Loft. Ele não contém CPF, CNPJ, cookie, token ou credencial.
 
+> Atualização de 19/10/2026: reativação após a liberação do módulo Fiança, desvio da API
+> direta removido e estabilização da sessão/login do worker —
+> veja [`CREDIT_AUTOMATION_REATIVACAO_2026-10-19.md`](CREDIT_AUTOMATION_REATIVACAO_2026-10-19.md).
+
 ## Escopo observado
 
 Fluxo confirmado no repositório:

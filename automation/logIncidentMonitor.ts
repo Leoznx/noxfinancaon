@@ -18,6 +18,8 @@ const errorPattern =
   /\b(?:erro|error|fatal|failed|failure|falha|falhou|falhado|falhada|uncaught|unhandled|crash(?:ed)?)\b/i;
 const correlationPattern = /\bNOX-(?:SIM|SYS)-\d{8}-[A-F0-9]{8}\b/i;
 const ignoredOperationalNoise = [
+  // Avisos emitidos por logAviso(): situações esperadas e recuperáveis, nunca incidentes.
+  /^\[[^\]]+\]\s+AVISO:/,
   /sess[aã]o ociosa.*recarregando.*travar sem erro/i,
   /propostas candidatas.*estado terminal.*aguard(?:a|ando) estabiliza[cç][aã]o/i,
   /Spool\s+[^\s]+\.json\s+ainda nao pode ser enviado/i,

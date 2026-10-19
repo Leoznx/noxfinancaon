@@ -26,7 +26,6 @@ const password = process.env.CREDPAGO_PASSWORD;
 const otpTimeoutMs = Number(process.env.AUTH_OTP_TIMEOUT_MS) || 10 * 60 * 1000;
 const interactiveTimeoutMs = Number(process.env.AUTH_INTERACTIVE_TIMEOUT_MS) || 10 * 60 * 1000;
 const interactiveHeadless = process.env.INTERACTIVE_HEADLESS === "true";
-const erpCreditSimulationPath = /\/erp\/proposta\/analise-de-credito(?:\/|$)/i;
 
 if (Boolean(login) !== Boolean(password)) {
   throw new Error("CREDPAGO_LOGIN e CREDPAGO_PASSWORD precisam ser configuradas juntas.");
@@ -46,74 +45,103 @@ if (
 ) {
   contextOptions.storageState = storageStatePath;
 }
-const context = await browser.newContext(contextOptions);
+let context;
+try {
+  context = await browser.newContext(contextOptions);
+} catch (error) {
+  // Um arquivo anterior corrompido não pode impedir um novo login.
+  console.log(`Sessão anterior ignorada (${error?.message?.split("\n")[0] ?? "inválida"}).`);
+  delete contextOptions.storageState;
+  context = await browser.newContext(contextOptions);
+}
 const page = await context.newPage();
 
+// Rotas do SSO/login (inclusive o callback OIDC, que ainda é transitório) nunca são "autenticado".
+const loginRoute = /(?:^|\/)login(?:\.php)?(?:\/|$)|\/oidc\/|\/realms\//i;
+// Áreas internas renderizadas pelo servidor: sem sessão o portal redireciona para o login,
+// então a URL (sem nenhuma tela de login visível) é um sinal confiável.
+const serverRenderedInternalRoute = /\/imobiliaria\/(?:cr|dashboard|home|view)(?:\/|$)/i;
+const erpAnalysisRoute = /\/erp\/proposta\/analise-de-credito(?:\/|$)/i;
+const fiancaProposalRoute = /\/fianca-aluguel\/imobiliaria\/proposta(?:\/|$)/i;
+const publicLandingText = /[áa]rea da imobili[áa]ria|[áa]rea do inquilino/i;
+
+async function visible(locator) {
+  return locator
+    .first()
+    .isVisible()
+    .catch(() => false);
+}
+
+/**
+ * O shell das SPAs (ERP e Fiança Aluguel) carrega com a mesma URL mesmo SEM sessão, antes de
+ * redirecionar ao SSO. Por isso essas rotas só contam como autenticadas quando o conteúdo
+ * real do formulário está visível — uma checagem só por URL salvava uma sessão deslogada.
+ */
 async function isAuthenticated() {
-  const url = new URL(page.url());
+  let url;
+  try {
+    url = new URL(page.url());
+  } catch {
+    return false;
+  }
   const credPagoHost = url.hostname === "credpago.com" || url.hostname.endsWith(".credpago.com");
   const loftAppHost = url.hostname === "app.loft.com.br";
   if (!credPagoHost && !loftAppHost) {
     return false;
   }
-  const loginButton = page.getByRole("button", { name: /login\s+loft/i });
-  const passwordField = page.getByLabel(/senha|password/i);
-  if (
-    await loginButton
-      .first()
-      .isVisible()
-      .catch(() => false)
-  )
-    return false;
-  if (
-    await passwordField
-      .first()
-      .isVisible()
-      .catch(() => false)
-  )
-    return false;
+  if (loginRoute.test(url.pathname)) return false;
 
-  if (
-    /\/imobiliaria\/cr(?:\/|$)/i.test(url.pathname) ||
-    (/\/erp(?:\/|$)/i.test(url.pathname) && !erpCreditSimulationPath.test(url.pathname))
-  ) {
-    return true;
+  if (await visible(page.getByRole("button", { name: /login\s+loft/i }))) return false;
+  if (await visible(page.getByLabel(/senha|password/i))) return false;
+
+  const text = await page
+    .locator("body")
+    .innerText()
+    .then((value) => value.replace(/\s+/g, " ").trim())
+    .catch(() => "");
+  // A vitrine pública do portal também pode aparecer sem o botão de login por instantes.
+  if (publicLandingText.test(text) && /login\s+loft/i.test(text)) return false;
+
+  if (serverRenderedInternalRoute.test(url.pathname)) return text.length > 0;
+
+  if (erpAnalysisRoute.test(url.pathname)) {
+    const markers = await Promise.all([
+      visible(page.getByRole("heading", { name: /an[aá]lise\s+de\s+cr[ée]dito/i })),
+      visible(page.getByText(/dados\s+do\s+inquilino/i)),
+      visible(page.getByRole("button", { name: /fazer\s+an[aá]lise/i })),
+    ]);
+    return markers.filter(Boolean).length >= 2;
   }
 
-  if (erpCreditSimulationPath.test(url.pathname)) {
-    const analysisHeading = page.getByRole("heading", {
-      name: /an[aá]lise\s+de\s+cr[ée]dito/i,
-    });
-    const tenantSection = page.getByText(/dados\s+do\s+inquilino/i);
-    const analysisButton = page.getByRole("button", {
-      name: /fazer\s+an[aá]lise/i,
-    });
-    const authenticatedSurfaceVisible = await Promise.all([
-      analysisHeading
-        .first()
-        .isVisible()
-        .catch(() => false),
-      tenantSection
-        .first()
-        .isVisible()
-        .catch(() => false),
-      analysisButton
-        .first()
-        .isVisible()
-        .catch(() => false),
+  if (fiancaProposalRoute.test(url.pathname)) {
+    const markers = await Promise.all([
+      visible(page.getByRole("heading", { name: /informe\s+os\s+dados\s+para\s+an[aá]lise/i })),
+      visible(page.getByText(/dados\s+do\s+inquilino/i)),
+      visible(page.getByText(/dados\s+da\s+loca[cç][aã]o/i)),
+      visible(page.getByRole("button", { name: /simular(?:\s+an[aá]lise\s+de)?\s+cr[ée]dito/i })),
     ]);
-    if (authenticatedSurfaceVisible.filter(Boolean).length >= 2) {
-      return true;
+    return markers.filter(Boolean).length >= 2;
+  }
+
+  // Qualquer outra rota interna conhecida do ERP só conta com o shell logado visível.
+  if (/\/erp(?:\/|$)/i.test(url.pathname)) return text.length > 300;
+
+  return visible(page.getByRole("button", { name: /simular(?:\s+an[aá]lise\s+de)?\s+cr[ée]dito/i }));
+}
+
+// O módulo Fiança Aluguel mantém cookies próprios. Na primeira visita depois do login o
+// portal pode devolver ao painel; a segunda navegação abre o formulário de proposta.
+const fiancaModuleUrl = "https://app.loft.com.br/fianca-aluguel/imobiliaria/proposta";
+
+async function initializeFiancaModule() {
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    await page.goto(fiancaModuleUrl, { waitUntil: "domcontentloaded", timeout: 30_000 }).catch(() => {});
+    await page.waitForTimeout(2_500);
+    if (/\/fianca-aluguel\/imobiliaria\/proposta/i.test(new URL(page.url()).pathname)) {
+      return await isAuthenticated();
     }
   }
-
-  const simulationButton = page.getByRole("button", {
-    name: /simular(?:\s+an[aá]lise\s+de)?\s+cr[ée]dito/i,
-  });
-  return simulationButton
-    .first()
-    .isVisible()
-    .catch(() => false);
+  return false;
 }
 
 async function waitForManualAuthentication(timeoutMs) {
@@ -126,9 +154,17 @@ async function waitForManualAuthentication(timeoutMs) {
 }
 
 async function persistAndFinish() {
+  console.log(
+    (await initializeFiancaModule()) ? "FIANCA_MODULE_READY" : "FIANCA_MODULE_NOT_CONFIRMED",
+  );
   await fs.mkdir(path.dirname(storageStatePath), { recursive: true });
-  await context.storageState({ path: storageStatePath });
+  // Grava em arquivo temporário e troca por rename: o worker da VPS recarrega este arquivo
+  // assim que ele muda e nunca pode ler uma cópia pela metade.
+  const temporaryPath = `${storageStatePath}.tmp-${process.pid}`;
+  await context.storageState({ path: temporaryPath });
+  await fs.rename(temporaryPath, storageStatePath);
   console.log("AUTH_SUCCESS");
+  console.log(`SESSION_FILE=${storageStatePath}`);
 }
 
 async function waitForOtpCode() {

@@ -1,7 +1,10 @@
-# Imagem oficial do Playwright: já traz Chromium + todas as dependências de
-# sistema do Linux corretas para essa versão exata (evita apt install manual
-# de dezenas de libs, que é frágil e desatualiza rápido). Versão precisa bater
-# com "playwright" no package.json.
+# Imagem oficial do Playwright: traz as dependências de sistema do Linux (evita apt
+# install manual de dezenas de libs, que é frágil e desatualiza rápido).
+#
+# As versões do package.json são EXATAS e o package-lock.json é versionado: antes, cada
+# rebuild na VPS resolvia "^1.49.1" para o Playwright mais novo do momento, trocando o
+# Chromium silenciosamente. O `playwright install` abaixo baixa o navegador da versão
+# travada, mesmo que ela seja mais nova que a tag da imagem base.
 FROM mcr.microsoft.com/playwright:v1.49.1-noble
 
 # Usuário não-root dedicado — a imagem base já roda como root por padrão.
@@ -10,8 +13,8 @@ RUN groupadd --system nox && useradd --system --create-home --gid nox nox
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
-RUN npm install --omit=dev && \
-    npm install --no-save tsx@^4.19.2 && \
+RUN npm ci --omit=dev && \
+    npm install --no-save tsx@4.23.15 && \
     npx playwright install chromium --with-deps
 
 COPY *.ts *.mjs ./

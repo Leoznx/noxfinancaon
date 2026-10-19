@@ -1,11 +1,27 @@
-import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
+import type { BrowserContext, Page } from "playwright";
 import { randomUUID } from "node:crypto";
 import readline from "node:readline/promises";
 import { stdin, stdout } from "node:process";
 import http from "node:http";
 import { env } from "./env";
 import { supabaseAdmin } from "./supabaseAdmin";
-import { formatErrorDetail, log, logErro, logStructured, maskDocumento } from "./logger";
+import {
+  formatErrorDetail,
+  log,
+  logAviso,
+  logErro,
+  logStructured,
+  maskDocumento,
+} from "./logger";
+import { BrowserSession } from "./browserSession";
+import {
+  CredPagoAuthenticationError,
+  CredPagoServiceUnavailableError,
+  authBackoffMs,
+  classifyAuthFailure,
+  shouldRestartBrowserAfterAuthFailure,
+  type AuthFailure,
+} from "./authRecovery";
 import {
   fillPessoa,
   fillDocumento,
@@ -20,6 +36,7 @@ import {
   detectAuthenticationState,
   isCreditSimulationUrl,
   CreditSimulationFormNotReadyError,
+  LoftLoginChallengeError,
 } from "./credpagoSelectors";
 import { parseResultado } from "./credpagoParser";
 import { isTransientPortalError, validateConsultaForAutomation } from "./errorPolicy";
@@ -84,19 +101,15 @@ function mensagemSeguraParaErro(erroTecnico: string): string {
 // ---------------------------------------------------------------------------
 let loginEmAndamento: Promise<void> | null = null;
 
-class CredPagoAuthenticationError extends Error {
-  constructor(message: string, options?: ErrorOptions) {
-    super(message, options);
-    this.name = "CredPagoAuthenticationError";
-  }
-}
+/**
+ * Navegador em uso. Permite informar "login confirmado/expirado" a quem grava a
+ * sessão sem passar o objeto por todas as funções: só uma sessão autenticada é
+ * gravada em disco, para nunca sobrescrever um arquivo bom com um login expirado.
+ */
+let sessaoAtiva: BrowserSession | null = null;
 
-class CredPagoServiceUnavailableError extends Error {
-  constructor(message: string, options?: ErrorOptions) {
-    super(message, options);
-    this.name = "CredPagoServiceUnavailableError";
-  }
-}
+/** Última falha de autenticação; base da decisão de recriar (ou não) o navegador. */
+let ultimaFalhaDeAutenticacao: AuthFailure | null = null;
 
 class LoftCancellationUnavailableError extends Error {
   constructor(message: string, options?: ErrorOptions) {
@@ -162,9 +175,19 @@ const runtimeState: {
   lastAuthCheckAt: string | null;
   lastAuthSuccessAt: string | null;
   authCheckStartedAt: string | null;
+  /** Próxima validação programada (backoff); nulo quando a sessão está saudável. */
+  nextAuthCheckAt: string | null;
+  /** A renovação automática não resolve: alguém precisa fazer login e trocar o arquivo de sessão. */
+  authRequiresHuman: boolean;
+  authFailureKind: string | null;
   lastLoopAt: string | null;
   consecutiveAuthFailures: number;
   browserRestarts: number;
+  lastBrowserRestartAt: string | null;
+  /** De onde veio a sessão carregada no navegador atual. */
+  sessionSource: string | null;
+  /** Quantas vezes o arquivo de sessão foi substituído externamente e recarregado. */
+  sessionReloads: number;
   queue: QueueRuntimeStatus;
   lastQueueSuccessAt: string | null;
   lastQueueErrorAt: string | null;
@@ -199,9 +222,15 @@ const runtimeState: {
   lastAuthCheckAt: null,
   lastAuthSuccessAt: null,
   authCheckStartedAt: null,
+  nextAuthCheckAt: null,
+  authRequiresHuman: false,
+  authFailureKind: null,
   lastLoopAt: null,
   consecutiveAuthFailures: 0,
   browserRestarts: 0,
+  lastBrowserRestartAt: null,
+  sessionSource: null,
+  sessionReloads: 0,
   queue: "checking",
   lastQueueSuccessAt: null,
   lastQueueErrorAt: null,
@@ -296,6 +325,25 @@ function registrarFalhaFilaCancelamento(contexto: string, error: unknown): void 
   }
 }
 
+/**
+ * O portal redireciona (SPA/SSO) enquanto `page.goto` ainda está em andamento, e o
+ * Playwright rejeita a primeira navegação com `net::ERR_ABORTED` / "frame was
+ * detached" mesmo que a página tenha chegado a um destino válido (a própria tela
+ * de login, por exemplo). Isso não é indisponibilidade do portal.
+ */
+function navegacaoFoiSubstituida(error: unknown): boolean {
+  return /net::ERR_ABORTED|frame was detached|interrupted by another navigation/i.test(
+    formatErrorDetail(error),
+  );
+}
+
+async function paginaAssentouEmUmDestino(page: Page): Promise<boolean> {
+  if (page.isClosed()) return false;
+  await page.waitForLoadState("domcontentloaded", { timeout: 10_000 }).catch(() => {});
+  const url = page.url();
+  return Boolean(url) && url !== "about:blank" && !url.startsWith("chrome-error:");
+}
+
 async function navegarParaPortal(page: Page, timeoutMs = 30_000): Promise<void> {
   let ultimoErro: unknown;
   for (let tentativa = 1; tentativa <= 2; tentativa += 1) {
@@ -304,14 +352,17 @@ async function navegarParaPortal(page: Page, timeoutMs = 30_000): Promise<void> 
       return;
     } catch (error) {
       ultimoErro = error;
-      if (!isTransientPortalError(error) || page.isClosed()) throw error;
+      if (page.isClosed()) throw error;
+      if (navegacaoFoiSubstituida(error) && (await paginaAssentouEmUmDestino(page))) return;
+      if (!isTransientPortalError(error)) throw error;
       if (tentativa === 2) {
         throw new CredPagoServiceUnavailableError(
           "O portal permaneceu indisponível após duas tentativas de navegação.",
           { cause: error },
         );
       }
-      logErro(`Portal indisponível na navegação; nova tentativa ${tentativa + 1}/2`, error);
+      // Há uma segunda tentativa logo abaixo: só um aviso, não um incidente.
+      logAviso(`Portal lento ou indisponível na navegação; nova tentativa ${tentativa + 1}/2`, error);
       await sleep(1_000);
     }
   }
@@ -319,6 +370,14 @@ async function navegarParaPortal(page: Page, timeoutMs = 30_000): Promise<void> 
     cause: ultimoErro,
   });
 }
+
+/**
+ * A SPA da Loft só exibe o formulário (ou redireciona ao SSO) de 2 s a ~10 s DEPOIS de
+ * `domcontentloaded`, e mais devagar ainda numa VPS sob carga. Decidir em 8 s gerava
+ * "o portal não informou o estado da autenticação" mesmo com a sessão válida. A
+ * detecção retorna assim que sabe; este é apenas o teto para o caso realmente indefinido.
+ */
+const AUTH_DETECTION_TIMEOUT_MS = 30_000;
 
 async function solicitarLoginManual(): Promise<void> {
   log("Tela de login detectada na CredPago.");
@@ -333,13 +392,18 @@ async function ensureLoggedIn(
   page: Page,
   persistirSessao: () => Promise<void>,
 ): Promise<void> {
-  const initialState = await detectAuthenticationState(page);
-  if (initialState === "authenticated") return;
+  const initialState = await detectAuthenticationState(page, AUTH_DETECTION_TIMEOUT_MS);
+  if (initialState === "authenticated") {
+    sessaoAtiva?.markAuthenticated(true);
+    return;
+  }
   if (initialState === "unknown") {
     throw new CredPagoServiceUnavailableError(
       "O portal da CredPago não informou o estado da autenticação.",
     );
   }
+  // A sessão em memória expirou: nunca a grave por cima do arquivo salvo.
+  sessaoAtiva?.markAuthenticated(false);
 
   if (!loginEmAndamento) {
     loginEmAndamento = (async () => {
@@ -351,6 +415,7 @@ async function ensureLoggedIn(
           env.credpagoPassword,
           env.authLoginTimeoutMs,
         );
+        sessaoAtiva?.markAuthenticated(true);
         await persistirSessao();
         log("Acesso ao portal renovado e sessão persistida.");
         return;
@@ -359,14 +424,33 @@ async function ensureLoggedIn(
       if (env.headless) {
         throw new CredPagoAuthenticationError(
           "Sessão expirada e credenciais de renovação não configuradas na VPS.",
+          { humanRequired: true },
         );
       }
 
       await solicitarLoginManual();
+      sessaoAtiva?.markAuthenticated(true);
       await persistirSessao();
     })()
       .catch((error) => {
         if (error instanceof CredPagoAuthenticationError) throw error;
+        // CAPTCHA, código por SMS/e-mail ou credencial recusada: só uma pessoa resolve.
+        if (error instanceof LoftLoginChallengeError) {
+          throw new CredPagoAuthenticationError(error.message, {
+            cause: error,
+            humanRequired: true,
+          });
+        }
+        // Aba fechada pelo watchdog, timeout ou rede: o portal/navegador não respondeu,
+        // o que NÃO prova que a sessão ou a credencial estejam inválidas.
+        if (isTransientPortalError(error)) {
+          throw new CredPagoServiceUnavailableError(
+            `O portal de autenticação não respondeu a tempo: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
         throw new CredPagoAuthenticationError(
           error instanceof Error
             ? `Não foi possível renovar o acesso ao portal: ${error.message}`
@@ -387,7 +471,7 @@ async function ensureLoggedIn(
   // agora autenticada no contexto compartilhado (cookies são por contexto, não por aba).
   await navegarParaPortal(page);
 
-  if ((await detectAuthenticationState(page)) !== "authenticated") {
+  if ((await detectAuthenticationState(page, AUTH_DETECTION_TIMEOUT_MS)) !== "authenticated") {
     throw new CredPagoAuthenticationError(
       "Login não confirmado — a página ainda parece ser a tela de login.",
     );
@@ -813,7 +897,7 @@ async function reconcilePendingLoftCancellation(
         message:
           `A reconciliação do cancelamento excedeu ` +
           `${Math.round(env.loftCancellationOperationTimeoutMs / 1000)}s e foi abortada.`,
-        abort: () => page?.close(),
+        abort: () => (page as Page | null)?.close(),
       },
     );
     const resolution = resolveLoftProposalReconciliation(
@@ -876,7 +960,7 @@ async function reconcilePendingLoftCancellation(
     return true;
   } finally {
     runtimeState.cancellationOperationStartedAt = null;
-    await page?.close().catch(() => {});
+    await (page as Page | null)?.close().catch(() => {});
   }
 }
 
@@ -886,6 +970,8 @@ async function processLoftCancellation(
   persistirSessao: () => Promise<void>,
 ): Promise<void> {
   if (!env.loftCancellationEnabled || !env.loftCancellationReason) return;
+  // Fixa o motivo validado: o TypeScript perde o estreitamento dentro das closures abaixo.
+  const motivoCancelamento = env.loftCancellationReason;
   const cid = ensureCorrelationId(job.correlation_id);
   const startedAt = Date.now();
   logStructured("loft_proposal_cancellation_started", {
@@ -902,20 +988,21 @@ async function processLoftCancellation(
         "O job não possui o identificador exato devolvido pelo envio; nenhuma proposta foi alterada.",
       );
     }
+    const propostaId = job.proposal_id;
     const operacao = async (): Promise<{
       proposalId: string;
       status: string;
       cancellationReason: string | null;
     }> => {
-      if (env.loftCancellationMode === "api" && job.proposal_id && loftCancellationClient) {
+      if (env.loftCancellationMode === "api" && loftCancellationClient) {
         const apiResponse = await loftCancellationClient.cancelProposal(
-          job.proposal_id,
-          env.loftCancellationReason,
+          propostaId,
+          motivoCancelamento,
           env.loftCancellationComment,
         );
         return {
           ...apiResponse,
-          cancellationReason: env.loftCancellationReason,
+          cancellationReason: motivoCancelamento,
         };
       }
 
@@ -924,14 +1011,14 @@ async function processLoftCancellation(
       await navegarParaPortal(page);
       await ensureLoggedIn(cid, page, persistirSessao);
       const portalResponse = await cancelLoftProposalViaPortal(page, {
-        proposalId: job.proposal_id,
+        proposalId: propostaId,
         document,
-        reason: env.loftCancellationReason,
+        reason: motivoCancelamento,
         comment: env.loftCancellationComment || undefined,
         timeoutMs: env.loftCancellationRequestTimeoutMs,
         onProposalResolved: async (proposalId) => {
           const attached = await vincularPropostaAoCancelamento(job.id, proposalId);
-          if (attached !== job.proposal_id) {
+          if (attached !== propostaId) {
             throw new Error("A proposta localizada diverge do identificador persistido no job.");
           }
         },
@@ -946,7 +1033,7 @@ async function processLoftCancellation(
       message:
         `O cancelamento da proposta excedeu ` +
         `${Math.round(env.loftCancellationOperationTimeoutMs / 1000)}s e foi abortado para retentativa segura.`,
-      abort: () => page?.close(),
+      abort: () => (page as Page | null)?.close(),
     });
     await finishLoftCancellation(job, {
       success: true,
@@ -1006,7 +1093,7 @@ async function processLoftCancellation(
     }
   } finally {
     runtimeState.cancellationOperationStartedAt = null;
-    await page?.close().catch(() => {});
+    await (page as Page | null)?.close().catch(() => {});
   }
 }
 
@@ -1252,8 +1339,60 @@ async function sinalizarFilaAguardandoServico(
   }
 }
 
+function mensagemDaFalhaDeAutenticacao(failure: AuthFailure): string {
+  if (failure.status === "blocked") {
+    return "Fila pausada: a conta do parceiro esta bloqueada para criar contratos";
+  }
+  if (failure.status === "required") {
+    return failure.humanRequired
+      ? "Fila pausada: o login da Loft precisa de uma pessoa (credencial, CAPTCHA ou código). " +
+          "Faça login pelo computador (npm run automation:interactive-login) e substitua o arquivo " +
+          "de sessão da VPS; o worker o recarrega sozinho em segundos"
+      : "Fila pausada: a autenticação da CredPago precisa ser recuperada";
+  }
+  return "Fila pausada: não foi possível validar o portal da CredPago";
+}
+
+/**
+ * Registra uma falha de autenticação e agenda a próxima tentativa com backoff.
+ * Só a primeira falha de cada tipo é um incidente; repetições viram avisos
+ * periódicos para não inundar o monitor nem insistir no login do provedor.
+ */
+function registrarFalhaDeAutenticacao(
+  failure: AuthFailure,
+  error: unknown,
+  statusAnterior: AuthRuntimeStatus,
+): void {
+  const tipoAnterior = runtimeState.authFailureKind;
+  ultimaFalhaDeAutenticacao = failure;
+  runtimeState.auth = failure.status;
+  runtimeState.authFailureKind = failure.kind;
+  runtimeState.authRequiresHuman = failure.humanRequired;
+  runtimeState.consecutiveAuthFailures += 1;
+  sessaoAtiva?.markAuthenticated(false);
+
+  const espera = authBackoffMs(failure, runtimeState.consecutiveAuthFailures, {
+    baseMs: env.authRetryIntervalMs,
+    maxMs: env.authRetryMaxIntervalMs,
+    humanMs: env.authHumanRetryIntervalMs,
+    blockedMs: env.providerAccessRetryIntervalMs,
+  });
+  proximaValidacaoAuthEm = Date.now() + espera;
+  runtimeState.nextAuthCheckAt = new Date(proximaValidacaoAuthEm).toISOString();
+
+  if (statusAnterior !== failure.status || tipoAnterior !== failure.kind) {
+    logErro(mensagemDaFalhaDeAutenticacao(failure), error);
+  } else if (runtimeState.consecutiveAuthFailures % 10 === 0) {
+    logAviso(
+      `Autenticação ainda indisponível após ${runtimeState.consecutiveAuthFailures} tentativas ` +
+        `(${failure.kind}); próxima validação em ${Math.round(espera / 1000)}s`,
+      error,
+    );
+  }
+}
+
 async function validarAutenticacao(
-  context: BrowserContext,
+  session: BrowserSession,
   persistirSessao: () => Promise<void>,
 ): Promise<boolean> {
   const agora = Date.now();
@@ -1267,13 +1406,13 @@ async function validarAutenticacao(
   let page: Page | null = null;
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    page = await context.newPage();
+    page = await session.context.newPage();
     const validacao = (async () => {
       await navegarParaPortal(page!, Math.min(30_000, env.authValidationTimeoutMs));
       await ensureLoggedIn("auth", page!, persistirSessao);
       await assertCreditSimulationAvailable(page!);
 
-      if ((await detectAuthenticationState(page!)) !== "authenticated") {
+      if ((await detectAuthenticationState(page!, AUTH_DETECTION_TIMEOUT_MS)) !== "authenticated") {
         throw new CredPagoAuthenticationError(
           "A sessão ainda redireciona para o portal de autenticação.",
         );
@@ -1296,27 +1435,20 @@ async function validarAutenticacao(
     runtimeState.auth = "ok";
     runtimeState.lastAuthSuccessAt = new Date().toISOString();
     runtimeState.consecutiveAuthFailures = 0;
+    runtimeState.authRequiresHuman = false;
+    runtimeState.authFailureKind = null;
+    ultimaFalhaDeAutenticacao = null;
     proximaValidacaoAuthEm = Date.now() + env.authCheckIntervalMs;
+    runtimeState.nextAuthCheckAt = new Date(proximaValidacaoAuthEm).toISOString();
+    session.markAuthenticated(true);
     if (statusAnterior !== "ok") {
       log("Autenticação da CredPago validada — fila liberada.");
+      // Depois de uma recuperação, guarda a sessão confirmada para sobreviver a reinícios.
+      await persistirSessao().catch(() => {});
     }
     return true;
   } catch (error) {
-    const isAuthError = error instanceof CredPagoAuthenticationError;
-    const isAccountBlocked = isCredPagoAccountBlockedError(error);
-    runtimeState.auth = isAccountBlocked ? "blocked" : isAuthError ? "required" : "unavailable";
-    runtimeState.consecutiveAuthFailures += 1;
-    proximaValidacaoAuthEm = Date.now() + env.authRetryIntervalMs;
-    if (statusAnterior !== runtimeState.auth) {
-      logErro(
-        isAccountBlocked
-          ? "Fila pausada: a conta do parceiro esta bloqueada para criar contratos"
-          : isAuthError
-            ? "Fila pausada: a autenticação da CredPago precisa ser recuperada"
-            : "Fila pausada: não foi possível validar o portal da CredPago",
-        error,
-      );
-    }
+    registrarFalhaDeAutenticacao(classifyAuthFailure(error), error, statusAnterior);
     return false;
   } finally {
     if (timer) clearTimeout(timer);
@@ -2167,57 +2299,27 @@ async function processarConsultaComTimeout(
 //    exportSession.ts. Não usa perfil em disco — só cookies/localStorage.
 // ---------------------------------------------------------------------------
 
-interface ContextoAberto {
-  context: BrowserContext;
-  browser: Browser | null; // null no modo perfil persistente (context.close() já basta)
-  persistirSessao: () => Promise<void>;
-}
+// A abertura, a gravação segura da sessão (atômica, só quando autenticada, sem
+// sobrescrever um arquivo trocado por uma pessoa) e a detecção de um Chromium
+// morto ficam em ./browserSession.
 
-async function abrirContexto(): Promise<ContextoAberto> {
-  if (env.storageStatePath) {
-    log(`Usando sessão portátil: ${env.storageStatePath}`);
-    const browser = await chromium.launch({ headless: env.headless });
-    const context = await browser.newContext({
-      storageState: env.storageStatePath,
-      viewport: { width: 1366, height: 900 },
-    });
-    runtimeState.browser = "ok";
-    return {
-      context,
-      browser,
-      persistirSessao: async () => {
-        await context.storageState({ path: env.storageStatePath }).catch((e) => {
-          logErro("Falha ao salvar sessão atualizada", e);
-        });
-      },
-    };
-  }
-
+async function abrirSessaoDoNavegador(): Promise<BrowserSession> {
   try {
-    const context = await chromium.launchPersistentContext(env.profileDir, {
+    const session = await BrowserSession.open({
+      storageStatePath: env.storageStatePath,
+      profileDir: env.profileDir,
       headless: env.headless,
-      viewport: { width: 1366, height: 900 },
+      info: (message) => log(message),
+      warn: (message, error) => logAviso(message, error),
     });
     runtimeState.browser = "ok";
-    return { context, browser: null, persistirSessao: async () => {} };
-  } catch (err) {
+    runtimeState.sessionSource = session.loadedFrom;
+    sessaoAtiva = session;
+    return session;
+  } catch (error) {
     runtimeState.browser = "unavailable";
-    const msg = err instanceof Error ? err.message : String(err);
-    if (/lock|already in use|singleton|profile.*use/i.test(msg)) {
-      throw new Error(
-        `Não foi possível abrir o perfil do Chrome em ${env.profileDir} — ele já está em uso por outro processo ` +
-          `(outra execução do worker, ou uma janela do Chrome aberta manualmente nessa mesma pasta). ` +
-          `Feche o outro processo/janela e rode o worker de novo. Detalhe técnico: ${msg}`,
-      );
-    }
-    throw err;
+    throw error;
   }
-}
-
-async function fecharContexto(contextoAberto: ContextoAberto): Promise<void> {
-  await contextoAberto.persistirSessao();
-  await contextoAberto.context.close().catch(() => {});
-  if (contextoAberto.browser) await contextoAberto.browser.close().catch(() => {});
 }
 
 async function validarSuperficieCancelamento(
@@ -2260,7 +2362,7 @@ async function validarSuperficieCancelamento(
       message:
         `A validação da superfície de cancelamento excedeu ` +
         `${Math.round(env.loftCancellationValidationTimeoutMs / 1000)}s e foi abortada.`,
-      abort: () => page?.close(),
+      abort: () => (page as Page | null)?.close(),
     });
     await persistirSessao();
     ultimaAtividadeEm = Date.now();
@@ -2278,7 +2380,7 @@ async function validarSuperficieCancelamento(
     return false;
   } finally {
     runtimeState.cancellationCheckStartedAt = null;
-    await page?.close().catch(() => {});
+    await (page as Page | null)?.close().catch(() => {});
   }
 }
 
@@ -2358,9 +2460,15 @@ function iniciarServidorHealth(): http.Server {
           queue: runtimeState.queue,
           lastAuthCheckAt: runtimeState.lastAuthCheckAt,
           lastAuthSuccessAt: runtimeState.lastAuthSuccessAt,
+          nextAuthCheckAt: runtimeState.nextAuthCheckAt,
+          authRequiresHuman: runtimeState.authRequiresHuman,
+          authFailureKind: runtimeState.authFailureKind,
           lastLoopAt: runtimeState.lastLoopAt,
           consecutiveAuthFailures: runtimeState.consecutiveAuthFailures,
           browserRestarts: runtimeState.browserRestarts,
+          lastBrowserRestartAt: runtimeState.lastBrowserRestartAt,
+          sessionSource: runtimeState.sessionSource,
+          sessionReloads: runtimeState.sessionReloads,
           lastQueueSuccessAt: runtimeState.lastQueueSuccessAt,
           lastQueueErrorAt: runtimeState.lastQueueErrorAt,
           consecutiveQueueFailures: runtimeState.consecutiveQueueFailures,
@@ -2410,6 +2518,7 @@ function iniciarServidorHealth(): http.Server {
         JSON.stringify({
           status: ready ? "ready" : "not_ready",
           auth: runtimeState.auth,
+          authRequiresHuman: runtimeState.authRequiresHuman,
           queue: runtimeState.queue,
           browser: runtimeState.browser,
           cancellationEnabled: env.loftCancellationEnabled,
@@ -2473,8 +2582,50 @@ async function loop(once: boolean): Promise<void> {
     env.storageStatePath ? "portable-session" : "persistent-profile",
   );
   log(`Mutex adquirido em ${lock.path}.`);
-  let contextoAberto = await abrirContexto();
+  let contextoAberto = await abrirSessaoDoNavegador();
   log(`Chrome iniciado em modo ${env.headless ? "headless (invisível)" : "visível"}`);
+
+  let proximoReinicioNavegadorEm = 0;
+  let proximaChecagemSessaoEm = 0;
+  let ultimoReinicioNavegadorEm = Date.now();
+  let falhasAvaliadasParaReinicio = 0;
+
+  /**
+   * Recria o Chromium sem nunca derrubar o atual antes de existir um substituto
+   * funcionando. Antes, uma falha ao reabrir (arquivo de sessão ruim, falta de
+   * memória) deixava `contextoAberto` apontando para um navegador FECHADO, e todas
+   * as validações seguintes falhavam com "Target page, context or browser has been closed".
+   */
+  const reiniciarNavegador = async (
+    motivo: string,
+    opcoes: { persistir: boolean },
+  ): Promise<boolean> => {
+    // Evita um laço quente caso o Chromium não consiga subir.
+    proximoReinicioNavegadorEm = Date.now() + 15_000;
+    const antigo = contextoAberto;
+    try {
+      if (opcoes.persistir && antigo.isAlive()) await antigo.persist().catch(() => false);
+      // O perfil persistente (modo local) só pode ser aberto por um processo por vez.
+      if (!env.storageStatePath) await antigo.close();
+      const novo = await abrirSessaoDoNavegador();
+      contextoAberto = novo;
+      if (env.storageStatePath) await antigo.close();
+      loginEmAndamento = null;
+      ultimoReinicioNavegadorEm = Date.now();
+      runtimeState.browserRestarts += 1;
+      runtimeState.lastBrowserRestartAt = new Date().toISOString();
+      runtimeState.consecutiveAuthFailures = 0;
+      runtimeState.auth = "checking";
+      proximaValidacaoAuthEm = 0;
+      log(`Navegador recriado (${motivo}).`);
+      return true;
+    } catch (error) {
+      runtimeState.browser = contextoAberto.isAlive() ? "ok" : "unavailable";
+      if (contextoAberto.isAlive()) sessaoAtiva = contextoAberto;
+      logErro(`Não foi possível recriar o navegador (${motivo}); nova tentativa será feita`, error);
+      return false;
+    }
+  };
 
   await restaurarBloqueioDeAcessoDoProvedor().catch((error) =>
     registrarFalhaFila("Falha ao restaurar o bloqueio persistente de acesso do provedor", error),
@@ -2489,7 +2640,7 @@ async function loop(once: boolean): Promise<void> {
   const finalizarWorker = async () => {
     if (healthServer) await new Promise((resolve) => healthServer.close(resolve));
     if (!env.keepBrowserOpen) {
-      await fecharContexto(contextoAberto);
+      await contextoAberto.close({ persist: true });
     } else {
       log("AUTOMATION_KEEP_BROWSER_OPEN=true — Chrome permanece aberto.");
     }
@@ -2538,16 +2689,48 @@ async function loop(once: boolean): Promise<void> {
         continue;
       }
 
+      // O Chromium pode ter morrido (falta de memória, crash, reinício do host).
+      // Detecta antes de usá-lo em vez de descobrir pelo erro "Target page,
+      // context or browser has been closed" em cada validação.
+      if (!contextoAberto.isAlive()) {
+        if (Date.now() >= proximoReinicioNavegadorEm) {
+          logErro("O navegador do worker deixou de responder; recriando");
+          await reiniciarNavegador("navegador-encerrado", { persistir: false });
+        }
+        await sleep(env.pollIntervalMs);
+        continue;
+      }
+
+      // Alguém fez um novo login (por exemplo, no computador) e substituiu o arquivo
+      // de sessão da VPS. Recarrega na hora, sem reiniciar o container, e valida de novo.
+      if (!cancelamentoEmAndamento && Date.now() >= proximaChecagemSessaoEm) {
+        proximaChecagemSessaoEm = Date.now() + env.sessionWatchIntervalMs;
+        if (await contextoAberto.detectExternalUpdate().catch(() => false)) {
+          log("Novo arquivo de sessão detectado — recarregando o navegador com ele.");
+          if (await reiniciarNavegador("sessao-substituida", { persistir: false })) {
+            runtimeState.sessionReloads += 1;
+            runtimeState.authRequiresHuman = false;
+            runtimeState.authFailureKind = null;
+            ultimaFalhaDeAutenticacao = null;
+          }
+          continue;
+        }
+      }
+
       // Autenticação vem antes da fila de cancelamentos. Se a sessão expirar,
       // a própria rotina de recuperação precisa rodar antes de qualquer acesso
       // à lista de propostas; caso contrário um job ambíguo cria um deadlock.
       const autenticacaoPronta = await validarAutenticacao(
-        contextoAberto.context,
+        contextoAberto,
         contextoAberto.persistirSessao,
       );
       if (!autenticacaoPronta) {
         const contaBloqueada = runtimeState.auth === "blocked";
-        await sinalizarFilaAguardandoServico("aguardando_liberacao_parceiro").catch((error) =>
+        // "Aguardando liberação do parceiro" só descreve o bloqueio comercial real;
+        // sessão expirada ou portal lento é "aguardando autenticação".
+        await sinalizarFilaAguardandoServico(
+          contaBloqueada ? "aguardando_liberacao_parceiro" : "aguardando_autenticacao",
+        ).catch((error) =>
           registrarFalhaFila("Falha ao sinalizar fila aguardando disponibilidade", error),
         );
         if (once) {
@@ -2555,26 +2738,31 @@ async function loop(once: boolean): Promise<void> {
           break;
         }
 
+        // Cada nova falha é avaliada uma única vez. Recriar o Chromium só ajuda
+        // quando o navegador/portal travou — nunca para CAPTCHA, código ou credencial
+        // recusada — e no máximo uma vez por BROWSER_RESTART_MIN_INTERVAL_MS.
         if (
           emAndamento.size === 0 &&
-          !contaBloqueada &&
-          runtimeState.consecutiveAuthFailures >= env.authFailuresBeforeBrowserRestart
+          ultimaFalhaDeAutenticacao &&
+          runtimeState.consecutiveAuthFailures > 0 &&
+          runtimeState.consecutiveAuthFailures !== falhasAvaliadasParaReinicio
         ) {
-          log(
-            `Reiniciando navegador após ${runtimeState.consecutiveAuthFailures} falha(s) consecutiva(s) de autenticação.`,
-          );
-          try {
-            await fecharContexto(contextoAberto);
-            loginEmAndamento = null;
-            contextoAberto = await abrirContexto();
-            runtimeState.browserRestarts += 1;
-            runtimeState.consecutiveAuthFailures = 0;
-            runtimeState.auth = "checking";
-            proximaValidacaoAuthEm = 0;
-          } catch (error) {
-            runtimeState.auth = "unavailable";
-            proximaValidacaoAuthEm = Date.now() + env.authRetryIntervalMs;
-            logErro("Falha ao reiniciar o navegador; nova tentativa será feita", error);
+          falhasAvaliadasParaReinicio = runtimeState.consecutiveAuthFailures;
+          if (
+            shouldRestartBrowserAfterAuthFailure({
+              failure: ultimaFalhaDeAutenticacao,
+              consecutiveFailures: runtimeState.consecutiveAuthFailures,
+              failuresBeforeRestart: env.authFailuresBeforeBrowserRestart,
+              msSinceLastRestart: Date.now() - ultimoReinicioNavegadorEm,
+              minIntervalMs: env.browserRestartMinIntervalMs,
+            })
+          ) {
+            // Sem as palavras "falha"/"erro": é uma ação planejada, não um incidente.
+            log(
+              `Recriando o navegador após ${runtimeState.consecutiveAuthFailures} validações seguidas sem autenticar (${ultimaFalhaDeAutenticacao.kind}).`,
+            );
+            await reiniciarNavegador("falhas-de-autenticacao", { persistir: false });
+            falhasAvaliadasParaReinicio = 0;
           }
         }
 

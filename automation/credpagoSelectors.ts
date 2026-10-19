@@ -1023,7 +1023,27 @@ export async function hasVisibleCaptchaChallenge(page: Page): Promise<boolean> {
   return anyVisible(widgets);
 }
 
-async function authenticationChallenge(page: Page): Promise<string | null> {
+export type LoginChallengeKind = "captcha" | "otp" | "invalid_credentials";
+
+/**
+ * O Login Loft pediu algo que só uma pessoa resolve (CAPTCHA, código por
+ * SMS/e-mail ou credenciais recusadas). O worker não contorna esses desafios e,
+ * principalmente, não deve insistir: cada tentativa extra de login pode levar o
+ * provedor a bloquear a conta.
+ */
+export class LoftLoginChallengeError extends Error {
+  readonly kind: LoginChallengeKind;
+
+  constructor(kind: LoginChallengeKind, message: string) {
+    super(message);
+    this.name = "LoftLoginChallengeError";
+    this.kind = kind;
+  }
+}
+
+async function authenticationChallenge(
+  page: Page,
+): Promise<{ kind: LoginChallengeKind; message: string } | null> {
   const texto = await page
     .locator("body")
     .innerText()
@@ -1036,19 +1056,61 @@ async function authenticationChallenge(page: Page): Promise<string | null> {
       texto,
     )
   ) {
-    return "O provedor solicitou uma verificação de segurança durante o acesso.";
+    return {
+      kind: "captcha",
+      message: "O provedor solicitou uma verificação de segurança durante o acesso.",
+    };
   }
   if (
     /insira\s+o\s+c[oó]digo|c[oó]digo\s+(?:de\s+)?verifica[cç][aã]o|c[oó]digo\s+enviado|autentica[cç][aã]o\s+em\s+duas\s+etapas/i.test(
       texto,
     )
   ) {
-    return "O provedor solicitou um código de verificação para renovar a sessão.";
+    return {
+      kind: "otp",
+      message: "O provedor solicitou um código de verificação para renovar a sessão.",
+    };
   }
   if (/credenciais?\s+inv[aá]lid|senha\s+incorret|usu[aá]rio\s+n[aã]o\s+encontrado/i.test(texto)) {
-    return "O portal de autenticação recusou as credenciais configuradas.";
+    return {
+      kind: "invalid_credentials",
+      message: "O portal de autenticação recusou as credenciais configuradas.",
+    };
   }
   return null;
+}
+
+/**
+ * Envia o formulário do Login Loft. O botão já ficou sem o rótulo exato "Entrar"
+ * e, em outro momento, ainda não estava montado quando o worker o procurou
+ * (erro "O botão Entrar do portal não foi encontrado"). Por isso aguarda um
+ * botão de envio visível e habilitado e, se nenhum aparecer, usa Enter no campo
+ * de senha — o mesmo gesto de uma pessoa.
+ */
+async function submitLoginForm(page: Page, passwordField: Locator, deadline: number): Promise<void> {
+  const candidates = [
+    page.getByRole("button", { name: /^\s*(?:entrar|continuar|acessar)\s*$/i }),
+    page.locator('form button[type="submit"]'),
+    page.locator('button[type="submit"], input[type="submit"]'),
+  ];
+  // Um botão legítimo aparece em poucos segundos; o resto do prazo fica reservado para o
+  // portal responder ao envio (o Enter abaixo também precisa de tempo para surtir efeito).
+  const limit = Math.min(6_000, Math.floor(tempoRestante(deadline) * 0.4));
+  const inicio = Date.now();
+  do {
+    for (const candidate of candidates) {
+      if ((await candidate.count().catch(() => 0)) === 0) continue;
+      const button = candidate.first();
+      if (!(await button.isVisible().catch(() => false))) continue;
+      // O React só habilita o botão depois de validar os dois campos; aguarda em vez de falhar.
+      if (await button.isDisabled().catch(() => true)) continue;
+      await button.click({ timeout: tempoRestante(deadline) });
+      return;
+    }
+    await page.waitForTimeout(FIND_POLL_MS);
+  } while (Date.now() - inicio < limit);
+
+  await passwordField.press("Enter", { timeout: tempoRestante(deadline) });
 }
 
 export async function detectAuthenticationState(
@@ -1181,6 +1243,9 @@ export async function loginWithCredentials(
       return;
     } catch (erro) {
       ultimoErro = erro;
+      // CAPTCHA/OTP/credencial recusada não se resolvem repetindo o envio — e
+      // cada reenvio conta contra a conta no provedor.
+      if (erro instanceof LoftLoginChallengeError) throw erro;
       if (tentativa < MAX_TENTATIVAS && tempoRestante(deadline) > FIND_POLL_MS) {
         await page
           .reload({ waitUntil: "domcontentloaded", timeout: tempoRestante(deadline) })
@@ -1270,30 +1335,22 @@ async function tentarLoginLoft(
   await senhaField.pressSequentially(password, { delay: 20 });
   await senhaField.press("Tab");
 
-  const entrarButton = page.getByRole("button", { name: /^\s*entrar\s*$/i });
-  const submitButton =
-    (await entrarButton.count().catch(() => 0)) > 0
-      ? entrarButton.first()
-      : page.locator('button[type="submit"], input[type="submit"]').first();
-  if ((await submitButton.count().catch(() => 0)) === 0) {
-    throw new Error("O botão Entrar do portal não foi encontrado.");
-  }
-  await submitButton.waitFor({ state: "visible", timeout: tempoRestante(deadline) });
-  if (await submitButton.isDisabled().catch(() => true)) {
-    throw new Error("O portal não habilitou o botão Entrar após o preenchimento.");
-  }
-  await submitButton.click({ timeout: tempoRestante(deadline) });
+  await submitLoginForm(page, senhaField, deadline);
 
-  let desafio: string | null = null;
+  const observado: { desafio: { kind: LoginChallengeKind; message: string } | null } = {
+    desafio: null,
+  };
   const concluiu = await waitUntil(
     page,
     async () => {
-      desafio = await authenticationChallenge(page);
-      return Boolean(desafio) || (await isAuthenticatedCredPagoPage(page));
+      observado.desafio = await authenticationChallenge(page);
+      return Boolean(observado.desafio) || (await isAuthenticatedCredPagoPage(page));
     },
     tempoRestante(deadline),
   );
-  if (desafio) throw new Error(desafio);
+  if (observado.desafio) {
+    throw new LoftLoginChallengeError(observado.desafio.kind, observado.desafio.message);
+  }
   if (!concluiu || !(await isAuthenticatedCredPagoPage(page))) {
     throw new Error("O portal não confirmou as credenciais dentro do tempo esperado.");
   }

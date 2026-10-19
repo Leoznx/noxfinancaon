@@ -380,10 +380,14 @@ exposta em `https://automacao.noxfianca.com/ready`. Nunca exponha credenciais, c
 service role nesses endpoints.
 
 Se o Login Loft exigir reCAPTCHA/OTP, a recuperação precisa de uma pessoa autorizada — o worker
-não tenta contornar a verificação. Rode `npm run automation:interactive-login` em um computador
-com interface gráfica, conclua o desafio na janela aberta e transfira o arquivo de sessão gerado
-para a VPS pelo canal SSH já configurado. O processo volta a ser totalmente automático depois
-que a sessão válida é carregada.
+não tenta contornar a verificação. Nesse caso o `/health` informa `authRequiresHuman: true` e o
+worker passa a validar só a cada 20 min (insistir no login poderia bloquear a conta). Rode
+`npm run automation:refresh-vps-session` (login manual em janela do Chromium + envio por scp +
+confirmação no `/health`) ou, manualmente, `npm run automation:interactive-login` e copie o
+arquivo gerado para `automation/data/credpago-session.json` da VPS. O worker observa esse arquivo
+e recarrega o navegador em segundos, sem reiniciar o container; um arquivo corrompido é colocado
+em quarentena e o último backup válido (`.bak`) é restaurado. Detalhes, causas e passo a passo em
+[`docs/CREDIT_AUTOMATION_REATIVACAO_2026-10-19.md`](docs/CREDIT_AUTOMATION_REATIVACAO_2026-10-19.md).
 
 ## Scripts disponíveis
 
@@ -395,4 +399,5 @@ que a sessão válida é carregada.
 | `npm run automation:once`              | Processa uma consulta pendente e encerra                           |
 | `npm run automation:install-browsers`  | Baixa o Chromium do Playwright                                     |
 | `npm run automation:interactive-login` | Renova a sessão com janela visível quando houver CAPTCHA/OTP       |
+| `npm run automation:refresh-vps-session` | Login manual + envio da sessão à VPS + confirmação no `/health`  |
 | `npm run test:automation`              | Testa detecção de login/sessão sem acessar dados reais de clientes |

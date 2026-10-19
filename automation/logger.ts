@@ -50,6 +50,17 @@ export function formatErrorDetail(err: unknown): string {
   return String(err).slice(0, MAX_ERROR_DETAIL_LENGTH);
 }
 
+/**
+ * Situação esperada e recuperável (por exemplo, a sessão salva não pôde ser
+ * gravada agora). O prefixo AVISO não é tratado como incidente pelo monitor.
+ */
+export function logAviso(msg: string, err?: unknown): void {
+  const detalhe = redactSensitiveText(formatErrorDetail(err), MAX_ERROR_DETAIL_LENGTH);
+  console.log(
+    `[${timestamp()}] AVISO: ${redactSensitiveText(msg, 1_000)}${detalhe ? " — " + detalhe : ""}`,
+  );
+}
+
 export function logErro(msg: string, err?: unknown): void {
   const detalhe = redactSensitiveText(formatErrorDetail(err), MAX_ERROR_DETAIL_LENGTH);
   console.error(

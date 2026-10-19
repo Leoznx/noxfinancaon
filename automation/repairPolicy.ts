@@ -19,6 +19,15 @@ export function isExpectedCreditReconciliationPending(
   );
 }
 
+/**
+ * O worker avisa quando o login da Loft só se resolve com uma pessoa (CAPTCHA,
+ * código por SMS/e-mail, credencial recusada ou ausente). Reiniciar o processo
+ * ou o Chromium nunca resolve isso — apenas repete tentativas de login.
+ */
+export function creditAuthRequiresHuman(creditWorkerHealth: Record<string, unknown>): boolean {
+  return creditWorkerHealth.authRequiresHuman === true;
+}
+
 export function activeCreditConsultationCount(
   creditWorkerHealth: Record<string, unknown>,
   databaseCount = 0,

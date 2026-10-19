@@ -79,6 +79,8 @@ const loftCancellationReason = configuredCancellationReason
   ? (configuredCancellationReason as LoftCancellationReason)
   : null;
 
+const authLoginTimeoutMs = positiveNumber("AUTH_LOGIN_TIMEOUT_MS", 75 * 1000, 10_000);
+
 const storageStatePath = process.env.CREDPAGO_STORAGE_STATE_PATH || "";
 const profileDir =
   process.env.CREDPAGO_PROFILE_DIR || path.resolve(__dirname, "chrome-profile-credpago");
@@ -197,11 +199,34 @@ export const env = {
     60_000,
   ),
   /** Teto TOTAL para todas as tentativas de redirecionamento e Login Loft. */
-  authLoginTimeoutMs: positiveNumber("AUTH_LOGIN_TIMEOUT_MS", 75 * 1000, 10_000),
-  /** Watchdog externo ao fluxo de login: fecha a aba mesmo se o Playwright/SSO não responder. */
-  authValidationTimeoutMs: positiveNumber("AUTH_VALIDATION_TIMEOUT_MS", 90 * 1000, 15_000),
+  authLoginTimeoutMs,
+  /**
+   * Watchdog externo ao fluxo de login: fecha a aba mesmo se o Playwright/SSO não responder.
+   * Precisa cobrir a navegação (até duas tentativas) MAIS o login completo; um prazo menor
+   * fechava a aba no meio do login ("Target page, context or browser has been closed").
+   */
+  authValidationTimeoutMs: Math.max(
+    positiveNumber("AUTH_VALIDATION_TIMEOUT_MS", 210 * 1000, 15_000),
+    // navegação (30 s) + detecção do estado (30 s) + login completo + nova detecção (30 s) + folga
+    authLoginTimeoutMs + 135_000,
+  ),
   /** Reinicia contexto+navegador depois de falhas seguidas, sem derrubar o processo. */
   authFailuresBeforeBrowserRestart: positiveNumber("AUTH_FAILURES_BEFORE_BROWSER_RESTART", 2),
+  /** Teto do intervalo (backoff exponencial) entre validações quando a sessão não é renovada. */
+  authRetryMaxIntervalMs: positiveNumber("AUTH_RETRY_MAX_INTERVAL_MS", 10 * 60 * 1000, 30_000),
+  /**
+   * CAPTCHA/OTP/credencial recusada exigem uma pessoa. Insistir a cada minuto só
+   * acumula tentativas de login e pode levar a conta a ser bloqueada pelo provedor.
+   */
+  authHumanRetryIntervalMs: positiveNumber("AUTH_HUMAN_RETRY_INTERVAL_MS", 20 * 60 * 1000, 60_000),
+  /** Menor intervalo entre duas recriações do navegador provocadas por falhas de autenticação. */
+  browserRestartMinIntervalMs: positiveNumber(
+    "BROWSER_RESTART_MIN_INTERVAL_MS",
+    5 * 60 * 1000,
+    10_000,
+  ),
+  /** Frequência com que o worker confere se alguém substituiu o arquivo de sessão (novo login). */
+  sessionWatchIntervalMs: positiveNumber("SESSION_WATCH_INTERVAL_MS", 5_000, 1_000),
   keepBrowserOpen: process.env.AUTOMATION_KEEP_BROWSER_OPEN === "true",
   /** Valor informado no ambiente, exposto apenas para diagnóstico operacional. */
   requestedMaxConcurrentConsultas,

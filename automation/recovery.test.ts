@@ -11,6 +11,7 @@ import { planAiRecovery } from "./aiRecoveryPlanner";
 import { analyzeWorkerLogLine } from "./logIncidentMonitor";
 import {
   activeCreditConsultationCount,
+  creditAuthRequiresHuman,
   isExpectedCreditReconciliationPending,
   shouldSkipHealthyCreditWorkerRestart,
 } from "./repairPolicy";
@@ -283,4 +284,31 @@ test("analise automatica seleciona somente runbooks permitidos a partir da saude
     planAiRecovery({ ...snapshot, portalBlocked: true }, error).runbook,
     "WAIT_EXTERNAL_DEPENDENCY",
   );
+});
+
+test("avisos operacionais esperados nunca viram incidente, mas erros reais continuam sendo registrados", () => {
+  assert.equal(
+    analyzeWorkerLogLine(
+      "[2026-10-19T20:00:00.000Z] AVISO: Não foi possível salvar a sessão agora; tentaremos novamente — Error: net::ERR_ABORTED",
+    ),
+    null,
+  );
+  assert.equal(
+    analyzeWorkerLogLine(
+      "[2026-10-19T20:00:00.000Z] AVISO: Portal lento ou indisponível na navegação; nova tentativa 2/2 — TimeoutError: page.goto: Timeout 30000ms exceeded.",
+    ),
+    null,
+  );
+  assert.ok(
+    analyzeWorkerLogLine(
+      "[2026-10-19T20:00:00.000Z] ERRO: Fila pausada: o login da Loft precisa de uma pessoa",
+    ),
+  );
+});
+
+test("só reinicia o worker por autenticação quando uma pessoa não é necessária", () => {
+  assert.equal(creditAuthRequiresHuman({ auth: "required", authRequiresHuman: true }), true);
+  assert.equal(creditAuthRequiresHuman({ auth: "required", authRequiresHuman: false }), false);
+  // Versões antigas do worker não informam o campo: o comportamento anterior é preservado.
+  assert.equal(creditAuthRequiresHuman({ auth: "required" }), false);
 });
