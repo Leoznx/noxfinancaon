@@ -289,7 +289,7 @@ export const AGENDA_FILTERS: Array<{ value: AgendaFilter; label: string }> = [
 ];
 
 export const AGENDA_BUSINESS_HOURS_LABEL =
-  "Segunda a quinta: 08:00–12:00 e 13:00–18:00. Sexta: 08:00–12:00 e 13:00–17:00.";
+  "Segunda a sexta: 08:00–11:30 e 13:00–17:30, reuniões de 30 minutos.";
 
 const CANONICAL_TYPES = new Set(["reuniao", "follow_up", "visita", "call", "ligacao", "retorno"]);
 
@@ -684,7 +684,7 @@ export type ScheduledSharedMeeting = {
   closer_name: string;
 };
 
-export const SHARED_MEETING_DURATION_MINUTES = 60;
+export const SHARED_MEETING_DURATION_MINUTES = 30;
 
 export async function fetchCloserAvailability(fromDate: Date, days = 14) {
   const date = formatLocalDate(fromDate);

@@ -198,7 +198,7 @@ function SdrScheduler({ sellerName, onRefresh }: { sellerName: string | null; on
         contactPhone,
         notes,
       });
-      toast.success(`Reunião de 1 hora distribuída para ${closerNames.get(meeting.closer_id) ?? firstNameOnly(meeting.closer_name)}. Os e-mails de confirmação serão enviados automaticamente.`);
+      toast.success(`Reunião de 30 minutos distribuída para ${closerNames.get(meeting.closer_id) ?? firstNameOnly(meeting.closer_name)}. Os e-mails de confirmação serão enviados automaticamente.`);
       resetClientForm();
       setSelected(null);
       await Promise.all([loadSlots(selectedDate), onRefresh(new Date(selected.slot_start))]);
@@ -349,7 +349,7 @@ function AvailableTimes({ date, slots, loading, closerNames, onRefresh, onSelect
           {slots.map((slot) => (
             <button key={`${slot.slot_start}-${slot.closer_id}`} type="button" onClick={() => onSelect(slot)} className="min-h-14 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-left transition hover:border-yellow-400 hover:bg-yellow-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400">
               <strong className="block text-sm font-black text-neutral-950">{new Date(slot.slot_start).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</strong>
-              <span className="mt-0.5 block truncate text-[10px] font-semibold text-neutral-500">Closer {closerNames.get(slot.closer_id) ?? firstNameOnly(slot.closer_name)} · 1h</span>
+              <span className="mt-0.5 block truncate text-[10px] font-semibold text-neutral-500">Closer {closerNames.get(slot.closer_id) ?? firstNameOnly(slot.closer_name)} · 30 min</span>
             </button>
           ))}
         </div>
@@ -383,7 +383,7 @@ function ClientBookingForm({ selected, closerName, clientType, firstName, lastNa
       <div className="grid gap-3 rounded-2xl border border-yellow-300 bg-yellow-50 p-4 sm:grid-cols-4">
         <SummaryItem label="Data" value={new Date(selected.slot_start).toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" })} />
         <SummaryItem label="Horário" value={new Date(selected.slot_start).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })} />
-        <SummaryItem label="Duração" value={`${SHARED_MEETING_DURATION_MINUTES / 60} hora`} />
+        <SummaryItem label="Duração" value={`${SHARED_MEETING_DURATION_MINUTES} min`} />
         <SummaryItem label="Closer" value={closerName} />
       </div>
 
@@ -501,7 +501,7 @@ function CloserCountdown({ sellerId, appointments, onRefresh }: Omit<Props, "sel
         <div className="mt-3 rounded-xl border border-white/10 bg-white/5 p-3">
           <p className="mb-2 text-xs font-bold text-neutral-200">Escolha um novo horário disponível:</p>
           <div className="flex max-h-36 flex-wrap gap-2 overflow-y-auto">
-            {slots.slice(0, 24).map((slot) => <button key={`${slot.slot_start}-${slot.closer_id}`} className="rounded-lg bg-white px-3 py-2 text-xs font-bold text-neutral-950 hover:bg-yellow-300" onClick={() => void reschedule(slot)}>{formatSlot(slot.slot_start)} · 1h</button>)}
+            {slots.slice(0, 24).map((slot) => <button key={`${slot.slot_start}-${slot.closer_id}`} className="rounded-lg bg-white px-3 py-2 text-xs font-bold text-neutral-950 hover:bg-yellow-300" onClick={() => void reschedule(slot)}>{formatSlot(slot.slot_start)} · 30 min</button>)}
           </div>
         </div>
       )}

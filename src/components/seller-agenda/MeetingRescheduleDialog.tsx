@@ -181,7 +181,7 @@ export function MeetingRescheduleDialog({
                       className={`rounded-xl border px-3 py-2.5 text-left transition ${active ? "border-neutral-950 bg-neutral-950 text-white" : "border-neutral-200 bg-white text-neutral-900 hover:border-yellow-400 hover:bg-yellow-50"}`}
                     >
                       <span className="flex items-center gap-1.5 text-sm font-black"><Clock3 className="h-3.5 w-3.5" />{format(new Date(slot.slot_start), "HH:mm")}</span>
-                      <span className={`mt-1 block truncate text-[9px] font-semibold ${active ? "text-neutral-300" : "text-neutral-500"}`}>{slot.closer_name} · 1 hora</span>
+                      <span className={`mt-1 block truncate text-[9px] font-semibold ${active ? "text-neutral-300" : "text-neutral-500"}`}>{slot.closer_name} · 30 min</span>
                     </button>
                   );
                 })}
