@@ -37,6 +37,22 @@ export interface BrowserSessionConfig {
 }
 
 const DEFAULT_VIEWPORT = { width: 1366, height: 900 };
+const CLOSE_TIMEOUT_MS = 10_000;
+
+/** Aguarda o fechamento sem nunca rejeitar nem bloquear além do prazo. */
+async function closeWithin(closing: Promise<unknown>, timeoutMs: number): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      closing.catch(() => {}),
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 /** Formato que o Playwright aceita em `newContext({ storageState })` (objeto, não caminho). */
 export type PlaywrightStorageState = Exclude<
@@ -215,7 +231,9 @@ export class BrowserSession {
     if (this.closed) return;
     if (options.persist) await this.persist().catch(() => false);
     this.closed = true;
-    await this.context.close().catch(() => {});
-    if (this.browser) await this.browser.close().catch(() => {});
+    // Um Chromium travado pode nunca responder ao close(); o prazo impede que o loop
+    // do worker fique preso justamente no momento de recriá-lo.
+    await closeWithin(this.context.close(), CLOSE_TIMEOUT_MS);
+    if (this.browser) await closeWithin(this.browser.close(), CLOSE_TIMEOUT_MS);
   }
 }

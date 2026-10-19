@@ -2704,7 +2704,13 @@ async function loop(once: boolean): Promise<void> {
 
       // Alguém fez um novo login (por exemplo, no computador) e substituiu o arquivo
       // de sessão da VPS. Recarrega na hora, sem reiniciar o container, e valida de novo.
-      if (!cancelamentoEmAndamento && Date.now() >= proximaChecagemSessaoEm) {
+      // Respeita o intervalo após uma tentativa de recriar o navegador: se o Chromium não
+      // subir (por exemplo, falta de memória), não tenta abri-lo a cada checagem.
+      if (
+        !cancelamentoEmAndamento &&
+        Date.now() >= proximaChecagemSessaoEm &&
+        Date.now() >= proximoReinicioNavegadorEm
+      ) {
         proximaChecagemSessaoEm = Date.now() + env.sessionWatchIntervalMs;
         if (await contextoAberto.detectExternalUpdate().catch(() => false)) {
           log("Novo arquivo de sessão detectado — recarregando o navegador com ele.");
@@ -2726,7 +2732,6 @@ async function loop(once: boolean): Promise<void> {
         contextoAberto.persistirSessao,
       );
       if (!autenticacaoPronta) {
-        const contaBloqueada = runtimeState.auth === "blocked";
         // O nome "aguardando_liberacao_parceiro" é histórico: site e aplicativo o
         // apresentam como "Em análise" para QUALQUER espera pelo serviço externo (o
         // aplicativo só faz isso para essa etapa). Por isso ele continua sendo o rótulo

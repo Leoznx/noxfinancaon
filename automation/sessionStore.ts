@@ -178,10 +178,18 @@ export async function loadStorageStateWithFallback(
   }
 
   if (primary.reason !== "missing") {
-    hooks.warn?.(
-      `Arquivo de sessão inutilizável (${primary.reason}${primary.detail ? `: ${primary.detail}` : ""}); preservado em quarentena.`,
-    );
-    if (primary.reason !== "unreadable") {
+    if (primary.reason === "unreadable") {
+      // Quase sempre um arquivo copiado por outro usuário (scp como root): o worker roda
+      // como "nox" e precisa ser o dono para ler e, depois, atualizar o arquivo.
+      hooks.warn?.(
+        `Sem permissão para ler o arquivo de sessão (${primary.detail ?? "erro de leitura"}); ` +
+          "ajuste o dono para o usuário do worker (docker compose exec -u root credpago-worker " +
+          "chown nox:nox /app/data/credpago-session.json). Usando o último backup válido, se houver.",
+      );
+    } else {
+      hooks.warn?.(
+        `Arquivo de sessão inutilizável (${primary.reason}${primary.detail ? `: ${primary.detail}` : ""}); preservado em quarentena.`,
+      );
       await fs.rename(filePath, `${filePath}.invalid-${Date.now()}`).catch(() => {});
       await pruneQuarantine(filePath);
     }
