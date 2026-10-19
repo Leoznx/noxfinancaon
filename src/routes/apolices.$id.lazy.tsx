@@ -325,10 +325,12 @@ function ApoliceDetalhe() {
     assinatura?.signature_status === "signed" ||
     Boolean(assinatura?.signed_at) ||
     documentoD4Sign?.document_subtype === "contratos-assinados";
+  // O envio da via assinada so pode acontecer uma vez: assim que o upload
+  // conclui, o document_subtype passa a "assinado_imobiliaria" e o botao
+  // some automaticamente na proxima renderizacao.
   const podeEditarContrato =
     Boolean(contratoLocacao?.id) &&
-    contratoLocacao?.document_subtype === "pendente_assinatura" &&
-    !assinaturaConcluida;
+    contratoLocacao?.document_subtype === "pendente_assinatura";
   const allDocuments = [
     ...documentosProposta.map((document) => ({ document, source: "proposal" as const })),
     ...documentos.map((document) => ({ document: document as ContractDocument, source: "contract" as const })),
@@ -575,23 +577,24 @@ function ApoliceDetalhe() {
             <p className="font-bold text-neutral-900">Nenhum documento foi enviado para este processo.</p>
           </Card>
         ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {allDocuments.map(({ document: doc, source }) => {
             const Icon = documentIcon(doc);
             const available = Boolean(doc?.file_url || doc?.storage_path);
             const pending = doc.document_subtype === "pendente_assinatura" ||
               (Boolean(doc.contract_signature_id) && !assinaturaConcluida);
             const editable = source === "proposal" && doc.id === contratoLocacao?.id && podeEditarContrato;
+            const uploadedAt = doc?.uploaded_at || doc?.updated_at || doc?.created_at;
             return (
               <Card
                 key={`${source}-${doc.id}`}
-                className={`p-6 border rounded-2xl bg-white flex flex-col gap-4 ${
+                className={`p-5 border rounded-2xl bg-white flex flex-col min-h-[260px] shadow-sm ${
                   pending ? "border-red-200 ring-1 ring-red-100" : "border-neutral-200"
                 }`}
               >
-                <div className="flex items-start justify-between">
+                <div className="flex items-start justify-between gap-3">
                   <div
-                    className={`w-12 h-12 rounded-xl border flex items-center justify-center ${
+                    className={`w-11 h-11 rounded-xl border flex items-center justify-center shrink-0 ${
                       pending
                         ? "bg-red-50 border-red-200"
                         : "bg-yellow-50 border-yellow-200"
@@ -601,54 +604,59 @@ function ApoliceDetalhe() {
                   </div>
                   <DocStatusBadge status={available ? (pending ? "pendente_assinatura" : "disponivel") : "nao_enviado"} />
                 </div>
-                <div className="space-y-1">
-                  <h3 className="font-black text-neutral-900">{documentLabel(doc)}</h3>
-                  <p className="text-xs text-neutral-500 font-medium">{documentDescription(doc)}</p>
+
+                <div className="mt-4 space-y-1.5 flex-1">
+                  <h3 className="font-black text-neutral-900 text-base leading-tight">{documentLabel(doc)}</h3>
+                  <p className="text-xs text-neutral-500 font-medium leading-relaxed">{documentDescription(doc)}</p>
                   {doc?.file_name && (
-                    <p className="text-xs text-neutral-700 font-bold mt-2 break-all">{doc.file_name}</p>
+                    <p className="text-xs text-neutral-700 font-bold pt-1 break-all line-clamp-2">{doc.file_name}</p>
                   )}
-                  {(doc?.uploaded_at || doc?.updated_at || doc?.created_at) && (
-                    <p className="text-[10px] text-neutral-400 uppercase tracking-widest font-bold mt-2">
-                      Enviado em {new Date(doc.uploaded_at || doc.updated_at || doc.created_at || "").toLocaleDateString("pt-BR")}
+                  {uploadedAt && (
+                    <p className="text-[10px] text-neutral-400 uppercase tracking-widest font-bold pt-1">
+                      Enviado em {new Date(uploadedAt).toLocaleDateString("pt-BR")}
                     </p>
                   )}
                 </div>
+
                 {editable && (
-                  <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
+                  <div className="mt-3 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
                     <AlertCircle size={14} className="mt-0.5 shrink-0" />
                     <span>
                       Contrato enviado sem assinatura. Envie a via assinada para
-                      concluir a contratacao — este envio so pode ser feito uma vez.
+                      concluir a contratação — este envio só pode ser feito uma vez.
                     </span>
                   </div>
                 )}
-                <div className="grid grid-cols-2 gap-2 pt-2 mt-auto">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="flex-1 rounded-lg gap-1.5 font-bold"
-                    disabled={!available}
-                    onClick={() => doc && void openDocument(doc)}
-                  >
-                    <Eye size={14} /> Visualizar
-                  </Button>
-                  <Button
-                    size="sm"
-                    className="flex-1 bg-neutral-900 hover:bg-neutral-800 text-white rounded-lg gap-1.5 font-bold"
-                    disabled={!available}
-                    onClick={() => doc && void openDocument(doc, true)}
-                  >
-                    <Download size={14} /> Baixar
-                  </Button>
+
+                <div className="pt-4 mt-auto flex flex-col gap-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="rounded-lg gap-1.5 font-bold"
+                      disabled={!available}
+                      onClick={() => doc && void openDocument(doc)}
+                    >
+                      <Eye size={14} /> Visualizar
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="bg-neutral-900 hover:bg-neutral-800 text-white rounded-lg gap-1.5 font-bold"
+                      disabled={!available}
+                      onClick={() => doc && void openDocument(doc, true)}
+                    >
+                      <Download size={14} /> Baixar
+                    </Button>
+                  </div>
                   {editable && (
                     <Button
                       size="sm"
-                      className="col-span-2 rounded-lg gap-1.5 font-black bg-red-600 hover:bg-red-700 text-white"
+                      className="w-full rounded-lg gap-1.5 font-black bg-red-600 hover:bg-red-700 text-white"
                       disabled={replacingDocument}
                       onClick={() => fileInputRef.current?.click()}
                     >
-                      {replacingDocument ? <Loader2 size={14} className="animate-spin" /> : <PenLine size={14} />}
-                      {replacingDocument ? "Enviando..." : "Enviar contrato com assinatura"}
+                      {replacingDocument ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                      {replacingDocument ? "Enviando..." : "Enviar contrato assinado"}
                     </Button>
                   )}
                 </div>
@@ -1017,7 +1025,7 @@ function DocStatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; cls: string }> = {
     disponivel:  { label: "Disponível",   cls: "bg-green-50 text-green-700 border-green-200" },
     pendente:    { label: "Pendente",     cls: "bg-amber-50 text-amber-700 border-amber-200" },
-    pendente_assinatura: { label: "Sem assinatura", cls: "bg-red-50 text-red-700 border-red-200" },
+    pendente_assinatura: { label: "Não assinado", cls: "bg-red-50 text-red-700 border-red-200" },
     nao_enviado: { label: "Não enviado",  cls: "bg-neutral-100 text-neutral-500 border-neutral-200" },
   };
   const cfg = map[status] || map.nao_enviado;
