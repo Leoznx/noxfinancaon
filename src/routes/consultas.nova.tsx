@@ -48,7 +48,7 @@ function NovaConsulta() {
 
       // Tenta a API direta da Loft (sem Playwright, sem fila).
       const direto = await simularLoftDireto(dados, user.email, user.role);
-      if (direto.ok) {
+      if (direto.ok && direto.consultaId) {
         await navigate({ to: "/consultas/$id/status", params: { id: direto.consultaId } });
         return;
       }
