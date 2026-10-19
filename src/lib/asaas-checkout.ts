@@ -311,20 +311,34 @@ export async function rehydrateAsaasCheckout(
       .limit(1),
   ]);
 
-  const paymentRow = paymentsResult.data?.[0] ?? null;
+  const rawPaymentRow = paymentsResult.data?.[0] ?? null;
   const subscriptionRow = subscriptionsResult.data?.[0] ?? null;
   const invoiceRows = invoicesResult.data ?? [];
+
+  // Uma cobrança terminada (cancelada, estornada, recusada...) não pode voltar à
+  // tela como "cobrança atual" — isso trava o seletor de vencimento e induz o
+  // backend a devolvê-la de novo quando o usuário clica em "Pagar agora". Para a
+  // reidratação, só consideramos faturas e pagamentos ativos.
+  const activePaymentRow =
+    rawPaymentRow && !isInactivePaymentStatus(rawPaymentRow.status) ? rawPaymentRow : null;
+  const activeInvoiceRows = invoiceRows.filter(
+    (row: any) => !isInactivePaymentStatus(row.status),
+  );
   const initialInvoice =
-    invoiceRows.find(
+    activeInvoiceRows.find(
       (row: any) =>
         row.charge_kind === "initial" || String(row.billing_key || "").includes(":initial:"),
     ) || null;
-  const invoiceRow = paymentRow
-    ? invoiceRows.find((row: any) => row.asaas_payment_id === paymentRow.id) || invoiceRows[0]
-    : initialInvoice || invoiceRows[0] || null;
+  const invoiceRow = activePaymentRow
+    ? activeInvoiceRows.find((row: any) => row.asaas_payment_id === activePaymentRow.id) ||
+      initialInvoice ||
+      activeInvoiceRows[0] ||
+      null
+    : initialInvoice || activeInvoiceRows[0] || null;
 
   const installmentPlanPending = hasIncompleteInstallmentPlan(invoiceRows);
 
+  const paymentRow = activePaymentRow;
   let payment = paymentRow || invoiceRow ? normalizePersistedPayment(paymentRow, invoiceRow) : null;
   let subscription = subscriptionRow ? normalizePersistedSubscription(subscriptionRow) : null;
 

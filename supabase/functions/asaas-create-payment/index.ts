@@ -92,6 +92,55 @@ function providerPaymentUrl(raw: any, local?: any) {
   return raw?.invoiceUrl || raw?.bankSlipUrl || local?.payment_url || local?.boleto_url || null;
 }
 
+/**
+ * Status terminais da fatura/pagamento. Uma fatura inicial nesses estados está
+ * morta — devolvê-la como "cobrança existente" trava a tela de pagamento e faz
+ * o usuário ver "Cobrança gerada com sucesso" sobre um pagamento cancelado.
+ */
+const INACTIVE_PAYMENT_STATUSES = new Set([
+  "cancelled",
+  "canceled",
+  "cancelado",
+  "expired",
+  "refused",
+  "recusado",
+  "failed",
+  "falhou",
+  "refunded",
+  "estornado",
+  "chargeback",
+  "chargeback_dispute",
+]);
+
+function isInactiveInvoice(invoice: any) {
+  return INACTIVE_PAYMENT_STATUSES.has(String(invoice?.status || "").toLowerCase());
+}
+
+async function retireDeadInitialInvoice(supabase: any, invoice: any) {
+  if (!invoice?.id || !invoice?.billing_key) return;
+  const retiredSuffix = `:retired:${Date.now()}`;
+  const retiredKey = `${invoice.billing_key}${retiredSuffix}`;
+  await supabase
+    .from("faturas_inquilino")
+    .update({ billing_key: retiredKey })
+    .eq("id", invoice.id);
+  // A billing_operation que reservou essa chave trava novas tentativas (o
+  // claim por idempotency_key reencontra a operação persistida e tenta
+  // recuperar o pagamento morto). Renomeamos sua chave em espelho para
+  // liberar o claim de uma cobrança nova no fluxo "Pagar agora".
+  const admin = supabaseAdmin();
+  await admin
+    .from("billing_operations")
+    .update({ idempotency_key: `${invoice.billing_key}${retiredSuffix}` })
+    .eq("idempotency_key", invoice.billing_key);
+  // O asaas_payment correlato também segura a idempotency_key: liberamos para
+  // que o upsert do novo pagamento não sobrescreva o histórico cancelado.
+  await admin
+    .from("asaas_payments")
+    .update({ idempotency_key: `${invoice.billing_key}${retiredSuffix}` })
+    .eq("idempotency_key", invoice.billing_key);
+}
+
 async function loadExistingInitial(supabase: any, proposalId: string) {
   const billingKey = buildBillingKey(proposalId, "initial", 1);
   const { data: invoice } = await supabase
@@ -272,6 +321,20 @@ serve(async (req) => {
           });
 
     let existingInvoice = await loadExistingInitial(supabase, proposalId);
+    // Fatura inicial em status terminal (cancelada, estornada, recusada,
+    // expirada, chargeback) não pode ser reaproveitada numa nova tentativa de
+    // pagamento: devolvê-la como "cobrança atual" trava o seletor de vencimento
+    // e exibe um "Cobrança gerada com sucesso" sobre um pagamento morto. Para
+    // o fluxo de criação, aposentamos a fatura morta (renomeando sua
+    // billing_key) e seguimos criando uma nova. Para refresh/resend sobre a
+    // mesma, o frontend já filtra na reidratação, então aqui a chamada vira
+    // 404 natural (fatura ativa não existe).
+    if (action === "create" && existingInvoice && isInactiveInvoice(existingInvoice)) {
+      await retireDeadInitialInvoice(supabase, existingInvoice);
+      existingInvoice = null;
+    } else if (action !== "create" && existingInvoice && isInactiveInvoice(existingInvoice)) {
+      existingInvoice = null;
+    }
     if (
       existingInvoice &&
       requestedBillingDueDay &&

@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
+  isInactivePaymentStatus,
   isPagamentoConcluido,
   paymentLink,
   policyStatusLabel,
@@ -79,11 +80,12 @@ export function ModalPagamentoAsaas({
 
   const status = resultado?.paymentStatus || resultado?.status;
   const concluido = isPagamentoConcluido(status);
-  const adiado = intent === "pay_later" || resultado?.deferPayment;
+  const inativo = isInactivePaymentStatus(status);
+  const adiado = !inativo && (intent === "pay_later" || resultado?.deferPayment);
   const consolidado = status === "awaiting_consolidation";
 
   useEffect(() => {
-    if (!open || concluido || consolidado || adiado) return;
+    if (!open || concluido || consolidado || adiado || inativo) return;
     const interval = window.setInterval(() => {
       if (atualizacaoAutomaticaRef.current) return;
       atualizacaoAutomaticaRef.current = true;
@@ -97,7 +99,7 @@ export function ModalPagamentoAsaas({
         });
     }, 5_000);
     return () => window.clearInterval(interval);
-  }, [adiado, concluido, consolidado, onAtualizarResultado, onAtualizarStatus, open]);
+  }, [adiado, concluido, consolidado, inativo, onAtualizarResultado, onAtualizarStatus, open]);
 
   if (!resultado) return null;
 
@@ -146,24 +148,28 @@ export function ModalPagamentoAsaas({
             )}
           </div>
           <DialogTitle className="text-xl font-bold text-neutral-900">
-            {consolidado
-              ? "Enviado ao faturamento consolidado"
-              : adiado
-                ? "Cobrança gerada com sucesso"
-                : concluido
-                  ? "Pagamento identificado"
-                  : isPix
-                    ? "Pague com Pix"
-                    : "Boleto gerado"}
+            {inativo
+              ? "Esta cobrança está inativa"
+              : consolidado
+                ? "Enviado ao faturamento consolidado"
+                : adiado
+                  ? "Cobrança gerada com sucesso"
+                  : concluido
+                    ? "Pagamento identificado"
+                    : isPix
+                      ? "Pague com Pix"
+                      : "Boleto gerado"}
           </DialogTitle>
           <DialogDescription className="text-sm text-neutral-600">
-            {consolidado
-              ? "A parcela foi registrada no financeiro da imobiliária e será incluída no lote, sem cobrança individual duplicada."
-              : adiado
-                ? "O processo de contratação continuará normalmente. O pagamento está pendente."
-                : isPix
-                  ? "Escaneie o QR Code ou copie o código no aplicativo do banco."
-                  : "Copie a linha digitável ou abra o boleto para pagar."}
+            {inativo
+              ? "A cobrança anterior foi encerrada e não pode mais ser paga. Volte e selecione uma forma de pagamento para gerar uma nova cobrança."
+              : consolidado
+                ? "A parcela foi registrada no financeiro da imobiliária e será incluída no lote, sem cobrança individual duplicada."
+                : adiado
+                  ? "O processo de contratação continuará normalmente. O pagamento está pendente."
+                  : isPix
+                    ? "Escaneie o QR Code ou copie o código no aplicativo do banco."
+                    : "Copie a linha digitável ou abra o boleto para pagar."}
           </DialogDescription>
         </div>
 
