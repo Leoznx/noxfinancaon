@@ -1331,10 +1331,11 @@ async function sinalizarFilaAguardandoServico(
   if (error) throw error;
   registrarSucessoFila();
   if (data?.length) {
+    // O rótulo gravado é o mesmo, mas o log descreve o motivo real da espera.
     log(
-      step === "aguardando_liberacao_parceiro"
+      runtimeState.auth === "blocked"
         ? `${data.length} consulta(s) preservada(s) enquanto a conta aguarda liberacao do parceiro.`
-        : `${data.length} consulta(s) aguardando a recuperação da autenticação.`,
+        : `${data.length} consulta(s) preservada(s) enquanto a autenticação do portal é recuperada.`,
     );
   }
 }
@@ -2726,11 +2727,12 @@ async function loop(once: boolean): Promise<void> {
       );
       if (!autenticacaoPronta) {
         const contaBloqueada = runtimeState.auth === "blocked";
-        // "Aguardando liberação do parceiro" só descreve o bloqueio comercial real;
-        // sessão expirada ou portal lento é "aguardando autenticação".
-        await sinalizarFilaAguardandoServico(
-          contaBloqueada ? "aguardando_liberacao_parceiro" : "aguardando_autenticacao",
-        ).catch((error) =>
+        // O nome "aguardando_liberacao_parceiro" é histórico: site e aplicativo o
+        // apresentam como "Em análise" para QUALQUER espera pelo serviço externo (o
+        // aplicativo só faz isso para essa etapa). Por isso ele continua sendo o rótulo
+        // dessas esperas; o motivo real fica em /health (auth, authFailureKind,
+        // authRequiresHuman), não no texto exibido ao corretor.
+        await sinalizarFilaAguardandoServico("aguardando_liberacao_parceiro").catch((error) =>
           registrarFalhaFila("Falha ao sinalizar fila aguardando disponibilidade", error),
         );
         if (once) {

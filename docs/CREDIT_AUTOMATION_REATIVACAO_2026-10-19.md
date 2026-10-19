@@ -89,8 +89,11 @@ removida manualmente (veja Pendências). O reset opcional do circuito está em
   90000).
 - **Navegação:** `ERR_ABORTED`/"frame was detached" com a página já em um destino válido deixa de
   contar como indisponibilidade; o aviso da primeira tentativa não vira incidente.
-- **Etapa da fila:** "aguardando liberação do parceiro" só aparece para o bloqueio comercial real;
-  sessão expirada ou portal lento é "aguardando autenticação".
+- **Etapa da fila (inalterada de propósito):** `aguardando_liberacao_parceiro` continua sendo o
+  rótulo de qualquer espera pelo serviço externo, inclusive sessão expirada. O nome é histórico:
+  site e aplicativo o apresentam como "Em análise" e o aplicativo só faz isso para essa etapa;
+  relabelar para `aguardando_autenticacao` faria o celular voltar a exibir "Consultando…". O motivo
+  real da espera fica em `/health` (`auth`, `authFailureKind`, `authRequiresHuman`).
 - **Reparador:** não reinicia mais o worker quando `authRequiresHuman` está ativo — registra
   ação manual necessária.
 - **Docker:** versões exatas em `automation/package.json` e `package-lock.json` versionado
