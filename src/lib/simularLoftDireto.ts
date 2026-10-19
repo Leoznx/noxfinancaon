@@ -140,19 +140,11 @@ export async function simularLoftDireto(
       .from("consultas_credito")
       .update({
         status: "erro",
-        erro_message: error instanceof Error ? error.message : "Erro desconhecido",
+        error_message: error instanceof Error ? error.message : "Erro desconhecido",
         automation_finished_at: new Date().toISOString(),
       })
       .eq("id", consultaId);
 
-    return {
-      ok: false,
-      consultaId,
-      status: "em_analise",
-      proposalId: null,
-      clienteNome: nome,
-      clienteDocumento: documento,
-      error: error instanceof Error ? error.message : "Erro inesperado",
-    };
+    throw error;
   }
 }
