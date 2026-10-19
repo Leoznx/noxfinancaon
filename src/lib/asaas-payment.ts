@@ -119,6 +119,31 @@ export function isReissuablePaymentStatus(status: unknown) {
   );
 }
 
+/**
+ * Status terminais que indicam que a cobrança morreu e não deve ser reaproveitada
+ * como "existente" numa nova tentativa de pagamento. Exportado para que a Edge
+ * Function e a reidratação apliquem o mesmo filtro, evitando que uma cobrança
+ * cancelada volte ao usuário disfarçada de "Cobrança gerada com sucesso".
+ */
+export const INACTIVE_PAYMENT_STATUSES = new Set([
+  "cancelled",
+  "canceled",
+  "cancelado",
+  "expired",
+  "refused",
+  "recusado",
+  "failed",
+  "falhou",
+  "refunded",
+  "estornado",
+  "chargeback",
+  "chargeback_dispute",
+]);
+
+export function isInactivePaymentStatus(status: unknown) {
+  return INACTIVE_PAYMENT_STATUSES.has(String(status || "").toLowerCase());
+}
+
 export function shouldCollectCardData(mode: CardSetupMode | null) {
   return mode === "direct";
 }
@@ -134,22 +159,8 @@ export function hasIncompleteInstallmentPlan(
     components?: { contractMonths?: number | string | null } | null;
   }>,
 ) {
-  const inactiveStatuses = new Set([
-    "cancelled",
-    "canceled",
-    "cancelado",
-    "expired",
-    "refused",
-    "recusado",
-    "failed",
-    "falhou",
-    "refunded",
-    "estornado",
-    "chargeback",
-    "chargeback_dispute",
-  ]);
   const activeInvoices = invoices.filter(
-    (invoice) => !inactiveStatuses.has(String(invoice.status || "pending").toLowerCase()),
+    (invoice) => !isInactivePaymentStatus(invoice.status || "pending"),
   );
   const initial = activeInvoices.find(
     (invoice) =>

@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx supabase migration repair:*)",
+      "Bash(npx supabase migration list:*)",
+      "Bash(npx supabase db push:*)",
+      "Bash(npx --yes supabase migration repair:*)",
+      "Bash(npx --yes supabase migration list:*)",
+      "Bash(npx --yes supabase db push:*)"
+    ]
+  }
+}

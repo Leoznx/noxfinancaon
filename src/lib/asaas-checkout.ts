@@ -2,6 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   getEdgeFunctionErrorDetails,
   hasIncompleteInstallmentPlan,
+  isInactivePaymentStatus,
   type AsaasPaymentMethod,
   type CardSetupMode,
   type CheckoutIntent,
