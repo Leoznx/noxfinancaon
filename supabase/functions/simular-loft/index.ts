@@ -209,6 +209,32 @@ serve(async (req) => {
     }
 
     const client = createLoftClient();
+
+    // Modo preview: enquanto o time comercial nao emite as credenciais OAuth2 da
+    // Loft, devolvemos uma simulacao fake (status "em_analise") para que o fluxo
+    // completo da tela — do formulario ao resultado — seja analisado sem derrubar
+    // a aplicacao. Assim que LOFT_OAUTH_CLIENT_ID/SECRET forem configurados, este
+    // branch desaparece sozinho e passamos a chamar a API real.
+    if (!client.clientId || !client.clientSecret) {
+      const proposalId = `preview-${Date.now()}`;
+      return new Response(JSON.stringify({
+        ok: true,
+        resultado: {
+          status: "em_analise",
+          proposalId,
+          clienteNome: input.nome,
+          clienteDocumento: input.documento,
+          statusLoft: "Pendente",
+          preview: true,
+          mensagem:
+            "Simulacao em modo preview: credenciais OAuth2 da Loft ainda nao foram configuradas.",
+        },
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const resultado = await simularCredito(client, input);
 
     return new Response(JSON.stringify({
