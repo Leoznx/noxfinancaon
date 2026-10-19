@@ -106,7 +106,7 @@ function normalizarStatus(statusLoft: string): "aprovado" | "recusado" | "em_ana
   return "em_analise";
 }
 
-async function simularCredito(client: LoftApiClient, input: SimulacaoLoftRequest) {
+async function simularCredito(client: LoftApiClient, input: SimularLoftRequest) {
   // 1. Criar simulação
   const inquilinoPrincipal = input.tipoPessoa === "PF"
     ? { cpf: input.documento, nome: input.nome }
