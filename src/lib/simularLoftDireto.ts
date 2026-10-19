@@ -3,19 +3,22 @@ import { upsertConsultaCredito } from "@/lib/consultas";
 import type { DadosSimulacao } from "@/components/simulacao/FormularioSimulacao";
 
 /**
- * Chama a API da Loft diretamente via Edge Function e grava o resultado.
+ * Chama a API da Loft via Edge Function e grava o resultado.
  *
  * Fluxo:
- * 1. Cria a consulta no banco (status: processando)
- * 2. Chama a Edge Function simular-loft
+ * 1. Cria/reaproveita a consulta no banco (status: processando)
+ * 2. Chama a Edge Function simular-loft via supabase.functions.invoke
  * 3. Grava o resultado no banco
- * 4. Retorna o resultado para o frontend
+ * 4. Em caso de falha de rede/CORS/função indisponível, devolve ok=false
+ *    SEM lançar erro, para que o chamador possa cair no fallback de fila
+ *    + worker Playwright. A consulta criada aqui é reaproveitada via
+ *    deduplicação por (profile + documento) feita por upsertConsultaCredito.
  */
 
 export interface SimularLoftDiretoResult {
   ok: boolean;
-  consultaId: string;
-  status: "aprovado" | "recusado" | "em_analise";
+  consultaId: string | null;
+  status: "aprovado" | "recusado" | "em_analise" | null;
   proposalId: string | null;
   clienteNome: string | null;
   clienteDocumento: string | null;
@@ -46,52 +49,71 @@ export async function simularLoftDireto(
   const { tipoPessoa, documento } = extrairDocumento(dados);
   const nome = extrairNome(dados);
 
-  // 1. Criar a consulta no banco
-  const consultaId = await upsertConsultaCredito({
-    dados,
-    userEmail,
-    userRole,
-    deferQueue: false,
-  });
+  // 1. Criar (ou reaproveitar) a consulta no banco.
+  //    Se nem isso for possível, propaga o erro — o chamador exibe toast.
+  let consultaId: string;
+  try {
+    consultaId = await upsertConsultaCredito({
+      dados,
+      userEmail,
+      userRole,
+      deferQueue: false,
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      consultaId: null,
+      status: null,
+      proposalId: null,
+      clienteNome: null,
+      clienteDocumento: null,
+      error: error instanceof Error ? error.message : "Falha ao criar consulta",
+    };
+  }
 
   try {
-    // 2. Chamar a Edge Function
-    const { data: authData } = await supabase.auth.getSession();
-    const token = authData?.session?.access_token;
-
-    const response = await fetch(
-      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/simular-loft`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          tipoPessoa,
-          documento,
-          nome,
-          tipoImovel: dados.tipoImovel,
-          cep: dados.cep,
-          valorAluguel: dados.valores.aluguel,
-          valorCondominio: dados.valores.condominio,
-          valorTaxas: dados.valores.taxas,
-        }),
+    // 2. Chamar a Edge Function via client oficial — resolve URL/CORS/auth sem
+    //    depender de VITE_SUPABASE_URL exposto em runtime nem de fetch cru.
+    const { data, error } = await supabase.functions.invoke<{
+      ok: boolean;
+      resultado?: {
+        status: "aprovado" | "recusado" | "em_analise";
+        proposalId: string;
+        clienteNome?: string;
+        clienteDocumento?: string;
+        statusLoft?: string;
+      };
+      error?: string;
+    }>("simular-loft", {
+      body: {
+        tipoPessoa,
+        documento,
+        nome,
+        tipoImovel: dados.tipoImovel,
+        cep: dados.cep,
+        valorAluguel: dados.valores.aluguel,
+        valorCondominio: dados.valores.condominio,
+        valorTaxas: dados.valores.taxas,
       },
-    );
+    });
 
-    if (!response.ok) {
-      throw new Error(`Edge Function respondeu ${response.status}`);
+    if (error || !data?.ok || !data.resultado) {
+      // Falha remota (função não publicada, credenciais Loft ausentes, 5xx):
+      // devolve ok=false para o chamador decidir o fallback. A consulta
+      // continua no banco com o estado criado por upsertConsultaCredito,
+      // de onde o worker Playwright pode reaproveitá-la.
+      return {
+        ok: false,
+        consultaId,
+        status: null,
+        proposalId: null,
+        clienteNome: nome,
+        clienteDocumento: documento,
+        error: error?.message || data?.error || "API da Loft indisponível",
+      };
     }
 
-    const resultado = await response.json();
-
-    if (!resultado.ok) {
-      throw new Error(resultado.error ?? "Falha na simulação");
-    }
-
-    // 3. Gravar o resultado no banco
-    const status = resultado.resultado.status;
+    const status = data.resultado.status;
     const mensagem =
       status === "aprovado"
         ? "Crédito aprovado."
@@ -99,6 +121,7 @@ export async function simularLoftDireto(
           ? "Crédito recusado."
           : "Crédito em análise.";
 
+    // 3. Gravar o resultado no banco
     await supabase
       .from("consultas_credito")
       .update({
@@ -116,8 +139,8 @@ export async function simularLoftDireto(
         origem: "nox_financa_direto",
         external_provider: "loft_api",
         external_status: status,
-        external_request_id: resultado.resultado.proposalId,
-        external_response: resultado.resultado,
+        external_request_id: data.resultado.proposalId,
+        external_response: data.resultado,
         automation_step: "api_direta",
         automation_started_at: new Date().toISOString(),
         automation_finished_at: new Date().toISOString(),
@@ -127,24 +150,23 @@ export async function simularLoftDireto(
     return {
       ok: true,
       consultaId,
-      status: status,
-      proposalId: resultado.resultado.proposalId,
+      status,
+      proposalId: data.resultado.proposalId,
       clienteNome: nome,
       clienteDocumento: documento,
     };
   } catch (error) {
+    // Erro inesperado (ex.: TypeError "Failed to fetch" com o cliente antigo).
+    // Nunca propaga: devolve ok=false para o chamador acionar o fallback.
     console.error("Erro na simulação direta:", error);
-
-    // Marcar erro no banco
-    await supabase
-      .from("consultas_credito")
-      .update({
-        status: "erro",
-        error_message: error instanceof Error ? error.message : "Erro desconhecido",
-        automation_finished_at: new Date().toISOString(),
-      })
-      .eq("id", consultaId);
-
-    throw error;
+    return {
+      ok: false,
+      consultaId,
+      status: null,
+      proposalId: null,
+      clienteNome: nome,
+      clienteDocumento: documento,
+      error: error instanceof Error ? error.message : "Falha na comunicação com a API",
+    };
   }
 }
