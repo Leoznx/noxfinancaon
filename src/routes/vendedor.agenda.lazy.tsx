@@ -282,7 +282,7 @@ function AgendaPage() {
     }
     if (item.type === "reuniao") {
       if (!canCompleteAppointment(item)) {
-        toast.error("Somente o Closer responsável pode concluir esta reunião.");
+        toast.error("Somente o Closer responsável ou o SDR que marcou podem concluir esta reunião.");
         return;
       }
       setViewing(null);
@@ -306,9 +306,15 @@ function AgendaPage() {
     if (["concluido", "cancelado"].includes(item.status)) return false;
     if (item.source === "rotating_lead") return false;
     if (item.type !== "reuniao") return true;
-    return sellerType === "closer"
-      && (item.assigned_closer_id === sellerId
+    // Pode concluir: Closer responsavel (ou dono quando nao ha closer atribuido)
+    // OU SDR que marcou — permite o SDR fechar reunioes que ja aconteceram
+    // sem depender do Closer para registrar o feedback.
+    const isCloser =
+      sellerType === "closer" &&
+      (item.assigned_closer_id === sellerId
         || (!item.assigned_closer_id && item.seller_id === sellerId));
+    const isSdrWhoScheduled = item.sdr_id === sellerId;
+    return isCloser || isSdrWhoScheduled;
   }
 
   async function submitMeetingFeedback(feedback: string) {
