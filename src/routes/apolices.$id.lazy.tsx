@@ -8,6 +8,7 @@ import {
   ArrowLeft, FileText, Download, Eye, AlertCircle, MapPin,
   Calendar, User, Building2, Wallet, Copy, FileCheck, Receipt,
   ClipboardCheck, ShieldCheck, Upload, Loader2, Clock3, Home,
+  Check, Search, PenLine, CreditCard, Circle,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -139,9 +140,10 @@ function ApoliceDetalhe() {
             id, consulta_id, numero, status, vigencia_inicio, vigencia_fim, valor_premio, created_at,
             consulta:consultas_credito(
               id, status, resultado, created_at, approved_at, dados_complementares_em, proposta_enviada_em,
-              payment_status, payment_type, insurance_payment_method_label, contract_period_months,
+              payment_status, payment_type, payment_confirmed_at, insurance_payment_method_label, contract_period_months,
               base_calculo, valor_aluguel, valor_condominio, valor_taxas, valor_premio_mensal, valor_anual,
-              selected_exit_cost, insurance_assistance, insurance_coverages,
+              selected_exit_cost, insurance_assistance, insurance_coverages, plano_id,
+              terms_accepted_at, contract_accepted_at,
               tenant_name, tenant_document, tenant_email, tenant_telefone, tenant_data_nascimento,
               imovel_subtipo, imovel_cep, imovel_endereco, imovel_numero, imovel_complemento,
               imovel_bairro, imovel_cidade, imovel_estado,
@@ -415,17 +417,21 @@ function ApoliceDetalhe() {
       }
       if (uploadError) throw uploadError;
 
+      // Marca o contrato como assinado (document_subtype deixa de ser
+      // "pendente_assinatura"), para que o botao "Enviar contrato com assinatura"
+      // suma apos o unico envio permitido.
       const { error: updateError } = await (supabase.from("documentos_proposta") as any)
         .update({
           file_name: file.name,
           file_url: path,
           file_type: file.type,
           uploaded_by: userId,
+          document_subtype: "assinado_imobiliaria",
         })
         .eq("id", contratoLocacao.id);
       if (updateError) throw updateError;
 
-      toast.success("Contrato atualizado. A nova versão já está disponível.");
+      toast.success("Contrato assinado enviado. Essa acao so pode ser feita uma vez.");
       setRefreshKey((value) => value + 1);
     } catch (error: any) {
       toast.error(error?.message || "Não foi possível atualizar o contrato.");
@@ -577,10 +583,21 @@ function ApoliceDetalhe() {
               (Boolean(doc.contract_signature_id) && !assinaturaConcluida);
             const editable = source === "proposal" && doc.id === contratoLocacao?.id && podeEditarContrato;
             return (
-              <Card key={`${source}-${doc.id}`} className="p-6 border-neutral-200 rounded-2xl bg-white flex flex-col gap-4">
+              <Card
+                key={`${source}-${doc.id}`}
+                className={`p-6 border rounded-2xl bg-white flex flex-col gap-4 ${
+                  pending ? "border-red-200 ring-1 ring-red-100" : "border-neutral-200"
+                }`}
+              >
                 <div className="flex items-start justify-between">
-                  <div className="w-12 h-12 rounded-xl bg-yellow-50 border border-yellow-200 flex items-center justify-center">
-                    <Icon className="w-5 h-5 text-yellow-700" />
+                  <div
+                    className={`w-12 h-12 rounded-xl border flex items-center justify-center ${
+                      pending
+                        ? "bg-red-50 border-red-200"
+                        : "bg-yellow-50 border-yellow-200"
+                    }`}
+                  >
+                    <Icon className={`w-5 h-5 ${pending ? "text-red-600" : "text-yellow-700"}`} />
                   </div>
                   <DocStatusBadge status={available ? (pending ? "pendente_assinatura" : "disponivel") : "nao_enviado"} />
                 </div>
@@ -596,6 +613,15 @@ function ApoliceDetalhe() {
                     </p>
                   )}
                 </div>
+                {editable && (
+                  <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
+                    <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                    <span>
+                      Contrato enviado sem assinatura. Envie a via assinada para
+                      concluir a contratacao — este envio so pode ser feito uma vez.
+                    </span>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-2 pt-2 mt-auto">
                   <Button
                     size="sm"
@@ -617,13 +643,12 @@ function ApoliceDetalhe() {
                   {editable && (
                     <Button
                       size="sm"
-                      variant="outline"
-                      className="col-span-2 rounded-lg gap-1.5 font-bold border-yellow-300 bg-yellow-50 hover:bg-yellow-100"
+                      className="col-span-2 rounded-lg gap-1.5 font-black bg-red-600 hover:bg-red-700 text-white"
                       disabled={replacingDocument}
                       onClick={() => fileInputRef.current?.click()}
                     >
-                      {replacingDocument ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-                      {replacingDocument ? "Atualizando..." : "Editar arquivo"}
+                      {replacingDocument ? <Loader2 size={14} className="animate-spin" /> : <PenLine size={14} />}
+                      {replacingDocument ? "Enviando..." : "Enviar contrato com assinatura"}
                     </Button>
                   )}
                 </div>
@@ -635,30 +660,11 @@ function ApoliceDetalhe() {
 
         <div className="pt-2">
           <h2 className="mb-4 text-lg font-black text-neutral-900">Histórico do processo</h2>
-          <Card className="border-neutral-200 bg-white p-6">
-            {historico.length === 0 ? (
-              <p className="text-sm text-neutral-500">Nenhum evento adicional foi registrado para esta proposta.</p>
-            ) : (
-              <ol className="space-y-4">
-                {historico.map((evento, index) => (
-                  <li key={evento.id} className="flex gap-3">
-                    <div className="flex flex-col items-center">
-                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-yellow-50 text-yellow-700">
-                        <Clock3 size={15} />
-                      </span>
-                      {index < historico.length - 1 && <span className="mt-1 h-full w-px bg-neutral-200" />}
-                    </div>
-                    <div className="min-w-0 pb-2">
-                      <p className="text-sm font-bold text-neutral-900">{evento.descricao}</p>
-                      <p className="mt-1 text-xs text-neutral-400">
-                        {humanize(evento.tipo_evento)} · {new Date(evento.created_at).toLocaleString("pt-BR")}
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            )}
-          </Card>
+          <ProcessoTimeline
+            consulta={consulta}
+            apolice={apolice}
+            assinaturaConcluida={assinaturaConcluida}
+          />
         </div>
 
         <div className="pt-2">
@@ -668,6 +674,123 @@ function ApoliceDetalhe() {
 
       </div>
     </DashboardLayout>
+  );
+}
+
+function ProcessoTimeline({
+  consulta,
+  apolice,
+  assinaturaConcluida,
+}: {
+  consulta: any;
+  apolice: any;
+  assinaturaConcluida: boolean;
+}) {
+  const paidStatuses = new Set([
+    "paid", "pago", "received", "confirmed", "approved", "paid_via_consolidated",
+  ]);
+  const steps = [
+    {
+      key: "consultou",
+      label: "Consultou",
+      icon: Search,
+      done: Boolean(consulta?.created_at),
+      at: consulta?.created_at as string | null | undefined,
+    },
+    {
+      key: "escolheu",
+      label: "Escolheu o plano",
+      icon: ClipboardCheck,
+      done: Boolean(consulta?.plano_id || consulta?.insurance_coverages),
+      at: consulta?.dados_complementares_em as string | null | undefined,
+    },
+    {
+      key: "contratou",
+      label: "Contratou o plano",
+      icon: FileCheck,
+      done: Boolean(
+        consulta?.contract_accepted_at ||
+          consulta?.terms_accepted_at ||
+          consulta?.proposta_enviada_em,
+      ),
+      at: (consulta?.contract_accepted_at ||
+        consulta?.terms_accepted_at ||
+        consulta?.proposta_enviada_em) as string | null | undefined,
+    },
+    {
+      key: "assinou",
+      label: "Assinou",
+      icon: PenLine,
+      done: Boolean(assinaturaConcluida),
+      at: null,
+    },
+    {
+      key: "pagou",
+      label: "Pagou",
+      icon: CreditCard,
+      done:
+        paidStatuses.has(String(consulta?.payment_status || "").toLowerCase()) ||
+        Boolean(consulta?.payment_confirmed_at) ||
+        ["ativa", "emitida"].includes(String(apolice?.status || "")),
+      at: consulta?.payment_confirmed_at as string | null | undefined,
+    },
+  ];
+
+  return (
+    <Card className="border-neutral-200 bg-white p-6">
+      <ol className="flex flex-col gap-0 md:flex-row md:items-start md:justify-between">
+        {steps.map((step, index) => {
+          const Icon = step.done ? Check : step.icon;
+          const isLast = index === steps.length - 1;
+          return (
+            <li
+              key={step.key}
+              className="flex md:flex-col md:items-center md:flex-1 gap-3 md:gap-2 relative pb-4 md:pb-0"
+            >
+              <div className="flex flex-col items-center md:flex-row md:w-full">
+                <span
+                  className={`relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 ${
+                    step.done
+                      ? "bg-green-500 border-green-500 text-white"
+                      : "bg-white border-neutral-200 text-neutral-300"
+                  }`}
+                >
+                  {step.done ? <Check size={18} strokeWidth={3} /> : <Icon size={16} />}
+                </span>
+                {!isLast && (
+                  <span
+                    className={`hidden md:block flex-1 h-0.5 ${
+                      step.done ? "bg-green-400" : "bg-neutral-200"
+                    }`}
+                  />
+                )}
+                {!isLast && (
+                  <span
+                    className={`md:hidden absolute left-5 top-10 bottom-0 w-0.5 ${
+                      step.done ? "bg-green-400" : "bg-neutral-200"
+                    }`}
+                  />
+                )}
+              </div>
+              <div className="min-w-0 md:text-center md:mt-2 pb-2 md:pb-0">
+                <p
+                  className={`text-sm font-black ${
+                    step.done ? "text-neutral-900" : "text-neutral-400"
+                  }`}
+                >
+                  {step.label}
+                </p>
+                {step.done && step.at && (
+                  <p className="mt-1 text-[10px] uppercase tracking-widest font-bold text-neutral-400">
+                    {new Date(step.at).toLocaleDateString("pt-BR")}
+                  </p>
+                )}
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    </Card>
   );
 }
 
@@ -894,7 +1017,7 @@ function DocStatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; cls: string }> = {
     disponivel:  { label: "Disponível",   cls: "bg-green-50 text-green-700 border-green-200" },
     pendente:    { label: "Pendente",     cls: "bg-amber-50 text-amber-700 border-amber-200" },
-    pendente_assinatura: { label: "Não assinado", cls: "bg-amber-50 text-amber-700 border-amber-200" },
+    pendente_assinatura: { label: "Sem assinatura", cls: "bg-red-50 text-red-700 border-red-200" },
     nao_enviado: { label: "Não enviado",  cls: "bg-neutral-100 text-neutral-500 border-neutral-200" },
   };
   const cfg = map[status] || map.nao_enviado;
