@@ -121,7 +121,7 @@ export async function simularLoftDireto(
         automation_step: "api_direta",
         automation_started_at: new Date().toISOString(),
         automation_finished_at: new Date().toISOString(),
-      })
+      } as never)
       .eq("id", consultaId);
 
     return {
