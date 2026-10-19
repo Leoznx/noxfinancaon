@@ -7,6 +7,7 @@ import {
 import {
   fingerprintSessionFile,
   loadStorageStateWithFallback,
+  readStorageStateFile,
   sameFingerprint,
   sessionHasProviderCookies,
   writeStorageStateAtomically,
@@ -70,6 +71,13 @@ export class BrowserSession {
   private authenticated = false;
   private persistInFlight: Promise<boolean> | null = null;
   private knownFingerprint: SessionFileFingerprint | null;
+  /**
+   * O arquivo existe mas este processo não conseguiu lê-lo (por exemplo, copiado por outro
+   * usuário com permissão 600). Mudar o dono não altera mtime nem tamanho, então só a
+   * releitura percebe que ele passou a ser legível — e, enquanto isso, ele nunca é
+   * sobrescrito pela sessão em memória.
+   */
+  private awaitingReadableFile: boolean;
 
   private constructor(
     readonly context: BrowserContext,
@@ -77,9 +85,11 @@ export class BrowserSession {
     private readonly config: BrowserSessionConfig,
     loadedFrom: BrowserSession["loadedFrom"],
     fingerprint: SessionFileFingerprint | null,
+    awaitingReadableFile = false,
   ) {
     this.loadedFrom = loadedFrom;
     this.knownFingerprint = fingerprint;
+    this.awaitingReadableFile = awaitingReadableFile;
     browser?.on("disconnected", () => {
       this.disconnected = true;
     });
@@ -149,7 +159,14 @@ export class BrowserSession {
       }
     }
 
-    return new BrowserSession(context, browser, config, loaded.source, loaded.fingerprint);
+    return new BrowserSession(
+      context,
+      browser,
+      config,
+      loaded.source,
+      loaded.fingerprint,
+      loaded.primaryFailure === "unreadable",
+    );
   }
 
   /** Forma esperada pelas rotinas do worker que recebem um `() => Promise<void>`. */
@@ -171,6 +188,12 @@ export class BrowserSession {
   async detectExternalUpdate(): Promise<boolean> {
     if (!this.config.storageStatePath || this.closed) return false;
     if (this.externalUpdatePending) return true;
+    if (this.awaitingReadableFile) {
+      // Releitura barata (arquivo de poucos KB): só recarrega quando ele realmente puder ser usado.
+      const attempt = await readStorageStateFile(this.config.storageStatePath);
+      if (attempt.ok) this.externalUpdatePending = true;
+      return this.externalUpdatePending;
+    }
     const onDisk = await fingerprintSessionFile(this.config.storageStatePath);
     if (!onDisk) return false;
     if (!sameFingerprint(onDisk, this.knownFingerprint)) this.externalUpdatePending = true;
@@ -192,6 +215,14 @@ export class BrowserSession {
       if (await this.detectExternalUpdate()) {
         this.config.info(
           "O arquivo de sessão foi substituído externamente; ele será preservado e recarregado.",
+        );
+        return false;
+      }
+      if (this.awaitingReadableFile) {
+        // Há um arquivo que este processo não consegue ler: sobrescrevê-lo apagaria a sessão
+        // nova que alguém acabou de colocar ali. Espera ele ficar legível.
+        this.config.info(
+          "O arquivo de sessão existe mas ainda não pode ser lido; ele foi preservado.",
         );
         return false;
       }

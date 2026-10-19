@@ -100,7 +100,13 @@ removida manualmente (veja Pendências). O reset opcional do circuito está em
   (antes cada rebuild resolvia `^1.49.1` para o Playwright mais novo do dia).
 - **Ferramentas:** `npm run automation:interactive-login` agora exige marcadores reais da tela
   (antes aceitaria a casca da SPA deslogada) e inicializa o módulo Fiança;
-  `npm run automation:refresh-vps-session` faz login, envio por scp e confirmação no `/health`.
+  `npm run automation:refresh-vps-session` faz login, envio por scp e confirmação no `/health`;
+  `npm run automation:copy-vps-command -- deploy|session` prepara, na área de transferência, os
+  blocos para colar no terminal da Hostinger (sem SSH); `automation/deployVps.sh` implanta o worker
+  com verificação de consultas ativas e imagem de rollback.
+- **Arquivo de sessão ilegível** (por exemplo, copiado como root com permissão 600): o worker avisa,
+  preserva o arquivo, nunca o sobrescreve e o recarrega sozinho quando ele passa a ser legível
+  (trocar o dono não muda mtime nem tamanho, por isso a releitura).
 
 ### `/health` e `/ready`
 Campos novos: `authRequiresHuman`, `authFailureKind`, `nextAuthCheckAt`, `lastBrowserRestartAt`,
@@ -115,26 +121,34 @@ Pré-requisito: nenhuma simulação em andamento (`activeConsultations: 0` em `/
 ```bash
 cd <checkout do repositório>
 git pull --ff-only
-cd automation
-export AUTOMATION_VERSION=$(git rev-parse --short HEAD) DEPLOY_VERSION=$(git rev-parse --short HEAD)
-docker compose build
-docker compose up -d
-docker compose logs --tail=60 credpago-worker
+bash automation/deployVps.sh
 ```
 
-**2. Renovar a sessão** (no seu computador, no diretório do projeto; o login é manual):
+`deployVps.sh` recusa continuar se houver consulta em andamento, guarda a imagem atual para
+rollback (`nox-automacao-credpago:pre-<versão>-<data>`), reconstrói e recria somente o worker e mostra
+`/health` e os logs. **Sem SSH no seu computador:** `npm run automation:copy-vps-command -- deploy`
+copia para a área de transferência um bloco que descobre a pasta do compose pelo Docker, faz o
+`git pull` e roda esse script; cole no terminal da Hostinger (hPanel → VPS → Terminal).
+
+**2. Renovar a sessão** (o login é sempre manual):
 
 ```bash
-export VPS_SSH_TARGET=usuario@IP_DA_VPS
-export VPS_DATA_DIR=<caminho da pasta automation/data na VPS>
-npm run automation:refresh-vps-session
+npm run automation:interactive-login        # abre o Chromium; você entra na Loft
 ```
 
-O script abre o Chromium, você entra na Loft (CAPTCHA/código incluídos), ele envia o arquivo
-para a VPS e aguarda `auth: "ok"`. Sem SSH, copie `automation/data/credpago-session.json` por
-um canal seguro para `automation/data/credpago-session.json` da VPS e rode, na VPS,
-`docker compose exec -u root credpago-worker chown nox:nox /app/data/credpago-session.json`.
-O arquivo equivale a uma senha: nunca por e-mail ou chat; apague a cópia local depois.
+Depois, uma de duas formas de levar `automation/data/credpago-session.json` à VPS:
+
+- **Com SSH:** `export VPS_SSH_TARGET=usuario@IP_DA_VPS VPS_DATA_DIR=<pasta automation/data na VPS>` e
+  `npm run automation:refresh-vps-session` (login, scp, troca atômica e confirmação no `/health`).
+- **Sem SSH:** `npm run automation:copy-vps-command -- session` copia para a área de transferência um
+  instalador (a sessão só vai para a área de transferência, nunca para a tela); cole no terminal da
+  Hostinger. Ele confere o hash, guarda o arquivo anterior como `.pre-<data>`, ajusta o dono **antes** de
+  renomear (o worker lê o arquivo assim que ele aparece) e desliga o histórico do shell durante a colagem.
+  Depois de colar, copie outro texto para limpar a área de transferência.
+
+O arquivo equivale a uma senha: nunca por e-mail ou chat; apague a cópia local depois. Se o arquivo
+chegar com o dono errado, o worker avisa no log, preserva o arquivo e o recarrega sozinho quando ele
+passar a ser legível (`docker exec -u root nox-automacao-credpago chown nox:nox /app/data/credpago-session.json`).
 
 **3. Conferir** (`curl https://automacao.noxfianca.com/ready`): `ready: true`, `auth: "ok"`,
 `cancellationReady: true`. Se `auth` for `required` com `authRequiresHuman: true`, repita o

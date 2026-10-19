@@ -1,0 +1,2 @@
+# Scripts de shell rodam na VPS (Linux): terminadores CRLF quebram o bash ("$'\r': command not found").
+*.sh text eol=lf

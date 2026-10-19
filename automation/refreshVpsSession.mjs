@@ -14,7 +14,7 @@
  * Configure no SEU terminal (nunca no repositório):
  *   VPS_SSH_TARGET     obrigatório. Ex.: usuario@IP_DA_VPS (ou um alias do seu ~/.ssh/config)
  *   VPS_DATA_DIR       obrigatório. Pasta ./data do compose na VPS. Ex.: /opt/noxfinancaon/automation/data
- *   VPS_COMPOSE_DIR    opcional. Pasta do docker-compose.yml na VPS (padrão: pasta pai de VPS_DATA_DIR)
+ *   VPS_CONTAINER      opcional. Nome do container do worker (padrão: nox-automacao-credpago)
  *   AUTOMATION_HEALTH_URL  opcional. Padrão: https://automacao.noxfianca.com/health
  *   SKIP_INTERACTIVE_LOGIN=true  reaproveita automation/data/credpago-session.json já gerado
  */
@@ -27,8 +27,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const localSession = path.resolve(here, "data", "credpago-session.json");
 const target = process.env.VPS_SSH_TARGET?.trim();
 const dataDir = process.env.VPS_DATA_DIR?.trim().replace(/\/+$/, "");
-const composeDir = process.env.VPS_COMPOSE_DIR?.trim().replace(/\/+$/, "") ||
-  (dataDir ? dataDir.replace(/\/[^/]+$/, "") : "");
+const container = process.env.VPS_CONTAINER?.trim() || "nox-automacao-credpago";
 const healthUrl = process.env.AUTOMATION_HEALTH_URL?.trim() || "https://automacao.noxfianca.com/health";
 
 function fail(message) {
@@ -52,6 +51,7 @@ if (!target || !dataDir) {
   );
 }
 if (!/^[\w.@:-]+$/.test(target)) fail("VPS_SSH_TARGET contém caracteres inesperados.");
+if (!/^[\w.-]+$/.test(container)) fail("VPS_CONTAINER contém caracteres inesperados.");
 
 if (process.env.SKIP_INTERACTIVE_LOGIN !== "true") {
   console.log("1/4  Abrindo o Chromium: entre na Loft na janela que vai aparecer...");
@@ -79,13 +79,15 @@ const finalPath = `${dataDir}/credpago-session.json`;
 console.log("2/4  Enviando a sessão para a VPS (scp)...");
 run("scp", ["-q", localSession, `${target}:${incoming}`]);
 
-console.log("3/4  Instalando o arquivo na VPS (troca atômica + dono correto)...");
+console.log("3/4  Instalando o arquivo na VPS (dono correto + troca atômica)...");
+// O worker roda como o usuário "nox" dentro do container e observa o arquivo a cada poucos
+// segundos. O dono é ajustado no arquivo TEMPORÁRIO e só depois ele é renomeado: se o arquivo
+// final aparecesse antes do chown, o worker não conseguiria lê-lo e ficaria com a sessão antiga.
 const remote = [
   "set -e",
   `chmod 600 ${quote(incoming)}`,
+  `docker exec -u root ${quote(container)} chown nox:nox /app/data/credpago-session.json.incoming`,
   `mv -f ${quote(incoming)} ${quote(finalPath)}`,
-  // O worker roda como o usuário "nox" dentro do container; sem isso ele não consegue ler o arquivo.
-  `cd ${quote(composeDir)} && docker compose exec -T -u root credpago-worker chown nox:nox /app/data/credpago-session.json`,
 ].join(" && ");
 run("ssh", [target, remote]);
 

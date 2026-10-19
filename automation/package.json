@@ -13,6 +13,7 @@
     "export-session": "tsx exportSession.ts",
     "login:interactive": "node interactiveLogin.mjs",
     "refresh-vps-session": "node refreshVpsSession.mjs",
+    "copy-vps-command": "node copyVpsCommand.mjs",
     "install-browsers": "playwright install --with-deps chromium",
     "test": "tsx --test *.test.ts"
   },

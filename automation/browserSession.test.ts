@@ -145,3 +145,33 @@ test("informa que o navegador deixou de responder antes de ele ser reutilizado",
     },
   );
 });
+
+test("preserva um arquivo ainda ilegível e o recarrega assim que ele passa a ser legível", async () => {
+  await withSession(
+    // Um diretório no lugar do arquivo faz a leitura falhar como "unreadable" — o mesmo caso de
+    // um arquivo copiado por outro usuário com permissão 600 (EACCES).
+    (file) => fs.mkdir(file).then(() => {}),
+    async (session, file, logs) => {
+      assert.ok(logs.some((line) => /Sem permissão para ler/i.test(line)));
+      session.markAuthenticated(true);
+      await session.context.addCookies([loftCookie]);
+
+      // Nunca sobrescreve o que não conseguiu ler e não pede recarga enquanto continua ilegível.
+      assert.equal(await session.persist(), false);
+      assert.equal(await session.detectExternalUpdate(), false);
+
+      // A permissão é corrigida (ou o arquivo é trocado): chown não muda mtime nem tamanho, então
+      // só a releitura percebe que o arquivo agora pode ser usado.
+      await fs.rm(file, { recursive: true });
+      await writeStorageStateAtomically(file, {
+        cookies: [{ ...loftCookie, value: "sessao-nova" }],
+        origins: [],
+      });
+
+      assert.equal(await session.detectExternalUpdate(), true);
+      assert.equal(await session.persist(), false);
+      const saved = await readStorageStateFile(file);
+      assert.equal(saved.ok && saved.state.cookies[0].value, "sessao-nova");
+    },
+  );
+});
