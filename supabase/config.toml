@@ -31,12 +31,6 @@ otp_expiry = 3600
 enroll_enabled = true
 verify_enabled = true
 
-[functions.cakto-webhook]
-verify_jwt = false
-
-[functions.create-cakto-payment]
-verify_jwt = true
-
 [functions.asaas-webhook]
 verify_jwt = false
 static_files = ["./functions/_shared/contract-templates/*.docx"]

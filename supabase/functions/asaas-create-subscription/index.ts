@@ -1482,7 +1482,12 @@ serve(async (req) => {
             status: refreshedStatus,
           });
           if (refreshedStatus === "refused" || switchingToCard) {
-            const retryKey = `${initialKey}:card-retry:${providerEventAt}`;
+            // Idempotencia DETERMINISTICA: a chave antes era baseada em
+            // new Date().toISOString() (providerEventAt), entao cada clique
+            // gerava chave diferente e claimBillingOperation nunca serializava
+            // o duplo-clique. Usar o id do pagamento Asaas + o id da fatura
+            // interna torna a chave estavel na mesma tentativa de retry.
+            const retryKey = `${initialKey}:card-retry:${payment.asaas_payment_id || invoice.id}`;
             const { operation: retryOperation, claimed: retryClaimed } =
               await claimBillingOperation(supabase, {
                 consultationId: proposalId,

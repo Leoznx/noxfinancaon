@@ -71,6 +71,12 @@ serve(async (req) => {
         400,
       );
     }
+    // Valida UUID antes de passar para query - sem isso um agencyUserId
+    // malformado via o cron viraria erro 500 em PostgREST com stacktrace.
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!UUID_RE.test(agencyUserId)) {
+      return jsonResponse(req, { ok: false, error: "Responsável inválido." }, 400);
+    }
 
     const admin = supabaseAdmin();
     const clock = saoPauloClock();

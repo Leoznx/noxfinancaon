@@ -172,7 +172,14 @@ Deno.serve(async (req) => {
     }
 
     const receipt = await validateReceiptFile(receiptValue);
-    const receiptPath = buildReceiptPath(context.user_id, withdrawalId, receipt.extension);
+    // Path deterministico (sha256 do conteudo) torna o retry idempotente:
+    // mesma origem + mesmo arquivo => mesmo path => conflito tratavel.
+    const receiptPath = buildReceiptPath(
+      context.user_id,
+      withdrawalId,
+      receipt.extension,
+      receipt.sha256,
+    );
     const { error: uploadError } = await admin.storage
       .from(WITHDRAWAL_RECEIPTS_BUCKET)
       .upload(receiptPath, receipt.bytes, {
@@ -182,12 +189,21 @@ Deno.serve(async (req) => {
       });
 
     if (uploadError) {
-      logSafeFailure("receipt_upload", uploadError, withdrawalId);
-      throw new HttpError(
-        500,
-        "O comprovante nao pode ser salvo. O saque nao foi marcado como pago.",
-        "receipt_upload_failed",
-      );
+      // Conflito "already exists" por retry do mesmo arquivo nao e falha:
+      // o path alvo ja esta no bucket e podemos prosseguir com a RPC.
+      const msg = String((uploadError as any)?.message || "").toLowerCase();
+      const isDuplicate =
+        msg.includes("already exists") ||
+        msg.includes("duplicate") ||
+        (uploadError as any)?.statusCode === "409";
+      if (!isDuplicate) {
+        logSafeFailure("receipt_upload", uploadError, withdrawalId);
+        throw new HttpError(
+          500,
+          "O comprovante nao pode ser salvo. O saque nao foi marcado como pago.",
+          "receipt_upload_failed",
+        );
+      }
     }
 
     let markData: unknown = null;

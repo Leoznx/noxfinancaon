@@ -1357,10 +1357,29 @@ export async function dispatchD4SignContract(
       });
       documentUuid = uploaded?.uuid;
       if (!documentUuid) throw new Error("d4sign_upload_missing_uuid");
-      await supabase
+      const { error: persistUuidError } = await supabase
         .from("contract_signatures")
         .update({ d4sign_document_uuid: documentUuid })
         .eq("id", signature.id);
+      if (persistUuidError) {
+        // D4Sign JA aceitou o upload. Se o UPDATE local falhar e nos nao
+        // registrarmos o uuid em algum lugar, o documento vira orfao: um
+        // novo retry re-upload cria outro doc na D4Sign e o webhook do
+        // antigo cai em 503 eterno. Loga o uuid onde um humano consegue
+        // reconciliar manualmente (contract_signature_events).
+        await supabase
+          .from("contract_signature_events")
+          .insert({
+            contract_signature_id: signature.id,
+            event_key: `d4sign:orphan:${documentUuid}`,
+            event_type: "d4sign_upload_orphan",
+            message: "Upload aceito pela D4Sign mas falhou ao persistir uuid local.",
+            payload: { d4sign_document_uuid: documentUuid, error: persistUuidError.message },
+          })
+          .select("id")
+          .maybeSingle();
+        throw new Error(`d4sign_upload_persist_failed:${documentUuid}`);
+      }
     }
 
     signature = { ...signature, d4sign_document_uuid: documentUuid };

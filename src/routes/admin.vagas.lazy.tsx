@@ -131,7 +131,7 @@ function AdminVagasPage() {
   const downloadResume = async (path: string) => {
     const { data, error } = await supabase.storage.from("curriculos").createSignedUrl(path, 300);
     if (error || !data?.signedUrl) { toast.error("Não foi possível gerar link."); return; }
-    window.open(data.signedUrl, "_blank");
+    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
   };
 
   return (

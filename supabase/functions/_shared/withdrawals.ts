@@ -284,11 +284,18 @@ export function buildReceiptPath(
   withdrawalOwnerId: string,
   withdrawalId: string,
   extension: ReceiptExtension,
+  contentFingerprint?: string,
 ) {
   if (!isUuid(withdrawalOwnerId) || !isUuid(withdrawalId)) {
     throw new Error("Invalid receipt path identifiers");
   }
-  return `${withdrawalOwnerId.toLowerCase()}/${withdrawalId.toLowerCase()}/${crypto.randomUUID()}.${extension}`;
+  // Preferir fingerprint deterministico (sha256 do conteudo) para que um retry
+  // do mesmo arquivo gere o mesmo path - evita uploads orfaos. Mantem o
+  // fallback para randomUUID se o chamador nao passar fingerprint.
+  const filename = contentFingerprint
+    ? contentFingerprint.replace(/[^a-f0-9]/gi, "").slice(0, 64).toLowerCase() || crypto.randomUUID()
+    : crypto.randomUUID();
+  return `${withdrawalOwnerId.toLowerCase()}/${withdrawalId.toLowerCase()}/${filename}.${extension}`;
 }
 
 export function isValidStoredReceiptPath(path: unknown, withdrawalId: string): path is string {

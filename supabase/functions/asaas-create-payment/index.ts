@@ -205,6 +205,8 @@ serve(async (req) => {
       return jsonResponse(req, { ok: false, error: "Selecione uma forma de pagamento." }, 400);
     }
     if (paymentMethod === "credit_card") {
+      // Cartao sempre vai pela recorrencia via asaas-create-subscription. O
+      // branch secundario de credit_card abaixo nao e mais alcancavel.
       return jsonResponse(
         req,
         {
@@ -213,13 +215,6 @@ serve(async (req) => {
           subscriptionRequired: true,
         },
         409,
-      );
-    }
-    if (deferred && paymentMethod === "credit_card") {
-      return jsonResponse(
-        req,
-        { ok: false, error: "Pagar depois esta disponivel apenas para Pix e boleto." },
-        400,
       );
     }
 

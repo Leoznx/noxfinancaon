@@ -12,7 +12,7 @@ import { ShieldCheck, KeyRound } from "lucide-react";
 
 export const Route = createFileRoute("/admin/permissoes")({
   component: () => (
-    <ProtectedRoute roles={["admin", "analista"]}>
+    <ProtectedRoute roles={["admin", "admin_master"]}>
       <PermissoesPage />
     </ProtectedRoute>
   ),

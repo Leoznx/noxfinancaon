@@ -74,7 +74,7 @@ Deno.serve(async (req) => {
   const callerRole = String(callerProfile?.role ?? callerInternal?.role ?? "");
   const isAdmin =
     (["admin", "admin_master"].includes(String(callerProfile?.role ?? "")) &&
-      !["bloqueado", "excluido"].includes(String(callerProfile?.status ?? ""))) ||
+      String(callerProfile?.status ?? "") === "ativo") ||
     (callerInternal?.role === "admin_master" && callerInternal?.status === "ativo");
   if (!isAdmin)
     return response({ ok: false, error: "Apenas administradores podem excluir usuários." }, 403);

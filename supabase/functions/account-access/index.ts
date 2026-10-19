@@ -140,10 +140,14 @@ Deno.serve(async (request) => {
 });
 
 async function listSignupAgencies() {
+  // Lista publica (anon) para o dropdown de signup de corretor. Razao social
+  // e informacao publica, mas limitamos as colunas e aplicamos limit para
+  // reduzir scraping do catalogo.
   const { data, error } = await admin
     .from("imobiliarias")
     .select("id, razao_social")
-    .order("razao_social", { ascending: true });
+    .order("razao_social", { ascending: true })
+    .limit(500);
 
   if (error) throw error;
 
@@ -225,7 +229,20 @@ async function signup(input: any, request: Request) {
 
   const userId = linkData.user.id;
   const status = role === "inquilino" ? "ativo" : "pendente_aprovacao";
-  await admin.from("profiles").update({ nome, telefone, role, status }).eq("id", userId);
+  const { error: profileUpdateError } = await admin
+    .from("profiles")
+    .update({ nome, telefone, role, status })
+    .eq("id", userId);
+  if (profileUpdateError) {
+    // Rollback: sem o profile preenchido, o signup fica orfao e o email bloqueia
+    // novos cadastros. Remove o auth user para o usuario poder recomecar.
+    await admin.auth.admin.deleteUser(userId);
+    console.error("[account-access.signup] profile update falhou", {
+      role,
+      message: profileUpdateError.message,
+    });
+    return { ok: false, error: "erro" };
+  }
 
   // Mesmo padrão do site: usa o primeiro nome da pessoa e nunca substitui uma
   // foto que já tenha sido definida. Para imobiliária, considera o responsável.
@@ -248,13 +265,27 @@ async function signup(input: any, request: Request) {
       await admin.auth.admin.deleteUser(userId);
       return { ok: false, error: "erro" };
     }
-    await admin
+    const { error: inquilinoUpsertError } = await admin
       .from("inquilinos")
       .upsert({ profile_id: userId, nome, cpf, tipo: "PF" }, { onConflict: "cpf" });
+    if (inquilinoUpsertError) {
+      await admin.auth.admin.deleteUser(userId);
+      console.error("[account-access.signup] inquilinos upsert falhou", {
+        message: inquilinoUpsertError.message,
+      });
+      return { ok: false, error: "erro" };
+    }
+    // IMPORTANTE: nao vincular consultas apenas por CPF (que e semi-publico no
+    // Brasil). O signup so herda consultas cujo tenant_email bate com o email
+    // deste cadastro, provando que o corretor/imobiliaria autorizou esta pessoa
+    // a assumir a proposta. Qualquer outra reivindicacao deve passar por token
+    // de ativacao (completar-acesso-inquilino) enviado pelo corretor.
+    const emailNormalizado = email.trim().toLowerCase();
     const { data: consultas } = await admin
       .from("consultas_credito")
       .update({ tenant_user_id: userId })
       .eq("tenant_document", cpf)
+      .ilike("tenant_email", emailNormalizado)
       .is("tenant_user_id", null)
       .select("id");
     const ids = (consultas ?? []).map((item: any) => item.id);
@@ -270,7 +301,7 @@ async function signup(input: any, request: Request) {
         .in("consulta_id", ids);
     }
   } else if (role === "imobiliaria") {
-    await admin.from("imobiliarias").insert({
+    const { error: imobError } = await admin.from("imobiliarias").insert({
       razao_social: input.razaoSocial,
       nome_fantasia: input.nomeFantasia || null,
       cnpj: input.cnpj,
@@ -282,6 +313,13 @@ async function signup(input: any, request: Request) {
       contato_email: email,
       contato_telefone: telefone,
     });
+    if (imobError) {
+      await admin.auth.admin.deleteUser(userId);
+      console.error("[account-access.signup] imobiliarias insert falhou", {
+        message: imobError.message,
+      });
+      return { ok: false, error: "erro" };
+    }
   } else if (role === "corretor") {
     const { error: brokerError } = await admin.from("corretores").insert({
       profile_id: userId,
@@ -307,9 +345,16 @@ async function signup(input: any, request: Request) {
       }
     }
   } else {
-    await admin
+    const { error: ownerError } = await admin
       .from("proprietarios")
       .insert({ profile_id: userId, nome, cpf_cnpj: input.cpfCnpj, email, telefone });
+    if (ownerError) {
+      await admin.auth.admin.deleteUser(userId);
+      console.error("[account-access.signup] proprietarios insert falhou", {
+        message: ownerError.message,
+      });
+      return { ok: false, error: "erro" };
+    }
   }
 
   await sendTemplateOrFallback("verification", email, nome, linkData.properties.action_link);

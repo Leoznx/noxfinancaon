@@ -45,6 +45,8 @@ function AprovacoesPage() {
   const [detalhe, setDetalhe] = useState<any | null>(null);
   const [docsDetalhe, setDocsDetalhe] = useState<any[]>([]);
   const [loadingDetalhe, setLoadingDetalhe] = useState(false);
+  const [processandoId, setProcessandoId] = useState<string | null>(null);
+  const processandoRef = useRef(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -101,49 +103,79 @@ function AprovacoesPage() {
   // escuta INSERT em notificacoes via Realtime (ver SinoNotificacoes.tsx).
   const notificarSolicitante = async (consulta: any, opts: { titulo: string; mensagem: string; tipo: string; cor: string }) => {
     if (!consulta?.profile_id_solicitante) return;
+    // Link e tipo sao calculados a partir do id da consulta - nunca
+    // aceita strings do caller (defesa contra alguem no mesmo cargo
+    // enviar notificacao com link externo). Mensagem/titulo tambem
+    // sao fixos aqui no site, nao vem de input de usuario.
+    const consultaId = String(consulta.id || "");
+    if (!/^[0-9a-f-]{36}$/i.test(consultaId)) return;
     const { error } = await supabase.from("notificacoes").insert({
       user_id: consulta.profile_id_solicitante,
       titulo: opts.titulo,
       mensagem: opts.mensagem,
       tipo: opts.tipo,
       cor_destaque: opts.cor,
-      link: `/consultas/${consulta.id}/resultado`,
+      link: `/consultas/${consultaId}/resultado`,
     } as any);
     if (error) console.error("[admin.aprovacoes] falha ao notificar solicitante:", error);
   };
 
   const aprovar = async (id: string) => {
-    const consulta = linhas.find((l) => l.id === id);
-    const { error } = await supabase.from("consultas_credito").update({
-      status: "aprovado", resultado: "aprovado", approved_by: adminId, approved_at: new Date().toISOString()
-    }).eq("id", id);
-    if (error) { toast.error("Erro ao aprovar"); return; }
-    toast.success("Consulta aprovada");
-    await notificarSolicitante(consulta, {
-      titulo: "Consulta aprovada",
-      mensagem: `A consulta de ${consulta?.tenant_name ?? "cliente"} (${consulta?.tenant_document ?? "—"}) foi aprovada.`,
-      tipo: "contrato_aprovado",
-      cor: "verde",
-    });
-    load();
+    if (processandoRef.current) return;
+    if (!adminId) {
+      toast.error("Sessao ainda carregando, aguarde um instante.");
+      return;
+    }
+    processandoRef.current = true;
+    setProcessandoId(id);
+    try {
+      const consulta = linhas.find((l) => l.id === id);
+      const { error } = await supabase.from("consultas_credito").update({
+        status: "aprovado", resultado: "aprovado", approved_by: adminId, approved_at: new Date().toISOString()
+      }).eq("id", id).eq("status", "em_analise"); // guard contra re-aprovar algo que ja saiu da fila
+      if (error) { toast.error("Erro ao aprovar"); return; }
+      toast.success("Consulta aprovada");
+      await notificarSolicitante(consulta, {
+        titulo: "Consulta aprovada",
+        mensagem: `A consulta de ${consulta?.tenant_name ?? "cliente"} (${consulta?.tenant_document ?? "—"}) foi aprovada.`,
+        tipo: "contrato_aprovado",
+        cor: "verde",
+      });
+      load();
+    } finally {
+      processandoRef.current = false;
+      setProcessandoId(null);
+    }
   };
 
   const reprovar = async () => {
     if (!rejectingId) return;
     if (!motivo.trim()) { toast.error("Informe o motivo"); return; }
-    const consulta = linhas.find((l) => l.id === rejectingId);
-    const { error } = await supabase.from("consultas_credito").update({
-      status: "reprovado", resultado: "recusado", rejected_by: adminId, rejected_at: new Date().toISOString(), rejection_reason: motivo
-    }).eq("id", rejectingId);
-    if (error) { toast.error("Erro ao reprovar"); return; }
-    toast.success("Consulta reprovada");
-    await notificarSolicitante(consulta, {
-      titulo: "Consulta recusada",
-      mensagem: `A consulta de ${consulta?.tenant_name ?? "cliente"} (${consulta?.tenant_document ?? "—"}) foi recusada. Motivo: ${motivo}`,
-      tipo: "contrato_reprovado",
-      cor: "vermelho",
-    });
-    setRejectingId(null); setMotivo(""); load();
+    if (processandoRef.current) return;
+    if (!adminId) {
+      toast.error("Sessao ainda carregando, aguarde um instante.");
+      return;
+    }
+    processandoRef.current = true;
+    setProcessandoId(rejectingId);
+    try {
+      const consulta = linhas.find((l) => l.id === rejectingId);
+      const { error } = await supabase.from("consultas_credito").update({
+        status: "reprovado", resultado: "recusado", rejected_by: adminId, rejected_at: new Date().toISOString(), rejection_reason: motivo
+      }).eq("id", rejectingId).eq("status", "em_analise");
+      if (error) { toast.error("Erro ao reprovar"); return; }
+      toast.success("Consulta reprovada");
+      await notificarSolicitante(consulta, {
+        titulo: "Consulta recusada",
+        mensagem: `A consulta de ${consulta?.tenant_name ?? "cliente"} (${consulta?.tenant_document ?? "—"}) foi recusada. Motivo: ${motivo}`,
+        tipo: "contrato_reprovado",
+        cor: "vermelho",
+      });
+      setRejectingId(null); setMotivo(""); load();
+    } finally {
+      processandoRef.current = false;
+      setProcessandoId(null);
+    }
   };
 
   const abrirDetalhes = useCallback(async (consulta: any) => {
@@ -159,13 +191,22 @@ function AprovacoesPage() {
         .order("created_at", { ascending: true });
       if (error) throw error;
 
+      // Allowlist de buckets permitidos aqui. document_subtype vem do uploader
+      // (cliente), entao sem allowlist um atacante que insira uma linha em
+      // documentos_proposta com um bucket arbitrario forcaria o admin a assinar
+      // URL em qualquer bucket que o token dele enxergue (ex. withdrawals,
+      // contratos-assinados, time-clock-photos).
+      const BUCKETS_PERMITIDOS = new Set([
+        "approval-documents",
+        "documentos-proposta",
+        "documentos-complementares",
+      ]);
       const docs = await Promise.all((data ?? []).map(async (doc: any) => {
         if (!doc.file_url || /^https?:\/\//i.test(doc.file_url)) return { ...doc, signedUrl: doc.file_url };
-        // document_subtype grava o bucket real onde o arquivo foi enviado
-        // (approval-documents) — usar um nome fixo diferente aqui fazia o
-        // signed URL sempre falhar silenciosamente.
+        const bucketCandidato = String(doc.document_subtype || "approval-documents");
+        const bucket = BUCKETS_PERMITIDOS.has(bucketCandidato) ? bucketCandidato : "approval-documents";
         const { data: signed, error: signedError } = await supabase.storage
-          .from(doc.document_subtype || "approval-documents")
+          .from(bucket)
           .createSignedUrl(doc.file_url, 600);
         if (signedError) console.error("Erro ao gerar signed URL:", signedError);
         return { ...doc, signedUrl: signed?.signedUrl ?? null };
@@ -268,8 +309,8 @@ function AprovacoesPage() {
                   </div>
                   <div className="mt-3 flex items-center gap-1 border-t border-neutral-100 pt-3">
                     <Button size="sm" variant="ghost" className="gap-1" onClick={() => abrirDetalhes(c)}><Eye size={14} /></Button>
-                    <Button size="sm" variant="ghost" className="gap-1 text-emerald-700" onClick={() => aprovar(c.id)}><CheckCircle2 size={14} /></Button>
-                    <Button size="sm" variant="ghost" className="gap-1 text-red-700" onClick={() => { setRejectingId(c.id); setMotivo(""); }}><XCircle size={14} /></Button>
+                    <Button size="sm" variant="ghost" className="gap-1 text-emerald-700" disabled={processandoId === c.id || !adminId} onClick={() => aprovar(c.id)}><CheckCircle2 size={14} /></Button>
+                    <Button size="sm" variant="ghost" className="gap-1 text-red-700" disabled={processandoId === c.id || !adminId} onClick={() => { setRejectingId(c.id); setMotivo(""); }}><XCircle size={14} /></Button>
                   </div>
                 </div>
               ))
@@ -324,8 +365,8 @@ function AprovacoesPage() {
                   <TableCell className="text-xs text-neutral-400">{new Date(c.created_at).toLocaleDateString("pt-BR")}</TableCell>
                   <TableCell className="text-right pr-6 space-x-1">
                     <Button size="sm" variant="ghost" className="gap-1" onClick={() => abrirDetalhes(c)}><Eye size={14} /></Button>
-                    <Button size="sm" variant="ghost" className="gap-1 text-emerald-700" onClick={() => aprovar(c.id)}><CheckCircle2 size={14} /></Button>
-                    <Button size="sm" variant="ghost" className="gap-1 text-red-700" onClick={() => { setRejectingId(c.id); setMotivo(""); }}><XCircle size={14} /></Button>
+                    <Button size="sm" variant="ghost" className="gap-1 text-emerald-700" disabled={processandoId === c.id || !adminId} onClick={() => aprovar(c.id)}><CheckCircle2 size={14} /></Button>
+                    <Button size="sm" variant="ghost" className="gap-1 text-red-700" disabled={processandoId === c.id || !adminId} onClick={() => { setRejectingId(c.id); setMotivo(""); }}><XCircle size={14} /></Button>
                   </TableCell>
                 </TableRow>
               ))}
@@ -405,7 +446,7 @@ function AprovacoesPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRejectingId(null)}>Cancelar</Button>
-            <Button className="bg-red-600 hover:bg-red-700" onClick={reprovar}>Reprovar</Button>
+            <Button className="bg-red-600 hover:bg-red-700" disabled={processandoId === rejectingId || !adminId} onClick={reprovar}>Reprovar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

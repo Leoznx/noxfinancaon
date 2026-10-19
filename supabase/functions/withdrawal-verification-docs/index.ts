@@ -91,6 +91,14 @@ Deno.serve(async (req) => {
       back_url: null,
       holder_photo_url: null,
     };
+    // Marca por documento se o arquivo existe E se a assinatura falhou. O
+    // caller consegue diferenciar "documento nao enviado" (uploaded=false)
+    // de "documento existe mas falhou a assinatura temporaria" (error=true).
+    const signedErrors: Record<string, { uploaded: boolean; error: boolean }> = {
+      front_url: { uploaded: false, error: false },
+      back_url: { uploaded: false, error: false },
+      holder_photo_url: { uploaded: false, error: false },
+    };
     const urlKeyByPathKey = {
       front_path: "front_url",
       back_path: "back_url",
@@ -102,11 +110,13 @@ Deno.serve(async (req) => {
     >) {
       const path = paths[pathKey];
       if (!isValidStoredDocPath(path)) continue;
+      signedErrors[urlKey].uploaded = true;
       const { data: signedData, error: signedError } = await admin.storage
         .from(VERIFICATION_DOCS_BUCKET)
         .createSignedUrl(path, VERIFICATION_SIGNED_URL_TTL_SECONDS);
       if (signedError || !signedData?.signedUrl) {
         if (signedError) logSafeFailure("create_verification_doc_signed_url", signedError, withdrawalId);
+        signedErrors[urlKey].error = true;
         continue;
       }
       signedUrls[urlKey] = signedData.signedUrl;
@@ -115,6 +125,7 @@ Deno.serve(async (req) => {
     return jsonResponse(req, {
       ok: true,
       ...signedUrls,
+      doc_status: signedErrors,
       expires_in: VERIFICATION_SIGNED_URL_TTL_SECONDS,
     });
   } catch (error) {

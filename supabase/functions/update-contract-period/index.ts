@@ -62,10 +62,13 @@ serve(async (req) => {
     return jsonResponse(req, { ok: false, error: "Metodo nao permitido." }, 405);
   }
 
+  let abortConsultationId = "";
+
   try {
     const { supabase, user } = await requireUser(req);
     const body = (await req.json()) as Body;
     const consultationId = String(body.proposalId || body.consultationId || "").trim();
+    abortConsultationId = consultationId;
     const nextMonths = parseContractPeriodMonths(body.contractPeriodMonths);
     if (!consultationId) {
       return jsonResponse(req, { ok: false, error: "Proposta nao encontrada." }, 400);
@@ -237,6 +240,19 @@ serve(async (req) => {
     console.error("[update-contract-period] falha ao alterar periodo", {
       message: error instanceof Error ? error.message : String(error),
     });
+    // Libera a reserva de troca de periodo para o usuario poder tentar outro
+    // valor em seguida; o loop de cancelamentos ja e idempotente, entao um
+    // retry parcial reaproveita o que ficou pronto.
+    if (abortConsultationId) {
+      try {
+        const { supabaseAdmin } = await import("../_shared/asaas.ts");
+        await supabaseAdmin().rpc("abort_contract_period_change", {
+          p_consultation_id: abortConsultationId,
+        });
+      } catch {
+        // cleanup best-effort
+      }
+    }
     return jsonResponse(
       req,
       {

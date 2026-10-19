@@ -89,7 +89,24 @@ serve(async (req) => {
 
     let raw = payment.raw_response;
     if (payment.asaas_payment_id) {
-      raw = await asaasFetch(`/payments/${payment.asaas_payment_id}`);
+      try {
+        raw = await asaasFetch(`/payments/${payment.asaas_payment_id}`);
+      } catch (providerError) {
+        // Nao perder o estado localmente conhecido quando o Asaas estiver fora
+        // do ar: devolve o cache em vez de 500. O usuario ve "verificar depois"
+        // em lugar de um erro feio no botao de atualizar.
+        console.error("[asaas-get-payment] provedor indisponivel", {
+          paymentId: payment.id,
+          message: providerError instanceof Error ? providerError.message : String(providerError),
+        });
+        return jsonResponse(req, {
+          ok: true,
+          cached: true,
+          providerUnavailable: true,
+          status: normalizePaymentStatus(payment.status),
+          payment: sanitizeAsaasResponse(payment.raw_response || {}),
+        });
+      }
       // Um GET ao Asaas e um snapshot observado agora. Datas como dateCreated
       // representam a criacao da cobranca e nao a versao do status retornado.
       const providerEventAt = new Date().toISOString();

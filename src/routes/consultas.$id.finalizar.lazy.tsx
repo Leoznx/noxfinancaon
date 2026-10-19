@@ -1170,6 +1170,13 @@ function ResumoPropostaLoft(p: any) {
       console.error("Falha nas server functions da proposta, aplicando fallback:", erroServerFn);
     }
 
+    // Fallback: NUNCA hardcode terms_accepted / property_not_wood_confirmed /
+    // insurance_restriction_warning_acknowledged. Esses sao aceites que o
+    // usuario precisa ter dado explicitamente na UI; forjar isso aqui gera
+    // registro juridico invalido. Se o aceite nao esta true, falhamos cedo.
+    if (!aceiteTermos) {
+      throw new Error("Aceite os Termos e Condições para continuar.");
+    }
     const { error } = await supabase
       .from("consultas_credito")
       .update({
@@ -1187,8 +1194,8 @@ function ResumoPropostaLoft(p: any) {
         insurance_payment_method_label: params.metodoLabel,
         billing_due_day: billingDueDay,
         property_not_wood_confirmed: true,
-        terms_accepted: true,
-        terms_accepted_at: new Date().toISOString(),
+        terms_accepted: aceiteTermos,
+        terms_accepted_at: aceiteTermos ? new Date().toISOString() : null,
         insurance_restriction_warning_acknowledged: true,
       } as any)
       .eq("id", id);

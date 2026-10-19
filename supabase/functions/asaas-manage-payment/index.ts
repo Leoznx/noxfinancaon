@@ -466,11 +466,6 @@ serve(async (req) => {
           },
         });
         invoice = invoiceTransition.row;
-        const invoiceReissueApplied =
-          reissueApplied &&
-          !invoiceTransition.staleEvent &&
-          isCollectableStatus(invoiceTransition.current.status) &&
-          normalizePaymentStatus(invoiceTransition.nextStatus) === status;
         await reconcileContractAfterPayment(supabase, invoice, payment, providerEventAt);
       }
     } else if (body.action === "resend_email" || body.action === "resend_whatsapp") {

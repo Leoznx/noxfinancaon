@@ -235,7 +235,7 @@ function FaturasInquilinoDetalhe() {
                           size="sm"
                           variant="outline"
                           className="rounded-lg h-8 gap-1"
-                          onClick={() => window.open(f.boleto_url, "_blank")}
+                          onClick={() => window.open(f.boleto_url, "_blank", "noopener,noreferrer")}
                         >
                           <Eye size={12} /> Ver
                         </Button>
@@ -280,7 +280,7 @@ function FaturasInquilinoDetalhe() {
                         variant="ghost"
                         className="rounded-lg h-8 gap-1 text-green-700"
                         title="Ver comprovante"
-                        onClick={() => window.open(f.comprovante_url, "_blank")}
+                        onClick={() => window.open(f.comprovante_url, "_blank", "noopener,noreferrer")}
                       >
                         <FileCheck size={12} /> Comprovante
                       </Button>
@@ -343,7 +343,7 @@ function FaturasInquilinoDetalhe() {
                           {f.boleto_url ? (
                             <>
                               <Button size="sm" variant="outline" className="rounded-lg h-8 gap-1"
-                                onClick={() => window.open(f.boleto_url, "_blank")}>
+                                onClick={() => window.open(f.boleto_url, "_blank", "noopener,noreferrer")}>
                                 <Eye size={12} /> Ver
                               </Button>
                               <Button size="sm" variant="ghost" className="rounded-lg h-8 w-8 p-0" title="Baixar PDF"
@@ -371,7 +371,7 @@ function FaturasInquilinoDetalhe() {
                           {f.comprovante_url ? (
                             <Button size="sm" variant="ghost" className="rounded-lg h-8 gap-1 text-green-700"
                               title="Ver comprovante"
-                              onClick={() => window.open(f.comprovante_url, "_blank")}>
+                              onClick={() => window.open(f.comprovante_url, "_blank", "noopener,noreferrer")}>
                               <FileCheck size={12} />
                             </Button>
                           ) : f.status === "pago" ? (

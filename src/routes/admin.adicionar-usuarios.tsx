@@ -15,7 +15,7 @@ import { UserPlus, Mail, Shield, UserCog } from "lucide-react";
 
 export const Route = createFileRoute("/admin/adicionar-usuarios")({
   component: () => (
-    <ProtectedRoute>
+    <ProtectedRoute roles={["admin", "admin_master"]}>
       <UsuariosPage />
     </ProtectedRoute>
   ),

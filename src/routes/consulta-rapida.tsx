@@ -118,21 +118,27 @@ function QuickConsultation() {
 
           {step === 4 && (
             <div className="text-center space-y-8 animate-fade-in">
-              <div className="w-20 h-20 bg-green-50 text-green-700 rounded-full flex items-center justify-center mx-auto border border-green-100 shadow-inner">
+              <div className="w-20 h-20 bg-neutral-100 text-neutral-700 rounded-full flex items-center justify-center mx-auto border border-neutral-200 shadow-inner">
                 <FileCheck size={40} strokeWidth={1.5} />
               </div>
               <div>
-                <h3 className="text-2xl font-bold text-neutral-900 mb-2">Crédito Pré-Aprovado</h3>
+                <h3 className="text-2xl font-bold text-neutral-900 mb-2">Simulação registrada</h3>
                 <p className="text-neutral-500 font-medium leading-relaxed">
-                  Com base nos indicadores fornecidos, seu perfil possui compatibilidade com as diretrizes de garantia da NOX FIANÇA.
+                  Recebemos seus dados. Essa é uma simulação indicativa — a aprovação
+                  real do seguro fiança depende da análise documental completa feita
+                  por um corretor credenciado NOX.
+                </p>
+                <p className="mt-3 text-sm text-neutral-400">
+                  Para prosseguir, continue sua solicitação com um corretor pelo botão
+                  abaixo.
                 </p>
               </div>
               <div className="space-y-4 pt-4">
-                <Button className="w-full h-14 bg-neutral-900 text-white hover:bg-neutral-800 rounded-lg font-bold text-lg shadow-xl shadow-neutral-100" onClick={() => navigate({ to: "/" })}>
-                  Retornar ao início
+                <Button className="w-full h-14 bg-[#FACC15] text-neutral-900 hover:bg-[#eab308] rounded-lg font-bold text-lg shadow-xl shadow-neutral-100" onClick={() => navigate({ to: "/cadastro-inquilino" })}>
+                  Continuar com um corretor
                 </Button>
-                <Button variant="ghost" className="w-full h-12 text-neutral-500 font-semibold hover:text-neutral-900" onClick={() => navigate({ to: "/login" })}>
-                  Acessar painel completo
+                <Button variant="ghost" className="w-full h-12 text-neutral-500 font-semibold hover:text-neutral-900" onClick={() => navigate({ to: "/" })}>
+                  Retornar ao início
                 </Button>
               </div>
             </div>

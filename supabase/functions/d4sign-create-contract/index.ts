@@ -8,6 +8,18 @@ import {
 } from "../_shared/asaas.ts";
 import { dispatchD4SignContract } from "../_shared/d4sign.ts";
 
+const UUID_V4_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+// Internal roles autorizados a disparar o fluxo documental. SDR/SAC/suporte
+// NAO podem gerar contrato na D4Sign nem reenviar convite para o inquilino.
+const ROLES_INTERNAS_PERMITIDAS = new Set([
+  "admin_master",
+  "admin",
+  "financeiro",
+  "juridico",
+  "closer",
+  "vendedor",
+]);
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders(req) });
   if (req.method !== "POST")
@@ -18,7 +30,7 @@ serve(async (req) => {
     const admin = supabaseAdmin();
     const body = await req.json();
     const consultationId = String(body?.consultationId || body?.proposalId || "");
-    if (!/^[0-9a-f-]{36}$/i.test(consultationId)) {
+    if (!UUID_V4_RE.test(consultationId)) {
       return jsonResponse(req, { ok: false, error: "Consulta invalida." }, 400);
     }
 
@@ -29,11 +41,23 @@ serve(async (req) => {
       .maybeSingle();
     const { data: internal } = await admin
       .from("internal_users")
-      .select("id")
+      .select("id, role")
       .eq("auth_user_id", user.id)
       .eq("status", "ativo")
       .limit(1);
-    if (consulta?.profile_id_solicitante !== user.id && !internal?.length) {
+    const { data: profile } = await admin
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
+    const roleInterna = internal?.[0]?.role;
+    const roleProfile = profile?.role;
+    const temRoleInternaValida =
+      ROLES_INTERNAS_PERMITIDAS.has(String(roleInterna || "")) ||
+      ROLES_INTERNAS_PERMITIDAS.has(String(roleProfile || "")) ||
+      roleProfile === "imobiliaria";
+    const ehDonoDaConsulta = consulta?.profile_id_solicitante === user.id;
+    if (!ehDonoDaConsulta && !temRoleInternaValida) {
       return jsonResponse(req, { ok: false, error: "Sem permissao para esta consulta." }, 403);
     }
 

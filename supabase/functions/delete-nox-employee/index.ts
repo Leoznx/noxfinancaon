@@ -35,9 +35,13 @@ serve(async (req) => {
     admin.from("profiles").select("role, status").eq("id", callerId).maybeSingle(),
     admin.from("internal_users").select("role, status").eq("auth_user_id", callerId).maybeSingle(),
   ]);
+  // Status "pendente_aprovacao" ainda nao e um admin ativo - exigir "ativo" em
+  // ambas as fontes (profile e internal_user), nao apenas que nao esteja
+  // bloqueado/excluido. Fecha a brecha de um admin recem-cadastrado conseguir
+  // acao destrutiva antes do segundo admin aprovar.
   const isAdmin =
     (["admin", "admin_master"].includes(String(callerProfile?.role ?? "")) &&
-      !["bloqueado", "excluido"].includes(String(callerProfile?.status ?? ""))) ||
+      String(callerProfile?.status ?? "") === "ativo") ||
     (callerInternal?.role === "admin_master" && callerInternal?.status === "ativo");
   if (!isAdmin)
     return response(

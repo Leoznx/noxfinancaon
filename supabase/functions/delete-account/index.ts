@@ -31,6 +31,49 @@ serve(async (req) => {
   if (userError || !userId)
     return response({ ok: false, error: "Sessão inválida ou expirada." }, 401);
 
+  // Business guard: nao permite auto-exclusao com obrigacoes financeiras ou
+  // contratuais em aberto. Impede corretor/imobiliaria/inquilino de fugir de
+  // reversao de comissao, fatura pendente ou saque em analise.
+  const [faturasAbertas, apolicesAtivas, saquesPendentes, periodoPendente] = await Promise.all([
+    supabaseAdmin
+      .from("faturas_inquilino")
+      .select("id", { count: "exact", head: true })
+      .eq("tenant_user_id", userId)
+      .in("status", ["pending", "overdue", "waiting_payment", "approved", "confirmed", "partial"]),
+    supabaseAdmin
+      .from("apolices")
+      .select("id", { count: "exact", head: true })
+      .or(
+        `tenant_user_id.eq.${userId},profile_id_solicitante.eq.${userId},corretor_profile_id.eq.${userId},imobiliaria_profile_id.eq.${userId}`,
+      )
+      .in("status", ["ativa", "ativada", "pendente_pagamento", "pendente_assinatura"]),
+    supabaseAdmin
+      .from("withdrawal_requests")
+      .select("id", { count: "exact", head: true })
+      .eq("beneficiary_profile_id", userId)
+      .in("status", ["pending", "approved", "awaiting_payment"]),
+    supabaseAdmin
+      .from("consultas_credito")
+      .select("id", { count: "exact", head: true })
+      .or(`profile_id_solicitante.eq.${userId},tenant_user_id.eq.${userId}`)
+      .not("contract_period_change_pending_at", "is", null),
+  ]);
+
+  const bloqueios: string[] = [];
+  if ((faturasAbertas?.count || 0) > 0) bloqueios.push("faturas em aberto");
+  if ((apolicesAtivas?.count || 0) > 0) bloqueios.push("apólices ativas");
+  if ((saquesPendentes?.count || 0) > 0) bloqueios.push("saques pendentes");
+  if ((periodoPendente?.count || 0) > 0) bloqueios.push("mudança de período em andamento");
+  if (bloqueios.length) {
+    return response(
+      {
+        ok: false,
+        error: `Resolva antes: ${bloqueios.join(", ")}. Fale com o suporte para prosseguir com a exclusao.`,
+      },
+      409,
+    );
+  }
+
   const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
   if (deleteError) {
     console.error("[delete-account] exclusão não concluída", {

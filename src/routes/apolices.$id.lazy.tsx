@@ -814,7 +814,7 @@ function FaturasView({ faturas, apolice }: { faturas: any[]; apolice: any }) {
                   <td className="px-6 py-4 text-right">
                     <div className="inline-flex gap-1.5">
                       {f.boleto_url && (
-                        <Button size="sm" variant="outline" className="rounded-lg h-8 gap-1" onClick={() => window.open(f.boleto_url, "_blank")}>
+                        <Button size="sm" variant="outline" className="rounded-lg h-8 gap-1" onClick={() => window.open(f.boleto_url, "_blank", "noopener,noreferrer")}>
                           <Eye size={12} /> Ver
                         </Button>
                       )}
@@ -839,7 +839,7 @@ function FaturasView({ faturas, apolice }: { faturas: any[]; apolice: any }) {
                       )}
                       {f.comprovante_url && (
                         <Button size="sm" variant="ghost" className="rounded-lg h-8 gap-1 text-green-700" title="Ver comprovante"
-                          onClick={() => window.open(f.comprovante_url, "_blank")}
+                          onClick={() => window.open(f.comprovante_url, "_blank", "noopener,noreferrer")}
                         >
                           <FileCheck size={12} />
                         </Button>

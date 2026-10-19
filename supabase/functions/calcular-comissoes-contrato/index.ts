@@ -42,10 +42,12 @@ serve(async (req) => {
     if (policyError) throw policyError;
     if (!policy) return jsonResponse(req, { ok: false, error: "Apolice nao encontrada." }, 404);
 
+    // Proprietario do imovel nao tem relacao com o repasse de comissao, entao
+    // nao deve conseguir disparar o calculo. So corretor/imobiliaria (que
+    // recebem) e staff financeiro.
     const ownsPolicy = [
       policy.corretor_profile_id,
       policy.imobiliaria_profile_id,
-      policy.proprietario_profile_id,
     ].includes(user.id);
     const profileRole = String(profile?.role || "");
     const internalRole =

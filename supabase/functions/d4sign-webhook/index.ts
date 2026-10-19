@@ -75,8 +75,15 @@ serve(async (req) => {
     return jsonResponse(req, { ok: false, error: "Metodo nao permitido." }, 405);
   if (hasOversizedBody(req))
     return jsonResponse(req, { ok: false, error: "Payload muito grande." }, 413);
+  // Secret aceito via header (preferencia) OU query param (compat retro: o
+  // painel D4Sign ja esta configurado assim; migrar o painel para header e
+  // depois remover o fallback de ?secret=). Secrets no querystring aparecem em
+  // access logs de proxies e no painel do Supabase.
   const expectedSecret = Deno.env.get("D4SIGN_WEBHOOK_SECRET") || "";
-  const receivedSecret = new URL(req.url).searchParams.get("secret") || "";
+  const headerSecret =
+    req.headers.get("x-webhook-secret") || req.headers.get("x-d4sign-secret") || "";
+  const querySecret = new URL(req.url).searchParams.get("secret") || "";
+  const receivedSecret = headerSecret || querySecret;
   if (!expectedSecret || !safeEqual(receivedSecret, expectedSecret)) {
     return jsonResponse(req, { ok: false, error: "Nao autorizado." }, 401);
   }
@@ -100,7 +107,14 @@ serve(async (req) => {
     eventType === "1" ||
     normalizedMessage.includes("finished document") ||
     normalizedMessage.includes("finalizado");
-  const cancelled = normalizedMessage.includes("cancel") || eventType === "3";
+  // Substring "cancel" dispara em falso-positivos ("cancellation declined",
+  // "nao cancelado", "cancel request denied"). Exigir eventType === "3" OU
+  // uma das frases explicitas de cancelamento com delimitador de palavra.
+  const explicitCancelPhrase =
+    /\b(document\s+cancelled|documento\s+cancelado|canceled\s+document|cancelado\s+com\s+sucesso)\b/i.test(
+      message,
+    );
+  const cancelled = eventType === "3" || explicitCancelPhrase;
 
   const supabase = supabaseAdmin();
   const { data: foundSignature, error } = await supabase
@@ -123,11 +137,16 @@ serve(async (req) => {
 
   // O cancelamento solicitado pela troca de prazo nao cancela a proposta. A
   // linha e criada antes da chamada a D4Sign, portanto ate um webhook imediato
-  // e reconhecido. Um evento de conclusao que vença a corrida continua sendo
-  // processado enquanto o UUID ainda estiver na assinatura principal.
+  // e reconhecido. Um evento de conclusao que vença a corrida precisa ser
+  // ignorado tambem enquanto o estado da supersessao ainda esta em transicao
+  // ("cancelling"), para evitar que um 'finished' tardio marque signed em
+  // documento substituido e trave a troca de prazo posterior.
   if (
     supersededDocument &&
-    (supersededDocument.state === "cancelled" || cancelled || !foundSignature)
+    (supersededDocument.state === "cancelled" ||
+      supersededDocument.state === "cancelling" ||
+      cancelled ||
+      !foundSignature)
   ) {
     return jsonResponse(req, {
       ok: true,
@@ -312,12 +331,15 @@ serve(async (req) => {
     }
     const { data: consultation, error: consultationError } = await supabase
       .from("consultas_credito")
-      .select("payment_status, payment_state")
+      .select("payment_status, payment_state, status")
       .eq("id", signature.consultation_id)
       .single();
     if (consultationError) throw consultationError;
 
     if (!isPaidStatus(consultation?.payment_state || consultation?.payment_status)) {
+      // Guard: nao rebaixa consulta ja ativada. Uma re-entrega tardia de
+      // 'finished' nao pode voltar a consulta para "aguardando_ativacao"
+      // depois de ter sido ativada pelo primeiro pagamento.
       await supabase
         .from("consultas_credito")
         .update({
@@ -329,7 +351,8 @@ serve(async (req) => {
           signature_status: "signed",
           policy_status: "issued_pending",
         })
-        .eq("id", signature.consultation_id);
+        .eq("id", signature.consultation_id)
+        .not("status", "in", "(ativado,ativada,active)");
       if (!["signed", "active"].includes(normalizeContractSignatureStatus(signature.status))) {
         await supabase.from("proposta_historico").insert({
           consulta_id: signature.consultation_id,

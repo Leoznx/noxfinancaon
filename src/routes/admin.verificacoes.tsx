@@ -175,6 +175,10 @@ function VerificacoesDocumentoPage() {
   };
 
   const aprovar = async (v: any) => {
+    if (!adminId) {
+      toast.error("Sessao ainda carregando, tente de novo em 1 segundo.");
+      return;
+    }
     setProcessando(v.id);
     try {
       const { error } = await supabase
@@ -194,7 +198,7 @@ function VerificacoesDocumentoPage() {
       // continua barrada em telas que checam status === 'ativo', como
       // "Vincular corretor"). Só mexe se ainda estiver pendente — não afeta
       // inquilino, que já nasce 'ativo'.
-      await supabase
+      const { error: profileError } = await supabase
         .from("profiles")
         .update({
           status: "ativo",
@@ -204,8 +208,17 @@ function VerificacoesDocumentoPage() {
         } as any)
         .eq("id", v.user_id)
         .eq("status", "pendente_aprovacao");
+      if (profileError) {
+        // Documento aprovado mas profile nao mudou. Nao silencia: avisa o
+        // admin para fazer o segundo passo manualmente antes de continuar.
+        toast.error(
+          "Documento aprovado, mas o status do usuario nao pode ser atualizado. Verifique a conta antes de prosseguir.",
+        );
+        console.error("[admin.verificacoes] profile update falhou", profileError);
+      } else {
+        toast.success("Documento aprovado.");
+      }
 
-      toast.success("Documento aprovado.");
       await notificarUsuario(v, {
         titulo: "Documento aprovado",
         mensagem: "Sua verificação de identidade foi aprovada. Sua conta está totalmente verificada.",

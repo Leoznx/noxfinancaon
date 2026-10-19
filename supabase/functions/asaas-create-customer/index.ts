@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { corsHeaders, jsonResponse, requireUser } from "../_shared/asaas.ts";
+import { corsHeaders, HttpError, jsonResponse, requireUser } from "../_shared/asaas.ts";
 import { ensureAsaasCustomer } from "../_shared/asaas-customer.ts";
+import { assertCanManageConsultationBilling } from "../_shared/billing-auth.ts";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders(req) });
@@ -22,23 +23,18 @@ serve(async (req) => {
     if (error) throw error;
     if (!consulta) return jsonResponse(req, { ok: false, error: "Proposta nao encontrada." }, 404);
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .maybeSingle();
-    const role = profile?.role;
-    const allowed =
-      consulta.profile_id_solicitante === user.id ||
-      consulta.tenant_user_id === user.id ||
-      consulta.billing_responsible_user_id === user.id ||
-      ["admin", "financeiro", "corretor", "imobiliaria"].includes(role);
-
-    if (!allowed) return jsonResponse(req, { ok: false, error: "Acesso nao autorizado." }, 403);
+    // Substitui o antigo allowlist por role (que concedia a QUALQUER corretor ou
+    // imobiliaria) pelo helper que amarra ownership direto + imobiliaria dona do
+    // corretor da proposta + roles financeiros globais. Mesma politica usada
+    // pelas demais funcoes financeiras.
+    await assertCanManageConsultationBilling(supabase, user.id, consulta);
 
     const customerId = await ensureAsaasCustomer(supabase, consulta);
     return jsonResponse(req, { ok: true, customerId });
   } catch (error) {
+    if (error instanceof HttpError) {
+      return jsonResponse(req, { ok: false, error: error.message }, error.status);
+    }
     console.error("[asaas-create-customer] erro", {
       message: error instanceof Error ? error.message : String(error),
     });

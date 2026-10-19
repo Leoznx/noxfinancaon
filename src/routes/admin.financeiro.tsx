@@ -1219,7 +1219,7 @@ function PaymentsTable({
   onDetails: (id: string) => void;
 }) {
   const openReceipt = async (row: FinanceWithdrawal, accessType: "view" | "download") => {
-    const popup = window.open("", "_blank");
+    const popup = window.open("", "_blank", "noopener,noreferrer");
     try {
       const url = await getWithdrawalReceiptUrl(row.id, accessType);
       if (popup) popup.location.href = url;

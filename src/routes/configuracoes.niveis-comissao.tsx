@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { toast } from "sonner";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { Trophy, Award, Medal, Gem, Settings, Save, AlertTriangle } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -30,7 +31,14 @@ function ConfigNiveisComissao() {
             <h1 className="text-4xl font-black tracking-tight">Níveis de Comissão</h1>
             <p className="text-muted-foreground mt-1 font-medium">Configure as metas e percentuais do plano de carreira dos corretores.</p>
           </div>
-          <Button className="bg-primary text-background font-black gap-2 h-12 rounded-2xl px-8">
+          <Button
+            className="bg-primary text-background font-black gap-2 h-12 rounded-2xl px-8"
+            onClick={() =>
+              toast.info(
+                "Esta tela ainda e um protótipo; a configuração definitiva de niveis é feita em Configurações › Comissão.",
+              )
+            }
+          >
             <Save size={20} />
             Salvar Alterações
           </Button>
@@ -39,7 +47,7 @@ function ConfigNiveisComissao() {
         <div className="bg-[#FACC15]/10 border border-[#FACC15]/20 p-4 rounded-2xl flex items-start gap-3">
           <AlertTriangle className="text-neutral-900 shrink-0" size={20} />
           <p className="text-xs text-neutral-900 font-medium">
-            <strong>Atenção:</strong> Alterar as metas ou percentuais afetará apenas as novas comissões geradas a partir do salvamento. Comissões antigas mantêm o histórico original.
+            <strong>Atenção:</strong> Esta tela é uma visualização dos níveis atuais. Para alterar metas ou percentuais em definitivo, use Configurações › Comissão.
           </p>
         </div>
 

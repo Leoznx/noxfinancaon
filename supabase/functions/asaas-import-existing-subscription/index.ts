@@ -442,6 +442,20 @@ async function persistImport(
     billing_responsible_user_id: null,
     asaas_customer_id: customer.id,
   };
+  // Audita a alteracao se o payment_type anterior era diferente - evita
+  // "overwrite silencioso" quando a imobiliaria pagava e o import sobrescreve
+  // para inquilino.
+  if (
+    consultation?.payment_type &&
+    consultation.payment_type !== contactPatch.payment_type
+  ) {
+    await supabase.from("proposta_historico").insert({
+      consulta_id: consultation.id,
+      tipo_evento: "import_subscription_payment_type_change",
+      descricao: `Import de assinatura mudou responsavel de pagamento de "${consultation.payment_type}" para "inquilino".`,
+      created_by: userId,
+    } as any);
+  }
   const { error: contactError } = await supabase
     .from("consultas_credito")
     .update(contactPatch)

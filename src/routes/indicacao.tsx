@@ -69,7 +69,7 @@ function IndicacaoPage() {
 
   const compartilharWhats = () => {
     const msg = `Olá! Estou te indicando a NOX Fiança. Cadastre-se pelo meu link e conheça uma solução simples para garantia locatícia: ${link}`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank", "noopener,noreferrer");
   };
 
   const compartilharEmail = () => {
