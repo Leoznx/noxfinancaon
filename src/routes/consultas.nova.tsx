@@ -112,7 +112,7 @@ function NovaConsulta() {
     setIsSubmitting(true);
     setErroAutomacao(null);
     setProgresso(5);
-    setEtapAutomacao("preparando_envio");
+    setEtapaAutomacao("preparando_envio");
     try {
       // Modo demo usa o fluxo demonstrativo (sem API real).
       if (demoSession) {
