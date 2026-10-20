@@ -21,6 +21,7 @@ import {
 } from "@/lib/simulacao-espera";
 import { DEMO_SIMULATION_DATA } from "@/lib/demo-accounts";
 import { isDemoSession } from "@/lib/demo-session";
+import { simularLoftDireto } from "@/lib/simularLoftDireto";
 
 export const Route = createFileRoute("/consultas/nova")({
   component: () => (
@@ -111,12 +112,35 @@ function NovaConsulta() {
     setIsSubmitting(true);
     setErroAutomacao(null);
     setProgresso(5);
-    // Abre o feedback bloqueante no mesmo clique. O corretor só sai daqui quando
-    // houver resultado real, falha definitiva ou ao escolher seguir em segundo plano.
     setEtapaAutomacao("preparando_envio");
     try {
-      const criarConsulta = demoSession ? criarConsultaDemonstrativa : criarConsultaParaAutomacao;
-      const id = await criarConsulta({
+      // Modo demo usa o fluxo demonstrativo (sem API real).
+      if (demoSession) {
+        const id = await criarConsultaDemonstrativa({
+          dados,
+          userEmail: user.email,
+          userRole: user.role,
+        });
+        setConsultaId(id);
+        escutarConsulta(id);
+        return;
+      }
+
+      // Tenta a API direta da Loft (rápido, sem Playwright).
+      try {
+        const direto = await simularLoftDireto(dados, user.email, user.role);
+        if (direto.ok) {
+          setConsultaId(direto.consultaId);
+          pararEscuta();
+          navigate({ to: "/consultas/$id/status", params: { id: direto.consultaId } });
+          return;
+        }
+      } catch (diretoErro) {
+        console.warn("API direta falhou, usando fila:", diretoErro);
+      }
+
+      // Fallback: fila + worker Playwright (caso a API direta falhe).
+      const id = await criarConsultaParaAutomacao({
         dados,
         userEmail: user.email,
         userRole: user.role,
