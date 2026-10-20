@@ -127,26 +127,20 @@ function NovaConsulta() {
       }
 
       // Tenta a API direta da Loft (rápido, sem Playwright).
-      try {
-        const direto = await simularLoftDireto(dados, user.email, user.role);
-        if (direto.ok) {
-          setConsultaId(direto.consultaId);
-          pararEscuta();
-          navigate({ to: "/consultas/$id/status", params: { id: direto.consultaId } });
-          return;
-        }
-      } catch (diretoErro) {
-        console.warn("API direta falhou, usando fila:", diretoErro);
+      // Se falhar, mostra o erro — não cai mais na fila silenciosamente.
+      const direto = await simularLoftDireto(dados, user.email, user.role);
+      if (direto.ok) {
+        setConsultaId(direto.consultaId);
+        pararEscuta();
+        navigate({ to: "/consultas/$id/status", params: { id: direto.consultaId } });
+        return;
       }
 
-      // Fallback: fila + worker Playwright (caso a API direta falhe).
-      const id = await criarConsultaParaAutomacao({
-        dados,
-        userEmail: user.email,
-        userRole: user.role,
-      });
-      setConsultaId(id);
-      escutarConsulta(id);
+      // Se chegou aqui, a API falhou — mostra o erro real.
+      const msg = direto.error || "Não foi possível simular o crédito agora.";
+      setErroAutomacao(msg);
+      toast.error(msg);
+      return;
     } catch (e: any) {
       toast.error("Erro ao criar consulta: " + (e?.message || "desconhecido"));
     } finally {
