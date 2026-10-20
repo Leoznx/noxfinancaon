@@ -7,14 +7,17 @@ import { Settings } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { ResultadoAutomacao } from "@/components/simulacao/ResultadoAutomacao";
+import { ModalConsultando } from "@/components/simulacao/ModalConsultando";
 import type {
   ExtrasSelecionados,
   PlanoSelecionadoCalculo,
 } from "@/components/simulacao/SeletorPlanos";
 import {
   getConsultaCredito,
+  progressoConsulta,
   registrarEventoProposta,
   reenviarConsulta,
+  resolverStatusConsulta,
   watchConsultaCredito,
   type ConsultaCredito,
 } from "@/lib/consultasCredito";
@@ -90,6 +93,31 @@ function StatusConsulta() {
             <Link to="/consultas">Ver minhas consultas</Link>
           </Button>
         </div>
+      </DashboardLayout>
+    );
+  }
+
+  const statusExibicao = resolverStatusConsulta(consulta);
+  const consultaEmAndamento = new Set([
+    "pendente",
+    "processando",
+    "aguardando_autenticacao",
+    "aguardando_servico_externo",
+    "aguardando_resultado",
+  ]).has(statusExibicao);
+
+  // Nunca apresenta a fila como se fosse um resultado. Se alguém abrir o link
+  // direto durante o processamento, mantém o mesmo modal de consulta até o
+  // worker gravar a decisão real recebida da Loft.
+  if (consultaEmAndamento) {
+    return (
+      <DashboardLayout>
+        <div className="flex-1" />
+        <ModalConsultando
+          open
+          progresso={progressoConsulta(consulta.status, consulta.automation_step)}
+          etapa={consulta.automation_step ?? consulta.status}
+        />
       </DashboardLayout>
     );
   }

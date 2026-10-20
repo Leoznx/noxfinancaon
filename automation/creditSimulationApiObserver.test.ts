@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseCreditSimulationResponsePayload } from "./creditSimulationApiObserver";
+import {
+  isCreditSimulationRequest,
+  parseCreditSimulationResponsePayload,
+} from "./creditSimulationApiObserver";
 
 test("captura o id técnico devolvido pelo BFF atual no mesmo objeto do status", () => {
   assert.deepEqual(
@@ -30,5 +33,41 @@ test("não promove id genérico quando existe apenas um status genérico aprovad
       status: "aprovado",
       proposalId: null,
     },
+  );
+});
+
+test("reconhece o POST do formulário atual da Loft", () => {
+  assert.equal(
+    isCreditSimulationRequest(
+      "https://app.loft.com.br/fianca-aluguel/imobiliaria/api/solicitacao/simulacao",
+      "POST",
+    ),
+    true,
+  );
+  assert.equal(
+    isCreditSimulationRequest(
+      "https://app.loft.com.br/api/internal-rental-guarantee/simulation",
+      "POST",
+    ),
+    true,
+  );
+  assert.equal(
+    isCreditSimulationRequest(
+      "https://app.loft.com.br/fianca-aluguel/imobiliaria/api/solicitacao/simulacao",
+      "GET",
+    ),
+    false,
+  );
+});
+
+test("captura status e id no contrato atual com analise aninhada", () => {
+  assert.deepEqual(
+    parseCreditSimulationResponsePayload({
+      data: {
+        id: 4789594,
+        analise: { status: "Aprovada" },
+      },
+    }),
+    { status: "aprovado", proposalId: "4789594" },
   );
 });

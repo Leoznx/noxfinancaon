@@ -211,3 +211,24 @@ Site e aplicativo passaram a apresentar o estado real do worker: Na fila, Consul
 autenticação, Aguardando serviço externo, Aguardando resultado, Erro, Requer verificação ou
 Cancelada sem envio. “Em análise” ficou reservado exclusivamente ao resultado real
 `resultado = 'em_analise'` retornado pelo provedor.
+
+## Correção do endpoint e da tela de espera — 20/10/2026
+
+A página publicada pela Loft passou a enviar a simulação por
+`/fianca-aluguel/imobiliaria/api/solicitacao/simulacao`. O observador do worker reconhecia apenas
+`/api/internal-rental-guarantee/simulation`; por isso o clique acontecia, mas o POST real não era
+associado à consulta. O worker preservava o caso como `requer_verificacao` e a fila causal de
+cancelamento bloqueava a próxima solicitação para evitar duplicidade.
+
+- O observador agora aceita os dois endpoints e interpreta o contrato atual
+  `{ data: { id, analise: { status } } }`, mantendo o ID e o veredito ligados à mesma resposta.
+- Um cancelamento ainda `prepared`, sem POST observado, é reconciliado contra a lista real da Loft e
+  expira em dois minutos quando nenhuma proposta nova existe. Envios observados continuam respeitando
+  integralmente a janela configurada de cancelamento.
+- O experimento de API direta reintroduzido depois da reativação foi retirado do botão. Ele criava uma
+  consulta intermediária e, ao falhar, criava outra para o worker. Cada clique volta a produzir uma
+  única consulta na fila autenticada.
+- As rotas de detalhe do site e do aplicativo não exibem mais uma tela terminal “Na fila” enquanto o
+  worker está operando. Elas mantêm o modal **Consultando crédito** e só mostram Aprovado, Recusado ou
+  Em análise depois de um resultado real da Loft. “Preparando a análise” passou a “Preparando a
+  consulta” para não sugerir um veredito inexistente.

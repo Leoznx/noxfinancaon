@@ -905,10 +905,18 @@ async function reconcilePendingLoftCancellation(
       job.known_proposal_ids ?? [],
     );
     if (!resolution) {
+      // Um job ainda `prepared` não teve nenhum POST observado. Depois de dois
+      // minutos e de uma busca estável sem proposta nova, ele pode ser abortado
+      // com segurança. Jobs cujo envio foi observado continuam respeitando todo
+      // o prazo de cancelamento configurado.
+      const reconciliationWindowMs =
+        job.status === "prepared" && !job.submitted_at
+          ? 2 * 60_000
+          : Math.max(2 * 60_000, env.loftCancellationDelayMs);
       if (
         !isLoftProposalReconciliationExpired(
           job.submitted_at ?? job.created_at,
-          Math.max(2 * 60_000, env.loftCancellationDelayMs),
+          reconciliationWindowMs,
         )
       ) {
         registrarSucessoFilaCancelamento();

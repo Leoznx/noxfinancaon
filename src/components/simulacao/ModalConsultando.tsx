@@ -36,7 +36,7 @@ const IMAGENS_RESULTADO = [
  */
 function etapaLabel(etapa?: string | null): string {
   if (etapa === "preparando_envio") return "Enviando a consulta";
-  if (etapa === "pendente") return "Preparando a análise";
+  if (etapa === "pendente") return "Preparando a consulta";
   if (etapa === "preenchendo") return "Preenchendo os dados da consulta";
   if (etapa === "enviando") return "Enviando a simulação";
   if (etapa === "aguardando_resultado") return "Aguardando o resultado";

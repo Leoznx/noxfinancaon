@@ -131,6 +131,14 @@ test("cancelamento e reconciliação possuem watchdog total menor que o lease", 
   assert.match(envSource, /LOFT_CANCELLATION_OPERATION_TIMEOUT_MS[\s\S]*240_000/);
 });
 
+test("preparo sem POST observado não bloqueia a fila por trinta minutos", async () => {
+  const worker = await readFile(workerPath, "utf8");
+  assert.match(
+    worker,
+    /job\.status === "prepared" && !job\.submitted_at[\s\S]*2 \* 60_000[\s\S]*env\.loftCancellationDelayMs/,
+  );
+});
+
 test("perda de lease interrompe só a execução antiga sem derrubar a fila", async () => {
   const worker = await readFile(workerPath, "utf8");
   const heartbeatStart = worker.indexOf("const heartbeatTimer = setInterval");

@@ -6,7 +6,6 @@ import { FormularioSimulacao, DadosSimulacao } from "@/components/simulacao/Form
 import { ModalConsultando } from "@/components/simulacao/ModalConsultando";
 import { toast } from "sonner";
 import { useAuth } from "@/components/AuthProvider";
-import { supabase } from "@/integrations/supabase/client";
 import {
   criarConsultaParaAutomacao,
   criarConsultaDemonstrativa,
@@ -22,7 +21,6 @@ import {
 } from "@/lib/simulacao-espera";
 import { DEMO_SIMULATION_DATA } from "@/lib/demo-accounts";
 import { isDemoSession } from "@/lib/demo-session";
-import { simularLoftDireto } from "@/lib/simularLoftDireto";
 
 export const Route = createFileRoute("/consultas/nova")({
   component: () => (
@@ -127,46 +125,9 @@ function NovaConsulta() {
         return;
       }
 
-      // Tenta API direta primeiro (rápido, ~5-10s)
-      try {
-        const direto = await simularLoftDireto(dados, user.email, user.role);
-        if (direto.ok && direto.resultado) {
-          const resultado = direto.resultado;
-          const status = resultado.status;
-          setConsultaId(direto.consultaId);
-          setErroAutomacao(null);
-
-          // Grava o resultado no banco
-          await supabase.from("consultas_credito").update({
-            tipo_pessoa: dados.tipoInquilino,
-            documento: status ? documento : null,
-            tenant_name: dados.inquilinos[0]?.nome ?? dados.razaoSocial,
-            tipo_imovel: dados.tipoImovel,
-            cep: dados.cep,
-            valor_aluguel: dados.valores.aluguel,
-            valor_condominio: dados.valores.condominio,
-            valor_taxas: dados.valores.taxas,
-            status: status,
-            resultado: status,
-            mensagem: status === "aprovado" ? "Crédito aprovado." : status === "recusado" ? "Crédito recusado." : "Crédito em análise.",
-            origem: "nox_financa_direto",
-            external_provider: "loft_api",
-            external_status: status,
-            external_request_id: resultado.proposalId,
-            external_response: resultado,
-            automation_step: "api_direta",
-            automation_started_at: new Date().toISOString(),
-            automation_finished_at: new Date().toISOString(),
-          } as any).eq("id", direto.consultaId);
-
-          navigate({ to: "/consultas/$id/status", params: { id: direto.consultaId } });
-          return;
-        }
-      } catch (diretoErro) {
-        console.warn("API direta falhou, usando fila:", diretoErro);
-      }
-
-      // Fallback: fila + worker Playwright (API direta indisponível)
+      // Uma única consulta entra na fila do worker. O caminho direto criava um
+      // registro intermediário com erro antes do fallback e podia duplicar cada
+      // clique; o worker autenticado é a fonte única do resultado da Loft.
       const id = await criarConsultaParaAutomacao({
         dados,
         userEmail: user.email,

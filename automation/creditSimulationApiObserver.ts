@@ -2,7 +2,10 @@ import type { Page, Request, Response } from "playwright";
 import type { ResultadoStatus } from "./types";
 import { extractLoftProposalId } from "./loftCancellation";
 
-const SIMULATION_API_PATH = /\/api\/internal-rental-guarantee\/simulation\/?$/i;
+const SIMULATION_API_PATHS = [
+  /\/api\/internal-rental-guarantee\/simulation\/?$/i,
+  /\/imobiliaria\/api\/solicitacao\/simulacao\/?$/i,
+];
 const MAX_VISITED_OBJECTS = 100;
 
 export interface ObservedCreditSimulationResult {
@@ -89,18 +92,56 @@ export function parseCreditSimulationResponsePayload(
     explicitProposalIds.push(payload.id);
   }
 
-  const proposalId = explicitProposalIds.map(extractLoftProposalId).find(Boolean);
+  // O formulário publicado em 19/10/2026 devolve `{ id, analise: { status } }`.
+  // Nesse contrato o status e o ID ficam em objetos diferentes, mas ligados pela
+  // chave semântica `analise`; por isso o `id` do pai é seguro para esta resposta.
+  const containingProposalIds: unknown[] = [];
+  const queue: unknown[] = [value];
+  const visited = new Set<object>();
+  while (queue.length > 0 && visited.size < MAX_VISITED_OBJECTS) {
+    const current = queue.shift();
+    if (!current || typeof current !== "object" || visited.has(current)) continue;
+    visited.add(current);
+    const record = current as Record<string, unknown>;
+    if (
+      record.analise === payload ||
+      record.analysis === payload ||
+      record.riskAnalysis === payload
+    ) {
+      containingProposalIds.push(
+        record.proposalId,
+        record.proposal_id,
+        record.idProposta,
+        record.id_proposta,
+        record.id,
+      );
+    }
+    for (const child of Object.values(record)) {
+      if (child && typeof child === "object") queue.push(child);
+    }
+  }
+
+  const proposalId = [...explicitProposalIds, ...containingProposalIds]
+    .map(extractLoftProposalId)
+    .find(Boolean);
 
   return { status, proposalId: proposalId ?? null };
 }
 
-function isSimulationRequest(request: Request): boolean {
+export function isCreditSimulationRequest(urlValue: string, method: string): boolean {
   try {
-    const url = new URL(request.url());
-    return SIMULATION_API_PATH.test(url.pathname) && request.method().toUpperCase() === "POST";
+    const url = new URL(urlValue);
+    return (
+      method.toUpperCase() === "POST" &&
+      SIMULATION_API_PATHS.some((pattern) => pattern.test(url.pathname))
+    );
   } catch {
     return false;
   }
+}
+
+function isSimulationRequest(request: Request): boolean {
+  return isCreditSimulationRequest(request.url(), request.method());
 }
 
 function isSimulationResponse(response: Response): boolean {
