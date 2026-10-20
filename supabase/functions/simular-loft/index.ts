@@ -38,10 +38,12 @@ function getSessionCookies(): string {
 
   // Fallback: constrói cookies a partir de variáveis individuais
   const phpSessId = Deno.env.get("LOFT_PHPSESSID");
+  const sessionId = Deno.env.get("LOFT_SESSION_ID");
   const oidcState = Deno.env.get("LOFT_OIDC_STATE");
 
   const cookies: string[] = [];
   if (phpSessId) cookies.push(`PHPSESSID=${phpSessId}`);
+  if (sessionId) cookies.push(`session_id=${sessionId}`);
   if (oidcState) cookies.push(`oidc_state_8bb12f6c1ccb=${oidcState}`);
 
   if (cookies.length === 0) {
