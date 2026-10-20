@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { FormularioSimulacao, DadosSimulacao } from "@/components/simulacao/FormularioSimulacao";
@@ -9,7 +9,16 @@ import { useAuth } from "@/components/AuthProvider";
 import {
   criarConsultaParaAutomacao,
   criarConsultaDemonstrativa,
+  reenviarConsulta,
+  watchConsultaCredito,
+  progressoConsulta,
 } from "@/lib/consultasCredito";
+import {
+  TEMPO_LIMITE_ACOMPANHAMENTO_MS,
+  TEMPO_PARA_SEGUNDO_PLANO_MS,
+  etapaDeEsperaLonga,
+  proximoPassoSimulacao,
+} from "@/lib/simulacao-espera";
 import { DEMO_SIMULATION_DATA } from "@/lib/demo-accounts";
 import { isDemoSession } from "@/lib/demo-session";
 
@@ -25,7 +34,74 @@ function NovaConsulta() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [consultaId, setConsultaId] = useState<string | null>(null);
+  const [erroAutomacao, setErroAutomacao] = useState<string | null>(null);
+  const [progresso, setProgresso] = useState(5);
+  const [etapaAutomacao, setEtapaAutomacao] = useState<string | null>(null);
+  const [esperaLonga, setEsperaLonga] = useState(false);
+  const stopWatchRef = useRef<(() => void) | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const esperaLongaRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const demoSession = isDemoSession();
+
+  const pararEscuta = () => {
+    stopWatchRef.current?.();
+    stopWatchRef.current = null;
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    if (esperaLongaRef.current) {
+      clearTimeout(esperaLongaRef.current);
+      esperaLongaRef.current = null;
+    }
+  };
+
+  useEffect(() => pararEscuta, []);
+
+  // A consulta continua salva e o detalhe acompanha o estado real da fila.
+  const abrirAcompanhamento = (id: string) => {
+    pararEscuta();
+    setConsultaId(null);
+    navigate({ to: "/consultas/$id/resultado", params: { id } });
+  };
+
+  const escutarConsulta = (id: string) => {
+    pararEscuta();
+    setEsperaLonga(false);
+    stopWatchRef.current = watchConsultaCredito(
+      id,
+      (consulta) => {
+        const passo = proximoPassoSimulacao(consulta);
+        if (passo.tipo === "aguardar") {
+          // Uma indisponibilidade curta é recuperada automaticamente pelo worker.
+          // Mantemos Realtime/polling ativos para o corretor seguir até o resultado,
+          // enquanto o modal mostra a etapa real gravada pela automação.
+          setEtapaAutomacao(consulta.automation_step);
+          setProgresso(progressoConsulta(consulta.status, consulta.automation_step));
+          return;
+        }
+        pararEscuta();
+        if (passo.tipo === "erro") {
+          setErroAutomacao(passo.mensagem);
+          return;
+        }
+        // Só chegamos aqui com decisão real (aprovado, recusado, em análise) ou
+        // com um estado final de acompanhamento (verificação necessária, cancelada).
+        setConsultaId(null);
+        navigate({ to: "/consultas/$id/status", params: { id } });
+      },
+      { onError: () => abrirAcompanhamento(id) },
+    );
+
+    // Quando a fila está parada à espera do serviço externo ou a resposta demora,
+    // o modal oferece seguir em segundo plano; nada é reenviado nem descartado.
+    esperaLongaRef.current = setTimeout(() => setEsperaLonga(true), TEMPO_PARA_SEGUNDO_PLANO_MS);
+
+    // Rede de segurança visual. A fila continua sendo a fonte da verdade: em vez
+    // de um retry que poderia duplicar o envio, abrimos o acompanhamento salvo.
+    timeoutRef.current = setTimeout(() => abrirAcompanhamento(id), TEMPO_LIMITE_ACOMPANHAMENTO_MS);
+  };
 
   const handleSimular = async (dados: DadosSimulacao) => {
     if (!user?.email) {
@@ -33,6 +109,11 @@ function NovaConsulta() {
       return;
     }
     setIsSubmitting(true);
+    setErroAutomacao(null);
+    setProgresso(5);
+    // Abre o feedback bloqueante no mesmo clique. O corretor só sai daqui quando
+    // houver resultado real, falha definitiva ou ao escolher seguir em segundo plano.
+    setEtapaAutomacao("preparando_envio");
     try {
       const criarConsulta = demoSession ? criarConsultaDemonstrativa : criarConsultaParaAutomacao;
       const id = await criarConsulta({
@@ -40,16 +121,38 @@ function NovaConsulta() {
         userEmail: user.email,
         userRole: user.role,
       });
-      // A API já confirmou que a solicitação foi registrada de forma durável.
-      // Não prendemos o corretor ao tempo do worker: o detalhe acompanha a fila
-      // por Realtime e apresenta a etapa operacional real até chegar uma decisão.
-      await navigate({ to: "/consultas/$id/status", params: { id } });
+      setConsultaId(id);
+      escutarConsulta(id);
     } catch (e: any) {
       toast.error("Erro ao criar consulta: " + (e?.message || "desconhecido"));
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  const handleTentarNovamente = async () => {
+    if (!consultaId) return;
+    try {
+      await reenviarConsulta(consultaId);
+      setErroAutomacao(null);
+      setProgresso(5);
+      setEtapaAutomacao(null);
+      escutarConsulta(consultaId);
+    } catch (e: any) {
+      toast.error("Erro ao reenviar consulta: " + (e?.message || "desconhecido"));
+    }
+  };
+
+  const handleFecharModal = () => {
+    pararEscuta();
+    setConsultaId(null);
+    setErroAutomacao(null);
+    setEtapaAutomacao(null);
+  };
+
+  const modalAberto = isSubmitting || consultaId !== null;
+  const podeSeguirEmSegundoPlano =
+    consultaId !== null && !erroAutomacao && (esperaLonga || etapaDeEsperaLonga(etapaAutomacao));
 
   return (
     <DashboardLayout>
@@ -58,7 +161,7 @@ function NovaConsulta() {
           <FormularioSimulacao
             modo="interno"
             onSubmit={handleSimular}
-            disabled={isSubmitting}
+            disabled={isSubmitting || modalAberto}
             dadosIniciais={demoSession ? DEMO_SIMULATION_DATA : undefined}
             allowDemoDocuments={demoSession}
           />
@@ -70,9 +173,15 @@ function NovaConsulta() {
         </div>
       </div>
       <ModalConsultando
-        open={isSubmitting}
-        progresso={5}
-        etapa="preparando_envio"
+        open={modalAberto}
+        erro={erroAutomacao}
+        progresso={progresso}
+        etapa={etapaAutomacao}
+        onTentarNovamente={handleTentarNovamente}
+        onFechar={handleFecharModal}
+        onContinuarEmSegundoPlano={
+          podeSeguirEmSegundoPlano && consultaId ? () => abrirAcompanhamento(consultaId) : undefined
+        }
       />
     </DashboardLayout>
   );

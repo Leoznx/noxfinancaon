@@ -12,6 +12,11 @@ interface ModalConsultandoProps {
   /** Progresso real (0-100) vindo do worker via Realtime — ver progressoConsulta() em consultasCredito.ts. */
   progresso?: number;
   etapa?: string | null;
+  /**
+   * Saída opcional enquanto a consulta ainda não tem decisão: a consulta segue na
+   * fila e o corretor acompanha o estado real na tela de detalhes. Só aparece quando informado.
+   */
+  onContinuarEmSegundoPlano?: () => void;
 }
 
 // As imagens de resultado (ResultadoAutomacao) só entram na tela quando o worker termina
@@ -26,7 +31,8 @@ const IMAGENS_RESULTADO = [
 /**
  * Modal bloqueante exibido enquanto o worker local consulta a CredPago.
  * Não fecha com clique fora nem com ESC — o fluxo termina por Realtime/polling
- * (redirecionamento) ou pelo estado de erro.
+ * (redirecionamento), pelo estado de erro ou, depois de uma espera longa, por
+ * "Continuar em segundo plano".
  */
 function etapaLabel(etapa?: string | null): string {
   if (etapa === "preparando_envio") return "Enviando a consulta";
@@ -41,7 +47,15 @@ function etapaLabel(etapa?: string | null): string {
   return "Consulta adicionada à fila";
 }
 
-export function ModalConsultando({ open, erro, onTentarNovamente, onFechar, progresso = 5, etapa }: ModalConsultandoProps) {
+export function ModalConsultando({
+  open,
+  erro,
+  onTentarNovamente,
+  onFechar,
+  progresso = 5,
+  etapa,
+  onContinuarEmSegundoPlano,
+}: ModalConsultandoProps) {
   useEffect(() => {
     if (!open) return;
     IMAGENS_RESULTADO.forEach((src) => {
@@ -82,6 +96,21 @@ export function ModalConsultando({ open, erro, onTentarNovamente, onFechar, prog
               <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
               Consultando crédito na NOX FIANÇA
             </div>
+            {onContinuarEmSegundoPlano && (
+              <div className="flex flex-col items-center gap-2 pt-1">
+                <p className="text-sm text-neutral-500 leading-relaxed">
+                  Está demorando mais que o normal. Sua consulta continua na fila e o resultado
+                  aparece em Minhas consultas.
+                </p>
+                <Button
+                  variant="outline"
+                  onClick={onContinuarEmSegundoPlano}
+                  className="font-bold h-11 rounded-xl text-neutral-700"
+                >
+                  Continuar em segundo plano
+                </Button>
+              </div>
+            )}
           </div>
         ) : (
           <div className="flex flex-col items-center text-center gap-5">
