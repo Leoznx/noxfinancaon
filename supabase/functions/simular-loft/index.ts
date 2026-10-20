@@ -39,15 +39,17 @@ function getSessionCookies(): string {
   // Fallback: constrói cookies a partir de variáveis individuais
   const phpSessId = Deno.env.get("LOFT_PHPSESSID");
   const sessionId = Deno.env.get("LOFT_SESSION_ID");
+  const idToken = Deno.env.get("LOFT_ID_TOKEN");
   const oidcState = Deno.env.get("LOFT_OIDC_STATE");
 
   const cookies: string[] = [];
   if (phpSessId) cookies.push(`PHPSESSID=${phpSessId}`);
   if (sessionId) cookies.push(`session_id=${sessionId}`);
+  if (idToken) cookies.push(`id_token=${idToken}`);
   if (oidcState) cookies.push(`oidc_state_8bb12f6c1ccb=${oidcState}`);
 
   if (cookies.length === 0) {
-    throw new Error("Cookies de sessão da Loft não configurados");
+    throw new Error("Cookies de sessão da Loft não configurados. Defina LOFT_SESSION_COOKIES ou LOFT_PHPSESSID + LOFT_SESSION_ID na Vercel.");
   }
 
   return cookies.join("; ");
@@ -55,10 +57,15 @@ function getSessionCookies(): string {
 
 async function requestLoft<T>(path: string, options: RequestInit = {}): Promise<T> {
   const cookies = getSessionCookies();
+  const authHeader = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
+    ? `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`
+    : "";
+
   const response = await fetch(`${LOFT_API_BASE}${path}`, {
     ...options,
     headers: {
       Cookie: cookies,
+      Authorization: authHeader,
       "Content-Type": "application/json",
       ...(options.headers as Record<string, string>),
     },

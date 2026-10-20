@@ -112,7 +112,7 @@ function NovaConsulta() {
     setIsSubmitting(true);
     setErroAutomacao(null);
     setProgresso(5);
-    setEtapaAutomacao("preparando_envio");
+    setEtapAutomacao("preparando_envio");
     try {
       // Modo demo usa o fluxo demonstrativo (sem API real).
       if (demoSession) {
@@ -126,23 +126,13 @@ function NovaConsulta() {
         return;
       }
 
-      // Tenta a API direta da Loft (rápido, sem Playwright).
-      // Se falhar, mostra o erro — não cai mais na fila silenciosamente.
-      const direto = await simularLoftDireto(dados, user.email, user.role);
-      if (direto.ok) {
-        setConsultaId(direto.consultaId);
-        pararEscuta();
-        navigate({ to: "/consultas/$id/status", params: { id: direto.consultaId } });
-        return;
-      }
-
-      // Se chegou aqui, a API falhou — mostra o erro real.
-      const msg = direto.error || "Não foi possível simular o crédito agora.";
+      // Usa apenas a API direta da Loft. Se falhar, mostra o erro no modal.
+      // NÃO cai na fila (worker Playwright) — isso evita demora desnecessária.
+      await simularLoftDireto(dados, user.email, user.role);
+    } catch (e: any) {
+      const msg = e?.message || "Não foi possível simular o crédito agora.";
       setErroAutomacao(msg);
       toast.error(msg);
-      return;
-    } catch (e: any) {
-      toast.error("Erro ao criar consulta: " + (e?.message || "desconhecido"));
     } finally {
       setIsSubmitting(false);
     }
