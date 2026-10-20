@@ -50,8 +50,8 @@ export const MENSAGEM_ERRO_PADRAO = "Não foi possível concluir a consulta no m
  * Decide o que a tela de nova consulta faz com a última leitura da fila:
  * - aguardar: segue no modal (Realtime/polling continuam ativos);
  * - erro: mostra a falha definitiva no modal, com "Tentar novamente";
- * - abrir_status: há decisão real (aprovado, recusado, em análise) ou estado
- *   final de acompanhamento (verificação necessária, cancelada).
+ * - abrir_status: há decisão real (aprovado, recusado, em análise) ou uma
+ *   solicitação cancelada sem envio. Quarentenas técnicas continuam aguardando.
  */
 export function proximoPassoSimulacao(consulta: ConsultaEmEspera): ProximoPassoSimulacao {
   const estado = resolveCreditStatusPresentation(consulta);

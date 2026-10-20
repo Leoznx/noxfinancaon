@@ -129,9 +129,9 @@ function Consultas() {
         return (
           <Badge
             variant="outline"
-            className="bg-amber-50 text-amber-800 border-amber-300 font-bold px-3"
+            className="bg-blue-50 text-blue-700 border-blue-200 font-bold px-3"
           >
-            Requer verificação
+            Consultando
           </Badge>
         );
       case "cancelada":
@@ -162,7 +162,7 @@ function Consultas() {
             variant="outline"
             className="bg-yellow-50 text-yellow-700 border-yellow-200 font-bold px-3"
           >
-            Na fila
+            Consultando
           </Badge>
         );
     }

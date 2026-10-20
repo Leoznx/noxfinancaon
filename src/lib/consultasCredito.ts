@@ -484,5 +484,5 @@ export const LABEL_STATUS_CONSULTA: Record<StatusExibicaoConsulta, string> = {
   aguardando_servico_externo: "Aguardando serviço externo",
   aguardando_resultado: "Aguardando resultado",
   processando: "Consultando",
-  pendente: "Na fila",
+  pendente: "Consultando",
 };

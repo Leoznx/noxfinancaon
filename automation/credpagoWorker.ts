@@ -1822,6 +1822,7 @@ async function processarConsulta(
         };
         try {
           await submitSimulation(executionPage, {
+            hasSubmissionStarted: () => clickObserver.hasStarted(),
             onBeforeClick: async () => {
               tracking = await prepararCancelamentoAntesDoEnvio(
                 submissionToken,

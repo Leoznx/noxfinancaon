@@ -61,10 +61,10 @@ const STATUS_UI: Record<
     Icon: AlertTriangle,
   },
   requer_verificacao: {
-    label: "Verificação necessária",
-    className: "bg-amber-50 border-amber-300 text-amber-950",
-    iconClassName: "text-amber-600",
-    Icon: AlertTriangle,
+    label: "Consultando crédito",
+    className: "bg-blue-50 border-blue-200 text-blue-900",
+    iconClassName: "text-blue-600",
+    Icon: Clock,
   },
   cancelada: {
     label: "Cancelada sem envio",
@@ -97,9 +97,9 @@ const STATUS_UI: Record<
     Icon: Clock,
   },
   pendente: {
-    label: "Na fila",
-    className: "bg-yellow-50 border-yellow-200 text-yellow-900",
-    iconClassName: "text-yellow-600",
+    label: "Consultando crédito",
+    className: "bg-blue-50 border-blue-200 text-blue-900",
+    iconClassName: "text-blue-600",
     Icon: Clock,
   },
 };

@@ -144,6 +144,11 @@ async function locateField(
 type ClickButtonOptions = {
   onBeforeClick?: () => void | Promise<void>;
   onAfterClick?: () => void | Promise<void>;
+  /**
+   * Permite encerrar imediatamente a espera pelo modal intermediário quando a
+   * versão do portal envia a análise já no primeiro clique.
+   */
+  hasSubmissionStarted?: () => boolean;
 };
 
 async function clickButtonByText(
@@ -579,7 +584,30 @@ export async function submitSimulation(
   options: ClickButtonOptions = {},
 ): Promise<void> {
   try {
-    await clickButtonByText(page, [SUBMIT_CREDIT_BUTTON_PATTERN], options);
+    await clickButtonByText(page, [SUBMIT_CREDIT_BUTTON_PATTERN], {
+      onBeforeClick: options.onBeforeClick,
+      onAfterClick: async () => {
+        // A tela publicada pela Loft em 20/10/2026 não envia mais a análise no
+        // primeiro clique. Ela abre o modal "Quase lá" e só dispara o POST depois
+        // de "Continuar". O observer de rede já está ativo neste ponto; portanto,
+        // confirmamos o modal antes de entregar o controle ao worker.
+        const continuar = page.getByRole("button", { name: /^continuar(?:\s|$)/i }).first();
+        const deadline = Date.now() + 1_500;
+        do {
+          if (options.hasSubmissionStarted?.()) break;
+          const visivel =
+            (await continuar.count().catch(() => 0)) > 0 &&
+            (await continuar.isVisible().catch(() => false));
+          if (visivel && (await continuar.isEnabled().catch(() => false))) {
+            await continuar.click();
+            break;
+          }
+          await page.waitForTimeout(50);
+        } while (Date.now() < deadline);
+
+        await options.onAfterClick?.();
+      },
+    });
   } catch (error) {
     if (
       error instanceof Error &&

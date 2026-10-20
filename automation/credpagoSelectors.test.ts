@@ -205,6 +205,41 @@ test("envia pelo botão Fazer análise sem clicar no texto explicativo que cont�
   await page.close();
 });
 
+test("confirma o modal Quase lá antes de considerar a simulação enviada", async () => {
+  const url = "https://app.loft.com.br/erp/proposta/analise-de-credito";
+  const page = await pageWithHtml(
+    url,
+    `<main>
+      <button id="analisar" type="button">Fazer análise</button>
+      <script>
+        document.querySelector('#analisar').addEventListener('click', () => {
+          const dialog = document.createElement('div');
+          dialog.setAttribute('role', 'dialog');
+          dialog.innerHTML = '<h2>Quase lá</h2>';
+          const continuar = document.createElement('button');
+          continuar.type = 'button';
+          continuar.textContent = 'Continuar →';
+          continuar.addEventListener('click', () => { document.body.dataset.submitted = 'true'; });
+          dialog.appendChild(continuar);
+          document.body.appendChild(dialog);
+        });
+      </script>
+    </main>`,
+  );
+  let afterClickSawSubmission = false;
+
+  await submitSimulation(page, {
+    onAfterClick: async () => {
+      afterClickSawSubmission =
+        (await page.locator("body").getAttribute("data-submitted")) === "true";
+    },
+  });
+
+  assert.equal(afterClickSawSubmission, true);
+  assert.equal(await page.locator("body").getAttribute("data-submitted"), "true");
+  await page.close();
+});
+
 test("envia pelo botão Iniciar análise usado na versão atual do portal", async () => {
   const url = "https://app.loft.com.br/erp/proposta/analise-de-credito";
   const page = await pageWithHtml(

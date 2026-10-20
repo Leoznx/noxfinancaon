@@ -52,8 +52,12 @@ export function resolveCreditStatusPresentation(
   if (decision === "em_analise") return "em_analise";
 
   if (technicalStatus === "cancelled" || status === "cancelada") return "cancelada";
+  // `requires_verification` é uma quarentena técnica para impedir reenvio
+  // duplicado. Não é uma decisão da Loft e não pode virar uma tela final para o
+  // cliente; enquanto a reconciliação acontece, a experiência continua como
+  // consulta em andamento.
   if (technicalStatus === "requires_verification" || status === "requer_verificacao") {
-    return "requer_verificacao";
+    return "aguardando_resultado";
   }
   if (technicalStatus === "technical_failure" || status === "erro") return "erro";
 

@@ -24,7 +24,7 @@ test("exibe o estado operacional real sem fabricar Em análise", () => {
   assert.equal(resolveCreditStatusPresentation({ status: "erro" }), "erro");
   assert.equal(
     resolveCreditStatusPresentation({ status: "requer_verificacao" }),
-    "requer_verificacao",
+    "aguardando_resultado",
   );
   assert.equal(
     resolveCreditStatusPresentation({ status: "aprovado", resultado: "erro" }),

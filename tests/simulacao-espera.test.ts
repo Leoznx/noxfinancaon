@@ -74,10 +74,10 @@ test("só abre o status quando existe decisão real do provedor", () => {
   );
 });
 
-test("estados finais de acompanhamento abrem o status com o motivo real", () => {
+test("quarentena técnica continua aguardando e cancelamento abre o status", () => {
   assert.deepEqual(
     proximoPassoSimulacao({ status: "requer_verificacao", technical_status: "requires_verification" }),
-    { tipo: "abrir_status" },
+    { tipo: "aguardar" },
   );
   assert.deepEqual(
     proximoPassoSimulacao({ status: "cancelada", technical_status: "cancelled" }),
