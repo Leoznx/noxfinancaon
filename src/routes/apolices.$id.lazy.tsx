@@ -123,7 +123,6 @@ function ApoliceDetalhe() {
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
-  const [refreshKey, setRefreshKey] = useState(0);
   const [replacingDocument, setReplacingDocument] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -264,7 +263,7 @@ function ApoliceDetalhe() {
     }
     load();
     return () => { cancelled = true; };
-  }, [id, refreshKey]);
+  }, [id]);
 
   if (loading) {
     return (
@@ -419,22 +418,28 @@ function ApoliceDetalhe() {
       }
       if (uploadError) throw uploadError;
 
-      // Marca o contrato como assinado (document_subtype deixa de ser
-      // "pendente_assinatura"), para que o botao "Enviar contrato com assinatura"
-      // suma apos o unico envio permitido.
-      const { error: updateError } = await (supabase.from("documentos_proposta") as any)
-        .update({
-          file_name: file.name,
-          file_url: path,
-          file_type: file.type,
-          uploaded_by: userId,
-          document_subtype: "assinado_imobiliaria",
-        })
-        .eq("id", contratoLocacao.id);
+      const { data: replacedData, error: updateError } = await (supabase as any).rpc(
+        "replace_unsigned_lease_document",
+        {
+          p_document_id: contratoLocacao.id,
+          p_file_name: file.name,
+          p_file_url: path,
+          p_file_type: file.type,
+        },
+      );
       if (updateError) throw updateError;
 
-      toast.success("Contrato assinado enviado. Essa acao so pode ser feita uma vez.");
-      setRefreshKey((value) => value + 1);
+      const replacedDocument = (Array.isArray(replacedData) ? replacedData[0] : replacedData) as
+        | ContractDocument
+        | null;
+      if (!replacedDocument?.id) throw new Error("O contrato foi enviado, mas não pôde ser confirmado.");
+
+      setDocumentosProposta((current) => current.map((document) => (
+        document.id === replacedDocument.id
+          ? { ...document, ...replacedDocument }
+          : document
+      )));
+      toast.success("Contrato assinado enviado e atualizado.");
     } catch (error: any) {
       toast.error(error?.message || "Não foi possível atualizar o contrato.");
     } finally {
