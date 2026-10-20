@@ -123,7 +123,7 @@ export async function simularLoftDireto(
         automation_step: "api_direta",
         automation_started_at: new Date().toISOString(),
         automation_finished_at: new Date().toISOString(),
-      })
+      } as any)
       .eq("id", consultaId);
 
     return {
@@ -137,16 +137,20 @@ export async function simularLoftDireto(
   } catch (error) {
     console.error("Erro na simulação direta:", error);
 
-    // Marcar erro no banco
-    await supabase
-      .from("consultas_credito")
-      .update({
-        status: "erro",
-        error_message: error instanceof Error ? error.message : "Erro desconhecido",
-        automation_finished_at: new Date().toISOString(),
-      })
-      .eq("id", consultaId);
-
+    // Marcar erro no banco para diagnóstico, mas deixar o erro propagar
+    // para o frontend exibir no modal (sem cair na fila do Playwright).
+    try {
+      await supabase
+        .from("consultas_credito")
+        .update({
+          status: "erro",
+          error_message: error instanceof Error ? error.message : "Erro desconhecido",
+          automation_finished_at: new Date().toISOString(),
+        } as any)
+        .eq("id", consultaId);
+    } catch {
+      // Falha ao marcar erro no banco não pode impedir a exibição do erro real.
+    }
     throw error;
   }
 }
