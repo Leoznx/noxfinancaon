@@ -3,6 +3,8 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const workerUrl = new URL("./credpagoWorker.ts", import.meta.url);
+const envUrl = new URL("./env.ts", import.meta.url);
+const composeUrl = new URL("./docker-compose.yml", import.meta.url);
 const migrationUrl = new URL(
   "../supabase/migrations/20261013233000_allow_causal_reused_loft_proposal.sql",
   import.meta.url,
@@ -80,13 +82,20 @@ test("prioriza cancelamentos vencidos antes de reconciliar submissões mais nova
   assert.match(worker, /reconcilia\[cç\]\[aã\]o\\s\+necess\[aá\]ria/);
 });
 
-test("serializa o snapshot na sessão e evita reabrir a lista durante a estabilização", async () => {
-  const worker = await readFile(workerUrl, "utf8");
+test("serializa o snapshot na sessão com prazo curto e isolado", async () => {
+  const [worker, environment, compose] = await Promise.all([
+    readFile(workerUrl, "utf8"),
+    readFile(envUrl, "utf8"),
+    readFile(composeUrl, "utf8"),
+  ]);
 
   const snapshot = worker.indexOf("? await iniciarSnapshotPropostas()");
   const fill = worker.indexOf("await fillPessoa(", snapshot);
   assert.ok(snapshot >= 0 && fill > snapshot);
   assert.match(worker, /snapshotDesteClique/);
+  assert.match(worker, /env\.loftCancellationSnapshotTimeoutMs/);
+  assert.match(environment, /"LOFT_CANCELLATION_SNAPSHOT_TIMEOUT_MS",\s*15_000,\s*3_000/);
+  assert.match(compose, /LOFT_CANCELLATION_SNAPSHOT_TIMEOUT_MS:[^\n]*15000/);
   assert.match(worker, /proximaReconciliacaoLoftEm\.set\(job\.id/);
   assert.doesNotMatch(
     worker,

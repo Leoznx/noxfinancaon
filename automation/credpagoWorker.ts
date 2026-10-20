@@ -1625,7 +1625,7 @@ async function processarConsulta(
             knownProposalIds = await listLoftProposalIdsForDocument(
               snapshotPage,
               consulta.documento || consulta.tenant_document || "",
-              env.loftCancellationRequestTimeoutMs,
+              env.loftCancellationSnapshotTimeoutMs,
             );
             lastSnapshotError = null;
             break;

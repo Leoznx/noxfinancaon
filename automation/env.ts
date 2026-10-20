@@ -173,6 +173,16 @@ export const env = {
     45_000,
     3_000,
   ),
+  /**
+   * O snapshot anterior ao envio roda em paralelo ao preenchimento e pode ser
+   * repetido uma vez. Um limite curto evita que uma lista lenta acrescente 45s
+   * inteiros à simulação sem reduzir o prazo das operações de cancelamento.
+   */
+  loftCancellationSnapshotTimeoutMs: positiveNumber(
+    "LOFT_CANCELLATION_SNAPSHOT_TIMEOUT_MS",
+    15_000,
+    3_000,
+  ),
   /** Prazo total externo para navegação, autenticação e probe da tela de cancelamento. */
   loftCancellationValidationTimeoutMs: positiveNumber(
     "LOFT_CANCELLATION_VALIDATION_TIMEOUT_MS",

@@ -67,6 +67,7 @@ LOFT_CANCELLATION_REASON="Inquilino desistiu do aluguel"
 LOFT_CANCELLATION_COMMENT=""
 LOFT_CANCELLATION_DELAY_MS=1800000
 LOFT_CANCELLATION_REQUEST_TIMEOUT_MS=45000
+LOFT_CANCELLATION_SNAPSHOT_TIMEOUT_MS=15000
 LOFT_CANCELLATION_VALIDATION_TIMEOUT_MS=120000
 LOFT_CANCELLATION_OPERATION_TIMEOUT_MS=240000
 ```
@@ -85,6 +86,8 @@ não criar propostas sem rastreamento; jobs pendentes nunca são descartados.
 
 Quando o cancelamento é obrigatório, uma simulação só é enviada depois que o snapshot e o job
 forem persistidos. Se essa preparação falhar, o clique no portal não acontece.
+O snapshot usa um limite próprio e curto, com uma única repetição segura; as operações de
+cancelamento continuam usando o prazo maior de `LOFT_CANCELLATION_REQUEST_TIMEOUT_MS`.
 
 ## Alternativa: API homologada
 
