@@ -198,7 +198,13 @@ export async function prefetchDashboardDataForHref(
   user: DashboardNavigationUser,
 ): Promise<void> {
   const pathname = href.split("?")[0].replace(/\/$/, "") || "/";
-  if (pathname === "/consultas") {
+  if (pathname === "/dashboard" && user.role === "imobiliaria") {
+    const { loadImobiliariaDashboard } = await import("@/lib/imobiliaria-dashboard");
+    await loadImobiliariaDashboard(user.id, user.email);
+  } else if (pathname === "/dashboard" && user.role === "corretor") {
+    const { loadCorretorDashboard } = await import("@/lib/imobiliaria-dashboard");
+    await loadCorretorDashboard(user.id);
+  } else if (pathname === "/consultas") {
     await loadDashboardConsultations(user);
   } else if (pathname === "/apolices") {
     await loadDashboardPolicies(user);

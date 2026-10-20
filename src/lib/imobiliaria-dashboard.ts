@@ -1,5 +1,11 @@
 import { supabase } from "@/integrations/supabase/client";
 import { CONSULTA_STATUS_PENDENTE } from "@/lib/dashboard-stats";
+import { loadSessionResource, peekSessionResource } from "@/lib/session-resource-cache";
+
+const DASHBOARD_CACHE_MAX_AGE_MS = 60_000;
+
+const agencyDashboardKey = (profileId: string) => `dashboard:${profileId}:imobiliaria`;
+const brokerDashboardKey = (profileId: string) => `dashboard:${profileId}:corretor`;
 
 export type ImobiliariaDashboardMonth = {
   key: string;
@@ -163,7 +169,7 @@ function monthRange(count = 12) {
 async function resolveAgency(profileId: string, email: string) {
   const { data: agency, error: agencyError } = await supabase
     .from("imobiliarias")
-    .select("id, razao_social, nome_fantasia")
+    .select("id, razao_social, nome_fantasia, corretores(profile_id)")
     .ilike("contato_email", email)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -171,15 +177,8 @@ async function resolveAgency(profileId: string, email: string) {
   if (agencyError) throw agencyError;
 
   const profileIds = [profileId];
-  if (agency?.id) {
-    const { data: brokers, error: brokersError } = await supabase
-      .from("corretores")
-      .select("profile_id")
-      .eq("imobiliaria_id", agency.id);
-    if (brokersError) throw brokersError;
-    for (const broker of brokers ?? []) {
-      if (broker.profile_id && !profileIds.includes(broker.profile_id)) profileIds.push(broker.profile_id);
-    }
+  for (const broker of agency?.corretores ?? []) {
+    if (broker.profile_id && !profileIds.includes(broker.profile_id)) profileIds.push(broker.profile_id);
   }
 
   return {
@@ -198,7 +197,10 @@ export async function fetchImobiliariaDashboard(
     : await resolveAgency(profileId, email);
   const monthsBase = monthRange(12);
 
-  const [consultationsResult, commissionsResult] = await Promise.all([
+  // Todas as colecoes independentes saem na mesma rodada de rede. Os joins
+  // internos preservam exatamente o escopo da imobiliaria/corretor e evitam a
+  // antiga cascata consultas -> apolices -> documentos/faturas.
+  const [consultationsResult, commissionsResult, policiesResult, documentsResult, invoicesResult] = await Promise.all([
     supabase
       .from("consultas_credito")
       .select(`
@@ -214,46 +216,34 @@ export async function fetchImobiliariaDashboard(
       .select("id, valor, status, created_at, contrato_id")
       .in("beneficiario_id", profileIds)
       .order("created_at", { ascending: false }),
+    supabase
+      .from("apolices")
+      .select("id, numero, status, created_at, consulta_id, consulta:consultas_credito!inner(profile_id_solicitante)")
+      .in("consulta.profile_id_solicitante", profileIds)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("documentos_contrato")
+      .select("id, apolice_id, tipo, status, created_at, apolice:apolices!inner(consulta:consultas_credito!inner(profile_id_solicitante))")
+      .in("apolice.consulta.profile_id_solicitante", profileIds)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("faturas_inquilino")
+      .select("id, consulta_id, numero_parcela, valor, vencimento, status, consulta:consultas_credito!inner(profile_id_solicitante)")
+      .in("consulta.profile_id_solicitante", profileIds)
+      .order("vencimento", { ascending: true }),
   ]);
   if (consultationsResult.error) throw consultationsResult.error;
   if (commissionsResult.error) throw commissionsResult.error;
+  if (policiesResult.error) throw policiesResult.error;
+  if (documentsResult.error) throw documentsResult.error;
+  if (invoicesResult.error) throw invoicesResult.error;
 
   const consultations = (consultationsResult.data ?? []) as any[];
   const commissions = (commissionsResult.data ?? []) as any[];
-  const consultationIds = consultations.map((row) => row.id);
-
-  const policiesResult = consultationIds.length
-    ? await supabase
-        .from("apolices")
-        .select("id, numero, status, created_at, consulta_id")
-        .in("consulta_id", consultationIds)
-        .order("created_at", { ascending: false })
-    : { data: [], error: null };
-  if (policiesResult.error) throw policiesResult.error;
   const policies = (policiesResult.data ?? []) as any[];
-  const policyIds = policies.map((row) => row.id);
   const policyConsultationIds = new Set<string>(
     policies.map((row) => row.consulta_id).filter((id): id is string => Boolean(id)),
   );
-
-  const [documentsResult, invoicesResult] = await Promise.all([
-    policyIds.length
-      ? supabase
-          .from("documentos_contrato")
-          .select("id, apolice_id, tipo, status, created_at")
-          .in("apolice_id", policyIds)
-          .order("created_at", { ascending: false })
-      : Promise.resolve({ data: [], error: null }),
-    consultationIds.length
-      ? supabase
-          .from("faturas_inquilino")
-          .select("id, consulta_id, numero_parcela, valor, vencimento, status")
-          .in("consulta_id", consultationIds)
-          .order("vencimento", { ascending: true })
-      : Promise.resolve({ data: [], error: null }),
-  ]);
-  if (documentsResult.error) throw documentsResult.error;
-  if (invoicesResult.error) throw invoicesResult.error;
 
   const consultationById = new Map(consultations.map((row) => [row.id, row]));
   const policyById = new Map(policies.map((row) => [row.id, row]));
@@ -405,6 +395,34 @@ export function fetchCorretorDashboard(profileId: string) {
     profileIds: [profileId],
     dashboardName: "Seu desempenho",
   });
+}
+
+export function peekImobiliariaDashboard(profileId: string) {
+  return peekSessionResource<ImobiliariaDashboardData>(agencyDashboardKey(profileId));
+}
+
+export function loadImobiliariaDashboard(
+  profileId: string,
+  email: string,
+  force = false,
+) {
+  return loadSessionResource(
+    agencyDashboardKey(profileId),
+    () => fetchImobiliariaDashboard(profileId, email),
+    { force, maxAgeMs: DASHBOARD_CACHE_MAX_AGE_MS },
+  );
+}
+
+export function peekCorretorDashboard(profileId: string) {
+  return peekSessionResource<ImobiliariaDashboardData>(brokerDashboardKey(profileId));
+}
+
+export function loadCorretorDashboard(profileId: string, force = false) {
+  return loadSessionResource(
+    brokerDashboardKey(profileId),
+    () => fetchCorretorDashboard(profileId),
+    { force, maxAgeMs: DASHBOARD_CACHE_MAX_AGE_MS },
+  );
 }
 
 export function formatCurrency(value: number) {

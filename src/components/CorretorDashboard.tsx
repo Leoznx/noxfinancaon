@@ -27,11 +27,13 @@ import { useCallback, useEffect, useMemo, useState, type ComponentType } from "r
 import { useEssentialLoading } from "@/components/GlobalLoading";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  fetchCorretorDashboard,
   formatCurrency,
+  loadCorretorDashboard,
+  peekCorretorDashboard,
   type ImobiliariaDashboardData,
 } from "@/lib/imobiliaria-dashboard";
-import { fetchNivelInfo, type NivelInfo } from "@/lib/niveis-parceria";
+import { getCachedNivelInfo, loadNivelInfo } from "@/lib/nivel-cache";
+import type { NivelInfo } from "@/lib/niveis-parceria";
 
 type Icon = ComponentType<{ className?: string; size?: number; strokeWidth?: number }>;
 
@@ -52,20 +54,21 @@ function levelBadge(level: string) {
 }
 
 export function CorretorDashboard({ profileId }: { profileId: string }) {
-  const [data, setData] = useState<ImobiliariaDashboardData | null>(null);
-  const [nivel, setNivel] = useState<NivelInfo | null>(null);
-  const [loading, setLoading] = useState(true);
+  const cachedDashboard = peekCorretorDashboard(profileId);
+  const [data, setData] = useState<ImobiliariaDashboardData | null>(() => cachedDashboard ?? null);
+  const [nivel, setNivel] = useState<NivelInfo | null>(() => getCachedNivelInfo(profileId) ?? null);
+  const [loading, setLoading] = useState(cachedDashboard === undefined);
   const [error, setError] = useState<string | null>(null);
   const [chartPeriod, setChartPeriod] = useState(6);
 
   useEssentialLoading(loading && !data);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (force = false) => {
     setError(null);
     try {
       const [dashboardData, levelData] = await Promise.all([
-        fetchCorretorDashboard(profileId),
-        fetchNivelInfo(profileId, "corretor"),
+        loadCorretorDashboard(profileId, force),
+        loadNivelInfo(profileId, "corretor"),
       ]);
       setData(dashboardData);
       setNivel(levelData);
@@ -78,18 +81,18 @@ export function CorretorDashboard({ profileId }: { profileId: string }) {
   }, [profileId]);
 
   useEffect(() => {
-    void load();
-    const onFocus = () => void load();
-    window.addEventListener("focus", onFocus);
+    void load(false);
+    const refresh = () => void load(true);
+    window.addEventListener("focus", refresh);
     const channel = supabase
       .channel(`broker-dashboard-live-${profileId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "consultas_credito" }, onFocus)
-      .on("postgres_changes", { event: "*", schema: "public", table: "apolices" }, onFocus)
-      .on("postgres_changes", { event: "*", schema: "public", table: "comissoes" }, onFocus)
-      .on("postgres_changes", { event: "*", schema: "public", table: "faturas_inquilino" }, onFocus)
+      .on("postgres_changes", { event: "*", schema: "public", table: "consultas_credito" }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "apolices" }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "comissoes" }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "faturas_inquilino" }, refresh)
       .subscribe();
     return () => {
-      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("focus", refresh);
       void supabase.removeChannel(channel);
     };
   }, [load, profileId]);
@@ -101,8 +104,8 @@ export function CorretorDashboard({ profileId }: { profileId: string }) {
     return { commission: current.comissoes, contracts: current.contratos, ticket };
   }, [data]);
 
-  if (loading) return <DashboardSkeleton />;
-  if (error || !data || !overview)
+  if (loading && !data) return <DashboardSkeleton />;
+  if (!data || !overview)
     return <DashboardError message={error ?? "Dados indisponíveis."} onRetry={load} />;
 
   const months = data.months.slice(-chartPeriod);

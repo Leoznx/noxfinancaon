@@ -33,25 +33,27 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  fetchImobiliariaDashboard,
   formatCurrency,
+  loadImobiliariaDashboard,
+  peekImobiliariaDashboard,
   type ImobiliariaDashboardData,
 } from "@/lib/imobiliaria-dashboard";
 
 type Icon = ComponentType<{ className?: string; size?: number; strokeWidth?: number }>;
 
 export function ImobiliariaDashboard({ profileId, email }: { profileId: string; email: string }) {
-  const [data, setData] = useState<ImobiliariaDashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const cachedDashboard = peekImobiliariaDashboard(profileId);
+  const [data, setData] = useState<ImobiliariaDashboardData | null>(() => cachedDashboard ?? null);
+  const [loading, setLoading] = useState(cachedDashboard === undefined);
   const [error, setError] = useState<string | null>(null);
   const [chartPeriod, setChartPeriod] = useState("6");
 
   useEssentialLoading(loading && !data);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (force = false) => {
     setError(null);
     try {
-      const dashboardData = await fetchImobiliariaDashboard(profileId, email);
+      const dashboardData = await loadImobiliariaDashboard(profileId, email, force);
       setData(dashboardData);
     } catch (cause) {
       const failure = cause as { message?: string; details?: string; hint?: string; code?: string };
@@ -65,45 +67,45 @@ export function ImobiliariaDashboard({ profileId, email }: { profileId: string; 
   }, [email, profileId]);
 
   useEffect(() => {
-    void load();
-    const onFocus = () => void load();
-    window.addEventListener("focus", onFocus);
+    void load(false);
+    const refresh = () => void load(true);
+    window.addEventListener("focus", refresh);
     const channel = supabase
       .channel(`agency-dashboard-live-${profileId}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "consultas_credito" },
-        () => void load(),
+        refresh,
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "apolices" },
-        () => void load(),
+        refresh,
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "comissoes" },
-        () => void load(),
+        refresh,
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "documentos_contrato" },
-        () => void load(),
+        refresh,
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "faturas_inquilino" },
-        () => void load(),
+        refresh,
       )
       .subscribe();
     return () => {
-      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("focus", refresh);
       void supabase.removeChannel(channel);
     };
   }, [load, profileId]);
 
-  if (loading) return <DashboardSkeleton />;
-  if (error || !data)
+  if (loading && !data) return <DashboardSkeleton />;
+  if (!data)
     return <DashboardError message={error ?? "Dados indisponíveis."} onRetry={load} />;
 
   const displayedMonths = data.months.slice(-Number(chartPeriod));
