@@ -89,6 +89,7 @@ const PRIORITY_DASHBOARD_ROUTES = new Set([
   "/consultas",
   "/apolices",
   "/faturas-inquilinos",
+  "/carteira-cobrancas",
   "/plano-carreira",
 ]);
 

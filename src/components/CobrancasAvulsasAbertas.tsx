@@ -54,7 +54,7 @@ export function CobrancasAvulsasAbertas() {
     const [pagamentosRes, faturasRes] = await Promise.all([
       (supabase as any)
         .from("asaas_payments")
-        .select("*, consulta:consultas_credito(tenant_name)")
+        .select("id, consultation_id, asaas_payment_id, payment_method, status, value, due_date, pix_copy_paste, boleto_url, boleto_barcode, external_reference, payment_responsible, recipient_name, confirmed_at, received_at, created_at, consulta:consultas_credito(tenant_name)")
         .order("created_at", { ascending: false }),
       supabase.from("faturas_inquilino").select("asaas_payment_id"),
     ]);

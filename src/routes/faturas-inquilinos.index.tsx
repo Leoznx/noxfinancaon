@@ -3,7 +3,7 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useAuth } from "@/components/AuthProvider";
-import { loadTenantInvoiceSummaries, peekTenantInvoiceSummaries, type TenantInvoiceSummary } from "@/lib/tenant-invoice-summary";
+import { fetchTenantInvoiceSummariesPage, loadTenantInvoiceSummaries, peekTenantInvoiceSummaries, type TenantInvoiceSummary } from "@/lib/tenant-invoice-summary";
 import { useCallback, useEffect, useState } from "react";
 import { Receipt, Eye, AlertCircle, RefreshCw } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -30,15 +30,22 @@ function FaturasInquilinosLista() {
   const { user } = useAuth();
   const userId = user?.id;
   const cached = userId ? peekTenantInvoiceSummaries(userId) : undefined;
-  const [linhas, setLinhas] = useState<TenantInvoiceSummary[]>(() => cached ?? []);
+  const [linhas, setLinhas] = useState<TenantInvoiceSummary[]>(() => cached?.rows ?? []);
+  const [nextOffset, setNextOffset] = useState(cached?.rows.length ?? 0);
+  const [hasMore, setHasMore] = useState(cached?.hasMore ?? false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [loading, setLoading] = useState(cached === undefined);
   const [erro, setErro] = useState<string | null>(null);
 
   const load = useCallback(async (force = false) => {
     if (!userId) return;
+    setLoading(true);
     setErro(null);
     try {
-      setLinhas(await loadTenantInvoiceSummaries(userId, force));
+      const page = await loadTenantInvoiceSummaries(userId, force);
+      setLinhas(page.rows);
+      setNextOffset(page.rows.length);
+      setHasMore(page.hasMore);
     } catch (e: any) {
       setErro(e.message || "Erro ao carregar faturas");
     } finally {
@@ -49,6 +56,22 @@ function FaturasInquilinosLista() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  async function loadMore() {
+    if (!hasMore || loadingMore) return;
+    setLoadingMore(true);
+    setErro(null);
+    try {
+      const page = await fetchTenantInvoiceSummariesPage(nextOffset);
+      setLinhas((current) => Array.from(new Map([...current, ...page.rows].map((row) => [row.apolice_id, row])).values()));
+      setNextOffset((current) => current + page.rows.length);
+      setHasMore(page.hasMore);
+    } catch (cause) {
+      setErro(cause instanceof Error ? cause.message : "Não foi possível carregar mais faturas.");
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   return (
     <DashboardLayout>
@@ -190,6 +213,12 @@ function FaturasInquilinosLista() {
                 </Card>
               ))}
             </div>
+            {hasMore && (
+              <Button onClick={() => void loadMore()} disabled={loadingMore} variant="outline" className="w-full rounded-xl font-bold">
+                {loadingMore ? "Carregando mais faturas…" : erro ? "Tentar carregar mais" : "Carregar mais faturas"}
+              </Button>
+            )}
+            {erro && <p role="alert" className="text-center text-sm text-red-700">{erro}</p>}
           </>
         )}
       </div>

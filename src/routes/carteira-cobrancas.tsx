@@ -1,11 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useEssentialLoading } from "@/components/GlobalLoading";
 import { CobrancasAvulsasAbertas } from "@/components/CobrancasAvulsasAbertas";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useAuth } from "@/components/AuthProvider";
 import { supabase } from "@/integrations/supabase/client";
+import { loadCarteiraCobrancas, peekCarteiraCobrancas } from "@/lib/carteira-cobrancas-data";
 import {
   Wallet,
   Search,
@@ -49,7 +50,6 @@ import {
 } from "@/lib/asaas-payment";
 import { manageAsaasSubscription, managePersistedAsaasPayment } from "@/lib/asaas-checkout";
 import {
-  fetchOwnConsolidatedBatches,
   reissuePayment,
   type ConsolidatedBillingBatch,
 } from "@/lib/automated-billing";
@@ -103,9 +103,12 @@ type Contrato = {
 
 function CarteiraCobrancas() {
   const { user } = useAuth();
-  const [faturas, setFaturas] = useState<any[]>([]);
-  const [batches, setBatches] = useState<ConsolidatedBillingBatch[]>([]);
-  const [loading, setLoading] = useState(true);
+  const userId = user?.id;
+  const isAgency = user?.role === "imobiliaria";
+  const cached = userId ? peekCarteiraCobrancas(userId, isAgency) : undefined;
+  const [faturas, setFaturas] = useState<any[]>(() => cached?.faturas ?? []);
+  const [batches, setBatches] = useState<ConsolidatedBillingBatch[]>(() => cached?.batches ?? []);
+  const [loading, setLoading] = useState(cached === undefined);
   useEssentialLoading(loading && faturas.length === 0 && batches.length === 0);
   const [busca, setBusca] = useState("");
   const [statusFiltro, setStatusFiltro] = useState("todos");
@@ -120,49 +123,31 @@ function CarteiraCobrancas() {
   const [acaoId, setAcaoId] = useState<string | null>(null);
   const [reissuingBatch, setReissuingBatch] = useState<string | null>(null);
 
-  async function carregar() {
-    setLoading(true);
+  const carregar = useCallback(async (force = true) => {
+    if (!userId) return;
+    if (!peekCarteiraCobrancas(userId, isAgency)) setLoading(true);
     try {
-      const [invoiceResult, batchRows, subscriptionResult] = await Promise.all([
-        supabase
-          .from("faturas_inquilino")
-          .select(
-            `*, consulta:consultas_credito(
-            id, tenant_name,
-            inquilino:inquilinos(nome, cpf, cnpj, razao_social),
-            imovel:imoveis(endereco, cidade, estado)
-          ), asaas_payment:asaas_payments(*), notifications:financial_notifications(*)`,
-          )
-          .order("numero_parcela", { ascending: true }),
-        fetchOwnConsolidatedBatches(),
-        (supabase as any)
-          .from("asaas_subscriptions")
-          .select("*")
-          .order("created_at", { ascending: false }),
-      ]);
-      if (invoiceResult.error) throw invoiceResult.error;
-      if (subscriptionResult.error) throw subscriptionResult.error;
-      const subscriptions = new Map<string, any>();
-      for (const subscription of subscriptionResult.data ?? []) {
-        if (!subscriptions.has(subscription.consultation_id)) {
-          subscriptions.set(subscription.consultation_id, subscription);
-        }
-      }
-      setFaturas(
-        (invoiceResult.data ?? []).map((invoice: any) => ({
-          ...invoice,
-          asaas_subscription: subscriptions.get(invoice.consulta_id) || null,
-        })),
-      );
-      setBatches(batchRows);
+      const data = await loadCarteiraCobrancas(userId, isAgency, force);
+      setFaturas(data.faturas);
+      setBatches(data.batches);
+    } catch (cause) {
+      console.error("[CarteiraCobrancas] erro ao carregar", cause);
+      throw cause;
     } finally {
       setLoading(false);
     }
-  }
+  }, [isAgency, userId]);
 
   useEffect(() => {
-    if (!user?.id) return;
-    carregar();
+    if (!userId) return;
+    void carregar(false).catch(() => toast.error("Não foi possível carregar a carteira de cobranças."));
+    let refreshTimer: number | undefined;
+    const scheduleRefresh = () => {
+      if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(() => {
+        void carregar(true).catch(() => undefined);
+      }, 350);
+    };
     // Sem filtro literal aqui de proposito: a carteira de um corretor/
     // imobiliaria depende de um JOIN em consultas_credito (dono ou
     // imobiliaria vinculada), nao de uma unica coluna igual em
@@ -171,29 +156,26 @@ function CarteiraCobrancas() {
     // realmente pode ver via SELECT (mesma fronteira de seguranca do fetch
     // acima), so refazendo a busca quando algo mudar.
     const channel = supabase
-      .channel(`carteira-cobrancas-realtime-${user.id}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "faturas_inquilino" }, () => {
-        carregar();
-      })
+      .channel(`carteira-cobrancas-realtime-${userId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "faturas_inquilino" }, scheduleRefresh)
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
           table: "consolidated_invoice_batches",
-          filter: `agency_user_id=eq.${user.id}`,
+          filter: `agency_user_id=eq.${userId}`,
         },
-        () => carregar(),
+        scheduleRefresh,
       )
-      .on("postgres_changes", { event: "*", schema: "public", table: "asaas_subscriptions" }, () =>
-        carregar(),
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "asaas_subscriptions" }, scheduleRefresh)
       .subscribe();
 
     return () => {
+      if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
       supabase.removeChannel(channel);
     };
-  }, [user?.id]);
+  }, [carregar, userId]);
 
   async function atualizarStatus(fatura: any) {
     const method = fatura.payment_method || fatura.asaas_payment?.payment_method;
