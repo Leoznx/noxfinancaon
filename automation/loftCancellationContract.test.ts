@@ -19,6 +19,10 @@ const stabilizationMigrationUrl = new URL(
   "../supabase/migrations/20261015193000_stabilize_credit_automation.sql",
   import.meta.url,
 );
+const scopedReconciliationMigrationUrl = new URL(
+  "../supabase/migrations/20261020203000_scope_loft_cancellation_reconciliation.sql",
+  import.meta.url,
+);
 
 test("usa uma RPC exclusiva para o ID causal devolvido pela submissão", async () => {
   const [worker, migration] = await Promise.all([
@@ -109,8 +113,30 @@ test("valida a autenticação antes de tocar a fila de cancelamentos", async () 
     loop.indexOf("await validarAutenticacao(") <
       loop.indexOf("if (env.loftCancellationEnabled && !cancelamentoEmAndamento"),
   );
-  assert.match(worker, /if \(reconciliacaoCancelamentoPendente\)[\s\S]*continue;/);
+  assert.match(worker, /if \(reconciliacaoCancelamentoBloqueante\)[\s\S]*continue;/);
   assert.match(worker, /error instanceof LoftCancellationQueueError/);
+});
+
+test("isola reconciliação confirmada por documento sem parar a fila global", async () => {
+  const [worker, migration] = await Promise.all([
+    readFile(workerUrl, "utf8"),
+    readFile(scopedReconciliationMigrationUrl, "utf8"),
+  ]);
+
+  assert.match(worker, /job\.status === "prepared" \|\| !job\.submitted_at/);
+  assert.match(worker, /"none" \| "blocking" \| "document_scoped"/);
+  assert.match(
+    worker,
+    /runtimeState\.cancellationExecution = blocksAllSubmissions \? "checking" : "ok"/,
+  );
+  assert.match(
+    migration,
+    /ambiguous_document\.document_value = consultation_document\.document_value/,
+  );
+  assert.match(migration, /ambiguous\.submitted_at IS NOT NULL/);
+  assert.match(migration, /ambiguous\.status IN \('scheduled', 'retry'\)/);
+  assert.match(migration, /proposal_id IS NULL[\s\S]*submitted_at IS NULL/);
+  assert.match(worker, /order\("submitted_at", \{ ascending: true, nullsFirst: true \}\)/);
 });
 
 test("não transforma falha terminal identificada em indisponibilidade global", async () => {

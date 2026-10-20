@@ -5,14 +5,7 @@ import { stdin, stdout } from "node:process";
 import http from "node:http";
 import { env } from "./env";
 import { supabaseAdmin } from "./supabaseAdmin";
-import {
-  formatErrorDetail,
-  log,
-  logAviso,
-  logErro,
-  logStructured,
-  maskDocumento,
-} from "./logger";
+import { formatErrorDetail, log, logAviso, logErro, logStructured, maskDocumento } from "./logger";
 import { BrowserSession } from "./browserSession";
 import {
   CredPagoAuthenticationError,
@@ -362,7 +355,10 @@ async function navegarParaPortal(page: Page, timeoutMs = 30_000): Promise<void> 
         );
       }
       // Há uma segunda tentativa logo abaixo: só um aviso, não um incidente.
-      logAviso(`Portal lento ou indisponível na navegação; nova tentativa ${tentativa + 1}/2`, error);
+      logAviso(
+        `Portal lento ou indisponível na navegação; nova tentativa ${tentativa + 1}/2`,
+        error,
+      );
       await sleep(1_000);
     }
   }
@@ -858,7 +854,7 @@ async function abortPreparedLoftCancellation(job: LoftCancellationJob): Promise<
 async function reconcilePendingLoftCancellation(
   context: BrowserContext,
   persistirSessao: () => Promise<void>,
-): Promise<boolean> {
+): Promise<"none" | "blocking" | "document_scoped"> {
   const { data, error } = await supabaseAdmin
     .from("loft_proposal_cancellations")
     .select(
@@ -866,6 +862,9 @@ async function reconcilePendingLoftCancellation(
     )
     .in("status", ["prepared", "scheduled", "retry"])
     .is("proposal_id", null)
+    // Um preparo sem POST confirmado nunca pode ficar escondido atrás de uma
+    // reconciliação já confirmada e isolável por documento.
+    .order("submitted_at", { ascending: true, nullsFirst: true })
     .order("created_at", { ascending: true })
     .limit(1);
   if (error) {
@@ -876,10 +875,18 @@ async function reconcilePendingLoftCancellation(
   }
   registrarSucessoFilaCancelamento();
   const job = Array.isArray(data) && data.length ? (data[0] as LoftCancellationJob) : null;
-  if (!job) return false;
+  if (!job) return "none";
+
+  // Um preparo ainda sem POST confirmado pode ter criado uma proposta sem que o
+  // worker tenha visto a requisição. Esse caso continua bloqueando globalmente
+  // por segurança. Depois que o POST foi confirmado, porém, a reconciliação é
+  // isolada pelo CPF/CNPJ no claim do banco: ela não pode mais segurar consultas
+  // de outros clientes durante todo o prazo de cancelamento.
+  const blocksAllSubmissions = job.status === "prepared" || !job.submitted_at;
+  const pendingDisposition = blocksAllSubmissions ? "blocking" : "document_scoped";
 
   const proximaVerificacao = proximaReconciliacaoLoftEm.get(job.id) ?? 0;
-  if (Date.now() < proximaVerificacao) return true;
+  if (Date.now() < proximaVerificacao) return pendingDisposition;
 
   const document = await loadLoftCancellationDocument(job);
   let page: Page | null = null;
@@ -920,9 +927,9 @@ async function reconcilePendingLoftCancellation(
         )
       ) {
         registrarSucessoFilaCancelamento();
-        runtimeState.cancellationExecution = "checking";
+        runtimeState.cancellationExecution = blocksAllSubmissions ? "checking" : "ok";
         proximaReconciliacaoLoftEm.set(job.id, Date.now() + RECONCILIATION_RETRY_MS);
-        return true;
+        return pendingDisposition;
       }
       await persistirSessao();
       if (job.status === "prepared") await abortPreparedLoftCancellation(job);
@@ -932,7 +939,7 @@ async function reconcilePendingLoftCancellation(
       log(
         "Job de cancelamento encerrado sem clique: nenhuma proposta nova apareceu após o prazo completo de reconciliação.",
       );
-      return true;
+      return "none";
     }
     if (resolution.kind === "already-terminal") {
       const submittedAt = Date.parse(job.submitted_at ?? job.created_at);
@@ -943,7 +950,7 @@ async function reconcilePendingLoftCancellation(
         registrarSucessoFilaCancelamento();
         runtimeState.cancellationExecution = "ok";
         proximaReconciliacaoLoftEm.set(job.id, submittedAt + 2 * 60_000);
-        return true;
+        return pendingDisposition;
       }
       await persistirSessao();
       await finishAlreadyTerminalLoftReconciliation(job);
@@ -954,7 +961,7 @@ async function reconcilePendingLoftCancellation(
       log(
         `Job de cancelamento concluído sem clique: ${resolution.proposalIds.length} propostas novas já estavam em estado terminal.`,
       );
-      return true;
+      return "none";
     }
     if (job.status === "prepared") {
       await reconcilePreparedLoftCancellation(job, resolution.proposalId);
@@ -965,7 +972,7 @@ async function reconcilePendingLoftCancellation(
     await persistirSessao();
     runtimeState.cancellationExecution = "ok";
     log("Job de cancelamento reconciliado com a única proposta nova encontrada após o envio.");
-    return true;
+    return "none";
   } finally {
     runtimeState.cancellationOperationStartedAt = null;
     await (page as Page | null)?.close().catch(() => {});
@@ -2789,7 +2796,7 @@ async function loop(once: boolean): Promise<void> {
       // O modo portal usa o mesmo BrowserContext da simulação. Só inicia um
       // cancelamento quando nenhuma consulta está usando a sessão e não retira
       // novas consultas enquanto a tela de propostas estiver em uso.
-      let reconciliacaoCancelamentoPendente = false;
+      let reconciliacaoCancelamentoBloqueante = false;
       if (env.loftCancellationEnabled && !cancelamentoEmAndamento && emAndamento.size === 0) {
         runtimeState.activeCancellation = true;
         try {
@@ -2818,16 +2825,20 @@ async function loop(once: boolean): Promise<void> {
             });
             cancelamentoEmAndamento = task;
           } else {
-            const encontrouReconciliacao = await reconcilePendingLoftCancellation(
+            const reconciliacao = await reconcilePendingLoftCancellation(
               contextoAberto.context,
               contextoAberto.persistirSessao,
             );
-            reconciliacaoCancelamentoPendente = exigeReconciliacao || encontrouReconciliacao;
+            // Durante um deploy gradual, a RPC antiga ainda pode devolver 55000
+            // também para jobs `scheduled` sem ID. A classificação do próprio job
+            // é a autoridade: só um preparo sem POST confirmado bloqueia todos.
+            reconciliacaoCancelamentoBloqueante =
+              reconciliacao === "blocking" || (exigeReconciliacao && reconciliacao === "none");
           }
         } catch (error) {
           // Falha fechada: qualquer erro neste bloco impede uma nova proposta
           // até a próxima passagem confirmar a fila e a identidade causal.
-          reconciliacaoCancelamentoPendente = true;
+          reconciliacaoCancelamentoBloqueante = true;
           if (error instanceof LoftCancellationQueueError) {
             registrarFalhaFilaCancelamento("Falha ao consultar a fila de cancelamentos", error);
           } else {
@@ -2846,10 +2857,9 @@ async function loop(once: boolean): Promise<void> {
         continue;
       }
 
-      // Enquanto um envio sem ID exato ainda está sendo reconciliado, não cria
-      // novas propostas para o mesmo portal. Isso preserva a causalidade sem
-      // transformar a espera normal em falha da fila do Supabase.
-      if (reconciliacaoCancelamentoPendente) {
+      // Só um preparo cujo POST ainda é incerto bloqueia o portal inteiro. Uma
+      // submissão confirmada sem ID já foi isolada por documento no claim.
+      if (reconciliacaoCancelamentoBloqueante) {
         if (once) {
           log("Reconciliação de cancelamento pendente — nenhuma consulta nova foi enviada.");
           break;
