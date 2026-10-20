@@ -87,6 +87,15 @@
   h6 {
     letter-spacing: -0.03em;
   }
+
+  @media (max-width: 767px) {
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+    textarea,
+    select,
+    [contenteditable="true"] {
+      font-size: 16px !important;
+    }
+  }
 }
 
 @layer utilities {
