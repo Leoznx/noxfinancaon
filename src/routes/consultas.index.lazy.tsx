@@ -3,7 +3,7 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { useEssentialLoading } from "@/components/GlobalLoading";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { RouteErrorFallback } from "@/components/RouteErrorFallback";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import {
   loadDashboardConsultations,
@@ -57,25 +57,41 @@ function Consultas() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("todos");
 
-  const fetchConsultas = useCallback(async () => {
-    try {
-      if (!user) {
-        setConsultas([]);
-        return;
-      }
-      const cached = peekDashboardConsultations(user);
-      if (cached === undefined) setLoading(true);
-      setConsultas(await loadDashboardConsultations(user, cached !== undefined));
-    } catch (error: any) {
-      toast.error("Erro ao carregar consultas: " + error.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [user]);
-
   useEffect(() => {
-    fetchConsultas();
-  }, [fetchConsultas]);
+    let active = true;
+
+    async function fetchConsultas() {
+      const cached = user ? peekDashboardConsultations(user) : undefined;
+      try {
+        if (!user) {
+          if (active) setConsultas([]);
+          return;
+        }
+        if (active) {
+          if (cached !== undefined) setConsultas(cached);
+          setLoading(cached === undefined);
+        }
+        const nextConsultas = await loadDashboardConsultations(user);
+        if (active) setConsultas(nextConsultas);
+      } catch (error: any) {
+        // A navegação pode desmontar esta aba enquanto o PostgREST ainda responde.
+        // Não vaze o erro atrasado para a próxima tela e, se já houver cache útil,
+        // mantenha-o visível sem exibir um falso alerta de falha total.
+        if (active && cached === undefined) {
+          toast.error("Erro ao carregar consultas: " + error.message, {
+            id: "consultas-load-error",
+          });
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    void fetchConsultas();
+    return () => {
+      active = false;
+    };
+  }, [user]);
 
   const getStatusConsulta = resolverStatusConsulta;
 
