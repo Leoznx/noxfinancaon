@@ -719,7 +719,19 @@ export function DashboardLayout({
     void Promise.allSettled(
       priorityTargets.map((href) => router.preloadRoute({ to: href as any })),
     ).finally(() => {
-      if (!cancelled) schedule(() => preloadNext(0));
+      if (!cancelled) {
+        schedule(() => preloadNext(0));
+        if (user && !isDemoSession()) {
+          void import("@/lib/dashboard-navigation-data").then(
+            async ({ prefetchDashboardDataForHref }) => {
+              for (const href of priorityTargets) {
+                if (cancelled) return;
+                await prefetchDashboardDataForHref(href, user).catch(() => undefined);
+              }
+            },
+          );
+        }
+      }
     });
     return () => {
       cancelled = true;
@@ -728,7 +740,14 @@ export function DashboardLayout({
         window.cancelIdleCallback(idleId);
       }
     };
-  }, [routePreloadKey, router]);
+  }, [routePreloadKey, router, user]);
+
+  const prefetchRouteData = (href: string) => {
+    if (!user || isDemoSession()) return;
+    void import("@/lib/dashboard-navigation-data").then(({ prefetchDashboardDataForHref }) =>
+      prefetchDashboardDataForHref(href, user).catch(() => undefined),
+    );
+  };
 
   const nomeTopo = nomeUsuario || user?.email?.split("@")[0] || "Usuário";
   const canSearchAdminMenu =
@@ -919,6 +938,9 @@ export function DashboardLayout({
                   <Link
                     to={item.href}
                     preload={PRIORITY_DASHBOARD_ROUTES.has(itemPath) ? "render" : "intent"}
+                    onPointerEnter={() => prefetchRouteData(item.href)}
+                    onFocus={() => prefetchRouteData(item.href)}
+                    onTouchStart={() => prefetchRouteData(item.href)}
                     className={`flex items-center gap-3 rounded-xl border-l-4 py-3 pl-3 transition-all ${item.parentLabel ? "ml-5 pr-3" : item.hasChildren ? "pr-11" : "pr-4"} ${
                       isDarkHighlight
                         ? "bg-black border-yellow-400 text-yellow-400 font-bold shadow-sm shadow-black/30 hover:bg-neutral-900"

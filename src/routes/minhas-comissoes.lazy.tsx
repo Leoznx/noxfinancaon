@@ -29,15 +29,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/components/AuthProvider";
 import { supabase } from "@/integrations/supabase/client";
-import { fetchNivelInfo, type NivelInfo } from "@/lib/niveis-parceria";
+import type { NivelInfo } from "@/lib/niveis-parceria";
+import { loadCommissionDashboard, peekCommissionDashboard } from "@/lib/dashboard-navigation-data";
 import {
   COMMISSION_STATUS_LABELS,
   FINANCIAL_STATUS_LABELS,
   formatCents,
-  getMyCommissionContracts,
-  getMyCommissions,
-  getMyWithdrawals,
-  getUserFinancialSummary,
   toWithdrawalError,
   WITHDRAWAL_STATUS_LABELS,
   type CommissionContract,
@@ -103,12 +100,21 @@ const financialTone: Record<string, string> = {
 
 function CommissionsPage() {
   const { user } = useAuth();
-  const [summary, setSummary] = useState<UserFinancialSummary>(emptySummary);
-  const [commissions, setCommissions] = useState<UserCommission[]>([]);
-  const [withdrawals, setWithdrawals] = useState<UserWithdrawal[]>([]);
-  const [contracts, setContracts] = useState<CommissionContract[]>([]);
-  const [level, setLevel] = useState<NivelInfo | null>(null);
-  const [loading, setLoading] = useState(true);
+  const cachedDashboard = user ? peekCommissionDashboard(user) : undefined;
+  const [summary, setSummary] = useState<UserFinancialSummary>(
+    () => cachedDashboard?.summary ?? emptySummary,
+  );
+  const [commissions, setCommissions] = useState<UserCommission[]>(
+    () => cachedDashboard?.commissions ?? [],
+  );
+  const [withdrawals, setWithdrawals] = useState<UserWithdrawal[]>(
+    () => cachedDashboard?.withdrawals ?? [],
+  );
+  const [contracts, setContracts] = useState<CommissionContract[]>(
+    () => cachedDashboard?.contracts ?? [],
+  );
+  const [level, setLevel] = useState<NivelInfo | null>(() => cachedDashboard?.level ?? null);
+  const [loading, setLoading] = useState(cachedDashboard === undefined);
   useEssentialLoading(
     loading && commissions.length === 0 && withdrawals.length === 0 && contracts.length === 0,
   );
@@ -120,24 +126,18 @@ function CommissionsPage() {
 
   const load = useCallback(
     async (background = false) => {
-      if (!user?.id) return;
+      if (!user) return;
+      const cached = peekCommissionDashboard(user);
       if (background) setRefreshing(true);
-      else setLoading(true);
+      else if (cached === undefined) setLoading(true);
       setError(null);
       try {
-        const [nextSummary, nextCommissions, nextWithdrawals, nextContracts, nextLevel] =
-          await Promise.all([
-            getUserFinancialSummary(),
-            getMyCommissions(),
-            getMyWithdrawals(),
-            getMyCommissionContracts(),
-            fetchNivelInfo(user.id, user.role),
-          ]);
-        setSummary(nextSummary || emptySummary);
-        setCommissions(Array.isArray(nextCommissions) ? nextCommissions : []);
-        setWithdrawals(Array.isArray(nextWithdrawals) ? nextWithdrawals : []);
-        setContracts(Array.isArray(nextContracts) ? nextContracts : []);
-        setLevel(nextLevel);
+        const next = await loadCommissionDashboard(user, background || cached !== undefined);
+        setSummary(next.summary || emptySummary);
+        setCommissions(next.commissions);
+        setWithdrawals(next.withdrawals);
+        setContracts(next.contracts);
+        setLevel(next.level);
       } catch (loadError) {
         setError(toWithdrawalError(loadError).message);
       } finally {
@@ -145,7 +145,7 @@ function CommissionsPage() {
         setRefreshing(false);
       }
     },
-    [user?.id, user?.role],
+    [user],
   );
 
   useEffect(() => {

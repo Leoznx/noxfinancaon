@@ -4,8 +4,11 @@ import { useEssentialLoading } from "@/components/GlobalLoading";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { RouteErrorFallback } from "@/components/RouteErrorFallback";
 import { useState, useEffect, useCallback } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/components/AuthProvider";
+import {
+  loadDashboardConsultations,
+  peekDashboardConsultations,
+} from "@/lib/dashboard-navigation-data";
 import {
   Search,
   Filter,
@@ -47,90 +50,28 @@ export const Route = createLazyFileRoute("/consultas/")({
 
 function Consultas() {
   const { user } = useAuth();
-  const [consultas, setConsultas] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cachedConsultas = user ? peekDashboardConsultations(user) : undefined;
+  const [consultas, setConsultas] = useState<any[]>(() => cachedConsultas ?? []);
+  const [loading, setLoading] = useState(cachedConsultas === undefined);
   useEssentialLoading(loading && consultas.length === 0);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("todos");
 
   const fetchConsultas = useCallback(async () => {
     try {
-      setLoading(true);
-
-      if (!user?.email) {
+      if (!user) {
         setConsultas([]);
         return;
       }
-
-      const { data: meuProfile, error: profileError } = await supabase
-        .from("profiles")
-        .select("id, role")
-        .eq("email", user.email)
-        .maybeSingle();
-
-      if (profileError) throw profileError;
-
-      let query = supabase.from("consultas_credito").select(`
-          *,
-          inquilinos (nome, cpf, cnpj),
-          imoveis (logradouro, numero, bairro, cidade, estado, cep, valor_aluguel),
-          planos (nome),
-          solicitante:profiles!profile_id_solicitante (nome, email, role)
-        `);
-
-      const role = user?.role;
-      if (role === "admin" || role === "analista") {
-        // vê tudo
-      } else if (role === "imobiliaria" && meuProfile) {
-        const { data: imobData } = await supabase
-          .from("imobiliarias")
-          .select("id")
-          .eq("contato_email", user?.email || "")
-          .maybeSingle();
-
-        let allowedProfileIds: string[] = [meuProfile.id];
-        if (imobData?.id) {
-          const { data: corretoresData } = await supabase
-            .from("corretores")
-            .select("profile_id")
-            .eq("imobiliaria_id", imobData.id);
-          if (corretoresData) {
-            allowedProfileIds = [
-              ...allowedProfileIds,
-              ...corretoresData.map((c: any) => c.profile_id).filter(Boolean),
-            ];
-          }
-        }
-        query = query.in("profile_id_solicitante", allowedProfileIds);
-      } else if (role === "inquilino") {
-        // Consulta do inquilino é tanto a que ele mesmo pediu (Contratar Seguro) quanto
-        // aquela em que ele é o inquilino analisado — o corretor/imobiliária consultou o
-        // CPF dele e a proposta é dele. A RLS de consultas_credito já libera esses três
-        // caminhos (solicitante, tenant_user_id e tenant_email) pro próprio inquilino.
-        const condicoes = [
-          meuProfile?.id ? `profile_id_solicitante.eq.${meuProfile.id}` : null,
-          user?.id ? `tenant_user_id.eq.${user.id}` : null,
-          user?.email ? `tenant_email.eq."${user.email}"` : null,
-        ].filter(Boolean) as string[];
-        query = query.or(condicoes.join(","));
-      } else if (meuProfile) {
-        query = query.or(
-          `profile_id_solicitante.eq.${meuProfile.id},and(profile_id_solicitante.is.null,role_solicitante.eq.${role})`,
-        );
-      } else {
-        query = query.eq("role_solicitante", role || "");
-      }
-
-      const { data, error } = await query.order("updated_at", { ascending: false });
-
-      if (error) throw error;
-      setConsultas(data || []);
+      const cached = peekDashboardConsultations(user);
+      if (cached === undefined) setLoading(true);
+      setConsultas(await loadDashboardConsultations(user, cached !== undefined));
     } catch (error: any) {
       toast.error("Erro ao carregar consultas: " + error.message);
     } finally {
       setLoading(false);
     }
-  }, [user?.email, user?.id, user?.role]);
+  }, [user]);
 
   useEffect(() => {
     fetchConsultas();
@@ -195,7 +136,10 @@ function Consultas() {
         );
       case "cancelada":
         return (
-          <Badge variant="outline" className="bg-neutral-50 text-neutral-700 border-neutral-300 font-bold px-3">
+          <Badge
+            variant="outline"
+            className="bg-neutral-50 text-neutral-700 border-neutral-300 font-bold px-3"
+          >
             Cancelada sem envio
           </Badge>
         );

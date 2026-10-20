@@ -4,8 +4,8 @@ import { useEssentialLoading } from "@/components/GlobalLoading";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useAuth } from "@/components/AuthProvider";
-import { supabase } from "@/integrations/supabase/client";
 import { useEffect, useState } from "react";
+import { loadDashboardPolicies, peekDashboardPolicies } from "@/lib/dashboard-navigation-data";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -24,8 +24,9 @@ export const Route = createFileRoute("/apolices/")({
 
 function ApolicesList() {
   const { user } = useAuth();
-  const [apolices, setApolices] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cachedPolicies = user ? peekDashboardPolicies(user) : undefined;
+  const [apolices, setApolices] = useState<any[]>(() => cachedPolicies ?? []);
+  const [loading, setLoading] = useState(cachedPolicies === undefined);
   useEssentialLoading(loading && apolices.length === 0);
   const [erro, setErro] = useState<string | null>(null);
   const [busca, setBusca] = useState("");
@@ -33,89 +34,13 @@ function ApolicesList() {
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      if (!user?.email) return;
-      setLoading(true);
+      if (!user) return;
+      const cached = peekDashboardPolicies(user);
+      if (cached === undefined) setLoading(true);
       setErro(null);
       try {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("id, role")
-          .eq("email", user.email)
-          .maybeSingle();
-
-        const pid = profile?.id;
-        const role = profile?.role || user.role;
-
-        // apolices.corretor_profile_id/imobiliaria_profile_id/proprietario_profile_id
-        // nunca são preenchidas pelo fluxo real de criação de apólice (ver
-        // src/lib/niveis-parceria.ts) — o vínculo de verdade é sempre
-        // apolices.consulta_id -> consultas_credito.profile_id_solicitante. Resolve
-        // os ids de consulta permitidos primeiro (mesmo padrão de
-        // consultas.index.lazy.tsx: para imobiliária, inclui a si mesma + os
-        // corretores vinculados) e só então filtra as apólices por consulta_id.
-        let consultaIdsPermitidos: string[] | null = null;
-
-        if (pid && role === "corretor") {
-          const { data: minhasConsultas } = await supabase
-            .from("consultas_credito")
-            .select("id")
-            .eq("profile_id_solicitante", pid);
-          consultaIdsPermitidos = (minhasConsultas || []).map((c: any) => c.id);
-        } else if (pid && role === "imobiliaria") {
-          const { data: imobData } = await supabase
-            .from("imobiliarias")
-            .select("id")
-            .eq("contato_email", user.email)
-            .maybeSingle();
-
-          let allowedProfileIds: string[] = [pid];
-          if (imobData?.id) {
-            const { data: corretoresData } = await supabase
-              .from("corretores")
-              .select("profile_id")
-              .eq("imobiliaria_id", imobData.id);
-            if (corretoresData) {
-              allowedProfileIds = [
-                ...allowedProfileIds,
-                ...corretoresData.map((c: any) => c.profile_id).filter(Boolean),
-              ];
-            }
-          }
-          const { data: consultasDaEquipe } = await supabase
-            .from("consultas_credito")
-            .select("id")
-            .in("profile_id_solicitante", allowedProfileIds);
-          consultaIdsPermitidos = (consultasDaEquipe || []).map((c: any) => c.id);
-        }
-
-        if (consultaIdsPermitidos && consultaIdsPermitidos.length === 0) {
-          if (!cancelled) setApolices([]);
-          return;
-        }
-
-        let query = supabase
-          .from("apolices")
-          .select(
-            `
-            id, numero, status, vigencia_inicio, vigencia_fim, valor_premio,
-            consulta:consultas_credito(
-              inquilino:inquilinos(nome, cpf),
-              imovel:imoveis(endereco, cidade, estado),
-              plano:planos(nome),
-              solicitante:profiles!profile_id_solicitante(nome)
-            ),
-            imobiliaria:profiles!apolices_imobiliaria_profile_id_fkey(nome)
-          `,
-          )
-          .order("created_at", { ascending: false });
-
-        if (consultaIdsPermitidos) {
-          query = query.in("consulta_id", consultaIdsPermitidos);
-        }
-
-        const { data, error } = await query;
-        if (error) throw error;
-        if (!cancelled) setApolices(data || []);
+        const data = await loadDashboardPolicies(user, cached !== undefined);
+        if (!cancelled) setApolices(data);
       } catch (e: any) {
         if (!cancelled) setErro(e.message || "Erro ao carregar apólices");
       } finally {
@@ -126,7 +51,7 @@ function ApolicesList() {
     return () => {
       cancelled = true;
     };
-  }, [user?.email, user?.role]);
+  }, [user]);
 
   const filtradas = apolices.filter((a) => {
     const q = busca.toLowerCase();
