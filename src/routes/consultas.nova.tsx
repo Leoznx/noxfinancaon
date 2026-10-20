@@ -6,6 +6,7 @@ import { FormularioSimulacao, DadosSimulacao } from "@/components/simulacao/Form
 import { ModalConsultando } from "@/components/simulacao/ModalConsultando";
 import { toast } from "sonner";
 import { useAuth } from "@/components/AuthProvider";
+import { supabase } from "@/integrations/supabase/client";
 import {
   criarConsultaParaAutomacao,
   criarConsultaDemonstrativa,
@@ -126,9 +127,53 @@ function NovaConsulta() {
         return;
       }
 
-      // Usa apenas a API direta da Loft. Se falhar, mostra o erro no modal.
-      // NÃO cai na fila (worker Playwright) — isso evita demora desnecessária.
-      await simularLoftDireto(dados, user.email, user.role);
+      // Tenta API direta primeiro (rápido, ~5-10s)
+      try {
+        const direto = await simularLoftDireto(dados, user.email, user.role);
+        if (direto.ok && direto.resultado) {
+          const resultado = direto.resultado;
+          const status = resultado.status;
+          setConsultaId(direto.consultaId);
+          setErroAutomacao(null);
+
+          // Grava o resultado no banco
+          await supabase.from("consultas_credito").update({
+            tipo_pessoa: dados.tipoInquilino,
+            documento: status ? documento : null,
+            tenant_name: dados.inquilinos[0]?.nome ?? dados.razaoSocial,
+            tipo_imovel: dados.tipoImovel,
+            cep: dados.cep,
+            valor_aluguel: dados.valores.aluguel,
+            valor_condominio: dados.valores.condominio,
+            valor_taxas: dados.valores.taxas,
+            status: status,
+            resultado: status,
+            mensagem: status === "aprovado" ? "Crédito aprovado." : status === "recusado" ? "Crédito recusado." : "Crédito em análise.",
+            origem: "nox_financa_direto",
+            external_provider: "loft_api",
+            external_status: status,
+            external_request_id: resultado.proposalId,
+            external_response: resultado,
+            automation_step: "api_direta",
+            automation_started_at: new Date().toISOString(),
+            automation_finished_at: new Date().toISOString(),
+          } as any).eq("id", direto.consultaId);
+
+          navigate({ to: "/consultas/$id/status", params: { id: direto.consultaId } });
+          return;
+        }
+      } catch (diretoErro) {
+        console.warn("API direta falhou, usando fila:", diretoErro);
+      }
+
+      // Fallback: fila + worker Playwright (API direta indisponível)
+      const id = await criarConsultaParaAutomacao({
+        dados,
+        userEmail: user.email,
+        userRole: user.role,
+      });
+      setConsultaId(id);
+      escutarConsulta(id);
     } catch (e: any) {
       const msg = e?.message || "Não foi possível simular o crédito agora.";
       setErroAutomacao(msg);
