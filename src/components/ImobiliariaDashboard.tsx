@@ -23,7 +23,6 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useState, type ComponentType } from "react";
 import { Button } from "@/components/ui/button";
-import { useEssentialLoading } from "@/components/GlobalLoading";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Select,
@@ -47,8 +46,6 @@ export function ImobiliariaDashboard({ profileId, email }: { profileId: string; 
   const [loading, setLoading] = useState(cachedDashboard === undefined);
   const [error, setError] = useState<string | null>(null);
   const [chartPeriod, setChartPeriod] = useState("6");
-
-  useEssentialLoading(loading && !data);
 
   const load = useCallback(async (force = false) => {
     setError(null);
@@ -104,7 +101,7 @@ export function ImobiliariaDashboard({ profileId, email }: { profileId: string; 
     };
   }, [load, profileId]);
 
-  if (loading && !data) return <DashboardSkeleton />;
+  if (loading && !data) return <DashboardInitialView />;
   if (!data)
     return <DashboardError message={error ?? "Dados indisponíveis."} onRetry={load} />;
 
@@ -213,6 +210,7 @@ export function ImobiliariaDashboard({ profileId, email }: { profileId: string; 
 }
 
 function HeroBanner() {
+  const [copyReady, setCopyReady] = useState(false);
   return (
     <section className="relative min-h-[330px] overflow-hidden rounded-[24px] border border-amber-100 bg-[radial-gradient(circle_at_88%_85%,rgba(255,196,0,0.2),transparent_34%),linear-gradient(112deg,#fffdf8_0%,#ffffff_54%,#fff7d8_100%)] shadow-[0_8px_30px_rgba(0,0,0,0.035)] sm:min-h-[350px] xl:h-full xl:min-h-0">
       <div
@@ -224,9 +222,15 @@ function HeroBanner() {
         alt="Equipe da imobiliária NOX diante de um empreendimento"
         className="pointer-events-none absolute -bottom-[6%] left-1/2 z-10 w-[102%] max-w-[390px] -translate-x-1/2 select-none object-contain sm:-bottom-[12%] sm:left-[3%] sm:h-[98%] sm:w-[54%] sm:max-w-none sm:translate-x-0 xl:-bottom-[24%] xl:-left-[1%] xl:h-[110%] xl:w-auto 2xl:-bottom-[30%] 2xl:left-0 2xl:h-[145%]"
       />
+      {!copyReady && (
+        <div className="absolute left-6 right-6 top-7 z-20 text-center text-3xl font-black leading-tight text-neutral-950 sm:left-auto sm:right-[5%] sm:top-1/3 sm:w-[48%] sm:text-left sm:text-4xl">
+          Sua imobiliária mais ágil, mais profissional.
+        </div>
+      )}
       <img
         src="/dashboard/agency-panel-copy.png"
         alt="Sua imobiliária mais ágil, mais profissional"
+        onLoad={() => setCopyReady(true)}
         className="pointer-events-none absolute right-1/2 top-3 z-20 w-[88%] max-w-[350px] translate-x-1/2 select-none object-contain sm:right-[3%] sm:top-1/2 sm:w-[52%] sm:max-w-[560px] sm:translate-x-0 sm:-translate-y-1/2 xl:right-[4%] xl:w-[46%] xl:max-w-[650px]"
       />
     </section>
@@ -242,9 +246,9 @@ function MetricCard({
   icon: Icon;
   label: string;
   value: string;
-  trend: number;
+  trend?: number;
 }) {
-  const positive = trendValue >= 0;
+  const positive = (trendValue ?? 0) >= 0;
   return (
     <article className="group min-w-0 rounded-2xl border border-neutral-200/80 bg-white p-3 shadow-[0_5px_22px_rgba(0,0,0,0.035)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_28px_rgba(0,0,0,0.06)] sm:p-4 xl:h-full xl:overflow-hidden xl:p-2.5">
       <div className="flex min-w-0 items-start gap-2 sm:items-center sm:gap-4 xl:h-full xl:gap-2.5">
@@ -256,13 +260,13 @@ function MetricCard({
           <p className="mt-1 truncate text-[clamp(17px,4.8vw,24px)] font-black tracking-tight tabular-nums text-neutral-950 xl:text-xl">
             {value}
           </p>
-          <p
+          {trendValue !== undefined && <p
             className={`mt-1 flex items-center gap-1 text-[10px] font-semibold xl:mt-0.5 xl:text-[9px] ${positive ? "text-emerald-600" : "text-red-500"}`}
           >
             <TrendingUp size={11} className={positive ? "" : "rotate-180"} />
             {positive ? "+" : ""}
             {trendValue}% <span className="font-normal text-neutral-400">vs mês anterior</span>
-          </p>
+          </p>}
         </div>
       </div>
     </article>
@@ -451,20 +455,21 @@ function ChartTooltip({ active, payload, label, currency = false }: any) {
   );
 }
 
-function DashboardSkeleton() {
+function DashboardInitialView() {
   return (
-    <div className="mx-auto max-w-[1580px] animate-pulse space-y-3.5">
-      <div className="h-[420px] rounded-[24px] bg-neutral-100 sm:h-[350px] xl:h-[320px]" />
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {Array.from({ length: 4 }, (_, index) => (
-          <div key={index} className="h-24 rounded-2xl bg-neutral-100" />
-        ))}
-      </div>
-      <div className="grid gap-3 xl:grid-cols-3">
-        {Array.from({ length: 3 }, (_, index) => (
-          <div key={index} className="h-[520px] rounded-2xl bg-neutral-100" />
-        ))}
-      </div>
+    <div className="mx-auto w-full max-w-[1580px] space-y-3.5 xl:grid xl:h-full xl:grid-rows-[320px_84px_minmax(360px,1fr)] xl:gap-2.5 xl:space-y-0">
+      <HeroBanner />
+      <section className="grid grid-cols-2 gap-3 xl:grid-cols-4 xl:gap-2.5">
+        <MetricCard icon={Search} label="Consultas pendentes" value="—" />
+        <MetricCard icon={FileText} label="Apólices ativas" value="—" />
+        <MetricCard icon={Users} label="Inquilinos sob gestão" value="—" />
+        <MetricCard icon={DollarSign} label="Comissões acumuladas" value="—" />
+      </section>
+      <section className="grid gap-3 xl:grid-cols-[1.18fr_0.9fr_1fr] xl:gap-2.5">
+        <DashboardPanel className="min-h-[360px]"><PanelHeader title="Consultas e contratos por mês" /><p className="mt-4 text-xs text-neutral-500">Atualizando indicadores…</p></DashboardPanel>
+        <DashboardPanel className="min-h-[360px]"><PanelHeader title="Status das apólices" /><p className="mt-4 text-xs text-neutral-500">Atualizando indicadores…</p></DashboardPanel>
+        <DashboardPanel className="min-h-[360px]"><PanelHeader title="Próximos vencimentos"><Link to="/faturas-inquilinos" className="text-xs font-semibold text-neutral-600">Ver todos</Link></PanelHeader><p className="mt-4 text-xs text-neutral-500">Atualizando vencimentos…</p></DashboardPanel>
+      </section>
     </div>
   );
 }

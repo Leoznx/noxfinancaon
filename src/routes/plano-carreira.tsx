@@ -3,7 +3,7 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useState, useEffect } from 'react';
 import { useAuth } from "@/components/AuthProvider";
-import { supabase } from "@/integrations/supabase/client";
+import { loadCareerContractCount, peekCareerContractCount } from "@/lib/career-progress";
 import { Medal, Award, Trophy, Gem, AlertCircle, Check, RefreshCw, ChevronRight } from 'lucide-react';
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -293,104 +293,50 @@ function BannerComoSubir({ tipoPerfil }: { tipoPerfil: string }) {
   );
 }
 
-function PlanoCarreiraSkeleton() {
-  return (
-    <div className="space-y-6 animate-pulse">
-      <div className="flex justify-between items-end">
-        <div className="space-y-3">
-          <div className="h-8 w-64 bg-neutral-200 rounded-lg"></div>
-          <div className="h-4 w-96 bg-neutral-100 rounded-lg"></div>
-        </div>
-        <div className="h-10 w-40 bg-neutral-100 rounded-full"></div>
-      </div>
-      <div className="h-48 bg-neutral-200 rounded-2xl"></div>
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {[1, 2, 3, 4].map(i => (
-          <div key={i} className="h-80 bg-neutral-100 rounded-2xl"></div>
-        ))}
-      </div>
-      <div className="h-24 bg-neutral-200 rounded-2xl"></div>
-    </div>
-  );
-}
-
 function PlanoCarreiraPage() {
   const { user } = useAuth();
   const tipoPerfil = (user?.role || 'corretor') as 'corretor' | 'imobiliaria' | 'proprietario';
   const textos = textosPorPerfil[tipoPerfil] || textosPorPerfil.corretor;
   
-  const [carregando, setCarregando] = useState(true);
-  const [contratosAtivos, setContratosAtivos] = useState(0);
+  const cachedCount = user?.id ? peekCareerContractCount(user.id, tipoPerfil) : undefined;
+  const [contratosAtivos, setContratosAtivos] = useState<number | null>(() => cachedCount ?? null);
+  const [erro, setErro] = useState(false);
   
   useEffect(() => {
     let cancelado = false;
     
-    async function carregar() {
-      if (!user) {
-        setCarregando(false);
-        return;
-      }
-
+    async function carregar(force = false) {
+      if (!user?.id) return;
       try {
-        const { data: { user: authUser } } = await supabase.auth.getUser();
-        if (!authUser) {
-          setCarregando(false);
-          return;
-        }
-
-        const campoVinculo = {
-          corretor: 'corretor_profile_id',
-          imobiliaria: 'imobiliaria_profile_id',
-          proprietario: 'proprietario_profile_id',
-        }[tipoPerfil];
-        
-        const { count, error } = await supabase
-          .from('apolices')
-          .select('id', { count: 'exact', head: true })
-          .eq('status', 'ativa')
-          .eq(campoVinculo as any, authUser.id);
-        
-        if (cancelado) return;
-        
-        if (error) {
-          console.warn('[INFO] Erro ao buscar contratos:', error.message);
-          setContratosAtivos(0);
-        } else {
-          setContratosAtivos(count || 0);
-        }
-      } catch (err: any) {
-        console.error('[ERRO]', err);
-      } finally {
+        const count = await loadCareerContractCount(user.id, tipoPerfil, force);
         if (!cancelado) {
-          setCarregando(false);
+          setContratosAtivos(count);
+          setErro(false);
         }
+      } catch (error) {
+        console.error('[PlanoCarreira] erro ao buscar contratos', error);
+        if (!cancelado) setErro(true);
       }
     }
     
-    carregar();
-    const intervalo = window.setInterval(carregar, 15000);
+    void carregar();
+    const onFocus = () => void carregar(true);
+    window.addEventListener('focus', onFocus);
 
     return () => {
       cancelado = true;
-      window.clearInterval(intervalo);
+      window.removeEventListener('focus', onFocus);
     };
-  }, [user, tipoPerfil]);
-  
-  if (carregando) {
-    return (
-      <DashboardLayout>
-        <PlanoCarreiraSkeleton />
-      </DashboardLayout>
-    );
-  }
+  }, [user?.id, tipoPerfil]);
   
   const niveis = NIVEIS_FALLBACK[tipoPerfil] || NIVEIS_FALLBACK.corretor;
+  const count = contratosAtivos ?? 0;
   const nivelAtual = niveis.find(n => 
-    contratosAtivos >= n.min && (n.max === null || contratosAtivos <= n.max)
+    count >= n.min && (n.max === null || count <= n.max)
   ) || niveis[0];
   
-  const proximoNivel = niveis.find(n => n.min > contratosAtivos);
-  const faltam = proximoNivel ? proximoNivel.min - contratosAtivos : 0;
+  const proximoNivel = niveis.find(n => n.min > count);
+  const faltam = proximoNivel ? proximoNivel.min - count : 0;
   
   return (
     <DashboardLayout>
@@ -402,23 +348,31 @@ function PlanoCarreiraPage() {
               {textos.subtitulo}
             </p>
           </div>
-          <BadgeNivelAtual nivel={nivelAtual.nome} contratos={contratosAtivos} />
+          {contratosAtivos !== null && <BadgeNivelAtual nivel={nivelAtual.nome} contratos={contratosAtivos} />}
         </header>
-        
-        <CardProgresso 
-          nivelAtual={nivelAtual}
-          proximoNivel={proximoNivel}
-          contratosAtivos={contratosAtivos}
-          faltam={faltam}
-          tipoPerfil={tipoPerfil}
-        />
+        {contratosAtivos === null ? (
+          <div className="rounded-2xl bg-neutral-900 p-6 text-white">
+            <h2 className="text-xl font-black">Seu progresso</h2>
+            <p className="mt-2 text-sm text-neutral-300">
+              {erro ? 'Não foi possível atualizar seus contratos agora.' : 'Atualizando seus contratos ativos…'}
+            </p>
+          </div>
+        ) : (
+          <CardProgresso
+            nivelAtual={nivelAtual}
+            proximoNivel={proximoNivel}
+            contratosAtivos={contratosAtivos}
+            faltam={faltam}
+            tipoPerfil={tipoPerfil}
+          />
+        )}
         
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {niveis.map(nivel => (
             <CardNivel
               key={nivel.nome}
               nivel={nivel}
-              atual={nivel.nome === nivelAtual.nome}
+              atual={contratosAtivos !== null && nivel.nome === nivelAtual.nome}
               tipoPerfil={tipoPerfil}
             />
           ))}

@@ -88,6 +88,8 @@ const PRIORITY_DASHBOARD_ROUTES = new Set([
   "/consultas/nova",
   "/consultas",
   "/apolices",
+  "/faturas-inquilinos",
+  "/plano-carreira",
 ]);
 
 type MenuItem = {
@@ -710,10 +712,9 @@ export function DashboardLayout({
 
     const preloadNext = (index: number) => {
       if (cancelled || index >= backgroundTargets.length) return;
-      void router
-        .preloadRoute({ to: backgroundTargets[index] as any })
-        .catch(() => undefined)
-        .finally(() => schedule(() => preloadNext(index + 1)));
+      const batch = backgroundTargets.slice(index, index + 3);
+      void Promise.allSettled(batch.map((href) => router.preloadRoute({ to: href as any })))
+        .finally(() => schedule(() => preloadNext(index + batch.length)));
     };
 
     void Promise.allSettled(
@@ -722,14 +723,10 @@ export function DashboardLayout({
       if (!cancelled) {
         schedule(() => preloadNext(0));
         if (user && !isDemoSession()) {
-          void import("@/lib/dashboard-navigation-data").then(
-            async ({ prefetchDashboardDataForHref }) => {
-              for (const href of priorityTargets) {
-                if (cancelled) return;
-                await prefetchDashboardDataForHref(href, user).catch(() => undefined);
-              }
-            },
-          );
+          void import("@/lib/dashboard-navigation-data").then(({ prefetchDashboardDataForHref }) => {
+            if (cancelled) return;
+            void Promise.allSettled(priorityTargets.map((href) => prefetchDashboardDataForHref(href, user)));
+          });
         }
       }
     });

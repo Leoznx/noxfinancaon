@@ -208,6 +208,12 @@ export async function prefetchDashboardDataForHref(
     await loadDashboardConsultations(user);
   } else if (pathname === "/apolices") {
     await loadDashboardPolicies(user);
+  } else if (pathname === "/faturas-inquilinos") {
+    const { loadTenantInvoiceSummaries } = await import("@/lib/tenant-invoice-summary");
+    await loadTenantInvoiceSummaries(user.id);
+  } else if (pathname === "/plano-carreira") {
+    const { loadCareerContractCount } = await import("@/lib/career-progress");
+    await loadCareerContractCount(user.id, user.role);
   } else if (
     pathname === "/minhas-comissoes" &&
     ["corretor", "imobiliaria", "proprietario"].includes(user.role)

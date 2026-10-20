@@ -24,7 +24,6 @@ import {
   Users,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type ComponentType } from "react";
-import { useEssentialLoading } from "@/components/GlobalLoading";
 import { supabase } from "@/integrations/supabase/client";
 import {
   formatCurrency,
@@ -60,8 +59,6 @@ export function CorretorDashboard({ profileId }: { profileId: string }) {
   const [loading, setLoading] = useState(cachedDashboard === undefined);
   const [error, setError] = useState<string | null>(null);
   const [chartPeriod, setChartPeriod] = useState(6);
-
-  useEssentialLoading(loading && !data);
 
   const load = useCallback(async (force = false) => {
     setError(null);
@@ -104,7 +101,7 @@ export function CorretorDashboard({ profileId }: { profileId: string }) {
     return { commission: current.comissoes, contracts: current.contratos, ticket };
   }, [data]);
 
-  if (loading && !data) return <DashboardSkeleton />;
+  if (loading && !data) return <DashboardInitialView />;
   if (!data || !overview)
     return <DashboardError message={error ?? "Dados indisponíveis."} onRetry={load} />;
 
@@ -232,6 +229,7 @@ function HeroBanner({
   data: ImobiliariaDashboardData;
   overview: { commission: number; contracts: number; ticket: number };
 }) {
+  const [copyReady, setCopyReady] = useState(false);
   return (
     <section className="relative min-h-[348px] overflow-hidden rounded-[24px] border border-amber-100 bg-[#fffdf8] shadow-[0_10px_34px_rgba(58,44,4,0.06)] sm:min-h-[390px] xl:h-full xl:min-h-0">
       <img
@@ -243,9 +241,11 @@ function HeroBanner({
       <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,253,248,1)_0%,rgba(255,253,248,0.98)_27%,rgba(255,253,248,0.72)_34%,rgba(255,253,248,0.04)_47%,rgba(255,253,248,0)_66%,rgba(255,253,248,0.88)_88%,rgba(255,253,248,1)_100%)]" />
 
       <div className="relative z-10 flex h-full max-w-[560px] flex-col justify-start px-4 py-4 sm:justify-center sm:px-9 xl:px-10">
+        {!copyReady && <h2 className="max-w-[440px] text-2xl font-black leading-tight text-neutral-950 sm:text-3xl">Quanto mais contratos, maior sua comissão.</h2>}
         <img
           src="/dashboard/broker-performance-copy.png"
           alt="Quanto mais contratos, maior sua comissão. Acompanhe sua performance, contratos e ganhos com mais praticidade."
+          onLoad={() => setCopyReady(true)}
           className="w-full max-w-[520px] select-none object-contain"
         />
       </div>
@@ -310,7 +310,7 @@ function MetricCard({
   icon: Icon;
   label: string;
   value: string;
-  trend: number;
+  trend?: number;
 }) {
   return (
     <Link
@@ -325,7 +325,7 @@ function MetricCard({
         <p className="truncate text-[clamp(17px,4.8vw,20px)] font-black tracking-tight tabular-nums text-neutral-950">
           {value}
         </p>
-        <Trend value={trend} />
+        {trend !== undefined && <Trend value={trend} />}
       </div>
       <ArrowRight
         size={16}
@@ -557,20 +557,25 @@ function ChartTooltip({ active, payload, label }: any) {
   );
 }
 
-function DashboardSkeleton() {
+function DashboardInitialView() {
   return (
-    <div className="mx-auto max-w-[1600px] animate-pulse space-y-3">
-      <div className="h-[220px] rounded-[24px] bg-neutral-100" />
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {Array.from({ length: 4 }, (_, index) => (
-          <div key={index} className="h-20 rounded-2xl bg-neutral-100" />
-        ))}
-      </div>
-      <div className="grid gap-3 xl:grid-cols-3">
-        {Array.from({ length: 3 }, (_, index) => (
-          <div key={index} className="h-[430px] rounded-2xl bg-neutral-100" />
-        ))}
-      </div>
+    <div className="mx-auto w-full max-w-[1600px] space-y-3.5 xl:grid xl:h-full xl:grid-rows-[220px_84px_minmax(330px,1fr)_70px] xl:gap-2.5 xl:space-y-0">
+      <section className="relative min-h-[220px] overflow-hidden rounded-[24px] border border-amber-100 bg-[#fffdf8]">
+        <img src="/dashboard/broker-performance-hero.png" alt="" aria-hidden="true" className="absolute right-0 h-full object-contain" />
+        <h2 className="relative z-10 max-w-[65%] p-5 text-2xl font-black leading-tight text-neutral-950">Quanto mais contratos, maior sua comissão.</h2>
+      </section>
+      <section className="grid grid-cols-2 gap-3 xl:grid-cols-4 xl:gap-2.5">
+        <MetricCard to="/consultas" icon={Search} label="Consultas pendentes" value="—" />
+        <MetricCard to="/apolices" icon={FileCheck2} label="Apólices ativas" value="—" />
+        <MetricCard to="/apolices" icon={Users} label="Inquilinos sob gestão" value="—" />
+        <MetricCard to="/minhas-comissoes" icon={DollarSign} label="Comissões acumuladas" value="—" />
+      </section>
+      <section className="grid gap-3 xl:grid-cols-[1.22fr_0.78fr_0.98fr] xl:gap-2.5">
+        <Panel className="min-h-[330px]"><PanelHeader title="Consultas e contratos por mês" /><p className="mt-4 text-xs text-neutral-500">Atualizando indicadores…</p></Panel>
+        <Panel className="min-h-[330px]"><PanelHeader title="Status das apólices" /><p className="mt-4 text-xs text-neutral-500">Atualizando indicadores…</p></Panel>
+        <Panel className="min-h-[330px]"><PanelHeader title="Próximos vencimentos" /><Link to="/faturas-inquilinos" className="mt-4 inline-block text-xs font-semibold text-neutral-600">Ver todos</Link></Panel>
+      </section>
+      <Link to="/plano-carreira" className="rounded-2xl border border-neutral-200 bg-white p-5 text-sm font-bold text-neutral-900">Plano de Carreira →</Link>
     </div>
   );
 }

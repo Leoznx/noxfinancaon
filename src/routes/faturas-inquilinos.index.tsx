@@ -1,10 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { useEssentialLoading } from "@/components/GlobalLoading";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { supabase } from "@/integrations/supabase/client";
-import { useEffect, useState } from "react";
+import { useAuth } from "@/components/AuthProvider";
+import { loadTenantInvoiceSummaries, peekTenantInvoiceSummaries, type TenantInvoiceSummary } from "@/lib/tenant-invoice-summary";
+import { useCallback, useEffect, useState } from "react";
 import { Receipt, Eye, AlertCircle, RefreshCw } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,120 +20,35 @@ export const Route = createFileRoute("/faturas-inquilinos/")({
   ),
 });
 
-type StatusFatura = "em_dia" | "a_vencer" | "vencido";
-
-type Linha = {
-  apolice_id: string;
-  numero: string;
-  inquilino_nome: string;
-  inquilino_doc: string;
-  cidade: string;
-  valor_parcela: number;
-  proximo_venc: string | null;
-  status: StatusFatura;
-};
+type StatusFatura = TenantInvoiceSummary["status"];
 
 const formatBRL = (v: number) =>
   (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const formatDate = (d: string | null) => (d ? new Date(d).toLocaleDateString("pt-BR") : "—");
 
-function extrairCidade(im: any): string {
-  if (!im) return "Cidade não informada";
-  if (im.cidade) return im.cidade;
-  const end = im.endereco || im.logradouro;
-  if (typeof end === "string" && end.includes(",")) {
-    const partes = end
-      .split(",")
-      .map((s: string) => s.trim())
-      .filter(Boolean);
-    if (partes.length >= 2) return partes[partes.length - 2] || partes[partes.length - 1];
-  }
-  return "Cidade não informada";
-}
-
 function FaturasInquilinosLista() {
-  const [linhas, setLinhas] = useState<Linha[]>([]);
-  const [loading, setLoading] = useState(true);
-  useEssentialLoading(loading && linhas.length === 0);
+  const { user } = useAuth();
+  const userId = user?.id;
+  const cached = userId ? peekTenantInvoiceSummaries(userId) : undefined;
+  const [linhas, setLinhas] = useState<TenantInvoiceSummary[]>(() => cached ?? []);
+  const [loading, setLoading] = useState(cached === undefined);
   const [erro, setErro] = useState<string | null>(null);
 
-  async function load() {
-    setLoading(true);
+  const load = useCallback(async (force = false) => {
+    if (!userId) return;
     setErro(null);
     try {
-      const { data: aps, error: apErr } = await supabase
-        .from("apolices")
-        .select(
-          `
-          id, numero, status,
-          consulta:consultas_credito(
-            inquilino:inquilinos(nome, cpf, cnpj, razao_social),
-            imovel:imoveis(endereco, logradouro, numero, bairro, cidade, estado)
-          )
-        `,
-        )
-        .order("created_at", { ascending: false });
-      if (apErr) throw apErr;
-
-      const ids = (aps || []).map((a: any) => a.id);
-      const parcelasByAp: Record<string, any[]> = {};
-      if (ids.length) {
-        const { data: ms, error: mensalidadesError } = await supabase
-          .from("mensalidades")
-          .select("apolice_id, valor, data_vencimento, status")
-          .in("apolice_id", ids);
-        if (mensalidadesError) throw mensalidadesError;
-        for (const m of ms || []) {
-          (parcelasByAp[m.apolice_id] ||= []).push(m);
-        }
-      }
-
-      const hoje = new Date();
-      hoje.setHours(0, 0, 0, 0);
-
-      const rows: Linha[] = (aps || []).map((a: any) => {
-        const inq = a.consulta?.inquilino;
-        const im = a.consulta?.imovel;
-        const parcelas = parcelasByAp[a.id] || [];
-
-        const pendentes = parcelas
-          .filter((p) => p.status !== "pago" && p.status !== "cancelado")
-          .sort(
-            (x, y) => new Date(x.data_vencimento).getTime() - new Date(y.data_vencimento).getTime(),
-          );
-
-        const vencida = pendentes.find((p) => new Date(p.data_vencimento) < hoje);
-        const proxima = pendentes.find((p) => new Date(p.data_vencimento) >= hoje);
-        const referencia = vencida || proxima || parcelas[0];
-
-        let status: StatusFatura;
-        if (vencida) status = "vencido";
-        else if (proxima) status = "a_vencer";
-        else status = "em_dia";
-
-        return {
-          apolice_id: a.id,
-          numero: a.numero,
-          inquilino_nome: inq?.nome || inq?.razao_social || "Inquilino não informado",
-          inquilino_doc: inq?.cpf || inq?.cnpj || "",
-          cidade: extrairCidade(im),
-          valor_parcela: Number(referencia?.valor || 0),
-          proximo_venc: (proxima || vencida)?.data_vencimento || null,
-          status,
-        };
-      });
-
-      setLinhas(rows);
+      setLinhas(await loadTenantInvoiceSummaries(userId, force));
     } catch (e: any) {
       setErro(e.message || "Erro ao carregar faturas");
     } finally {
       setLoading(false);
     }
-  }
+  }, [userId]);
 
   useEffect(() => {
-    load();
-  }, []);
+    void load();
+  }, [load]);
 
   return (
     <DashboardLayout>
@@ -147,22 +62,20 @@ function FaturasInquilinosLista() {
           </p>
         </div>
 
-        {loading ? (
-          <div className="space-y-3 animate-pulse">
-            <div className="h-16 bg-neutral-100 rounded-2xl" />
-            <div className="h-16 bg-neutral-100 rounded-2xl" />
-            <div className="h-16 bg-neutral-100 rounded-2xl" />
-          </div>
-        ) : erro ? (
+        {erro && linhas.length === 0 ? (
           <Card className="p-10 text-center border-red-200 bg-red-50">
             <AlertCircle className="w-10 h-10 text-red-600 mx-auto mb-3" />
             <p className="font-black text-red-900 mb-2">
               Não foi possível carregar as faturas. Tente novamente.
             </p>
             <p className="text-sm text-red-700 mb-4">{erro}</p>
-            <Button onClick={load} className="rounded-lg gap-2 font-bold">
+            <Button onClick={() => void load(true)} className="rounded-lg gap-2 font-bold">
               <RefreshCw size={14} /> Tentar novamente
             </Button>
+          </Card>
+        ) : loading && linhas.length === 0 ? (
+          <Card className="border-neutral-200 bg-white p-6 text-sm font-medium text-neutral-500">
+            Consultando as faturas vinculadas à sua conta…
           </Card>
         ) : linhas.length === 0 ? (
           <Card className="p-12 text-center bg-white border-neutral-200">
