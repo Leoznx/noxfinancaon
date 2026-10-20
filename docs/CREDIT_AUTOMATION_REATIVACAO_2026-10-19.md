@@ -197,3 +197,17 @@ já liberada — dependem de uma consulta real (veja a etapa 5) e de um worker i
 - Se a Loft passar a exigir CAPTCHA/OTP com frequência, avaliar um canal de entrega de sessão sem
   SSH (por exemplo, envio pelo painel administrativo) e alerta ativo para a equipe quando
   `authRequiresHuman` ficar ativo.
+
+## Decisão operacional posterior — 19/10/2026
+
+O proprietário decidiu que as 19 solicitações ainda na fila não deveriam criar propostas na Loft.
+A migração `20261020002000_cancel_credit_backlog_and_expose_real_status.sql` encerra somente esse
+conjunto histórico, preservando os registros para auditoria com `technical_status = 'cancelled'`,
+`status = 'cancelada'` e `provider_submission_state = 'not_submitted'`. O corte imutável é
+`queue_enqueued_at <= 2026-10-19 23:49:39.04028+00` e a transação aborta se não encontrar exatamente
+19 registros. Novas simulações não entram nesse corte e seguem normalmente para a fila.
+
+Site e aplicativo passaram a apresentar o estado real do worker: Na fila, Consultando, Aguardando
+autenticação, Aguardando serviço externo, Aguardando resultado, Erro, Requer verificação ou
+Cancelada sem envio. “Em análise” ficou reservado exclusivamente ao resultado real
+`resultado = 'em_analise'` retornado pelo provedor.

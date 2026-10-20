@@ -17,18 +17,49 @@ test("mantém decisões reais da Loft", () => {
   );
 });
 
-test("exibe estados sem decisão como em análise sem fabricar resultado", () => {
-  for (const status of [null, "pendente", "processando", "erro", "requer_verificacao"]) {
-    assert.equal(
-      resolveCreditStatusPresentation({ status, resultado: null }),
-      "em_analise",
-      String(status),
-    );
-  }
-
+test("exibe o estado operacional real sem fabricar Em análise", () => {
+  assert.equal(resolveCreditStatusPresentation({ status: null, resultado: null }), "pendente");
+  assert.equal(resolveCreditStatusPresentation({ status: "pendente" }), "pendente");
+  assert.equal(resolveCreditStatusPresentation({ status: "processando" }), "processando");
+  assert.equal(resolveCreditStatusPresentation({ status: "erro" }), "erro");
+  assert.equal(
+    resolveCreditStatusPresentation({ status: "requer_verificacao" }),
+    "requer_verificacao",
+  );
   assert.equal(
     resolveCreditStatusPresentation({ status: "aprovado", resultado: "erro" }),
-    "em_analise",
+    "aprovado",
+  );
+});
+
+test("detalha as etapas gravadas pelo worker", () => {
+  assert.equal(
+    resolveCreditStatusPresentation({
+      status: "processando",
+      technical_status: "processing",
+      automation_step: "aguardando_autenticacao",
+    }),
+    "aguardando_autenticacao",
+  );
+  assert.equal(
+    resolveCreditStatusPresentation({
+      status: "processando",
+      technical_status: "waiting_provider",
+      automation_step: "aguardando_resultado",
+    }),
+    "aguardando_resultado",
+  );
+  assert.equal(
+    resolveCreditStatusPresentation({
+      status: "pendente",
+      technical_status: "queued",
+      automation_step: "aguardando_liberacao_parceiro",
+    }),
+    "aguardando_servico_externo",
+  );
+  assert.equal(
+    resolveCreditStatusPresentation({ status: "cancelada", technical_status: "cancelled" }),
+    "cancelada",
   );
 });
 

@@ -193,13 +193,22 @@ function Consultas() {
             Requer verificação
           </Badge>
         );
+      case "cancelada":
+        return (
+          <Badge variant="outline" className="bg-neutral-50 text-neutral-700 border-neutral-300 font-bold px-3">
+            Cancelada sem envio
+          </Badge>
+        );
+      case "aguardando_autenticacao":
+      case "aguardando_servico_externo":
+      case "aguardando_resultado":
       case "processando":
         return (
           <Badge
             variant="outline"
-            className="bg-yellow-50 text-yellow-700 border-yellow-200 font-bold px-3"
+            className="bg-blue-50 text-blue-700 border-blue-200 font-bold px-3"
           >
-            Consultando...
+            {getStatusLabel(status)}
           </Badge>
         );
       case "pendente":
@@ -209,7 +218,7 @@ function Consultas() {
             variant="outline"
             className="bg-yellow-50 text-yellow-700 border-yellow-200 font-bold px-3"
           >
-            Pendente
+            Na fila
           </Badge>
         );
     }

@@ -20,7 +20,8 @@ export type StatusConsulta =
   | "recusado"
   | "em_analise"
   | "erro"
-  | "requer_verificacao";
+  | "requer_verificacao"
+  | "cancelada";
 
 export const STATUS_FINAIS: StatusConsulta[] = [
   "aprovado",
@@ -28,6 +29,7 @@ export const STATUS_FINAIS: StatusConsulta[] = [
   "em_analise",
   "erro",
   "requer_verificacao",
+  "cancelada",
 ];
 
 export interface ConsultaCredito {
@@ -52,6 +54,7 @@ export interface ConsultaCredito {
   automation_started_at: string | null;
   automation_finished_at: string | null;
   automation_step: string | null;
+  technical_status: string | null;
   error_message: string | null;
   raw_response: unknown;
   substatus: string | null;
@@ -281,7 +284,7 @@ export async function getConsultaCredito(
   const query = supabase
     .from("consultas_credito")
     .select(
-      "id, correlation_id, created_at, updated_at, tipo_pessoa, documento, documento_masked, tenant_name, tipo_imovel, cep, imovel_cep, valor_aluguel, valor_condominio, valor_taxas, status, resultado, mensagem, origem, automation_started_at, automation_finished_at, automation_step, error_message, raw_response, substatus, plano_id, contract_period_months, valor_premio_mensal, valor_anual, dados_complementares_em, documentos, documentos_prazo_iniciado_em, documentos_prazo_limite_em, documentos_faltantes_em",
+      "id, correlation_id, created_at, updated_at, tipo_pessoa, documento, documento_masked, tenant_name, tipo_imovel, cep, imovel_cep, valor_aluguel, valor_condominio, valor_taxas, status, resultado, mensagem, origem, automation_started_at, automation_finished_at, automation_step, technical_status, error_message, raw_response, substatus, plano_id, contract_period_months, valor_premio_mensal, valor_anual, dados_complementares_em, documentos, documentos_prazo_iniciado_em, documentos_prazo_limite_em, documentos_faltantes_em",
     )
     .eq("id", id);
   try {
@@ -463,6 +466,8 @@ export function resolverStatusConsulta(consulta: {
   status?: string | null;
   resultado?: string | null;
   substatus?: string | null;
+  technical_status?: string | null;
+  automation_step?: string | null;
 }): StatusExibicaoConsulta {
   return resolveCreditStatusPresentation(consulta);
 }
@@ -474,6 +479,10 @@ export const LABEL_STATUS_CONSULTA: Record<StatusExibicaoConsulta, string> = {
   falta_documentos: "Falta de documentos",
   erro: "Erro",
   requer_verificacao: "Requer verificação",
-  processando: "Consultando...",
-  pendente: "Pendente",
+  cancelada: "Cancelada sem envio",
+  aguardando_autenticacao: "Aguardando autenticação",
+  aguardando_servico_externo: "Aguardando serviço externo",
+  aguardando_resultado: "Aguardando resultado",
+  processando: "Consultando",
+  pendente: "Na fila",
 };

@@ -24,7 +24,11 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { formatDocumento, type ConsultaCredito, type StatusConsulta } from "@/lib/consultasCredito";
+import {
+  formatDocumento,
+  resolverStatusConsulta,
+  type ConsultaCredito,
+} from "@/lib/consultasCredito";
 import { resolveCreditCustomerName } from "@/lib/credit-customer-name";
 import { SeletorPlanos, type ExtrasSelecionados, type PlanoSelecionadoCalculo } from "@/components/simulacao/SeletorPlanos";
 
@@ -62,8 +66,38 @@ const STATUS_UI: Record<
     iconClassName: "text-amber-600",
     Icon: AlertTriangle,
   },
+  cancelada: {
+    label: "Cancelada sem envio",
+    className: "bg-neutral-50 border-neutral-300 text-neutral-800",
+    iconClassName: "text-neutral-500",
+    Icon: XCircle,
+  },
+  aguardando_autenticacao: {
+    label: "Aguardando autenticação",
+    className: "bg-blue-50 border-blue-200 text-blue-900",
+    iconClassName: "text-blue-600",
+    Icon: Clock,
+  },
+  aguardando_servico_externo: {
+    label: "Aguardando serviço externo",
+    className: "bg-blue-50 border-blue-200 text-blue-900",
+    iconClassName: "text-blue-600",
+    Icon: Clock,
+  },
+  aguardando_resultado: {
+    label: "Aguardando resultado",
+    className: "bg-blue-50 border-blue-200 text-blue-900",
+    iconClassName: "text-blue-600",
+    Icon: Clock,
+  },
+  processando: {
+    label: "Consultando",
+    className: "bg-blue-50 border-blue-200 text-blue-900",
+    iconClassName: "text-blue-600",
+    Icon: Clock,
+  },
   pendente: {
-    label: "Pendente",
+    label: "Na fila",
     className: "bg-yellow-50 border-yellow-200 text-yellow-900",
     iconClassName: "text-yellow-600",
     Icon: Clock,
@@ -104,52 +138,12 @@ export function ResultadoAutomacao({
   contractPeriodMonthsInitial,
 }: ResultadoAutomacaoProps) {
   const navigate = useNavigate();
-  // `resultado` guarda o veredito da consulta de crédito de forma permanente — a
-  // automação só grava decisões reais (aprovado/recusado/em_analise) ali.
-  // Já `consulta.status` é o ponteiro de etapa da proposta inteira (pendente_documentacao,
-  // aguardando_ativacao, ativado, etc.) e avança conforme o corretor progride a proposta.
-  // Preferir `resultado` aqui evita que essa tela fique presa em "Consultando..." para
-  // sempre assim que a proposta avança para as próximas etapas.
-  const statusBruto = String(consulta.status ?? "").toLowerCase();
-  const resultadoNormalizado = String(consulta.resultado ?? "").toLowerCase();
-  const resultadoConhecido = ["aprovado", "recusado", "reprovado", "em_analise"].includes(resultadoNormalizado);
-  // A automação em si só tem dois estados "ainda rodando": pendente (na fila) e
-  // processando (worker aberto). Qualquer outro `status` (pendente_documentacao,
-  // aguardando_ativacao, ativado...) significa que a proposta já avançou bem além da
-  // análise de crédito — nunca deve mostrar "Consultando..." nesse caso, mesmo que
-  // `resultado` tenha ficado null por ser um registro antigo/manual que nunca passou
-  // pela automação de verdade (confirmado com um caso real: status=aguardando_ativacao,
-  // resultado=null, ficava preso em "Consultando..." para sempre).
-  const aindaNaAnaliseDeCredito =
-    statusBruto === "" || statusBruto === "pendente" || statusBruto === "processando";
-  const estadoTecnicoFinal = statusBruto === "erro" || statusBruto === "requer_verificacao";
-  const status = (
-    resultadoConhecido
-      ? consulta.resultado
-      : estadoTecnicoFinal
-        ? statusBruto
-        : aindaNaAnaliseDeCredito
-          ? consulta.status
-          : "aprovado"
-  ) as StatusConsulta;
-  const estadoOperacional = ["erro", "requer_verificacao"].includes(resultadoNormalizado)
-    ? resultadoNormalizado
-    : statusBruto;
-  const semDecisaoReal =
-    !resultadoConhecido &&
-    ["", "pendente", "processando", "erro", "requer_verificacao"].includes(estadoOperacional);
-  const mensagemAnaliseOperacional = "Sua simulação está em análise.";
+  const status = resolverStatusConsulta(consulta);
   const ui = STATUS_UI[status];
   const statusNormalizado = String(status ?? "").toLowerCase();
   const isRecusado = statusNormalizado.includes("recusado") || statusNormalizado.includes("reprovado");
   const isDocumentacaoPendente = statusNormalizado.includes("pendente_documentacao");
-  const isEmAnalise =
-    statusNormalizado.includes("em_analise") ||
-    statusNormalizado.includes("em análise") ||
-    statusNormalizado.includes("em analise") ||
-    statusNormalizado.includes("análise") ||
-    statusNormalizado.includes("analise") ||
-    (statusNormalizado === "pendente" && !!consulta.automation_finished_at);
+  const isEmAnalise = status === "em_analise" || status === "falta_documentos";
   const nomeCliente = resolveCreditCustomerName({
     tenantName: consulta.tenant_name,
     rawResponse: consulta.raw_response,
@@ -372,10 +366,9 @@ export function ResultadoAutomacao({
     );
   }
 
-  if (isEmAnalise || semDecisaoReal) {
-    const jaEnviadoParaAprovacao =
-      !semDecisaoReal && consulta.substatus === "documentacao_complementar_enviada";
-    const faltaDocumentos = !semDecisaoReal && consulta.substatus === "falta_documentos";
+  if (isEmAnalise) {
+    const jaEnviadoParaAprovacao = consulta.substatus === "documentacao_complementar_enviada";
+    const faltaDocumentos = status === "falta_documentos";
     const AnaliseIcon = faltaDocumentos ? AlertTriangle : Clock;
     return (
       <div className="space-y-6">
@@ -402,9 +395,7 @@ export function ResultadoAutomacao({
                       <p className="text-amber-800 text-sm sm:text-base leading-tight">
                         {faltaDocumentos
                           ? "O prazo terminou sem o envio da documentação."
-                          : semDecisaoReal
-                            ? mensagemAnaliseOperacional
-                            : "Sua simulação está em análise."}
+                          : "Sua simulação está em análise."}
                       </p>
                     </div>
                   </div>
@@ -453,7 +444,7 @@ export function ResultadoAutomacao({
           </div>
         )}
 
-        {!semDecisaoReal && <FormularioAnaliseComplementar consulta={consulta} />}
+        <FormularioAnaliseComplementar consulta={consulta} />
       </div>
     );
   }

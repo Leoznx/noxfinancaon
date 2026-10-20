@@ -41,8 +41,8 @@ function NovaConsulta() {
         userRole: user.role,
       });
       // A API já confirmou que a solicitação foi registrada de forma durável.
-      // Não prendemos o corretor ao tempo do worker/Loft: o detalhe acompanha
-      // a fila por Realtime e apresenta "Em análise" enquanto não há decisão.
+      // Não prendemos o corretor ao tempo do worker: o detalhe acompanha a fila
+      // por Realtime e apresenta a etapa operacional real até chegar uma decisão.
       await navigate({ to: "/consultas/$id/status", params: { id } });
     } catch (e: any) {
       toast.error("Erro ao criar consulta: " + (e?.message || "desconhecido"));

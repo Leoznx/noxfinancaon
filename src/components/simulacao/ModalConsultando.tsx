@@ -35,8 +35,8 @@ function etapaLabel(etapa?: string | null): string {
   if (etapa === "enviando") return "Enviando a simulação";
   if (etapa === "aguardando_resultado") return "Aguardando o resultado";
   if (etapa === "abrindo") return "Abrindo a consulta";
-  if (etapa === "aguardando_autenticacao") return "Preparando a análise";
-  if (etapa === "aguardando_liberacao_parceiro") return "Sua simulação está em análise";
+  if (etapa === "aguardando_autenticacao") return "Aguardando autenticação da automação";
+  if (etapa === "aguardando_liberacao_parceiro") return "Aguardando o serviço externo";
   if (etapa === "recuperada_automaticamente") return "Consulta recuperada e reenfileirada";
   return "Consulta adicionada à fila";
 }

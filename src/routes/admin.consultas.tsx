@@ -435,6 +435,10 @@ function StatusBadge({ status }: { status: StatusExibicaoConsulta }) {
     em_analise: "bg-amber-100 text-amber-700 border-amber-200",
     falta_documentos: "bg-orange-100 text-orange-700 border-orange-200",
     requer_verificacao: "bg-violet-100 text-violet-700 border-violet-200",
+    cancelada: "bg-neutral-100 text-neutral-700 border-neutral-300",
+    aguardando_autenticacao: "bg-blue-100 text-blue-700 border-blue-200",
+    aguardando_servico_externo: "bg-blue-100 text-blue-700 border-blue-200",
+    aguardando_resultado: "bg-blue-100 text-blue-700 border-blue-200",
     processando: "bg-yellow-100 text-yellow-700 border-yellow-200",
     erro: "bg-red-100 text-red-700 border-red-200",
   };
