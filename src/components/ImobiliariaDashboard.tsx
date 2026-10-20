@@ -48,6 +48,7 @@ export function ImobiliariaDashboard({ profileId, email }: { profileId: string; 
   const [chartPeriod, setChartPeriod] = useState("6");
 
   const load = useCallback(async (force = false) => {
+    setLoading(true);
     setError(null);
     try {
       const dashboardData = await loadImobiliariaDashboard(profileId, email, force);
@@ -82,11 +83,6 @@ export function ImobiliariaDashboard({ profileId, email }: { profileId: string; 
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "comissoes" },
-        refresh,
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "documentos_contrato" },
         refresh,
       )
       .on(
@@ -203,7 +199,7 @@ export function ImobiliariaDashboard({ profileId, email }: { profileId: string; 
           <PolicyStatusChart data={data.policyStatus} />
         </DashboardPanel>
 
-        <InvoicePanel invoices={data.invoices} />
+        <InvoicePanel invoices={data.invoices} unavailable={data.invoicesUnavailable} />
       </section>
     </div>
   );
@@ -376,7 +372,7 @@ function PolicyStatusChart({ data }: { data: ImobiliariaDashboardData["policySta
   );
 }
 
-function InvoicePanel({ invoices }: { invoices: ImobiliariaDashboardData["invoices"] }) {
+function InvoicePanel({ invoices, unavailable }: { invoices: ImobiliariaDashboardData["invoices"]; unavailable: boolean }) {
   return (
     <DashboardPanel className="flex min-h-[390px] flex-col overflow-hidden sm:min-h-[460px] xl:h-full xl:min-h-0">
       <PanelHeader title="Próximos vencimentos">
@@ -390,7 +386,9 @@ function InvoicePanel({ invoices }: { invoices: ImobiliariaDashboardData["invoic
         </Button>
       </PanelHeader>
       <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1 [scrollbar-color:#d4d4d4_transparent] [scrollbar-width:thin]">
-        {invoices.length ? (
+        {unavailable ? (
+          <p className="mt-6 text-center text-xs text-neutral-500">Vencimentos temporariamente indisponíveis. Acesse “Ver todos” ou atualize o painel.</p>
+        ) : invoices.length ? (
           <div className="space-y-2.5">
             {invoices.map((invoice) => (
               <article

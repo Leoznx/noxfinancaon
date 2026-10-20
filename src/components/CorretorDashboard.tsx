@@ -61,6 +61,7 @@ export function CorretorDashboard({ profileId }: { profileId: string }) {
   const [chartPeriod, setChartPeriod] = useState(6);
 
   const load = useCallback(async (force = false) => {
+    setLoading(true);
     setError(null);
     try {
       const [dashboardData, levelData] = await Promise.all([
@@ -214,7 +215,7 @@ export function CorretorDashboard({ profileId }: { profileId: string }) {
           <PolicyStatus data={data.policyStatus} />
         </Panel>
 
-        <InvoicePanel invoices={data.invoices} />
+        <InvoicePanel invoices={data.invoices} unavailable={data.invoicesUnavailable} />
       </section>
 
       <CareerProgress nivel={nivel} />
@@ -418,7 +419,7 @@ function PolicyStatus({ data }: { data: ImobiliariaDashboardData["policyStatus"]
   );
 }
 
-function InvoicePanel({ invoices }: { invoices: ImobiliariaDashboardData["invoices"] }) {
+function InvoicePanel({ invoices, unavailable }: { invoices: ImobiliariaDashboardData["invoices"]; unavailable: boolean }) {
   return (
     <Panel className="flex min-h-[430px] flex-col overflow-hidden xl:h-full xl:min-h-0">
       <PanelHeader title="Próximos vencimentos">
@@ -430,7 +431,9 @@ function InvoicePanel({ invoices }: { invoices: ImobiliariaDashboardData["invoic
         </Link>
       </PanelHeader>
       <div className="mt-2 min-h-0 flex-1 overflow-y-auto pr-1 [scrollbar-color:#d4d4d4_transparent] [scrollbar-width:thin]">
-        {invoices.length ? (
+        {unavailable ? (
+          <p className="mt-6 text-center text-xs text-neutral-500">Vencimentos temporariamente indisponíveis. Acesse “Ver todos” ou atualize o painel.</p>
+        ) : invoices.length ? (
           <div className="divide-y divide-neutral-100">
             {invoices.map((invoice) => (
               <article key={invoice.id} className="flex items-center gap-2.5 py-2.5 first:pt-1.5">
