@@ -132,7 +132,7 @@ function CommissionsPage() {
       else if (cached === undefined) setLoading(true);
       setError(null);
       try {
-        const next = await loadCommissionDashboard(user, background || cached !== undefined);
+        const next = await loadCommissionDashboard(user, background);
         setSummary(next.summary || emptySummary);
         setCommissions(next.commissions);
         setWithdrawals(next.withdrawals);

@@ -32,12 +32,18 @@ export function loadSessionResource<T>(
     return Promise.resolve(existing.value);
   }
 
-  const promise = loader()
+  const entry: ResourceEntry<T> = {
+    value: existing?.value,
+    updatedAt: existing?.updatedAt ?? 0,
+  };
+  const promise = Promise.resolve()
+    .then(loader)
     .then((value) => {
-      resources.set(key, { value, updatedAt: Date.now() });
+      if (resources.get(key) === entry) resources.set(key, { value, updatedAt: Date.now() });
       return value;
     })
     .catch((error) => {
+      if (resources.get(key) !== entry) throw error;
       if (existing?.value !== undefined) {
         resources.set(key, { value: existing.value, updatedAt: existing.updatedAt });
       } else {
@@ -46,11 +52,8 @@ export function loadSessionResource<T>(
       throw error;
     });
 
-  resources.set(key, {
-    value: existing?.value,
-    updatedAt: existing?.updatedAt ?? 0,
-    promise,
-  });
+  entry.promise = promise;
+  resources.set(key, entry);
   return promise;
 }
 

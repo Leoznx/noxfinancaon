@@ -213,7 +213,8 @@ export async function prefetchDashboardDataForHref(
     await loadTenantInvoiceSummaries(user.id);
   } else if (pathname === "/carteira-cobrancas" && ["corretor", "imobiliaria", "proprietario"].includes(user.role)) {
     const { loadCarteiraCobrancas } = await import("@/lib/carteira-cobrancas-data");
-    await loadCarteiraCobrancas(user.id, user.role === "imobiliaria");
+    const { loadCobrancasAvulsas } = await import("@/lib/cobrancas-avulsas-data");
+    await Promise.all([loadCarteiraCobrancas(user), loadCobrancasAvulsas(user)]);
   } else if (pathname === "/plano-carreira") {
     const { loadCareerContractCount } = await import("@/lib/career-progress");
     await loadCareerContractCount(user.id, user.role);

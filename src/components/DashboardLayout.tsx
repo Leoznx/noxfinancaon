@@ -74,6 +74,7 @@ import {
 } from "@/lib/broker-commission-policy";
 import { useAdminAttention } from "@/hooks/useAdminAttention";
 import { useDashboardLoadingScope } from "@/components/GlobalLoading";
+import { isNavigationScopeCurrent, warmNavigationRoutes } from "@/lib/navigation-warmup";
 
 const CARGOS_INTERNOS_GATEADOS = [
   "juridico",
@@ -85,12 +86,13 @@ const CARGOS_INTERNOS_GATEADOS = [
 
 const PRIORITY_DASHBOARD_ROUTES = new Set([
   "/dashboard",
-  "/consultas/nova",
-  "/consultas",
-  "/apolices",
   "/faturas-inquilinos",
   "/carteira-cobrancas",
+  "/consultas",
+  "/apolices",
   "/plano-carreira",
+  "/minhas-comissoes",
+  "/consultas/nova",
 ]);
 
 type MenuItem = {
@@ -684,67 +686,42 @@ export function DashboardLayout({
       menuItems.flatMap((item) => [item.href, ...(item.children ?? []).map((child) => child.href)]),
     ),
   )
-    .filter((href) => !href.startsWith(location.pathname + "?") && href !== location.pathname)
     .join("\n");
 
-  // As abas mais usadas são aquecidas imediatamente e antes das demais. O
-  // restante continua sendo baixado um por vez quando o navegador está ocioso,
-  // sem disputar banda com a Nova Consulta ou com a rota clicada pelo usuário.
+  // As filas sobrevivem à troca de página. Dados começam junto com o código,
+  // com a tela aberta primeiro e apenas uma aba em segundo plano por vez.
   useEffect(() => {
-    if (!routePreloadKey || typeof window === "undefined") return;
+    if (!routePreloadKey || !user || isDemoSession()) return;
     const targets = routePreloadKey.split("\n");
-    const priorityTargets = targets.filter((href) =>
-      PRIORITY_DASHBOARD_ROUTES.has(href.split("?")[0]),
-    );
-    const backgroundTargets = targets.filter(
-      (href) => !PRIORITY_DASHBOARD_ROUTES.has(href.split("?")[0]),
-    );
-    let cancelled = false;
-    let timeoutId: number | undefined;
-    let idleId: number | undefined;
-
-    const schedule = (callback: () => void) => {
-      if (typeof window.requestIdleCallback === "function") {
-        idleId = window.requestIdleCallback(callback, { timeout: 1_500 });
-      } else {
-        timeoutId = window.setTimeout(callback, 250);
-      }
+    const priorities = [...PRIORITY_DASHBOARD_ROUTES];
+    const rank = (href: string) => {
+      const index = priorities.indexOf(href.split("?")[0]);
+      return index < 0 ? priorities.length : index;
     };
-
-    const preloadNext = (index: number) => {
-      if (cancelled || index >= backgroundTargets.length) return;
-      const batch = backgroundTargets.slice(index, index + 3);
-      void Promise.allSettled(batch.map((href) => router.preloadRoute({ to: href as any })))
-        .finally(() => schedule(() => preloadNext(index + batch.length)));
-    };
-
-    void Promise.allSettled(
-      priorityTargets.map((href) => router.preloadRoute({ to: href as any })),
-    ).finally(() => {
-      if (!cancelled) {
-        schedule(() => preloadNext(0));
-        if (user && !isDemoSession()) {
-          void import("@/lib/dashboard-navigation-data").then(({ prefetchDashboardDataForHref }) => {
-            if (cancelled) return;
-            void Promise.allSettled(priorityTargets.map((href) => prefetchDashboardDataForHref(href, user)));
-          });
-        }
-      }
+    targets.sort((a, b) => {
+      return rank(a) - rank(b);
     });
-    return () => {
-      cancelled = true;
-      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
-      if (idleId !== undefined && typeof window.cancelIdleCallback === "function") {
-        window.cancelIdleCallback(idleId);
-      }
-    };
-  }, [routePreloadKey, router, user]);
+    warmNavigationRoutes({
+      scope: `${user.id}:${user.role}`,
+      hrefs: targets,
+      currentHref: location.pathname,
+      preloadCode: (href) => router.preloadRoute({ to: href as any }),
+      loadData: (href) => import("@/lib/dashboard-navigation-data").then(({ prefetchDashboardDataForHref }) => {
+        if (isNavigationScopeCurrent(`${user.id}:${user.role}`)) return prefetchDashboardDataForHref(href, user);
+      }),
+    });
+  }, [location.pathname, routePreloadKey, router, user]);
 
   const prefetchRouteData = (href: string) => {
     if (!user || isDemoSession()) return;
-    void import("@/lib/dashboard-navigation-data").then(({ prefetchDashboardDataForHref }) =>
-      prefetchDashboardDataForHref(href, user).catch(() => undefined),
-    );
+    warmNavigationRoutes({
+      scope: `${user.id}:${user.role}`,
+      hrefs: [href],
+      currentHref: href,
+      loadData: (target) => import("@/lib/dashboard-navigation-data").then(({ prefetchDashboardDataForHref }) => {
+        if (isNavigationScopeCurrent(`${user.id}:${user.role}`)) return prefetchDashboardDataForHref(target, user);
+      }),
+    });
   };
 
   const nomeTopo = nomeUsuario || user?.email?.split("@")[0] || "Usuário";

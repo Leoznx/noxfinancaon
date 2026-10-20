@@ -6,6 +6,8 @@ import {
   getPreferredStorage,
 } from "@/lib/authStorage";
 import { clearDemoSession, isDemoSession } from "@/lib/demo-session";
+import { clearSessionResources } from "@/lib/session-resource-cache";
+import { resetNavigationWarmup } from "@/lib/navigation-warmup";
 
 export type Role =
   | "admin"
@@ -72,6 +74,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const LOGOUT_IN_PROGRESS_KEY = "nox_logout_in_progress";
 
 function clearStoredAuth() {
+  clearSessionResources();
+  resetNavigationWarmup();
   if (typeof window === "undefined") return;
 
   if (isDemoSession()) {
@@ -370,6 +374,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     sellerTypeHint?: SellerType | null,
     timeClockEnabledHint?: boolean,
   ) => {
+    if (user && user.id !== id) {
+      clearSessionResources();
+      resetNavigationWarmup();
+    }
     isLoggingOutRef.current = false;
     authVersionRef.current += 1;
     const loginVersion = authVersionRef.current;

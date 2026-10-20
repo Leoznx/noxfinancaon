@@ -52,3 +52,19 @@ test("invalida todos os recursos de um prefixo", async () => {
   assert.equal(peekSessionResource("dashboard:user-1:apolices"), undefined);
   assert.equal(peekSessionResource("dashboard:user-2:consultas"), 3);
 });
+
+test("resposta antiga não repõe dados após logout ou invalidação", async () => {
+  let resolve!: (value: string[]) => void;
+  const pending = loadSessionResource(
+    "conta-antiga",
+    () =>
+      new Promise<string[]>((done) => {
+        resolve = done;
+      }),
+  );
+  await Promise.resolve();
+  clearSessionResources();
+  resolve(["dados privados"]);
+  await pending;
+  assert.equal(peekSessionResource("conta-antiga"), undefined);
+});

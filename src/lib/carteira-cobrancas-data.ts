@@ -1,4 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
+import { loadBillingScope, readBillingRows, type BillingScopeUser } from "@/lib/billing-scope";
 import {
   fetchOwnConsolidatedBatches,
   type ConsolidatedBillingBatch,
@@ -17,15 +17,16 @@ export function peekCarteiraCobrancas(userId: string, isAgency: boolean) {
   return peekSessionResource<CarteiraCobrancasData>(keyFor(userId, isAgency));
 }
 
-export function loadCarteiraCobrancas(userId: string, isAgency: boolean, force = false) {
+export function loadCarteiraCobrancas(user: BillingScopeUser, force = false) {
   return loadSessionResource(
-    keyFor(userId, isAgency),
+    keyFor(user.id, user.role === "imobiliaria"),
     async (): Promise<CarteiraCobrancasData> => {
-      const [invoiceResult, batchRows, subscriptionResult] = await Promise.all([
-        supabase
-          .from("faturas_inquilino")
-          .select(
-            `
+      const scope = await loadBillingScope(user, force);
+      const [invoiceRows, batchRows, subscriptionRows] = await Promise.all([
+        readBillingRows(
+          scope,
+          "faturas_inquilino",
+          `
             id, consulta_id, status, valor, vencimento, numero_parcela,
             payment_method, payment_responsible, payment_url, boleto_url,
             linha_digitavel, consolidated_item_id, recipient_user_id,
@@ -38,30 +39,30 @@ export function loadCarteiraCobrancas(userId: string, isAgency: boolean, force =
             asaas_payment:asaas_payments(id, asaas_payment_id, payment_method, confirmed_at, received_at),
             notifications:financial_notifications(id)
           `,
-          )
-          .order("numero_parcela", { ascending: true }),
-        isAgency ? fetchOwnConsolidatedBatches() : Promise.resolve([]),
-        (supabase as any)
-          .from("asaas_subscriptions")
-          .select(
-            "id, consultation_id, asaas_subscription_id, status, card_registration_status, initial_checkout_status, checkout_status, checkout_url, mode, fire_insurance_payment_mode, initial_amount, monthly_amount, created_at",
-          )
-          .order("created_at", { ascending: false }),
+        ),
+        user.role === "imobiliaria" ? fetchOwnConsolidatedBatches() : Promise.resolve([]),
+        readBillingRows(
+          scope,
+          "asaas_subscriptions",
+          "id, consultation_id, asaas_subscription_id, status, card_registration_status, initial_checkout_status, checkout_status, checkout_url, mode, fire_insurance_payment_mode, initial_amount, monthly_amount, created_at",
+        ),
       ]);
-      if (invoiceResult.error) throw invoiceResult.error;
-      if (subscriptionResult.error) throw subscriptionResult.error;
 
       const subscriptions = new Map<string, any>();
-      for (const subscription of subscriptionResult.data ?? []) {
+      for (const subscription of subscriptionRows.sort((a, b) =>
+        String(b.created_at).localeCompare(String(a.created_at)),
+      )) {
         if (!subscriptions.has(subscription.consultation_id)) {
           subscriptions.set(subscription.consultation_id, subscription);
         }
       }
       return {
-        faturas: (invoiceResult.data ?? []).map((invoice: any) => ({
-          ...invoice,
-          asaas_subscription: subscriptions.get(invoice.consulta_id) || null,
-        })),
+        faturas: invoiceRows
+          .sort((a, b) => a.numero_parcela - b.numero_parcela)
+          .map((invoice: any) => ({
+            ...invoice,
+            asaas_subscription: subscriptions.get(invoice.consulta_id) || null,
+          })),
         batches: batchRows,
       };
     },

@@ -104,6 +104,8 @@ type Contrato = {
 function CarteiraCobrancas() {
   const { user } = useAuth();
   const userId = user?.id;
+  const userEmail = user?.email;
+  const userRole = user?.role;
   const isAgency = user?.role === "imobiliaria";
   const cached = userId ? peekCarteiraCobrancas(userId, isAgency) : undefined;
   const [faturas, setFaturas] = useState<any[]>(() => cached?.faturas ?? []);
@@ -124,10 +126,10 @@ function CarteiraCobrancas() {
   const [reissuingBatch, setReissuingBatch] = useState<string | null>(null);
 
   const carregar = useCallback(async (force = true) => {
-    if (!userId) return;
+    if (!userId || !userEmail || !userRole) return;
     if (!peekCarteiraCobrancas(userId, isAgency)) setLoading(true);
     try {
-      const data = await loadCarteiraCobrancas(userId, isAgency, force);
+      const data = await loadCarteiraCobrancas({ id: userId, email: userEmail, role: userRole }, force);
       setFaturas(data.faturas);
       setBatches(data.batches);
     } catch (cause) {
@@ -136,7 +138,7 @@ function CarteiraCobrancas() {
     } finally {
       setLoading(false);
     }
-  }, [isAgency, userId]);
+  }, [isAgency, userId, userEmail, userRole]);
 
   useEffect(() => {
     if (!userId) return;

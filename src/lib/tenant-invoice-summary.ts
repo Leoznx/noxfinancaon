@@ -12,13 +12,6 @@ export type TenantInvoiceSummary = {
   status: "em_dia" | "a_vencer" | "vencido";
 };
 
-export type TenantInvoiceSummaryPage = {
-  rows: TenantInvoiceSummary[];
-  hasMore: boolean;
-};
-
-export const TENANT_INVOICE_PAGE_SIZE = 50;
-
 const keyFor = (userId: string) => `dashboard-route:${userId}:faturas-inquilinos`;
 
 function cityOf(property: any): string {
@@ -36,12 +29,10 @@ function cityOf(property: any): string {
 }
 
 export function peekTenantInvoiceSummaries(userId: string) {
-  return peekSessionResource<TenantInvoiceSummaryPage>(keyFor(userId));
+  return peekSessionResource<TenantInvoiceSummary[]>(keyFor(userId));
 }
 
-export async function fetchTenantInvoiceSummariesPage(
-  offset = 0,
-): Promise<TenantInvoiceSummaryPage> {
+async function fetchTenantInvoiceSummaries(): Promise<TenantInvoiceSummary[]> {
   const { data, error } = await supabase
     .from("apolices")
     .select(
@@ -55,15 +46,12 @@ export async function fetchTenantInvoiceSummariesPage(
         `,
     )
     .order("created_at", { ascending: false })
-    .order("id", { ascending: false })
-    .range(offset, offset + TENANT_INVOICE_PAGE_SIZE);
+    .order("id", { ascending: false });
   if (error) throw error;
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const rows = (data ?? [])
-    .slice(0, TENANT_INVOICE_PAGE_SIZE)
-    .map((policy: any): TenantInvoiceSummary => {
+  const rows = (data ?? []).map((policy: any): TenantInvoiceSummary => {
       const installments = policy.mensalidades ?? [];
       let overdue: any = null;
       let upcoming: any = null;
@@ -87,11 +75,11 @@ export async function fetchTenantInvoiceSummariesPage(
         status: overdue ? "vencido" : upcoming ? "a_vencer" : "em_dia",
       };
     });
-  return { rows, hasMore: (data ?? []).length > TENANT_INVOICE_PAGE_SIZE };
+  return rows;
 }
 
 export function loadTenantInvoiceSummaries(userId: string, force = false) {
-  return loadSessionResource(keyFor(userId), () => fetchTenantInvoiceSummariesPage(), {
+  return loadSessionResource(keyFor(userId), fetchTenantInvoiceSummaries, {
     force,
     maxAgeMs: 60_000,
   });

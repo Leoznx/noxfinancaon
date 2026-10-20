@@ -13,30 +13,11 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { isPagamentoConcluido, statusPagamentoLabel } from "@/lib/asaas-payment";
+import { statusPagamentoLabel } from "@/lib/asaas-payment";
+import { useAuth } from "@/components/AuthProvider";
+import { loadCobrancasAvulsas, peekCobrancasAvulsas, type CobrancaAvulsa } from "@/lib/cobrancas-avulsas-data";
 import { managePersistedAsaasPayment } from "@/lib/asaas-checkout";
 import { toast } from "sonner";
-
-type CobrancaAvulsa = {
-  id: string;
-  consultation_id: string | null;
-  asaas_payment_id: string | null;
-  payment_method: string | null;
-  status: string | null;
-  value: number | null;
-  due_date: string | null;
-  pix_copy_paste: string | null;
-  boleto_url: string | null;
-  boleto_barcode: string | null;
-  invoice_url?: string | null;
-  payment_url?: string | null;
-  external_reference?: string | null;
-  payment_responsible?: "tenant" | "agency" | null;
-  recipient_name?: string | null;
-  confirmed_at?: string | null;
-  received_at?: string | null;
-  consulta?: { tenant_name: string | null } | null;
-};
 
 /**
  * Cobranças de contratação (Pix/boleto/cartão) que ainda estão em aberto e não
@@ -45,42 +26,37 @@ type CobrancaAvulsa = {
  * permanece condicionada aos requisitos contratuais e financeiros.
  */
 export function CobrancasAvulsasAbertas() {
-  const [itens, setItens] = useState<CobrancaAvulsa[]>([]);
-  const [carregando, setCarregando] = useState(true);
+  const { user } = useAuth();
+  const userId = user?.id;
+  const userEmail = user?.email;
+  const userRole = user?.role;
+  const cached = userId ? peekCobrancasAvulsas(userId) : undefined;
+  const [itens, setItens] = useState<CobrancaAvulsa[]>(() => cached ?? []);
+  const [carregando, setCarregando] = useState(cached === undefined);
   const [atualizandoId, setAtualizandoId] = useState<string | null>(null);
   const [acaoId, setAcaoId] = useState<string | null>(null);
 
-  const carregar = useCallback(async () => {
-    const [pagamentosRes, faturasRes] = await Promise.all([
-      (supabase as any)
-        .from("asaas_payments")
-        .select("id, consultation_id, asaas_payment_id, payment_method, status, value, due_date, pix_copy_paste, boleto_url, boleto_barcode, external_reference, payment_responsible, recipient_name, confirmed_at, received_at, created_at, consulta:consultas_credito(tenant_name)")
-        .order("created_at", { ascending: false }),
-      supabase.from("faturas_inquilino").select("asaas_payment_id"),
-    ]);
-
-    const jaEhParcela = new Set(
-      ((faturasRes.data as any[]) ?? [])
-        .map((fatura) => fatura.asaas_payment_id)
-        .filter(Boolean),
-    );
-
-    const abertas = (((pagamentosRes.data as CobrancaAvulsa[]) ?? []) as CobrancaAvulsa[]).filter(
-      (pagamento) => !isPagamentoConcluido(pagamento.status) && !jaEhParcela.has(pagamento.id),
-    );
-    setItens(abertas);
-    setCarregando(false);
-  }, []);
+  const carregar = useCallback(async (force = true) => {
+    if (!userId || !userEmail || !userRole) return;
+    try {
+      setItens(await loadCobrancasAvulsas({ id: userId, email: userEmail, role: userRole }, force));
+    } finally {
+      setCarregando(false);
+    }
+  }, [userId, userEmail, userRole]);
 
   useEffect(() => {
-    void carregar();
+    void carregar(false).catch(() => toast.error("Não foi possível atualizar as cobranças avulsas."));
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const canal = supabase
       .channel("cobrancas-avulsas-abertas")
       .on("postgres_changes", { event: "*", schema: "public", table: "asaas_payments" }, () => {
-        void carregar();
+        clearTimeout(timer);
+        timer = setTimeout(() => { void carregar().catch(() => undefined); }, 350);
       })
       .subscribe();
     return () => {
+      clearTimeout(timer);
       supabase.removeChannel(canal);
     };
   }, [carregar]);

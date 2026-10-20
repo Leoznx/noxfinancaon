@@ -39,7 +39,7 @@ function ApolicesList() {
       if (cached === undefined) setLoading(true);
       setErro(null);
       try {
-        const data = await loadDashboardPolicies(user, cached !== undefined);
+        const data = await loadDashboardPolicies(user);
         if (!cancelled) setApolices(data);
       } catch (e: any) {
         if (!cancelled) setErro(e.message || "Erro ao carregar apólices");

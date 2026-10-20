@@ -64,18 +64,20 @@ export function CorretorDashboard({ profileId }: { profileId: string }) {
     setLoading(true);
     setError(null);
     try {
-      const [dashboardData, levelData] = await Promise.all([
-        loadCorretorDashboard(profileId, force),
-        loadNivelInfo(profileId, "corretor"),
-      ]);
+      const dashboardData = await loadCorretorDashboard(profileId, force);
       setData(dashboardData);
-      setNivel(levelData);
     } catch (cause) {
       console.error("[CorretorDashboard] falha ao carregar painel", cause);
       setError("Não foi possível carregar os indicadores do corretor agora.");
     } finally {
       setLoading(false);
     }
+  }, [profileId]);
+
+  useEffect(() => {
+    let active = true;
+    void loadNivelInfo(profileId, "corretor").then((level) => { if (active) setNivel(level); });
+    return () => { active = false; };
   }, [profileId]);
 
   useEffect(() => {
