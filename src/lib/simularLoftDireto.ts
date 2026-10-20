@@ -1,6 +1,6 @@
-import { supabase } from "@integrations/supabase/client";
-import { upsertConsultaCredito } from "@lib/consultas";
-import type { DadosSimulacao } from "@components/simulacao/FormularioSimulacao";
+import { supabase } from "@/integrations/supabase/client";
+import { upsertConsultaCredito } from "@/lib/consultas";
+import type { DadosSimulacao } from "@/components/simulacao/FormularioSimulacao";
 
 /**
  * Chama a API da Loft diretamente via Edge Function e grava o resultado.
