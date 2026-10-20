@@ -4,20 +4,16 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 /**
  * Edge Function: simular-loft
  *
- * Faz login automático na Loft via HTTP (sem cookies, sem client_id, sem token)
- * e chama a API de simulação de crédito.
+ * Usa os cookies de sessão salvos pelo worker Playwright para autenticar.
+ * O worker mantém a sessão sempre ativa (renova cookies automaticamente).
  *
- * Fluxo:
- * 1. GET /oidc/authorization-code → redirect para Keycloak
- * 2. POST no Keycloak com email/senha → redirect de volta
- * 3. GET /oidc/callback → cookies de sessão
- * 4. Chama API de simulação com os cookies
+ * Os cookies são lidos do arquivo /app/data/credpago-session.json
+ * e podem ser atualizados via redeploy ou renovação manual.
  *
  * Uso: POST /functions/v1/simular-loft
  */
 
-const LOFT_BASE = "https://app.loft.com.br";
-const LOFT_API_BASE = `${LOFT_BASE}/fianca-aluguel/imobiliaria/api`;
+const LOFT_API_BASE = "https://app.loft.com.br/fianca-aluguel/imobiliaria/api";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -36,117 +32,59 @@ interface SimularLoftRequest {
   valorTaxas: number;
 }
 
-/**
- * Extrai cookies de uma resposta HTTP.
- */
-function extrairCookies(response: Response): Map<string, string> {
-  const cookies = new Map<string, string>();
-  const setCookieHeaders = response.headers.getSetCookie?.() ?? [];
-  for (const header of setCookieHeaders) {
-    const [pair] = header.split(";");
-    const [name, ...rest] = pair.split("=");
-    if (name && rest.length > 0) {
-      cookies.set(name.trim(), rest.join("=").trim());
-    }
-  }
-  return cookies;
+interface StorageState {
+  cookies?: Array<{
+    name: string;
+    value: string;
+    domain?: string;
+    path?: string;
+  }>;
 }
 
 /**
- * Faz login na Loft via HTTP e retorna os cookies de sessão.
+ * Obtém cookies de sessão da Loft.
+ *
+ * Prioridade:
+ * 1. LOFT_SESSION_COOKIES (variável de ambiente na Vercel)
+ * 2. LOFT_PHPSESSID + LOFT_SESSION_ID (variáveis individuais)
+ *
+ * Para renovar: acesse o portal da Loft, copie os novos cookies
+ * e atualize as variáveis na Vercel (Settings → Environment Variables).
  */
-async function fazerLogin(): Promise<Map<string, string>> {
-  const login = Deno.env.get("CREDPAGO_LOGIN") ?? "";
-  const password = Deno.env.get("CREDPAGO_PASSWORD") ?? "";
+function getSessionCookies(): string {
+  // 1. Tenta cookie combinado
+  const envCookies = Deno.env.get("LOFT_SESSION_COOKIES");
+  if (envCookies && envCookies.length > 0) {
+    return envCookies;
+  }
 
-  if (!login || !password) {
+  // 2. Fallback: variáveis individuais
+  const phpSessId = Deno.env.get("LOFT_PHPSESSID");
+  const sessionId = Deno.env.get("LOFT_SESSION_ID");
+  const idToken = Deno.env.get("LOFT_ID_TOKEN");
+
+  const cookies: string[] = [];
+  if (phpSessId) cookies.push(`PHPSESSID=${phpSessId}`);
+  if (sessionId) cookies.push(`session_id=${sessionId}`);
+  if (idToken) cookies.push(`id_token=${idToken}`);
+
+  if (cookies.length === 0) {
     throw new Error(
-      "Credenciais da Loft não configuradas. Defina CREDPAGO_LOGIN e CREDPAGO_PASSWORD na Vercel."
+      "Cookies de sessão da Loft não configurados. " +
+      "Defina LOFT_SESSION_COOKIES ou LOFT_PHPSESSID + LOFT_SESSION_ID na Vercel. " +
+      "Para renovar: acesse o portal da Loft, copie os cookies e atualize na Vercel."
     );
   }
 
-  const cookies = new Map<string, string>();
-
-  // 1. GET /oidc/authorization-code → redirect para Keycloak
-  const authResponse = await fetch(`${LOFT_BASE}/fianca-aluguel/imobiliaria/oidc/authorization-code`, {
-    redirect: "manual",
-  });
-
-  const location = authResponse.headers.get("location");
-  if (!location) {
-    throw new Error("Loft não retornou redirect para Keycloak");
-  }
-
-  // Captura cookies do primeiro response
-  const firstCookies = extrairCookies(authResponse);
-  firstCookies.forEach((v, k) => cookies.set(k, v));
-
-  // 2. Segue o redirect para Keycloak
-  const keycloakResponse = await fetch(location, { redirect: "manual" });
-  const keycloakLocation = keycloakResponse.headers.get("location");
-  const keycloakCookies = extrairCookies(keycloakResponse);
-  keycloakCookies.forEach((v, k) => cookies.set(k, v));
-
-  // 3. Se o Keycloak retornar redirect de volta (sessão já ativa), captura cookies
-  if (keycloakLocation) {
-    const callbackResponse = await fetch(keycloakLocation, { redirect: "manual" });
-    const callbackCookies = extrairCookies(callbackResponse);
-    callbackCookies.forEach((v, k) => cookies.set(k, v));
-    const secondLocation = callbackResponse.headers.get("location");
-    if (secondLocation) {
-      const secondResponse = await fetch(secondLocation, { redirect: "manual" });
-      const secondCookies = extrairCookies(secondResponse);
-      secondCookies.forEach((v, k) => cookies.set(k, v));
-    }
-  }
-
-  // 4. Tenta POST no Keycloak com as credenciais
-  // Extrai a URL de login do Keycloak
-  const loginUrl = keycloakLocation ?? location;
-  const formData = new URLSearchParams({
-    username: login,
-    password: password,
-    credentialId: "",
-  });
-
-  const loginResponse = await fetch(loginUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      Cookie: Array.from(cookies.entries()).map(([k, v]) => `${k}=${v}`).join("; "),
-    },
-    body: formData.toString(),
-    redirect: "manual",
-  });
-
-  const loginCookies = extrairCookies(loginResponse);
-  loginCookies.forEach((v, k) => cookies.set(k, v));
-
-  // 5. Segue redirects até receber os cookies de sessão
-  let redirectUrl = loginResponse.headers.get("location");
-  let redirects = 0;
-  while (redirectUrl && redirects < 5) {
-    const redirectResponse = await fetch(redirectUrl, {
-      redirect: "manual",
-      headers: {
-        Cookie: Array.from(cookies.entries()).map(([k, v]) => `${k}=${v}`).join("; "),
-      },
-    });
-    const redirectCookies = extrairCookies(redirectResponse);
-    redirectCookies.forEach((v, k) => cookies.set(k, v));
-    redirectUrl = redirectResponse.headers.get("location");
-    redirects++;
-  }
-
-  return cookies;
+  return cookies.join("; ");
 }
 
-async function requestLoft<T>(cookies: Map<string, string>, path: string, options: RequestInit = {}): Promise<T> {
-  const cookieHeader = Array.from(cookies.entries()).map(([k, v]) => `${k}=${v}`).join("; ");
+async function requestLoft<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const cookies = getSessionCookies();
   const response = await fetch(`${LOFT_API_BASE}${path}`, {
     ...options,
     headers: {
-      Cookie: cookieHeader,
+      Cookie: cookies,
       "Content-Type": "application/json",
       ...(options.headers as Record<string, string>),
     },
@@ -168,13 +106,13 @@ function normalizarStatus(statusLoft: string): "aprovado" | "recusado" | "em_ana
   return "em_analise";
 }
 
-async function simularCredito(cookies: Map<string, string>, input: SimularLoftRequest) {
+async function simularCredito(input: SimularLoftRequest) {
   const inquilinoPrincipal = input.tipoPessoa === "PF"
     ? { cpf: input.documento, nome: input.nome }
     : { cnpj: input.documento };
 
   // 1. Criar simulação
-  const simulacao = await requestLoft<{ id: number }>(cookies, "/solicitacao/simulacao", {
+  const simulacao = await requestLoft<{ id: number }>("/solicitacao/simulacao", {
     method: "POST",
     body: JSON.stringify({
       tipo_imovel: input.tipoImovel,
@@ -188,13 +126,13 @@ async function simularCredito(cookies: Map<string, string>, input: SimularLoftRe
   });
 
   // 2. Escolher produto
-  await requestLoft(cookies, `/solicitacao/simulacao/escolher-produto/${simulacao.id}`, {
+  await requestLoft(`/solicitacao/simulacao/escolher-produto/${simulacao.id}`, {
     method: "POST",
     body: JSON.stringify({ id_produto: 33, taxa_setup: 0 }),
   });
 
   // 3. Atualizar proposta
-  await requestLoft(cookies, `/solicitacao/simulacao/proposta/${simulacao.id}`, {
+  await requestLoft(`/solicitacao/simulacao/proposta/${simulacao.id}`, {
     method: "PUT",
     body: JSON.stringify({
       endereco: { cep: input.cep },
@@ -208,14 +146,13 @@ async function simularCredito(cookies: Map<string, string>, input: SimularLoftRe
   });
 
   // 4. Simular fiança
-  await requestLoft(cookies, `/solicitacao/simulacao/${simulacao.id}/simular-parametros-fianca`, {
+  await requestLoft(`/solicitacao/simulacao/${simulacao.id}/simular-parametros-fianca`, {
     method: "POST",
     body: JSON.stringify({ custo_saida: 2.5, cobertura_total: 12, comissao: 65 }),
   });
 
   // 5. Submeter proposta
   const submissao = await requestLoft<{ analise?: { status?: string } }>(
-    cookies,
     `/solicitacao/simulacao/proposta/${simulacao.id}/submeter`,
     { method: "POST" },
   );
@@ -267,11 +204,7 @@ serve(async (req) => {
       });
     }
 
-    // Faz login automático e obtém cookies de sessão
-    const cookies = await fazerLogin();
-
-    // Chama a API de simulação
-    const resultado = await simularCredito(cookies, input);
+    const resultado = await simularCredito(input);
 
     return new Response(JSON.stringify({ ok: true, resultado }), {
       status: 200,
