@@ -4,6 +4,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { supabase } from "@/integrations/supabase/client";
+import { invalidateAgencyScope, loadAgencyScope } from "@/lib/agency-scope";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -129,19 +130,18 @@ function CorretoresAdmin() {
 
   const resolveImobiliariaId = useCallback(async () => {
     setLoading(true);
-    const userEmail = user?.email;
-    if (!userEmail) {
+    if (!user?.id) {
       setLoading(false);
       return;
     }
-    const { data: imob } = await supabase.from("imobiliarias").select("id").ilike("contato_email", userEmail).maybeSingle();
-    if (imob?.id) {
-      setImobiliariaId(imob.id);
-      await fetchLinkedCorretores(imob.id);
+    const agency = await loadAgencyScope(user);
+    if (agency.agencyId) {
+      setImobiliariaId(agency.agencyId);
+      await fetchLinkedCorretores(agency.agencyId);
     } else {
       setLoading(false);
     }
-  }, [user?.email, fetchLinkedCorretores]);
+  }, [user, fetchLinkedCorretores]);
 
   useEffect(() => {
     if (!user) return;
@@ -151,7 +151,10 @@ function CorretoresAdmin() {
 
   useEffect(() => {
     if (!isImobiliaria || !imobiliariaId) return;
-    const refresh = () => void fetchLinkedCorretores(imobiliariaId, true);
+    const refresh = () => {
+      if (user?.id) invalidateAgencyScope(user.id);
+      void fetchLinkedCorretores(imobiliariaId, true);
+    };
     const channel = supabase
       .channel(`broker-team-${imobiliariaId}`)
       .on(
@@ -173,7 +176,7 @@ function CorretoresAdmin() {
       window.removeEventListener("focus", onFocus);
       void supabase.removeChannel(channel);
     };
-  }, [fetchLinkedCorretores, imobiliariaId, isImobiliaria]);
+  }, [fetchLinkedCorretores, imobiliariaId, isImobiliaria, user?.id]);
 
   const resetModal = () => {
     setSearchInput("");

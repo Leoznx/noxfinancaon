@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { CONSULTA_STATUS_PENDENTE } from "@/lib/dashboard-stats";
 import { loadSessionResource, peekSessionResource } from "@/lib/session-resource-cache";
+import { loadAgencyScope } from "@/lib/agency-scope";
 
 const DASHBOARD_CACHE_MAX_AGE_MS = 60_000;
 
@@ -159,34 +160,6 @@ function monthRange(count = 12) {
   });
 }
 
-async function resolveAgency(profileId: string, email: string) {
-  const { data: agency, error: agencyError } = await supabase
-    .from("imobiliarias")
-    .select("id, razao_social, nome_fantasia")
-    .ilike("contato_email", email)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (agencyError) throw agencyError;
-
-  const profileIds = [profileId];
-  if (agency?.id) {
-    const { data: brokers, error: brokersError } = await supabase
-      .from("corretores")
-      .select("profile_id")
-      .eq("imobiliaria_id", agency.id);
-    if (brokersError) throw brokersError;
-    for (const broker of brokers ?? []) {
-      if (broker.profile_id && !profileIds.includes(broker.profile_id)) profileIds.push(broker.profile_id);
-    }
-  }
-
-  return {
-    profileIds,
-    agencyName: agency?.nome_fantasia || agency?.razao_social || "Sua imobiliária",
-  };
-}
-
 export async function fetchImobiliariaDashboard(
   profileId: string,
   email: string,
@@ -194,7 +167,10 @@ export async function fetchImobiliariaDashboard(
 ): Promise<ImobiliariaDashboardData> {
   const { profileIds, agencyName } = scope
     ? { profileIds: scope.profileIds, agencyName: scope.dashboardName }
-    : await resolveAgency(profileId, email);
+    : await loadAgencyScope({ id: profileId, email }).then((agency) => ({
+        profileIds: agency.profileIds,
+        agencyName: agency.agencyName,
+      }));
   const monthsBase = monthRange(12);
 
   // Resolve o escopo por consultas e usa IDs diretos nas coleções dependentes.

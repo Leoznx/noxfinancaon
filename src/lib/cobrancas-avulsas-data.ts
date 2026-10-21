@@ -1,6 +1,7 @@
 import { isPagamentoConcluido } from "@/lib/asaas-payment";
 import { loadBillingScope, readBillingRows, type BillingScopeUser } from "@/lib/billing-scope";
 import { loadSessionResource, peekSessionResource } from "@/lib/session-resource-cache";
+import { loadCarteiraInvoiceRows } from "@/lib/carteira-cobrancas-data";
 
 export type CobrancaAvulsa = {
   id: string;
@@ -39,11 +40,7 @@ export function loadCobrancasAvulsas(user: BillingScopeUser, force = false) {
           "asaas_payments",
           "id, consultation_id, asaas_payment_id, payment_method, status, value, due_date, pix_copy_paste, boleto_url, boleto_barcode, external_reference, payment_responsible, recipient_name, confirmed_at, received_at, created_at, consulta:consultas_credito!asaas_payments_consultation_id_fkey(tenant_name)",
         ),
-        readBillingRows<{ id: string; asaas_payment_id: string | null }>(
-          scope,
-          "faturas_inquilino",
-          "id, asaas_payment_id",
-        ),
+        loadCarteiraInvoiceRows(user, force),
       ]);
       const installmentPayments = new Set(
         invoices.map((invoice) => invoice.asaas_payment_id).filter(Boolean),

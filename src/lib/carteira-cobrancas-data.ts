@@ -12,6 +12,34 @@ export type CarteiraCobrancasData = {
 
 const keyFor = (userId: string, isAgency: boolean) =>
   `dashboard-route:${userId}:carteira-cobrancas:${isAgency ? "agency" : "other"}`;
+const invoiceRowsKeyFor = (userId: string) => `dashboard-route:${userId}:billing-invoice-rows`;
+
+export function loadCarteiraInvoiceRows(user: BillingScopeUser, force = false) {
+  return loadSessionResource(
+    invoiceRowsKeyFor(user.id),
+    async () => {
+      const scope = await loadBillingScope(user, force);
+      return readBillingRows(
+        scope,
+        "faturas_inquilino",
+        `
+          id, consulta_id, status, valor, vencimento, numero_parcela,
+          payment_method, payment_responsible, payment_url, boleto_url,
+          linha_digitavel, consolidated_item_id, recipient_user_id,
+          installment_total, confirmed_at, asaas_payment_id,
+          consulta:consultas_credito(
+            id, tenant_name,
+            inquilino:inquilinos(nome, cpf, cnpj, razao_social),
+            imovel:imoveis(endereco, cidade, estado)
+          ),
+          asaas_payment:asaas_payments(id, asaas_payment_id, payment_method, confirmed_at, received_at),
+          notifications:financial_notifications(id)
+        `,
+      );
+    },
+    { force, maxAgeMs: 45_000 },
+  );
+}
 
 export function peekCarteiraCobrancas(userId: string, isAgency: boolean) {
   return peekSessionResource<CarteiraCobrancasData>(keyFor(userId, isAgency));
@@ -23,23 +51,7 @@ export function loadCarteiraCobrancas(user: BillingScopeUser, force = false) {
     async (): Promise<CarteiraCobrancasData> => {
       const scope = await loadBillingScope(user, force);
       const [invoiceRows, batchRows, subscriptionRows] = await Promise.all([
-        readBillingRows(
-          scope,
-          "faturas_inquilino",
-          `
-            id, consulta_id, status, valor, vencimento, numero_parcela,
-            payment_method, payment_responsible, payment_url, boleto_url,
-            linha_digitavel, consolidated_item_id, recipient_user_id,
-            installment_total, confirmed_at,
-            consulta:consultas_credito(
-              id, tenant_name,
-              inquilino:inquilinos(nome, cpf, cnpj, razao_social),
-              imovel:imoveis(endereco, cidade, estado)
-            ),
-            asaas_payment:asaas_payments(id, asaas_payment_id, payment_method, confirmed_at, received_at),
-            notifications:financial_notifications(id)
-          `,
-        ),
+        loadCarteiraInvoiceRows(user, force),
         user.role === "imobiliaria" ? fetchOwnConsolidatedBatches() : Promise.resolve([]),
         readBillingRows(
           scope,

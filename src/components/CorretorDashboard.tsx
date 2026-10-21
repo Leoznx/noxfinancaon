@@ -82,17 +82,41 @@ export function CorretorDashboard({ profileId }: { profileId: string }) {
 
   useEffect(() => {
     void load(false);
-    const refresh = () => void load(true);
-    window.addEventListener("focus", refresh);
+    let refreshTimer: number | null = null;
+    const refresh = () => {
+      if (refreshTimer !== null) window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(() => void load(true), 300);
+    };
+    const refreshOnFocus = () => void load(false);
+    window.addEventListener("focus", refreshOnFocus);
     const channel = supabase
       .channel(`broker-dashboard-live-${profileId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "consultas_credito" }, refresh)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "consultas_credito",
+          filter: `profile_id_solicitante=eq.${profileId}`,
+        },
+        refresh,
+      )
       .on("postgres_changes", { event: "*", schema: "public", table: "apolices" }, refresh)
-      .on("postgres_changes", { event: "*", schema: "public", table: "comissoes" }, refresh)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "comissoes",
+          filter: `beneficiario_id=eq.${profileId}`,
+        },
+        refresh,
+      )
       .on("postgres_changes", { event: "*", schema: "public", table: "faturas_inquilino" }, refresh)
       .subscribe();
     return () => {
-      window.removeEventListener("focus", refresh);
+      if (refreshTimer !== null) window.clearTimeout(refreshTimer);
+      window.removeEventListener("focus", refreshOnFocus);
       void supabase.removeChannel(channel);
     };
   }, [load, profileId]);

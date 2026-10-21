@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { loadAgencyScope } from "@/lib/agency-scope";
 
 export type NivelInfo = {
   nivelAtual: any;
@@ -17,35 +18,7 @@ export type NivelInfo = {
 export async function fetchNivelInfo(profileId: string, role: string): Promise<NivelInfo | null> {
   let profileIds = [profileId];
   if (role === "imobiliaria") {
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("email")
-      .eq("id", profileId)
-      .maybeSingle();
-    if (profileError) throw profileError;
-
-    if (profile?.email) {
-      const { data: agency, error: agencyError } = await supabase
-        .from("imobiliarias")
-        .select("id")
-        .ilike("contato_email", profile.email)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (agencyError) throw agencyError;
-
-      if (agency?.id) {
-        const { data: brokers, error: brokersError } = await supabase
-          .from("corretores")
-          .select("profile_id")
-          .eq("imobiliaria_id", agency.id);
-        if (brokersError) throw brokersError;
-        profileIds = [
-          profileId,
-          ...(brokers ?? []).map((broker) => broker.profile_id).filter((id): id is string => Boolean(id)),
-        ];
-      }
-    }
+    profileIds = (await loadAgencyScope({ id: profileId })).profileIds;
   }
 
   const niveisPromise = supabase

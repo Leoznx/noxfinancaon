@@ -110,3 +110,21 @@ test("dados começam antes do download das rotas terminar e não reiniciam na na
   releaseCode.forEach((release) => release());
   resetNavigationWarmup();
 });
+
+test("permite aquecer o código de todas as rotas sem buscar dados de abas ocultas", async () => {
+  resetNavigationWarmup();
+  const codeCalls: string[] = [];
+  const dataCalls: string[] = [];
+  warmNavigationRoutes({
+    scope: "conta:imobiliaria",
+    hrefs: ["/dashboard", "/consultas", "/carteira-cobrancas"],
+    dataHrefs: ["/dashboard"],
+    currentHref: "/dashboard",
+    preloadCode: async (href) => void codeCalls.push(href),
+    loadData: async (href) => void dataCalls.push(href),
+  });
+  await tick();
+  assert.deepEqual(dataCalls, ["/dashboard"]);
+  assert.deepEqual(codeCalls.sort(), ["/carteira-cobrancas", "/consultas", "/dashboard"]);
+  resetNavigationWarmup();
+});

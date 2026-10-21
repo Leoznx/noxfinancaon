@@ -66,8 +66,13 @@ export function ImobiliariaDashboard({ profileId, email }: { profileId: string; 
 
   useEffect(() => {
     void load(false);
-    const refresh = () => void load(true);
-    window.addEventListener("focus", refresh);
+    let refreshTimer: number | null = null;
+    const refresh = () => {
+      if (refreshTimer !== null) window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(() => void load(true), 300);
+    };
+    const refreshOnFocus = () => void load(false);
+    window.addEventListener("focus", refreshOnFocus);
     const channel = supabase
       .channel(`agency-dashboard-live-${profileId}`)
       .on(
@@ -92,7 +97,8 @@ export function ImobiliariaDashboard({ profileId, email }: { profileId: string; 
       )
       .subscribe();
     return () => {
-      window.removeEventListener("focus", refresh);
+      if (refreshTimer !== null) window.clearTimeout(refreshTimer);
+      window.removeEventListener("focus", refreshOnFocus);
       void supabase.removeChannel(channel);
     };
   }, [load, profileId]);

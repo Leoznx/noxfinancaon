@@ -1,7 +1,7 @@
 import { createLazyFileRoute, Link } from "@tanstack/react-router";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { useState, useEffect } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -13,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/components/AuthProvider";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { loadSinistrosRouteData, peekSinistrosRouteData } from "@/lib/sinistros-data";
 
 export const Route = createLazyFileRoute("/sinistros")({
   component: () => (
@@ -25,60 +26,32 @@ export const Route = createLazyFileRoute("/sinistros")({
 function Sinistros() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin" || user?.role === "analista";
-  const [sinistros, setSinistros] = useState<any[]>([]);
-  const [apolices, setApolices] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cachedData = user?.id ? peekSinistrosRouteData(user.id) : undefined;
+  const [sinistros, setSinistros] = useState<any[]>(() => cachedData?.sinistros ?? []);
+  const [apolices, setApolices] = useState<any[]>(() => cachedData?.apolices ?? []);
+  const [loading, setLoading] = useState(cachedData === undefined);
   const [open, setOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [selectedApoliceId, setSelectedApoliceId] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => {
-    fetchData();
-  }, [user]);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async (force = false) => {
+    if (!user?.id) return;
     try {
-      setLoading(true);
-      // Fetch sinistros
-      const { data: sinistrosData, error: sinistrosError } = await supabase
-        .from('sinistros')
-        .select(`
-          *,
-          apolices (
-            numero,
-            consultas_credito (
-              inquilinos (nome),
-              imoveis (logradouro, numero, bairro)
-            )
-          )
-        `)
-        .order('created_at', { ascending: false });
-
-      if (sinistrosError) throw sinistrosError;
-      setSinistros(sinistrosData || []);
-
-      // Fetch active apolices to allow opening new sinistro
-      const { data: apolicesData, error: apolicesError } = await supabase
-        .from('apolices')
-        .select(`
-          id,
-          numero,
-          consultas_credito (
-            inquilinos (nome),
-            imoveis (valor_aluguel)
-          )
-        `)
-        .eq('status', 'ativa');
-
-      if (apolicesError) throw apolicesError;
-      setApolices(apolicesData || []);
+      if (!peekSinistrosRouteData(user.id)) setLoading(true);
+      const result = await loadSinistrosRouteData(user.id, force);
+      setSinistros(result.sinistros);
+      setApolices(result.apolices);
     } catch (error: any) {
       toast.error("Erro ao carregar dados: " + error.message);
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.id]);
+
+  useEffect(() => {
+    void fetchData(false);
+  }, [fetchData]);
 
   const handleOpenSinistro = async () => {
     if (!selectedApoliceId) {
@@ -109,7 +82,7 @@ function Sinistros() {
       setOpen(false);
       setConfirmOpen(false);
       setSelectedApoliceId("");
-      fetchData();
+      await fetchData(true);
     } catch (error: any) {
       toast.error("Erro ao abrir sinistro: " + error.message);
     } finally {

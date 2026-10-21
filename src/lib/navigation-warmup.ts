@@ -69,6 +69,7 @@ export function resetNavigationWarmup() {
 export function warmNavigationRoutes(options: {
   scope: string;
   hrefs: string[];
+  dataHrefs?: string[];
   currentHref: string;
   preloadCode?: (href: string) => Promise<unknown>;
   loadData: (href: string) => Promise<unknown>;
@@ -79,14 +80,16 @@ export function warmNavigationRoutes(options: {
   }
   const normalize = (href: string) => href.split("?")[0].replace(/\/$/, "") || "/";
   const hrefs = [...new Set(options.hrefs.map(normalize))];
+  const dataHrefs = [...new Set((options.dataHrefs ?? options.hrefs).map(normalize))];
   const currentHref = normalize(options.currentHref);
-  if (hrefs.includes(currentHref)) {
+  if (dataHrefs.includes(currentHref)) {
     // A tela aberta tem prioridade. O cache deduplica sua consulta já em curso.
     void dataQueue.enqueue(currentHref, () => options.loadData(currentHref), true);
   }
   for (const href of hrefs) {
     if (options.preloadCode)
       void codeQueue.enqueue(href, () => options.preloadCode!(href), href === currentHref);
-    void dataQueue.enqueue(href, () => options.loadData(href));
   }
+  for (const href of dataHrefs)
+    void dataQueue.enqueue(href, () => options.loadData(href), href === currentHref);
 }

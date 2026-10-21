@@ -11,6 +11,7 @@ import {
   type UserWithdrawal,
 } from "@/lib/withdrawals";
 import { loadSessionResource, peekSessionResource } from "@/lib/session-resource-cache";
+import { loadAgencyScope } from "@/lib/agency-scope";
 
 const ROUTE_DATA_MAX_AGE_MS = 45_000;
 const LIST_LIMIT = 100;
@@ -32,46 +33,9 @@ export type CommissionDashboardData = {
   level: NivelInfo | null;
 };
 
-type AgencyScope = {
-  agencyId: string | null;
-  profileIds: string[];
-};
-
 const consultationKey = (user: DashboardNavigationUser) => `dashboard-route:${user.id}:consultas`;
 const policyKey = (user: DashboardNavigationUser) => `dashboard-route:${user.id}:apolices`;
 const commissionKey = (user: DashboardNavigationUser) => `dashboard-route:${user.id}:comissoes`;
-const agencyScopeKey = (user: DashboardNavigationUser) => `dashboard-route:${user.id}:agency-scope`;
-
-async function loadAgencyScope(user: DashboardNavigationUser): Promise<AgencyScope> {
-  return loadSessionResource(
-    agencyScopeKey(user),
-    async () => {
-      const { data: agency, error: agencyError } = await supabase
-        .from("imobiliarias")
-        .select("id")
-        .ilike("contato_email", user.email)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (agencyError) throw agencyError;
-      if (!agency?.id) return { agencyId: null, profileIds: [user.id] };
-
-      const { data: brokers, error: brokersError } = await supabase
-        .from("corretores")
-        .select("profile_id")
-        .eq("imobiliaria_id", agency.id);
-      if (brokersError) throw brokersError;
-      return {
-        agencyId: agency.id,
-        profileIds: Array.from(
-          new Set([user.id, ...(brokers ?? []).map((broker) => broker.profile_id).filter(Boolean)]),
-        ),
-      };
-    },
-    { maxAgeMs: 5 * 60_000 },
-  );
-}
-
 export function peekDashboardConsultations(user: DashboardNavigationUser) {
   return peekSessionResource<DashboardConsultationRow[]>(consultationKey(user));
 }
@@ -223,5 +187,8 @@ export async function prefetchDashboardDataForHref(
     ["corretor", "imobiliaria", "proprietario"].includes(user.role)
   ) {
     await loadCommissionDashboard(user);
+  } else if (pathname === "/sinistros") {
+    const { loadSinistrosRouteData } = await import("@/lib/sinistros-data");
+    await loadSinistrosRouteData(user.id);
   }
 }

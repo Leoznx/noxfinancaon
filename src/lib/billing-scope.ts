@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { loadSessionResource } from "@/lib/session-resource-cache";
+import { loadAgencyScope } from "@/lib/agency-scope";
 
 export type BillingScopeUser = { id: string; email: string; role: string };
 export type BillingScope = { userId: string; consultationIds: string[]; policyIds: string[] };
@@ -13,24 +14,8 @@ export function loadBillingScope(user: BillingScopeUser, force = false) {
         return null;
       const profileIds = [user.id];
       if (user.role === "imobiliaria") {
-        const agencies = await supabase
-          .from("imobiliarias")
-          .select("id")
-          .ilike("contato_email", user.email);
-        if (agencies.error) throw agencies.error;
-        if (agencies.data?.length) {
-          const brokers = await supabase
-            .from("corretores")
-            .select("profile_id")
-            .in(
-              "imobiliaria_id",
-              agencies.data.map((item) => item.id),
-            );
-          if (brokers.error) throw brokers.error;
-          profileIds.push(
-            ...(brokers.data ?? []).flatMap((item) => (item.profile_id ? [item.profile_id] : [])),
-          );
-        }
+        const agency = await loadAgencyScope(user);
+        profileIds.splice(0, profileIds.length, ...agency.profileIds);
       }
       const consultationIds = new Set<string>();
       const policyIds: string[] = [];

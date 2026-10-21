@@ -3,11 +3,6 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { NivelCorretorCard } from "@/components/NivelCorretorCard";
 import { DashboardEquipeBanner } from "@/components/DashboardEquipeBanner";
-import { JuridicoDashboard } from "@/components/JuridicoDashboard";
-import { FinanceiroDashboard } from "@/components/FinanceiroDashboard";
-import { MarketingDashboard } from "@/components/MarketingDashboard";
-import { ImobiliariaDashboard } from "@/components/ImobiliariaDashboard";
-import { CorretorDashboard } from "@/components/CorretorDashboard";
 import {
   Trophy,
   Search,
@@ -21,16 +16,60 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
-import { useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchNivelInfo, type NivelInfo } from "@/lib/niveis-parceria";
 import { fetchDashboardStats, type DashboardStats } from "@/lib/dashboard-stats";
 import { redirectPathForRole } from "@/lib/authRedirect";
-import { OwnerDashboard } from "@/components/owner-dashboard/OwnerDashboard";
 import { useEssentialLoading } from "@/components/GlobalLoading";
+
+const JuridicoDashboard = lazy(() =>
+  import("@/components/JuridicoDashboard").then((module) => ({ default: module.JuridicoDashboard })),
+);
+const FinanceiroDashboard = lazy(() =>
+  import("@/components/FinanceiroDashboard").then((module) => ({ default: module.FinanceiroDashboard })),
+);
+const MarketingDashboard = lazy(() =>
+  import("@/components/MarketingDashboard").then((module) => ({ default: module.MarketingDashboard })),
+);
+const ImobiliariaDashboard = lazy(() =>
+  import("@/components/ImobiliariaDashboard").then((module) => ({ default: module.ImobiliariaDashboard })),
+);
+const CorretorDashboard = lazy(() =>
+  import("@/components/CorretorDashboard").then((module) => ({ default: module.CorretorDashboard })),
+);
+const OwnerDashboard = lazy(() =>
+  import("@/components/owner-dashboard/OwnerDashboard").then((module) => ({ default: module.OwnerDashboard })),
+);
 
 const formatarBRL = (v: number) =>
   (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+function DashboardRoleSkeleton() {
+  return (
+    <div className="grid gap-3" aria-label="Preparando painel">
+      <div className="h-52 rounded-2xl bg-neutral-100" />
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        {Array.from({ length: 4 }, (_, index) => (
+          <div key={index} className="h-20 rounded-2xl bg-neutral-100" />
+        ))}
+      </div>
+      <div className="grid gap-3 xl:grid-cols-3">
+        {Array.from({ length: 3 }, (_, index) => (
+          <div key={index} className="h-72 rounded-2xl bg-neutral-100" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DashboardRoleShell() {
+  return (
+    <DashboardLayout lockDesktopViewport>
+      <DashboardRoleSkeleton />
+    </DashboardLayout>
+  );
+}
 
 export const Route = createFileRoute("/dashboard")({
   component: () => (
@@ -51,7 +90,11 @@ function Dashboard() {
   }
 
   if (user?.role === "proprietario") {
-    return <OwnerDashboard />;
+    return (
+      <Suspense fallback={<DashboardRoleShell />}>
+        <OwnerDashboard />
+      </Suspense>
+    );
   }
   return <DashboardForRole />;
 }
@@ -174,7 +217,7 @@ function DashboardForRole() {
   if (isJuridico) {
     return (
       <DashboardLayout lockDesktopViewport>
-        <JuridicoDashboard />
+        <Suspense fallback={<DashboardRoleSkeleton />}><JuridicoDashboard /></Suspense>
       </DashboardLayout>
     );
   }
@@ -182,7 +225,7 @@ function DashboardForRole() {
   if (isFinanceiro) {
     return (
       <DashboardLayout>
-        <FinanceiroDashboard />
+        <Suspense fallback={<DashboardRoleSkeleton />}><FinanceiroDashboard /></Suspense>
       </DashboardLayout>
     );
   }
@@ -190,7 +233,7 @@ function DashboardForRole() {
   if (isMarketing) {
     return (
       <DashboardLayout>
-        <MarketingDashboard />
+        <Suspense fallback={<DashboardRoleSkeleton />}><MarketingDashboard /></Suspense>
       </DashboardLayout>
     );
   }
@@ -198,7 +241,7 @@ function DashboardForRole() {
   if (isCorretor && user?.id) {
     return (
       <DashboardLayout lockDesktopViewport>
-        <CorretorDashboard profileId={user.id} />
+        <Suspense fallback={<DashboardRoleSkeleton />}><CorretorDashboard profileId={user.id} /></Suspense>
       </DashboardLayout>
     );
   }
@@ -206,7 +249,7 @@ function DashboardForRole() {
   if (isImobiliaria && user?.id && user.email) {
     return (
       <DashboardLayout lockDesktopViewport>
-        <ImobiliariaDashboard profileId={user.id} email={user.email} />
+        <Suspense fallback={<DashboardRoleSkeleton />}><ImobiliariaDashboard profileId={user.id} email={user.email} /></Suspense>
       </DashboardLayout>
     );
   }

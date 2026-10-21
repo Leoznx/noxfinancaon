@@ -75,6 +75,7 @@ import {
 import { useAdminAttention } from "@/hooks/useAdminAttention";
 import { useDashboardLoadingScope } from "@/components/GlobalLoading";
 import { isNavigationScopeCurrent, warmNavigationRoutes } from "@/lib/navigation-warmup";
+import { loadAgencyScope } from "@/lib/agency-scope";
 
 const CARGOS_INTERNOS_GATEADOS = [
   "juridico",
@@ -479,17 +480,16 @@ export function DashboardLayout({
 
       try {
         const { supabase } = await import("@/integrations/supabase/client");
-        const [profileResult, agencyResult] = await Promise.all([
-          supabase.from("profiles").select("nome, avatar_url").eq("id", user.id).maybeSingle(),
+        const profileIsFresh = isCachedHeaderProfileFresh(perfilCache);
+        const [profileResult, agencyScope] = await Promise.all([
+          profileIsFresh
+            ? Promise.resolve({
+                data: { nome: perfilCache?.nome ?? null, avatar_url: perfilCache?.avatarUrl ?? null },
+              })
+            : supabase.from("profiles").select("nome, avatar_url").eq("id", user.id).maybeSingle(),
           user.role === "imobiliaria"
-            ? supabase
-                .from("imobiliarias")
-                .select("razao_social, nome_fantasia")
-                .ilike("contato_email", user.email)
-                .order("created_at", { ascending: false })
-                .limit(1)
-                .maybeSingle()
-            : Promise.resolve({ data: null }),
+            ? loadAgencyScope({ id: user.id, email: user.email })
+            : Promise.resolve(null),
         ]);
         let perfil = profileResult.data as {
           nome: string | null;
@@ -508,8 +508,7 @@ export function DashboardLayout({
         if (!ativo) return;
         let nomeFinal = perfil?.nome || perfilCache?.nome || user.email.split("@")[0] || "Usuário";
         if (user.role === "imobiliaria") {
-          const agency = agencyResult.data;
-          nomeFinal = agency?.nome_fantasia || agency?.razao_social || nomeFinal;
+          nomeFinal = agencyScope?.agencyName || nomeFinal;
         }
         const avatarFinal = perfil?.avatar_url || perfilCache?.avatarUrl || null;
         setNomeUsuario(nomeFinal);
@@ -704,6 +703,9 @@ export function DashboardLayout({
     warmNavigationRoutes({
       scope: `${user.id}:${user.role}`,
       hrefs: targets,
+      // Baixa o código das rotas em segundo plano, mas busca dados apenas da
+      // tela aberta. As outras abas aquecem ao foco/hover do próprio link.
+      dataHrefs: targets.includes(location.pathname) ? [location.pathname] : [],
       currentHref: location.pathname,
       preloadCode: (href) => router.preloadRoute({ to: href as any }),
       loadData: (href) => import("@/lib/dashboard-navigation-data").then(({ prefetchDashboardDataForHref }) => {
