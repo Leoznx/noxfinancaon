@@ -47,16 +47,19 @@ export async function loadDashboardConsultations(
   return loadSessionResource(
     consultationKey(user),
     async () => {
-      let query = supabase.from("consultas_credito").select(`
+      const consultationFields = `
         id, status, resultado, substatus, technical_status, automation_step,
         created_at, updated_at, tenant_name, tenant_document, documento,
-        property_address, rent_value, payment_status, profile_id_solicitante,
-        role_solicitante,
+        property_address, rent_value, payment_status,
         inquilinos (nome, cpf, cnpj),
         imoveis (logradouro, numero, bairro, cidade, estado, cep, valor_aluguel),
-        planos (nome),
-        solicitante:profiles!profile_id_solicitante (nome, email, role)
-      `);
+        planos (nome)
+      `;
+      const fields =
+        user.role === "imobiliaria"
+          ? `${consultationFields}, solicitante:profiles!profile_id_solicitante (nome)`
+          : consultationFields;
+      let query = supabase.from("consultas_credito").select(fields);
 
       if (!["admin", "admin_master", "analista"].includes(user.role)) {
         if (user.role === "imobiliaria") {
@@ -190,5 +193,9 @@ export async function prefetchDashboardDataForHref(
   } else if (pathname === "/sinistros") {
     const { loadSinistrosRouteData } = await import("@/lib/sinistros-data");
     await loadSinistrosRouteData(user.id);
+  } else if (pathname === "/corretores-admin" && user.role === "imobiliaria") {
+    const { loadMyBrokerAgencyMembers } = await import("@/lib/broker-agency-invitations");
+    const scope = await loadAgencyScope(user);
+    if (scope.agencyId) await loadMyBrokerAgencyMembers(user.id, scope.agencyId);
   }
 }

@@ -32,7 +32,7 @@ import {
 } from "@/lib/broker-commission-policy";
 import {
   createBrokerAgencyInvitation,
-  listMyBrokerAgencyMembers,
+  loadMyBrokerAgencyMembers,
 } from "@/lib/broker-agency-invitations";
 import { buildBrokerAgencySignupUrl, getOrCreateMyBrokerAgencySignupLink } from "@/lib/broker-agency-signup-links";
 
@@ -101,9 +101,10 @@ function CorretoresAdmin() {
 
   const isImobiliaria = user?.role === "imobiliaria";
 
-  const fetchLinkedCorretores = useCallback(async (imobId: string, silent = false) => {
+  const fetchLinkedCorretores = useCallback(async (imobId: string, silent = false, force = false) => {
+    if (!user?.id) return;
     if (!silent) setLoading(true);
-    const { data, error } = await listMyBrokerAgencyMembers(imobId);
+    const { data, error } = await loadMyBrokerAgencyMembers(user.id, imobId, force);
     if (error) toast.error("Erro ao carregar corretores: " + error);
     setCorretores(
       (data || []).map((row) => ({
@@ -118,7 +119,7 @@ function CorretoresAdmin() {
       })),
     );
     if (!silent) setLoading(false);
-  }, []);
+  }, [user?.id]);
 
   const fetchAllCorretores = useCallback(async () => {
     setLoading(true);
@@ -151,9 +152,13 @@ function CorretoresAdmin() {
 
   useEffect(() => {
     if (!isImobiliaria || !imobiliariaId) return;
+    let refreshTimer: number | undefined;
     const refresh = () => {
       if (user?.id) invalidateAgencyScope(user.id);
-      void fetchLinkedCorretores(imobiliariaId, true);
+      window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(() => {
+        void fetchLinkedCorretores(imobiliariaId, true, true);
+      }, 300);
     };
     const channel = supabase
       .channel(`broker-team-${imobiliariaId}`)
@@ -168,11 +173,10 @@ function CorretoresAdmin() {
         refresh,
       )
       .subscribe();
-    const interval = window.setInterval(refresh, 30_000);
-    const onFocus = () => refresh();
+    const onFocus = () => void fetchLinkedCorretores(imobiliariaId, true);
     window.addEventListener("focus", onFocus);
     return () => {
-      window.clearInterval(interval);
+      window.clearTimeout(refreshTimer);
       window.removeEventListener("focus", onFocus);
       void supabase.removeChannel(channel);
     };
@@ -272,7 +276,7 @@ function CorretoresAdmin() {
       }
       setOpen(false);
       resetModal();
-      if (imobiliariaId) await fetchLinkedCorretores(imobiliariaId);
+      if (imobiliariaId) await fetchLinkedCorretores(imobiliariaId, false, true);
       else await resolveImobiliariaId();
     } finally {
       setIsLinking(false);
@@ -330,7 +334,7 @@ function CorretoresAdmin() {
       clearBrokerCommissionAccessCache(editingCommissionOf.profile_id);
       toast.success("Regra atualizada para os próximos contratos.");
       setEditingCommissionOf(null);
-      if (imobiliariaId) await fetchLinkedCorretores(imobiliariaId);
+      if (imobiliariaId) await fetchLinkedCorretores(imobiliariaId, false, true);
     } finally {
       setSavingCommissionMode(false);
     }
@@ -347,7 +351,7 @@ function CorretoresAdmin() {
     }
     toast.success("Corretor desvinculado com sucesso.");
     setToUnlink(null);
-    if (imobiliariaId) await fetchLinkedCorretores(imobiliariaId);
+    if (imobiliariaId) await fetchLinkedCorretores(imobiliariaId, false, true);
     else await resolveImobiliariaId();
   };
 

@@ -12,6 +12,7 @@ type ApiCall = {
   finishedAt?: number;
   bytes?: number;
   failed?: boolean;
+  status?: number;
 };
 
 type Measurement = {
@@ -25,6 +26,7 @@ type Measurement = {
   duplicateRequests: string[];
   apiBytes: number | null;
   slowestApiMs: number | null;
+  failedRequests: string[];
   apiBreakdown: string[];
 };
 
@@ -73,7 +75,9 @@ function attachApiTracker(page: Page) {
     if (!call) return;
     call.finishedAt = performance.now();
     call.failed = failed;
-    const header = (await request.response())?.headers()["content-length"];
+    const response = await request.response();
+    call.status = response?.status();
+    const header = response?.headers()["content-length"];
     if (header && /^\d+$/.test(header)) call.bytes = Number(header);
   };
   page.on("requestfinished", (request) => void finish(request, false));
@@ -110,13 +114,20 @@ function summarizeCalls(calls: ApiCall[], fromIndex: number) {
       .map(([key, count]) => `${key} ×${count}`),
     apiBytes: knownBytes.length ? knownBytes.reduce((sum, value) => sum + value, 0) : null,
     slowestApiMs: durations.length ? Math.max(...durations) : null,
+    failedRequests: slice
+      .filter((call) => call.failed || (call.status !== undefined && call.status >= 400))
+      .map((call) => `${call.key}=${call.failed ? "network" : call.status}`),
     apiBreakdown: slice
       .map((call) => ({
         key: call.key,
         duration: call.finishedAt ? Math.round(call.finishedAt - call.startedAt) : null,
+        status: call.status,
       }))
       .sort((a, b) => (b.duration ?? Number.MAX_SAFE_INTEGER) - (a.duration ?? Number.MAX_SAFE_INTEGER))
-      .map((call) => `${call.key}=${call.duration ?? "timeout"}ms`),
+      .map(
+        (call) =>
+          `${call.key}=${call.duration ?? "timeout"}ms${call.status ? `(${call.status})` : ""}`,
+      ),
   };
 }
 
@@ -211,10 +222,10 @@ async function runRole(role: string) {
 const results = [];
 for (const role of roles) results.push(await runRole(role));
 if (process.env.NOX_AUDIT_FORMAT === "tsv") {
-  process.stdout.write("role\tpass\tlabel\tvisual_ms\tdata_ready_ms\tapi_requests\tapi_bytes\tslowest_api_ms\tduplicates\tapi_breakdown\n");
+  process.stdout.write("role\tpass\tlabel\tvisual_ms\tdata_ready_ms\tapi_requests\tapi_bytes\tslowest_api_ms\tduplicates\tfailed_requests\tapi_breakdown\n");
   for (const result of results) {
     process.stdout.write(
-      `${result.role}\tentry\tDashboard inicial\t${result.entry.visualMs}\t${result.entry.dataReadyMs}\t${result.entry.apiRequests}\t${result.entry.apiBytes ?? "?"}\t${result.entry.slowestApiMs ?? "-"}\t${result.entry.duplicateRequests.join("; ") || "-"}\t${result.entry.apiBreakdown.join("; ")}\n`,
+      `${result.role}\tentry\tDashboard inicial\t${result.entry.visualMs}\t${result.entry.dataReadyMs}\t${result.entry.apiRequests}\t${result.entry.apiBytes ?? "?"}\t${result.entry.slowestApiMs ?? "-"}\t${result.entry.duplicateRequests.join("; ") || "-"}\t${result.entry.failedRequests.join("; ") || "-"}\t${result.entry.apiBreakdown.join("; ")}\n`,
     );
     for (const item of result.measurements) {
       process.stdout.write(
@@ -228,6 +239,7 @@ if (process.env.NOX_AUDIT_FORMAT === "tsv") {
           item.apiBytes ?? "?",
           item.slowestApiMs ?? "-",
           item.duplicateRequests.join("; ") || "-",
+          item.failedRequests.join("; ") || "-",
           item.apiBreakdown.join("; ") || "-",
         ].join("\t") + "\n",
       );

@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { BrokerCommissionAllocationMode } from "@/lib/broker-commission-policy";
+import { loadSessionResource, peekSessionResource } from "@/lib/session-resource-cache";
 
 export type BrokerAgencyMember = {
   membership_id: string;
@@ -134,6 +135,42 @@ export async function listMyBrokerAgencyMembers(imobiliariaId?: string) {
     })),
     error: error?.message || null,
   };
+}
+
+const brokerMembersKey = (profileId: string) =>
+  `dashboard-route:${profileId}:broker-agency-members`;
+
+export function peekMyBrokerAgencyMembers(profileId: string) {
+  return peekSessionResource<BrokerAgencyMember[]>(brokerMembersKey(profileId));
+}
+
+/**
+ * Mantém a equipe isolada pelo usuário autenticado e deduplica montagens/prefetches.
+ * Falhas de atualização preservam a última lista válida em vez de apagar a tela.
+ */
+export async function loadMyBrokerAgencyMembers(
+  profileId: string,
+  imobiliariaId?: string,
+  force = false,
+) {
+  const cached = peekMyBrokerAgencyMembers(profileId);
+  try {
+    const data = await loadSessionResource(
+      brokerMembersKey(profileId),
+      async () => {
+        const result = await listMyBrokerAgencyMembers(imobiliariaId);
+        if (result.error) throw new Error(result.error);
+        return result.data;
+      },
+      { force, maxAgeMs: 45_000 },
+    );
+    return { data, error: null };
+  } catch (error) {
+    return {
+      data: cached ?? [],
+      error: error instanceof Error ? error.message : "Erro ao carregar corretores.",
+    };
+  }
 }
 
 export async function createBrokerAgencyInvitation(
