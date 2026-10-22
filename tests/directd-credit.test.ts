@@ -106,3 +106,26 @@ test("migração desliga o claim antigo e registra o custo de R$ 1,98", () => {
   assert.match(shutdownMigration, /claim_next_loft_proposal_cancellation/);
   assert.match(shutdownMigration, /claim_next_repair_job/);
 });
+
+test("migração cria todos os campos de auditoria usados pelo fluxo oficial", () => {
+  const compatibilityMigration = readFileSync(
+    new URL(
+      "../supabase/migrations/20261022170000_credit_provider_audit_columns.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+
+  for (const column of [
+    "external_provider",
+    "external_status",
+    "external_request_id",
+    "external_response",
+    "automacao_credpago_status",
+    "automacao_credpago_resultado",
+    "provider_returned_at",
+    "automacao_processed_at",
+  ]) {
+    assert.match(compatibilityMigration, new RegExp(`ADD COLUMN IF NOT EXISTS ${column}\\b`));
+  }
+});
