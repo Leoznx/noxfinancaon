@@ -70,7 +70,13 @@ export function normalizeDirectDResult(
   if (!faixaScore) return null;
 
   const normalized = normalizeText(faixaScore);
-  const score = Number.isFinite(Number(subject?.score)) ? Number(subject?.score) : null;
+  const rawScore = subject?.score;
+  const score =
+    rawScore === null || rawScore === undefined
+      ? null
+      : Number.isFinite(Number(rawScore))
+        ? Number(rawScore)
+        : null;
 
   if (
     normalized.includes("alto") &&

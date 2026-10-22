@@ -7,7 +7,7 @@ import {
   type DirectDScoreResponse,
 } from "../supabase/functions/_shared/directd-credit.ts";
 
-function responseFor(faixaScore: string, score = 700): DirectDScoreResponse {
+function responseFor(faixaScore: string, score: number | null = 700): DirectDScoreResponse {
   return {
     metaDados: {
       consultaUid: "consulta-teste",
@@ -37,6 +37,13 @@ test("mapeia as três faixas QUOD para a regra comercial da NOX", () => {
 
 test("não toma decisão automática para faixa desconhecida", () => {
   assert.equal(normalizeDirectDResult(responseFor("Faixa experimental"), 11), null);
+});
+
+test("preserva score ausente como nulo", () => {
+  assert.equal(
+    normalizeDirectDResult(responseFor("Baixo índice de inadimplência", null), 11)?.score,
+    null,
+  );
 });
 
 test("seleciona pessoa jurídica para CNPJ", () => {
@@ -88,4 +95,14 @@ test("migração desliga o claim antigo e registra o custo de R$ 1,98", () => {
   );
   assert.match(billingMigration, /p_charge_confirmed boolean/);
   assert.match(billingMigration, /SET billed_cents = coalesce\(v_cost, 198\)/);
+
+  const shutdownMigration = readFileSync(
+    new URL(
+      "../supabase/migrations/20261022162000_disable_legacy_browser_aux_workers.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  assert.match(shutdownMigration, /claim_next_loft_proposal_cancellation/);
+  assert.match(shutdownMigration, /claim_next_repair_job/);
 });
