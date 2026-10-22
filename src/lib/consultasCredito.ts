@@ -12,7 +12,7 @@ import {
   type CreditStatusPresentation,
 } from "@/lib/credit-status-presentation";
 
-/** Status do fluxo de automação local CredPago. */
+/** Status compartilhado do fluxo de análise oficial de crédito. */
 export type StatusConsulta =
   | "pendente"
   | "processando"
@@ -153,9 +153,9 @@ interface CriarConsultaParams {
 }
 
 /**
- * Cria (ou reaproveita) a consulta via fluxo existente e grava os campos que o
- * worker local de automação CredPago precisa. Deixa a consulta na fila com
- * status "pendente" e origem "nox_financa".
+ * Cria (ou reaproveita) uma consulta idempotente para a API oficial QUOD.
+ * A chamada paga é feita separadamente por `executarConsultaOficial`, depois
+ * que a tela já recebeu o id e começou a acompanhar o registro por Realtime.
  */
 export async function criarConsultaParaAutomacao({ dados }: CriarConsultaParams): Promise<string> {
   const rawDoc = dados.tipoInquilino === "PF" ? dados.inquilinos[0]?.cpf || "" : dados.cnpj || "";
@@ -195,24 +195,27 @@ export async function criarConsultaParaAutomacao({ dados }: CriarConsultaParams)
     p_correlation_id: correlationId,
     p_idempotency_key: operationKey,
   };
-  let { data, error } = await (supabase as any).rpc("enqueue_credit_simulation", rpcPayload);
-  // Rolling-deploy compatibility: Vercel can publish before the database migration
-  // reaches production. The old overload keeps the site usable during that window.
-  if (
-    error &&
-    /p_idempotency_key|function.*not found|schema cache|PGRST202/i.test(
-      String(error.message || error.code),
-    )
-  ) {
-    const legacyPayload: Record<string, unknown> = { ...rpcPayload };
-    delete legacyPayload.p_idempotency_key;
-    ({ data, error } = await (supabase as any).rpc("enqueue_credit_simulation", legacyPayload));
-  }
+  const { data, error } = await (supabase as any).rpc(
+    "enqueue_official_credit_simulation",
+    rpcPayload,
+  );
   if (error) throw error;
   if (typeof data !== "string" || !data) {
-    throw new Error("Não foi possível colocar a consulta na fila.");
+    throw new Error("Não foi possível preparar a consulta oficial.");
   }
   return data;
+}
+
+export async function executarConsultaOficial(id: string): Promise<void> {
+  const { data, error } = await supabase.functions.invoke("simulate-credit-official", {
+    body: { consultaId: id },
+  });
+  if (error) {
+    throw new Error(error.message || "Falha ao comunicar com a API oficial de crédito.");
+  }
+  if (!data?.ok) {
+    throw new Error(data?.error || "A API oficial não conseguiu concluir a consulta.");
+  }
 }
 
 /**
@@ -296,53 +299,31 @@ export async function getConsultaCredito(
   }
 }
 
-/** Recoloca uma consulta com erro de volta na fila do worker. */
+/** Reenvia somente falhas que o backend confirmou não terem gerado cobrança. */
 export async function reenviarConsulta(id: string): Promise<void> {
   const atual = await getConsultaCredito(id);
   if (!atual) throw new Error("Consulta não encontrada ou sem permissão de acesso.");
-  // Um aviso local de demora não significa que o worker parou. Não altere uma
-  // linha ainda pendente/processando: isso evita claims duplicados e dois envios.
-  if (atual.status === "pendente" || atual.status === "processando") return;
+  // A Edge Function possui claim idempotente. Repetir a invocação de uma linha
+  // ainda pendente não repete a consulta paga e recupera falhas locais de rede.
+  if (atual.status === "pendente" || atual.status === "processando") {
+    await executarConsultaOficial(id);
+    return;
+  }
   if (atual.status !== "erro") {
     throw new Error("Esta consulta já foi concluída e não precisa ser reenviada.");
   }
 
   const { data: retried, error: retryError } = await (supabase as any).rpc(
-    "retry_credit_simulation",
+    "retry_official_credit_simulation",
     { p_consultation_id: id },
   );
-  if (!retryError) {
-    if (!retried) {
-      throw new Error(
-        "Esta falha não pode ser reenviada automaticamente. Consulte o suporte para verificar o envio anterior.",
-      );
-    }
-    return;
+  if (retryError) throw retryError;
+  if (!retried) {
+    throw new Error(
+      "Esta falha não pode ser reenviada automaticamente. Consulte o suporte para verificar uma possível cobrança anterior.",
+    );
   }
-  if (
-    !/function.*not found|schema cache|PGRST202/i.test(
-      String(retryError.message || retryError.code),
-    )
-  ) {
-    throw retryError;
-  }
-
-  // Compatibility only until the durable-queue migration is applied.
-  const { error } = await supabase
-    .from("consultas_credito")
-    .update({
-      cep: selectOperationalCreditSimulationCep(),
-      status: "pendente",
-      resultado: null,
-      mensagem: null,
-      error_message: null,
-      automation_started_at: null,
-      automation_finished_at: null,
-      automation_step: null,
-    } as any)
-    .eq("id", id)
-    .eq("status", "erro");
-  if (error) throw error;
+  await executarConsultaOficial(id);
 }
 
 interface WatchConsultaCreditoOptions {

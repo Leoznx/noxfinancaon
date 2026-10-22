@@ -264,7 +264,7 @@ const ADMIN_CATALOG = [
 
 const corretorItems = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
-  { icon: Search, label: "Nova Consulta", href: "/consultas/nova", highlight: true },
+  { icon: Search, label: "Simular Crédito Oficial", href: "/consultas/nova", highlight: true },
   { icon: History, label: "Minhas Consultas", href: "/consultas" },
   { icon: FileText, label: "Contratos Ativos", href: "/apolices" },
   { icon: Receipt, label: "Faturas Inquilinos", href: "/faturas-inquilinos" },
@@ -279,7 +279,7 @@ const corretorItems = [
 
 const imobiliariaItems = [
   { icon: LayoutDashboard, label: "Painel Imobiliária", href: "/dashboard" },
-  { icon: Search, label: "Nova Consulta", href: "/consultas/nova", highlight: true },
+  { icon: Search, label: "Simular Crédito Oficial", href: "/consultas/nova", highlight: true },
   { icon: History, label: "Minhas Consultas", href: "/consultas" },
   { icon: FileText, label: "Contratos Ativos", href: "/apolices" },
   { icon: Receipt, label: "Faturas Inquilinos", href: "/faturas-inquilinos" },
@@ -294,7 +294,7 @@ const imobiliariaItems = [
 
 const proprietarioItems = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
-  { icon: Search, label: "Nova Consulta", href: "/consultas/nova", highlight: true },
+  { icon: Search, label: "Simular Crédito Oficial", href: "/consultas/nova", highlight: true },
   { icon: History, label: "Minhas Consultas", href: "/consultas" },
   { icon: Home, label: "Meus Imóveis", href: "/imoveis" },
   { icon: FileCheck2, label: "Contratos Ativos", href: "/apolices" },

@@ -9,6 +9,7 @@ import { useAuth } from "@/components/AuthProvider";
 import {
   criarConsultaParaAutomacao,
   criarConsultaDemonstrativa,
+  executarConsultaOficial,
   reenviarConsulta,
   watchConsultaCredito,
   progressoConsulta,
@@ -125,9 +126,8 @@ function NovaConsulta() {
         return;
       }
 
-      // Uma única consulta entra na fila do worker. O caminho direto criava um
-      // registro intermediário com erro antes do fallback e podia duplicar cada
-      // clique; o worker autenticado é a fonte única do resultado da Loft.
+      // O registro nasce primeiro para que o modal acompanhe imediatamente. A
+      // chamada paga acontece na Edge Function e possui claim idempotente.
       const id = await criarConsultaParaAutomacao({
         dados,
         userEmail: user.email,
@@ -135,6 +135,12 @@ function NovaConsulta() {
       });
       setConsultaId(id);
       escutarConsulta(id);
+      void executarConsultaOficial(id).catch((error: unknown) => {
+        const message =
+          error instanceof Error ? error.message : "Não foi possível concluir a consulta oficial.";
+        setErroAutomacao(message);
+        toast.error(message);
+      });
     } catch (e: any) {
       const msg = e?.message || "Não foi possível simular o crédito agora.";
       setErroAutomacao(msg);

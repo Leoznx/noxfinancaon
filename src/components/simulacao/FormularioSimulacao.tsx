@@ -249,7 +249,7 @@ export function FormularioSimulacao({
   return (
     <div className="w-full max-w-5xl">
       <h1 className="text-4xl md:text-5xl font-bold text-neutral-900 mb-2 tracking-tight">
-        Simule a fiança do seu cliente
+        {modo === "interno" ? "Simular crédito oficial" : "Simule a fiança do seu cliente"}
       </h1>
       <p className="text-lg text-neutral-600 mb-10">
         Preencha os dados abaixo. A solicitação é registrada na hora e o resultado aparece assim
@@ -494,7 +494,7 @@ export function FormularioSimulacao({
           disabled={disabled}
           className="w-full mt-8 bg-neutral-900 hover:bg-neutral-800 disabled:bg-neutral-300 text-white py-8 rounded-xl font-bold text-xl inline-flex items-center justify-center gap-2 transition-all shadow-xl shadow-neutral-200 active:scale-[0.98]"
         >
-          {modo === "publico" ? "Simular crédito e entrar" : "Simular crédito"}
+          {modo === "publico" ? "Simular crédito e entrar" : "Simular crédito oficial"}
           <ChevronRight className="w-6 h-6" strokeWidth={2.5} />
         </Button>
       </form>

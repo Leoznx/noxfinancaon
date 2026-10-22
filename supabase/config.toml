@@ -75,6 +75,9 @@ verify_jwt = false
 [functions.sync-marketing-ads]
 verify_jwt = true
 
+[functions.simulate-credit-official]
+verify_jwt = true
+
 [functions.asaas-create-installment-plan]
 verify_jwt = true
 
