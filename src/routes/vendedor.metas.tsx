@@ -127,11 +127,7 @@ function Goals() {
     [daily],
   );
   const closer = roleProgress?.seller_type === "closer";
-  const dailyMeetings = roleProgress
-    ? closer
-      ? roleProgress.meetings_completed_daily
-      : roleProgress.meetings_scheduled_daily
-    : 0;
+  const dailyMeetings = roleProgress?.meetings_completed_daily ?? 0;
   const dailyMeetingsTarget = roleProgress
     ? closer
       ? roleProgress.target_meetings_completed_daily
@@ -263,7 +259,7 @@ function Goals() {
                 />
                 <DailyGoalCard
                   icon={CalendarCheck2}
-                  eyebrow={closer ? "Reuniões confirmadas" : "Reuniões agendadas"}
+                  eyebrow={closer ? "Reuniões confirmadas" : "Concluídas pelo Closer"}
                   title="Reuniões"
                   current={dailyMeetings}
                   target={dailyMeetingsTarget}
@@ -333,18 +329,11 @@ function Goals() {
                 </div>
                 <div className="mt-4 grid gap-3 lg:grid-cols-2">
                   <SharedGoalGroup
-                    title={closer ? "Reuniões confirmadas" : "Reuniões agendadas"}
-                    values={
-                      closer
-                        ? [
-                            roleProgress.meetings_completed_weekly,
-                            roleProgress.meetings_completed_monthly,
-                          ]
-                        : [
-                            roleProgress.meetings_scheduled_weekly,
-                            roleProgress.meetings_scheduled_monthly,
-                          ]
-                    }
+                    title={closer ? "Reuniões confirmadas" : "Reuniões concluídas"}
+                    values={[
+                      roleProgress.meetings_completed_weekly,
+                      roleProgress.meetings_completed_monthly,
+                    ]}
                     targets={
                       closer
                         ? [

@@ -557,7 +557,7 @@ function TabMetas() {
               </div>
               <div>
                 <h3 className="mb-2 text-sm font-black text-neutral-950">
-                  {team === "sdr" ? "Reuniões agendadas" : "Reuniões confirmadas"}
+                  {team === "sdr" ? "Reuniões concluídas" : "Reuniões confirmadas"}
                 </h3>
                 <div className="grid gap-3 md:grid-cols-3">
                   <TeamMetaEditor
@@ -701,18 +701,11 @@ function TeamMetaEditor({
 }
 
 function TeamMemberProgress({ row }: { row: TeamGoalProgress }) {
-  const meetings =
-    row.seller_type === "sdr"
-      ? [
-          row.meetings_scheduled_daily,
-          row.meetings_scheduled_weekly,
-          row.meetings_scheduled_monthly,
-        ]
-      : [
-          row.meetings_completed_daily,
-          row.meetings_completed_weekly,
-          row.meetings_completed_monthly,
-        ];
+  const meetings = [
+    row.meetings_completed_daily,
+    row.meetings_completed_weekly,
+    row.meetings_completed_monthly,
+  ];
   const meetingTargets =
     row.seller_type === "sdr"
       ? [

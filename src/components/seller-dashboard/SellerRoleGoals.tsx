@@ -1,4 +1,4 @@
-import { CalendarCheck2, CalendarClock, Target, UserPlus } from "lucide-react";
+import { CalendarCheck2, Target, UserPlus } from "lucide-react";
 import type { SellerGoalProgress } from "@/lib/seller-progress";
 
 type SellerType = "sdr" | "closer";
@@ -48,7 +48,7 @@ export function SellerRoleGoals({
           <h2 className="seller-role-goals__title mt-2 text-lg font-black tracking-[-0.025em] text-neutral-950 sm:text-xl">
             {role === "closer"
               ? "Reuniões confirmadas e cadastros"
-              : "Reuniões agendadas e cadastros"}
+              : "Reuniões concluídas e cadastros"}
           </h2>
           <p className="seller-role-goals__description mt-0.5 text-xs font-medium text-neutral-500">
             {role === "closer"
@@ -165,13 +165,13 @@ function registrationGoals(progress: SellerGoalProgress): GoalItem[] {
 
 function meetingGoals(progress: SellerGoalProgress, role: SellerType): GoalItem[] {
   const closer = role === "closer";
-  const label = closer ? "Reuniões confirmadas" : "Reuniões agendadas";
-  const Icon = closer ? CalendarCheck2 : CalendarClock;
+  const label = closer ? "Reuniões confirmadas" : "Reuniões concluídas";
+  const Icon = CalendarCheck2;
   return [
     {
       label,
       period: "Hoje",
-      current: closer ? progress.meetings_completed_daily : progress.meetings_scheduled_daily,
+      current: progress.meetings_completed_daily,
       target: closer
         ? progress.target_meetings_completed_daily
         : progress.target_meetings_scheduled_daily,
@@ -182,7 +182,7 @@ function meetingGoals(progress: SellerGoalProgress, role: SellerType): GoalItem[
     {
       label,
       period: "Esta semana",
-      current: closer ? progress.meetings_completed_weekly : progress.meetings_scheduled_weekly,
+      current: progress.meetings_completed_weekly,
       target: closer
         ? progress.target_meetings_completed_weekly
         : progress.target_meetings_scheduled_weekly,
@@ -193,7 +193,7 @@ function meetingGoals(progress: SellerGoalProgress, role: SellerType): GoalItem[
     {
       label,
       period: "No mês",
-      current: closer ? progress.meetings_completed_monthly : progress.meetings_scheduled_monthly,
+      current: progress.meetings_completed_monthly,
       target: closer
         ? progress.target_meetings_completed_monthly
         : progress.target_meetings_scheduled_monthly,
