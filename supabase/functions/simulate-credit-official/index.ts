@@ -5,18 +5,38 @@ import {
   sanitizeDirectDResponse,
   type DirectDScoreResponse,
 } from "../_shared/directd-credit.ts";
+import {
+  normalizeDirectDIdentity,
+  normalizeDirectDIdentityName,
+  sanitizeDirectDIdentityResponse,
+  type DirectDIdentityResponse,
+  type NormalizedDirectDIdentity,
+} from "../_shared/directd-identity.ts";
 import { corsHeaders, hasOversizedBody, rejectDisallowedOrigin } from "../_shared/http-security.ts";
 
 const ALLOWED_ROLES = new Set(["corretor", "imobiliaria", "admin", "analista"]);
 const DIRECTD_SCORE_URL = "https://apiv3.directd.com.br/api/Score";
+const DIRECTD_PF_IDENTITY_URL = "https://apiv3.directd.com.br/api/CadastroPessoaFisica";
+const DIRECTD_PJ_IDENTITY_URL = "https://apiv3.directd.com.br/api/CadastroPessoaJuridica";
 const REQUEST_TIMEOUT_MS = 30_000;
 
 type ClaimedConsultation = {
   id: string;
   documento: string | null;
   tenant_document: string | null;
+  tenant_name: string | null;
+  tenant_data_nascimento: string | null;
   tipo_pessoa: string | null;
+  profile_id_solicitante: string;
   execution_version: number;
+};
+
+type IdentityRequestState = {
+  identity_status: string | null;
+  identity_attempt_count: number | null;
+  identity_provider_consulta_uid: string | null;
+  identity_customer_name: string | null;
+  identity_birth_date: string | null;
 };
 
 function digits(value: unknown): string {
@@ -87,6 +107,20 @@ serve(async (req) => {
       return json({ ok: false, error: "A API oficial de crédito não está configurada." });
     }
 
+    const { data: identityProviderConfig, error: identityProviderConfigError } = await supabaseAdmin
+      .from("credit_api_provider_config")
+      .select("enabled, unit_cost_cents")
+      .eq("provider_key", "directd-cadastro")
+      .maybeSingle();
+    if (identityProviderConfigError || !identityProviderConfig?.enabled) {
+      await supabaseAdmin.rpc("fail_official_credit_simulation_configuration", {
+        p_consultation_id: consultaId,
+        p_error_code: "DIRECTD_IDENTITY_PROVIDER_DISABLED",
+      });
+      return json({ ok: false, error: "A consulta cadastral oficial não está configurada." });
+    }
+    const identityCostCents = Number(identityProviderConfig.unit_cost_cents) || 16;
+
     const workerId = `edge-directd-${crypto.randomUUID()}`;
     const { data: claimedRows, error: claimError } = await supabaseAdmin.rpc(
       "claim_official_credit_simulation",
@@ -119,6 +153,237 @@ serve(async (req) => {
         p_charge_confirmed: false,
       });
       return json({ ok: false, error: "CPF ou CNPJ inválido para a consulta oficial." });
+    }
+
+    const { data: storedIdentityRequest, error: storedIdentityRequestError } = await supabaseAdmin
+      .from("directd_credit_requests")
+      .select(
+        "identity_status, identity_attempt_count, identity_provider_consulta_uid, identity_customer_name, identity_birth_date",
+      )
+      .eq("consultation_id", consultaId)
+      .maybeSingle();
+    if (storedIdentityRequestError) {
+      await supabaseAdmin.rpc("fail_official_credit_simulation", {
+        p_consultation_id: consultaId,
+        p_worker_id: workerId,
+        p_execution_version: claimed.execution_version,
+        p_error_code: "IDENTITY_LEDGER_READ_FAILED",
+        p_user_message: "Não foi possível preparar a identificação do CPF ou CNPJ.",
+        p_ambiguous_charge: false,
+        p_provider_http_status: null,
+        p_charge_confirmed: false,
+      });
+      return json({ ok: false, error: "Não foi possível preparar a identificação do cliente." });
+    }
+
+    const storedIdentity = storedIdentityRequest as IdentityRequestState | null;
+    let identity: NormalizedDirectDIdentity | null = null;
+    const storedCustomerName = normalizeDirectDIdentityName(storedIdentity?.identity_customer_name);
+    if (storedIdentity?.identity_status === "succeeded" && storedCustomerName) {
+      identity = {
+        customerName: storedCustomerName,
+        birthDate: storedIdentity.identity_birth_date,
+        providerExternalId: storedIdentity.identity_provider_consulta_uid,
+      };
+    } else {
+      const identityAttemptCount = Number(storedIdentity?.identity_attempt_count ?? 0) + 1;
+      const { error: identityStartError } = await supabaseAdmin
+        .from("directd_credit_requests")
+        .update({
+          identity_status: "submitting",
+          identity_attempt_count: identityAttemptCount,
+          identity_provider_http_status: null,
+          identity_error_code: null,
+          identity_requested_at: new Date().toISOString(),
+          identity_completed_at: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("consultation_id", consultaId);
+      if (identityStartError) {
+        await supabaseAdmin.rpc("fail_official_credit_simulation", {
+          p_consultation_id: consultaId,
+          p_worker_id: workerId,
+          p_execution_version: claimed.execution_version,
+          p_error_code: "IDENTITY_LEDGER_WRITE_FAILED",
+          p_user_message: "Não foi possível preparar a identificação do CPF ou CNPJ.",
+          p_ambiguous_charge: false,
+          p_provider_http_status: null,
+          p_charge_confirmed: false,
+        });
+        return json({ ok: false, error: "Não foi possível preparar a identificação do cliente." });
+      }
+      await supabaseAdmin
+        .from("consultas_credito")
+        .update({ automation_step: "consultando_cadastro", heartbeat_at: new Date().toISOString() })
+        .eq("id", consultaId)
+        .eq("worker_id", workerId)
+        .eq("execution_version", claimed.execution_version);
+
+      const failIdentity = async ({
+        errorCode,
+        message,
+        ambiguousCharge,
+        providerHttpStatus,
+        billed,
+        safeResponse,
+        providerExternalId,
+      }: {
+        errorCode: string;
+        message: string;
+        ambiguousCharge: boolean;
+        providerHttpStatus: number | null;
+        billed: boolean;
+        safeResponse?: Record<string, unknown> | null;
+        providerExternalId?: string | null;
+      }) => {
+        await supabaseAdmin
+          .from("directd_credit_requests")
+          .update({
+            identity_status: ambiguousCharge ? "requires_verification" : "failed_no_charge",
+            identity_provider_http_status: providerHttpStatus,
+            identity_provider_consulta_uid: providerExternalId ?? null,
+            identity_billed_cents: billed ? identityCostCents : null,
+            identity_error_code: errorCode,
+            identity_response: safeResponse ?? null,
+            identity_completed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("consultation_id", consultaId);
+        await supabaseAdmin.rpc("fail_official_credit_simulation", {
+          p_consultation_id: consultaId,
+          p_worker_id: workerId,
+          p_execution_version: claimed.execution_version,
+          p_error_code: errorCode,
+          p_user_message: message,
+          p_ambiguous_charge: ambiguousCharge,
+          p_provider_http_status: providerHttpStatus,
+          // Este campo registra somente a cobrança da API de Score. A cobrança
+          // cadastral é auditada separadamente nas colunas identity_*.
+          p_charge_confirmed: false,
+        });
+        return json({ ok: false, error: message });
+      };
+
+      const identityUrl = new URL(
+        document.length === 11 ? DIRECTD_PF_IDENTITY_URL : DIRECTD_PJ_IDENTITY_URL,
+      );
+      identityUrl.searchParams.set("TOKEN", directDToken);
+      identityUrl.searchParams.set(document.length === 11 ? "CPF" : "CNPJ", document);
+
+      const identityController = new AbortController();
+      const identityTimeout = setTimeout(() => identityController.abort(), REQUEST_TIMEOUT_MS);
+      let identityResponse: Response;
+      try {
+        identityResponse = await fetch(identityUrl, {
+          method: "GET",
+          headers: { Accept: "application/json" },
+          signal: identityController.signal,
+        });
+      } catch (error) {
+        return await failIdentity({
+          errorCode:
+            error instanceof DOMException && error.name === "AbortError"
+              ? "DIRECTD_IDENTITY_TIMEOUT"
+              : "DIRECTD_IDENTITY_NETWORK_ERROR",
+          message:
+            "A identificação oficial ficou inconclusiva. O suporte precisa conferir antes de um novo envio.",
+          ambiguousCharge: true,
+          providerHttpStatus: null,
+          billed: false,
+        });
+      } finally {
+        clearTimeout(identityTimeout);
+      }
+
+      const identityResponseText = await identityResponse.text();
+      const parsedIdentity = safeJson(identityResponseText) as DirectDIdentityResponse | null;
+      const safeIdentityResponse = parsedIdentity
+        ? sanitizeDirectDIdentityResponse(parsedIdentity, document.length)
+        : null;
+      const identityProviderExternalId = parsedIdentity?.metaDados?.consultaUid?.trim() || null;
+
+      if (identityResponse.status === 201 || identityResponse.status === 202) {
+        return await failIdentity({
+          errorCode: "DIRECTD_IDENTITY_ASYNC_PENDING",
+          message:
+            "A identificação foi aceita de forma assíncrona e precisa de conferência antes de continuar.",
+          ambiguousCharge: true,
+          providerHttpStatus: identityResponse.status,
+          billed: false,
+          safeResponse: safeIdentityResponse,
+          providerExternalId: identityProviderExternalId,
+        });
+      }
+
+      if (!identityResponse.ok || !parsedIdentity) {
+        const safeToRetry = [400, 401, 403, 404, 503].includes(identityResponse.status);
+        return await failIdentity({
+          errorCode: `DIRECTD_IDENTITY_HTTP_${identityResponse.status}`,
+          message:
+            identityResponse.status === 403
+              ? "Saldo indisponível na Direct Data. Recarregue a conta antes de tentar novamente."
+              : "A API oficial não conseguiu identificar o CPF ou CNPJ.",
+          ambiguousCharge: !safeToRetry,
+          providerHttpStatus: identityResponse.status,
+          billed: false,
+          safeResponse: safeIdentityResponse,
+          providerExternalId: identityProviderExternalId,
+        });
+      }
+
+      identity = normalizeDirectDIdentity(parsedIdentity, document.length);
+      if (!identity) {
+        return await failIdentity({
+          errorCode: "DIRECTD_IDENTITY_NAME_MISSING",
+          message:
+            "A consulta cadastral foi concluída, mas não devolveu um nome válido. O suporte precisa conferir o retorno.",
+          ambiguousCharge: true,
+          providerHttpStatus: identityResponse.status,
+          billed: true,
+          safeResponse: safeIdentityResponse,
+          providerExternalId: identityProviderExternalId,
+        });
+      }
+
+      const { data: identitySaved, error: identitySaveError } = await supabaseAdmin.rpc(
+        "save_official_credit_identity",
+        {
+          p_consultation_id: consultaId,
+          p_worker_id: workerId,
+          p_execution_version: claimed.execution_version,
+          p_customer_name: identity.customerName,
+          p_birth_date: identity.birthDate,
+          p_provider_external_id: identity.providerExternalId,
+          p_sanitized_response: safeIdentityResponse,
+          p_provider_http_status: identityResponse.status,
+        },
+      );
+      if (identitySaveError || !identitySaved) {
+        return await failIdentity({
+          errorCode: "DIRECTD_IDENTITY_PERSISTENCE_FAILED",
+          message:
+            "A identificação foi concluída, mas não pôde ser salva. O suporte precisa conferir antes de continuar.",
+          ambiguousCharge: true,
+          providerHttpStatus: identityResponse.status,
+          billed: true,
+          safeResponse: safeIdentityResponse,
+          providerExternalId: identity.providerExternalId,
+        });
+      }
+    }
+
+    if (!identity) {
+      await supabaseAdmin.rpc("fail_official_credit_simulation", {
+        p_consultation_id: consultaId,
+        p_worker_id: workerId,
+        p_execution_version: claimed.execution_version,
+        p_error_code: "DIRECTD_IDENTITY_UNAVAILABLE",
+        p_user_message: "Não foi possível confirmar a identidade do CPF ou CNPJ.",
+        p_ambiguous_charge: true,
+        p_provider_http_status: null,
+        p_charge_confirmed: false,
+      });
+      return json({ ok: false, error: "Não foi possível confirmar a identidade do cliente." });
     }
 
     const url = new URL(DIRECTD_SCORE_URL);
@@ -224,7 +489,10 @@ serve(async (req) => {
         provider: "directd_quod",
         decision: result.decision,
         scoreBand: result.faixaScore,
-        billedCents: 198,
+        customerNameSource: "directd_cadastro",
+        identityLookupBilledCents: identityCostCents,
+        scoreBilledCents: 198,
+        billedCents: 198 + identityCostCents,
       },
     });
 
@@ -234,6 +502,7 @@ serve(async (req) => {
         status: result.decision,
         faixaScore: result.faixaScore,
         score: result.score,
+        nome: identity.customerName,
       },
     });
   } catch (error) {

@@ -291,7 +291,7 @@ function Consultas() {
             <div>
               <p className="text-neutral-900 font-bold">Nenhuma consulta encontrada</p>
               <p className="text-neutral-500 text-sm mt-1">
-                Use “Simular Crédito Oficial” no menu lateral para iniciar uma análise.
+                Use “Nova Consulta” no menu lateral para iniciar uma análise.
               </p>
             </div>
           </div>
@@ -418,7 +418,7 @@ function Consultas() {
                       <div className="max-w-xs mx-auto">
                         <p className="text-neutral-900 font-bold">Nenhuma consulta encontrada</p>
                         <p className="text-neutral-500 text-sm mt-1">
-                          Use “Simular Crédito Oficial” no menu lateral para iniciar uma análise.
+                          Use “Nova Consulta” no menu lateral para iniciar uma análise.
                         </p>
                       </div>
                     </div>

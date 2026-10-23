@@ -74,6 +74,8 @@ export type AutomationStep =
   | "abrindo"
   | "preenchendo"
   | "enviando"
+  | "consultando_cadastro"
+  | "consultando_score"
   | "aguardando_resultado"
   | "aguardando_autenticacao"
   | "aguardando_liberacao_parceiro"
@@ -82,7 +84,9 @@ export type AutomationStep =
 const PROGRESSO_POR_ETAPA: Record<AutomationStep, number> = {
   abrindo: 15,
   preenchendo: 40,
-  enviando: 65,
+  enviando: 25,
+  consultando_cadastro: 45,
+  consultando_score: 75,
   aguardando_resultado: 85,
   aguardando_autenticacao: 5,
   aguardando_liberacao_parceiro: 5,

@@ -181,20 +181,22 @@ export function FormularioSimulacao({
       toast.error(msg);
       return;
     }
-    const nomeInquilino =
-      tipoInquilino === "PF" ? inquilinos[0]?.nome.trim() ?? "" : razaoSocial.trim();
-    if (
-      nomeInquilino.length < 3 ||
-      !/[A-Za-zÀ-ÖØ-öø-ÿ]/.test(nomeInquilino) ||
-      /\d/.test(nomeInquilino)
-    ) {
-      const msg =
-        tipoInquilino === "PF"
-          ? "Informe o nome completo do inquilino."
-          : "Informe a razão social da empresa.";
-      setErro(msg);
-      toast.error(msg);
-      return;
+    if (modo === "publico") {
+      const nomeInquilino =
+        tipoInquilino === "PF" ? inquilinos[0]?.nome.trim() ?? "" : razaoSocial.trim();
+      if (
+        nomeInquilino.length < 3 ||
+        !/[A-Za-zÀ-ÖØ-öø-ÿ]/.test(nomeInquilino) ||
+        /\d/.test(nomeInquilino)
+      ) {
+        const msg =
+          tipoInquilino === "PF"
+            ? "Informe o nome completo do inquilino."
+            : "Informe a razão social da empresa.";
+        setErro(msg);
+        toast.error(msg);
+        return;
+      }
     }
     if (!cepSomenteNox) {
       if (!cep || cep.replace(/\D/g, "").length < 8) {
@@ -253,9 +255,9 @@ export function FormularioSimulacao({
       tipoInquilino,
       inquilinos: inquilinos.map((inquilino) => ({
         ...inquilino,
-        nome: inquilino.nome.trim(),
+        nome: modo === "interno" && !allowDemoDocuments ? "" : inquilino.nome.trim(),
       })),
-      razaoSocial: razaoSocial.trim(),
+      razaoSocial: modo === "interno" && !allowDemoDocuments ? "" : razaoSocial.trim(),
       cnpj,
       tipoImovel,
       cep,
@@ -267,11 +269,12 @@ export function FormularioSimulacao({
   return (
     <div className="w-full max-w-5xl">
       <h1 className="text-4xl md:text-5xl font-bold text-neutral-900 mb-2 tracking-tight">
-        {modo === "interno" ? "Simular crédito oficial" : "Simule a fiança do seu cliente"}
+        {modo === "interno" ? "Nova Consulta" : "Simule a fiança do seu cliente"}
       </h1>
       <p className="text-lg text-neutral-600 mb-10">
-        Preencha os dados abaixo. A solicitação é registrada na hora e o resultado aparece assim
-        que a análise for concluída.
+        {modo === "interno"
+          ? "Informe o CPF ou CNPJ. O nome será consultado automaticamente na API oficial e salvo com o resultado."
+          : "Preencha os dados abaixo. A solicitação é registrada na hora e o resultado aparece assim que a análise for concluída."}
       </p>
 
       <form onSubmit={handleSimular}>
@@ -308,20 +311,24 @@ export function FormularioSimulacao({
                     <Label className="text-xs font-bold text-neutral-500 uppercase tracking-widest">
                       Inquilino {i + 1}
                     </Label>
-                    <Input
-                      value={inq.nome}
-                      onChange={(event) => {
-                        const nome = event.target.value;
-                        setInquilinos((atuais) =>
-                          atuais.map((item, index) => (index === i ? { ...item, nome } : item)),
-                        );
-                      }}
-                      autoComplete="name"
-                      className="h-14 text-base font-medium"
-                      placeholder="Nome completo"
-                      maxLength={120}
-                      required
-                    />
+                    {modo === "publico" ? (
+                      <Input
+                        value={inq.nome}
+                        onChange={(event) => {
+                          const nome = event.target.value;
+                          setInquilinos((atuais) =>
+                            atuais.map((item, index) =>
+                              index === i ? { ...item, nome } : item,
+                            ),
+                          );
+                        }}
+                        autoComplete="name"
+                        className="h-14 text-base font-medium"
+                        placeholder="Nome completo"
+                        maxLength={120}
+                        required
+                      />
+                    ) : null}
                     <IMaskInput
                       mask="000.000.000-00"
                       value={inq.cpf}
@@ -341,20 +348,22 @@ export function FormularioSimulacao({
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label className="text-xs font-bold text-neutral-500 uppercase tracking-widest">
-                    Razão social
-                  </Label>
-                  <Input
-                    value={razaoSocial}
-                    onChange={(event) => setRazaoSocial(event.target.value)}
-                    autoComplete="organization"
-                    className="h-14 text-base font-medium"
-                    placeholder="Razão social"
-                    maxLength={120}
-                    required
-                  />
-                </div>
+                {modo === "publico" ? (
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold text-neutral-500 uppercase tracking-widest">
+                      Razão social
+                    </Label>
+                    <Input
+                      value={razaoSocial}
+                      onChange={(event) => setRazaoSocial(event.target.value)}
+                      autoComplete="organization"
+                      className="h-14 text-base font-medium"
+                      placeholder="Razão social"
+                      maxLength={120}
+                      required
+                    />
+                  </div>
+                ) : null}
                 <div className="space-y-2">
                   <Label className="text-xs font-bold text-neutral-500 uppercase tracking-widest">
                     CNPJ
@@ -526,7 +535,7 @@ export function FormularioSimulacao({
           <span>
             {modo === "publico"
               ? "Para visualizar o resultado, será necessário entrar ou criar uma conta gratuita."
-              : "Para visualizar o resultado, preencha todos os dados corretamente."}
+              : "O nome será obtido pelo CPF/CNPJ e aparecerá automaticamente em Minhas Consultas."}
           </span>
         </div>
 
@@ -542,7 +551,7 @@ export function FormularioSimulacao({
           disabled={disabled}
           className="w-full mt-8 bg-neutral-900 hover:bg-neutral-800 disabled:bg-neutral-300 text-white py-8 rounded-xl font-bold text-xl inline-flex items-center justify-center gap-2 transition-all shadow-xl shadow-neutral-200 active:scale-[0.98]"
         >
-          {modo === "publico" ? "Simular crédito e entrar" : "Simular crédito oficial"}
+          {modo === "publico" ? "Simular crédito e entrar" : "Consultar crédito"}
           <ChevronRight className="w-6 h-6" strokeWidth={2.5} />
         </Button>
       </form>
