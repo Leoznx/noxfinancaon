@@ -6,6 +6,7 @@ import {
   type DirectDScoreResponse,
 } from "../_shared/directd-credit.ts";
 import {
+  isDirectDIdentityNotFound,
   normalizeDirectDIdentity,
   normalizeDirectDIdentityName,
   sanitizeDirectDIdentityResponse,
@@ -37,6 +38,8 @@ type IdentityRequestState = {
   identity_provider_consulta_uid: string | null;
   identity_customer_name: string | null;
   identity_birth_date: string | null;
+  identity_provider_http_status: number | null;
+  identity_error_code: string | null;
 };
 
 function digits(value: unknown): string {
@@ -158,7 +161,7 @@ serve(async (req) => {
     const { data: storedIdentityRequest, error: storedIdentityRequestError } = await supabaseAdmin
       .from("directd_credit_requests")
       .select(
-        "identity_status, identity_attempt_count, identity_provider_consulta_uid, identity_customer_name, identity_birth_date",
+        "identity_status, identity_attempt_count, identity_provider_consulta_uid, identity_customer_name, identity_birth_date, identity_provider_http_status, identity_error_code",
       )
       .eq("consultation_id", consultaId)
       .maybeSingle();
@@ -185,6 +188,36 @@ serve(async (req) => {
         birthDate: storedIdentity.identity_birth_date,
         providerExternalId: storedIdentity.identity_provider_consulta_uid,
       };
+    } else if (
+      storedIdentity?.identity_status === "failed_billed" &&
+      storedIdentity.identity_error_code === "DIRECTD_IDENTITY_NOT_FOUND"
+    ) {
+      const documentLabel = document.length === 14 ? "CNPJ" : "CPF";
+      const message = `${documentLabel} não localizado na base cadastral. Confira o documento antes de tentar novamente.`;
+      await supabaseAdmin.rpc("fail_official_credit_simulation", {
+        p_consultation_id: consultaId,
+        p_worker_id: workerId,
+        p_execution_version: claimed.execution_version,
+        p_error_code: "DIRECTD_IDENTITY_NOT_FOUND",
+        p_user_message: message,
+        p_ambiguous_charge: false,
+        p_provider_http_status: storedIdentity.identity_provider_http_status,
+        p_charge_confirmed: false,
+      });
+      return json({ ok: false, error: message });
+    } else if (storedIdentity?.identity_status === "requires_verification") {
+      await supabaseAdmin.rpc("fail_official_credit_simulation", {
+        p_consultation_id: consultaId,
+        p_worker_id: workerId,
+        p_execution_version: claimed.execution_version,
+        p_error_code: storedIdentity.identity_error_code ?? "DIRECTD_IDENTITY_REQUIRES_VERIFICATION",
+        p_user_message:
+          "A identificação oficial anterior precisa de conferência antes de um novo envio.",
+        p_ambiguous_charge: true,
+        p_provider_http_status: storedIdentity.identity_provider_http_status,
+        p_charge_confirmed: false,
+      });
+      return json({ ok: false, error: "A identificação oficial anterior precisa de conferência." });
     } else {
       const identityAttemptCount = Number(storedIdentity?.identity_attempt_count ?? 0) + 1;
       const { error: identityStartError } = await supabaseAdmin
@@ -239,7 +272,11 @@ serve(async (req) => {
         await supabaseAdmin
           .from("directd_credit_requests")
           .update({
-            identity_status: ambiguousCharge ? "requires_verification" : "failed_no_charge",
+            identity_status: ambiguousCharge
+              ? "requires_verification"
+              : billed
+                ? "failed_billed"
+                : "failed_no_charge",
             identity_provider_http_status: providerHttpStatus,
             identity_provider_consulta_uid: providerExternalId ?? null,
             identity_billed_cents: billed ? identityCostCents : null,
@@ -326,6 +363,19 @@ serve(async (req) => {
           ambiguousCharge: !safeToRetry,
           providerHttpStatus: identityResponse.status,
           billed: false,
+          safeResponse: safeIdentityResponse,
+          providerExternalId: identityProviderExternalId,
+        });
+      }
+
+      if (isDirectDIdentityNotFound(parsedIdentity)) {
+        const documentLabel = document.length === 14 ? "CNPJ" : "CPF";
+        return await failIdentity({
+          errorCode: "DIRECTD_IDENTITY_NOT_FOUND",
+          message: `${documentLabel} não localizado na base cadastral. Confira o documento antes de tentar novamente.`,
+          ambiguousCharge: false,
+          providerHttpStatus: identityResponse.status,
+          billed: true,
           safeResponse: safeIdentityResponse,
           providerExternalId: identityProviderExternalId,
         });

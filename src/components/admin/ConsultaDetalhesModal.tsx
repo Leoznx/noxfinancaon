@@ -34,7 +34,7 @@ import {
   resolverStatusConsulta,
   type StatusExibicaoConsulta,
 } from "@/lib/consultasCredito";
-import { resolveCreditCustomerName } from "@/lib/credit-customer-name";
+import { resolveCreditCustomerDisplayName } from "@/lib/credit-customer-name";
 import {
   reconcileExistingAsaasSubscription,
   type ExistingAsaasSubscriptionPreview,
@@ -293,10 +293,12 @@ export function ConsultaDetalhesModal({ consulta, open, onOpenChange }: Props) {
     consulta.inquilinos?.cpf ||
     consulta.inquilinos?.cnpj ||
     null;
-  const nomeInquilino = resolveCreditCustomerName({
+  const nomeInquilino = resolveCreditCustomerDisplayName({
     tenantName: consulta.tenant_name,
     rawResponse: consulta.raw_response,
     fallbacks: [consulta.inquilinos?.nome, consulta.inquilinos?.razao_social],
+    document: consulta.tenant_document ?? consulta.documento,
+    errorCategory: consulta.last_error_category,
   });
 
   const aluguel = Number(

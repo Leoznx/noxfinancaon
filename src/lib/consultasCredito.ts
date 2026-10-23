@@ -55,6 +55,7 @@ export interface ConsultaCredito {
   automation_finished_at: string | null;
   automation_step: string | null;
   technical_status: string | null;
+  last_error_category: string | null;
   error_message: string | null;
   raw_response: unknown;
   substatus: string | null;
@@ -291,7 +292,7 @@ export async function getConsultaCredito(
   const query = supabase
     .from("consultas_credito")
     .select(
-      "id, correlation_id, created_at, updated_at, tipo_pessoa, documento, documento_masked, tenant_name, tipo_imovel, cep, imovel_cep, valor_aluguel, valor_condominio, valor_taxas, status, resultado, mensagem, origem, automation_started_at, automation_finished_at, automation_step, technical_status, error_message, raw_response, substatus, plano_id, contract_period_months, valor_premio_mensal, valor_anual, dados_complementares_em, documentos, documentos_prazo_iniciado_em, documentos_prazo_limite_em, documentos_faltantes_em",
+      "id, correlation_id, created_at, updated_at, tipo_pessoa, documento, documento_masked, tenant_name, tipo_imovel, cep, imovel_cep, valor_aluguel, valor_condominio, valor_taxas, status, resultado, mensagem, origem, automation_started_at, automation_finished_at, automation_step, technical_status, last_error_category, error_message, raw_response, substatus, plano_id, contract_period_months, valor_premio_mensal, valor_anual, dados_complementares_em, documentos, documentos_prazo_iniciado_em, documentos_prazo_limite_em, documentos_faltantes_em",
     )
     .eq("id", id);
   try {

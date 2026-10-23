@@ -26,6 +26,31 @@ export interface NormalizedDirectDIdentity {
   providerExternalId: string | null;
 }
 
+function normalizeProviderMessage(value: unknown): string {
+  return typeof value === "string"
+    ? value
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .toLowerCase()
+    : "";
+}
+
+/** HTTP 200 também pode representar documento ausente na base cadastral. */
+export function isDirectDIdentityNotFound(response: DirectDIdentityResponse): boolean {
+  const resultId = Number(response.metaDados?.resultadoId);
+  const providerMessage = normalizeProviderMessage(
+    `${response.metaDados?.resultado ?? ""} ${response.metaDados?.mensagem ?? ""}`,
+  );
+  const explicitlyNotFound =
+    providerMessage.includes("documento entidade nao encontrada") ||
+    providerMessage.includes("documento nao encontrado") ||
+    providerMessage.includes("entidade nao encontrada");
+
+  return explicitlyNotFound || (resultId === 6 && providerMessage.includes("nao encontrad"));
+}
+
 const INVALID_NAME_WORDS =
   /\b(cpf|cnpj|cliente|inquilin[oa]|locat[aá]ri[oa]|proponente|nome|resultado|an[aá]lise|cr[eé]dito|aprovad[oa]|recusad[oa]|valor|aluguel|simula[cç][aã]o|pendente|dados)\b/i;
 

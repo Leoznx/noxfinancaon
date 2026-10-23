@@ -4,6 +4,7 @@ import { test } from "node:test";
 import {
   extractCreditCustomerName,
   normalizeCreditCustomerName,
+  resolveCreditCustomerDisplayName,
   resolveCreditCustomerName,
 } from "../src/lib/credit-customer-name";
 
@@ -85,5 +86,24 @@ test("prioriza tenant_name e usa o resumo técnico somente como fallback", () =>
       rawResponse: { textoCapturado: "Nome: Carla Mendes\nCPF: [DOCUMENT_REDACTED]" },
     }),
     "Carla Mendes",
+  );
+});
+
+test("mostra documento não localizado sem inventar nome de cliente", () => {
+  assert.equal(
+    resolveCreditCustomerDisplayName({
+      tenantName: "08025215920",
+      document: "080.252.159-20",
+      errorCategory: "DIRECTD_IDENTITY_NOT_FOUND",
+    }),
+    "CPF não localizado",
+  );
+  assert.equal(
+    resolveCreditCustomerDisplayName({
+      tenantName: "12345678000195",
+      document: "12.345.678/0001-95",
+      errorCategory: "DIRECTD_IDENTITY_NOT_FOUND",
+    }),
+    "CNPJ não localizado",
   );
 });

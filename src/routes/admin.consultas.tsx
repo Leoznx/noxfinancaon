@@ -32,7 +32,7 @@ import {
   resolverStatusConsulta,
   type StatusExibicaoConsulta,
 } from "@/lib/consultasCredito";
-import { resolveCreditCustomerName } from "@/lib/credit-customer-name";
+import { resolveCreditCustomerDisplayName } from "@/lib/credit-customer-name";
 
 export const Route = createFileRoute("/admin/consultas")({
   component: () => (
@@ -50,7 +50,7 @@ export const Route = createFileRoute("/admin/consultas")({
 });
 
 const SELECT_CONSULTA = `
-  id, status, resultado, substatus, created_at, updated_at,
+  id, status, resultado, substatus, last_error_category, created_at, updated_at,
   tenant_name, tenant_document, documento, property_address, rent_value, valor_aluguel, raw_response,
   cep, imovel_cep, imovel_cidade, imovel_estado,
   role_solicitante, profile_id_solicitante, payment_status,
@@ -65,10 +65,12 @@ const LIMITE_LISTA = 500;
 
 function nomeInquilino(consulta: any): string {
   return (
-    resolveCreditCustomerName({
+    resolveCreditCustomerDisplayName({
       tenantName: consulta.tenant_name,
       rawResponse: consulta.raw_response,
       fallbacks: [consulta.inquilinos?.nome, consulta.inquilinos?.razao_social],
+      document: consulta.tenant_document ?? consulta.documento,
+      errorCategory: consulta.last_error_category,
     }) ?? "Nome não informado"
   );
 }

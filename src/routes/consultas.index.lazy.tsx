@@ -31,7 +31,7 @@ import {
   LABEL_STATUS_CONSULTA,
   resolverStatusConsulta,
 } from "@/lib/consultasCredito";
-import { resolveCreditCustomerName } from "@/lib/credit-customer-name";
+import { resolveCreditCustomerDisplayName } from "@/lib/credit-customer-name";
 
 export const Route = createLazyFileRoute("/consultas/")({
   component: () => (
@@ -205,10 +205,12 @@ function Consultas() {
   // cadastro vinculado para recuperar resultados de versões antigas do worker que já
   // receberam o nome do parceiro, mas não o copiaram para a coluna da consulta.
   const getNome = (c: any) => {
-    const nome = resolveCreditCustomerName({
+    const nome = resolveCreditCustomerDisplayName({
       tenantName: c.tenant_name,
       rawResponse: c.raw_response,
       fallbacks: [c.inquilinos?.nome],
+      document: c.documento || c.tenant_document,
+      errorCategory: c.last_error_category,
     });
     if (nome) return nome;
     if (getStatusConsulta(c) === "recusado") {

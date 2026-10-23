@@ -29,7 +29,7 @@ import {
   resolverStatusConsulta,
   type ConsultaCredito,
 } from "@/lib/consultasCredito";
-import { resolveCreditCustomerName } from "@/lib/credit-customer-name";
+import { resolveCreditCustomerDisplayName } from "@/lib/credit-customer-name";
 import { SeletorPlanos, type ExtrasSelecionados, type PlanoSelecionadoCalculo } from "@/components/simulacao/SeletorPlanos";
 
 const STATUS_UI: Record<
@@ -144,9 +144,11 @@ export function ResultadoAutomacao({
   const isRecusado = statusNormalizado.includes("recusado") || statusNormalizado.includes("reprovado");
   const isDocumentacaoPendente = statusNormalizado.includes("pendente_documentacao");
   const isEmAnalise = status === "em_analise" || status === "falta_documentos";
-  const nomeCliente = resolveCreditCustomerName({
+  const nomeCliente = resolveCreditCustomerDisplayName({
     tenantName: consulta.tenant_name,
     rawResponse: consulta.raw_response,
+    document: consulta.documento,
+    errorCategory: consulta.last_error_category,
   });
 
   if (status === "aprovado" || isDocumentacaoPendente) {

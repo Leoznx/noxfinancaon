@@ -158,3 +158,25 @@ export function resolveCreditCustomerName({
     null
   );
 }
+
+export function resolveCreditCustomerDisplayName({
+  document,
+  errorCategory,
+  ...nameSources
+}: {
+  tenantName: unknown;
+  rawResponse?: unknown;
+  fallbacks?: unknown[];
+  document?: unknown;
+  errorCategory?: unknown;
+}): string | null {
+  const customerName = resolveCreditCustomerName(nameSources);
+  if (customerName) return customerName;
+
+  if (errorCategory === "DIRECTD_IDENTITY_NOT_FOUND") {
+    const documentDigits = typeof document === "string" ? document.replace(/\D/g, "") : "";
+    return documentDigits.length === 14 ? "CNPJ não localizado" : "CPF não localizado";
+  }
+
+  return null;
+}
