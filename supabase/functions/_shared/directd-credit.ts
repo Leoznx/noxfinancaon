@@ -76,6 +76,37 @@ export function normalizeDirectDResult(
         ? Number(rawScore)
         : null;
 
+  // O score numérico é a fonte da decisão comercial da NOX. Ele vem antes do
+  // texto do provedor porque a descrição da faixa pode divergir dos limites
+  // vigentes. Os intervalos são contínuos para que 540 e 651 não fiquem sem
+  // uma decisão.
+  if (score !== null && score >= 0 && score <= 540) {
+    return {
+      decision: "recusado",
+      faixaScore: "Alto índice de inadimplência",
+      score,
+      message: "Crédito reprovado pela análise oficial de risco.",
+    };
+  }
+  if (score !== null && score >= 541 && score <= 650) {
+    return {
+      decision: "em_analise",
+      faixaScore: "Médio índice de inadimplência",
+      score,
+      message: "Análise pendente. Envie o comprovante de renda para continuar.",
+    };
+  }
+  if (score !== null && score >= 651 && score <= 1000) {
+    return {
+      decision: "aprovado",
+      faixaScore: "Baixo índice de inadimplência",
+      score,
+      message: "Crédito aprovado pela análise oficial de risco.",
+    };
+  }
+
+  // O texto só é usado como fallback quando o provedor não devolve um score
+  // numérico utilizável.
   if (
     normalized.includes("alto") &&
     (normalized.includes("inadimpl") || normalized.includes("risco"))
@@ -87,7 +118,6 @@ export function normalizeDirectDResult(
       message: "Crédito reprovado pela análise oficial de risco.",
     };
   }
-
   if (
     normalized.includes("medio") &&
     (normalized.includes("inadimpl") || normalized.includes("risco"))
@@ -99,7 +129,6 @@ export function normalizeDirectDResult(
       message: "Análise pendente. Envie o comprovante de renda para continuar.",
     };
   }
-
   if (
     normalized.includes("baixo") &&
     (normalized.includes("inadimpl") || normalized.includes("risco"))
@@ -107,34 +136,6 @@ export function normalizeDirectDResult(
     return {
       decision: "aprovado",
       faixaScore,
-      score,
-      message: "Crédito aprovado pela análise oficial de risco.",
-    };
-  }
-
-  // A documentação oficial também define os intervalos numéricos. Alguns CPFs
-  // retornam HTTP 200 e score, mas sem o texto de faixa; nesses casos o número é
-  // suficiente para aplicar exatamente a mesma regra comercial.
-  if (score !== null && score >= 0 && score <= 600) {
-    return {
-      decision: "recusado",
-      faixaScore: faixaScore || "Alto índice de inadimplência",
-      score,
-      message: "Crédito reprovado pela análise oficial de risco.",
-    };
-  }
-  if (score !== null && score >= 601 && score <= 700) {
-    return {
-      decision: "em_analise",
-      faixaScore: faixaScore || "Médio índice de inadimplência",
-      score,
-      message: "Análise pendente. Envie o comprovante de renda para continuar.",
-    };
-  }
-  if (score !== null && score >= 701 && score <= 1000) {
-    return {
-      decision: "aprovado",
-      faixaScore: faixaScore || "Baixo índice de inadimplência",
       score,
       message: "Crédito aprovado pela análise oficial de risco.",
     };

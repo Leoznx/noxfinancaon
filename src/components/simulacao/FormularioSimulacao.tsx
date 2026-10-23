@@ -183,7 +183,11 @@ export function FormularioSimulacao({
     }
     const nomeInquilino =
       tipoInquilino === "PF" ? inquilinos[0]?.nome.trim() ?? "" : razaoSocial.trim();
-    if (nomeInquilino.length < 3 || !/[A-Za-zÀ-ÖØ-öø-ÿ]/.test(nomeInquilino)) {
+    if (
+      nomeInquilino.length < 3 ||
+      !/[A-Za-zÀ-ÖØ-öø-ÿ]/.test(nomeInquilino) ||
+      /\d/.test(nomeInquilino)
+    ) {
       const msg =
         tipoInquilino === "PF"
           ? "Informe o nome completo do inquilino."

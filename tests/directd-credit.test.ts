@@ -7,7 +7,7 @@ import {
   type DirectDScoreResponse,
 } from "../supabase/functions/_shared/directd-credit.ts";
 
-function responseFor(faixaScore: string, score: number | null = 700): DirectDScoreResponse {
+function responseFor(faixaScore: string, score: number | null = null): DirectDScoreResponse {
   return {
     metaDados: {
       consultaUid: "consulta-teste",
@@ -44,10 +44,23 @@ test("envia faixa sem regra para análise complementar", () => {
   });
 });
 
-test("usa os intervalos oficiais quando o provedor omite o texto da faixa", () => {
-  assert.equal(normalizeDirectDResult(responseFor("", 600), 11).decision, "recusado");
-  assert.equal(normalizeDirectDResult(responseFor("", 601), 11).decision, "em_analise");
-  assert.equal(normalizeDirectDResult(responseFor("", 701), 11).decision, "aprovado");
+test("aplica os limites comerciais contínuos definidos pela NOX", () => {
+  assert.equal(normalizeDirectDResult(responseFor("", 0), 11).decision, "recusado");
+  assert.equal(normalizeDirectDResult(responseFor("", 540), 11).decision, "recusado");
+  assert.equal(normalizeDirectDResult(responseFor("", 541), 11).decision, "em_analise");
+  assert.equal(normalizeDirectDResult(responseFor("", 650), 11).decision, "em_analise");
+  assert.equal(normalizeDirectDResult(responseFor("", 651), 11).decision, "aprovado");
+  assert.equal(normalizeDirectDResult(responseFor("", 1000), 11).decision, "aprovado");
+});
+
+test("o score prevalece quando o texto do provedor diverge da regra NOX", () => {
+  const medio = normalizeDirectDResult(responseFor("Alto índice de inadimplência", 551), 11);
+  assert.equal(medio.decision, "em_analise");
+  assert.equal(medio.faixaScore, "Médio índice de inadimplência");
+
+  const aprovado = normalizeDirectDResult(responseFor("Médio índice de inadimplência", 698), 11);
+  assert.equal(aprovado.decision, "aprovado");
+  assert.equal(aprovado.faixaScore, "Baixo índice de inadimplência");
 });
 
 test("preserva score ausente como nulo", () => {
@@ -139,4 +152,31 @@ test("migração cria todos os campos de auditoria usados pelo fluxo oficial", (
   ]) {
     assert.match(compatibilityMigration, new RegExp(`ADD COLUMN IF NOT EXISTS ${column}\\b`));
   }
+});
+
+test("migração exige identidade e aplica as faixas comerciais no histórico", () => {
+  const migration = readFileSync(
+    new URL(
+      "../supabase/migrations/20261023133000_credit_score_thresholds_and_required_identity.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+
+  assert.match(migration, /IF v_valid_name IS NULL THEN/);
+  assert.match(migration, /Nome completo ou razão social é obrigatório/);
+  assert.match(migration, /request\.score BETWEEN 0 AND 540 THEN 'recusado'/);
+  assert.match(migration, /request\.score BETWEEN 541 AND 650 THEN 'em_analise'/);
+  assert.match(migration, /request\.score BETWEEN 651 AND 1000 THEN 'aprovado'/);
+  assert.match(migration, /conciliacao_mesmo_documento/);
+
+  const legacyShutdown = readFileSync(
+    new URL(
+      "../supabase/migrations/20261023143000_disable_direct_legacy_credit_enqueue.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  assert.match(legacyShutdown, /FROM PUBLIC, anon, authenticated/);
+  assert.match(legacyShutdown, /TO service_role/);
 });
