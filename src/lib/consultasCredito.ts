@@ -463,7 +463,7 @@ export const LABEL_STATUS_CONSULTA: Record<StatusExibicaoConsulta, string> = {
   cancelada: "Cancelada sem envio",
   aguardando_autenticacao: "Aguardando autenticação",
   aguardando_servico_externo: "Aguardando serviço externo",
-  aguardando_resultado: "Aguardando resultado",
+  aguardando_resultado: "Consultando",
   processando: "Consultando",
   pendente: "Consultando",
 };

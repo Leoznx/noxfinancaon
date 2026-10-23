@@ -28,8 +28,8 @@ function normalizeStatus(value: string | null | undefined): string {
 
 /**
  * Resolve somente o estado apresentado ao usuário. `resultado` continua sendo
- * reservado para decisões reais do provedor. Estados operacionais da fila nunca
- * viram "Em análise": cada um é apresentado com o estado real gravado pelo worker.
+ * reservado para decisões reais do provedor. Uma resposta paga que exige revisão
+ * é apresentada como "Em análise"; etapas transitórias continuam "Consultando".
  */
 export function resolveCreditStatusPresentation(
   row: CreditStatusPresentationRow,
@@ -52,12 +52,10 @@ export function resolveCreditStatusPresentation(
   if (decision === "em_analise") return "em_analise";
 
   if (technicalStatus === "cancelled" || status === "cancelada") return "cancelada";
-  // `requires_verification` é uma quarentena técnica para impedir reenvio
-  // duplicado. Não é uma decisão da Loft e não pode virar uma tela final para o
-  // cliente; enquanto a reconciliação acontece, a experiência continua como
-  // consulta em andamento.
+  // `requires_verification` impede reenvio e cobrança duplicada. Para o usuário,
+  // a consulta já saiu da fila automática e precisa de análise complementar.
   if (technicalStatus === "requires_verification" || status === "requer_verificacao") {
-    return "aguardando_resultado";
+    return "em_analise";
   }
   if (technicalStatus === "technical_failure" || status === "erro") return "erro";
 
@@ -66,7 +64,7 @@ export function resolveCreditStatusPresentation(
     return "aguardando_servico_externo";
   }
   if (automationStep === "aguardando_resultado" || technicalStatus === "waiting_provider") {
-    return "aguardando_resultado";
+    return "processando";
   }
   if (
     technicalStatus === "processing" ||

@@ -17,14 +17,14 @@ test("mantém decisões reais da Loft", () => {
   );
 });
 
-test("exibe o estado operacional real sem fabricar Em análise", () => {
+test("exibe revisão manual como Em análise e mantém a fila como Consultando", () => {
   assert.equal(resolveCreditStatusPresentation({ status: null, resultado: null }), "pendente");
   assert.equal(resolveCreditStatusPresentation({ status: "pendente" }), "pendente");
   assert.equal(resolveCreditStatusPresentation({ status: "processando" }), "processando");
   assert.equal(resolveCreditStatusPresentation({ status: "erro" }), "erro");
   assert.equal(
     resolveCreditStatusPresentation({ status: "requer_verificacao" }),
-    "aguardando_resultado",
+    "em_analise",
   );
   assert.equal(
     resolveCreditStatusPresentation({ status: "aprovado", resultado: "erro" }),
@@ -47,7 +47,7 @@ test("detalha as etapas gravadas pelo worker", () => {
       technical_status: "waiting_provider",
       automation_step: "aguardando_resultado",
     }),
-    "aguardando_resultado",
+    "processando",
   );
   assert.equal(
     resolveCreditStatusPresentation({

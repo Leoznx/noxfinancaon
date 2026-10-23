@@ -194,24 +194,6 @@ serve(async (req) => {
     }
 
     const result = normalizeDirectDResult(parsed, document.length);
-    if (!result) {
-      await supabaseAdmin.rpc("fail_official_credit_simulation", {
-        p_consultation_id: consultaId,
-        p_worker_id: workerId,
-        p_execution_version: claimed.execution_version,
-        p_error_code: "DIRECTD_UNKNOWN_SCORE_RANGE",
-        p_user_message:
-          "A QUOD retornou uma faixa de score não reconhecida. O suporte precisa revisar o resultado.",
-        p_ambiguous_charge: true,
-        p_provider_http_status: providerResponse.status,
-        p_charge_confirmed: true,
-      });
-      return json({
-        ok: false,
-        error: "Faixa de score não reconhecida; revisão manual necessária.",
-      });
-    }
-
     const sanitizedResponse = sanitizeDirectDResponse(parsed, document.length);
     const { data: finished, error: finishError } = await supabaseAdmin.rpc(
       "finish_official_credit_simulation",

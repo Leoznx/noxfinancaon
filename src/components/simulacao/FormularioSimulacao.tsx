@@ -181,6 +181,17 @@ export function FormularioSimulacao({
       toast.error(msg);
       return;
     }
+    const nomeInquilino =
+      tipoInquilino === "PF" ? inquilinos[0]?.nome.trim() ?? "" : razaoSocial.trim();
+    if (nomeInquilino.length < 3 || !/[A-Za-zÀ-ÖØ-öø-ÿ]/.test(nomeInquilino)) {
+      const msg =
+        tipoInquilino === "PF"
+          ? "Informe o nome completo do inquilino."
+          : "Informe a razão social da empresa.";
+      setErro(msg);
+      toast.error(msg);
+      return;
+    }
     if (!cepSomenteNox) {
       if (!cep || cep.replace(/\D/g, "").length < 8) {
         const msg = "Informe um CEP válido do imóvel.";
@@ -236,8 +247,11 @@ export function FormularioSimulacao({
 
     onSubmit({
       tipoInquilino,
-      inquilinos,
-      razaoSocial,
+      inquilinos: inquilinos.map((inquilino) => ({
+        ...inquilino,
+        nome: inquilino.nome.trim(),
+      })),
+      razaoSocial: razaoSocial.trim(),
       cnpj,
       tipoImovel,
       cep,
@@ -290,13 +304,29 @@ export function FormularioSimulacao({
                     <Label className="text-xs font-bold text-neutral-500 uppercase tracking-widest">
                       Inquilino {i + 1}
                     </Label>
+                    <Input
+                      value={inq.nome}
+                      onChange={(event) => {
+                        const nome = event.target.value;
+                        setInquilinos((atuais) =>
+                          atuais.map((item, index) => (index === i ? { ...item, nome } : item)),
+                        );
+                      }}
+                      autoComplete="name"
+                      className="h-14 text-base font-medium"
+                      placeholder="Nome completo"
+                      maxLength={120}
+                      required
+                    />
                     <IMaskInput
                       mask="000.000.000-00"
                       value={inq.cpf}
                       onAccept={(val: any) => {
-                        const newInqs = [...inquilinos];
-                        newInqs[i].cpf = val;
-                        setInquilinos(newInqs);
+                        setInquilinos((atuais) =>
+                          atuais.map((item, index) =>
+                            index === i ? { ...item, cpf: val } : item,
+                          ),
+                        );
                       }}
                       autoComplete="off"
                       className="flex h-14 w-full rounded-lg border border-neutral-200 bg-white px-4 py-2 text-base font-medium focus:ring-2 focus:ring-yellow-400 outline-none transition-all"
@@ -307,6 +337,20 @@ export function FormularioSimulacao({
               </div>
             ) : (
               <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-neutral-500 uppercase tracking-widest">
+                    Razão social
+                  </Label>
+                  <Input
+                    value={razaoSocial}
+                    onChange={(event) => setRazaoSocial(event.target.value)}
+                    autoComplete="organization"
+                    className="h-14 text-base font-medium"
+                    placeholder="Razão social"
+                    maxLength={120}
+                    required
+                  />
+                </div>
                 <div className="space-y-2">
                   <Label className="text-xs font-bold text-neutral-500 uppercase tracking-widest">
                     CNPJ

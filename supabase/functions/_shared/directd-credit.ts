@@ -64,11 +64,9 @@ export function subjectForDocument(
 export function normalizeDirectDResult(
   response: DirectDScoreResponse,
   documentLength: number,
-): NormalizedDirectDResult | null {
+): NormalizedDirectDResult {
   const subject = subjectForDocument(response, documentLength);
   const faixaScore = String(subject?.faixaScore ?? "").trim();
-  if (!faixaScore) return null;
-
   const normalized = normalizeText(faixaScore);
   const rawScore = subject?.score;
   const score =
@@ -114,7 +112,43 @@ export function normalizeDirectDResult(
     };
   }
 
-  return null;
+  // A documentação oficial também define os intervalos numéricos. Alguns CPFs
+  // retornam HTTP 200 e score, mas sem o texto de faixa; nesses casos o número é
+  // suficiente para aplicar exatamente a mesma regra comercial.
+  if (score !== null && score >= 0 && score <= 600) {
+    return {
+      decision: "recusado",
+      faixaScore: faixaScore || "Alto índice de inadimplência",
+      score,
+      message: "Crédito reprovado pela análise oficial de risco.",
+    };
+  }
+  if (score !== null && score >= 601 && score <= 700) {
+    return {
+      decision: "em_analise",
+      faixaScore: faixaScore || "Médio índice de inadimplência",
+      score,
+      message: "Análise pendente. Envie o comprovante de renda para continuar.",
+    };
+  }
+  if (score !== null && score >= 701 && score <= 1000) {
+    return {
+      decision: "aprovado",
+      faixaScore: faixaScore || "Baixo índice de inadimplência",
+      score,
+      message: "Crédito aprovado pela análise oficial de risco.",
+    };
+  }
+
+  // Uma resposta HTTP 200 já consumiu a consulta. Sem faixa/score conclusivo,
+  // o estado correto é análise complementar — nunca uma fila sem fim e nunca
+  // um novo envio automático que poderia cobrar novamente.
+  return {
+    decision: "em_analise",
+    faixaScore: faixaScore || "Faixa não informada",
+    score,
+    message: "A análise oficial precisa de conferência complementar.",
+  };
 }
 
 export function sanitizeDirectDResponse(

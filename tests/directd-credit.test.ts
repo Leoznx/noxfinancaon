@@ -35,8 +35,19 @@ test("mapeia as três faixas QUOD para a regra comercial da NOX", () => {
   );
 });
 
-test("não toma decisão automática para faixa desconhecida", () => {
-  assert.equal(normalizeDirectDResult(responseFor("Faixa experimental"), 11), null);
+test("envia faixa sem regra para análise complementar", () => {
+  assert.deepEqual(normalizeDirectDResult(responseFor("Faixa experimental", null), 11), {
+    decision: "em_analise",
+    faixaScore: "Faixa experimental",
+    score: null,
+    message: "A análise oficial precisa de conferência complementar.",
+  });
+});
+
+test("usa os intervalos oficiais quando o provedor omite o texto da faixa", () => {
+  assert.equal(normalizeDirectDResult(responseFor("", 600), 11).decision, "recusado");
+  assert.equal(normalizeDirectDResult(responseFor("", 601), 11).decision, "em_analise");
+  assert.equal(normalizeDirectDResult(responseFor("", 701), 11).decision, "aprovado");
 });
 
 test("preserva score ausente como nulo", () => {

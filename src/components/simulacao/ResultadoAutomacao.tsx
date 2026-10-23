@@ -85,7 +85,7 @@ const STATUS_UI: Record<
     Icon: Clock,
   },
   aguardando_resultado: {
-    label: "Aguardando resultado",
+    label: "Consultando",
     className: "bg-blue-50 border-blue-200 text-blue-900",
     iconClassName: "text-blue-600",
     Icon: Clock,
