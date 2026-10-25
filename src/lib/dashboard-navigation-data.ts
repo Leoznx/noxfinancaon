@@ -48,7 +48,7 @@ export async function loadDashboardConsultations(
     consultationKey(user),
     async () => {
       const consultationFields = `
-        id, status, resultado, substatus, technical_status, automation_step,
+        id, status, resultado, substatus, technical_status, automation_step, raw_response,
         created_at, updated_at, tenant_name, tenant_document, documento,
         property_address, rent_value, payment_status,
         inquilinos (nome, cpf, cnpj),

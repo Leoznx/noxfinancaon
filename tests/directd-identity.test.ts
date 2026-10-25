@@ -135,3 +135,15 @@ test("migração torna documento não localizado terminal e sem nova cobrança",
   assert.match(migration, /technical_status = 'technical_failure'/);
   assert.match(migration, /normalize_official_credit_customer_name\(consultation\.tenant_name\)/);
 });
+
+test("score continua quando a fonte cadastral não conhece o documento", () => {
+  const implementation = readFileSync(
+    new URL("../supabase/functions/simulate-credit-official/index.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(implementation, /let identityNotFound = false/);
+  assert.match(implementation, /identityNotFound = true/);
+  assert.match(implementation, /!identity && !identityNotFound/);
+  assert.match(implementation, /directd_cadastro_not_found/);
+});

@@ -181,6 +181,26 @@ serve(async (req) => {
 
     const storedIdentity = storedIdentityRequest as IdentityRequestState | null;
     let identity: NormalizedDirectDIdentity | null = null;
+    let identityNotFound = false;
+    const advanceToScore = async () => {
+      const now = new Date();
+      const { data, error } = await supabaseAdmin
+        .from("consultas_credito")
+        .update({
+          automation_step: "consultando_score",
+          heartbeat_at: now.toISOString(),
+          lease_expires_at: new Date(now.getTime() + 60_000).toISOString(),
+          updated_at: now.toISOString(),
+        })
+        .eq("id", consultaId)
+        .eq("worker_id", workerId)
+        .eq("execution_version", claimed.execution_version)
+        .eq("technical_status", "processing")
+        .eq("provider_submission_state", "submitting")
+        .select("id")
+        .maybeSingle();
+      return !error && !!data;
+    };
     const storedCustomerName = normalizeDirectDIdentityName(storedIdentity?.identity_customer_name);
     if (storedIdentity?.identity_status === "succeeded" && storedCustomerName) {
       identity = {
@@ -192,25 +212,29 @@ serve(async (req) => {
       storedIdentity?.identity_status === "failed_billed" &&
       storedIdentity.identity_error_code === "DIRECTD_IDENTITY_NOT_FOUND"
     ) {
-      const documentLabel = document.length === 14 ? "CNPJ" : "CPF";
-      const message = `${documentLabel} não localizado na base cadastral. Confira o documento antes de tentar novamente.`;
-      await supabaseAdmin.rpc("fail_official_credit_simulation", {
-        p_consultation_id: consultaId,
-        p_worker_id: workerId,
-        p_execution_version: claimed.execution_version,
-        p_error_code: "DIRECTD_IDENTITY_NOT_FOUND",
-        p_user_message: message,
-        p_ambiguous_charge: false,
-        p_provider_http_status: storedIdentity.identity_provider_http_status,
-        p_charge_confirmed: false,
-      });
-      return json({ ok: false, error: message });
+      // A consulta cadastral e a consulta de Score são produtos independentes.
+      // Ausência de nome na base cadastral não pode impedir a decisão de crédito.
+      identityNotFound = true;
+      if (!(await advanceToScore())) {
+        await supabaseAdmin.rpc("fail_official_credit_simulation", {
+          p_consultation_id: consultaId,
+          p_worker_id: workerId,
+          p_execution_version: claimed.execution_version,
+          p_error_code: "DIRECTD_IDENTITY_PROGRESS_FAILED",
+          p_user_message: "Não foi possível iniciar a consulta oficial de score.",
+          p_ambiguous_charge: false,
+          p_provider_http_status: null,
+          p_charge_confirmed: false,
+        });
+        return json({ ok: false, error: "Não foi possível iniciar a consulta oficial de score." });
+      }
     } else if (storedIdentity?.identity_status === "requires_verification") {
       await supabaseAdmin.rpc("fail_official_credit_simulation", {
         p_consultation_id: consultaId,
         p_worker_id: workerId,
         p_execution_version: claimed.execution_version,
-        p_error_code: storedIdentity.identity_error_code ?? "DIRECTD_IDENTITY_REQUIRES_VERIFICATION",
+        p_error_code:
+          storedIdentity.identity_error_code ?? "DIRECTD_IDENTITY_REQUIRES_VERIFICATION",
         p_user_message:
           "A identificação oficial anterior precisa de conferência antes de um novo envio.",
         p_ambiguous_charge: true,
@@ -369,60 +393,79 @@ serve(async (req) => {
       }
 
       if (isDirectDIdentityNotFound(parsedIdentity)) {
-        const documentLabel = document.length === 14 ? "CNPJ" : "CPF";
-        return await failIdentity({
-          errorCode: "DIRECTD_IDENTITY_NOT_FOUND",
-          message: `${documentLabel} não localizado na base cadastral. Confira o documento antes de tentar novamente.`,
-          ambiguousCharge: false,
-          providerHttpStatus: identityResponse.status,
-          billed: true,
-          safeResponse: safeIdentityResponse,
-          providerExternalId: identityProviderExternalId,
-        });
-      }
+        const { data: identityNotFoundSaved, error: identityNotFoundSaveError } =
+          await supabaseAdmin
+            .from("directd_credit_requests")
+            .update({
+              identity_status: "failed_billed",
+              identity_provider_http_status: identityResponse.status,
+              identity_provider_consulta_uid: identityProviderExternalId,
+              identity_billed_cents: identityCostCents,
+              identity_error_code: "DIRECTD_IDENTITY_NOT_FOUND",
+              identity_response: safeIdentityResponse,
+              identity_completed_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .eq("consultation_id", consultaId)
+            .select("consultation_id")
+            .maybeSingle();
+        if (identityNotFoundSaveError || !identityNotFoundSaved || !(await advanceToScore())) {
+          return await failIdentity({
+            errorCode: "DIRECTD_IDENTITY_PERSISTENCE_FAILED",
+            message:
+              "A identificação cadastral foi concluída, mas não foi possível iniciar o score.",
+            ambiguousCharge: true,
+            providerHttpStatus: identityResponse.status,
+            billed: true,
+            safeResponse: safeIdentityResponse,
+            providerExternalId: identityProviderExternalId,
+          });
+        }
+        identityNotFound = true;
+      } else {
+        identity = normalizeDirectDIdentity(parsedIdentity, document.length);
+        if (!identity) {
+          return await failIdentity({
+            errorCode: "DIRECTD_IDENTITY_NAME_MISSING",
+            message:
+              "A consulta cadastral foi concluída, mas não devolveu um nome válido. O suporte precisa conferir o retorno.",
+            ambiguousCharge: true,
+            providerHttpStatus: identityResponse.status,
+            billed: true,
+            safeResponse: safeIdentityResponse,
+            providerExternalId: identityProviderExternalId,
+          });
+        }
 
-      identity = normalizeDirectDIdentity(parsedIdentity, document.length);
-      if (!identity) {
-        return await failIdentity({
-          errorCode: "DIRECTD_IDENTITY_NAME_MISSING",
-          message:
-            "A consulta cadastral foi concluída, mas não devolveu um nome válido. O suporte precisa conferir o retorno.",
-          ambiguousCharge: true,
-          providerHttpStatus: identityResponse.status,
-          billed: true,
-          safeResponse: safeIdentityResponse,
-          providerExternalId: identityProviderExternalId,
-        });
-      }
-
-      const { data: identitySaved, error: identitySaveError } = await supabaseAdmin.rpc(
-        "save_official_credit_identity",
-        {
-          p_consultation_id: consultaId,
-          p_worker_id: workerId,
-          p_execution_version: claimed.execution_version,
-          p_customer_name: identity.customerName,
-          p_birth_date: identity.birthDate,
-          p_provider_external_id: identity.providerExternalId,
-          p_sanitized_response: safeIdentityResponse,
-          p_provider_http_status: identityResponse.status,
-        },
-      );
-      if (identitySaveError || !identitySaved) {
-        return await failIdentity({
-          errorCode: "DIRECTD_IDENTITY_PERSISTENCE_FAILED",
-          message:
-            "A identificação foi concluída, mas não pôde ser salva. O suporte precisa conferir antes de continuar.",
-          ambiguousCharge: true,
-          providerHttpStatus: identityResponse.status,
-          billed: true,
-          safeResponse: safeIdentityResponse,
-          providerExternalId: identity.providerExternalId,
-        });
+        const { data: identitySaved, error: identitySaveError } = await supabaseAdmin.rpc(
+          "save_official_credit_identity",
+          {
+            p_consultation_id: consultaId,
+            p_worker_id: workerId,
+            p_execution_version: claimed.execution_version,
+            p_customer_name: identity.customerName,
+            p_birth_date: identity.birthDate,
+            p_provider_external_id: identity.providerExternalId,
+            p_sanitized_response: safeIdentityResponse,
+            p_provider_http_status: identityResponse.status,
+          },
+        );
+        if (identitySaveError || !identitySaved) {
+          return await failIdentity({
+            errorCode: "DIRECTD_IDENTITY_PERSISTENCE_FAILED",
+            message:
+              "A identificação foi concluída, mas não pôde ser salva. O suporte precisa conferir antes de continuar.",
+            ambiguousCharge: true,
+            providerHttpStatus: identityResponse.status,
+            billed: true,
+            safeResponse: safeIdentityResponse,
+            providerExternalId: identity.providerExternalId,
+          });
+        }
       }
     }
 
-    if (!identity) {
+    if (!identity && !identityNotFound) {
       await supabaseAdmin.rpc("fail_official_credit_simulation", {
         p_consultation_id: consultaId,
         p_worker_id: workerId,
@@ -509,7 +552,12 @@ serve(async (req) => {
     }
 
     const result = normalizeDirectDResult(parsed, document.length);
-    const sanitizedResponse = sanitizeDirectDResponse(parsed, document.length);
+    const sanitizedResponse = {
+      ...sanitizeDirectDResponse(parsed, document.length),
+      identity: identityNotFound
+        ? { status: "not_found", errorCode: "DIRECTD_IDENTITY_NOT_FOUND" }
+        : { status: "found" },
+    };
     const { data: finished, error: finishError } = await supabaseAdmin.rpc(
       "finish_official_credit_simulation",
       {
@@ -539,7 +587,7 @@ serve(async (req) => {
         provider: "directd_quod",
         decision: result.decision,
         scoreBand: result.faixaScore,
-        customerNameSource: "directd_cadastro",
+        customerNameSource: identityNotFound ? "directd_cadastro_not_found" : "directd_cadastro",
         identityLookupBilledCents: identityCostCents,
         scoreBilledCents: 198,
         billedCents: 198 + identityCostCents,
@@ -552,7 +600,7 @@ serve(async (req) => {
         status: result.decision,
         faixaScore: result.faixaScore,
         score: result.score,
-        nome: identity.customerName,
+        nome: identity?.customerName ?? null,
       },
     });
   } catch (error) {

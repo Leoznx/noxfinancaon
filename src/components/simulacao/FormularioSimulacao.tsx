@@ -273,7 +273,7 @@ export function FormularioSimulacao({
       </h1>
       <p className="text-lg text-neutral-600 mb-10">
         {modo === "interno"
-          ? "Informe o CPF ou CNPJ. O nome será consultado automaticamente na API oficial e salvo com o resultado."
+          ? "Informe o CPF ou CNPJ. O nome será salvo automaticamente quando estiver disponível na fonte oficial."
           : "Preencha os dados abaixo. A solicitação é registrada na hora e o resultado aparece assim que a análise for concluída."}
       </p>
 
@@ -535,7 +535,7 @@ export function FormularioSimulacao({
           <span>
             {modo === "publico"
               ? "Para visualizar o resultado, será necessário entrar ou criar uma conta gratuita."
-              : "O nome será obtido pelo CPF/CNPJ e aparecerá automaticamente em Minhas Consultas."}
+              : "O nome será obtido pelo CPF/CNPJ quando estiver disponível na fonte oficial."}
           </span>
         </div>
 

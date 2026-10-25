@@ -106,4 +106,14 @@ test("mostra documento não localizado sem inventar nome de cliente", () => {
     }),
     "CNPJ não localizado",
   );
+  assert.equal(
+    resolveCreditCustomerDisplayName({
+      tenantName: "16833608938",
+      document: "168.336.089-38",
+      rawResponse: {
+        identity: { status: "not_found", errorCode: "DIRECTD_IDENTITY_NOT_FOUND" },
+      },
+    }),
+    "CPF não localizado",
+  );
 });

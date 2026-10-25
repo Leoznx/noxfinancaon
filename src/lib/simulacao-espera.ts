@@ -25,6 +25,7 @@ const ESTADOS_EM_ANDAMENTO = new Set([
   "aguardando_autenticacao",
   "aguardando_servico_externo",
   "aguardando_resultado",
+  "requer_verificacao",
 ]);
 
 // Etapas gravadas pelo worker quando a fila está parada à espera do serviço
@@ -54,12 +55,20 @@ export const MENSAGEM_ERRO_PADRAO = "Não foi possível concluir a consulta no m
  *   solicitação cancelada sem envio. Quarentenas técnicas continuam aguardando.
  */
 export function proximoPassoSimulacao(consulta: ConsultaEmEspera): ProximoPassoSimulacao {
+  if (
+    consulta.technical_status?.toLowerCase() === "requires_verification" ||
+    consulta.status?.toLowerCase() === "requer_verificacao"
+  ) {
+    return { tipo: "aguardar" };
+  }
   const estado = resolveCreditStatusPresentation(consulta);
   if (ESTADOS_EM_ANDAMENTO.has(estado)) return { tipo: "aguardar" };
   if (estado === "erro") {
     return {
       tipo: "erro",
-      mensagem: consulta.error_message || consulta.mensagem || MENSAGEM_ERRO_PADRAO,
+      // `error_message` é o código técnico usado por suporte e auditoria. O
+      // modal deve priorizar a explicação segura gravada em `mensagem`.
+      mensagem: consulta.mensagem || consulta.error_message || MENSAGEM_ERRO_PADRAO,
     };
   }
   return { tipo: "abrir_status" };

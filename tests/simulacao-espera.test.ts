@@ -90,10 +90,10 @@ test("falha técnica definitiva aparece no modal com a mensagem gravada", () => 
     proximoPassoSimulacao({
       status: "erro",
       technical_status: "technical_failure",
-      error_message: "O portal recusou a consulta.",
-      mensagem: "ignorada",
+      error_message: "DIRECTD_IDENTITY_NOT_FOUND",
+      mensagem: "CPF não localizado na fonte cadastral.",
     }),
-    { tipo: "erro", mensagem: "O portal recusou a consulta." },
+    { tipo: "erro", mensagem: "CPF não localizado na fonte cadastral." },
   );
   assert.deepEqual(proximoPassoSimulacao({ status: "erro", mensagem: "Falha ao consultar." }), {
     tipo: "erro",
