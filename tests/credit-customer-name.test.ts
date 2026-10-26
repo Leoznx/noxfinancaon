@@ -116,4 +116,14 @@ test("mostra documento não localizado sem inventar nome de cliente", () => {
     }),
     "CPF não localizado",
   );
+  assert.equal(
+    resolveCreditCustomerDisplayName({
+      tenantName: "48765009000155",
+      document: "48.765.009/0001-55",
+      rawResponse: {
+        identity: { status: "unavailable", errorCode: "DIRECTD_IDENTITY_NAME_MISSING" },
+      },
+    }),
+    "Razão social indisponível",
+  );
 });

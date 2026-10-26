@@ -175,13 +175,17 @@ export function resolveCreditCustomerDisplayName({
 
   const response = rawResponseObject(nameSources.rawResponse);
   const identity = rawResponseObject(response?.identity);
-  const identityNotFound =
-    errorCategory === "DIRECTD_IDENTITY_NOT_FOUND" ||
-    identity?.errorCode === "DIRECTD_IDENTITY_NOT_FOUND";
+  const identityErrorCode =
+    typeof identity?.errorCode === "string" ? identity.errorCode : errorCategory;
+  const identityNotFound = identityErrorCode === "DIRECTD_IDENTITY_NOT_FOUND";
 
   if (identityNotFound) {
     const documentDigits = typeof document === "string" ? document.replace(/\D/g, "") : "";
     return documentDigits.length === 14 ? "CNPJ não localizado" : "CPF não localizado";
+  }
+  if (identityErrorCode === "DIRECTD_IDENTITY_NAME_MISSING") {
+    const documentDigits = typeof document === "string" ? document.replace(/\D/g, "") : "";
+    return documentDigits.length === 14 ? "Razão social indisponível" : "Nome indisponível";
   }
 
   return null;

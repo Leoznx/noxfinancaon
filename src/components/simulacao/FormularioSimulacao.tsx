@@ -273,7 +273,7 @@ export function FormularioSimulacao({
       </h1>
       <p className="text-lg text-neutral-600 mb-10">
         {modo === "interno"
-          ? "Informe o CPF ou CNPJ. O nome será salvo automaticamente quando estiver disponível na fonte oficial."
+          ? "Informe o CPF ou CNPJ. Análises oficiais já concluídas para o documento são reaproveitadas sem nova cobrança."
           : "Preencha os dados abaixo. A solicitação é registrada na hora e o resultado aparece assim que a análise for concluída."}
       </p>
 

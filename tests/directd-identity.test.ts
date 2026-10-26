@@ -142,8 +142,27 @@ test("score continua quando a fonte cadastral não conhece o documento", () => {
     "utf8",
   );
 
-  assert.match(implementation, /let identityNotFound = false/);
-  assert.match(implementation, /identityNotFound = true/);
-  assert.match(implementation, /!identity && !identityNotFound/);
+  assert.match(implementation, /let identityUnavailableCode: string \| null = null/);
+  assert.match(implementation, /identityUnavailableCode = "DIRECTD_IDENTITY_NOT_FOUND"/);
+  assert.match(implementation, /!identity && !identityUnavailableCode/);
   assert.match(implementation, /directd_cadastro_not_found/);
+  assert.match(implementation, /DIRECTD_IDENTITY_NAME_MISSING/);
+  assert.match(implementation, /directd_cadastro_name_missing/);
+});
+
+test("cache reutiliza somente decisões oficiais concluídas sem nova cobrança", () => {
+  const migration = readFileSync(
+    new URL(
+      "../supabase/migrations/20261026120000_reuse_official_credit_results.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+
+  assert.match(migration, /source\.technical_status = 'completed'/);
+  assert.match(migration, /source\.resultado IN \('aprovado', 'recusado', 'em_analise'\)/);
+  assert.match(migration, /source_request\.status = 'succeeded'/);
+  assert.match(migration, /billed_cents[\s\S]*?0/);
+  assert.match(migration, /reused_from_consultation_id/);
+  assert.doesNotMatch(migration, /source\.technical_status IN \([^)]*processing/);
 });
