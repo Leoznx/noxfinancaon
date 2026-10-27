@@ -11,6 +11,7 @@ import {
   resolveCreditStatusPresentation,
   type CreditStatusPresentation,
 } from "@/lib/credit-status-presentation";
+import { officialCreditErrorMessage } from "@/lib/official-credit-error";
 
 /** Status compartilhado do fluxo de análise oficial de crédito. */
 export type StatusConsulta =
@@ -216,7 +217,7 @@ export async function executarConsultaOficial(id: string): Promise<void> {
     body: { consultaId: id },
   });
   if (error) {
-    throw new Error(error.message || "Falha ao comunicar com a API oficial de crédito.");
+    throw new Error(await officialCreditErrorMessage(error));
   }
   if (!data?.ok) {
     throw new Error(data?.error || "A API oficial não conseguiu concluir a consulta.");

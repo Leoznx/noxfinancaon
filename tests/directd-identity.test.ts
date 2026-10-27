@@ -166,3 +166,18 @@ test("cache reutiliza somente decisões oficiais concluídas sem nova cobrança"
   assert.match(migration, /reused_from_consultation_id/);
   assert.doesNotMatch(migration, /source\.technical_status IN \([^)]*processing/);
 });
+
+test("origem do cache oficial é aceita pela restrição do banco", () => {
+  const migration = readFileSync(
+    new URL(
+      "../supabase/migrations/20261027131500_allow_official_credit_cache_origin.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+
+  assert.match(migration, /DROP CONSTRAINT IF EXISTS consultas_credito_automacao_origem_check/);
+  assert.match(migration, /'api_oficial_cache'/);
+  assert.match(migration, /'api_oficial'/);
+  assert.match(migration, /'automacao_local'/);
+});
