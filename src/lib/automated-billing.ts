@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { executeSupabaseQuery } from "@/lib/supabase-query";
 
 export type ConsolidatedBillingBatch = {
   id: string;
@@ -29,13 +30,18 @@ export type ReissuedPayment = {
 };
 
 export async function fetchOwnConsolidatedBatches() {
-  const { data, error } = await (supabase as any)
-    .from("consolidated_invoice_batches")
-    .select(
-      "id, agency_user_id, reference_month, reference_year, total_value, received_value, due_date, status, billing_method, invoice_count, invoice_url, bank_slip_url, identification_field, pix_copy_paste, paid_at",
-    )
-    .order("reference_year", { ascending: false })
-    .order("reference_month", { ascending: false });
+  const { data, error } = await executeSupabaseQuery<{
+    data: ConsolidatedBillingBatch[] | null;
+    error: { message?: string } | null;
+  }>(
+    (supabase as any)
+      .from("consolidated_invoice_batches")
+      .select(
+        "id, agency_user_id, reference_month, reference_year, total_value, received_value, due_date, status, billing_method, invoice_count, invoice_url, bank_slip_url, identification_field, pix_copy_paste, paid_at",
+      )
+      .order("reference_year", { ascending: false })
+      .order("reference_month", { ascending: false }),
+  );
   if (error) throw error;
   return (data ?? []) as ConsolidatedBillingBatch[];
 }

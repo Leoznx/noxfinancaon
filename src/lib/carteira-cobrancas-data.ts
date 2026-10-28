@@ -1,4 +1,4 @@
-import { loadBillingScope, readBillingRows, type BillingScopeUser } from "@/lib/billing-scope";
+import { readBillingRows, type BillingScopeUser } from "@/lib/billing-scope";
 import {
   fetchOwnConsolidatedBatches,
   type ConsolidatedBillingBatch,
@@ -18,9 +18,8 @@ export function loadCarteiraInvoiceRows(user: BillingScopeUser, force = false) {
   return loadSessionResource(
     invoiceRowsKeyFor(user.id),
     async () => {
-      const scope = await loadBillingScope(user, force);
       return readBillingRows(
-        scope,
+        null,
         "faturas_inquilino",
         `
           id, consulta_id, status, valor, vencimento, numero_parcela,
@@ -37,7 +36,7 @@ export function loadCarteiraInvoiceRows(user: BillingScopeUser, force = false) {
         `,
       );
     },
-    { force, maxAgeMs: 45_000 },
+    { force, maxAgeMs: 120_000 },
   );
 }
 
@@ -49,15 +48,26 @@ export function loadCarteiraCobrancas(user: BillingScopeUser, force = false) {
   return loadSessionResource(
     keyFor(user.id, user.role === "imobiliaria"),
     async (): Promise<CarteiraCobrancasData> => {
-      const scope = await loadBillingScope(user, force);
+      const previous = peekCarteiraCobrancas(user.id, user.role === "imobiliaria");
+      const previousInvoices = new Map(
+        previous?.faturas.map((invoice) => [invoice.id, invoice]) ?? [],
+      );
       const [invoiceRows, batchRows, subscriptionRows] = await Promise.all([
         loadCarteiraInvoiceRows(user, force),
-        user.role === "imobiliaria" ? fetchOwnConsolidatedBatches() : Promise.resolve([]),
+        user.role === "imobiliaria"
+          ? fetchOwnConsolidatedBatches().catch((error) => {
+              console.warn("[CarteiraCobrancas] lotes indisponíveis", error);
+              return previous?.batches ?? [];
+            })
+          : Promise.resolve([]),
         readBillingRows(
-          scope,
+          null,
           "asaas_subscriptions",
           "id, consultation_id, asaas_subscription_id, status, card_registration_status, initial_checkout_status, checkout_status, checkout_url, mode, fire_insurance_payment_mode, initial_amount, monthly_amount, created_at",
-        ),
+        ).catch((error) => {
+          console.warn("[CarteiraCobrancas] assinaturas indisponíveis", error);
+          return [];
+        }),
       ]);
 
       const subscriptions = new Map<string, any>();
@@ -73,11 +83,14 @@ export function loadCarteiraCobrancas(user: BillingScopeUser, force = false) {
           .sort((a, b) => a.numero_parcela - b.numero_parcela)
           .map((invoice: any) => ({
             ...invoice,
-            asaas_subscription: subscriptions.get(invoice.consulta_id) || null,
+            asaas_subscription:
+              subscriptions.get(invoice.consulta_id) ||
+              previousInvoices.get(invoice.id)?.asaas_subscription ||
+              null,
           })),
         batches: batchRows,
       };
     },
-    { force, maxAgeMs: 45_000 },
+    { force, maxAgeMs: 120_000 },
   );
 }

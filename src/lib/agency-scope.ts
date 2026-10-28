@@ -4,6 +4,7 @@ import {
   loadSessionResource,
   peekSessionResource,
 } from "@/lib/session-resource-cache";
+import { executeSupabaseQuery } from "@/lib/supabase-query";
 
 export type AgencyScopeUser = {
   id: string;
@@ -29,23 +30,29 @@ async function fallbackAgencyId(email: string | null | undefined) {
 
   // O caminho exato permite índice simples. O ilike fica apenas como fallback
   // para registros legados que tenham sido salvos com capitalização diferente.
-  const exact = await supabase
-    .from("imobiliarias")
-    .select("id")
-    .eq("contato_email", resolvedEmail)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const exact = await executeSupabaseQuery((signal) =>
+    supabase
+      .from("imobiliarias")
+      .select("id")
+      .eq("contato_email", resolvedEmail)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .abortSignal(signal)
+      .maybeSingle(),
+  );
   if (exact.error) throw exact.error;
   if (exact.data?.id) return exact.data.id;
 
-  const insensitive = await supabase
-    .from("imobiliarias")
-    .select("id")
-    .ilike("contato_email", resolvedEmail)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const insensitive = await executeSupabaseQuery((signal) =>
+    supabase
+      .from("imobiliarias")
+      .select("id")
+      .ilike("contato_email", resolvedEmail)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .abortSignal(signal)
+      .maybeSingle(),
+  );
   if (insensitive.error) throw insensitive.error;
   return insensitive.data?.id ?? null;
 }
@@ -54,22 +61,25 @@ async function fetchAgencyScope(user: AgencyScopeUser): Promise<AgencyScope> {
   // A função já existente resolve auth.uid() no servidor e não aceita identidade
   // do cliente. Além de preservar a autorização, evita repetir o filtro de e-mail
   // em cada tela do dashboard.
-  const currentAgency = await supabase.rpc("current_imobiliaria_id");
-  const agencyId = currentAgency.error
-    ? await fallbackAgencyId(user.email)
-    : currentAgency.data;
+  const currentAgency = await executeSupabaseQuery(supabase.rpc("current_imobiliaria_id"));
+  const agencyId = currentAgency.error ? await fallbackAgencyId(user.email) : currentAgency.data;
 
   if (!agencyId) {
     return { agencyId: null, agencyName: "Sua imobiliária", profileIds: [user.id] };
   }
 
   const [agencyResult, brokersResult] = await Promise.all([
-    supabase
-      .from("imobiliarias")
-      .select("razao_social, nome_fantasia")
-      .eq("id", agencyId)
-      .maybeSingle(),
-    supabase.from("corretores").select("profile_id").eq("imobiliaria_id", agencyId),
+    executeSupabaseQuery((signal) =>
+      supabase
+        .from("imobiliarias")
+        .select("razao_social, nome_fantasia")
+        .eq("id", agencyId)
+        .abortSignal(signal)
+        .maybeSingle(),
+    ),
+    executeSupabaseQuery(
+      supabase.from("corretores").select("profile_id").eq("imobiliaria_id", agencyId),
+    ),
   ]);
   if (brokersResult.error) throw brokersResult.error;
 

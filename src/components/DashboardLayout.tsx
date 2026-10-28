@@ -484,7 +484,10 @@ export function DashboardLayout({
         const [profileResult, agencyScope] = await Promise.all([
           profileIsFresh
             ? Promise.resolve({
-                data: { nome: perfilCache?.nome ?? null, avatar_url: perfilCache?.avatarUrl ?? null },
+                data: {
+                  nome: perfilCache?.nome ?? null,
+                  avatar_url: perfilCache?.avatarUrl ?? null,
+                },
               })
             : supabase.from("profiles").select("nome, avatar_url").eq("id", user.id).maybeSingle(),
           user.role === "imobiliaria"
@@ -684,8 +687,7 @@ export function DashboardLayout({
     new Set(
       menuItems.flatMap((item) => [item.href, ...(item.children ?? []).map((child) => child.href)]),
     ),
-  )
-    .join("\n");
+  ).join("\n");
 
   // As filas sobrevivem à troca de página. Dados começam junto com o código,
   // com a tela aberta primeiro e apenas uma aba em segundo plano por vez.
@@ -701,17 +703,21 @@ export function DashboardLayout({
     targets.sort((a, b) => {
       return rank(a) - rank(b);
     });
+    const dataTargets = targets.filter((href) => PRIORITY_DASHBOARD_ROUTES.has(href.split("?")[0]));
+    if (!dataTargets.includes(location.pathname)) dataTargets.unshift(location.pathname);
     warmNavigationRoutes({
       scope: navigationScope,
       hrefs: targets,
-      // Baixa o código das rotas em segundo plano, mas busca dados apenas da
-      // tela aberta. As outras abas aquecem ao foco/hover do próprio link.
-      dataHrefs: targets.includes(location.pathname) ? [location.pathname] : [],
+      // A tela aberta tem prioridade; as rotas mais usadas aquecem em fila de
+      // concorrência 1 para ficarem instantâneas sem congestionar o Supabase.
+      dataHrefs: dataTargets,
       currentHref: location.pathname,
       preloadCode: (href) => router.preloadRoute({ to: href as any }),
-      loadData: (href) => import("@/lib/dashboard-navigation-data").then(({ prefetchDashboardDataForHref }) => {
-        if (isNavigationScopeCurrent(navigationScope)) return prefetchDashboardDataForHref(href, user);
-      }),
+      loadData: (href) =>
+        import("@/lib/dashboard-navigation-data").then(({ prefetchDashboardDataForHref }) => {
+          if (isNavigationScopeCurrent(navigationScope))
+            return prefetchDashboardDataForHref(href, user);
+        }),
     });
   }, [location.pathname, routePreloadKey, router, user]);
 
@@ -722,9 +728,11 @@ export function DashboardLayout({
       scope: navigationScope,
       hrefs: [href],
       currentHref: href,
-      loadData: (target) => import("@/lib/dashboard-navigation-data").then(({ prefetchDashboardDataForHref }) => {
-        if (isNavigationScopeCurrent(navigationScope)) return prefetchDashboardDataForHref(target, user);
-      }),
+      loadData: (target) =>
+        import("@/lib/dashboard-navigation-data").then(({ prefetchDashboardDataForHref }) => {
+          if (isNavigationScopeCurrent(navigationScope))
+            return prefetchDashboardDataForHref(target, user);
+        }),
     });
   };
 

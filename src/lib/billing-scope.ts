@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { loadSessionResource } from "@/lib/session-resource-cache";
 import { loadAgencyScope } from "@/lib/agency-scope";
+import { executeSupabaseQuery } from "@/lib/supabase-query";
 
 export type BillingScopeUser = { id: string; email: string; role: string };
 export type BillingScope = { userId: string; consultationIds: string[]; policyIds: string[] };
@@ -88,7 +89,7 @@ export function billingScopeFilters(scope: BillingScope, table: BillingTable) {
   return filters;
 }
 
-export async function readBillingRows<T = any>(
+export async function readBillingRows<T extends { id: string } = any>(
   scope: BillingScope | null,
   table: BillingTable,
   select: string,
@@ -103,7 +104,10 @@ export async function readBillingRows<T = any>(
         .order("id")
         .range(offset, offset + pageSize - 1);
       if (filter) query = query.or(filter);
-      const { data, error } = await query;
+      const { data, error } = await executeSupabaseQuery<{
+        data: T[] | null;
+        error: { message?: string } | null;
+      }>(query);
       if (error) throw error;
       for (const row of data ?? []) rows.set(row.id, row);
       if ((data?.length ?? 0) < pageSize) break;

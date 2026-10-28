@@ -15,7 +15,11 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { statusPagamentoLabel } from "@/lib/asaas-payment";
 import { useAuth } from "@/components/AuthProvider";
-import { loadCobrancasAvulsas, peekCobrancasAvulsas, type CobrancaAvulsa } from "@/lib/cobrancas-avulsas-data";
+import {
+  loadCobrancasAvulsas,
+  peekCobrancasAvulsas,
+  type CobrancaAvulsa,
+} from "@/lib/cobrancas-avulsas-data";
 import { managePersistedAsaasPayment } from "@/lib/asaas-checkout";
 import { toast } from "sonner";
 
@@ -36,23 +40,34 @@ export function CobrancasAvulsasAbertas() {
   const [atualizandoId, setAtualizandoId] = useState<string | null>(null);
   const [acaoId, setAcaoId] = useState<string | null>(null);
 
-  const carregar = useCallback(async (force = true) => {
-    if (!userId || !userEmail || !userRole) return;
-    try {
-      setItens(await loadCobrancasAvulsas({ id: userId, email: userEmail, role: userRole }, force));
-    } finally {
-      setCarregando(false);
-    }
-  }, [userId, userEmail, userRole]);
+  const carregar = useCallback(
+    async (force = true) => {
+      if (!userId || !userEmail || !userRole) return;
+      try {
+        setItens(
+          await loadCobrancasAvulsas({ id: userId, email: userEmail, role: userRole }, force),
+        );
+      } finally {
+        setCarregando(false);
+      }
+    },
+    [userId, userEmail, userRole],
+  );
 
   useEffect(() => {
-    void carregar(false).catch(() => toast.error("Não foi possível atualizar as cobranças avulsas."));
+    void carregar(false).catch((error) => {
+      // A carteira principal continua utilizável mesmo se este bloco auxiliar
+      // estiver temporariamente indisponível; evita dois alertas para a mesma falha.
+      console.warn("[CobrancasAvulsas] atualização indisponível", error);
+    });
     let timer: ReturnType<typeof setTimeout> | undefined;
     const canal = supabase
       .channel("cobrancas-avulsas-abertas")
       .on("postgres_changes", { event: "*", schema: "public", table: "asaas_payments" }, () => {
         clearTimeout(timer);
-        timer = setTimeout(() => { void carregar().catch(() => undefined); }, 350);
+        timer = setTimeout(() => {
+          void carregar().catch(() => undefined);
+        }, 350);
       })
       .subscribe();
     return () => {
@@ -134,7 +149,8 @@ export function CobrancasAvulsasAbertas() {
             Faturas em aberto da contratação
           </h2>
           <p className="text-xs text-amber-900/80">
-            A assinatura pode continuar; a cobertura só é ativada quando todos os requisitos forem cumpridos.
+            A assinatura pode continuar; a cobertura só é ativada quando todos os requisitos forem
+            cumpridos.
           </p>
         </div>
       </div>
@@ -167,7 +183,8 @@ export function CobrancasAvulsasAbertas() {
               </p>
               {(item.confirmed_at || item.received_at) && (
                 <p className="text-[11px] text-emerald-700">
-                  Confirmado em {new Date(item.received_at || item.confirmed_at || "").toLocaleString("pt-BR")}
+                  Confirmado em{" "}
+                  {new Date(item.received_at || item.confirmed_at || "").toLocaleString("pt-BR")}
                 </p>
               )}
             </div>
@@ -202,7 +219,11 @@ export function CobrancasAvulsasAbertas() {
               </a>
             )}
             {(item.payment_url || item.invoice_url) && (
-              <a href={item.payment_url || item.invoice_url || "#"} target="_blank" rel="noreferrer">
+              <a
+                href={item.payment_url || item.invoice_url || "#"}
+                target="_blank"
+                rel="noreferrer"
+              >
                 <Button size="sm" variant="outline" className="h-8 gap-1 text-xs">
                   <ExternalLink className="h-3 w-3" /> Abrir cobrança
                 </Button>

@@ -12,8 +12,9 @@ import {
 } from "@/lib/withdrawals";
 import { loadSessionResource, peekSessionResource } from "@/lib/session-resource-cache";
 import { loadAgencyScope } from "@/lib/agency-scope";
+import { executeSupabaseQuery } from "@/lib/supabase-query";
 
-const ROUTE_DATA_MAX_AGE_MS = 45_000;
+const ROUTE_DATA_MAX_AGE_MS = 120_000;
 const LIST_LIMIT = 100;
 
 export type DashboardNavigationUser = {
@@ -78,9 +79,9 @@ export async function loadDashboardConsultations(
         }
       }
 
-      const { data, error } = await query
-        .order("updated_at", { ascending: false })
-        .limit(LIST_LIMIT);
+      const { data, error } = await executeSupabaseQuery(
+        query.order("updated_at", { ascending: false }).limit(LIST_LIMIT),
+      );
       if (error) throw error;
       return (data ?? []) as DashboardConsultationRow[];
     },
@@ -124,7 +125,7 @@ export async function loadDashboardPolicies(
         query = query.in("consulta.profile_id_solicitante", scope.profileIds);
       }
 
-      const { data, error } = await query;
+      const { data, error } = await executeSupabaseQuery(query);
       if (error) throw error;
       return (data ?? []) as DashboardPolicyRow[];
     },
@@ -186,7 +187,10 @@ export async function prefetchDashboardDataForHref(
   } else if (pathname === "/dashboard" && effectiveRole === "proprietario") {
     const { loadOwnerDashboard } = await import("@/lib/owner-dashboard");
     await loadOwnerDashboard(user.id);
-  } else if (pathname === "/dashboard" && ["admin", "admin_master", "analista"].includes(effectiveRole)) {
+  } else if (
+    pathname === "/dashboard" &&
+    ["admin", "admin_master", "analista"].includes(effectiveRole)
+  ) {
     const { loadDashboardOverview } = await import("@/lib/dashboard-overview-data");
     await loadDashboardOverview(user.id);
   } else if (pathname === "/vendedor" && effectiveRole === "vendedor") {
@@ -202,7 +206,10 @@ export async function prefetchDashboardDataForHref(
   } else if (pathname === "/faturas-inquilinos") {
     const { loadTenantInvoiceSummaries } = await import("@/lib/tenant-invoice-summary");
     await loadTenantInvoiceSummaries(user.id);
-  } else if (pathname === "/carteira-cobrancas" && ["corretor", "imobiliaria", "proprietario"].includes(user.role)) {
+  } else if (
+    pathname === "/carteira-cobrancas" &&
+    ["corretor", "imobiliaria", "proprietario"].includes(user.role)
+  ) {
     const { loadCarteiraCobrancas } = await import("@/lib/carteira-cobrancas-data");
     const { loadCobrancasAvulsas } = await import("@/lib/cobrancas-avulsas-data");
     await Promise.all([loadCarteiraCobrancas(user), loadCobrancasAvulsas(user)]);
