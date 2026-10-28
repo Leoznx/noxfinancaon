@@ -1,27 +1,20 @@
 import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { NivelCorretorCard } from "@/components/NivelCorretorCard";
 import { DashboardEquipeBanner } from "@/components/DashboardEquipeBanner";
 import {
-  Trophy,
   Search,
   FileText,
   Users,
   DollarSign,
-  ArrowUpRight,
   TrendingUp,
-  Home,
-  AlertCircle,
-  CheckCircle2,
 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { fetchNivelInfo, type NivelInfo } from "@/lib/niveis-parceria";
-import { fetchDashboardStats, type DashboardStats } from "@/lib/dashboard-stats";
 import { redirectPathForRole } from "@/lib/authRedirect";
 import { useEssentialLoading } from "@/components/GlobalLoading";
+import { loadDashboardOverview, peekDashboardOverview } from "@/lib/dashboard-overview-data";
+import type { DashboardStats } from "@/lib/dashboard-stats";
 
 const JuridicoDashboard = lazy(() =>
   import("@/components/JuridicoDashboard").then((module) => ({ default: module.JuridicoDashboard })),
@@ -106,16 +99,9 @@ function DashboardForRole() {
   const isMarketing = user?.internalRole === "marketing" || user?.role === "marketing";
   const isCorretor = user?.role === "corretor" && !isJuridico && !isFinanceiro && !isMarketing;
   const isImobiliaria = user?.role === "imobiliaria";
-  const isAdmin =
-    (user?.role === "admin" || user?.role === "analista") &&
-    !isJuridico &&
-    !isFinanceiro &&
-    !isMarketing;
-
-  const [consultasRecentes, setConsultasRecentes] = useState<any[]>([]);
-  const [loadingConsultas, setLoadingConsultas] = useState(true);
-  const [nivelInfo, setNivelInfo] = useState<NivelInfo | null>(null);
-  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const cachedStats = user?.id ? peekDashboardOverview(user.id) : undefined;
+  const [loadingConsultas, setLoadingConsultas] = useState(cachedStats === undefined);
+  const [stats, setStats] = useState<DashboardStats | null>(() => cachedStats ?? null);
 
   useEssentialLoading(
     loadingConsultas &&
@@ -127,68 +113,18 @@ function DashboardForRole() {
       !isCorretor,
   );
 
-  // profileIds === null significa admin (sem filtro, vê o total geral).
-  // Pra imobiliária, agrega o próprio profile + o de todos os corretores vinculados —
-  // mesma regra já usada aqui pra "consultas recentes", agora reaproveitada pros cards.
-  // user.id já É o profile id (profiles.id = auth.users.id) e user.role já é o
-  // profiles.role — os dois já vêm prontos do AuthProvider, então dá pra pular de vez
-  // o roundtrip que existia aqui só pra buscar de novo o que já estava em mãos (era o
-  // maior gargalo do "demora pra carregar" do dashboard).
-  const carregarDados = useCallback(async () => {
+  const carregarDados = useCallback(async (force = false) => {
     if (!user?.id || isJuridico || isFinanceiro || isMarketing || isImobiliaria || isCorretor) {
       setLoadingConsultas(false);
       return;
     }
     try {
-      if (isCorretor || isImobiliaria) {
-        fetchNivelInfo(user.id, user.role)
-          .then(setNivelInfo)
-          .catch(() => setNivelInfo(null));
-      }
-
-      let profileIds: string[] | null = null;
-      if (!isAdmin) {
-        if (isImobiliaria) {
-          const { data: imob } = await supabase
-            .from("imobiliarias")
-            .select("id")
-            .eq("contato_email", user.email)
-            .maybeSingle();
-          let ids = [user.id];
-          if (imob?.id) {
-            const { data: corretoresData } = await supabase
-              .from("corretores")
-              .select("profile_id")
-              .eq("imobiliaria_id", imob.id);
-            ids = [...ids, ...(corretoresData || []).map((c: any) => c.profile_id).filter(Boolean)];
-          }
-          profileIds = ids;
-        } else {
-          profileIds = [user.id];
-        }
-      }
-
-      let q = supabase
-        .from("consultas_credito")
-        .select(`id, status, created_at, inquilinos (nome, cpf, cnpj), imoveis (valor_aluguel)`)
-        .order("created_at", { ascending: false })
-        .limit(5);
-      if (profileIds !== null) q = q.in("profile_id_solicitante", profileIds);
-
-      const [{ data: consultasData }, statsData] = await Promise.all([
-        q,
-        fetchDashboardStats(profileIds),
-      ]);
-      setConsultasRecentes(consultasData || []);
-      setStats(statsData);
+      setStats(await loadDashboardOverview(user.id, force));
     } finally {
       setLoadingConsultas(false);
     }
   }, [
     user?.id,
-    user?.email,
-    user?.role,
-    isAdmin,
     isImobiliaria,
     isCorretor,
     isJuridico,
@@ -197,20 +133,20 @@ function DashboardForRole() {
   ]);
 
   useEffect(() => {
-    carregarDados();
+    void carregarDados();
   }, [carregarDados]);
 
   // Sem Realtime configurado nessas tabelas ainda — reconsulta ao voltar pra aba,
   // que já cobre o caso comum de "criei uma consulta/apólice em outra aba e voltei".
   useEffect(() => {
     const onVisible = () => {
-      if (document.visibilityState === "visible") carregarDados();
+      if (document.visibilityState === "visible") void carregarDados();
     };
     document.addEventListener("visibilitychange", onVisible);
-    window.addEventListener("focus", carregarDados);
+    window.addEventListener("focus", onVisible);
     return () => {
       document.removeEventListener("visibilitychange", onVisible);
-      window.removeEventListener("focus", carregarDados);
+      window.removeEventListener("focus", onVisible);
     };
   }, [carregarDados]);
 
@@ -254,36 +190,10 @@ function DashboardForRole() {
     );
   }
 
-  const nivelCardInfo = nivelInfo?.nivelAtual
-    ? {
-        nome: nivelInfo.nivelAtual.nome_nivel,
-        percentual: nivelInfo.nivelAtual.percentual_comissao ?? 0,
-        cor: "#FACC15",
-        icone: Trophy,
-        contratos: nivelInfo.contratosAtivos,
-        proximoNivel: nivelInfo.proximoNivel?.nome_nivel,
-        metaProximo: nivelInfo.proximoNivel?.min_contratos,
-      }
-    : isCorretor || isImobiliaria
-      ? {
-          nome: "BRONZE",
-          percentual: 1,
-          cor: "#FACC15",
-          icone: Trophy,
-          contratos: 0,
-          proximoNivel: "PRATA",
-          metaProximo: 11,
-        }
-      : null;
-
   return (
     <DashboardLayout>
       <div className="space-y-4 sm:space-y-8 lg:space-y-10">
         <DashboardEquipeBanner />
-
-        {(isCorretor || isImobiliaria) && nivelCardInfo && (
-          <NivelCorretorCard info={nivelCardInfo} />
-        )}
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
           <CardStats

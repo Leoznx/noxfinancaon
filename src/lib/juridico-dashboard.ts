@@ -1,4 +1,8 @@
 import { supabase } from "@/integrations/supabase/client";
+import { loadSessionResource, peekSessionResource } from "@/lib/session-resource-cache";
+
+const JURIDICO_DASHBOARD_MAX_AGE_MS = 2 * 60_000;
+const juridicoDashboardKey = (userId: string) => `dashboard:juridico:${userId}`;
 
 export type JuridicoConsulta = {
   id: string;
@@ -131,3 +135,14 @@ export async function fetchJuridicoDashboardData(): Promise<{
     error: firstError?.message ?? null,
   };
 }
+
+export const peekJuridicoDashboard = (userId: string) =>
+  peekSessionResource<Awaited<ReturnType<typeof fetchJuridicoDashboardData>>>(
+    juridicoDashboardKey(userId),
+  );
+
+export const loadJuridicoDashboard = (userId: string, force = false) =>
+  loadSessionResource(juridicoDashboardKey(userId), fetchJuridicoDashboardData, {
+    force,
+    maxAgeMs: JURIDICO_DASHBOARD_MAX_AGE_MS,
+  });

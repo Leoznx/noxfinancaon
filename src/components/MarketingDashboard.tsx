@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   Activity,
@@ -16,6 +16,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useEssentialLoading } from "@/components/GlobalLoading";
+import { useAuth } from "@/components/AuthProvider";
+import { loadMarketingDashboard, peekMarketingDashboard } from "@/lib/internal-dashboards";
 import {
   Table,
   TableBody,
@@ -44,72 +46,42 @@ const tempo = (iso: string) => {
   return `${Math.floor(h / 24)}d`;
 };
 
-const DEMO_LEADS: any[] = [
-  {
-    id: "LEAD-MKT-001",
-    nome: "Joao da Silva",
-    origem: "Blog",
-    status: "novo",
-    interesse: "Seguro fianca",
-    created_at: new Date(Date.now() - 1000 * 60 * 60 * 30).toISOString(),
-  },
-  {
-    id: "LEAD-MKT-002",
-    nome: "Maria Oliveira",
-    origem: "Seja parceiro",
-    status: "qualificado",
-    interesse: "Parceria",
-    created_at: new Date(Date.now() - 1000 * 60 * 60 * 12).toISOString(),
-  },
-];
-
 export function MarketingDashboard() {
-  const [leads, setLeads] = useState<any[]>([]);
-  const [posts, setPosts] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [usingDemo, setUsingDemo] = useState(false);
+  const { user } = useAuth();
+  const cached = user?.id ? peekMarketingDashboard(user.id) : undefined;
+  const [leads, setLeads] = useState<any[]>(() => cached?.leads ?? []);
+  const [posts, setPosts] = useState<any[]>(() => cached?.posts ?? []);
+  const [loading, setLoading] = useState(cached === undefined);
+  const [usingDemo, setUsingDemo] = useState(cached?.usingDemo ?? false);
 
   useEssentialLoading(loading);
 
-  const load = async () => {
-    const { data } = await supabase
-      .from("leads")
-      .select("id, nome, telefone, email, origem, status, created_at")
-      .order("created_at", { ascending: false })
-      .limit(300);
-
-    const leadRows = data ?? [];
-    if (!leadRows.length) {
-      setLeads(DEMO_LEADS);
-      setPosts([
-        {
-          id: "BLOG-MKT-001",
-          titulo: "Como alugar sem fiador",
-          status: "publicado",
-          created_at: new Date().toISOString(),
-        },
-      ]);
-      setUsingDemo(true);
-    } else {
-      setLeads(leadRows);
-      setPosts([]);
-      setUsingDemo(false);
+  const load = useCallback(async (force = false) => {
+    if (!user?.id) return;
+    try {
+      const result = await loadMarketingDashboard(user.id, force);
+      setLeads(result.leads);
+      setPosts(result.posts);
+      setUsingDemo(result.usingDemo);
+    } catch (error) {
+      console.warn("[MarketingDashboard] não foi possível atualizar", error);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  };
+  }, [user?.id]);
 
   useEffect(() => {
-    load();
-    const interval = setInterval(load, 30000);
+    void load();
+    const interval = setInterval(() => void load(true), 60_000);
     const ch = supabase
       .channel("marketing-rt")
-      .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, () => void load(true))
       .subscribe();
     return () => {
       clearInterval(interval);
       supabase.removeChannel(ch);
     };
-  }, []);
+  }, [load]);
 
   const stats = useMemo(() => {
     const novosHoje = leads.filter((l) => isToday(l.created_at)).length;

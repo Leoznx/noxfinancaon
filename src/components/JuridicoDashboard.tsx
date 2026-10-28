@@ -46,10 +46,12 @@ import {
 } from "@/components/ui/table";
 import {
   EMPTY_JURIDICO_DASHBOARD,
-  fetchJuridicoDashboardData,
+  loadJuridicoDashboard,
+  peekJuridicoDashboard,
   type JuridicoConsulta,
   type JuridicoDashboardData,
 } from "@/lib/juridico-dashboard";
+import { useAuth } from "@/components/AuthProvider";
 
 type Periodo = "30d" | "3m" | "6m" | "12m";
 type Tone = "neutral" | "amber" | "blue" | "green" | "red" | "orange" | "purple";
@@ -70,24 +72,27 @@ const APPROVAL_COLORS = {
 const ACTIVE_CONTRACT_STATUSES = new Set(["ativa", "active", "vigente"]);
 
 export function JuridicoDashboard() {
-  const [data, setData] = useState<JuridicoDashboardData>(EMPTY_JURIDICO_DASHBOARD);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { user } = useAuth();
+  const cached = user?.id ? peekJuridicoDashboard(user.id) : undefined;
+  const [data, setData] = useState<JuridicoDashboardData>(() => cached?.data ?? EMPTY_JURIDICO_DASHBOARD);
+  const [loading, setLoading] = useState(cached === undefined);
+  const [error, setError] = useState<string | null>(cached?.error ?? null);
   const [periodo, setPeriodo] = useState<Periodo>("12m");
 
   useEssentialLoading(loading);
 
-  const load = useCallback(async () => {
-    const result = await fetchJuridicoDashboardData();
+  const load = useCallback(async (force = false) => {
+    if (!user?.id) return;
+    const result = await loadJuridicoDashboard(user.id, force);
     setData(result.data);
     setError(result.error);
     setLoading(false);
-  }, []);
+  }, [user?.id]);
 
   const retry = useCallback(() => {
     setLoading(true);
     setError(null);
-    void load();
+    void load(true);
   }, [load]);
 
   useEffect(() => {
@@ -99,22 +104,22 @@ export function JuridicoDashboard() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "consultas_credito" },
-        () => void load(),
+        () => void load(true),
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "verificacoes_documento" },
-        () => void load(),
+        () => void load(true),
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "apolices" },
-        () => void load(),
+        () => void load(true),
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "sinistros" },
-        () => void load(),
+        () => void load(true),
       )
       .subscribe();
 

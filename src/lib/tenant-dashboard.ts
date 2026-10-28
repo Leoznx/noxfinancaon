@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { loadSessionResource, peekSessionResource } from "@/lib/session-resource-cache";
 import {
   mergeTenantBillingItems,
   type TenantBillingConsultation,
@@ -6,6 +7,9 @@ import {
   type TenantInvoiceSource,
   type TenantPaymentSource,
 } from "@/lib/tenant-billing";
+
+const TENANT_DASHBOARD_MAX_AGE_MS = 2 * 60_000;
+const tenantDashboardKey = (userId: string) => `dashboard:inquilino:${userId}`;
 
 export type TenantContractSignature = {
   id: string;
@@ -208,6 +212,20 @@ export async function fetchTenantDashboard(
     invoices,
   };
 }
+
+export const peekTenantDashboard = (userId: string) =>
+  peekSessionResource<TenantDashboardData>(tenantDashboardKey(userId));
+
+export const loadTenantDashboard = (
+  userId: string,
+  email?: string | null,
+  force = false,
+) =>
+  loadSessionResource(
+    tenantDashboardKey(userId),
+    () => fetchTenantDashboard(userId, email),
+    { force, maxAgeMs: TENANT_DASHBOARD_MAX_AGE_MS },
+  );
 
 export async function resolveTenantDashboardDocumentUrl(document: TenantDashboardDocument) {
   if (/^https?:\/\//.test(document.file_url)) return document.file_url;

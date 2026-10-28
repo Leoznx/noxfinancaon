@@ -8,7 +8,8 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
-import { fetchMySellerControlDashboard, sellerLeadTargetForPeriod, type SellerControlDashboard, type SellerControlPeriod } from "@/lib/seller-control";
+import { loadMySellerControlDashboard, peekMySellerControlDashboard, sellerLeadTargetForPeriod, type SellerControlDashboard, type SellerControlPeriod } from "@/lib/seller-control";
+import { useAuth } from "@/components/AuthProvider";
 
 export const Route = createFileRoute("/vendedor/")({
   component: () => <ProtectedRoute roles={["vendedor", "admin_master", "admin"]}><VendedorDashboard /></ProtectedRoute>,
@@ -35,24 +36,27 @@ function periodLabel(data: SellerControlDashboard | null, anchor: Date) {
 }
 
 function VendedorDashboard() {
+  const { user } = useAuth();
   const [period, setPeriod] = useState<SellerControlPeriod>("daily");
   const [anchor, setAnchor] = useState(() => new Date());
-  const [data, setData] = useState<SellerControlDashboard | null>(null);
-  const [loading, setLoading] = useState(true);
+  const cached = user?.id ? peekMySellerControlDashboard(user.id, period, anchor) : undefined;
+  const [data, setData] = useState<SellerControlDashboard | null>(() => cached ?? null);
+  const [loading, setLoading] = useState(cached === undefined);
   const [error, setError] = useState("");
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const load = useCallback(async (silent = false) => {
+  const load = useCallback(async (silent = false, force = false) => {
+    if (!user?.id) return;
     if (!silent) setLoading(true);
     setError("");
-    try { setData(await fetchMySellerControlDashboard(period, anchor)); }
+    try { setData(await loadMySellerControlDashboard(user.id, period, anchor, force)); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível carregar o relatório."); }
     finally { setLoading(false); }
-  }, [anchor, period]);
+  }, [anchor, period, user?.id]);
 
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
-    const refresh = () => { if (refreshTimer.current) clearTimeout(refreshTimer.current); refreshTimer.current = setTimeout(() => void load(true), 250); };
+    const refresh = () => { if (refreshTimer.current) clearTimeout(refreshTimer.current); refreshTimer.current = setTimeout(() => void load(true, true), 250); };
     const channel = supabase.channel("seller-control-dashboard")
       .on("postgres_changes", { event: "*", schema: "public", table: "seller_commercial_events" }, refresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "seller_contact_leads" }, refresh)
@@ -74,7 +78,7 @@ function VendedorDashboard() {
           <div className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-yellow-400/25 blur-3xl" />
           <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div><span className="inline-flex items-center gap-2 rounded-full bg-yellow-400 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-black"><CalendarRange className="h-3.5 w-3.5" /> Relatório comercial</span><h1 className="mt-3 text-3xl font-black tracking-tight">Seu ritmo, sem ruído.</h1><p className="mt-1 max-w-2xl text-sm text-neutral-300">Metas e ações comerciais reunidas em uma leitura simples, atualizada em tempo real.</p></div>
-            <Button variant="outline" className="gap-2 border-white/20 bg-white/10 text-white hover:bg-white/20 hover:text-white" onClick={() => void load()} disabled={loading}><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Atualizar</Button>
+            <Button variant="outline" className="gap-2 border-white/20 bg-white/10 text-white hover:bg-white/20 hover:text-white" onClick={() => void load(false, true)} disabled={loading}><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Atualizar</Button>
           </div>
         </header>
 

@@ -1,4 +1,8 @@
 import { supabase } from "@/integrations/supabase/client";
+import { loadSessionResource, peekSessionResource } from "@/lib/session-resource-cache";
+
+const OWNER_DASHBOARD_MAX_AGE_MS = 2 * 60_000;
+const ownerDashboardKey = (userId: string) => `dashboard:proprietario:${userId}`;
 
 export type OwnerDashboardPeriod = "3" | "6" | "year" | "12";
 
@@ -161,3 +165,12 @@ export async function fetchOwnerDashboard(): Promise<OwnerDashboardData> {
   if (error) throw new Error(error.message || "Não foi possível carregar o dashboard.");
   return normalizeOwnerDashboard(data);
 }
+
+export const peekOwnerDashboard = (userId: string) =>
+  peekSessionResource<OwnerDashboardData>(ownerDashboardKey(userId));
+
+export const loadOwnerDashboard = (userId: string, force = false) =>
+  loadSessionResource(ownerDashboardKey(userId), fetchOwnerDashboard, {
+    force,
+    maxAgeMs: OWNER_DASHBOARD_MAX_AGE_MS,
+  });

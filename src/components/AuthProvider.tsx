@@ -8,6 +8,7 @@ import {
 import { clearDemoSession, isDemoSession } from "@/lib/demo-session";
 import { clearSessionResources } from "@/lib/session-resource-cache";
 import { resetNavigationWarmup } from "@/lib/navigation-warmup";
+import { redirectPathForRole } from "@/lib/authRedirect";
 
 export type Role =
   | "admin"
@@ -365,6 +366,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
     }
   };
+
+  // Assim que a sessão real é confirmada, aquece em paralelo a rota inicial e
+  // os dados do painel. A navegação continua livre; ao entrar no dashboard o
+  // primeiro frame já encontra o bundle e o snapshot da sessão em memória.
+  useEffect(() => {
+    if (isLoading || !user || isDemoSession()) return;
+    const target = redirectPathForRole(user.internalRole || user.role);
+    void import("@/lib/dashboard-navigation-data")
+      .then(({ prefetchDashboardDataForHref }) => prefetchDashboardDataForHref(target, user))
+      .catch((error) => console.warn("[Auth] dashboard warmup failed", error));
+  }, [isLoading, user]);
 
   const login = (
     email: string,

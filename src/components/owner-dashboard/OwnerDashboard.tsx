@@ -35,13 +35,15 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { useEssentialLoading } from "@/components/GlobalLoading";
 import { Button } from "@/components/ui/button";
 import {
-  fetchOwnerDashboard,
   filterMonthlyRevenue,
+  loadOwnerDashboard,
+  peekOwnerDashboard,
   type OwnerDashboardActivity,
   type OwnerDashboardContract,
   type OwnerDashboardData,
   type OwnerDashboardPeriod,
 } from "@/lib/owner-dashboard";
+import { useAuth } from "@/components/AuthProvider";
 
 const BRL = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -90,17 +92,20 @@ function formatRelativeDate(value: string) {
 }
 
 export function OwnerDashboard() {
-  const [data, setData] = useState<OwnerDashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+  const cached = user?.id ? peekOwnerDashboard(user.id) : undefined;
+  const [data, setData] = useState<OwnerDashboardData | null>(() => cached ?? null);
+  const [loading, setLoading] = useState(cached === undefined);
   const [error, setError] = useState<string | null>(null);
   const [period, setPeriod] = useState<OwnerDashboardPeriod>("6");
 
   useEssentialLoading(loading && !data);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (force = false) => {
+    if (!user?.id) return;
     setError(null);
     try {
-      setData(await fetchOwnerDashboard());
+      setData(await loadOwnerDashboard(user.id, force));
     } catch (loadError) {
       setError(
         loadError instanceof Error ? loadError.message : "Não foi possível carregar o dashboard.",
@@ -108,7 +113,7 @@ export function OwnerDashboard() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     void load();
@@ -143,7 +148,7 @@ export function OwnerDashboard() {
         {loading ? (
           <OwnerDashboardSkeleton />
         ) : error || !data ? (
-          <OwnerDashboardError message={error} onRetry={() => void load()} />
+          <OwnerDashboardError message={error} onRetry={() => void load(true)} />
         ) : (
           <>
             <OwnerSummaryGrid data={data} />

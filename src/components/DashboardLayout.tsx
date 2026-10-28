@@ -692,6 +692,7 @@ export function DashboardLayout({
   useEffect(() => {
     if (!routePreloadKey || !user || isDemoSession()) return;
     const targets = routePreloadKey.split("\n");
+    const navigationScope = `${user.id}:${user.internalRole || user.role}`;
     const priorities = [...PRIORITY_DASHBOARD_ROUTES];
     const rank = (href: string) => {
       const index = priorities.indexOf(href.split("?")[0]);
@@ -701,7 +702,7 @@ export function DashboardLayout({
       return rank(a) - rank(b);
     });
     warmNavigationRoutes({
-      scope: `${user.id}:${user.role}`,
+      scope: navigationScope,
       hrefs: targets,
       // Baixa o código das rotas em segundo plano, mas busca dados apenas da
       // tela aberta. As outras abas aquecem ao foco/hover do próprio link.
@@ -709,19 +710,20 @@ export function DashboardLayout({
       currentHref: location.pathname,
       preloadCode: (href) => router.preloadRoute({ to: href as any }),
       loadData: (href) => import("@/lib/dashboard-navigation-data").then(({ prefetchDashboardDataForHref }) => {
-        if (isNavigationScopeCurrent(`${user.id}:${user.role}`)) return prefetchDashboardDataForHref(href, user);
+        if (isNavigationScopeCurrent(navigationScope)) return prefetchDashboardDataForHref(href, user);
       }),
     });
   }, [location.pathname, routePreloadKey, router, user]);
 
   const prefetchRouteData = (href: string) => {
     if (!user || isDemoSession()) return;
+    const navigationScope = `${user.id}:${user.internalRole || user.role}`;
     warmNavigationRoutes({
-      scope: `${user.id}:${user.role}`,
+      scope: navigationScope,
       hrefs: [href],
       currentHref: href,
       loadData: (target) => import("@/lib/dashboard-navigation-data").then(({ prefetchDashboardDataForHref }) => {
-        if (isNavigationScopeCurrent(`${user.id}:${user.role}`)) return prefetchDashboardDataForHref(target, user);
+        if (isNavigationScopeCurrent(navigationScope)) return prefetchDashboardDataForHref(target, user);
       }),
     });
   };

@@ -1,4 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
+import { loadSessionResource, peekSessionResource } from "@/lib/session-resource-cache";
+
+const SELLER_DASHBOARD_MAX_AGE_MS = 60_000;
 
 export type SellerControlPeriod = "daily" | "weekly" | "monthly";
 export type SellerType = "sdr" | "closer";
@@ -294,6 +297,27 @@ export async function fetchMySellerControlDashboard(
   if (error) throw error;
   return normalizeDashboard(data, period);
 }
+
+const sellerDashboardKey = (userId: string, period: SellerControlPeriod, anchor: Date) =>
+  `dashboard:vendedor:${userId}:${period}:${localDate(anchor)}`;
+
+export const peekMySellerControlDashboard = (
+  userId: string,
+  period: SellerControlPeriod,
+  anchor = new Date(),
+) => peekSessionResource<SellerControlDashboard>(sellerDashboardKey(userId, period, anchor));
+
+export const loadMySellerControlDashboard = (
+  userId: string,
+  period: SellerControlPeriod,
+  anchor = new Date(),
+  force = false,
+) =>
+  loadSessionResource(
+    sellerDashboardKey(userId, period, anchor),
+    () => fetchMySellerControlDashboard(period, anchor),
+    { force, maxAgeMs: SELLER_DASHBOARD_MAX_AGE_MS },
+  );
 
 export async function fetchAdminSellerControlReport(
   period: SellerControlPeriod,

@@ -18,14 +18,16 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  type FinanceCommission,
-  type FinanceSummary,
-  type FinanceWithdrawal,
   formatCents,
-  getFinanceSummary,
-  listFinanceCommissions,
-  listFinanceWithdrawals,
 } from "@/lib/withdrawals";
+import {
+  EMPTY_FINANCE_SUMMARY,
+  loadFinanceiroDashboard,
+  peekFinanceiroDashboard,
+  type FinanceInvoice,
+  type FinanceiroDashboardData,
+} from "@/lib/internal-dashboards";
+import { useAuth } from "@/components/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useEssentialLoading } from "@/components/GlobalLoading";
@@ -38,23 +40,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-interface FinanceInvoice {
-  id: string;
-  valor: number;
-  status: string;
-  vencimento: string;
-  pago_em: string | null;
-  numero_parcela: number;
-  apolice_id: string | null;
-}
-
-interface DashboardData {
-  summary: FinanceSummary;
-  invoices: FinanceInvoice[];
-  commissions: FinanceCommission[];
-  withdrawals: FinanceWithdrawal[];
-}
-
 type Priority = {
   kind: "invoice" | "withdrawal" | "commission";
   type: string;
@@ -64,22 +49,6 @@ type Priority = {
   valueCents: number;
   date: string;
   delayDays: number;
-};
-
-const EMPTY_SUMMARY: FinanceSummary = {
-  revenue_received_cents: 0,
-  revenue_pending_cents: 0,
-  commissions_paid_cents: 0,
-  commissions_payable_cents: 0,
-  open_withdrawals: 0,
-  pending_review_withdrawals: 0,
-  paid_withdrawals: 0,
-  commission_count: 0,
-  payment_count: 0,
-  active_contracts: 0,
-  pending_contracts: 0,
-  contracts_missing_billing: 0,
-  reconciliation_required: 0,
 };
 
 const PAID_INVOICE_STATUSES = new Set(["paid", "pago", "received", "paid_via_consolidated"]);
@@ -148,46 +117,31 @@ const formatDate = (value: string) => {
 };
 
 export function FinanceiroDashboard() {
-  const [data, setData] = useState<DashboardData>({
-    summary: EMPTY_SUMMARY,
+  const { user } = useAuth();
+  const cached = user?.id ? peekFinanceiroDashboard(user.id) : undefined;
+  const [data, setData] = useState<FinanceiroDashboardData>(() => cached ?? {
+    summary: EMPTY_FINANCE_SUMMARY,
     invoices: [],
     commissions: [],
     withdrawals: [],
   });
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(cached === undefined);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const hasLoaded = useRef(false);
+  const hasLoaded = useRef(cached !== undefined);
   const requestInFlight = useRef(false);
 
   useEssentialLoading(loading && !hasLoaded.current);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (force = false) => {
+    if (!user?.id) return;
     if (requestInFlight.current) return;
     requestInFlight.current = true;
     if (hasLoaded.current) setRefreshing(true);
     else setLoading(true);
 
     try {
-      const [summary, withdrawals, commissions, invoiceResult] = await Promise.all([
-        getFinanceSummary(),
-        listFinanceWithdrawals({ scope: "OPEN" }),
-        listFinanceCommissions(),
-        supabase
-          .from("faturas_inquilino")
-          .select("id, valor, status, vencimento, pago_em, numero_parcela, apolice_id")
-          .order("vencimento", { ascending: false })
-          .limit(5000),
-      ]);
-
-      if (invoiceResult.error) throw invoiceResult.error;
-
-      setData({
-        summary,
-        withdrawals,
-        commissions,
-        invoices: (invoiceResult.data ?? []) as FinanceInvoice[],
-      });
+      setData(await loadFinanceiroDashboard(user.id, force));
       setError(null);
       hasLoaded.current = true;
     } catch {
@@ -201,12 +155,12 @@ export function FinanceiroDashboard() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     void load();
 
-    const interval = window.setInterval(() => void load(), 60_000);
+    const interval = window.setInterval(() => void load(true), 60_000);
     const onVisible = () => {
       if (document.visibilityState === "visible") void load();
     };
@@ -217,27 +171,27 @@ export function FinanceiroDashboard() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "faturas_inquilino" },
-        () => void load(),
+        () => void load(true),
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "comissoes" },
-        () => void load(),
+        () => void load(true),
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "withdrawal_requests" },
-        () => void load(),
+        () => void load(true),
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "asaas_payments" },
-        () => void load(),
+        () => void load(true),
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "consolidated_invoice_batches" },
-        () => void load(),
+        () => void load(true),
       )
       .subscribe();
 
@@ -378,7 +332,7 @@ export function FinanceiroDashboard() {
   }
 
   if (error && !hasLoaded.current) {
-    return <DashboardError message={error} onRetry={() => void load()} />;
+    return <DashboardError message={error} onRetry={() => void load(true)} />;
   }
 
   const alertStyle = {
@@ -411,7 +365,7 @@ export function FinanceiroDashboard() {
       {error && (
         <div className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm font-semibold">{error}</p>
-          <Button size="sm" variant="outline" onClick={() => void load()} disabled={refreshing}>
+          <Button size="sm" variant="outline" onClick={() => void load(true)} disabled={refreshing}>
             Tentar novamente
           </Button>
         </div>

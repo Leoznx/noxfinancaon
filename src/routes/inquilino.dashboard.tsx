@@ -15,8 +15,9 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { reissuePayment } from "@/lib/automated-billing";
 import {
-  fetchTenantDashboard,
   isTenantInvoiceOpen,
+  loadTenantDashboard,
+  peekTenantDashboard,
   resolveTenantDashboardDocumentUrl,
   type TenantDashboardData,
   type TenantDashboardDocument,
@@ -37,16 +38,17 @@ function TenantDashboardPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [data, setData] = useState<TenantDashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const cached = user?.id ? peekTenantDashboard(user.id) : undefined;
+  const [data, setData] = useState<TenantDashboardData | null>(() => cached ?? null);
+  const [loading, setLoading] = useState(cached === undefined);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (force = false) => {
     if (!user?.id) return;
     setError(null);
     try {
-      setData(await fetchTenantDashboard(user.id, user.email));
+      setData(await loadTenantDashboard(user.id, user.email, force));
     } catch (loadError) {
       setError(
         loadError instanceof Error
@@ -66,7 +68,7 @@ function TenantDashboardPage() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "contract_signatures" },
-        () => void load(),
+        () => void load(true),
       )
       .on(
         "postgres_changes",
@@ -76,7 +78,7 @@ function TenantDashboardPage() {
           table: "faturas_inquilino",
           filter: `tenant_user_id=eq.${user.id}`,
         },
-        () => void load(),
+        () => void load(true),
       )
       .on(
         "postgres_changes",
@@ -86,7 +88,7 @@ function TenantDashboardPage() {
           table: "documentos_proposta",
           filter: `tenant_user_id=eq.${user.id}`,
         },
-        () => void load(),
+        () => void load(true),
       )
       .subscribe();
     return () => {
@@ -134,7 +136,7 @@ function TenantDashboardPage() {
           window.open(payment.boleto.pdfUrl, "_blank", "noopener,noreferrer");
         }
         toast.success("2ª via do boleto gerada.");
-        await load();
+        await load(true);
         return;
       } catch (invoiceError) {
         toast.error(
@@ -195,7 +197,7 @@ function TenantDashboardPage() {
       });
       if (insertError) throw insertError;
       toast.success("Documento enviado com sucesso.");
-      await load();
+      await load(true);
     } catch (uploadError) {
       toast.error(
         uploadError instanceof Error ? uploadError.message : "Não foi possível enviar o documento.",

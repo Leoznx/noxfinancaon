@@ -20,6 +20,8 @@ export type DashboardNavigationUser = {
   id: string;
   email: string;
   role: string;
+  internalRole?: string | null;
+  sellerType?: string | null;
 };
 
 export type DashboardConsultationRow = Record<string, any>;
@@ -165,12 +167,34 @@ export async function prefetchDashboardDataForHref(
   user: DashboardNavigationUser,
 ): Promise<void> {
   const pathname = href.split("?")[0].replace(/\/$/, "") || "/";
-  if (pathname === "/dashboard" && user.role === "imobiliaria") {
+  const effectiveRole = user.internalRole || user.role;
+  if (pathname === "/dashboard" && effectiveRole === "imobiliaria") {
     const { loadImobiliariaDashboard } = await import("@/lib/imobiliaria-dashboard");
     await loadImobiliariaDashboard(user.id, user.email);
-  } else if (pathname === "/dashboard" && user.role === "corretor") {
+  } else if (pathname === "/dashboard" && effectiveRole === "corretor") {
     const { loadCorretorDashboard } = await import("@/lib/imobiliaria-dashboard");
     await loadCorretorDashboard(user.id);
+  } else if (pathname === "/dashboard" && effectiveRole === "juridico") {
+    const { loadJuridicoDashboard } = await import("@/lib/juridico-dashboard");
+    await loadJuridicoDashboard(user.id);
+  } else if (pathname === "/dashboard" && effectiveRole === "financeiro") {
+    const { loadFinanceiroDashboard } = await import("@/lib/internal-dashboards");
+    await loadFinanceiroDashboard(user.id);
+  } else if (pathname === "/dashboard" && effectiveRole === "marketing") {
+    const { loadMarketingDashboard } = await import("@/lib/internal-dashboards");
+    await loadMarketingDashboard(user.id);
+  } else if (pathname === "/dashboard" && effectiveRole === "proprietario") {
+    const { loadOwnerDashboard } = await import("@/lib/owner-dashboard");
+    await loadOwnerDashboard(user.id);
+  } else if (pathname === "/dashboard" && ["admin", "admin_master", "analista"].includes(effectiveRole)) {
+    const { loadDashboardOverview } = await import("@/lib/dashboard-overview-data");
+    await loadDashboardOverview(user.id);
+  } else if (pathname === "/vendedor" && effectiveRole === "vendedor") {
+    const { loadMySellerControlDashboard } = await import("@/lib/seller-control");
+    await loadMySellerControlDashboard(user.id, "daily", new Date());
+  } else if (pathname === "/inquilino/dashboard" && effectiveRole === "inquilino") {
+    const { loadTenantDashboard } = await import("@/lib/tenant-dashboard");
+    await loadTenantDashboard(user.id, user.email);
   } else if (pathname === "/consultas") {
     await loadDashboardConsultations(user);
   } else if (pathname === "/apolices") {
