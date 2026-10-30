@@ -32,6 +32,10 @@ import {
   resolverStatusConsulta,
 } from "@/lib/consultasCredito";
 import { resolveCreditCustomerDisplayName } from "@/lib/credit-customer-name";
+import {
+  getClosedContractPolicyId,
+  isClosedContractConsultation,
+} from "@/lib/credit-status-presentation";
 
 export const Route = createLazyFileRoute("/consultas/")({
   component: () => (
@@ -104,6 +108,15 @@ function Consultas() {
   const getStatusBadge = (c: any) => {
     const status = getStatusConsulta(c);
     switch (status) {
+      case "contrato_fechado":
+        return (
+          <Badge
+            variant="outline"
+            className="bg-emerald-50 text-emerald-800 border-emerald-300 font-bold px-3"
+          >
+            Contrato Fechado
+          </Badge>
+        );
       case "aprovado":
         return (
           <Badge
@@ -276,6 +289,7 @@ function Consultas() {
           <SelectContent>
             <SelectItem value="todos">Todos os status</SelectItem>
             <SelectItem value="aprovado">Aprovados</SelectItem>
+            <SelectItem value="contrato_fechado">Contratos fechados</SelectItem>
             <SelectItem value="recusado">Recusados</SelectItem>
             <SelectItem value="em_analise">Em análise</SelectItem>
           </SelectContent>
@@ -310,6 +324,12 @@ function Consultas() {
             const doc = getDoc(c);
             const endereco = formatarEnderecoConsulta(c);
             const aluguel = getAluguel(c);
+            const contractId = getClosedContractPolicyId(c);
+            const detailsHref = isClosedContractConsultation(c)
+              ? contractId
+                ? `/apolices/${contractId}`
+                : "/apolices"
+              : `/consultas/${c.id}/resultado`;
             return (
               <Card key={c.id} className="border-neutral-200 shadow-sm bg-white p-4">
                 <div className="flex items-start justify-between gap-3">
@@ -357,7 +377,7 @@ function Consultas() {
                       })}
                     </span>
                   </div>
-                  <Link to={`/consultas/${c.id}/resultado` as any} className="shrink-0">
+                  <Link to={detailsHref as any} className="shrink-0">
                     <Button
                       variant="ghost"
                       size="sm"
@@ -439,6 +459,12 @@ function Consultas() {
                   const doc = getDoc(c);
                   const endereco = formatarEnderecoConsulta(c);
                   const aluguel = getAluguel(c);
+                  const contractId = getClosedContractPolicyId(c);
+                  const detailsHref = isClosedContractConsultation(c)
+                    ? contractId
+                      ? `/apolices/${contractId}`
+                      : "/apolices"
+                    : `/consultas/${c.id}/resultado`;
                   return (
                     <tr key={c.id} className="hover:bg-neutral-50/50 transition-colors group">
                       <td className="px-8 py-6">
@@ -505,7 +531,7 @@ function Consultas() {
                         </div>
                       </td>
                       <td className="px-8 py-6 text-right">
-                        <Link to={`/consultas/${c.id}/resultado` as any}>
+                        <Link to={detailsHref as any}>
                           <Button
                             variant="ghost"
                             size="sm"

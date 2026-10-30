@@ -10,6 +10,7 @@ import { getCreditSimulationOperationKey } from "@/lib/credit-simulation-idempot
 import {
   resolveCreditStatusPresentation,
   type CreditStatusPresentation,
+  type CreditStatusPresentationRow,
 } from "@/lib/credit-status-presentation";
 import { officialCreditErrorMessage } from "@/lib/official-credit-error";
 
@@ -446,20 +447,18 @@ export type StatusExibicaoConsulta = CreditStatusPresentation;
  * grava aprovado/recusado/em_analise/erro ali e nunca mais mexe). Já `status` é o ponteiro
  * de etapa da proposta inteira (pendente, processando, pendente_documentacao,
  * aguardando_ativacao, ativo...) e avança conforme o corretor toca a proposta. Preferir
- * `resultado` faz o painel mostrar sempre o resultado real da análise, mesmo depois de a
- * proposta seguir para as próximas etapas. Mesma regra usada em "Minhas Consultas".
+ * `resultado` faz o painel mostrar o resultado real da análise enquanto a proposta segue
+ * pelo funil. Quando já existe uma apólice ativa, o estado contratual passa a ter prioridade
+ * e "Minhas Consultas" exibe "Contrato Fechado".
  */
-export function resolverStatusConsulta(consulta: {
-  status?: string | null;
-  resultado?: string | null;
-  substatus?: string | null;
-  technical_status?: string | null;
-  automation_step?: string | null;
-}): StatusExibicaoConsulta {
+export function resolverStatusConsulta(
+  consulta: CreditStatusPresentationRow,
+): StatusExibicaoConsulta {
   return resolveCreditStatusPresentation(consulta);
 }
 
 export const LABEL_STATUS_CONSULTA: Record<StatusExibicaoConsulta, string> = {
+  contrato_fechado: "Contrato Fechado",
   aprovado: "Aprovado",
   recusado: "Recusado",
   em_analise: "Em análise",

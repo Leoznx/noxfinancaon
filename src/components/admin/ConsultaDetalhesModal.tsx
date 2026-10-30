@@ -48,6 +48,7 @@ type Props = {
 };
 
 const TOM_STATUS: Record<StatusExibicaoConsulta, string> = {
+  contrato_fechado: "border-emerald-300 bg-emerald-100 text-emerald-800",
   aprovado: "border-emerald-200 bg-emerald-50 text-emerald-700",
   recusado: "border-red-200 bg-red-50 text-red-700",
   em_analise: "border-amber-200 bg-amber-50 text-amber-700",

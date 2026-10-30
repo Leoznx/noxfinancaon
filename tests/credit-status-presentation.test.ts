@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { resolveCreditStatusPresentation } from "../src/lib/credit-status-presentation";
+import {
+  getClosedContractPolicyId,
+  resolveCreditStatusPresentation,
+} from "../src/lib/credit-status-presentation";
 
 test("mantém decisões reais da Loft", () => {
   assert.equal(
@@ -74,6 +77,43 @@ test("preserva falta de documentos e etapas aprovadas legadas", () => {
   );
   assert.equal(
     resolveCreditStatusPresentation({ status: "aguardando_ativacao", resultado: null }),
+    "aprovado",
+  );
+});
+
+test("prioriza Contrato Fechado quando a consulta já possui apólice ativa", () => {
+  assert.equal(
+    resolveCreditStatusPresentation({
+      status: "ativado",
+      resultado: "aprovado",
+      policy_status: "active",
+    }),
+    "contrato_fechado",
+  );
+  assert.equal(
+    resolveCreditStatusPresentation({
+      status: "aprovado",
+      resultado: "aprovado",
+      apolices: [{ id: "policy-active", status: "ativa" }],
+    }),
+    "contrato_fechado",
+  );
+  assert.equal(
+    getClosedContractPolicyId({
+      apolices: [
+        { id: "policy-pending", status: "emitida_pendente" },
+        { id: "policy-active", status: "ativa" },
+      ],
+    }),
+    "policy-active",
+  );
+  assert.equal(
+    resolveCreditStatusPresentation({
+      status: "aprovado",
+      resultado: "aprovado",
+      policy_status: "issued_pending",
+      apolices: [{ id: "policy-pending", status: "emitida_pendente" }],
+    }),
     "aprovado",
   );
 });

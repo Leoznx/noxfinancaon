@@ -52,6 +52,7 @@ export async function loadDashboardConsultations(
     async () => {
       const consultationFields = `
         id, status, resultado, substatus, technical_status, last_error_category, automation_step,
+        policy_status,
         created_at, updated_at, tenant_name, tenant_document, documento,
         property_address, rent_value, payment_status,
         raw_cliente_nome:raw_response->>clienteNome,
@@ -60,7 +61,8 @@ export async function loadDashboardConsultations(
         raw_identity_error_code:raw_response->identity->>errorCode,
         inquilinos (nome, cpf, cnpj),
         imoveis (logradouro, numero, bairro, cidade, estado, cep, valor_aluguel),
-        planos (nome)
+        planos (nome),
+        apolices (id, status)
       `;
       const fields =
         user.role === "imobiliaria"

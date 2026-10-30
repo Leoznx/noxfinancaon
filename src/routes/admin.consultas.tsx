@@ -431,6 +431,7 @@ function ConsultasAdminPage() {
 
 function StatusBadge({ status }: { status: StatusExibicaoConsulta }) {
   const map: Record<StatusExibicaoConsulta, string> = {
+    contrato_fechado: "bg-emerald-200 text-emerald-800 border-emerald-300",
     aprovado: "bg-emerald-100 text-emerald-700 border-emerald-200",
     pendente: "bg-amber-100 text-amber-700 border-amber-200",
     recusado: "bg-red-100 text-red-700 border-red-200",

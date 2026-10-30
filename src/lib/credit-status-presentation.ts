@@ -1,4 +1,5 @@
 export type CreditStatusPresentation =
+  | "contrato_fechado"
   | "aprovado"
   | "recusado"
   | "em_analise"
@@ -18,12 +19,47 @@ export type CreditStatusPresentationRow = {
   substatus?: string | null;
   technical_status?: string | null;
   automation_step?: string | null;
+  policy_status?: string | null;
+  apolices?:
+    | { id?: string | null; status?: string | null }
+    | { id?: string | null; status?: string | null }[]
+    | null;
 };
 
 function normalizeStatus(value: string | null | undefined): string {
   return String(value ?? "")
     .trim()
     .toLowerCase();
+}
+
+const CLOSED_CONSULTATION_STATUSES = new Set([
+  "ativo",
+  "ativado",
+  "ativa",
+  "contrato_fechado",
+  "contrato fechado",
+]);
+
+const ACTIVE_POLICY_STATUSES = new Set(["active", "ativo", "ativa", "ativado", "ativada"]);
+
+function relatedPolicies(row: CreditStatusPresentationRow) {
+  if (!row.apolices) return [];
+  return Array.isArray(row.apolices) ? row.apolices : [row.apolices];
+}
+
+export function getClosedContractPolicyId(row: CreditStatusPresentationRow): string | null {
+  const policy = relatedPolicies(row).find((item) =>
+    ACTIVE_POLICY_STATUSES.has(normalizeStatus(item.status)),
+  );
+  return policy?.id || null;
+}
+
+export function isClosedContractConsultation(row: CreditStatusPresentationRow): boolean {
+  return (
+    CLOSED_CONSULTATION_STATUSES.has(normalizeStatus(row.status)) ||
+    normalizeStatus(row.policy_status) === "active" ||
+    getClosedContractPolicyId(row) !== null
+  );
 }
 
 /**
@@ -39,6 +75,8 @@ export function resolveCreditStatusPresentation(
   const substatus = normalizeStatus(row.substatus);
   const technicalStatus = normalizeStatus(row.technical_status);
   const automationStep = normalizeStatus(row.automation_step);
+
+  if (isClosedContractConsultation(row)) return "contrato_fechado";
 
   const decision = ["aprovado", "recusado", "reprovado", "em_analise"].includes(resultado)
     ? resultado
