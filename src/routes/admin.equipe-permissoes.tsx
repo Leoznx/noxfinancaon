@@ -2,7 +2,7 @@ import { createFileRoute, Navigate, useNavigate, useSearch } from "@tanstack/rea
 import { useServerFn } from "@tanstack/react-start";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import {
   Users,
@@ -34,6 +35,9 @@ import {
   UserCheck,
   Trash2,
   Clock3,
+  Camera,
+  FlaskConical,
+  Loader2,
 } from "lucide-react";
 import { z } from "zod";
 import { useAuth } from "@/components/AuthProvider";
@@ -41,6 +45,12 @@ import { registrarAuditoria } from "@/lib/auditoria";
 import { deleteNoxEmployee } from "@/lib/delete-nox-employee";
 import { setSellerTimeClockEnabled } from "@/lib/time-clock";
 import { updateNoxEmployeeRole } from "@/lib/nox-employees.functions";
+import { defaultAvatarForName } from "@/lib/gender-avatar";
+import {
+  isSystemDefaultAvatar,
+  restoreAdminProfileAvatar,
+  uploadAdminProfileAvatar,
+} from "@/lib/profile-avatar";
 
 const VALID_TABS = ["colaboradores", "permissoes", "equipe-comercial", "auditoria"] as const;
 type TabKey = (typeof VALID_TABS)[number];
@@ -85,6 +95,14 @@ function cargoAtualDoColaborador(colaborador: any): CargoColaborador {
     return colaborador.seller_type === "closer" ? "closer" : "sdr";
   }
   return colaborador.role as CargoColaborador;
+}
+
+function isTestAccountName(name: string | null | undefined) {
+  return (name ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .includes("teste");
 }
 
 function EquipePermissoesPage() {
@@ -225,6 +243,10 @@ export function TabColaboradores() {
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [savingClockId, setSavingClockId] = useState<string | null>(null);
+  const [showTestAccounts, setShowTestAccounts] = useState(false);
+  const [photoEmployee, setPhotoEmployee] = useState<any | null>(null);
+  const [avatarAction, setAvatarAction] = useState<"upload" | "remove" | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const canManageClock =
     user?.role === "admin" ||
     user?.role === "admin_master" ||
@@ -232,12 +254,34 @@ export function TabColaboradores() {
 
   const carregar = async () => {
     setLoading(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("internal_users" as any)
       .select("*")
       .neq("status", "excluido")
       .order("created_at", { ascending: false });
-    setRows((data as any[]) ?? []);
+    if (error) {
+      toast.error("Não foi possível carregar os colaboradores.");
+      setRows([]);
+      setLoading(false);
+      return;
+    }
+    const employees = (data as any[]) ?? [];
+    const profileIds = employees.map((employee) => employee.auth_user_id).filter(Boolean);
+    const { data: profiles, error: profilesError } = profileIds.length
+      ? await supabase.from("profiles").select("id, avatar_url").in("id", profileIds)
+      : { data: [], error: null };
+    if (profilesError) toast.error("Não foi possível carregar as fotos dos colaboradores.");
+    const avatars = new Map(
+      ((profiles as Array<{ id: string; avatar_url: string | null }> | null) ?? []).map(
+        (profile) => [profile.id, profile.avatar_url],
+      ),
+    );
+    setRows(
+      employees.map((employee) => ({
+        ...employee,
+        avatar_url: avatars.get(employee.auth_user_id) ?? null,
+      })),
+    );
     setLoading(false);
   };
   useEffect(() => {
@@ -304,43 +348,124 @@ export function TabColaboradores() {
     }
   };
 
+  const testAccounts = useMemo(
+    () => rows.filter((employee) => isTestAccountName(employee.full_name)),
+    [rows],
+  );
+  const regularAccounts = useMemo(
+    () => rows.filter((employee) => !isTestAccountName(employee.full_name)),
+    [rows],
+  );
+  const visibleRows = showTestAccounts ? testAccounts : regularAccounts;
+
+  const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !photoEmployee || avatarAction) return;
+    setAvatarAction("upload");
+    try {
+      const avatarUrl = await uploadAdminProfileAvatar(photoEmployee.auth_user_id, file);
+      setRows((current) =>
+        current.map((employee) =>
+          employee.id === photoEmployee.id ? { ...employee, avatar_url: avatarUrl } : employee,
+        ),
+      );
+      toast.success(`Foto de ${photoEmployee.full_name || "perfil"} atualizada em todo o sistema.`);
+      setPhotoEmployee(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível atualizar a foto.");
+    } finally {
+      setAvatarAction(null);
+    }
+  };
+
+  const handleAvatarRemove = async () => {
+    if (!photoEmployee || avatarAction) return;
+    if (!window.confirm(`Remover a foto de ${photoEmployee.full_name || "perfil"} e restaurar a foto original do sistema?`)) return;
+    setAvatarAction("remove");
+    try {
+      const avatarUrl = await restoreAdminProfileAvatar(
+        photoEmployee.auth_user_id,
+        photoEmployee.full_name,
+      );
+      setRows((current) =>
+        current.map((employee) =>
+          employee.id === photoEmployee.id ? { ...employee, avatar_url: avatarUrl } : employee,
+        ),
+      );
+      toast.success("Foto removida. O avatar original do sistema foi restaurado.");
+      setPhotoEmployee(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível remover a foto.");
+    } finally {
+      setAvatarAction(null);
+    }
+  };
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Colaboradores Internos</CardTitle>
-        <p className="text-sm text-muted-foreground">
-          Equipe interna — Vendedor, Vendedor Closer, Jurídico, Financeiro, Marketing e Suporte.
-        </p>
-      </CardHeader>
-      <CardContent>
+    <>
+      <Card>
+        <CardHeader className="gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <CardTitle>{showTestAccounts ? "Contas teste" : "Colaboradores Internos"}</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {showTestAccounts
+                ? "Contas de validação separadas automaticamente pelo nome do colaborador."
+                : "Equipe interna — Vendedor, Vendedor Closer, Jurídico, Financeiro, Marketing e Suporte."}
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant={showTestAccounts ? "default" : "outline"}
+            className="gap-2 self-start"
+            onClick={() => setShowTestAccounts((current) => !current)}
+          >
+            <FlaskConical className="h-4 w-4" />
+            {showTestAccounts
+              ? `Voltar aos colaboradores (${regularAccounts.length})`
+              : `Contas teste (${testAccounts.length})`}
+          </Button>
+        </CardHeader>
+        <CardContent>
         {/* Mobile/tablet estreito: cards empilhados, sem tabela pra arrastar. */}
         <div className="md:hidden divide-y divide-neutral-100 -mx-6">
           {loading ? (
             <p className="text-center text-sm py-6">Carregando…</p>
-          ) : rows.length === 0 ? (
+          ) : visibleRows.length === 0 ? (
             <p className="text-center text-sm text-muted-foreground py-6">
-              Nenhum colaborador cadastrado.
+              {showTestAccounts ? "Nenhuma conta teste cadastrada." : "Nenhum colaborador cadastrado."}
             </p>
           ) : (
-            rows.map((u) => (
+            visibleRows.map((u) => (
               <div key={u.id} className="px-6 py-4 space-y-2">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="font-medium truncate">{u.full_name}</p>
                     <p className="text-xs text-muted-foreground truncate">{u.email}</p>
                   </div>
-                  <Badge
-                    variant={
-                      u.status === "ativo"
-                        ? "default"
-                        : u.status === "bloqueado"
-                          ? "destructive"
-                          : "secondary"
-                    }
-                    className="shrink-0"
-                  >
-                    {u.status}
-                  </Badge>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Badge
+                      variant={
+                        u.status === "ativo"
+                          ? "default"
+                          : u.status === "bloqueado"
+                            ? "destructive"
+                            : "secondary"
+                      }
+                    >
+                      {u.status}
+                    </Badge>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="outline"
+                      className="h-8 w-8 rounded-full"
+                      aria-label={`Alterar foto de perfil de ${u.full_name || u.email}`}
+                      onClick={() => setPhotoEmployee(u)}
+                    >
+                      <Camera className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
                 <div className="flex items-center justify-between gap-3">
                   {u.role === "admin_master" ? (
@@ -422,14 +547,14 @@ export function TabColaboradores() {
                     Carregando…
                   </TableCell>
                 </TableRow>
-              ) : rows.length === 0 ? (
+              ) : visibleRows.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-6">
-                    Nenhum colaborador cadastrado.
+                    {showTestAccounts ? "Nenhuma conta teste cadastrada." : "Nenhum colaborador cadastrado."}
                   </TableCell>
                 </TableRow>
               ) : (
-                rows.map((u) => (
+                visibleRows.map((u) => (
                   <TableRow key={u.id}>
                     <TableCell className="font-medium">{u.full_name}</TableCell>
                     <TableCell>{u.email}</TableCell>
@@ -455,17 +580,29 @@ export function TabColaboradores() {
                       )}
                     </TableCell>
                     <TableCell>
-                      <Badge
-                        variant={
-                          u.status === "ativo"
-                            ? "default"
-                            : u.status === "bloqueado"
-                              ? "destructive"
-                              : "secondary"
-                        }
-                      >
-                        {u.status}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge
+                          variant={
+                            u.status === "ativo"
+                              ? "default"
+                              : u.status === "bloqueado"
+                                ? "destructive"
+                                : "secondary"
+                          }
+                        >
+                          {u.status}
+                        </Badge>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="outline"
+                          className="h-8 w-8 rounded-full"
+                          aria-label={`Alterar foto de perfil de ${u.full_name || u.email}`}
+                          onClick={() => setPhotoEmployee(u)}
+                        >
+                          <Camera className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                     <TableCell>
                       {u.role === "vendedor" ? (
@@ -511,8 +648,79 @@ export function TabColaboradores() {
             </TableBody>
           </Table>
         </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+
+      <Dialog
+        open={!!photoEmployee}
+        onOpenChange={(open) => {
+          if (!open && !avatarAction) setPhotoEmployee(null);
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Foto de perfil</DialogTitle>
+          </DialogHeader>
+          {photoEmployee ? (
+            <div className="space-y-5">
+              <div className="flex items-center gap-4 rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
+                <img
+                  src={photoEmployee.avatar_url || defaultAvatarForName(photoEmployee.full_name)}
+                  alt={`Foto de ${photoEmployee.full_name || "colaborador"}`}
+                  className="h-16 w-16 rounded-full border-2 border-white object-cover shadow"
+                />
+                <div className="min-w-0">
+                  <p className="truncate font-bold text-neutral-900">{photoEmployee.full_name}</p>
+                  <p className="truncate text-sm text-muted-foreground">{photoEmployee.email}</p>
+                </div>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Envie uma imagem JPG, PNG ou WEBP de até 2MB. A alteração será usada no login e em todas as áreas que exibem este usuário.
+              </p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={handleAvatarUpload}
+                disabled={!!avatarAction}
+              />
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button
+                  type="button"
+                  className="flex-1 gap-2"
+                  disabled={!!avatarAction}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  {avatarAction === "upload" ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Camera className="h-4 w-4" />
+                  )}
+                  {avatarAction === "upload" ? "Enviando…" : "Enviar foto"}
+                </Button>
+                {!isSystemDefaultAvatar(photoEmployee.avatar_url) ? (
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    className="flex-1 gap-2"
+                    disabled={!!avatarAction}
+                    onClick={() => void handleAvatarRemove()}
+                  >
+                    {avatarAction === "remove" ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
+                    {avatarAction === "remove" ? "Removendo…" : "Remover foto"}
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
