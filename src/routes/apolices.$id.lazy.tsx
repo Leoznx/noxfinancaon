@@ -885,9 +885,9 @@ function ProcessoTimeline({
           return (
             <li
               key={step.key}
-              className="flex md:flex-col md:items-center md:flex-1 gap-3 md:gap-2 relative pb-4 md:pb-0"
+              className="relative flex gap-3 pb-4 md:flex-1 md:flex-col md:items-center md:gap-2 md:pb-0"
             >
-              <div className="flex flex-col items-center md:flex-row md:w-full">
+              <div className="flex flex-col items-center md:w-full md:flex-row md:justify-center">
                 <span
                   className={`relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 ${
                     step.done
@@ -899,7 +899,7 @@ function ProcessoTimeline({
                 </span>
                 {!isLast && (
                   <span
-                    className={`hidden md:block flex-1 h-0.5 ${
+                    className={`absolute left-1/2 top-5 hidden h-0.5 w-full md:block ${
                       step.done ? "bg-green-400" : "bg-neutral-200"
                     }`}
                   />
@@ -912,7 +912,7 @@ function ProcessoTimeline({
                   />
                 )}
               </div>
-              <div className="min-w-0 md:text-center md:mt-2 pb-2 md:pb-0">
+              <div className="min-w-0 pb-2 md:mt-2 md:w-full md:pb-0 md:text-center">
                 <p
                   className={`text-sm font-black ${
                     step.done ? "text-neutral-900" : "text-neutral-400"
