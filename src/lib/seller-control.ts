@@ -393,7 +393,9 @@ export async function respondToMySellerContactLeadTask(
     p_next_step: nextStep,
     p_notes: notes.trim() || null,
   });
-  if (error) throw error;
+  if (error) {
+    throw new Error(error.message || "Não foi possível registrar o retorno deste lead.");
+  }
   return data;
 }
 

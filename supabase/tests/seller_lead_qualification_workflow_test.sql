@@ -3,7 +3,7 @@ BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 SET LOCAL search_path = public, extensions, pg_catalog;
 
-SELECT plan(27);
+SELECT plan(32);
 
 SELECT has_column('public', 'seller_contact_leads', 'lead_category', 'lead guarda a jornada escolhida');
 SELECT has_column('public', 'seller_contact_leads', 'rotation_locked', 'lead pode bloquear rotacao');
@@ -90,6 +90,89 @@ SELECT ok(
 SELECT is((SELECT current_seller_id FROM public.seller_contact_leads WHERE id = (SELECT id FROM _qualified_leads WHERE category = 'meeting_scheduled')), 'd2000000-0000-4000-8000-000000000001'::uuid, 'reuniao continua com o mesmo vendedor');
 SELECT is((SELECT count(*) FROM public.seller_contact_lead_tasks WHERE lead_id = (SELECT id FROM _qualified_leads WHERE category = 'meeting_scheduled') AND status = 'pending'), 1::bigint, 'reuniao cria o proximo contato de 15 dias');
 SELECT ok(EXISTS (SELECT 1 FROM public.seller_contact_lead_tasks WHERE lead_id = (SELECT id FROM _qualified_leads WHERE category = 'meeting_scheduled') AND next_step = 'continue_follow_up' AND response_notes = 'Continuar com o mesmo vendedor'), 'resultado guarda proximo passo e observacao');
+
+CREATE TEMP TABLE _late_meeting_task AS
+SELECT
+  task.id AS task_id,
+  appointment.id AS appointment_id,
+  task.due_at,
+  (
+    public.next_seller_business_day(
+      (task.due_at AT TIME ZONE 'America/Sao_Paulo')::date + 1
+    ) + time '10:00'
+  ) AT TIME ZONE 'America/Sao_Paulo' AS processed_at
+FROM public.seller_contact_lead_tasks AS task
+JOIN public.seller_appointments AS appointment
+  ON appointment.contact_lead_task_id = task.id
+WHERE task.lead_id = (SELECT id FROM _qualified_leads WHERE category = 'meeting_scheduled')
+  AND task.status = 'pending';
+
+SELECT set_config('nox.contact_lead_mutation', '1', true);
+
+UPDATE public.seller_contact_lead_tasks
+SET status = 'missed'
+WHERE id = (SELECT task_id FROM _late_meeting_task);
+
+UPDATE public.seller_appointments
+SET status = 'nao_compareceu'
+WHERE id = (SELECT appointment_id FROM _late_meeting_task);
+
+UPDATE public.seller_contact_leads
+SET cycle_number = cycle_number + 1,
+    cycle_started_at = (SELECT processed_at FROM _late_meeting_task),
+    rotation_due_at = (SELECT processed_at FROM _late_meeting_task) + interval '15 days',
+    no_response_count = no_response_count + 1
+WHERE id = (SELECT id FROM _qualified_leads WHERE category = 'meeting_scheduled');
+
+DO $schedule_next_meeting_cycle$
+BEGIN
+  PERFORM public.schedule_seller_contact_lead_cycle(
+    (SELECT id FROM _qualified_leads WHERE category = 'meeting_scheduled')
+  );
+END;
+$schedule_next_meeting_cycle$;
+
+CREATE TEMP TABLE _late_meeting_response (payload jsonb) ON COMMIT DROP;
+INSERT INTO _late_meeting_response
+SELECT public.respond_to_qualified_seller_contact_lead_task(
+  'd2000000-0000-4000-8000-000000000001',
+  (SELECT appointment_id FROM _late_meeting_task),
+  'sem_retorno',
+  'not_interested',
+  'Encerrado depois da virada do ciclo',
+  (SELECT processed_at FROM _late_meeting_task)
+);
+
+SELECT is(
+  (SELECT (payload->>'late_response')::boolean FROM _late_meeting_response),
+  true,
+  'lembrete perdido do ciclo anterior aceita resposta tardia do mesmo vendedor'
+);
+SELECT is(
+  (SELECT status FROM public.seller_contact_leads WHERE id = (SELECT id FROM _qualified_leads WHERE category = 'meeting_scheduled')),
+  'archived',
+  'resposta tardia sem interesse encerra o lead'
+);
+SELECT is(
+  (SELECT status FROM public.seller_contact_lead_tasks WHERE id = (SELECT task_id FROM _late_meeting_task)),
+  'completed',
+  'tarefa perdida respondida passa para concluida'
+);
+SELECT is(
+  (SELECT status FROM public.seller_appointments WHERE id = (SELECT appointment_id FROM _late_meeting_task)),
+  'concluido',
+  'compromisso perdido respondido passa para concluido'
+);
+SELECT is(
+  (
+    SELECT count(*)
+    FROM public.seller_contact_lead_tasks
+    WHERE lead_id = (SELECT id FROM _qualified_leads WHERE category = 'meeting_scheduled')
+      AND status = 'pending'
+  ),
+  0::bigint,
+  'encerramento tardio cancela o ciclo futuro provisoriamente criado'
+);
 
 SELECT ok(
   (

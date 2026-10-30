@@ -103,7 +103,7 @@ export function AppointmentDetailsDialog({
     outcome: SellerLeadOutcome,
     nextStep: SellerLeadNextStep,
     notes: string,
-  ) => void;
+  ) => void | Promise<void>;
   canEdit?: boolean;
   canManageCloserMeeting?: boolean;
   canComplete?: boolean;
@@ -111,12 +111,15 @@ export function AppointmentDetailsDialog({
   const [leadOutcome, setLeadOutcome] = useState<SellerLeadOutcome | null>(null);
   const [leadNextStep, setLeadNextStep] = useState<SellerLeadNextStep | null>(null);
   const [leadNotes, setLeadNotes] = useState("");
+  const [submittingLeadOutcome, setSubmittingLeadOutcome] = useState(false);
   useEffect(() => {
     setLeadOutcome(null);
     setLeadNextStep(null);
     setLeadNotes("");
+    setSubmittingLeadOutcome(false);
   }, [item?.id]);
   if (!item) return null;
+  const selectedItem = item;
   const contact = getAppointmentContact(item);
   const contactPhoneDigits = contact.phone ? normalizeBrazilianPhone(contact.phone) : "";
   const contactPhoneDisplay = contact.phone ? formatBrazilianPhoneInput(contact.phone) : null;
@@ -137,6 +140,23 @@ export function AppointmentDetailsDialog({
   const journey =
     item.source === "meeting_follow_up" && item.journey ? JOURNEY_COPY[item.journey.status] : null;
   const JourneyIcon = journey?.icon;
+  const appointmentDay = format(new Date(item.scheduled_at), "yyyy-MM-dd");
+  const today = format(new Date(), "yyyy-MM-dd");
+  const canRespondToRotatingLead =
+    item.source === "rotating_lead" &&
+    !["concluido", "cancelado"].includes(item.status) &&
+    appointmentDay <= today;
+
+  async function submitLeadOutcome() {
+    if (!onLeadOutcome || !leadOutcome || !leadNextStep || submittingLeadOutcome) return;
+    setSubmittingLeadOutcome(true);
+    try {
+      await onLeadOutcome(selectedItem, leadOutcome, leadNextStep, leadNotes);
+    } finally {
+      setSubmittingLeadOutcome(false);
+    }
+  }
+
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-lg">
@@ -288,66 +308,59 @@ export function AppointmentDetailsDialog({
               </p>
             </div>
           )}
-          {item.source === "rotating_lead" &&
-            onLeadOutcome &&
-            leadOutcome &&
-            !["concluido", "cancelado"].includes(item.status) && (
-              <div className="space-y-3 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
-                <div>
-                  <p className="text-xs font-black uppercase tracking-[.12em] text-neutral-500">
-                    Resultado: {leadOutcome === "em_contato" ? "Em contato" : "Sem retorno"}
-                  </p>
-                  <p className="mt-1 text-sm font-black text-neutral-950">
-                    Qual é o próximo passo?
-                  </p>
-                </div>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {SELLER_LEAD_NEXT_STEPS.map((step) => (
-                    <button
-                      key={step.value}
-                      type="button"
-                      onClick={() => setLeadNextStep(step.value)}
-                      className={`rounded-xl border p-3 text-left transition ${leadNextStep === step.value ? "border-violet-500 bg-violet-50 ring-2 ring-violet-100" : "border-neutral-200 hover:bg-neutral-50"}`}
-                    >
-                      <strong className="block text-xs font-black">{step.label}</strong>
-                      <span className="mt-1 block text-[11px] leading-4 text-neutral-500">
-                        {step.description}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-                <textarea
-                  value={leadNotes}
-                  onChange={(event) => setLeadNotes(event.target.value)}
-                  rows={3}
-                  maxLength={500}
-                  placeholder="Observação do contato (opcional)"
-                  className="w-full resize-none rounded-xl border border-neutral-200 px-3 py-2 text-sm outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
-                />
-                <div className="flex flex-wrap justify-end gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      setLeadOutcome(null);
-                      setLeadNextStep(null);
-                    }}
-                  >
-                    Voltar
-                  </Button>
-                  <Button
-                    type="button"
-                    disabled={!leadNextStep}
-                    className="bg-violet-600 font-black text-white hover:bg-violet-700"
-                    onClick={() =>
-                      leadNextStep && onLeadOutcome(item, leadOutcome, leadNextStep, leadNotes)
-                    }
-                  >
-                    Confirmar próximo passo
-                  </Button>
-                </div>
+          {canRespondToRotatingLead && onLeadOutcome && leadOutcome && (
+            <div className="space-y-3 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[.12em] text-neutral-500">
+                  Resultado: {leadOutcome === "em_contato" ? "Em contato" : "Sem retorno"}
+                </p>
+                <p className="mt-1 text-sm font-black text-neutral-950">Qual é o próximo passo?</p>
               </div>
-            )}
+              <div className="grid gap-2 sm:grid-cols-2">
+                {SELLER_LEAD_NEXT_STEPS.map((step) => (
+                  <button
+                    key={step.value}
+                    type="button"
+                    onClick={() => setLeadNextStep(step.value)}
+                    className={`rounded-xl border p-3 text-left transition ${leadNextStep === step.value ? "border-violet-500 bg-violet-50 ring-2 ring-violet-100" : "border-neutral-200 hover:bg-neutral-50"}`}
+                  >
+                    <strong className="block text-xs font-black">{step.label}</strong>
+                    <span className="mt-1 block text-[11px] leading-4 text-neutral-500">
+                      {step.description}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <textarea
+                value={leadNotes}
+                onChange={(event) => setLeadNotes(event.target.value)}
+                rows={3}
+                maxLength={500}
+                placeholder="Observação do contato (opcional)"
+                className="w-full resize-none rounded-xl border border-neutral-200 px-3 py-2 text-sm outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
+              />
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setLeadOutcome(null);
+                    setLeadNextStep(null);
+                  }}
+                >
+                  Voltar
+                </Button>
+                <Button
+                  type="button"
+                  disabled={!leadNextStep || submittingLeadOutcome}
+                  className="bg-violet-600 font-black text-white hover:bg-violet-700"
+                  onClick={() => void submitLeadOutcome()}
+                >
+                  {submittingLeadOutcome ? "Salvando..." : "Confirmar próximo passo"}
+                </Button>
+              </div>
+            </div>
+          )}
           {visibleNotes && (
             <p className="rounded-xl border border-neutral-200 p-3 leading-relaxed text-neutral-600">
               {visibleNotes}
@@ -430,28 +443,35 @@ export function AppointmentDetailsDialog({
           )}
         </div>
         <DialogFooter className="flex-wrap">
+          {canRespondToRotatingLead && onLeadOutcome && (
+            <>
+              {!leadOutcome && (
+                <>
+                  <Button
+                    variant="outline"
+                    className="border-amber-200 bg-amber-50 font-black text-amber-900 hover:bg-amber-100"
+                    onClick={() => setLeadOutcome("sem_retorno")}
+                  >
+                    Sem retorno
+                  </Button>
+                  <Button
+                    className="bg-emerald-600 font-black text-white hover:bg-emerald-700"
+                    onClick={() => setLeadOutcome("em_contato")}
+                  >
+                    <Check className="mr-1.5 h-4 w-4" /> Em contato
+                  </Button>
+                </>
+              )}
+            </>
+          )}
           {item.source === "rotating_lead" &&
-            onLeadOutcome &&
-            !["concluido", "cancelado"].includes(item.status) && (
-              <>
-                {!leadOutcome && (
-                  <>
-                    <Button
-                      variant="outline"
-                      className="border-amber-200 bg-amber-50 font-black text-amber-900 hover:bg-amber-100"
-                      onClick={() => setLeadOutcome("sem_retorno")}
-                    >
-                      Sem retorno
-                    </Button>
-                    <Button
-                      className="bg-emerald-600 font-black text-white hover:bg-emerald-700"
-                      onClick={() => setLeadOutcome("em_contato")}
-                    >
-                      <Check className="mr-1.5 h-4 w-4" /> Em contato
-                    </Button>
-                  </>
-                )}
-              </>
+            !canRespondToRotatingLead &&
+            !["concluido", "cancelado"].includes(item.status) &&
+            appointmentDay > today && (
+              <p className="mr-auto text-xs font-bold text-amber-800">
+                As ações deste lead serão liberadas em{" "}
+                {format(new Date(item.scheduled_at), "dd/MM/yyyy")}.
+              </p>
             )}
           {!["meeting_follow_up", "admin", "rotating_lead"].includes(item.source) && (
             <Button
