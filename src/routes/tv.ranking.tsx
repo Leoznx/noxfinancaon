@@ -793,6 +793,51 @@ const TV_STYLES = `
   .tv-login-submit:disabled { opacity: .65; }
   .tv-spin { animation: tv-spin .8s linear infinite; }
   @keyframes tv-spin { to { transform: rotate(360deg); } }
+  @supports not (width: clamp(1px, 2px, 3px)) {
+    .tv-dashboard { padding: 24px 36px; gap: 16px; }
+    .tv-brand-row img { width: 240px; }
+    .tv-brand-row > span { font-size: 16px; }
+    .tv-live-pill, .tv-clock { font-size: 15px; }
+    .tv-summary-grid { gap: 14px; }
+    .tv-summary-card { min-height: 96px; padding: 15px 18px; gap: 16px; }
+    .tv-summary-icon { width: 52px; height: 52px; }
+    .tv-summary-card div > span { font-size: 14px; }
+    .tv-summary-card strong { font-size: 34px; }
+    .tv-summary-card small { font-size: 13px; }
+    .tv-warning { font-size: 14px; }
+    .tv-rankings { gap: 18px; }
+    .tv-ranking-title { min-height: 84px; padding: 14px 20px; }
+    .tv-ranking-title h2 { font-size: 23px; }
+    .tv-ranking-title p { font-size: 13px; }
+    .tv-ranking-title > svg { width: 36px; }
+    .tv-ranking-columns { padding: 0 18px; font-size: 10px; }
+    .tv-ranking-list { padding: 0 12px 12px; gap: 7px; }
+    .tv-ranking-row { padding: 7px 10px; }
+    .tv-position { font-size: 16px; }
+    .tv-avatar { width: 46px; height: 46px; font-size: 13px; }
+    .tv-person strong { font-size: 16px; }
+    .tv-person small { font-size: 11px; }
+    .tv-result strong { font-size: 24px; }
+    .tv-result span { font-size: 11px; }
+    .tv-goal strong { font-size: 16px; }
+    .tv-goal span { font-size: 10px; }
+    .tv-footer { font-size: 12px; }
+    .tv-center-card h1 { font-size: 42px; }
+    .tv-center-card p { font-size: 20px; }
+    .tv-loading strong { font-size: 25px; }
+    .tv-login-brand { padding: 70px; }
+    .tv-login-brand > img { width: 300px; }
+    .tv-login-copy { margin-top: 70px; }
+    .tv-login-copy > span { font-size: 16px; }
+    .tv-login-copy h1 { font-size: 60px; }
+    .tv-login-copy p { font-size: 22px; }
+    .tv-login-features span { font-size: 15px; }
+    .tv-login-card { width: 520px; max-width: 82%; padding: 44px; }
+    .tv-login-card h2 { font-size: 32px; }
+    .tv-login-card > p, .tv-login-card label { font-size: 15px; }
+    .tv-login-card input { height: 62px; font-size: 18px; }
+    .tv-login-submit { height: 64px; font-size: 18px; }
+  }
   @media (max-width: 1000px) {
     html, body { overflow: auto; }
     .tv-board { min-height: 100vh; }

@@ -9,6 +9,12 @@ import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
 // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
 export default defineConfig({
+  vite: {
+    // TVs de baixo custo costumam manter o WebView AOSP de fábrica. O alvo
+    // ES2017 remove sintaxes como optional chaining/nullish coalescing, que
+    // Chromium < 80 não consegue nem interpretar.
+    build: { target: "es2017" },
+  },
   tanstackStart: {
     router: { autoCodeSplitting: true },
     server: { entry: "server" },

@@ -26,6 +26,147 @@ import appCss from "../styles.css?url";
 const SITE_TITLE = "NOX FIANÇA";
 const SOCIAL_SHARE_IMAGE = "https://noxfianca.com/nox-financa-whatsapp-2026-v2.png";
 
+// Executa antes do bundle de hidratação. Algumas TVs AOSP mantêm WebViews que
+// entendem ES2017, mas ainda não oferecem APIs usadas pelos chunks compartilhados.
+// O conteúdo injetado abaixo é deliberadamente ES5 para que o próprio polyfill
+// também seja interpretado nesses aparelhos.
+const LEGACY_BROWSER_POLYFILLS = `
+(function (root) {
+  "use strict";
+
+  function define(target, name, value) {
+    try {
+      Object.defineProperty(target, name, {
+        configurable: true,
+        writable: true,
+        value: value
+      });
+    } catch (error) {
+      target[name] = value;
+    }
+  }
+
+  if (typeof root.globalThis === "undefined") {
+    root.globalThis = root;
+  }
+
+  if (typeof Object.hasOwn !== "function") {
+    define(Object, "hasOwn", function (object, property) {
+      return Object.prototype.hasOwnProperty.call(Object(object), property);
+    });
+  }
+
+  if (typeof String.prototype.replaceAll !== "function") {
+    define(String.prototype, "replaceAll", function (search, replacement) {
+      var input = String(this);
+      if (search && Object.prototype.toString.call(search) === "[object RegExp]") {
+        if (!search.global) {
+          throw new TypeError("replaceAll exige uma expressão regular global");
+        }
+        return input.replace(search, replacement);
+      }
+
+      var source = String(search);
+      var special = "\\\\^$.*+?()[]{}|";
+      var escaped = "";
+      var index;
+      for (index = 0; index < source.length; index += 1) {
+        escaped += special.indexOf(source.charAt(index)) >= 0
+          ? "\\\\" + source.charAt(index)
+          : source.charAt(index);
+      }
+      return input.replace(new RegExp(escaped, "g"), replacement);
+    });
+  }
+
+  if (typeof Array.prototype.at !== "function") {
+    define(Array.prototype, "at", function (position) {
+      var length = this.length >>> 0;
+      var number = Number(position) || 0;
+      var index = number < 0 ? Math.ceil(number) : Math.floor(number);
+      index = index < 0 ? length + index : index;
+      return index < 0 || index >= length ? undefined : this[index];
+    });
+  }
+
+  if (typeof Object.fromEntries !== "function") {
+    define(Object, "fromEntries", function (entries) {
+      var result = {};
+      var iterator;
+      var step;
+      var index;
+      if (
+        typeof Symbol !== "undefined" &&
+        Symbol.iterator &&
+        entries != null &&
+        typeof entries[Symbol.iterator] === "function"
+      ) {
+        iterator = entries[Symbol.iterator]();
+        while (!(step = iterator.next()).done) {
+          result[step.value[0]] = step.value[1];
+        }
+        return result;
+      }
+      for (index = 0; index < entries.length; index += 1) {
+        result[entries[index][0]] = entries[index][1];
+      }
+      return result;
+    });
+  }
+
+  if (typeof Promise !== "undefined" && typeof Promise.allSettled !== "function") {
+    define(Promise, "allSettled", function (entries) {
+      var values = [];
+      var iterator;
+      var step;
+      var index;
+      if (
+        typeof Symbol !== "undefined" &&
+        Symbol.iterator &&
+        entries != null &&
+        typeof entries[Symbol.iterator] === "function"
+      ) {
+        iterator = entries[Symbol.iterator]();
+        while (!(step = iterator.next()).done) values.push(step.value);
+      } else {
+        for (index = 0; index < entries.length; index += 1) values.push(entries[index]);
+      }
+      return Promise.all(values.map(function (value) {
+        return Promise.resolve(value).then(
+          function (result) { return { status: "fulfilled", value: result }; },
+          function (reason) { return { status: "rejected", reason: reason }; }
+        );
+      }));
+    });
+  }
+
+  if (root.crypto && typeof root.crypto.randomUUID !== "function") {
+    define(root.crypto, "randomUUID", function () {
+      var bytes = new Uint8Array(16);
+      var index;
+      if (typeof root.crypto.getRandomValues === "function") {
+        root.crypto.getRandomValues(bytes);
+      } else {
+        for (index = 0; index < bytes.length; index += 1) {
+          bytes[index] = Math.floor(Math.random() * 256);
+        }
+      }
+      bytes[6] = (bytes[6] & 15) | 64;
+      bytes[8] = (bytes[8] & 63) | 128;
+      var hex = [];
+      for (index = 0; index < bytes.length; index += 1) {
+        hex.push((bytes[index] + 256).toString(16).slice(1));
+      }
+      return hex.slice(0, 4).join("") + "-" +
+        hex.slice(4, 6).join("") + "-" +
+        hex.slice(6, 8).join("") + "-" +
+        hex.slice(8, 10).join("") + "-" +
+        hex.slice(10, 16).join("");
+    });
+  }
+})(typeof window !== "undefined" ? window : this);
+`;
+
 /**
  * PageView em cada troca de rota. Como o site é uma SPA, o Google Ads e o Pixel
  * da Meta só contariam o primeiro carregamento se dependessem apenas do
@@ -342,6 +483,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
           />
         </noscript>
         {children}
+        <script dangerouslySetInnerHTML={{ __html: LEGACY_BROWSER_POLYFILLS }} />
         <Scripts />
       </body>
     </html>

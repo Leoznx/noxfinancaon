@@ -82,7 +82,9 @@ export async function readCsvFileAsText(file: File): Promise<string> {
 export async function readPdfFileAsText(file: File): Promise<string> {
   const [{ getDocument, GlobalWorkerOptions }, workerUrlModule] = await Promise.all([
     import("pdfjs-dist"),
-    import("pdfjs-dist/build/pdf.worker.mjs?url"),
+    // `worker&url` faz o Vite compilar o worker com o mesmo target ES2017 do
+    // cliente. `?url` sozinho apenas copiava o .mjs moderno do pdfjs-dist.
+    import("pdfjs-dist/build/pdf.worker.mjs?worker&url"),
   ]);
   GlobalWorkerOptions.workerSrc = (workerUrlModule as { default: string }).default;
 
