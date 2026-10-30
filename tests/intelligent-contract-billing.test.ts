@@ -262,7 +262,10 @@ test("novo prazo preserva a chave inicial e versiona apenas as mensalidades futu
 
   assert.equal(revisedSchedule[0].billingKey, firstSchedule[0].billingKey);
   assert.equal(firstSchedule[1].billingKey, `${buildBillingKey(consultationId, "monthly", 2)}`);
-  assert.equal(revisedSchedule[1].billingKey, `${buildBillingKey(consultationId, "monthly", "2-r1")}`);
+  assert.equal(
+    revisedSchedule[1].billingKey,
+    `${buildBillingKey(consultationId, "monthly", "2-r1")}`,
+  );
   assert.notEqual(revisedSchedule[1].billingKey, firstSchedule[1].billingKey);
 });
 
@@ -298,6 +301,19 @@ test("plano agenda boleto futuro e o worker materializa sem liberar acao manual"
   assert.match(installmentPlan, /status: "scheduled"/);
   assert.match(installmentPlan, /shouldMaterializeScheduledBoleto/);
   assert.match(scheduler, /materializeScheduledBoletoInvoice/);
+});
+
+test("aposentadoria da cobranca inicial libera idempotencia e referencia externa", () => {
+  const createPayment = readFileSync(
+    new URL("../supabase/functions/asaas-create-payment/index.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(
+    createPayment,
+    /update\(\{ idempotency_key: retiredKey, external_reference: retiredKey \}\)/,
+  );
+  assert.match(createPayment, /persistInitialPayment/);
+  assert.match(createPayment, /isRetirableExternalReferenceConflict/);
 });
 
 test("redutor de pagamento ignora redelivery antiga e nunca regride quitacao", () => {

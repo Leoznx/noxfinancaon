@@ -360,7 +360,8 @@ function FinalizarPage() {
           setPagamento((data as any).insurance_payment_method);
         const vencimentoSalvo = normalizePaymentDueDay((data as any).billing_due_day);
         if (vencimentoSalvo) setBillingDueDay(vencimentoSalvo);
-        const responsavelSalvo = (data as any).payment_type || (data as any).billing_responsible_role;
+        const responsavelSalvo =
+          (data as any).payment_type || (data as any).billing_responsible_role;
         if (responsavelSalvo === "imobiliaria" || responsavelSalvo === "inquilino")
           setPaymentType(responsavelSalvo);
 
@@ -1186,8 +1187,8 @@ function ResumoPropostaLoft(p: any) {
         billing_responsible_role: paymentType,
         billing_responsible_user_id:
           paymentType === "inquilino"
-            ? consulta?.tenant_user_id ?? null
-            : consulta?.profile_id_solicitante ?? consulta?.responsavel_profile?.id ?? null,
+            ? (consulta?.tenant_user_id ?? null)
+            : (consulta?.profile_id_solicitante ?? consulta?.responsavel_profile?.id ?? null),
         insurance_payment_method: pagamento,
         insurance_payment_method_label: params.metodoLabel,
         billing_due_day: billingDueDay,
@@ -1343,12 +1344,12 @@ function ResumoPropostaLoft(p: any) {
       setCheckoutIntent(intent);
       setPagamentoAsaasResultado(data);
       setModalAsaasAberto(intent === "pay_now");
-      try {
-        await criarParcelasFuturas(pagamento as "pix" | "boleto");
-      } catch {
-        // A cobrança inicial continua válida e o modal oferece retry somente do cronograma.
-      }
       if (intent === "pay_later") {
+        try {
+          await criarParcelasFuturas(pagamento as "pix" | "boleto");
+        } catch {
+          // A cobrança inicial continua válida e a retomada não a duplica.
+        }
         navigate({
           to: "/consultas/$id/contrato-realizado",
           params: { id },
@@ -1356,6 +1357,10 @@ function ResumoPropostaLoft(p: any) {
         });
         return;
       }
+      // No pagamento imediato, o primeiro boleto/Pix deve aparecer assim que
+      // for criado. O cronograma restante continua em segundo plano e é
+      // materializado de forma idempotente em Faturas do Inquilino.
+      void criarParcelasFuturas(pagamento as "pix" | "boleto").catch(() => undefined);
       toast.success("Cobrança criada. Use os dados exibidos para pagar agora.");
     } catch (e: any) {
       console.error("Erro ao criar pagamento Asaas:", e);
@@ -1471,7 +1476,8 @@ function ResumoPropostaLoft(p: any) {
       selectedFireInsuranceMode: incendioPagamento === "a_vista" ? "avista" : "embutido",
       amount: assinaturaAsaasResultado.initialAmount,
       monthlyAmount: assinaturaAsaasResultado.monthlyAmount,
-      billingDueDay: billingDueDay ?? normalizePaymentDueDay(consulta?.billing_due_day) ?? undefined,
+      billingDueDay:
+        billingDueDay ?? normalizePaymentDueDay(consulta?.billing_due_day) ?? undefined,
       action,
     });
     setAssinaturaAsaasResultado(atualizado);
@@ -1592,10 +1598,14 @@ function ResumoPropostaLoft(p: any) {
                     <p className="text-neutral-500">Nenhum documento enviado.</p>
                   )}
                   {contratoAssinadoPendente && (
-                    <p className="font-semibold text-amber-700">Pendente: anexar o contrato de locação quando estiver pronto.</p>
+                    <p className="font-semibold text-amber-700">
+                      Pendente: anexar o contrato de locação quando estiver pronto.
+                    </p>
                   )}
                   {vistoriaPendente && (
-                    <p className="font-semibold text-amber-700">Pendente: anexar a vistoria do imóvel quando estiver pronta.</p>
+                    <p className="font-semibold text-amber-700">
+                      Pendente: anexar a vistoria do imóvel quando estiver pronta.
+                    </p>
                   )}
                 </div>
               </div>
@@ -1761,7 +1771,8 @@ function ResumoPropostaLoft(p: any) {
                         Pagamento via {contaPagadora.title}
                       </p>
                       <p className="mt-1 text-xs leading-relaxed text-slate-600">
-                        As cobranças deste contrato usarão os dados cadastrados {contaPagadora.dataOwner}.
+                        As cobranças deste contrato usarão os dados cadastrados{" "}
+                        {contaPagadora.dataOwner}.
                       </p>
                     </button>
                     <button
@@ -1861,8 +1872,8 @@ function ResumoPropostaLoft(p: any) {
                         Escolha o dia do vencimento
                       </h4>
                       <p className="mt-1 text-xs leading-relaxed text-slate-600">
-                        A primeira cobrança e as mensalidades seguintes usarão o mesmo dia. Se o
-                        dia deste mês já passou, o primeiro vencimento será no mês seguinte.
+                        A primeira cobrança e as mensalidades seguintes usarão o mesmo dia. Se o dia
+                        deste mês já passou, o primeiro vencimento será no mês seguinte.
                       </p>
                     </div>
                   </div>
@@ -1892,9 +1903,11 @@ function ResumoPropostaLoft(p: any) {
                 <div className="flex items-start gap-3 rounded-md border border-amber-300 bg-amber-50 p-4 text-amber-950">
                   <ShieldCheck size={20} className="mt-0.5 shrink-0" />
                   <p className="text-xs leading-relaxed">
-                    <strong>A cobertura só fica ativa após a confirmação do primeiro pagamento.</strong>{" "}
-                    Em &quot;Pagar agora&quot;, o pagamento pode ser antecipado; o dia escolhido continua
-                    sendo a referência dos vencimentos do contrato.
+                    <strong>
+                      A cobertura só fica ativa após a confirmação do primeiro pagamento.
+                    </strong>{" "}
+                    Em &quot;Pagar agora&quot;, o pagamento pode ser antecipado; o dia escolhido
+                    continua sendo a referência dos vencimentos do contrato.
                   </p>
                 </div>
 
@@ -2625,7 +2638,6 @@ function EtapaResumo(p: any) {
           <Linha label="Nascimento" value={consulta?.tenant_data_nascimento} />
         </Card>
 
-
         <Card icon={<FileCheck2 size={14} />} title="Documentos enviados">
           {documentos.length === 0 && (
             <p className="text-xs text-neutral-400">Nenhum documento enviado.</p>
@@ -2645,8 +2657,16 @@ function EtapaResumo(p: any) {
             <div className="mt-3 flex gap-2 rounded-lg border border-yellow-300 bg-yellow-50 p-3 text-xs text-neutral-800">
               <AlertTriangle size={14} className="mt-0.5 shrink-0 text-yellow-700" />
               <div className="space-y-1">
-                {contratoAssinadoPendente && <p><strong>Pendência:</strong> anexar o contrato de locação quando estiver pronto.</p>}
-                {vistoriaPendente && <p><strong>Pendência:</strong> anexar a vistoria do imóvel quando estiver pronta.</p>}
+                {contratoAssinadoPendente && (
+                  <p>
+                    <strong>Pendência:</strong> anexar o contrato de locação quando estiver pronto.
+                  </p>
+                )}
+                {vistoriaPendente && (
+                  <p>
+                    <strong>Pendência:</strong> anexar a vistoria do imóvel quando estiver pronta.
+                  </p>
+                )}
               </div>
             </div>
           )}
@@ -3064,8 +3084,16 @@ function EtapaRevisao(p: any) {
             <div className="mt-3 flex gap-2 rounded-lg border border-yellow-300 bg-yellow-50 p-3 text-xs text-neutral-800">
               <AlertTriangle size={14} className="mt-0.5 shrink-0 text-yellow-700" />
               <div className="space-y-1">
-                {contratoAssinadoPendente && <p><strong>Pendência:</strong> anexar o contrato de locação quando estiver pronto.</p>}
-                {vistoriaPendente && <p><strong>Pendência:</strong> anexar a vistoria do imóvel quando estiver pronta.</p>}
+                {contratoAssinadoPendente && (
+                  <p>
+                    <strong>Pendência:</strong> anexar o contrato de locação quando estiver pronto.
+                  </p>
+                )}
+                {vistoriaPendente && (
+                  <p>
+                    <strong>Pendência:</strong> anexar a vistoria do imóvel quando estiver pronta.
+                  </p>
+                )}
               </div>
             </div>
           )}

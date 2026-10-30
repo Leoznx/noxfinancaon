@@ -120,25 +120,80 @@ async function retireDeadInitialInvoice(supabase: any, invoice: any) {
   if (!invoice?.id || !invoice?.billing_key) return;
   const retiredSuffix = `:retired:${Date.now()}`;
   const retiredKey = `${invoice.billing_key}${retiredSuffix}`;
-  await supabase
+  const { error: invoiceRetirementError } = await supabase
     .from("faturas_inquilino")
     .update({ billing_key: retiredKey })
     .eq("id", invoice.id);
+  if (invoiceRetirementError) throw invoiceRetirementError;
   // A billing_operation que reservou essa chave trava novas tentativas (o
   // claim por idempotency_key reencontra a operação persistida e tenta
   // recuperar o pagamento morto). Renomeamos sua chave em espelho para
   // liberar o claim de uma cobrança nova no fluxo "Pagar agora".
   const admin = supabaseAdmin();
-  await admin
+  const { error: operationRetirementError } = await admin
     .from("billing_operations")
     .update({ idempotency_key: `${invoice.billing_key}${retiredSuffix}` })
     .eq("idempotency_key", invoice.billing_key);
+  if (operationRetirementError) throw operationRetirementError;
   // O asaas_payment correlato também segura a idempotency_key: liberamos para
-  // que o upsert do novo pagamento não sobrescreva o histórico cancelado.
-  await admin
+  // que o upsert do novo pagamento não sobrescreva o histórico cancelado. A
+  // external_reference precisa ser aposentada junto: ela também é única e o
+  // novo recurso no Asaas reutiliza a chave canônica da parcela inicial.
+  const { error: paymentRetirementError } = await admin
     .from("asaas_payments")
-    .update({ idempotency_key: `${invoice.billing_key}${retiredSuffix}` })
+    .update({ idempotency_key: retiredKey, external_reference: retiredKey })
     .eq("idempotency_key", invoice.billing_key);
+  if (paymentRetirementError) throw paymentRetirementError;
+}
+
+function isRetirableExternalReferenceConflict(error: any) {
+  const details = [error?.message, error?.details, error?.hint, error?.constraint]
+    .filter(Boolean)
+    .join(" ");
+  return error?.code === "23505" && /external_reference/i.test(details);
+}
+
+async function persistInitialPayment(supabase: any, localPayload: any) {
+  const persist = () =>
+    supabase
+      .from("asaas_payments")
+      .upsert(localPayload, { onConflict: "idempotency_key" })
+      .select("*")
+      .maybeSingle();
+
+  let result = await persist();
+  if (!isRetirableExternalReferenceConflict(result.error)) return result;
+
+  // Compatibilidade com cobranças canceladas antes de a aposentadoria passar
+  // a renomear também external_reference. Só liberamos a chave de uma linha
+  // terminal e de outro recurso do provedor; uma cobrança ativa nunca é
+  // substituída por esta recuperação.
+  const admin = supabaseAdmin();
+  const { data: conflict, error: conflictError } = await admin
+    .from("asaas_payments")
+    .select("id, idempotency_key, asaas_payment_id, status")
+    .eq("external_reference", localPayload.external_reference)
+    .maybeSingle();
+  if (conflictError || !conflict || !isInactiveInvoice(conflict)) return result;
+  if (
+    conflict.asaas_payment_id &&
+    localPayload.asaas_payment_id &&
+    conflict.asaas_payment_id === localPayload.asaas_payment_id
+  ) {
+    return result;
+  }
+
+  const retiredKey = String(conflict.idempotency_key || "").includes(":retired:")
+    ? String(conflict.idempotency_key)
+    : `${localPayload.external_reference}:retired:${Date.now()}`;
+  const { error: retirementError } = await admin
+    .from("asaas_payments")
+    .update({ idempotency_key: retiredKey, external_reference: retiredKey })
+    .eq("id", conflict.id);
+  if (retirementError) return result;
+
+  result = await persist();
+  return result;
 }
 
 async function loadExistingInitial(supabase: any, proposalId: string) {
@@ -814,11 +869,10 @@ serve(async (req) => {
       recipient_email: recipient.recipientEmail,
       recipient_phone: recipient.recipientPhone,
     };
-    const { data: localPayment, error: paymentError } = await supabase
-      .from("asaas_payments")
-      .upsert(localPayload, { onConflict: "idempotency_key" })
-      .select("*")
-      .maybeSingle();
+    const { data: localPayment, error: paymentError } = await persistInitialPayment(
+      supabase,
+      localPayload,
+    );
     if (paymentError || !localPayment) {
       await updateBillingOperation(supabase, operation.id, {
         state: "provider_created",
