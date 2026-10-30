@@ -24,9 +24,9 @@ SELECT matches(
   'helper reconhece primeira fatura paga'
 );
 
-SELECT unlike(
-  pg_get_functiondef('public.seller_client_commission_events_for(uuid)'::regprocedure),
-  'signature_status|contract_accepted',
+SELECT ok(
+  pg_get_functiondef('public.seller_client_commission_events_for(uuid)'::regprocedure)
+    !~ 'signature_status|contract_accepted',
   'helper financeiro nao depende de assinatura ou aceite'
 );
 
