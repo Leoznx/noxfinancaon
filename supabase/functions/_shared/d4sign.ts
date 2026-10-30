@@ -497,8 +497,16 @@ export async function supersedePendingD4SignDocument(
     consultationId: string;
     previousMonths: number;
     nextMonths: number;
+    reason?: "contract_period_change" | "financial_terms_change";
+    comment?: string;
   },
 ) {
+  const reason = params.reason || "contract_period_change";
+  const comment =
+    params.comment ||
+    (reason === "financial_terms_change"
+      ? "Valores contratuais atualizados antes da assinatura."
+      : `Prazo contratual alterado de ${params.previousMonths} para ${params.nextMonths} meses.`);
   const { data: initialSignature, error: signatureError } = await supabase
     .from("contract_signatures")
     .select("*")
@@ -523,7 +531,7 @@ export async function supersedePendingD4SignDocument(
       consultation_id: params.consultationId,
       d4sign_document_uuid: documentUuid,
       state: "cancelling",
-      reason: "contract_period_change",
+      reason,
     };
     const { data: inserted, error: insertError } = await supabase
       .from("contract_signature_superseded_documents")
@@ -549,7 +557,7 @@ export async function supersedePendingD4SignDocument(
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            comment: `Prazo contratual alterado de ${params.previousMonths} para ${params.nextMonths} meses.`,
+            comment,
           }),
         });
       } catch (error) {
@@ -641,12 +649,13 @@ export async function supersedePendingD4SignDocument(
     await supabase.from("contract_signature_events").upsert(
       {
         contract_signature_id: currentSignature.id,
-        event_key: `${documentUuid}:period_change_superseded`,
-        event_type: "period_change_superseded",
-        message: `Prazo alterado de ${params.previousMonths} para ${params.nextMonths} meses.`,
+        event_key: `${documentUuid}:${reason}_superseded`,
+        event_type: `${reason}_superseded`,
+        message: comment,
         payload: {
           previousMonths: params.previousMonths,
           nextMonths: params.nextMonths,
+          reason,
         },
         status: "processed",
         processed_at: new Date().toISOString(),
