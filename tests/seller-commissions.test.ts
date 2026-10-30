@@ -5,6 +5,7 @@ import {
   calcularBonus,
   calcularComissaoContratos,
   calcularGanhoTotal,
+  getDesempenhoComissaoVendedor,
 } from "../src/lib/comissao-vendedor";
 
 test("aplica as faixas progressivas por contrato dentro do mês", () => {
@@ -32,4 +33,33 @@ test("total mensal combina comissão base e bônus", () => {
     bonus: 2200,
     total: 3825,
   });
+});
+
+test("mede o desempenho dentro da faixa real do vendedor", () => {
+  assert.deepEqual(getDesempenhoComissaoVendedor(2), {
+    inicioFaixa: 0,
+    metaFaixa: 15,
+    realizadosNaFaixa: 2,
+    totalNaFaixa: 15,
+    percentual: 13,
+    faltam: 13,
+    situacao: "Construindo ritmo",
+    proximaConquista: "Bônus de R$ 400",
+    nivelMaximo: false,
+  });
+
+  const aceleracao = getDesempenhoComissaoVendedor(20);
+  assert.equal(aceleracao.realizadosNaFaixa, 5);
+  assert.equal(aceleracao.totalNaFaixa, 10);
+  assert.equal(aceleracao.percentual, 50);
+  assert.equal(aceleracao.metaFaixa, 25);
+
+  const elite = getDesempenhoComissaoVendedor(35);
+  assert.equal(elite.realizadosNaFaixa, 5);
+  assert.equal(elite.totalNaFaixa, 15);
+  assert.equal(elite.percentual, 33);
+  assert.equal(elite.metaFaixa, 45);
+
+  assert.equal(getDesempenhoComissaoVendedor(45).nivelMaximo, true);
+  assert.equal(getDesempenhoComissaoVendedor(45).percentual, 100);
 });

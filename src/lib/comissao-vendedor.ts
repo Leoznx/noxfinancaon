@@ -41,6 +41,82 @@ export type NivelComissaoVendedor = {
   mensagem: string;
 };
 
+export type DesempenhoComissaoVendedor = {
+  inicioFaixa: number;
+  metaFaixa: number;
+  realizadosNaFaixa: number;
+  totalNaFaixa: number;
+  percentual: number;
+  faltam: number;
+  situacao:
+    | "Início da faixa"
+    | "Construindo ritmo"
+    | "Ritmo consistente"
+    | "Perto da conquista"
+    | "Faixa conquistada";
+  proximaConquista: string;
+  nivelMaximo: boolean;
+};
+
+/**
+ * Representa o avanço dentro da faixa atual. Diferente do total bruto do mês,
+ * esse percentual não superestima nem subestima o desempenho depois de uma
+ * promoção: ao chegar à Aceleração, por exemplo, a régua passa a medir 15→25.
+ */
+export function getDesempenhoComissaoVendedor(contratos: number): DesempenhoComissaoVendedor {
+  const total = Math.max(0, Math.floor(contratos));
+  const faixa =
+    total < 15
+      ? { inicio: 0, meta: 15, conquista: "Bônus de R$ 400" }
+      : total < 25
+        ? { inicio: 15, meta: 25, conquista: "R$ 45 por contrato" }
+        : total < 30
+          ? { inicio: 25, meta: 30, conquista: "Mais R$ 600 de bônus" }
+          : total < 45
+            ? { inicio: 30, meta: 45, conquista: "Mais R$ 1.200 de bônus" }
+            : null;
+
+  if (!faixa) {
+    return {
+      inicioFaixa: 45,
+      metaFaixa: 45,
+      realizadosNaFaixa: 0,
+      totalNaFaixa: 0,
+      percentual: 100,
+      faltam: 0,
+      situacao: "Faixa conquistada",
+      proximaConquista: "Nível máximo conquistado",
+      nivelMaximo: true,
+    };
+  }
+
+  const realizadosNaFaixa = Math.min(Math.max(total - faixa.inicio, 0), faixa.meta - faixa.inicio);
+  const totalNaFaixa = faixa.meta - faixa.inicio;
+  const percentual = Math.round((realizadosNaFaixa / totalNaFaixa) * 100);
+  const situacao =
+    percentual === 0
+      ? "Início da faixa"
+      : percentual < 35
+        ? "Construindo ritmo"
+        : percentual < 70
+          ? "Ritmo consistente"
+          : percentual < 100
+            ? "Perto da conquista"
+            : "Faixa conquistada";
+
+  return {
+    inicioFaixa: faixa.inicio,
+    metaFaixa: faixa.meta,
+    realizadosNaFaixa,
+    totalNaFaixa,
+    percentual,
+    faltam: faixa.meta - total,
+    situacao,
+    proximaConquista: faixa.conquista,
+    nivelMaximo: false,
+  };
+}
+
 /** Texto motivacional compartilhado pelas telas de metas e comissões. */
 export function getNivelComissaoVendedor(contratos: number): NivelComissaoVendedor {
   const total = Math.max(0, Math.floor(contratos));
