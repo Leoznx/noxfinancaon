@@ -93,6 +93,7 @@ import {
   enviarProposta,
   listarHistoricoProposta,
 } from "@/lib/finalizacao.functions";
+import { loadFinalizationSnapshot } from "@/lib/finalization-snapshot";
 
 export const Route = createLazyFileRoute("/consultas/$id/finalizar")({
   component: () => (
@@ -202,56 +203,6 @@ const PAGAMENTOS = [
     desc: "Pagamento à vista via boleto bancário.",
   },
 ];
-
-// A finalização não precisa materializar a linha inteira de consultas_credito.
-// Em propostas com respostas/documentos grandes, o antigo `select *` também
-// carregava colunas e relacionamentos que esta tela nunca usa e podia exceder
-// o statement_timeout antes mesmo de o usuário chegar ao envio dos arquivos.
-const FINALIZATION_CONSULTATION_SELECT = [
-  "id",
-  "status",
-  "substatus",
-  "created_at",
-  "tenant_name",
-  "tenant_document",
-  "tenant_email",
-  "tenant_telefone",
-  "tenant_data_nascimento",
-  "tenant_user_id",
-  "profile_id_solicitante",
-  "rent_value",
-  "valor_aluguel",
-  "valor_condominio",
-  "valor_taxas",
-  "valor_premio_mensal",
-  "valor_anual",
-  "contract_period_months",
-  "documentos",
-  "commission_enabled",
-  "insurance_coverages",
-  "insurance_assistance",
-  "insurance_commission_pct",
-  "insurance_payment_method",
-  "insurance_payment_method_label",
-  "billing_due_day",
-  "payment_type",
-  "billing_responsible_role",
-  "terms_accepted",
-  "terms_accepted_at",
-  "proposta_enviada_em",
-  "imovel_subtipo",
-  "imovel_cep",
-  "imovel_endereco",
-  "imovel_numero",
-  "imovel_complemento",
-  "imovel_bairro",
-  "imovel_cidade",
-  "imovel_estado",
-  "inquilinos(nome,cpf,cnpj)",
-  "imoveis(valor_aluguel,valor_condominio,valor_taxas,cep,tipo,endereco,numero,complemento,bairro,cidade,estado)",
-  "planos(nome,cobertura_multiplicador,custo_saida)",
-  "responsavel_profile:profiles!consultas_credito_profile_id_solicitante_fkey(id,role)",
-].join(",");
 
 const COMISSAO_OPCOES = [0, 5, 8, 10, 12, 15, 18, 20];
 const RESIDENCIAL_OPCOES = ["Casa", "Apartamento"];
@@ -386,6 +337,7 @@ function FinalizarPage() {
   const fnHist = useServerFn(listarHistoricoProposta);
 
   useEffect(() => {
+    let active = true;
     const preferencias = readCheckoutPreferences(id);
     if (preferencias) {
       setPagamento(preferencias.paymentMethod);
@@ -394,24 +346,9 @@ function FinalizarPage() {
     }
     (async () => {
       try {
-        // consulta/documentos/histórico não dependem uns dos outros — buscar em paralelo
-        // em vez de em sequência corta o tempo de carregamento da página praticamente ao
-        // tempo da requisição mais lenta, em vez da soma das três.
-        const [consultaRes, docsRes, histRes] = await Promise.all([
-          supabase
-            .from("consultas_credito")
-            .select(FINALIZATION_CONSULTATION_SELECT)
-            .eq("id", id)
-            .single(),
-          supabase
-            .from("documentos_proposta")
-            .select("id, file_name, document_type, document_subtype")
-            .eq("consulta_id", id),
-          fnHist({ data: { consultaId: id } }).catch(() => null),
-        ]);
-
-        if (consultaRes.error) throw consultaRes.error;
-        const data = consultaRes.data;
+        const snapshot = await loadFinalizationSnapshot(id);
+        if (!active) return;
+        const data = snapshot.consulta;
         setConsulta(data);
 
         if ((data as any).insurance_coverages?.length)
@@ -458,15 +395,21 @@ function FinalizarPage() {
         )
           setEtapa("enviada");
 
-        setDocumentos(docsRes.data ?? []);
-        if (histRes) setHistorico(histRes.historico);
+        setDocumentos(snapshot.documentos);
+        setHistorico(snapshot.historico);
       } catch (e: any) {
-        toast.error("Erro ao carregar: " + e.message);
+        if (active) {
+          toast.error(e.message || "Não foi possível carregar a proposta agora.", {
+            id: `finalization-load-${id}`,
+          });
+        }
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => {
+      active = false;
+    };
   }, [id]);
 
   const imovel = consulta?.imoveis ?? {};

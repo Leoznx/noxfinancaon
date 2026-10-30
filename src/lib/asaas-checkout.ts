@@ -287,6 +287,7 @@ function normalizePersistedSubscription(row: any): NormalizedAsaasSubscription {
 export async function rehydrateAsaasCheckout(
   proposalId: string,
   preferences: CheckoutPreferences,
+  options: { refreshProvider?: boolean } = {},
 ): Promise<RehydratedCheckout> {
   const client = supabase as any;
   const [paymentsResult, invoicesResult, subscriptionsResult] = await Promise.all([
@@ -342,7 +343,11 @@ export async function rehydrateAsaasCheckout(
   let payment = paymentRow || invoiceRow ? normalizePersistedPayment(paymentRow, invoiceRow) : null;
   let subscription = subscriptionRow ? normalizePersistedSubscription(subscriptionRow) : null;
 
-  if (subscriptionRow) {
+  // A tela deve abrir usando o estado persistido. Consultar Asaas/D4Sign aqui
+  // colocava rede externa no caminho crítico e repetia processamento a cada
+  // troca de período ou dado. Os modais/polling fazem o refresh quando ele é
+  // realmente necessário.
+  if (options.refreshProvider && subscriptionRow) {
     try {
       subscription = await manageAsaasSubscription({
         proposalId,
@@ -357,7 +362,7 @@ export async function rehydrateAsaasCheckout(
     } catch {
       // O snapshot local ainda permite retomar a tela quando o provedor falha.
     }
-  } else if (paymentRow || invoiceRow) {
+  } else if (options.refreshProvider && (paymentRow || invoiceRow)) {
     try {
       payment = await managePersistedAsaasPayment({
         consultationId: proposalId,
