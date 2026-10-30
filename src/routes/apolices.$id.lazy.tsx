@@ -15,6 +15,16 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { useAuth } from "@/components/AuthProvider";
+import {
+  buildContractBillingRows,
+  summarizeContractBilling,
+  type ContractBillingRow,
+} from "@/lib/contract-billing";
+import type {
+  TenantBillingConsultation,
+  TenantInvoiceSource,
+  TenantPaymentSource,
+} from "@/lib/tenant-billing";
 
 export const Route = createLazyFileRoute("/apolices/$id")({
   component: () => (
@@ -123,7 +133,7 @@ function ApoliceDetalhe() {
   const [documentos, setDocumentos] = useState<any[]>([]);
   const [documentosProposta, setDocumentosProposta] = useState<ContractDocument[]>([]);
   const [assinatura, setAssinatura] = useState<any>(null);
-  const [faturas, setFaturas] = useState<any[]>([]);
+  const [faturas, setFaturas] = useState<ContractBillingRow[]>([]);
   const [historico, setHistorico] = useState<ProposalHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
@@ -147,7 +157,7 @@ function ApoliceDetalhe() {
             id, consulta_id, numero, status, vigencia_inicio, vigencia_fim, valor_premio, created_at,
             consulta:consultas_credito(
               id, status, resultado, created_at, approved_at, dados_complementares_em, proposta_enviada_em,
-              payment_status, payment_type, payment_confirmed_at, insurance_payment_method_label, contract_period_months, documentos,
+              payment_status, payment_type, payment_confirmed_at, insurance_payment_method, insurance_payment_method_label, contract_period_months, documentos,
               base_calculo, valor_aluguel, valor_condominio, valor_taxas, valor_premio_mensal, valor_anual,
               selected_exit_cost, insurance_assistance, insurance_coverages, plano_id,
               terms_accepted_at, contract_accepted_at,
@@ -174,7 +184,15 @@ function ApoliceDetalhe() {
         if (apErr) throw apErr;
         if (!ap) throw new Error("Apólice não encontrada ou sem acesso.");
 
-        const [docsResult, proposalDocsResult, signatureResult, invoicesResult, historyResult] = await Promise.all([
+        const [
+          docsResult,
+          proposalDocsResult,
+          signatureResult,
+          invoicesResult,
+          paymentsResult,
+          legacyInstallmentsResult,
+          historyResult,
+        ] = await Promise.all([
           supabase.from("documentos_contrato").select("*").eq("apolice_id", id),
           (supabase.from("documentos_proposta") as any)
             .select("id, file_name, file_url, file_type, document_type, document_subtype, contract_signature_id, created_at, updated_at")
@@ -186,13 +204,25 @@ function ApoliceDetalhe() {
             .maybeSingle(),
           (supabase as any)
             .from("faturas_inquilino")
-            .select(`
-              id, numero_parcela, installment_total, vencimento, valor, status,
-              pago_em, confirmed_at, payment_url, boleto_url, linha_digitavel,
-              asaas_payment:asaas_payments(invoice_url, boleto_url, boleto_barcode, pix_copy_paste)
-            `)
-            .eq("apolice_id", id)
+            .select(
+              "id, consulta_id, asaas_payment_id, billing_key, charge_kind, payment_method, numero_parcela, installment_total, vencimento, valor, status, pago_em, confirmed_at, payment_url, boleto_url, linha_digitavel, payment_responsible",
+            )
+            .or(`apolice_id.eq.${id},consulta_id.eq.${ap.consulta_id}`)
             .order("vencimento", { ascending: true }),
+          (supabase as any)
+            .from("asaas_payments")
+            .select(
+              "id, consultation_id, asaas_payment_id, payment_method, status, value, due_date, confirmed_at, received_at, pix_qr_code, pix_copy_paste, pix_expires_at, boleto_url, boleto_barcode, external_reference, payment_responsible, raw_response",
+            )
+            .eq("consultation_id", ap.consulta_id)
+            .order("due_date", { ascending: true }),
+          supabase
+            .from("mensalidades")
+            .select(
+              "id, numero_parcela, data_vencimento, valor, status, data_pagamento, boleto_url, linha_digitavel, codigo_barras, comprovante_url",
+            )
+            .eq("apolice_id", id)
+            .order("data_vencimento", { ascending: true }),
           supabase
             .from("proposta_historico")
             .select("id, tipo_evento, descricao, created_at")
@@ -210,6 +240,8 @@ function ApoliceDetalhe() {
           proposalDocsResult.error,
           signatureResult.error,
           invoicesResult.error,
+          paymentsResult.error,
+          legacyInstallmentsResult.error,
           historyResult.error,
         ].filter(Boolean);
 
@@ -244,23 +276,29 @@ function ApoliceDetalhe() {
               ? "Algumas informações complementares não puderam ser carregadas. Os dados disponíveis estão exibidos abaixo."
               : null,
           );
+          const consultation = ap.consulta as TenantBillingConsultation;
+          const payments = (paymentsResult.data || []).map((payment: any) => {
+            const raw =
+              payment.raw_response && typeof payment.raw_response === "object"
+                ? payment.raw_response
+                : {};
+            return {
+              ...payment,
+              invoice_url:
+                raw.invoiceUrl ||
+                raw.bankSlipUrl ||
+                raw.paymentLink ||
+                raw.payment_link ||
+                null,
+            };
+          }) as TenantPaymentSource[];
           setFaturas(
-            (invoicesResult.data || []).map((invoice: any) => ({
-              ...invoice,
-              data_vencimento: invoice.vencimento,
-              data_pagamento: invoice.pago_em || invoice.confirmed_at,
-              boleto_url:
-                invoice.payment_url ||
-                invoice.boleto_url ||
-                invoice.asaas_payment?.invoice_url ||
-                invoice.asaas_payment?.boleto_url ||
-                null,
-              linha_digitavel:
-                invoice.linha_digitavel ||
-                invoice.asaas_payment?.boleto_barcode ||
-                invoice.asaas_payment?.pix_copy_paste ||
-                null,
-            })),
+            buildContractBillingRows({
+              consultation,
+              invoices: (invoicesResult.data || []) as TenantInvoiceSource[],
+              payments,
+              legacyInstallments: legacyInstallmentsResult.data || [],
+            }),
           );
         }
       } catch (e: any) {
@@ -306,7 +344,7 @@ function ApoliceDetalhe() {
   const plano = consulta?.plano;
 
   const formatBRL = (v: number) => (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-  const formatDate = (d: string) => (d ? new Date(d).toLocaleDateString("pt-BR") : "—");
+  const formatDate = (d?: string | null) => (d ? new Date(d).toLocaleDateString("pt-BR") : "—");
 
   const endereco = imovel
     ? [imovel.logradouro || imovel.endereco, imovel.numero, imovel.complemento, imovel.bairro, imovel.cidade, imovel.estado]
@@ -986,30 +1024,12 @@ function DetalheLinha({
   );
 }
 
-function FaturasView({ faturas, apolice }: { faturas: any[]; apolice: any }) {
+function FaturasView({ faturas, apolice }: { faturas: ContractBillingRow[]; apolice: any }) {
   const formatBRL = (v: number) => (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-  const formatDate = (d: string) => (d ? new Date(d).toLocaleDateString("pt-BR") : "—");
+  const formatDate = (d?: string | null) => (d ? new Date(d).toLocaleDateString("pt-BR") : "—");
 
-  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
-  const enriquecidas = faturas.map((f) => {
-    const venc = new Date(f.data_vencimento);
-    const status = String(f.status || "pending").toLowerCase();
-    const pago = ["pago", "paid", "received", "confirmed", "paid_via_consolidated"].includes(status);
-    const aberto = [
-      "pendente", "pending", "created", "waiting_payment", "processing",
-      "risk_analysis", "approved", "awaiting_consolidation", "scheduled",
-    ].includes(status);
-    const vencido = status === "overdue" || status === "vencido" || (aberto && venc < hoje);
-    return { ...f, statusReal: pago ? "pago" : vencido ? "vencido" : aberto ? "pendente" : status };
-  });
-
-  const total = enriquecidas.reduce((s, f) => s + Number(f.valor || 0), 0);
-  const pago = enriquecidas.filter((f) => f.statusReal === "pago").reduce((s, f) => s + Number(f.valor || 0), 0);
-  const pendente = enriquecidas.filter((f) => f.statusReal === "pendente").reduce((s, f) => s + Number(f.valor || 0), 0);
-  const vencidoTotal = enriquecidas.filter((f) => f.statusReal === "vencido").reduce((s, f) => s + Number(f.valor || 0), 0);
-  const aberto = enriquecidas.filter((f) => f.statusReal === "pendente").length;
-  const vencidoCount = enriquecidas.filter((f) => f.statusReal === "vencido").length;
-  const proxima = enriquecidas.find((f) => f.statusReal === "pendente");
+  const resumo = summarizeContractBilling(faturas);
+  const enriquecidas = resumo.rows;
 
   const copiar = async (texto: string) => {
     try {
@@ -1024,18 +1044,18 @@ function FaturasView({ faturas, apolice }: { faturas: any[]; apolice: any }) {
     <div className="space-y-6">
       {/* Resumo financeiro */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        <KpiSmall label="Total contratado" valor={formatBRL(total)} cor="neutral" />
-        <KpiSmall label="Total pago" valor={formatBRL(pago)} cor="green" />
-        <KpiSmall label="Total pendente" valor={formatBRL(pendente)} cor="amber" />
-        <KpiSmall label="Total vencido" valor={formatBRL(vencidoTotal)} cor="red" />
-        <KpiSmall label="Parcelas em aberto" valor={String(aberto)} cor="amber" />
-        <KpiSmall label="Próximo vencimento" valor={proxima ? formatDate(proxima.data_vencimento) : "—"} cor="neutral" />
+        <KpiSmall label="Total contratado" valor={formatBRL(resumo.total)} cor="neutral" />
+        <KpiSmall label="Total pago" valor={formatBRL(resumo.paid)} cor="green" />
+        <KpiSmall label="Total pendente" valor={formatBRL(resumo.pending)} cor="amber" />
+        <KpiSmall label="Total vencido" valor={formatBRL(resumo.overdue)} cor="red" />
+        <KpiSmall label="Parcelas em aberto" valor={String(resumo.openCount)} cor="amber" />
+        <KpiSmall label="Próximo vencimento" valor={formatDate(resumo.nextDueDate || "")} cor="neutral" />
       </div>
 
-      {vencidoCount > 0 && (
+      {resumo.overdueCount > 0 && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3 text-sm">
           <AlertCircle className="text-red-600" />
-          <p className="font-bold text-red-900">{vencidoCount} parcela(s) vencida(s).</p>
+          <p className="font-bold text-red-900">{resumo.overdueCount} parcela(s) vencida(s).</p>
         </div>
       )}
 
@@ -1077,7 +1097,7 @@ function FaturasView({ faturas, apolice }: { faturas: any[]; apolice: any }) {
                   <td className="px-6 py-4 text-right">
                     <div className="inline-flex gap-1.5">
                       {f.boleto_url && (
-                        <Button size="sm" variant="outline" className="rounded-lg h-8 gap-1" onClick={() => window.open(f.boleto_url, "_blank", "noopener,noreferrer")}>
+                        <Button size="sm" variant="outline" className="rounded-lg h-8 gap-1" onClick={() => window.open(f.boleto_url!, "_blank", "noopener,noreferrer")}>
                           <Eye size={12} /> Ver
                         </Button>
                       )}
@@ -1085,7 +1105,7 @@ function FaturasView({ faturas, apolice }: { faturas: any[]; apolice: any }) {
                         <Button size="sm" variant="ghost" className="rounded-lg h-8 w-8 p-0" title="Baixar PDF"
                           onClick={() => {
                             const a = document.createElement("a");
-                            a.href = f.boleto_url; a.target = "_blank"; a.rel = "noopener";
+                            a.href = f.boleto_url!; a.target = "_blank"; a.rel = "noopener";
                             a.download = `boleto-${apolice.numero}-${i + 1}.pdf`;
                             document.body.appendChild(a); a.click(); a.remove();
                           }}
@@ -1095,14 +1115,14 @@ function FaturasView({ faturas, apolice }: { faturas: any[]; apolice: any }) {
                       )}
                       {f.linha_digitavel && (
                         <Button size="sm" variant="ghost" className="rounded-lg h-8 w-8 p-0" title="Copiar linha digitável"
-                          onClick={() => copiar(f.linha_digitavel)}
+                          onClick={() => copiar(f.linha_digitavel!)}
                         >
                           <Copy size={12} />
                         </Button>
                       )}
                       {f.comprovante_url && (
                         <Button size="sm" variant="ghost" className="rounded-lg h-8 gap-1 text-green-700" title="Ver comprovante"
-                          onClick={() => window.open(f.comprovante_url, "_blank", "noopener,noreferrer")}
+                          onClick={() => window.open(f.comprovante_url!, "_blank", "noopener,noreferrer")}
                         >
                           <FileCheck size={12} />
                         </Button>

@@ -117,6 +117,15 @@ export type TenantBillingItem = {
   notificationCount: number;
 };
 
+export type MergeTenantBillingOptions = {
+  /**
+   * A tela do inquilino não deve exibir cobranças centralizadas da
+   * imobiliária. Já o detalhe interno da apólice precisa mostrar o
+   * faturamento completo, independentemente de quem é o pagador.
+   */
+  includeAgencyBilling?: boolean;
+};
+
 function normalizeMethod(value: string | null | undefined): TenantBillingMethod {
   if (value === "boleto" || value === "pix" || value === "credit_card") return value;
   return "unknown";
@@ -145,14 +154,24 @@ export function mergeTenantBillingItems(
   invoices: TenantInvoiceSource[],
   payments: TenantPaymentSource[],
   subscriptions: TenantSubscriptionSource[] = [],
+  options: MergeTenantBillingOptions = {},
 ): TenantBillingItem[] {
   const consultationById = new Map(consultations.map((item) => [item.id, item]));
   const tenantConsultationIds = new Set(
     consultations
-      .filter((item) => item.payment_type !== "imobiliaria")
+      .filter(
+        (item) =>
+          options.includeAgencyBilling || item.payment_type !== "imobiliaria",
+      )
       .map((item) => item.id),
   );
-  const paymentById = new Map(payments.map((item) => [item.id, item]));
+  const paymentById = new Map<string, TenantPaymentSource>();
+  for (const payment of payments) {
+    paymentById.set(payment.id, payment);
+    if (payment.asaas_payment_id) {
+      paymentById.set(payment.asaas_payment_id, payment);
+    }
+  }
   const subscriptionByConsultation = new Map<string, TenantSubscriptionSource>();
   for (const subscription of subscriptions) {
     if (!subscriptionByConsultation.has(subscription.consultation_id)) {
@@ -162,14 +181,67 @@ export function mergeTenantBillingItems(
   const usedPaymentIds = new Set<string>();
   const merged: TenantBillingItem[] = [];
 
+  const amountInCents = (value: number | null | undefined) =>
+    Math.round(Number(value || 0) * 100);
+
+  const installmentFromPayment = (
+    payment: TenantPaymentSource,
+    consultation: TenantBillingConsultation | undefined,
+  ) =>
+    installmentFromReference(
+      payment.external_reference,
+      consultation?.contract_period_months,
+    ).number;
+
+  const findPaymentForInvoice = (
+    invoice: TenantInvoiceSource,
+    consultation: TenantBillingConsultation | undefined,
+  ) => {
+    const direct = invoice.asaas_payment_id
+      ? paymentById.get(invoice.asaas_payment_id)
+      : undefined;
+    if (direct) return direct;
+
+    // Contratos antigos podem ter sido pagos antes de o vínculo UUID ser
+    // gravado na fatura. Reconciliamos apenas dentro da mesma consulta e com
+    // parcela + valor compatíveis para não somar a cobrança duas vezes.
+    return payments.find((payment) => {
+      if (
+        usedPaymentIds.has(payment.id) ||
+        payment.consultation_id !== invoice.consulta_id ||
+        amountInCents(payment.value) !== amountInCents(invoice.valor)
+      ) {
+        return false;
+      }
+
+      const referencedInstallment = installmentFromPayment(
+        payment,
+        consultation,
+      );
+      if (
+        /(?:installment:|:monthly:)\d+/i.test(
+          String(payment.external_reference || ""),
+        ) &&
+        invoice.numero_parcela &&
+        referencedInstallment === Number(invoice.numero_parcela)
+      ) {
+        return true;
+      }
+
+      return Boolean(
+        invoice.vencimento &&
+          payment.due_date &&
+          invoice.vencimento.slice(0, 10) === payment.due_date.slice(0, 10),
+      );
+    });
+  };
+
   for (const invoice of invoices) {
     const consultationId = invoice.consulta_id || "";
     if (!tenantConsultationIds.has(consultationId)) continue;
-    const payment = invoice.asaas_payment_id
-      ? paymentById.get(invoice.asaas_payment_id)
-      : undefined;
-    if (payment) usedPaymentIds.add(payment.id);
     const consultation = consultationById.get(consultationId);
+    const payment = findPaymentForInvoice(invoice, consultation);
+    if (payment) usedPaymentIds.add(payment.id);
     const subscription = subscriptionByConsultation.get(consultationId);
 
     merged.push({
