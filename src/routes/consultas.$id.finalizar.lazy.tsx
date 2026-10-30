@@ -2125,7 +2125,7 @@ function ResumoPropostaLoft(p: any) {
       </div>
 
       <div className="fixed bottom-0 left-0 right-0 z-20 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur">
-        <div className="mx-auto w-full max-w-[1200px]">
+        <div className="mx-auto w-full max-w-[1400px]">
           <div className="flex w-full items-center justify-between gap-4">
             <Button
               type="button"
