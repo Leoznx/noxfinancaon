@@ -110,6 +110,7 @@ import { Route as LoginVendedornoxRouteImport } from './routes/login_.vendedorno
 import { Route as PainelNotificacoesRouteImport } from './routes/painel/notificacoes'
 import { Route as SimularIndexRouteImport } from './routes/simular.index'
 import { Route as SimularResultadoRouteImport } from './routes/simular.resultado'
+import { Route as TvRankingRouteImport } from './routes/tv.ranking'
 import { Route as VendedorIndexRouteImport } from './routes/vendedor.index'
 import { Route as VendedorAgendaRouteImport } from './routes/vendedor.agenda'
 import { Route as VendedorClientesRouteImport } from './routes/vendedor.clientes'
@@ -653,6 +654,11 @@ const SimularResultadoRoute = SimularResultadoRouteImport.update({
   path: '/resultado',
   getParentRoute: () => SimularRoute,
 } as any)
+const TvRankingRoute = TvRankingRouteImport.update({
+  id: '/tv/ranking',
+  path: '/tv/ranking',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const VendedorIndexRoute = VendedorIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -871,6 +877,7 @@ export interface FileRoutesByFullPath {
   '/login/vendedornox': typeof LoginVendedornoxRoute
   '/painel/notificacoes': typeof PainelNotificacoesRoute
   '/simular/resultado': typeof SimularResultadoRoute
+  '/tv/ranking': typeof TvRankingRoute
   '/vendedor/agenda': typeof VendedorAgendaRoute
   '/vendedor/clientes': typeof VendedorClientesRoute
   '/vendedor/comissoes': typeof VendedorComissoesRoute
@@ -992,6 +999,7 @@ export interface FileRoutesByTo {
   '/login/vendedornox': typeof LoginVendedornoxRoute
   '/painel/notificacoes': typeof PainelNotificacoesRoute
   '/simular/resultado': typeof SimularResultadoRoute
+  '/tv/ranking': typeof TvRankingRoute
   '/vendedor/agenda': typeof VendedorAgendaRoute
   '/vendedor/clientes': typeof VendedorClientesRoute
   '/vendedor/comissoes': typeof VendedorComissoesRoute
@@ -1118,6 +1126,7 @@ export interface FileRoutesById {
   '/login_/vendedornox': typeof LoginVendedornoxRoute
   '/painel/notificacoes': typeof PainelNotificacoesRoute
   '/simular/resultado': typeof SimularResultadoRoute
+  '/tv/ranking': typeof TvRankingRoute
   '/vendedor/agenda': typeof VendedorAgendaRoute
   '/vendedor/clientes': typeof VendedorClientesRoute
   '/vendedor/comissoes': typeof VendedorComissoesRoute
@@ -1245,6 +1254,7 @@ export interface FileRouteTypes {
     | '/login/vendedornox'
     | '/painel/notificacoes'
     | '/simular/resultado'
+    | '/tv/ranking'
     | '/vendedor/agenda'
     | '/vendedor/clientes'
     | '/vendedor/comissoes'
@@ -1366,6 +1376,7 @@ export interface FileRouteTypes {
     | '/login/vendedornox'
     | '/painel/notificacoes'
     | '/simular/resultado'
+    | '/tv/ranking'
     | '/vendedor/agenda'
     | '/vendedor/clientes'
     | '/vendedor/comissoes'
@@ -1491,6 +1502,7 @@ export interface FileRouteTypes {
     | '/login_/vendedornox'
     | '/painel/notificacoes'
     | '/simular/resultado'
+    | '/tv/ranking'
     | '/vendedor/agenda'
     | '/vendedor/clientes'
     | '/vendedor/comissoes'
@@ -1613,6 +1625,7 @@ export interface RootRouteChildren {
   LoginSdrnoxRoute: typeof LoginSdrnoxRoute
   LoginVendedornoxRoute: typeof LoginVendedornoxRoute
   PainelNotificacoesRoute: typeof PainelNotificacoesRoute
+  TvRankingRoute: typeof TvRankingRoute
   BlogIndexRoute: typeof BlogIndexRoute
   FaturasInquilinosIndexRoute: typeof FaturasInquilinosIndexRoute
   InquilinoIndexRoute: typeof InquilinoIndexRoute
@@ -2327,6 +2340,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SimularResultadoRouteImport
       parentRoute: typeof SimularRoute
     }
+    '/tv/ranking': {
+      id: '/tv/ranking'
+      path: '/tv/ranking'
+      fullPath: '/tv/ranking'
+      preLoaderRoute: typeof TvRankingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/vendedor/': {
       id: '/vendedor/'
       path: '/'
@@ -2683,6 +2703,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginSdrnoxRoute: LoginSdrnoxRoute,
   LoginVendedornoxRoute: LoginVendedornoxRoute,
   PainelNotificacoesRoute: PainelNotificacoesRoute,
+  TvRankingRoute: TvRankingRoute,
   BlogIndexRoute: BlogIndexRoute,
   FaturasInquilinosIndexRoute: FaturasInquilinosIndexRoute,
   InquilinoIndexRoute: InquilinoIndexRoute,
