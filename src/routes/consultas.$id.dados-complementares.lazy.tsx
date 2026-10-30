@@ -94,7 +94,6 @@ function DadosComplementaresPage() {
   const [vistoriaPronta, setVistoriaPronta] = useState<"sim" | "nao" | "">("");
   const [contratoPronto, setContratoPronto] = useState<"sim" | "nao" | "">("");
   const [docInquilino, setDocInquilino] = useState<File | null>(null);
-  const [docInquilinoSubtype, setDocInquilinoSubtype] = useState<"cnh" | "rg" | "">("");
   const [docResidencia, setDocResidencia] = useState<File | null>(null);
 
   const [errors, setErrors] = useState<Record<string, boolean>>({});
@@ -136,7 +135,6 @@ function DadosComplementaresPage() {
           setSubtipo(demo.imovel.subtipo);
           setVistoriaPronta("sim");
           setContratoPronto(demo.contratoAssinado);
-          setDocInquilinoSubtype(demo.documentoFoto);
         } else {
           setNome(i.nome ?? (data as any).tenant_name ?? "");
           setCpf(maskCPF(i.cpf ?? (data as any).tenant_document ?? ""));
@@ -160,10 +158,8 @@ function DadosComplementaresPage() {
         setExistingDocs(docs ?? []);
         const docContratoExistente = (docs ?? []).find((doc: any) => doc.document_type === "contrato_locacao");
         const docVistoriaExistente = (docs ?? []).find((doc: any) => doc.document_type === "vistoria_imovel");
-        const docInq = (docs ?? []).find((doc: any) => doc.document_type === "documento_foto" || doc.document_type === "documento_inquilino");
         if (!isDemo) {
           const dadosComplementares = ((data as any).documentos?.dados_complementares ?? {}) as Record<string, unknown>;
-          if (docInq?.document_subtype) setDocInquilinoSubtype(docInq.document_subtype as "cnh" | "rg");
           if (docVistoriaExistente) setVistoriaPronta("sim");
           else if (dadosComplementares.vistoria_imovel_pendencia) setVistoriaPronta("nao");
           if (docContratoExistente) {
@@ -230,7 +226,6 @@ function DadosComplementaresPage() {
       if (vistoriaPronta === "sim" && !docVistoria && !hasExistingDoc("vistoria_imovel")) e.docVistoria = true;
       if (!contratoPronto) e.contratoPronto = true;
       if (contratoPronto === "sim" && !docContrato && !hasExistingDoc("contrato_locacao")) e.docContrato = true;
-      if (!docInquilinoSubtype) e.docInquilinoSubtype = true;
       if (!docInquilino && !hasExistingDoc("documento_foto", "documento_inquilino")) e.docInquilino = true;
       if (!docResidencia && !hasExistingDoc("comprovante_residencia", "comprovante_residencia_imovel")) e.docResidencia = true;
     }
@@ -253,7 +248,6 @@ function DadosComplementaresPage() {
         docContrato: "Contrato de locação",
         vistoriaPronta: "Situação da vistoria do imóvel",
         contratoPronto: "Situação do contrato de locação",
-        docInquilinoSubtype: "Tipo do documento com foto",
         docInquilino: "Documento com foto",
         docResidencia: "Comprovante de residência",
       };
@@ -362,7 +356,7 @@ function DadosComplementaresPage() {
         docVistoria ? { file: docVistoria, type: "vistoria_imovel", subtype: null } : null,
         docContrato && contratoPronto === "sim" ? { file: docContrato, type: "contrato_locacao", subtype: "assinado_todas_partes" } : null,
         docResidencia ? { file: docResidencia, type: "comprovante_residencia", subtype: "pode_ser_imovel_antigo" } : null,
-        docInquilino ? { file: docInquilino, type: "documento_foto", subtype: docInquilinoSubtype } : null,
+        docInquilino ? { file: docInquilino, type: "documento_foto", subtype: null } : null,
       ].filter(Boolean) as Array<{ file: File; type: string; subtype: string | null }>;
 
       for (const d of docs) {
@@ -583,18 +577,6 @@ function DadosComplementaresPage() {
                 error={errors.docInquilino}
                 onPick={(files) => { pickFile(files, setDocInquilino); setErrors(p => ({ ...p, docInquilino: false })); }}
                 onClear={() => setDocInquilino(null)}
-                extraHeader={
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Tipo de documento *</Label>
-                    <Select value={docInquilinoSubtype} onValueChange={(v) => { setDocInquilinoSubtype(v as "cnh" | "rg"); setErrors(p => ({ ...p, docInquilinoSubtype: false })); }}>
-                      <SelectTrigger data-error={errors.docInquilinoSubtype || undefined} className={`h-9 ${err("docInquilinoSubtype")}`}><SelectValue placeholder="Selecione" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="cnh">CNH</SelectItem>
-                        <SelectItem value="rg">RG / Identidade</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                }
               />
 
               <UploadCard
