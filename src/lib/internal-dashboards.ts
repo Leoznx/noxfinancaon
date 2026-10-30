@@ -42,6 +42,13 @@ export const EMPTY_FINANCE_SUMMARY: FinanceSummary = {
   pending_contracts: 0,
   contracts_missing_billing: 0,
   reconciliation_required: 0,
+  seller_payroll_count: 0,
+  seller_payroll_total_cents: 0,
+  seller_payroll_paid_cents: 0,
+  seller_payroll_payable_cents: 0,
+  seller_payroll_due_date: null,
+  seller_payroll_period_end: null,
+  seller_payroll_is_overdue: false,
 };
 
 export type MarketingDashboardData = {

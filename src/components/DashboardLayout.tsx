@@ -168,7 +168,7 @@ const adminItems: MenuItem[] = [
   },
   {
     icon: DollarSign,
-    label: "Financeiro e Faturamento",
+    label: "Financeiro",
     href: "/admin/financeiro",
     module: "financeiro",
     modules: ["financeiro", "faturamento"],
@@ -190,38 +190,11 @@ const adminItems: MenuItem[] = [
     label: "Equipe NOX",
     href: "/admin/equipe-nox",
     module: "equipe_nox",
-    children: [
-      { label: "Visão da equipe", href: "/admin/equipe-nox" },
-      { label: "Reunião com a equipe", href: "/admin/equipe-nox?tab=reunioes" },
-      { label: "Agenda dos Closers", href: "/admin/agenda-closers" },
-      { label: "Leads e Distribuição", href: "/admin/leads" },
-      { label: "Distribuição de Leads", href: "/admin/distribuicao-leads" },
-      { label: "Vagas abertas", href: "/admin/vagas" },
-      { label: "Metas", href: "/admin/equipe-nox?tab=metas" },
-      { label: "Relatório comercial", href: "/admin/equipe-nox?tab=relatorio-comercial" },
-      { label: "Recompensas", href: "/admin/equipe-nox?tab=recompensas" },
-      { label: "Comissões e equipe comercial", href: "/admin/equipe-nox?tab=comissoes" },
-      { label: "Colaboradores", href: "/admin/equipe-nox?tab=colaboradores" },
-      { label: "Histórico de ponto", href: "/admin/equipe-nox?tab=historico-ponto" },
-    ],
   },
   {
     icon: Settings,
     label: "Configurações",
     href: "/configuracoes",
-    children: [
-      { label: "Perfil", href: "/configuracoes?tab=perfil" },
-      { label: "Conta", href: "/configuracoes?tab=conta" },
-      { label: "Segurança", href: "/configuracoes?tab=seguranca" },
-      { label: "Notificações", href: "/configuracoes?tab=notificacoes" },
-      { label: "Plano e Nível", href: "/configuracoes?tab=comissoes" },
-      { label: "Aprovações de Documentos", href: "/admin/verificacoes" },
-      {
-        label: "Central de Erros",
-        href: "/admin/central-erros",
-        keywords: ["automação", "reparo", "saúde"],
-      },
-    ],
   },
 ];
 
@@ -431,9 +404,7 @@ export function DashboardLayout({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [menuSearch, setMenuSearch] = useState("");
   const [headerSearch, setHeaderSearch] = useState("");
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
-    () => new Set(["Equipe NOX", "Configurações"]),
-  );
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set());
   const adminAttention = useAdminAttention();
   const perfilCacheInicial = getCachedHeaderProfile(user?.email);
   const [nomeUsuario, setNomeUsuario] = useState(perfilCacheInicial?.nome || "");

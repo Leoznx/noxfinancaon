@@ -3,6 +3,7 @@ import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-r
 import {
   AlertTriangle,
   Banknote,
+  CalendarDays,
   CheckCircle2,
   Download,
   ExternalLink,
@@ -75,6 +76,8 @@ import {
   getWithdrawalReceiptUrl,
   listFinanceCommissions,
   listFinanceWithdrawals,
+  listSellerMonthlyPayroll,
+  markSellerMonthlyPayrollPaid,
   markWithdrawalPaid,
   rejectWithdrawal,
   toWithdrawalError,
@@ -83,10 +86,12 @@ import {
   type FinanceCommission,
   type FinanceSummary,
   type FinanceWithdrawal,
+  type SellerMonthlyPayroll,
+  type SellerPayrollStatus,
   type WithdrawalStatus,
 } from "@/lib/withdrawals";
 
-const FINANCE_TABS = ["billing", "withdrawals", "commissions", "payments"] as const;
+const FINANCE_TABS = ["billing", "payroll", "withdrawals", "commissions", "payments"] as const;
 type FinanceTabKey = (typeof FINANCE_TABS)[number];
 
 export const Route = createFileRoute("/admin/financeiro")({
@@ -135,6 +140,13 @@ const EMPTY_SUMMARY: FinanceSummary = {
   pending_contracts: 0,
   contracts_missing_billing: 0,
   reconciliation_required: 0,
+  seller_payroll_count: 0,
+  seller_payroll_total_cents: 0,
+  seller_payroll_paid_cents: 0,
+  seller_payroll_payable_cents: 0,
+  seller_payroll_due_date: null,
+  seller_payroll_period_end: null,
+  seller_payroll_is_overdue: false,
 };
 
 const WITHDRAWAL_TONES: Record<WithdrawalStatus, string> = {
@@ -168,6 +180,14 @@ const REJECTION_REASONS = [
 const dateTime = (value: string | null | undefined) =>
   value ? new Date(value).toLocaleString("pt-BR") : "—";
 
+const dateOnly = (value: string | null | undefined) =>
+  value ? new Date(`${value.slice(0, 10)}T12:00:00`).toLocaleDateString("pt-BR") : "—";
+
+const currentPayrollPeriod = () => {
+  const now = new Date();
+  return { month: now.getMonth() + 1, year: now.getFullYear() };
+};
+
 function currencyInputToCents(value: string) {
   if (!value.trim()) return undefined;
   const amount = Number(value.replace(",", "."));
@@ -195,6 +215,8 @@ function FinanceiroAdminPage() {
   const [openWithdrawals, setOpenWithdrawals] = useState<FinanceWithdrawal[]>([]);
   const [payments, setPayments] = useState<FinanceWithdrawal[]>([]);
   const [commissions, setCommissions] = useState<FinanceCommission[]>([]);
+  const [payroll, setPayroll] = useState<SellerMonthlyPayroll[]>([]);
+  const [payrollPeriod, setPayrollPeriod] = useState(currentPayrollPeriod);
   const [contractBilling, setContractBilling] = useState<AdminContractBillingRow[]>([]);
   const [draftFilters, setDraftFilters] = useState<FinanceFilters>(EMPTY_FILTERS);
   const [filters, setFilters] = useState<FinanceFilters>(EMPTY_FILTERS);
@@ -209,58 +231,71 @@ function FinanceiroAdminPage() {
   const [rejectTarget, setRejectTarget] = useState<FinanceWithdrawal | null>(null);
   const [paymentTarget, setPaymentTarget] = useState<FinanceWithdrawal | null>(null);
   const [reconciling, setReconciling] = useState<string | null>(null);
+  const [payingPayroll, setPayingPayroll] = useState<string | null>(null);
 
-  const loadData = useCallback(async (activeFilters: FinanceFilters, quiet = false) => {
-    if (quiet) setRefreshing(true);
-    else setLoading(true);
-    setError(null);
-    try {
-      const params = withdrawalParams(activeFilters);
-      const [nextSummary, nextOpen, nextPayments, nextCommissions, nextContractBilling] = await Promise.all([
-        getFinanceSummary(),
-        listFinanceWithdrawals({ ...params, scope: "OPEN" }),
-        listFinanceWithdrawals({ ...params, scope: "PAID" }),
-        listFinanceCommissions(),
-        listAdminContractBilling(),
-      ]);
-      const activeContracts = nextContractBilling.filter((row) =>
-        ["active", "ativa", "ativo"].includes(
-          String(row.policy_status || row.contract_status || "").toLowerCase(),
-        ),
-      ).length;
-      const pendingContracts = nextContractBilling.length - activeContracts;
-      setSummary({
-        ...nextSummary,
-        revenue_received_cents: Math.max(
-          nextSummary.revenue_received_cents,
-          nextContractBilling.reduce((sum, row) => sum + row.received_cents, 0),
-        ),
-        revenue_pending_cents: Math.max(
-          nextSummary.revenue_pending_cents,
-          nextContractBilling.reduce((sum, row) => sum + row.outstanding_cents, 0),
-        ),
-        active_contracts: activeContracts,
-        pending_contracts: pendingContracts,
-        contracts_missing_billing: nextContractBilling.filter(
-          (row) => row.billing_status === "awaiting_billing",
-        ).length,
-        reconciliation_required: nextContractBilling.filter(
-          (row) => row.billing_status === "reconciliation_required",
-        ).length,
-      });
-      setOpenWithdrawals(nextOpen);
-      setPayments(nextPayments);
-      setCommissions(nextCommissions);
-      setContractBilling(nextContractBilling);
-    } catch (loadError) {
-      const message = toWithdrawalError(loadError).message;
-      setError(message);
-      toast.error(message);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
+  const loadData = useCallback(
+    async (activeFilters: FinanceFilters, quiet = false) => {
+      if (quiet) setRefreshing(true);
+      else setLoading(true);
+      setError(null);
+      try {
+        const params = withdrawalParams(activeFilters);
+        const [
+          nextSummary,
+          nextOpen,
+          nextPayments,
+          nextCommissions,
+          nextContractBilling,
+          nextPayroll,
+        ] = await Promise.all([
+          getFinanceSummary(),
+          listFinanceWithdrawals({ ...params, scope: "OPEN" }),
+          listFinanceWithdrawals({ ...params, scope: "PAID" }),
+          listFinanceCommissions(),
+          listAdminContractBilling(),
+          listSellerMonthlyPayroll(payrollPeriod.month, payrollPeriod.year),
+        ]);
+        const activeContracts = nextContractBilling.filter((row) =>
+          ["active", "ativa", "ativo"].includes(
+            String(row.policy_status || row.contract_status || "").toLowerCase(),
+          ),
+        ).length;
+        const pendingContracts = nextContractBilling.length - activeContracts;
+        setSummary({
+          ...nextSummary,
+          revenue_received_cents: Math.max(
+            nextSummary.revenue_received_cents,
+            nextContractBilling.reduce((sum, row) => sum + row.received_cents, 0),
+          ),
+          revenue_pending_cents: Math.max(
+            nextSummary.revenue_pending_cents,
+            nextContractBilling.reduce((sum, row) => sum + row.outstanding_cents, 0),
+          ),
+          active_contracts: activeContracts,
+          pending_contracts: pendingContracts,
+          contracts_missing_billing: nextContractBilling.filter(
+            (row) => row.billing_status === "awaiting_billing",
+          ).length,
+          reconciliation_required: nextContractBilling.filter(
+            (row) => row.billing_status === "reconciliation_required",
+          ).length,
+        });
+        setOpenWithdrawals(nextOpen);
+        setPayments(nextPayments);
+        setCommissions(nextCommissions);
+        setContractBilling(nextContractBilling);
+        setPayroll(nextPayroll);
+      } catch (loadError) {
+        const message = toWithdrawalError(loadError).message;
+        setError(message);
+        toast.error(message);
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [payrollPeriod.month, payrollPeriod.year],
+  );
 
   useEffect(() => {
     void loadData(filters);
@@ -297,6 +332,16 @@ function FinanceiroAdminPage() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "asaas_subscriptions" },
+        () => void loadData(filters, true),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "seller_commissions" },
+        () => void loadData(filters, true),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "seller_monthly_payrolls" },
         () => void loadData(filters, true),
       )
       .subscribe();
@@ -364,6 +409,29 @@ function FinanceiroAdminPage() {
     }
   };
 
+  const confirmPayrollPayment = async (row: SellerMonthlyPayroll) => {
+    if (
+      !window.confirm(
+        `Confirmar o pagamento de ${formatCents(row.payable_cents)} para ${row.seller_name}?`,
+      )
+    ) {
+      return;
+    }
+    setPayingPayroll(row.id);
+    try {
+      await markSellerMonthlyPayrollPaid(
+        row.id,
+        `Folha ${String(payrollPeriod.month).padStart(2, "0")}/${payrollPeriod.year}`,
+      );
+      toast.success("Pagamento da folha confirmado.");
+      await loadData(filters, true);
+    } catch (payrollError) {
+      toast.error(toWithdrawalError(payrollError).message);
+    } finally {
+      setPayingPayroll(null);
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-7 pb-10">
@@ -375,7 +443,7 @@ function FinanceiroAdminPage() {
             </p>
             <h1 className="mt-1 text-3xl font-black tracking-tight text-neutral-950">Financeiro</h1>
             <p className="mt-2 text-sm text-neutral-500">
-              Contratos, cobranças Asaas, saques e comissões em uma trilha financeira única.
+              Receitas, cobranças, saques, comissões e folha dos vendedores em uma trilha única.
             </p>
           </div>
           <Button
@@ -390,7 +458,7 @@ function FinanceiroAdminPage() {
 
         <SummaryGrid summary={summary} loading={loading} />
 
-        {activeTab !== "billing" && (
+        {activeTab !== "billing" && activeTab !== "payroll" && (
           <FilterPanel
             filters={draftFilters}
             onChange={setDraftFilters}
@@ -435,6 +503,12 @@ function FinanceiroAdminPage() {
               count={summary.active_contracts + summary.pending_contracts}
             />
             <FinanceTab
+              value="payroll"
+              icon={CalendarDays}
+              label="Folha dos vendedores"
+              count={summary.seller_payroll_count}
+            />
+            <FinanceTab
               value="withdrawals"
               icon={Banknote}
               label="Saques"
@@ -460,6 +534,17 @@ function FinanceiroAdminPage() {
               loading={loading}
               reconciling={reconciling}
               onReconcile={(consultationId) => void reconcile(consultationId)}
+            />
+          </TabsContent>
+
+          <TabsContent value="payroll">
+            <SellerPayrollTable
+              rows={payroll}
+              period={payrollPeriod}
+              loading={loading}
+              payingId={payingPayroll}
+              onPeriodChange={setPayrollPeriod}
+              onPay={(row) => void confirmPayrollPayment(row)}
             />
           </TabsContent>
 
@@ -542,7 +627,11 @@ function ContractBillingTable({
         row.property_address,
         row.contract_status,
         CONTRACT_BILLING_STATUS_LABELS[row.billing_status],
-      ].some((value) => String(value || "").toLowerCase().includes(query)),
+      ].some((value) =>
+        String(value || "")
+          .toLowerCase()
+          .includes(query),
+      ),
     );
   }, [rows, search]);
 
@@ -595,11 +684,7 @@ function ContractBillingTable({
             placeholder="Contrato, inquilino, CPF ou endereço"
           />
         </div>
-        <Button
-          variant="outline"
-          disabled={Boolean(reconciling)}
-          onClick={() => onReconcile()}
-        >
+        <Button variant="outline" disabled={Boolean(reconciling)} onClick={() => onReconcile()}>
           <RefreshCw className={`mr-2 h-4 w-4 ${reconciling === "all" ? "animate-spin" : ""}`} />
           Conciliar tudo com Asaas
         </Button>
@@ -616,7 +701,9 @@ function ContractBillingTable({
               <div className="flex items-start justify-between gap-3">
                 <PersonCell
                   name={row.tenant_name || "Inquilino não informado"}
-                  secondary={row.contract_number ? `Contrato ${row.contract_number}` : "Contrato pendente"}
+                  secondary={
+                    row.contract_number ? `Contrato ${row.contract_number}` : "Contrato pendente"
+                  }
                 />
                 {statusBadge(row)}
               </div>
@@ -626,7 +713,11 @@ function ContractBillingTable({
                 <MiniValue label="Faturas" value={String(row.invoice_count)} />
                 <MiniValue
                   label="Próximo vencimento"
-                  value={row.next_due_date ? new Date(`${row.next_due_date}T12:00:00`).toLocaleDateString("pt-BR") : "—"}
+                  value={
+                    row.next_due_date
+                      ? new Date(`${row.next_due_date}T12:00:00`).toLocaleDateString("pt-BR")
+                      : "—"
+                  }
                 />
               </div>
               {actions(row)}
@@ -660,10 +751,16 @@ function ContractBillingTable({
                   <TableCell className="pl-5">
                     <PersonCell
                       name={row.tenant_name || "Inquilino não informado"}
-                      secondary={row.contract_number ? `Contrato ${row.contract_number}` : "Contrato pendente"}
+                      secondary={
+                        row.contract_number
+                          ? `Contrato ${row.contract_number}`
+                          : "Contrato pendente"
+                      }
                     />
                   </TableCell>
-                  <TableCell className="capitalize">{row.contract_status.replaceAll("_", " ")}</TableCell>
+                  <TableCell className="capitalize">
+                    {row.contract_status.replaceAll("_", " ")}
+                  </TableCell>
                   <TableCell>{statusBadge(row)}</TableCell>
                   <TableCell>
                     <span className="font-bold">{row.invoice_count}</span>
@@ -674,7 +771,9 @@ function ContractBillingTable({
                   <TableCell className="font-semibold text-emerald-700">
                     {formatCents(row.received_cents)}
                   </TableCell>
-                  <TableCell className="font-semibold">{formatCents(row.outstanding_cents)}</TableCell>
+                  <TableCell className="font-semibold">
+                    {formatCents(row.outstanding_cents)}
+                  </TableCell>
                   <TableCell className="whitespace-nowrap text-sm text-neutral-600">
                     {row.next_due_date
                       ? new Date(`${row.next_due_date}T12:00:00`).toLocaleDateString("pt-BR")
@@ -722,6 +821,29 @@ function SummaryGrid({ summary, loading }: { summary: FinanceSummary; loading: b
       tone: "bg-yellow-50 text-yellow-700",
     },
     {
+      icon: CalendarDays,
+      label: "Folha dos vendedores",
+      value: formatCents(summary.seller_payroll_total_cents),
+      detail: `${summary.seller_payroll_count} vendedor(es) · competência até ${dateOnly(summary.seller_payroll_period_end)}`,
+      tone: "bg-cyan-50 text-cyan-700",
+    },
+    {
+      icon: Banknote,
+      label: "Folha a pagar",
+      value: formatCents(summary.seller_payroll_payable_cents),
+      detail: `Pagamento no dia ${dateOnly(summary.seller_payroll_due_date)}${summary.seller_payroll_is_overdue ? " · vencido" : ""}`,
+      tone: summary.seller_payroll_is_overdue
+        ? "bg-red-50 text-red-700"
+        : "bg-indigo-50 text-indigo-700",
+    },
+    {
+      icon: CheckCircle2,
+      label: "Folha paga",
+      value: formatCents(summary.seller_payroll_paid_cents),
+      detail: "Baixas confirmadas e auditadas",
+      tone: "bg-emerald-50 text-emerald-700",
+    },
+    {
       icon: FileText,
       label: "Contratos ativos",
       value: String(summary.active_contracts),
@@ -738,7 +860,7 @@ function SummaryGrid({ summary, loading }: { summary: FinanceSummary; loading: b
   ];
 
   return (
-    <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+    <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
       {cards.map((card) => (
         <Card key={card.label} className="rounded-2xl border-neutral-200 shadow-sm">
           <CardContent className="p-5">
@@ -936,6 +1058,181 @@ function FinanceTab({
         {count}
       </Badge>
     </TabsTrigger>
+  );
+}
+
+const PAYROLL_STATUS_LABELS: Record<SellerPayrollStatus, string> = {
+  scheduled: "Agendado",
+  due: "Vence hoje",
+  overdue: "Em atraso",
+  paid: "Pago",
+  cancelled: "Cancelado",
+};
+
+const PAYROLL_STATUS_TONES: Record<SellerPayrollStatus, string> = {
+  scheduled: "border-blue-200 bg-blue-50 text-blue-800",
+  due: "border-amber-200 bg-amber-50 text-amber-800",
+  overdue: "border-red-200 bg-red-50 text-red-800",
+  paid: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  cancelled: "border-neutral-200 bg-neutral-100 text-neutral-700",
+};
+
+function SellerPayrollTable({
+  rows,
+  period,
+  loading,
+  payingId,
+  onPeriodChange,
+  onPay,
+}: {
+  rows: SellerMonthlyPayroll[];
+  period: { month: number; year: number };
+  loading: boolean;
+  payingId: string | null;
+  onPeriodChange: (period: { month: number; year: number }) => void;
+  onPay: (row: SellerMonthlyPayroll) => void;
+}) {
+  const periodValue = `${period.year}-${String(period.month).padStart(2, "0")}`;
+  const total = rows.reduce((sum, row) => sum + row.total_cents, 0);
+  const payable = rows.reduce((sum, row) => sum + row.payable_cents, 0);
+
+  const paymentAction = (row: SellerMonthlyPayroll) => {
+    if (row.status === "paid") {
+      return (
+        <span className="text-xs font-semibold text-emerald-700">Pago {dateTime(row.paid_at)}</span>
+      );
+    }
+    if (row.status === "scheduled") {
+      return (
+        <span className="text-xs font-semibold text-blue-700">
+          Pagamento dia {dateOnly(row.due_date)}
+        </span>
+      );
+    }
+    if (row.status === "cancelled") return null;
+    return (
+      <Button size="sm" onClick={() => onPay(row)} disabled={payingId === row.id}>
+        {payingId === row.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+        Confirmar pagamento
+      </Button>
+    );
+  };
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
+      <div className="flex flex-col gap-4 border-b border-neutral-100 p-5 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <h2 className="text-lg font-black text-neutral-950">Folha mensal dos vendedores</h2>
+          <p className="mt-1 text-sm text-neutral-500">
+            Período completo do mês, salário fixo de R$ 2.300,00 mais comissões e bônus. Pagamento
+            no dia 05 seguinte.
+          </p>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+          <div>
+            <Label htmlFor="payroll-period">Competência</Label>
+            <Input
+              id="payroll-period"
+              type="month"
+              value={periodValue}
+              className="mt-1.5 w-full sm:w-44"
+              onChange={(event) => {
+                const [year, month] = event.target.value.split("-").map(Number);
+                if (year && month) onPeriodChange({ year, month });
+              }}
+            />
+          </div>
+          <div className="rounded-xl bg-neutral-950 px-4 py-2.5 text-sm text-white">
+            Total <strong>{formatCents(total)}</strong> · a pagar{" "}
+            <strong>{formatCents(payable)}</strong>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-3 p-4 md:hidden">
+        {loading ? <CardsLoading /> : null}
+        {!loading && rows.length === 0 ? (
+          <CardsEmpty>Nenhum vendedor nesta competência.</CardsEmpty>
+        ) : null}
+        {!loading &&
+          rows.map((row) => (
+            <article key={row.id} className="rounded-xl border border-neutral-200 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-black text-neutral-950">{row.seller_name}</p>
+                  <p className="text-xs text-neutral-500">
+                    {row.seller_type?.toUpperCase() || "Vendedor"} · {dateOnly(row.period_start)} a{" "}
+                    {dateOnly(row.period_end)}
+                  </p>
+                </div>
+                <Badge variant="outline" className={PAYROLL_STATUS_TONES[row.status]}>
+                  {PAYROLL_STATUS_LABELS[row.status]}
+                </Badge>
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                <MiniValue label="Fixo" value={formatCents(row.base_salary_cents)} />
+                <MiniValue label="Comissões" value={formatCents(row.commission_cents)} />
+                <MiniValue label="Bônus" value={formatCents(row.bonus_cents)} />
+                <MiniValue
+                  label="Total"
+                  value={formatCents(row.total_cents)}
+                  valueClassName="font-black"
+                />
+              </div>
+              <div className="mt-4 flex justify-end">{paymentAction(row)}</div>
+            </article>
+          ))}
+      </div>
+
+      <div className="hidden overflow-x-auto md:block">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="pl-5">Vendedor</TableHead>
+              <TableHead>Período</TableHead>
+              <TableHead>Fixo</TableHead>
+              <TableHead>Comissões</TableHead>
+              <TableHead>Bônus</TableHead>
+              <TableHead>Total</TableHead>
+              <TableHead>Vencimento</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="pr-5 text-right">Ação</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? <EmptyRow columns={9} loading /> : null}
+            {!loading && rows.length === 0 ? (
+              <EmptyRow columns={9}>Nenhum vendedor nesta competência.</EmptyRow>
+            ) : null}
+            {!loading &&
+              rows.map((row) => (
+                <TableRow key={row.id}>
+                  <TableCell className="pl-5">
+                    <PersonCell
+                      name={row.seller_name}
+                      secondary={`${row.seller_type?.toUpperCase() || "Vendedor"} · ${row.seller_email}`}
+                    />
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    {dateOnly(row.period_start)} a {dateOnly(row.period_end)}
+                  </TableCell>
+                  <TableCell>{formatCents(row.base_salary_cents)}</TableCell>
+                  <TableCell>{formatCents(row.commission_cents)}</TableCell>
+                  <TableCell>{formatCents(row.bonus_cents)}</TableCell>
+                  <TableCell className="font-black">{formatCents(row.total_cents)}</TableCell>
+                  <TableCell>{dateOnly(row.due_date)}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className={PAYROLL_STATUS_TONES[row.status]}>
+                      {PAYROLL_STATUS_LABELS[row.status]}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="pr-5 text-right">{paymentAction(row)}</TableCell>
+                </TableRow>
+              ))}
+          </TableBody>
+        </Table>
+      </div>
+    </section>
   );
 }
 

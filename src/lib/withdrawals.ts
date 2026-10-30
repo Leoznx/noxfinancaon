@@ -116,6 +116,37 @@ export interface FinanceSummary {
   pending_contracts: number;
   contracts_missing_billing: number;
   reconciliation_required: number;
+  seller_payroll_count: number;
+  seller_payroll_total_cents: number;
+  seller_payroll_paid_cents: number;
+  seller_payroll_payable_cents: number;
+  seller_payroll_due_date: string | null;
+  seller_payroll_period_end: string | null;
+  seller_payroll_is_overdue: boolean;
+}
+
+export type SellerPayrollStatus = "scheduled" | "due" | "overdue" | "paid" | "cancelled";
+
+export interface SellerMonthlyPayroll {
+  id: string;
+  seller_id: string;
+  seller_name: string;
+  seller_email: string;
+  seller_type: "sdr" | "closer" | null;
+  competence_month: string;
+  period_start: string;
+  period_end: string;
+  due_date: string;
+  base_salary_cents: number;
+  commission_cents: number;
+  bonus_cents: number;
+  total_cents: number;
+  paid_amount_cents: number;
+  payable_cents: number;
+  status: SellerPayrollStatus;
+  paid_at: string | null;
+  paid_by_name: string | null;
+  payment_notes: string | null;
 }
 
 export interface FinanceWithdrawal extends UserWithdrawal {
@@ -250,6 +281,11 @@ export function toWithdrawalError(error: unknown) {
     ["WITHDRAWAL_FORBIDDEN", "Você não possui permissão para executar esta ação."],
     ["WITHDRAWAL_REJECTION_REASON_REQUIRED", "Informe o motivo da recusa."],
     ["WITHDRAWAL_INVALID_RECEIPT", "O comprovante enviado não é permitido."],
+    ["PAYROLL_FORBIDDEN", "Você não possui permissão para acessar a folha dos vendedores."],
+    ["PAYROLL_INVALID_PERIOD", "Selecione uma competência mensal válida."],
+    ["PAYROLL_NOT_FOUND", "A folha selecionada não foi encontrada."],
+    ["PAYROLL_CANCELLED", "Esta folha foi cancelada e não pode ser paga."],
+    ["PAYROLL_NOT_DUE", "O pagamento desta competência fica disponível no dia 05."],
   ];
   const match = messages.find(([code]) => raw.includes(code));
   return new WithdrawalError(
@@ -328,6 +364,17 @@ export async function getFinanceSummary() {
     pending_contracts: Number(summary.pending_contracts ?? 0),
     contracts_missing_billing: Number(summary.contracts_missing_billing ?? 0),
     reconciliation_required: Number(summary.reconciliation_required ?? 0),
+    seller_payroll_count: Number(summary.seller_payroll_count ?? 0),
+    seller_payroll_total_cents: Number(summary.seller_payroll_total_cents ?? 0),
+    seller_payroll_paid_cents: Number(summary.seller_payroll_paid_cents ?? 0),
+    seller_payroll_payable_cents: Number(summary.seller_payroll_payable_cents ?? 0),
+    seller_payroll_due_date: summary.seller_payroll_due_date
+      ? String(summary.seller_payroll_due_date)
+      : null,
+    seller_payroll_period_end: summary.seller_payroll_period_end
+      ? String(summary.seller_payroll_period_end)
+      : null,
+    seller_payroll_is_overdue: summary.seller_payroll_is_overdue === true,
   } satisfies FinanceSummary;
 }
 
@@ -357,6 +404,21 @@ export const listFinanceWithdrawals = (
   });
 
 export const listFinanceCommissions = () => rpc<FinanceCommission[]>("list_finance_commissions");
+
+export const listSellerMonthlyPayroll = (month: number, year: number) =>
+  rpc<SellerMonthlyPayroll[]>("list_seller_monthly_payroll", {
+    p_month: month,
+    p_year: year,
+  });
+
+export const markSellerMonthlyPayrollPaid = (payrollId: string, notes?: string) =>
+  rpc<{ ok: boolean; id: string; status?: "paid"; already_paid?: boolean }>(
+    "mark_seller_monthly_payroll_paid",
+    {
+      p_payroll_id: payrollId,
+      p_notes: notes?.trim() || null,
+    },
+  );
 
 export async function markWithdrawalPaid(params: {
   withdrawalId: string;
