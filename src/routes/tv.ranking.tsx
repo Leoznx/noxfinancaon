@@ -41,6 +41,14 @@ const LIVE_TABLES = [
   "seller_appointments",
 ] as const;
 
+declare global {
+  interface Window {
+    NoxTvAndroid?: {
+      markReady: () => void;
+    };
+  }
+}
+
 function readCachedSnapshot(): TvSalesDashboardSnapshot | null {
   if (typeof window === "undefined") return null;
   try {
@@ -54,6 +62,16 @@ function readCachedSnapshot(): TvSalesDashboardSnapshot | null {
 
 function TvRankingRoute() {
   const { user, isLoading, logout } = useAuth();
+
+  useEffect(() => {
+    if (isLoading || typeof window === "undefined") return;
+    document.documentElement.dataset.noxTvReady = "true";
+    try {
+      window.NoxTvAndroid?.markReady();
+    } catch {
+      // O mesmo painel continua funcionando normalmente fora do aplicativo da TV.
+    }
+  }, [isLoading, user]);
 
   if (isLoading) return <TvLoading message="Preparando o painel comercial…" />;
   if (!user) return <TvLogin />;
