@@ -70,7 +70,7 @@ export function CommissionIncentives({ rewards, progress, rows }: CommissionInce
                 Entradas
               </CardTitle>
               <p className="mt-2 text-xs leading-5 text-neutral-500">
-                Contratos ativos e pagos contabilizados na folha deste mês.
+                Primeiros pagamentos confirmados e contabilizados na folha deste mês.
               </p>
             </div>
             <span className="shrink-0 rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-[10px] font-black text-emerald-700">
@@ -122,7 +122,7 @@ export function CommissionIncentives({ rewards, progress, rows }: CommissionInce
             <EmptyColumn
               icon={ArrowDownToLine}
               title="Nenhuma entrada neste mês"
-              description="Quando o contrato estiver ativo e o plano for pago, ele aparecerá aqui automaticamente."
+              description="Quando o primeiro pagamento for confirmado, ele aparecerá aqui automaticamente, sem esperar a assinatura."
               tone="emerald"
             />
           )}

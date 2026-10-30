@@ -1312,7 +1312,7 @@ function TabComissoes() {
           <div>
             <CardTitle>Comissões da equipe</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Fechamento automático de contratos ativos e pagos. Total da folha:{" "}
+              Fechamento automático no primeiro pagamento, sem esperar assinatura. Total da folha:{" "}
               {formatMoney(totalMes)}
             </p>
           </div>

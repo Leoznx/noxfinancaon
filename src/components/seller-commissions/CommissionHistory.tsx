@@ -40,7 +40,7 @@ export function CommissionHistory({ rows }: CommissionHistoryProps) {
         <div>
           <h2 className="text-lg font-black tracking-[-0.015em] text-[#151515]">Histórico de comissões</h2>
           <p className="mt-1 text-sm text-[#777]">
-            Cada linha entra automaticamente na folha quando o contrato fica ativo e o plano é pago.
+            Cada linha entra automaticamente na folha assim que o primeiro pagamento é confirmado, sem esperar a assinatura.
           </p>
         </div>
         <Select value={period} onValueChange={(value) => setPeriod(value as CommissionPeriod)}>
@@ -163,7 +163,7 @@ function CommissionEmptyState() {
         </div>
         <h3 className="mt-3 text-lg font-black text-[#111]">Nenhuma comissão registrada</h3>
         <p className="mt-2 text-sm font-medium text-[#888]">
-          As comissões aparecem quando o contrato estiver ativo e a primeira parcela do plano estiver paga.
+          As comissões aparecem assim que a primeira parcela do plano estiver paga, sem esperar a assinatura do contrato.
         </p>
       </div>
     </div>
