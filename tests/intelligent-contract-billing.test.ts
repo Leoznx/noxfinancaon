@@ -11,6 +11,8 @@ import {
   canManageIndividualInvoiceAction,
   checkoutStatusFromEvent,
   contractActivationDecision,
+  contractAwaitingSignatureProjection,
+  paymentEventTypeFromProviderStatus,
   hasDirectBillingOwnership,
   planInitialBilling,
   reduceCheckoutStatus,
@@ -25,6 +27,7 @@ import {
   subscriptionStatusFromEvent,
   webhookEventCanBeClaimed,
 } from "../supabase/functions/_shared/billing-state";
+
 import {
   BOLETO_ISSUANCE_LEAD_DAYS,
   initialBoletoDueDate,
@@ -35,6 +38,28 @@ import {
   scheduledBoletoIssueDate,
   shouldMaterializeScheduledBoleto,
 } from "../supabase/functions/_shared/billing-automation";
+
+test("conciliação converte o snapshot financeiro no evento semântico do Asaas", () => {
+  assert.equal(paymentEventTypeFromProviderStatus("RECEIVED"), "PAYMENT_RECEIVED");
+  assert.equal(paymentEventTypeFromProviderStatus("RECEIVED_IN_CASH"), "PAYMENT_RECEIVED");
+  assert.equal(paymentEventTypeFromProviderStatus("CONFIRMED"), "PAYMENT_CONFIRMED");
+  assert.equal(paymentEventTypeFromProviderStatus("OVERDUE"), "PAYMENT_OVERDUE");
+  assert.equal(paymentEventTypeFromProviderStatus("PENDING"), "PAYMENT_UPDATED");
+});
+
+test("pagamento conciliado remove a espera financeira sem antecipar a assinatura", () => {
+  assert.deepEqual(contractAwaitingSignatureProjection("paid"), {
+    status: "aguardando_ativacao",
+    substatus: "aguardando_assinatura_d4sign",
+    activation_status: "aguardando_assinatura",
+    signature_status: "sent",
+    policy_status: "issued_pending",
+  });
+  assert.equal(
+    contractAwaitingSignatureProjection("pending").activation_status,
+    "aguardando_pagamento_e_assinatura",
+  );
+});
 
 test("troca o meio da cobrança inicial somente enquanto ela está aberta", () => {
   assert.equal(

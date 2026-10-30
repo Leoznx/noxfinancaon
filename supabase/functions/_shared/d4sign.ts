@@ -10,6 +10,7 @@ import {
   resolveContractPeriodMonths,
 } from "./contract-period.ts";
 import {
+  contractAwaitingSignatureProjection,
   contractActivationDecision,
   recurringSetupAllowsContractActivation,
 } from "./billing-state.ts";
@@ -1317,6 +1318,14 @@ export async function dispatchD4SignContract(
       if (signature.status === "awaiting_signature") {
         await materializeD4SignContractDocument(supabase, consultationId);
         await ensureSignatureInviteWhatsapp(supabase, signature, consulta);
+        await supabase
+          .from("consultas_credito")
+          .update(
+            contractAwaitingSignatureProjection(
+              consulta.payment_state || consulta.payment_status,
+            ),
+          )
+          .eq("id", consultationId);
       }
       return {
         ok: true,
@@ -1457,16 +1466,10 @@ export async function dispatchD4SignContract(
     await supabase
       .from("consultas_credito")
       .update({
-        status: "aguardando_ativacao",
-        substatus: paymentConfirmed
-          ? "aguardando_assinatura_d4sign"
-          : "aguardando_pagamento_e_assinatura_d4sign",
+        ...contractAwaitingSignatureProjection(
+          consulta.payment_state || consulta.payment_status,
+        ),
         proposta_enviada_em: now,
-        activation_status: paymentConfirmed
-          ? "aguardando_assinatura"
-          : "aguardando_pagamento_e_assinatura",
-        signature_status: "sent",
-        policy_status: "issued_pending",
       })
       .eq("id", consultationId);
     await supabase.from("proposta_historico").insert({
@@ -1548,7 +1551,28 @@ async function ensurePendingPolicyForConsultation(supabase: any, consulta: any) 
     .eq("consulta_id", consulta.id)
     .limit(1);
   if (existing?.[0]) {
-    return existing[0];
+    const policy = existing[0];
+    const expectedPremium = Number(
+      consulta.valor_anual || Number(consulta.valor_premio_mensal || 0) * 12,
+    );
+    if (
+      !["ativa", "active", "cancelada", "cancelled"].includes(
+        String(policy.status || "").toLowerCase(),
+      ) &&
+      Number.isFinite(expectedPremium) &&
+      expectedPremium > 0 &&
+      Math.abs(Number(policy.valor_premio || 0) - expectedPremium) >= 0.01
+    ) {
+      const { data: synchronized, error } = await supabase
+        .from("apolices")
+        .update({ valor_premio: expectedPremium })
+        .eq("id", policy.id)
+        .select("*")
+        .single();
+      if (error) throw new Error(`policy_value_sync_error:${error.message}`);
+      return synchronized;
+    }
+    return policy;
   }
 
   const starts = new Date();

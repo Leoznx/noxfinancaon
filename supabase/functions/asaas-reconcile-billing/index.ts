@@ -12,6 +12,7 @@ import {
   rejectDisallowedOrigin,
   safeEqualSecret,
 } from "../_shared/http-security.ts";
+import { paymentEventTypeFromProviderStatus } from "../_shared/billing-state.ts";
 
 type RunBody = {
   consultationId?: string;
@@ -62,7 +63,7 @@ async function postSnapshotToWebhook(resource: ProviderResource, snapshot: any) 
         }
       : {
           id: `reconcile:payment:${resource.id}:${providerStatus}:${dayBucket}`,
-          event: "PAYMENT_UPDATED",
+          event: paymentEventTypeFromProviderStatus(providerStatus),
           dateCreated: new Date().toISOString(),
           payment: snapshot,
         };

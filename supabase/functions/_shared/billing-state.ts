@@ -229,6 +229,23 @@ export function shouldDispatchContractAfterPayment(input: {
   );
 }
 
+export function contractAwaitingSignatureProjection(paymentStatus: unknown) {
+  const paymentConfirmed = ["confirmed", "paid"].includes(
+    normalizePaymentStatus(paymentStatus),
+  );
+  return {
+    status: "aguardando_ativacao",
+    substatus: paymentConfirmed
+      ? "aguardando_assinatura_d4sign"
+      : "aguardando_pagamento_e_assinatura_d4sign",
+    activation_status: paymentConfirmed
+      ? "aguardando_assinatura"
+      : "aguardando_pagamento_e_assinatura",
+    signature_status: "sent",
+    policy_status: "issued_pending",
+  };
+}
+
 export function shouldReconcileBillingOperation(state: unknown) {
   return ["reserved", "provider_created", "ambiguous", "persisted"].includes(String(state || ""));
 }
@@ -515,6 +532,34 @@ export function paymentStatusFromEvent(eventType: unknown, providerStatus?: unkn
   }
   if (providerStatus) return normalizePaymentStatus(providerStatus);
   return map[event] || "pending";
+}
+
+/**
+ * Converte um snapshot consultado no Asaas no mesmo evento semântico que o
+ * webhook teria entregue. A conciliação não pode publicar sempre
+ * PAYMENT_UPDATED: os efeitos posteriores (baixa da primeira parcela,
+ * contrato, notificações e comissões) dependem de PAYMENT_CONFIRMED ou
+ * PAYMENT_RECEIVED.
+ */
+export function paymentEventTypeFromProviderStatus(providerStatus: unknown) {
+  const status = String(providerStatus || "").trim().toUpperCase();
+  const map: Record<string, string> = {
+    AWAITING_RISK_ANALYSIS: "PAYMENT_AWAITING_RISK_ANALYSIS",
+    APPROVED_BY_RISK_ANALYSIS: "PAYMENT_APPROVED_BY_RISK_ANALYSIS",
+    REPROVED_BY_RISK_ANALYSIS: "PAYMENT_REPROVED_BY_RISK_ANALYSIS",
+    CONFIRMED: "PAYMENT_CONFIRMED",
+    RECEIVED: "PAYMENT_RECEIVED",
+    RECEIVED_IN_CASH: "PAYMENT_RECEIVED",
+    OVERDUE: "PAYMENT_OVERDUE",
+    DELETED: "PAYMENT_DELETED",
+    BANK_SLIP_CANCELLED: "PAYMENT_BANK_SLIP_CANCELLED",
+    REFUNDED: "PAYMENT_REFUNDED",
+    PARTIALLY_REFUNDED: "PAYMENT_PARTIALLY_REFUNDED",
+    CHARGEBACK_REQUESTED: "PAYMENT_CHARGEBACK_REQUESTED",
+    CHARGEBACK_DISPUTE: "PAYMENT_CHARGEBACK_DISPUTE",
+    CREDIT_CARD_CAPTURE_REFUSED: "PAYMENT_CREDIT_CARD_CAPTURE_REFUSED",
+  };
+  return map[status] || "PAYMENT_UPDATED";
 }
 
 export function subscriptionStatusFromEvent(

@@ -89,7 +89,10 @@ function OwnerDocumentsPage() {
             file_url: document.file_url,
             storagePath: document.file_url,
             bucket: document.document_subtype,
-            status: "disponivel",
+            status:
+              document.document_subtype === "pendente_assinatura_d4sign"
+                ? "pendente_assinatura"
+                : "disponivel",
             uploaded_at: document.created_at,
           })),
         ].map((document) => {
@@ -200,7 +203,11 @@ function DocumentCard({ document }: { document: DocumentRow }) {
           <span
             className={`rounded-full px-2.5 py-1 text-[9px] font-bold ${available ? "bg-emerald-50 text-emerald-700" : "bg-neutral-100 text-neutral-500"}`}
           >
-            {available ? "Disponível" : "Em preparação"}
+            {available
+              ? "Disponível"
+              : document.status === "pendente_assinatura"
+                ? "Aguardando assinatura"
+                : "Em preparação"}
           </span>
         </div>
         <p className="mt-1 truncate text-xs text-neutral-500">
