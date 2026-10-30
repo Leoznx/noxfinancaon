@@ -923,11 +923,8 @@ function ResumoPropostaLoft(p: any) {
     historicoAberto,
     setHistoricoAberto,
     tipoSeguroImovel,
-    setTipoSeguroImovel,
     residencialSubtipo,
-    setResidencialSubtipo,
     comercialSubtipo,
-    setComercialSubtipo,
     coberturas,
     toggleCobertura,
     assistencia,
@@ -1640,32 +1637,6 @@ function ResumoPropostaLoft(p: any) {
         <section className="rounded-md border border-slate-300 bg-white p-6">
           <h2 className="mb-5 text-lg font-bold text-neutral-950">Seguro Imobiliário</h2>
           <div className="space-y-6">
-            <div>
-              <p className="mb-4 text-sm font-medium">Tipo de imóvel</p>
-              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                <TipoImovelCard
-                  title="Residencial"
-                  selected={tipoSeguroImovel === "residencial"}
-                  onClick={() => setTipoSeguroImovel("residencial")}
-                  icon={<Home size={17} />}
-                  selectValue={residencialSubtipo}
-                  onSelect={setResidencialSubtipo}
-                  placeholder="Tipo de residência"
-                  options={RESIDENCIAL_OPCOES}
-                />
-                <TipoImovelCard
-                  title="Comercial"
-                  selected={tipoSeguroImovel === "comercial"}
-                  onClick={() => setTipoSeguroImovel("comercial")}
-                  icon={<Building2 size={17} />}
-                  selectValue={comercialSubtipo}
-                  onSelect={setComercialSubtipo}
-                  placeholder="Tipo de comércio"
-                  options={COMERCIAL_OPCOES}
-                />
-              </div>
-            </div>
-
             <div className="space-y-3">
               <h3 className="text-lg font-bold">Coberturas</h3>
               <p className="text-sm text-slate-600">
@@ -2386,55 +2357,6 @@ function ResumoRow({ label, value }: { label: string; value: React.ReactNode }) 
     <div className="flex items-start justify-between gap-6 text-sm">
       <span className="text-neutral-950">{label}</span>
       <span className="text-right text-neutral-950">{value || "—"}</span>
-    </div>
-  );
-}
-
-function TipoImovelCard(p: {
-  title: string;
-  selected: boolean;
-  onClick: () => void;
-  icon: React.ReactNode;
-  selectValue: string;
-  onSelect: (value: string) => void;
-  placeholder: string;
-  options: string[];
-}) {
-  return (
-    <div
-      className={`rounded-md border p-5 ${p.selected ? "border-slate-400" : "border-slate-300"}`}
-    >
-      <button
-        type="button"
-        onClick={p.onClick}
-        className="mb-4 flex w-full items-center justify-between text-left"
-      >
-        <span className="flex items-center gap-2 text-sm font-bold text-neutral-950">
-          {p.icon}
-          {p.title}
-        </span>
-        <span
-          className={`h-4 w-4 rounded-full border ${p.selected ? "border-emerald-700 bg-emerald-500" : "border-neutral-900 bg-white"}`}
-        />
-      </button>
-      <Select
-        value={p.selectValue}
-        onValueChange={(v) => {
-          p.onClick();
-          p.onSelect(v);
-        }}
-      >
-        <SelectTrigger className="h-11 rounded-md border-slate-400">
-          <SelectValue placeholder={p.placeholder} />
-        </SelectTrigger>
-        <SelectContent>
-          {p.options.map((opt) => (
-            <SelectItem key={opt} value={opt}>
-              {opt}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
     </div>
   );
 }
