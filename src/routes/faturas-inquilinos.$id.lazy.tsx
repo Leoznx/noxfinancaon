@@ -5,13 +5,29 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { supabase } from "@/integrations/supabase/client";
 import { useCallback, useEffect, useState } from "react";
 import {
-  ArrowLeft, Receipt, AlertCircle, Eye, Download, Copy,
-  FileCheck, MapPin, RefreshCw,
+  ArrowLeft,
+  Receipt,
+  AlertCircle,
+  Eye,
+  Download,
+  Copy,
+  FileCheck,
+  MapPin,
+  RefreshCw,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import {
+  isTenantInvoiceOpen,
+  normalizeCanonicalTenantInvoices,
+  normalizeLegacyTenantInvoices,
+  pickNextOpenInvoice,
+  tenantInvoiceInitialBreakdown,
+  tenantInvoiceKindLabel,
+  type TenantInvoiceDisplayRow,
+} from "@/lib/tenant-invoice-display";
 
 export const Route = createLazyFileRoute("/faturas-inquilinos/$id")({
   component: () => (
@@ -26,12 +42,14 @@ export const Route = createLazyFileRoute("/faturas-inquilinos/$id")({
 const formatBRL = (v: number) =>
   (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const formatDate = (d: string | null | undefined) =>
-  d ? new Date(d).toLocaleDateString("pt-BR") : "—";
+  d
+    ? new Date(/^\d{4}-\d{2}-\d{2}$/.test(d) ? `${d}T00:00:00` : d).toLocaleDateString("pt-BR")
+    : "—";
 
 function FaturasInquilinoDetalhe() {
   const { id } = Route.useParams();
   const [apolice, setApolice] = useState<any>(null);
-  const [parcelas, setParcelas] = useState<any[]>([]);
+  const [parcelas, setParcelas] = useState<TenantInvoiceDisplayRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -41,7 +59,8 @@ function FaturasInquilinoDetalhe() {
     try {
       const { data: ap, error: apErr } = await supabase
         .from("apolices")
-        .select(`
+        .select(
+          `
           id, numero, status, vigencia_inicio, vigencia_fim,
           consulta:consultas_credito(
             inquilino:inquilinos(nome, cpf, cnpj, razao_social),
@@ -50,20 +69,37 @@ function FaturasInquilinoDetalhe() {
           imobiliaria:profiles!apolices_imobiliaria_profile_id_fkey(nome),
           corretor:profiles!apolices_corretor_profile_id_fkey(nome),
           proprietario:profiles!apolices_proprietario_profile_id_fkey(nome)
-        `)
+        `,
+        )
         .eq("id", id)
         .maybeSingle();
       if (apErr) throw apErr;
       if (!ap) throw new Error("Contrato não encontrado ou sem acesso.");
 
-      const { data: ms } = await supabase
-        .from("mensalidades")
-        .select("*")
+      const { data: faturas, error: faturasErr } = await (supabase as any)
+        .from("faturas_inquilino")
+        .select(
+          "id, numero_parcela, installment_total, vencimento, valor, status, pago_em, confirmed_at, boleto_url, linha_digitavel, payment_url, charge_kind, components",
+        )
         .eq("apolice_id", id)
-        .order("data_vencimento", { ascending: true });
+        .order("numero_parcela", { ascending: true });
+      if (faturasErr) throw faturasErr;
+
+      let rows = normalizeCanonicalTenantInvoices(faturas ?? []);
+      if (rows.length === 0) {
+        const { data: mensalidades, error: mensalidadesErr } = await supabase
+          .from("mensalidades")
+          .select(
+            "id, numero_parcela, data_vencimento, valor, status, data_pagamento, boleto_url, linha_digitavel, comprovante_url",
+          )
+          .eq("apolice_id", id)
+          .order("numero_parcela", { ascending: true });
+        if (mensalidadesErr) throw mensalidadesErr;
+        rows = normalizeLegacyTenantInvoices(mensalidades ?? []);
+      }
 
       setApolice(ap);
-      setParcelas(ms || []);
+      setParcelas(rows);
     } catch (e: any) {
       setErro(e.message || "Erro ao carregar faturas");
     } finally {
@@ -113,24 +149,32 @@ function FaturasInquilinoDetalhe() {
   const inquilino = consulta?.inquilino;
   const imovel = consulta?.imovel;
   const endereco = imovel
-    ? [imovel.logradouro || imovel.endereco, imovel.numero, imovel.bairro, imovel.cidade, imovel.estado]
-        .filter(Boolean).join(", ")
+    ? [
+        imovel.logradouro || imovel.endereco,
+        imovel.numero,
+        imovel.bairro,
+        imovel.cidade,
+        imovel.estado,
+      ]
+        .filter(Boolean)
+        .join(", ")
     : "Endereço não cadastrado";
 
-  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
-  const enriquecidas = parcelas.map((f) => {
-    const venc = new Date(f.data_vencimento);
-    const vencido = f.status === "pendente" && venc < hoje;
-    return { ...f, statusReal: vencido ? "vencido" : f.status };
-  });
-
-  const total = enriquecidas.reduce((s, f) => s + Number(f.valor || 0), 0);
-  const pago = enriquecidas.filter((f) => f.statusReal === "pago").reduce((s, f) => s + Number(f.valor || 0), 0);
-  const pendente = enriquecidas.filter((f) => f.statusReal === "pendente").reduce((s, f) => s + Number(f.valor || 0), 0);
-  const vencidoTotal = enriquecidas.filter((f) => f.statusReal === "vencido").reduce((s, f) => s + Number(f.valor || 0), 0);
-  const aberto = enriquecidas.filter((f) => f.statusReal === "pendente").length;
-  const vencidoCount = enriquecidas.filter((f) => f.statusReal === "vencido").length;
-  const proxima = enriquecidas.find((f) => f.statusReal === "pendente");
+  const total = parcelas
+    .filter((invoice) => invoice.status !== "cancelled")
+    .reduce((sum, invoice) => sum + invoice.amount, 0);
+  const pago = parcelas
+    .filter((invoice) => invoice.status === "paid")
+    .reduce((sum, invoice) => sum + invoice.amount, 0);
+  const pendente = parcelas
+    .filter(isTenantInvoiceOpen)
+    .reduce((sum, invoice) => sum + invoice.amount, 0);
+  const vencidoTotal = parcelas
+    .filter((invoice) => invoice.status === "overdue")
+    .reduce((sum, invoice) => sum + invoice.amount, 0);
+  const aberto = parcelas.filter(isTenantInvoiceOpen).length;
+  const vencidoCount = parcelas.filter((invoice) => invoice.status === "overdue").length;
+  const proxima = pickNextOpenInvoice(parcelas);
 
   const copiar = async (texto: string) => {
     try {
@@ -187,7 +231,11 @@ function FaturasInquilinoDetalhe() {
           <Kpi label="Total pendente" valor={formatBRL(pendente)} cor="amber" />
           <Kpi label="Total vencido" valor={formatBRL(vencidoTotal)} cor="red" />
           <Kpi label="Parcelas em aberto" valor={String(aberto)} cor="amber" />
-          <Kpi label="Próximo vencimento" valor={proxima ? formatDate(proxima.data_vencimento) : "—"} cor="neutral" />
+          <Kpi
+            label="Próximo vencimento"
+            valor={proxima ? formatDate(proxima.dueDate) : "—"}
+            cor="neutral"
+          />
         </div>
 
         {vencidoCount > 0 && (
@@ -203,95 +251,109 @@ function FaturasInquilinoDetalhe() {
         <Card className="border-neutral-200 shadow-sm overflow-hidden bg-white">
           {/* Mobile/tablet estreito (< md): cards empilhados, sem tabela pra arrastar. */}
           <div className="md:hidden divide-y divide-neutral-100">
-            {enriquecidas.length === 0 ? (
+            {parcelas.length === 0 ? (
               <div className="flex flex-col items-center gap-2 py-16">
                 <Receipt className="text-neutral-300" size={36} />
                 <p className="text-neutral-900 font-bold">Nenhuma fatura encontrada</p>
               </div>
             ) : (
-              enriquecidas.map((f, i) => (
-                <div key={f.id} className="p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-black text-neutral-900">
-                        #{String(f.numero_parcela ?? i + 1).padStart(2, "0")}
-                      </p>
-                      <p className="text-xs text-neutral-500">
-                        Vence {formatDate(f.data_vencimento)}
-                      </p>
+              parcelas.map((f, i) => {
+                const breakdown = tenantInvoiceInitialBreakdown(f);
+                return (
+                  <div key={f.id} className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-black text-neutral-900">
+                          {tenantInvoiceKindLabel(f)} · {f.installmentNumber}
+                          {f.installmentTotal ? ` de ${f.installmentTotal}` : ""}
+                        </p>
+                        <p className="text-xs text-neutral-500">Vence {formatDate(f.dueDate)}</p>
+                      </div>
+                      <FaturaStatusBadge status={f.status} rawStatus={f.rawStatus} />
                     </div>
-                    <FaturaStatusBadge status={f.statusReal} />
-                  </div>
-                  <div className="mt-2 flex items-center justify-between text-sm">
-                    <span className="text-neutral-500">
-                      {f.data_pagamento ? `Pago em ${formatDate(f.data_pagamento)}` : "Ainda não pago"}
-                    </span>
-                    <span className="font-bold text-neutral-900">{formatBRL(Number(f.valor))}</span>
-                  </div>
-                  <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-neutral-100 pt-3">
-                    {f.boleto_url ? (
-                      <>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="rounded-lg h-8 gap-1"
-                          onClick={() => window.open(f.boleto_url, "_blank", "noopener,noreferrer")}
-                        >
-                          <Eye size={12} /> Ver
-                        </Button>
+                    <div className="mt-2 flex items-center justify-between text-sm">
+                      <span className="text-neutral-500">
+                        {f.paidAt ? `Pago em ${formatDate(f.paidAt)}` : "Ainda não pago"}
+                      </span>
+                      <span className="font-bold text-neutral-900">{formatBRL(f.amount)}</span>
+                    </div>
+                    {breakdown && breakdown.initialExtrasAmount > 0 && (
+                      <p className="mt-1 text-xs text-neutral-500">
+                        Mensalidade {formatBRL(breakdown.monthlyAmount)} + itens iniciais{" "}
+                        {formatBRL(breakdown.initialExtrasAmount)}
+                      </p>
+                    )}
+                    <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-neutral-100 pt-3">
+                      {f.paymentUrl ? (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="rounded-lg h-8 gap-1"
+                            onClick={() =>
+                              window.open(f.paymentUrl!, "_blank", "noopener,noreferrer")
+                            }
+                          >
+                            <Eye size={12} /> Ver
+                          </Button>
+                          {f.boletoUrl && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="rounded-lg h-8 w-8 p-0"
+                              title="Baixar PDF"
+                              onClick={() => {
+                                const a = document.createElement("a");
+                                a.href = f.boletoUrl!;
+                                a.target = "_blank";
+                                a.rel = "noopener";
+                                a.download = `boleto-${apolice.numero}-${i + 1}.pdf`;
+                                document.body.appendChild(a);
+                                a.click();
+                                a.remove();
+                              }}
+                            >
+                              <Download size={12} />
+                            </Button>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-[10px] text-neutral-400 italic">
+                          Boleto não disponível
+                        </span>
+                      )}
+                      {f.barcode && (
                         <Button
                           size="sm"
                           variant="ghost"
                           className="rounded-lg h-8 w-8 p-0"
-                          title="Baixar PDF"
-                          onClick={() => {
-                            const a = document.createElement("a");
-                            a.href = f.boleto_url;
-                            a.target = "_blank";
-                            a.rel = "noopener";
-                            a.download = `boleto-${apolice.numero}-${i + 1}.pdf`;
-                            document.body.appendChild(a);
-                            a.click();
-                            a.remove();
-                          }}
+                          title="Copiar linha digitável"
+                          onClick={() => copiar(f.barcode!)}
                         >
-                          <Download size={12} />
+                          <Copy size={12} />
                         </Button>
-                      </>
-                    ) : (
-                      <span className="text-[10px] text-neutral-400 italic">
-                        Boleto não disponível
-                      </span>
-                    )}
-                    {f.linha_digitavel && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="rounded-lg h-8 w-8 p-0"
-                        title="Copiar linha digitável"
-                        onClick={() => copiar(f.linha_digitavel)}
-                      >
-                        <Copy size={12} />
-                      </Button>
-                    )}
-                    {f.comprovante_url ? (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="rounded-lg h-8 gap-1 text-green-700"
-                        title="Ver comprovante"
-                        onClick={() => window.open(f.comprovante_url, "_blank", "noopener,noreferrer")}
-                      >
-                        <FileCheck size={12} /> Comprovante
-                      </Button>
-                    ) : f.status === "pago" ? (
-                      <span className="text-[10px] text-neutral-400 italic">
-                        Comprovante não enviado
-                      </span>
-                    ) : null}
+                      )}
+                      {f.receiptUrl ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="rounded-lg h-8 gap-1 text-green-700"
+                          title="Ver comprovante"
+                          onClick={() =>
+                            window.open(f.receiptUrl!, "_blank", "noopener,noreferrer")
+                          }
+                        >
+                          <FileCheck size={12} /> Comprovante
+                        </Button>
+                      ) : f.status === "paid" ? (
+                        <span className="text-[10px] text-neutral-400 italic">
+                          Comprovante não enviado
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
 
@@ -309,80 +371,118 @@ function FaturasInquilinoDetalhe() {
                 </tr>
               </thead>
               <tbody className="divide-y border-t">
-                {enriquecidas.length === 0 ? (
+                {parcelas.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="text-center py-16">
                       <div className="flex flex-col items-center gap-2">
                         <Receipt className="text-neutral-300" size={36} />
-                        <p className="text-neutral-900 font-bold">
-                          Nenhuma fatura encontrada
-                        </p>
+                        <p className="text-neutral-900 font-bold">Nenhuma fatura encontrada</p>
                       </div>
                     </td>
                   </tr>
                 ) : (
-                  enriquecidas.map((f, i) => (
-                    <tr key={f.id} className="hover:bg-neutral-50/50">
-                      <td className="px-6 py-4 font-black text-neutral-900">
-                        #{String(f.numero_parcela ?? i + 1).padStart(2, "0")}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-neutral-600">
-                        {formatDate(f.data_vencimento)}
-                      </td>
-                      <td className="px-6 py-4 text-right font-bold text-neutral-900">
-                        {formatBRL(Number(f.valor))}
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <FaturaStatusBadge status={f.statusReal} />
-                      </td>
-                      <td className="px-6 py-4 text-xs text-neutral-500">
-                        {f.data_pagamento ? formatDate(f.data_pagamento) : "—"}
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="inline-flex gap-1.5">
-                          {f.boleto_url ? (
-                            <>
-                              <Button size="sm" variant="outline" className="rounded-lg h-8 gap-1"
-                                onClick={() => window.open(f.boleto_url, "_blank", "noopener,noreferrer")}>
-                                <Eye size={12} /> Ver
-                              </Button>
-                              <Button size="sm" variant="ghost" className="rounded-lg h-8 w-8 p-0" title="Baixar PDF"
-                                onClick={() => {
-                                  const a = document.createElement("a");
-                                  a.href = f.boleto_url; a.target = "_blank"; a.rel = "noopener";
-                                  a.download = `boleto-${apolice.numero}-${i + 1}.pdf`;
-                                  document.body.appendChild(a); a.click(); a.remove();
-                                }}>
-                                <Download size={12} />
-                              </Button>
-                            </>
-                          ) : (
-                            <span className="text-[10px] text-neutral-400 italic">
-                              Boleto não disponível
-                            </span>
+                  parcelas.map((f, i) => {
+                    const breakdown = tenantInvoiceInitialBreakdown(f);
+                    return (
+                      <tr key={f.id} className="hover:bg-neutral-50/50">
+                        <td className="px-6 py-4 text-neutral-900">
+                          <p className="font-black">{tenantInvoiceKindLabel(f)}</p>
+                          <p className="text-[11px] text-neutral-500">
+                            Parcela {f.installmentNumber}
+                            {f.installmentTotal ? ` de ${f.installmentTotal}` : ""}
+                          </p>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-neutral-600">
+                          {formatDate(f.dueDate)}
+                        </td>
+                        <td className="px-6 py-4 text-right font-bold text-neutral-900">
+                          <p>{formatBRL(f.amount)}</p>
+                          {breakdown && breakdown.initialExtrasAmount > 0 && (
+                            <p className="mt-0.5 text-[10px] font-medium text-neutral-500">
+                              {formatBRL(breakdown.monthlyAmount)} mensal +{" "}
+                              {formatBRL(breakdown.initialExtrasAmount)} inicial
+                            </p>
                           )}
-                          {f.linha_digitavel && (
-                            <Button size="sm" variant="ghost" className="rounded-lg h-8 w-8 p-0"
-                              title="Copiar linha digitável"
-                              onClick={() => copiar(f.linha_digitavel)}>
-                              <Copy size={12} />
-                            </Button>
-                          )}
-                          {f.comprovante_url ? (
-                            <Button size="sm" variant="ghost" className="rounded-lg h-8 gap-1 text-green-700"
-                              title="Ver comprovante"
-                              onClick={() => window.open(f.comprovante_url, "_blank", "noopener,noreferrer")}>
-                              <FileCheck size={12} />
-                            </Button>
-                          ) : f.status === "pago" ? (
-                            <span className="text-[10px] text-neutral-400 italic">
-                              Comprovante não enviado
-                            </span>
-                          ) : null}
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <FaturaStatusBadge status={f.status} rawStatus={f.rawStatus} />
+                        </td>
+                        <td className="px-6 py-4 text-xs text-neutral-500">
+                          {f.paidAt ? formatDate(f.paidAt) : "—"}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="inline-flex gap-1.5">
+                            {f.paymentUrl ? (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="rounded-lg h-8 gap-1"
+                                  onClick={() =>
+                                    window.open(f.paymentUrl!, "_blank", "noopener,noreferrer")
+                                  }
+                                >
+                                  <Eye size={12} /> Ver
+                                </Button>
+                                {f.boletoUrl && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="rounded-lg h-8 w-8 p-0"
+                                    title="Baixar PDF"
+                                    onClick={() => {
+                                      const a = document.createElement("a");
+                                      a.href = f.boletoUrl!;
+                                      a.target = "_blank";
+                                      a.rel = "noopener";
+                                      a.download = `boleto-${apolice.numero}-${i + 1}.pdf`;
+                                      document.body.appendChild(a);
+                                      a.click();
+                                      a.remove();
+                                    }}
+                                  >
+                                    <Download size={12} />
+                                  </Button>
+                                )}
+                              </>
+                            ) : (
+                              <span className="text-[10px] text-neutral-400 italic">
+                                Boleto não disponível
+                              </span>
+                            )}
+                            {f.barcode && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="rounded-lg h-8 w-8 p-0"
+                                title="Copiar linha digitável"
+                                onClick={() => copiar(f.barcode!)}
+                              >
+                                <Copy size={12} />
+                              </Button>
+                            )}
+                            {f.receiptUrl ? (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="rounded-lg h-8 gap-1 text-green-700"
+                                title="Ver comprovante"
+                                onClick={() =>
+                                  window.open(f.receiptUrl!, "_blank", "noopener,noreferrer")
+                                }
+                              >
+                                <FileCheck size={12} />
+                              </Button>
+                            ) : f.status === "paid" ? (
+                              <span className="text-[10px] text-neutral-400 italic">
+                                Comprovante não enviado
+                              </span>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -396,17 +496,21 @@ function FaturasInquilinoDetalhe() {
 function DarkItem({ label, valor }: { label: string; valor: string }) {
   return (
     <div className="space-y-1">
-      <p className="text-[9px] uppercase tracking-widest text-neutral-500 font-black">
-        {label}
-      </p>
+      <p className="text-[9px] uppercase tracking-widest text-neutral-500 font-black">{label}</p>
       <p className="text-sm font-bold text-white truncate">{valor}</p>
     </div>
   );
 }
 
 function Kpi({
-  label, valor, cor,
-}: { label: string; valor: string; cor: "green" | "red" | "amber" | "neutral" }) {
+  label,
+  valor,
+  cor,
+}: {
+  label: string;
+  valor: string;
+  cor: "green" | "red" | "amber" | "neutral";
+}) {
   const map = {
     green: "text-green-700 bg-green-50 border-green-100",
     red: "text-red-700 bg-red-50 border-red-100",
@@ -415,24 +519,24 @@ function Kpi({
   } as const;
   return (
     <div className={`rounded-xl border p-4 ${map[cor]}`}>
-      <p className="text-[9px] uppercase tracking-widest font-black opacity-70">
-        {label}
-      </p>
+      <p className="text-[9px] uppercase tracking-widest font-black opacity-70">{label}</p>
       <p className="text-base font-black mt-1 truncate">{valor}</p>
     </div>
   );
 }
 
-function FaturaStatusBadge({ status }: { status: string }) {
+function FaturaStatusBadge({ status, rawStatus }: { status: string; rawStatus?: string }) {
   const map: Record<string, { label: string; cls: string }> = {
-    pago: { label: "Pago", cls: "bg-green-50 text-green-700 border-green-200" },
-    pendente: { label: "Pendente", cls: "bg-amber-50 text-amber-700 border-amber-200" },
-    vencido: { label: "Vencido", cls: "bg-red-50 text-red-700 border-red-200" },
-    atrasado: { label: "Vencido", cls: "bg-red-50 text-red-700 border-red-200" },
-    cancelado: { label: "Cancelado", cls: "bg-neutral-100 text-neutral-500 border-neutral-200" },
-    processamento: { label: "Em processamento", cls: "bg-blue-50 text-blue-700 border-blue-200" },
+    paid: { label: "Pago", cls: "bg-green-50 text-green-700 border-green-200" },
+    pending: { label: "Pendente", cls: "bg-amber-50 text-amber-700 border-amber-200" },
+    overdue: { label: "Vencido", cls: "bg-red-50 text-red-700 border-red-200" },
+    cancelled: { label: "Cancelado", cls: "bg-neutral-100 text-neutral-500 border-neutral-200" },
+    processing: { label: "Em processamento", cls: "bg-blue-50 text-blue-700 border-blue-200" },
   };
-  const cfg = map[status] || map.pendente;
+  const cfg =
+    status === "pending" && rawStatus === "scheduled"
+      ? { label: "Programada", cls: "bg-blue-50 text-blue-700 border-blue-200" }
+      : map[status] || map.pending;
   return (
     <Badge className={`${cfg.cls} border text-[9px] uppercase font-black px-2 py-0.5`}>
       {cfg.label}

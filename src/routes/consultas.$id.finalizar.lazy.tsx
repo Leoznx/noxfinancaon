@@ -2154,8 +2154,8 @@ function ResumoPropostaLoft(p: any) {
       </div>
 
       <div className="fixed bottom-0 left-0 right-0 z-20 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-[780px] flex-col gap-1">
-          <div className="flex w-full items-center justify-between gap-3">
+        <div className="mx-auto w-full max-w-[1200px]">
+          <div className="flex w-full items-center justify-between gap-4">
             <Button
               type="button"
               variant="outline"
@@ -2219,24 +2219,6 @@ function ResumoPropostaLoft(p: any) {
               </div>
             )}
           </div>
-          {!seguroConcluido && (
-            <p className="text-xs text-neutral-500">
-              Aceite os Termos e Condições para seguir para o pagamento.
-            </p>
-          )}
-          {pagamentoAberto && !pagamento && (
-            <p className="text-xs text-neutral-500">
-              Escolha uma forma de pagamento para enviar a proposta.
-            </p>
-          )}
-          {pagamentoAberto && !paymentType && (
-            <p className="text-xs text-neutral-500">
-              Escolha se o pagamento será feito pela imobiliária ou pelo inquilino.
-            </p>
-          )}
-          {pagamentoAberto && !billingDueDay && (
-            <p className="text-xs text-neutral-500">Escolha o dia de vencimento do pagamento.</p>
-          )}
         </div>
       </div>
 
@@ -2262,6 +2244,13 @@ function ResumoPropostaLoft(p: any) {
             : undefined
         }
         onIrParaFaturas={() => navigate({ to: rotaFaturasAbertas as any })}
+        onConcluir={() =>
+          navigate({
+            to: "/consultas/$id/contrato-realizado",
+            params: { id },
+            replace: true,
+          })
+        }
       />
 
       <ModalCronogramaBoletos

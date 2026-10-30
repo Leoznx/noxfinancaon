@@ -3,7 +3,11 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useAuth } from "@/components/AuthProvider";
-import { loadTenantInvoiceSummaries, peekTenantInvoiceSummaries, type TenantInvoiceSummary } from "@/lib/tenant-invoice-summary";
+import {
+  loadTenantInvoiceSummaries,
+  peekTenantInvoiceSummaries,
+  type TenantInvoiceSummary,
+} from "@/lib/tenant-invoice-summary";
 import { useCallback, useEffect, useState } from "react";
 import { Receipt, Eye, AlertCircle, RefreshCw } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -24,7 +28,8 @@ type StatusFatura = TenantInvoiceSummary["status"];
 
 const formatBRL = (v: number) =>
   (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-const formatDate = (d: string | null) => (d ? new Date(d).toLocaleDateString("pt-BR") : "—");
+const formatDate = (d: string | null) =>
+  d ? new Date(`${d.slice(0, 10)}T00:00:00`).toLocaleDateString("pt-BR") : "—";
 
 function FaturasInquilinosLista() {
   const { user } = useAuth();
@@ -34,18 +39,21 @@ function FaturasInquilinosLista() {
   const [loading, setLoading] = useState(cached === undefined);
   const [erro, setErro] = useState<string | null>(null);
 
-  const load = useCallback(async (force = false) => {
-    if (!userId) return;
-    if (peekTenantInvoiceSummaries(userId) === undefined) setLoading(true);
-    setErro(null);
-    try {
-      setLinhas(await loadTenantInvoiceSummaries(userId, force));
-    } catch (e: any) {
-      setErro(e.message || "Erro ao carregar faturas");
-    } finally {
-      setLoading(false);
-    }
-  }, [userId]);
+  const load = useCallback(
+    async (force = false) => {
+      if (!userId) return;
+      if (peekTenantInvoiceSummaries(userId) === undefined) setLoading(true);
+      setErro(null);
+      try {
+        setLinhas(await loadTenantInvoiceSummaries(userId, force));
+      } catch (e: any) {
+        setErro(e.message || "Erro ao carregar faturas");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [userId],
+  );
 
   useEffect(() => {
     void load();
@@ -96,7 +104,7 @@ function FaturasInquilinosLista() {
                     <tr>
                       <th className="px-5 py-3">Inquilino</th>
                       <th className="px-5 py-3">Cidade</th>
-                      <th className="px-5 py-3 text-right">Valor da parcela</th>
+                      <th className="px-5 py-3 text-right">Mensalidade recorrente</th>
                       <th className="px-5 py-3 text-center">Status</th>
                       <th className="px-5 py-3">Próximo vencimento</th>
                       <th className="px-5 py-3 text-right">Ações</th>
@@ -163,7 +171,7 @@ function FaturasInquilinosLista() {
                   <div className="flex items-center justify-between text-xs mb-3">
                     <div>
                       <p className="text-[10px] uppercase tracking-widest text-neutral-400 font-bold">
-                        Parcela
+                        Mensalidade recorrente
                       </p>
                       <p className="font-black text-neutral-900 text-sm">
                         {formatBRL(l.valor_parcela)}
@@ -191,7 +199,11 @@ function FaturasInquilinosLista() {
                 </Card>
               ))}
             </div>
-            {erro && <p role="alert" className="text-center text-sm text-red-700">{erro}</p>}
+            {erro && (
+              <p role="alert" className="text-center text-sm text-red-700">
+                {erro}
+              </p>
+            )}
           </>
         )}
       </div>

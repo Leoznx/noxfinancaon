@@ -1,5 +1,12 @@
 import { supabase } from "@/integrations/supabase/client";
 import { loadSessionResource, peekSessionResource } from "@/lib/session-resource-cache";
+import {
+  normalizeCanonicalTenantInvoices,
+  normalizeLegacyTenantInvoices,
+  pickNextOpenInvoice,
+  pickRecurringInvoiceValue,
+} from "@/lib/tenant-invoice-display";
+import { readBillingRows } from "@/lib/billing-scope";
 
 export type TenantInvoiceSummary = {
   apolice_id: string;
@@ -42,39 +49,47 @@ async function fetchTenantInvoiceSummaries(): Promise<TenantInvoiceSummary[]> {
             inquilino:inquilinos(nome, cpf, cnpj, razao_social),
             imovel:imoveis(endereco, logradouro, numero, bairro, cidade, estado)
           ),
-          mensalidades(valor, data_vencimento, status)
+          mensalidades(id, numero_parcela, valor, data_vencimento, data_pagamento, status)
         `,
     )
     .order("created_at", { ascending: false })
     .order("id", { ascending: false });
   if (error) throw error;
 
+  const canonicalByPolicy = new Map<string, any[]>();
+  const invoiceRows = await readBillingRows<any>(
+    null,
+    "faturas_inquilino",
+    "id, apolice_id, numero_parcela, installment_total, vencimento, valor, status, pago_em, confirmed_at, charge_kind, components",
+  );
+  for (const invoice of invoiceRows) {
+    if (!invoice.apolice_id) continue;
+    const rows = canonicalByPolicy.get(invoice.apolice_id) ?? [];
+    rows.push(invoice);
+    canonicalByPolicy.set(invoice.apolice_id, rows);
+  }
+
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const rows = (data ?? []).map((policy: any): TenantInvoiceSummary => {
-      const installments = policy.mensalidades ?? [];
-      let overdue: any = null;
-      let upcoming: any = null;
-      for (const item of installments) {
-        if (item.status === "pago" || item.status === "cancelado") continue;
-        const due = new Date(item.data_vencimento);
-        if (due < today && (!overdue || due < new Date(overdue.data_vencimento))) overdue = item;
-        if (due >= today && (!upcoming || due < new Date(upcoming.data_vencimento)))
-          upcoming = item;
-      }
-      const reference = overdue || upcoming || installments[0];
-      const tenant = policy.consulta?.inquilino;
-      return {
-        apolice_id: policy.id,
-        numero: policy.numero,
-        inquilino_nome: tenant?.nome || tenant?.razao_social || "Inquilino não informado",
-        inquilino_doc: tenant?.cpf || tenant?.cnpj || "",
-        cidade: cityOf(policy.consulta?.imovel),
-        valor_parcela: Number(reference?.valor || 0),
-        proximo_venc: (upcoming || overdue)?.data_vencimento || null,
-        status: overdue ? "vencido" : upcoming ? "a_vencer" : "em_dia",
-      };
-    });
+    const canonicalRows = canonicalByPolicy.get(policy.id) ?? [];
+    const installments = canonicalRows.length
+      ? normalizeCanonicalTenantInvoices(canonicalRows, today)
+      : normalizeLegacyTenantInvoices(policy.mensalidades ?? [], today);
+    const nextOpen = pickNextOpenInvoice(installments);
+    const hasOverdue = installments.some((item) => item.status === "overdue");
+    const tenant = policy.consulta?.inquilino;
+    return {
+      apolice_id: policy.id,
+      numero: policy.numero,
+      inquilino_nome: tenant?.nome || tenant?.razao_social || "Inquilino não informado",
+      inquilino_doc: tenant?.cpf || tenant?.cnpj || "",
+      cidade: cityOf(policy.consulta?.imovel),
+      valor_parcela: pickRecurringInvoiceValue(installments),
+      proximo_venc: nextOpen?.dueDate || null,
+      status: hasOverdue ? "vencido" : nextOpen ? "a_vencer" : "em_dia",
+    };
+  });
   return rows;
 }
 

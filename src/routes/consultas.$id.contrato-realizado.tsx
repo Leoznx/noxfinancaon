@@ -217,9 +217,7 @@ function ContratoRealizadoPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() =>
-                      navigate({ to: "/consultas/$id/status", params: { id }, replace: true })
-                    }
+                    onClick={() => navigate({ to: "/apolices" })}
                     className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-xs font-black text-white transition hover:bg-slate-800 sm:flex-none"
                   >
                     Acompanhar proposta

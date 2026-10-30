@@ -44,6 +44,7 @@ interface ModalPagamentoAsaasProps {
   onReenviar?: (channel: Channel) => Promise<void>;
   onRetryInstallments?: () => Promise<void>;
   onIrParaFaturas?: () => void;
+  onConcluir: () => void;
 }
 
 function useCopiar() {
@@ -72,6 +73,7 @@ export function ModalPagamentoAsaas({
   onReenviar,
   onRetryInstallments,
   onIrParaFaturas,
+  onConcluir,
 }: ModalPagamentoAsaasProps) {
   const codigoCopiar = useCopiar();
   const linkCopiar = useCopiar();
@@ -373,7 +375,7 @@ export function ModalPagamentoAsaas({
           <Button
             type="button"
             className="bg-yellow-400 text-neutral-950 hover:bg-yellow-300"
-            onClick={onFechar}
+            onClick={onConcluir}
           >
             Concluir
           </Button>
