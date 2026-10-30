@@ -96,7 +96,6 @@ function DadosComplementaresPage() {
   const [docInquilino, setDocInquilino] = useState<File | null>(null);
   const [docInquilinoSubtype, setDocInquilinoSubtype] = useState<"cnh" | "rg" | "">("");
   const [docResidencia, setDocResidencia] = useState<File | null>(null);
-  const [docRenda, setDocRenda] = useState<File | null>(null);
 
   const [errors, setErrors] = useState<Record<string, boolean>>({});
   const err = (k: string) => errors[k] ? "border-red-500 ring-1 ring-red-500" : "";
@@ -234,7 +233,6 @@ function DadosComplementaresPage() {
       if (!docInquilinoSubtype) e.docInquilinoSubtype = true;
       if (!docInquilino && !hasExistingDoc("documento_foto", "documento_inquilino")) e.docInquilino = true;
       if (!docResidencia && !hasExistingDoc("comprovante_residencia", "comprovante_residencia_imovel")) e.docResidencia = true;
-      if (!docRenda && !hasExistingDoc("comprovante_renda")) e.docRenda = true;
     }
 
     setErrors(e);
@@ -258,7 +256,6 @@ function DadosComplementaresPage() {
         docInquilinoSubtype: "Tipo do documento com foto",
         docInquilino: "Documento com foto",
         docResidencia: "Comprovante de residência",
-        docRenda: "Comprovante de renda",
       };
       const missing = Object.keys(e).map((key) => labels[key] ?? key);
       const msg = `Preencha os campos destacados em vermelho: ${missing.join(", ")}.`;
@@ -348,7 +345,6 @@ function DadosComplementaresPage() {
                     ...(vistoriaPendente ? [] : ["vistoria_imovel"]),
                     ...(contratoPendente ? [] : ["contrato_locacao"]),
                     "comprovante_residencia",
-                    "comprovante_renda",
                     "documento_foto",
                   ],
             },
@@ -366,7 +362,6 @@ function DadosComplementaresPage() {
         docVistoria ? { file: docVistoria, type: "vistoria_imovel", subtype: null } : null,
         docContrato && contratoPronto === "sim" ? { file: docContrato, type: "contrato_locacao", subtype: "assinado_todas_partes" } : null,
         docResidencia ? { file: docResidencia, type: "comprovante_residencia", subtype: "pode_ser_imovel_antigo" } : null,
-        docRenda ? { file: docRenda, type: "comprovante_renda", subtype: null } : null,
         docInquilino ? { file: docInquilino, type: "documento_foto", subtype: docInquilinoSubtype } : null,
       ].filter(Boolean) as Array<{ file: File; type: string; subtype: string | null }>;
 
@@ -481,7 +476,7 @@ function DadosComplementaresPage() {
                 <CheckCircle2 size={22} className="mt-0.5 shrink-0 text-yellow-600" />
                 <div>
                   <h2 className="text-sm font-black uppercase tracking-widest text-neutral-700">Documentos de teste</h2>
-                  <p className="mt-1 text-sm text-neutral-500">Vistoria, contrato, documento com foto, residência e renda estão validados automaticamente nesta demonstração.</p>
+                  <p className="mt-1 text-sm text-neutral-500">Vistoria, contrato, documento com foto e residência estão validados automaticamente nesta demonstração.</p>
                 </div>
               </div>
             </section>
@@ -492,7 +487,7 @@ function DadosComplementaresPage() {
               <p className="text-sm text-neutral-500 mt-1">Envie os documentos disponíveis. Contrato e vistoria podem ser anexados depois.</p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <UploadCard
                 icon={<ClipboardCheck size={18} />}
                 title="Vistoria do Imóvel"
@@ -611,17 +606,6 @@ function DadosComplementaresPage() {
                 error={errors.docResidencia}
                 onPick={(files) => { pickFile(files, setDocResidencia); setErrors(p => ({ ...p, docResidencia: false })); }}
                 onClear={() => setDocResidencia(null)}
-              />
-
-              <UploadCard
-                icon={<Receipt size={18} />}
-                title="Comprovante de Renda"
-                description="Envie o comprovante de renda do inquilino em PDF, JPG, PNG ou WEBP."
-                file={docRenda}
-                existingFileName={findExistingDoc("comprovante_renda")?.file_name}
-                error={errors.docRenda}
-                onPick={(files) => { pickFile(files, setDocRenda); setErrors(p => ({ ...p, docRenda: false })); }}
-                onClear={() => setDocRenda(null)}
               />
             </div>
           </section>
