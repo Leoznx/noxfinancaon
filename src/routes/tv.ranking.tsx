@@ -12,7 +12,12 @@ import {
   WifiOff,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useAuth } from "@/components/AuthProvider";
+import {
+  useAuth,
+  type InternalRole,
+  type Role,
+  type SellerType as AuthSellerType,
+} from "@/components/AuthProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { setRememberMe } from "@/lib/authStorage";
 import {
@@ -33,6 +38,7 @@ const ROWS_PER_PAGE = 5;
 const FALLBACK_REFRESH_MS = 60_000;
 const FULL_SYNC_MS = 60 * 60_000;
 const PAGE_ROTATION_MS = 18_000;
+const TV_LOGIN_TIMEOUT_MS = 25_000;
 const LIVE_TABLES = [
   "seller_signup_attributions",
   "seller_client_partnerships",
@@ -40,6 +46,62 @@ const LIVE_TABLES = [
   "seller_team_goals",
   "seller_appointments",
 ] as const;
+
+const INTERNAL_ROLES = new Set<InternalRole>([
+  "admin_master",
+  "juridico",
+  "financeiro",
+  "marketing",
+  "suporte",
+  "vendedor",
+]);
+
+async function withTvLoginTimeout<T>(operation: Promise<T>): Promise<T> {
+  let timeoutId: number | undefined;
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<never>((_, reject) => {
+        timeoutId = window.setTimeout(
+          () => reject(new Error("tv_login_timeout")),
+          TV_LOGIN_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  } finally {
+    if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+  }
+}
+
+function tvLoginErrorMessage(cause: unknown): string {
+  const error = cause as { code?: string; message?: string } | null;
+  const code = String(error?.code ?? "").toLowerCase();
+  const message = String(error?.message ?? "").toLowerCase();
+
+  if (message.includes("tv_login_timeout")) {
+    return "A autenticação demorou demais. Verifique a internet da TV e tente novamente.";
+  }
+  if (code === "invalid_credentials" || message.includes("invalid login credentials")) {
+    return "E-mail ou senha incorretos. Confira os dados e tente novamente.";
+  }
+  if (code === "email_not_confirmed" || message.includes("email not confirmed")) {
+    return "Este e-mail ainda não foi confirmado. Confirme-o antes de entrar na TV.";
+  }
+  if (message.includes("tv_admin_required")) {
+    return "Esta conta não possui acesso de Admin ou Admin Master ao painel da TV.";
+  }
+  if (message.includes("tv_profile_missing")) {
+    return "A conta foi autenticada, mas o perfil administrativo não foi encontrado.";
+  }
+  if (
+    message.includes("failed to fetch") ||
+    message.includes("network") ||
+    message.includes("load failed")
+  ) {
+    return "A TV não conseguiu acessar o servidor. Verifique a internet e tente novamente.";
+  }
+  return "Não foi possível concluir o acesso. Tente novamente em alguns instantes.";
+}
 
 declare global {
   interface Window {
@@ -98,27 +160,101 @@ function TvRankingRoute() {
 }
 
 function TvLogin() {
+  const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [submitLabel, setSubmitLabel] = useState("Abrir painel");
   const [error, setError] = useState("");
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!email.trim() || !password) return;
+    const form = event.currentTarget as HTMLFormElement;
+    const formData = new FormData(form);
+    const normalizedEmail = String(formData.get("email") ?? email)
+      .trim()
+      .toLowerCase();
+    const submittedPassword = String(formData.get("password") ?? password);
+    if (!normalizedEmail || !submittedPassword) {
+      setError("Preencha o e-mail e a senha para entrar.");
+      return;
+    }
     setSubmitting(true);
+    setSubmitLabel("Autenticando…");
     setError("");
     try {
       setRememberMe(true);
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: email.trim().toLowerCase(),
-        password,
-      });
+      const { data: authData, error: signInError } = await withTvLoginTimeout(
+        supabase.auth.signInWithPassword({
+          email: normalizedEmail,
+          password: submittedPassword,
+        }),
+      );
       if (signInError) throw signInError;
+      if (!authData.user) throw new Error("tv_profile_missing");
+
+      setSubmitLabel("Validando acesso…");
+      const [profileResult, internalUserResult] = await withTvLoginTimeout(
+        Promise.all([
+          supabase
+            .from("profiles")
+            .select("role,status")
+            .eq("id", authData.user.id)
+            .maybeSingle(),
+          supabase
+            .from("internal_users" as any)
+            .select("role,status,seller_type,time_clock_enabled")
+            .eq("auth_user_id", authData.user.id)
+            .maybeSingle(),
+        ]),
+      );
+      if (profileResult.error) throw profileResult.error;
+
+      const profile = profileResult.data as { role?: Role | null } | null;
+      if (!profile?.role) throw new Error("tv_profile_missing");
+      const internalUser = internalUserResult.error
+        ? null
+        : (internalUserResult.data as
+            | {
+                role?: string | null;
+                status?: string | null;
+                seller_type?: string | null;
+                time_clock_enabled?: boolean | null;
+              }
+            | null);
+      const internalRole =
+        internalUser?.status === "ativo" &&
+        INTERNAL_ROLES.has(internalUser.role as InternalRole)
+          ? (internalUser.role as InternalRole)
+          : !internalUser && INTERNAL_ROLES.has(profile.role as InternalRole)
+            ? (profile.role as InternalRole)
+            : null;
+      const authorized =
+        profile.role === "admin" ||
+        profile.role === "admin_master" ||
+        internalRole === "admin_master";
+
+      if (!authorized) {
+        await supabase.auth.signOut({ scope: "local" });
+        throw new Error("tv_admin_required");
+      }
+
+      const sellerType = ["sdr", "closer"].includes(internalUser?.seller_type ?? "")
+        ? (internalUser!.seller_type as AuthSellerType)
+        : null;
+      login(
+        authData.user.email ?? normalizedEmail,
+        profile.role,
+        authData.user.id,
+        internalRole,
+        sellerType,
+        internalUser?.status === "ativo" && internalUser.time_clock_enabled === true,
+      );
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Não foi possível entrar.");
+      setError(tvLoginErrorMessage(cause));
     } finally {
       setSubmitting(false);
+      setSubmitLabel("Abrir painel");
     }
   };
 
@@ -154,9 +290,12 @@ function TvLogin() {
           <label htmlFor="tv-email">E-mail</label>
           <input
             id="tv-email"
+            name="email"
             type="email"
             inputMode="email"
             autoComplete="username"
+            autoCapitalize="none"
+            spellCheck={false}
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             autoFocus
@@ -164,19 +303,20 @@ function TvLogin() {
           <label htmlFor="tv-password">Senha</label>
           <input
             id="tv-password"
+            name="password"
             type="password"
             autoComplete="current-password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
           />
           {error ? (
-            <div className="tv-login-error">
+            <div className="tv-login-error" role="alert" aria-live="assertive">
               <AlertTriangle /> {error}
             </div>
           ) : null}
           <button className="tv-login-submit" type="submit" disabled={submitting}>
             {submitting ? <RefreshCw className="tv-spin" /> : <ShieldCheck />}
-            {submitting ? "Entrando…" : "Abrir painel"}
+            {submitLabel}
           </button>
         </form>
       </main>
@@ -646,6 +786,7 @@ const TV_STYLES = `
   .tv-login-card > p { margin: 0 0 30px; color: #8d8d93; font-size: clamp(13px, .9vw, 18px); }
   .tv-login-card label { display: block; margin: 20px 0 8px; color: #c5c5c8; font-size: clamp(13px, .85vw, 17px); font-weight: 800; }
   .tv-login-card input { width: 100%; height: clamp(54px, 4vw, 72px); border: 1px solid #3b3b41; border-radius: 12px; background: #0b0b0d; color: #fff; padding: 0 18px; font-size: clamp(16px, 1.1vw, 22px); }
+  .tv-login-card input:focus, .tv-login-submit:focus-visible { outline: 4px solid #fff; outline-offset: 4px; border-color: #ffd300; }
   .tv-login-error { margin-top: 18px; border: 1px solid #6a2929; border-radius: 10px; background: #331515; color: #ffbcbc; padding: 12px; display: flex; gap: 9px; font-size: clamp(12px, .8vw, 16px); }
   .tv-login-error svg { width: 20px; flex: 0 0 auto; }
   .tv-login-submit { width: 100%; height: clamp(58px, 4.2vw, 76px); margin-top: 24px; border: 0; border-radius: 13px; background: #ffd300; color: #101010; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: clamp(16px, 1.05vw, 21px); font-weight: 950; cursor: pointer; }
