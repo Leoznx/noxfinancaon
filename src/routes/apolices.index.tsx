@@ -22,6 +22,10 @@ export const Route = createFileRoute("/apolices/")({
   ),
 });
 
+function contractorName(policy: any) {
+  return policy.consulta?.solicitante?.nome || policy.imobiliaria?.nome || "Autônomo";
+}
+
 function ApolicesList() {
   const { user } = useAuth();
   const cachedPolicies = user ? peekDashboardPolicies(user) : undefined;
@@ -60,7 +64,7 @@ function ApolicesList() {
       a.numero?.toLowerCase().includes(q) ||
       a.consulta?.inquilino?.nome?.toLowerCase().includes(q) ||
       a.imobiliaria?.nome?.toLowerCase().includes(q) ||
-      a.consulta?.solicitante?.nome?.toLowerCase().includes(q)
+      contractorName(a).toLowerCase().includes(q)
     );
   });
 
@@ -80,7 +84,7 @@ function ApolicesList() {
         <div className="relative w-full md:w-80">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400" size={18} />
           <Input
-            placeholder="Buscar por nº, inquilino ou imobiliária"
+            placeholder="Buscar por nº, inquilino ou contratante"
             className="pl-12 h-12 bg-white border-neutral-200 rounded-xl"
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
@@ -134,12 +138,7 @@ function ApolicesList() {
                   {a.consulta?.imovel?.endereco || ""}
                 </p>
                 <p className="text-xs text-neutral-600">
-                  {user?.role === "imobiliaria" ? "Corretor: " : "Imobiliária: "}
-                  <span className="font-medium">
-                    {user?.role === "imobiliaria"
-                      ? a.consulta?.solicitante?.nome || "—"
-                      : a.imobiliaria?.nome || "Autônomo"}
-                  </span>
+                  Contratante: <span className="font-medium">{contractorName(a)}</span>
                 </p>
                 <p className="text-xs text-neutral-600">
                   {formatDate(a.vigencia_inicio)} <span className="text-neutral-300">→</span>{" "}
@@ -174,9 +173,7 @@ function ApolicesList() {
               <tr>
                 <th className="px-6 py-5">Nº Apólice</th>
                 <th className="px-6 py-5">Inquilino</th>
-                <th className="px-6 py-5">
-                  {user?.role === "imobiliaria" ? "Corretor" : "Imobiliária"}
-                </th>
+                <th className="px-6 py-5">Contratante</th>
                 <th className="px-6 py-5">Vigência</th>
                 <th className="px-6 py-5 text-right">Prêmio</th>
                 <th className="px-6 py-5 text-center">Status</th>
@@ -221,9 +218,7 @@ function ApolicesList() {
                       </p>
                     </td>
                     <td className="px-6 py-5 text-sm text-neutral-600">
-                      {user?.role === "imobiliaria"
-                        ? a.consulta?.solicitante?.nome || "—"
-                        : a.imobiliaria?.nome || "Autônomo"}
+                      {contractorName(a)}
                     </td>
                     <td className="px-6 py-5 text-sm text-neutral-600">
                       {formatDate(a.vigencia_inicio)} <span className="text-neutral-300">→</span>{" "}
@@ -260,6 +255,7 @@ function ApolicesList() {
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
     ativa: "bg-green-50 text-green-700 border-green-200",
+    emitida_pendente: "bg-amber-50 text-amber-700 border-amber-200",
     pendente: "bg-amber-50 text-amber-700 border-amber-200",
     cancelada: "bg-red-50 text-red-700 border-red-200",
     encerrada: "bg-neutral-100 text-neutral-600 border-neutral-200",
@@ -268,7 +264,7 @@ function StatusBadge({ status }: { status: string }) {
     <Badge
       className={`${map[status] || map.pendente} border text-[10px] uppercase font-black px-2.5 py-0.5`}
     >
-      {status}
+      {status === "emitida_pendente" ? "Aguardando assinatura" : status.replaceAll("_", " ")}
     </Badge>
   );
 }
