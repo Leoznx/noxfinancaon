@@ -87,9 +87,9 @@ const CARGOS_INTERNOS_GATEADOS = [
 
 const PRIORITY_DASHBOARD_ROUTES = new Set([
   "/dashboard",
+  "/consultas",
   "/faturas-inquilinos",
   "/carteira-cobrancas",
-  "/consultas",
   "/apolices",
   "/plano-carreira",
   "/minhas-comissoes",
@@ -690,7 +690,7 @@ export function DashboardLayout({
   ).join("\n");
 
   // As filas sobrevivem à troca de página. Dados começam junto com o código,
-  // com a tela aberta primeiro e apenas uma aba em segundo plano por vez.
+  // com a tela aberta primeiro e até uma segunda aba prioritária em paralelo.
   useEffect(() => {
     if (!routePreloadKey || !user || isDemoSession()) return;
     const targets = routePreloadKey.split("\n");
@@ -708,8 +708,8 @@ export function DashboardLayout({
     warmNavigationRoutes({
       scope: navigationScope,
       hrefs: targets,
-      // A tela aberta tem prioridade; as rotas mais usadas aquecem em fila de
-      // concorrência 1 para ficarem instantâneas sem congestionar o Supabase.
+      // A tela aberta tem prioridade; Consultas e as demais rotas mais usadas
+      // aquecem cedo sem disparar todas as leituras ao mesmo tempo.
       dataHrefs: dataTargets,
       currentHref: location.pathname,
       preloadCode: (href) => router.preloadRoute({ to: href as any }),

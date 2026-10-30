@@ -55,7 +55,10 @@ export function createWarmupQueue(concurrency: number) {
 }
 
 const codeQueue = createWarmupQueue(2);
-const dataQueue = createWarmupQueue(1);
+// Duas leituras independentes cabem em paralelo sem transformar o aquecimento
+// em uma rajada contra o Supabase. Assim, a rota atual e a próxima aba mais
+// usada começam juntas em vez de o usuário esperar toda a fila sequencial.
+const dataQueue = createWarmupQueue(2);
 let currentScope = "";
 
 export const isNavigationScopeCurrent = (scope: string) => currentScope === scope;

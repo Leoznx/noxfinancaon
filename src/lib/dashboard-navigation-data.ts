@@ -51,9 +51,13 @@ export async function loadDashboardConsultations(
     consultationKey(user),
     async () => {
       const consultationFields = `
-        id, status, resultado, substatus, technical_status, automation_step, raw_response,
+        id, status, resultado, substatus, technical_status, last_error_category, automation_step,
         created_at, updated_at, tenant_name, tenant_document, documento,
         property_address, rent_value, payment_status,
+        raw_cliente_nome:raw_response->>clienteNome,
+        raw_customer_name:raw_response->>customerName,
+        raw_nome_cliente:raw_response->>nomeCliente,
+        raw_identity_error_code:raw_response->identity->>errorCode,
         inquilinos (nome, cpf, cnpj),
         imoveis (logradouro, numero, bairro, cidade, estado, cep, valor_aluguel),
         planos (nome)
@@ -64,7 +68,21 @@ export async function loadDashboardConsultations(
           : consultationFields;
       let query = supabase.from("consultas_credito").select(fields);
 
-      if (!["admin", "admin_master", "analista"].includes(user.role)) {
+      const hasInternalScope =
+        Boolean(user.internalRole) ||
+        [
+          "admin",
+          "admin_master",
+          "analista",
+          "financeiro",
+          "juridico",
+          "marketing",
+          "suporte",
+          "vendedor",
+          "comercial",
+        ].includes(user.role);
+
+      if (!hasInternalScope) {
         if (user.role === "imobiliaria") {
           const scope = await loadAgencyScope(user);
           query = query.in("profile_id_solicitante", scope.profileIds);

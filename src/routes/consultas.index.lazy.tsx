@@ -71,7 +71,9 @@ function Consultas() {
           if (cached !== undefined) setConsultas(cached);
           setLoading(cached === undefined);
         }
-        const nextConsultas = await loadDashboardConsultations(user);
+        // Se o aquecimento já entregou um snapshot, pinte-o imediatamente e
+        // revalide em segundo plano. A aba fica instantânea sem congelar dados.
+        const nextConsultas = await loadDashboardConsultations(user, cached !== undefined);
         if (active) setConsultas(nextConsultas);
       } catch (error: any) {
         // A navegação pode desmontar esta aba enquanto o PostgREST ainda responde.
@@ -207,7 +209,12 @@ function Consultas() {
   const getNome = (c: any) => {
     const nome = resolveCreditCustomerDisplayName({
       tenantName: c.tenant_name,
-      rawResponse: c.raw_response,
+      rawResponse: {
+        clienteNome: c.raw_cliente_nome,
+        customerName: c.raw_customer_name,
+        nomeCliente: c.raw_nome_cliente,
+        identity: { errorCode: c.raw_identity_error_code },
+      },
       fallbacks: [c.inquilinos?.nome],
       document: c.documento || c.tenant_document,
       errorCategory: c.last_error_category,
