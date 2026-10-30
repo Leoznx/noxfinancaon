@@ -460,6 +460,7 @@ function FinalizarPage() {
         ) || (pinturaTotal > 0 ? toMoney(pinturaTotal / 3) : 0)
       : 0;
   const contratoAssinadoPendente = !!dadosComplementaresSummary?.contrato_locacao_pendencia;
+  const vistoriaPendente = !!dadosComplementaresSummary?.vistoria_imovel_pendencia;
   const custoSaida = Number(plano?.custo_saida) || 0;
 
   const valorComissao = useMemo(
@@ -674,6 +675,7 @@ function FinalizarPage() {
         pinturaMensal={pinturaMensal}
         custoSaida={custoSaida}
         contratoAssinadoPendente={contratoAssinadoPendente}
+        vistoriaPendente={vistoriaPendente}
         enviando={enviando}
         paymentType={paymentType}
         setPaymentType={setPaymentType}
@@ -780,6 +782,7 @@ function FinalizarPage() {
               plano={plano}
               documentos={documentos}
               contratoAssinadoPendente={contratoAssinadoPendente}
+              vistoriaPendente={vistoriaPendente}
               totalLoc={totalLoc}
               cobertura={cobertura}
               premioMensal={premioMensal}
@@ -821,6 +824,7 @@ function FinalizarPage() {
               documentos={documentos}
               historico={historico}
               contratoAssinadoPendente={contratoAssinadoPendente}
+              vistoriaPendente={vistoriaPendente}
               coberturas={coberturas}
               assistencia={assistencia}
               comissaoPct={comissaoPct}
@@ -953,6 +957,7 @@ function ResumoPropostaLoft(p: any) {
     pinturaMensal,
     custoSaida,
     contratoAssinadoPendente,
+    vistoriaPendente,
     enviando,
     paymentType,
     setPaymentType,
@@ -1568,7 +1573,6 @@ function ResumoPropostaLoft(p: any) {
               <div>
                 <p className="font-bold">Nome</p>
                 <p>{inquilino?.nome ?? consulta?.tenant_name ?? "—"}</p>
-                {contratoAssinadoPendente && <p className="text-neutral-700">(Pendente)</p>}
               </div>
               <div>
                 <p className="font-bold">CPF</p>
@@ -1593,6 +1597,12 @@ function ResumoPropostaLoft(p: any) {
                     ))
                   ) : (
                     <p className="text-neutral-500">Nenhum documento enviado.</p>
+                  )}
+                  {contratoAssinadoPendente && (
+                    <p className="font-semibold text-amber-700">Pendente: anexar o contrato de locação quando estiver pronto.</p>
+                  )}
+                  {vistoriaPendente && (
+                    <p className="font-semibold text-amber-700">Pendente: anexar a vistoria do imóvel quando estiver pronta.</p>
                   )}
                 </div>
               </div>
@@ -2564,6 +2574,7 @@ function EtapaResumo(p: any) {
     plano,
     documentos,
     contratoAssinadoPendente,
+    vistoriaPendente,
     totalLoc,
     cobertura,
     premioMensal,
@@ -2637,13 +2648,13 @@ function EtapaResumo(p: any) {
               </li>
             ))}
           </ul>
-          {contratoAssinadoPendente && (
+          {(contratoAssinadoPendente || vistoriaPendente) && (
             <div className="mt-3 flex gap-2 rounded-lg border border-yellow-300 bg-yellow-50 p-3 text-xs text-neutral-800">
               <AlertTriangle size={14} className="mt-0.5 shrink-0 text-yellow-700" />
-              <span>
-                <strong>Pendência:</strong> enviar o contrato de locação assinado e atualizado após
-                finalizar.
-              </span>
+              <div className="space-y-1">
+                {contratoAssinadoPendente && <p><strong>Pendência:</strong> anexar o contrato de locação quando estiver pronto.</p>}
+                {vistoriaPendente && <p><strong>Pendência:</strong> anexar a vistoria do imóvel quando estiver pronta.</p>}
+              </div>
             </div>
           )}
         </Card>
@@ -2983,6 +2994,7 @@ function EtapaRevisao(p: any) {
     documentos,
     historico,
     contratoAssinadoPendente,
+    vistoriaPendente,
     coberturas,
     assistencia,
     comissaoPct,
@@ -3055,13 +3067,13 @@ function EtapaRevisao(p: any) {
               </li>
             ))}
           </ul>
-          {contratoAssinadoPendente && (
+          {(contratoAssinadoPendente || vistoriaPendente) && (
             <div className="mt-3 flex gap-2 rounded-lg border border-yellow-300 bg-yellow-50 p-3 text-xs text-neutral-800">
               <AlertTriangle size={14} className="mt-0.5 shrink-0 text-yellow-700" />
-              <span>
-                <strong>Pendência:</strong> enviar o contrato de locação assinado e atualizado após
-                finalizar.
-              </span>
+              <div className="space-y-1">
+                {contratoAssinadoPendente && <p><strong>Pendência:</strong> anexar o contrato de locação quando estiver pronto.</p>}
+                {vistoriaPendente && <p><strong>Pendência:</strong> anexar a vistoria do imóvel quando estiver pronta.</p>}
+              </div>
             </div>
           )}
         </Card>

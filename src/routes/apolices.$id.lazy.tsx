@@ -52,6 +52,8 @@ type ProposalHistory = {
   created_at: string;
 };
 
+type DeferredDocumentType = "contrato_locacao" | "vistoria_imovel";
+
 const DOCUMENT_LABELS: Record<string, string> = {
   vistoria_imovel: "Vistoria do imóvel",
   contrato_locacao: "Contrato de locação",
@@ -92,9 +94,12 @@ function documentDescription(document: ContractDocument) {
       : "Documento gerado pela NOX e enviado para assinatura.";
   }
   if (document.document_type === "contrato_locacao") {
-    return document.document_subtype === "pendente_assinatura"
-      ? "Contrato informado como não assinado; pode ser atualizado até a conclusão da assinatura."
+    return document.document_subtype === "pendente_assinatura" || document.document_subtype === "pendente_envio"
+      ? "Contrato ainda não estava pronto e deve ser anexado nesta área."
       : "Contrato de locação anexado durante a contratação.";
+  }
+  if (document.document_type === "vistoria_imovel" && document.document_subtype === "pendente_envio") {
+    return "Vistoria ainda não estava pronta e deve ser anexada nesta área.";
   }
   if (document.document_type === "documento_foto" || document.document_type === "documento_inquilino") {
     return document.document_subtype
@@ -125,6 +130,9 @@ function ApoliceDetalhe() {
   const [aviso, setAviso] = useState<string | null>(null);
   const [replacingDocument, setReplacingDocument] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [attachingDocumentType, setAttachingDocumentType] = useState<DeferredDocumentType | null>(null);
+  const deferredFileInputRef = useRef<HTMLInputElement>(null);
+  const deferredDocumentTypeRef = useRef<DeferredDocumentType | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -139,7 +147,7 @@ function ApoliceDetalhe() {
             id, consulta_id, numero, status, vigencia_inicio, vigencia_fim, valor_premio, created_at,
             consulta:consultas_credito(
               id, status, resultado, created_at, approved_at, dados_complementares_em, proposta_enviada_em,
-              payment_status, payment_type, payment_confirmed_at, insurance_payment_method_label, contract_period_months,
+              payment_status, payment_type, payment_confirmed_at, insurance_payment_method_label, contract_period_months, documentos,
               base_calculo, valor_aluguel, valor_condominio, valor_taxas, valor_premio_mensal, valor_anual,
               selected_exit_cost, insurance_assistance, insurance_coverages, plano_id,
               terms_accepted_at, contract_accepted_at,
@@ -318,7 +326,11 @@ function ApoliceDetalhe() {
     user?.internalRole || user?.role || "",
   );
   const contratoLocacao = documentosProposta.find((document) => document.document_type === "contrato_locacao");
+  const vistoriaImovel = documentosProposta.find((document) => document.document_type === "vistoria_imovel");
   const documentoD4Sign = documentosProposta.find((document) => Boolean(document.contract_signature_id));
+  const dadosComplementares = consulta?.documentos?.dados_complementares ?? {};
+  const contratoAdiado = Boolean(dadosComplementares.contrato_locacao_pendencia) && !contratoLocacao;
+  const vistoriaAdiada = Boolean(dadosComplementares.vistoria_imovel_pendencia) && !vistoriaImovel;
   const assinaturaConcluida =
     ["signed", "active"].includes(String(assinatura?.status || "")) ||
     assinatura?.signature_status === "signed" ||
@@ -333,11 +345,28 @@ function ApoliceDetalhe() {
   const allDocuments = [
     ...documentosProposta.map((document) => ({ document, source: "proposal" as const })),
     ...documentos.map((document) => ({ document: document as ContractDocument, source: "contract" as const })),
+    ...(contratoAdiado ? [{
+      document: {
+        id: "deferred-contrato_locacao",
+        document_type: "contrato_locacao",
+        document_subtype: "pendente_envio",
+      } as ContractDocument,
+      source: "deferred" as const,
+    }] : []),
+    ...(vistoriaAdiada ? [{
+      document: {
+        id: "deferred-vistoria_imovel",
+        document_type: "vistoria_imovel",
+        document_subtype: "pendente_envio",
+      } as ContractDocument,
+      source: "deferred" as const,
+    }] : []),
   ].sort((a, b) => {
     const first = new Date(a.document.updated_at || a.document.uploaded_at || a.document.created_at || 0).getTime();
     const second = new Date(b.document.updated_at || b.document.uploaded_at || b.document.created_at || 0).getTime();
     return second - first;
   });
+  const attachedDocumentsCount = allDocuments.filter(({ document }) => Boolean(document.file_url || document.storage_path)).length;
 
   async function resolveDocumentUrl(document: ContractDocument) {
     const path = document.storage_path || document.file_url;
@@ -444,6 +473,74 @@ function ApoliceDetalhe() {
       toast.error(error?.message || "Não foi possível atualizar o contrato.");
     } finally {
       setReplacingDocument(false);
+    }
+  }
+
+  function chooseDeferredDocument(documentType: DeferredDocumentType) {
+    deferredDocumentTypeRef.current = documentType;
+    deferredFileInputRef.current?.click();
+  }
+
+  async function attachDeferredDocument(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    const documentType = deferredDocumentTypeRef.current;
+    deferredDocumentTypeRef.current = null;
+    if (!file || !documentType) return;
+    if (!ACCEPTED_CONTRACT_TYPES.includes(file.type)) {
+      toast.error("Envie um arquivo PDF, JPG, PNG ou WEBP.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("O arquivo deve ter no máximo 10 MB.");
+      return;
+    }
+
+    setAttachingDocumentType(documentType);
+    try {
+      const { data: authData } = await supabase.auth.getUser();
+      const userId = authData.user?.id;
+      if (!userId) throw new Error("Sessão inválida.");
+      const safeName = file.name
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-zA-Z0-9._-]/g, "-")
+        .replace(/-+/g, "-");
+      const path = `${userId}/${apolice.consulta_id}/${documentType}-${Date.now()}-${safeName}`;
+      let uploadError: any = null;
+      for (const bucket of ["approval-documents", "anexos", "documentos-proposta"]) {
+        const { error } = await supabase.storage.from(bucket).upload(path, file, {
+          cacheControl: "3600",
+          contentType: file.type,
+          upsert: true,
+        });
+        if (!error) {
+          uploadError = null;
+          break;
+        }
+        uploadError = error;
+        if (!String(error.message || "").toLowerCase().includes("bucket not found")) break;
+      }
+      if (uploadError) throw uploadError;
+
+      const { data, error } = await (supabase as any).rpc("attach_deferred_proposal_document", {
+        p_consulta_id: apolice.consulta_id,
+        p_document_type: documentType,
+        p_file_name: file.name,
+        p_file_url: path,
+        p_file_type: file.type,
+      });
+      if (error) throw error;
+      const attachedDocument = (Array.isArray(data) ? data[0] : data) as ContractDocument | null;
+      if (!attachedDocument?.id) throw new Error("O documento foi enviado, mas não pôde ser confirmado.");
+      setDocumentosProposta((current) => [attachedDocument, ...current]);
+      toast.success(documentType === "contrato_locacao"
+        ? "Contrato anexado e pendência concluída."
+        : "Vistoria anexada e pendência concluída.");
+    } catch (error: any) {
+      toast.error(error?.message || "Não foi possível anexar o documento pendente.");
+    } finally {
+      setAttachingDocumentType(null);
     }
   }
 
@@ -560,7 +657,7 @@ function ApoliceDetalhe() {
           <div>
             <h2 className="text-lg font-black text-neutral-900">Documentação enviada</h2>
             <p className="mt-1 text-sm text-neutral-500">
-              {allDocuments.length} arquivo(s) anexado(s) à contratação.
+              {attachedDocumentsCount} arquivo(s) anexado(s) à contratação.
             </p>
           </div>
           <Button asChild variant="outline" className="rounded-lg gap-2 font-bold">
@@ -576,6 +673,13 @@ function ApoliceDetalhe() {
           className="hidden"
           onChange={replaceUnsignedContract}
         />
+        <input
+          ref={deferredFileInputRef}
+          type="file"
+          accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
+          className="hidden"
+          onChange={attachDeferredDocument}
+        />
         {allDocuments.length === 0 ? (
           <Card className="border-dashed border-neutral-300 bg-white p-10 text-center">
             <FileText className="mx-auto mb-3 text-neutral-300" size={34} />
@@ -587,8 +691,11 @@ function ApoliceDetalhe() {
             const Icon = documentIcon(doc);
             const available = Boolean(doc?.file_url || doc?.storage_path);
             const pending = doc.document_subtype === "pendente_assinatura" ||
+              doc.document_subtype === "pendente_envio" ||
               (Boolean(doc.contract_signature_id) && !assinaturaConcluida);
             const editable = source === "proposal" && doc.id === contratoLocacao?.id && podeEditarContrato;
+            const deferredType = source === "deferred" ? doc.document_type as DeferredDocumentType : null;
+            const attaching = deferredType === attachingDocumentType;
             const uploadedAt = doc?.uploaded_at || doc?.updated_at || doc?.created_at;
             return (
               <Card
@@ -607,7 +714,7 @@ function ApoliceDetalhe() {
                   >
                     <Icon className={`w-5 h-5 ${pending ? "text-red-600" : "text-yellow-700"}`} />
                   </div>
-                  <DocStatusBadge status={available ? (pending ? "pendente_assinatura" : "disponivel") : "nao_enviado"} />
+                  <DocStatusBadge status={pending ? "pendente_envio" : available ? "disponivel" : "nao_enviado"} />
                 </div>
 
                 <div className="mt-4 space-y-1.5 flex-1">
@@ -627,9 +734,14 @@ function ApoliceDetalhe() {
                   <div className="mt-3 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
                     <AlertCircle size={14} className="mt-0.5 shrink-0" />
                     <span>
-                      Contrato enviado sem assinatura. Envie a via assinada para
-                      concluir a contratação — este envio só pode ser feito uma vez.
+                      Contrato marcado como não pronto. Envie a versão final nesta área — este envio só pode ser feito uma vez.
                     </span>
+                  </div>
+                )}
+                {deferredType && (
+                  <div className="mt-3 flex items-start gap-2 rounded-xl border border-yellow-300 bg-yellow-50 px-3 py-2 text-xs font-bold text-yellow-900">
+                    <Clock3 size={14} className="mt-0.5 shrink-0" />
+                    <span>O seguro foi concluído sem este arquivo. Anexe-o agora para encerrar a pendência.</span>
                   </div>
                 )}
 
@@ -661,7 +773,22 @@ function ApoliceDetalhe() {
                       onClick={() => fileInputRef.current?.click()}
                     >
                       {replacingDocument ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-                      {replacingDocument ? "Enviando..." : "Enviar contrato assinado"}
+                      {replacingDocument ? "Enviando..." : "Anexar contrato pronto"}
+                    </Button>
+                  )}
+                  {deferredType && (
+                    <Button
+                      size="sm"
+                      className="w-full rounded-lg gap-1.5 font-black bg-neutral-900 hover:bg-neutral-800 text-white"
+                      disabled={Boolean(attachingDocumentType)}
+                      onClick={() => chooseDeferredDocument(deferredType)}
+                    >
+                      {attaching ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                      {attaching
+                        ? "Enviando..."
+                        : deferredType === "contrato_locacao"
+                          ? "Anexar contrato pronto"
+                          : "Anexar vistoria pronta"}
                     </Button>
                   )}
                 </div>
@@ -1030,7 +1157,8 @@ function DocStatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; cls: string }> = {
     disponivel:  { label: "Disponível",   cls: "bg-green-50 text-green-700 border-green-200" },
     pendente:    { label: "Pendente",     cls: "bg-amber-50 text-amber-700 border-amber-200" },
-    pendente_assinatura: { label: "Não assinado", cls: "bg-red-50 text-red-700 border-red-200" },
+    pendente_assinatura: { label: "Pendente", cls: "bg-amber-50 text-amber-700 border-amber-200" },
+    pendente_envio: { label: "Pendente", cls: "bg-amber-50 text-amber-700 border-amber-200" },
     nao_enviado: { label: "Não enviado",  cls: "bg-neutral-100 text-neutral-500 border-neutral-200" },
   };
   const cfg = map[status] || map.nao_enviado;

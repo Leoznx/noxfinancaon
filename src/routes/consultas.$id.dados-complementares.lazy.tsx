@@ -88,10 +88,11 @@ function DadosComplementaresPage() {
   const [email, setEmail] = useState("");
   const [telefone, setTelefone] = useState("");
 
-  // Documentos (4 obrigatórios)
+  // Documentos da contratação. Contrato e vistoria podem ficar pendentes para envio posterior.
   const [docVistoria, setDocVistoria] = useState<File | null>(null);
   const [docContrato, setDocContrato] = useState<File | null>(null);
-  const [contratoAssinado, setContratoAssinado] = useState<"sim" | "nao" | "">("");
+  const [vistoriaPronta, setVistoriaPronta] = useState<"sim" | "nao" | "">("");
+  const [contratoPronto, setContratoPronto] = useState<"sim" | "nao" | "">("");
   const [docInquilino, setDocInquilino] = useState<File | null>(null);
   const [docInquilinoSubtype, setDocInquilinoSubtype] = useState<"cnh" | "rg" | "">("");
   const [docResidencia, setDocResidencia] = useState<File | null>(null);
@@ -134,7 +135,8 @@ function DadosComplementaresPage() {
           setNumero(demo.imovel.numero);
           setComplemento(demo.imovel.complemento);
           setSubtipo(demo.imovel.subtipo);
-          setContratoAssinado(demo.contratoAssinado);
+          setVistoriaPronta("sim");
+          setContratoPronto(demo.contratoAssinado);
           setDocInquilinoSubtype(demo.documentoFoto);
         } else {
           setNome(i.nome ?? (data as any).tenant_name ?? "");
@@ -158,11 +160,18 @@ function DadosComplementaresPage() {
           .eq("consulta_id", id);
         setExistingDocs(docs ?? []);
         const docContratoExistente = (docs ?? []).find((doc: any) => doc.document_type === "contrato_locacao");
+        const docVistoriaExistente = (docs ?? []).find((doc: any) => doc.document_type === "vistoria_imovel");
         const docInq = (docs ?? []).find((doc: any) => doc.document_type === "documento_foto" || doc.document_type === "documento_inquilino");
         if (!isDemo) {
+          const dadosComplementares = ((data as any).documentos?.dados_complementares ?? {}) as Record<string, unknown>;
           if (docInq?.document_subtype) setDocInquilinoSubtype(docInq.document_subtype as "cnh" | "rg");
-          if (docContratoExistente?.document_subtype === "assinado_todas_partes") setContratoAssinado("sim");
-          if (docContratoExistente?.document_subtype === "pendente_assinatura") setContratoAssinado("nao");
+          if (docVistoriaExistente) setVistoriaPronta("sim");
+          else if (dadosComplementares.vistoria_imovel_pendencia) setVistoriaPronta("nao");
+          if (docContratoExistente) {
+            setContratoPronto(docContratoExistente.document_subtype === "pendente_assinatura" ? "nao" : "sim");
+          } else if (dadosComplementares.contrato_locacao_pendencia) {
+            setContratoPronto("nao");
+          }
         }
       } catch (e: any) {
         toast.error("Erro ao carregar consulta: " + e.message);
@@ -218,9 +227,10 @@ function DadosComplementaresPage() {
     if (!email.trim()) e.email = true;
     if (!telefone.trim()) e.telefone = true;
     if (!demoMode) {
-      if (!docVistoria && !hasExistingDoc("vistoria_imovel")) e.docVistoria = true;
-      if (!docContrato && !hasExistingDoc("contrato_locacao")) e.docContrato = true;
-      if (!contratoAssinado) e.contratoAssinado = true;
+      if (!vistoriaPronta) e.vistoriaPronta = true;
+      if (vistoriaPronta === "sim" && !docVistoria && !hasExistingDoc("vistoria_imovel")) e.docVistoria = true;
+      if (!contratoPronto) e.contratoPronto = true;
+      if (contratoPronto === "sim" && !docContrato && !hasExistingDoc("contrato_locacao")) e.docContrato = true;
       if (!docInquilinoSubtype) e.docInquilinoSubtype = true;
       if (!docInquilino && !hasExistingDoc("documento_foto", "documento_inquilino")) e.docInquilino = true;
       if (!docResidencia && !hasExistingDoc("comprovante_residencia", "comprovante_residencia_imovel")) e.docResidencia = true;
@@ -243,7 +253,8 @@ function DadosComplementaresPage() {
         telefone: "Telefone",
         docVistoria: "Vistoria do imóvel",
         docContrato: "Contrato de locação",
-        contratoAssinado: "Contrato assinado por todas as partes",
+        vistoriaPronta: "Situação da vistoria do imóvel",
+        contratoPronto: "Situação do contrato de locação",
         docInquilinoSubtype: "Tipo do documento com foto",
         docInquilino: "Documento com foto",
         docResidencia: "Comprovante de residência",
@@ -298,7 +309,8 @@ function DadosComplementaresPage() {
       const previousDocumentos = ((consulta as any)?.documentos && typeof (consulta as any).documentos === "object")
         ? (consulta as any).documentos
         : {};
-      const contratoPendente = contratoAssinado === "nao";
+      const contratoPendente = contratoPronto === "nao";
+      const vistoriaPendente = vistoriaPronta === "nao";
       const { error: updErr } = await supabase
         .from("consultas_credito")
         .update({
@@ -319,17 +331,22 @@ function DadosComplementaresPage() {
             ...previousDocumentos,
             dados_complementares: {
               ...(previousDocumentos as any).dados_complementares,
-              contrato_locacao_assinado: contratoAssinado === "sim",
+              contrato_locacao_pronto: contratoPronto === "sim",
+              contrato_locacao_assinado: contratoPronto === "sim",
               contrato_locacao_pendencia: contratoPendente
-                ? "Enviar contrato de locação assinado e atualizado após finalizar."
+                ? "Anexar o contrato de locação quando estiver pronto."
+                : null,
+              vistoria_imovel_pronta: vistoriaPronta === "sim",
+              vistoria_imovel_pendencia: vistoriaPendente
+                ? "Anexar a vistoria do imóvel quando estiver pronta."
                 : null,
               demonstracao: demoMode,
               documentos_liberados_automaticamente: demoMode,
               documentos_obrigatorios: demoMode
                 ? []
                 : [
-                    "vistoria_imovel",
-                    "contrato_locacao",
+                    ...(vistoriaPendente ? [] : ["vistoria_imovel"]),
+                    ...(contratoPendente ? [] : ["contrato_locacao"]),
                     "comprovante_residencia",
                     "comprovante_renda",
                     "documento_foto",
@@ -340,14 +357,14 @@ function DadosComplementaresPage() {
         .eq("id", id);
       if (updErr) throw updErr;
 
-      // 3. Upload de documentos (4 obrigatórios)
+      // 3. Upload dos documentos já disponíveis; pendências ficam para a área de Documentos.
       const { data: { user } } = await supabase.auth.getUser();
       const uploaderId = user?.id;
       if (!uploaderId) throw new Error("Usuário não autenticado");
 
       const docs: Array<{ file: File; type: string; subtype: string | null }> = [
         docVistoria ? { file: docVistoria, type: "vistoria_imovel", subtype: null } : null,
-        docContrato ? { file: docContrato, type: "contrato_locacao", subtype: contratoAssinado === "sim" ? "assinado_todas_partes" : "pendente_assinatura" } : null,
+        docContrato && contratoPronto === "sim" ? { file: docContrato, type: "contrato_locacao", subtype: "assinado_todas_partes" } : null,
         docResidencia ? { file: docResidencia, type: "comprovante_residencia", subtype: "pode_ser_imovel_antigo" } : null,
         docRenda ? { file: docRenda, type: "comprovante_renda", subtype: null } : null,
         docInquilino ? { file: docInquilino, type: "documento_foto", subtype: docInquilinoSubtype } : null,
@@ -472,53 +489,90 @@ function DadosComplementaresPage() {
           <section className="bg-white rounded-2xl border border-neutral-100 p-5 sm:p-6 space-y-5">
             <div>
               <h2 className="text-sm font-black uppercase tracking-widest text-neutral-700">Documentos</h2>
-              <p className="text-sm text-neutral-500 mt-1">Envie os documentos obrigatórios para concluir a proposta.</p>
+              <p className="text-sm text-neutral-500 mt-1">Envie os documentos disponíveis. Contrato e vistoria podem ser anexados depois.</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               <UploadCard
                 icon={<ClipboardCheck size={18} />}
                 title="Vistoria do Imóvel"
-                description="Envie a vistoria do imóvel em PDF, JPG, PNG ou WEBP."
+                description="Se a vistoria já estiver pronta, envie em PDF, JPG, PNG ou WEBP."
                 file={docVistoria}
                 existingFileName={findExistingDoc("vistoria_imovel")?.file_name}
-                error={errors.docVistoria}
+                error={errors.docVistoria || errors.vistoriaPronta}
                 onPick={(files) => { pickFile(files, setDocVistoria); setErrors(p => ({ ...p, docVistoria: false })); }}
                 onClear={() => setDocVistoria(null)}
-              />
-
-              <UploadCard
-                icon={<FileText size={18} />}
-                title="Contrato de Locação"
-                description="Envie o contrato de locação assinado ou em andamento, em PDF, JPG, PNG ou WEBP."
-                file={docContrato}
-                existingFileName={findExistingDoc("contrato_locacao")?.file_name}
-                error={errors.docContrato || errors.contratoAssinado}
-                onPick={(files) => { pickFile(files, setDocContrato); setErrors(p => ({ ...p, docContrato: false })); }}
-                onClear={() => setDocContrato(null)}
+                uploadDisabled={vistoriaPronta === "nao"}
                 extraHeader={
-                  <div data-error={errors.contratoAssinado || undefined} className={`space-y-2 rounded-lg ${errors.contratoAssinado ? "ring-1 ring-red-500 p-2" : ""}`}>
-                    <Label className="text-xs">Já foi assinado por todas as partes? *</Label>
+                  <div data-error={errors.vistoriaPronta || undefined} className={`space-y-2 rounded-lg ${errors.vistoriaPronta ? "ring-1 ring-red-500 p-2" : ""}`}>
+                    <Label className="text-xs">A vistoria do imóvel está pronta? *</Label>
                     <div className="grid grid-cols-2 gap-2">
                       {(["sim", "nao"] as const).map((value) => (
                         <button
                           key={value}
                           type="button"
-                          onClick={() => { setContratoAssinado(value); setErrors(p => ({ ...p, contratoAssinado: false })); }}
+                          onClick={() => {
+                            setVistoriaPronta(value);
+                            if (value === "nao") setDocVistoria(null);
+                            setErrors(p => ({ ...p, vistoriaPronta: false, docVistoria: false }));
+                          }}
                           className={`h-9 rounded-lg border text-xs font-bold transition-colors ${
-                            contratoAssinado === value
+                            vistoriaPronta === value
                               ? "border-yellow-400 bg-yellow-50 text-neutral-900"
                               : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300"
                           }`}
                         >
-                          {value === "sim" ? "Sim" : "Não"}
+                          {value === "sim" ? "Sim, está pronta" : "Não está pronta"}
                         </button>
                       ))}
                     </div>
-                    {contratoAssinado === "nao" && (
+                    {vistoriaPronta === "nao" && (
                       <div className="flex gap-2 rounded-lg border border-yellow-300 bg-yellow-50 p-2 text-[11px] leading-relaxed text-neutral-700">
                         <AlertTriangle size={14} className="mt-0.5 shrink-0 text-yellow-700" />
-                        <span>Será criada uma pendência para enviar o contrato assinado e atualizado após finalizar.</span>
+                        <span>Você pode concluir o seguro agora e anexar a vistoria depois em Documentos.</span>
+                      </div>
+                    )}
+                  </div>
+                }
+              />
+
+              <UploadCard
+                icon={<FileText size={18} />}
+                title="Contrato de Locação"
+                description="Se o contrato já estiver pronto, envie em PDF, JPG, PNG ou WEBP."
+                file={docContrato}
+                existingFileName={findExistingDoc("contrato_locacao")?.file_name}
+                error={errors.docContrato || errors.contratoPronto}
+                onPick={(files) => { pickFile(files, setDocContrato); setErrors(p => ({ ...p, docContrato: false })); }}
+                onClear={() => setDocContrato(null)}
+                uploadDisabled={contratoPronto === "nao"}
+                extraHeader={
+                  <div data-error={errors.contratoPronto || undefined} className={`space-y-2 rounded-lg ${errors.contratoPronto ? "ring-1 ring-red-500 p-2" : ""}`}>
+                    <Label className="text-xs">O contrato de locação está pronto? *</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {(["sim", "nao"] as const).map((value) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => {
+                            setContratoPronto(value);
+                            if (value === "nao") setDocContrato(null);
+                            setErrors(p => ({ ...p, contratoPronto: false, docContrato: false }));
+                          }}
+                          className={`h-9 rounded-lg border text-xs font-bold transition-colors ${
+                            contratoPronto === value
+                              ? "border-yellow-400 bg-yellow-50 text-neutral-900"
+                              : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300"
+                          }`}
+                        >
+                          {value === "sim" ? "Sim, está pronto" : "Não está pronto"}
+                        </button>
+                      ))}
+                    </div>
+                    {contratoPronto === "nao" && (
+                      <div className="flex gap-2 rounded-lg border border-yellow-300 bg-yellow-50 p-2 text-[11px] leading-relaxed text-neutral-700">
+                        <AlertTriangle size={14} className="mt-0.5 shrink-0 text-yellow-700" />
+                        <span>Você pode concluir o seguro agora e anexar o contrato depois em Documentos.</span>
                       </div>
                     )}
                   </div>
@@ -615,6 +669,7 @@ function UploadCard({
   extraHeader,
   footer,
   error,
+  uploadDisabled = false,
 }: {
   icon: React.ReactNode;
   title: string;
@@ -626,6 +681,7 @@ function UploadCard({
   extraHeader?: React.ReactNode;
   footer?: React.ReactNode;
   error?: boolean;
+  uploadDisabled?: boolean;
 }) {
   const [dragOver, setDragOver] = useState(false);
   const inputId = `upload-${title.replace(/\s+/g, "-").toLowerCase()}`;
@@ -652,27 +708,28 @@ function UploadCard({
 
       <label
         htmlFor={inputId}
-        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragOver={(e) => { e.preventDefault(); if (!uploadDisabled) setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
         onDrop={(e) => {
           e.preventDefault();
           setDragOver(false);
-          onPick(e.dataTransfer.files);
+          if (!uploadDisabled) onPick(e.dataTransfer.files);
         }}
-        className={`flex flex-col items-center justify-center gap-1 border-2 border-dashed rounded-lg p-4 cursor-pointer transition-colors ${
-          dragOver ? "border-yellow-400 bg-yellow-50" : file || existingFileName ? "border-emerald-200 bg-emerald-50/40" : "border-neutral-200 hover:border-yellow-400"
+        className={`flex flex-col items-center justify-center gap-1 border-2 border-dashed rounded-lg p-4 transition-colors ${uploadDisabled ? "cursor-not-allowed border-neutral-200 bg-neutral-100 opacity-60" : "cursor-pointer"} ${
+          !uploadDisabled && dragOver ? "border-yellow-400 bg-yellow-50" : file || existingFileName ? "border-emerald-200 bg-emerald-50/40" : !uploadDisabled ? "border-neutral-200 hover:border-yellow-400" : ""
         }`}
       >
         <input
           id={inputId}
           type="file"
+          disabled={uploadDisabled}
           accept=".pdf,.jpg,.jpeg,.png,.webp"
           className="hidden"
           onChange={(e) => onPick(e.target.files)}
         />
         <Upload size={20} className="text-neutral-400" />
         <p className="text-xs font-medium text-neutral-700">
-          {file || existingFileName ? "Substituir arquivo" : "Clique ou arraste o arquivo"}
+          {uploadDisabled ? "Envio liberado depois em Documentos" : file || existingFileName ? "Substituir arquivo" : "Clique ou arraste o arquivo"}
         </p>
         <p className="text-[10px] text-neutral-400">PDF, JPG, PNG ou WEBP · até 10MB</p>
       </label>
