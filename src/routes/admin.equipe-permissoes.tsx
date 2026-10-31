@@ -43,6 +43,7 @@ import { z } from "zod";
 import { useAuth } from "@/components/AuthProvider";
 import { registrarAuditoria } from "@/lib/auditoria";
 import { deleteNoxEmployee } from "@/lib/delete-nox-employee";
+import { collaboratorDisplayName } from "@/lib/collaborator-name";
 import { setSellerTimeClockEnabled } from "@/lib/time-clock";
 import { updateNoxEmployeeRole } from "@/lib/nox-employees.functions";
 import { defaultAvatarForName } from "@/lib/gender-avatar";
@@ -103,6 +104,10 @@ function isTestAccountName(name: string | null | undefined) {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .includes("teste");
+}
+
+function employeeDisplayName(employee: { full_name?: string | null; email?: string | null }) {
+  return collaboratorDisplayName(employee.full_name, employee.email || "Colaborador");
 }
 
 function EquipePermissoesPage() {
@@ -304,7 +309,7 @@ export function TabColaboradores() {
       ? `\n\nAntes do desligamento, todos os leads e compromissos comerciais ativos serão distribuídos, um por um, para outros ${employee.seller_type === "closer" ? "Closers" : "Vendedores"}. Os itens receberão o aviso vermelho “LEAD COLABORADOR QUE SAIU”.`
       : "";
     const confirmed = window.confirm(
-      `Desativar e remover ${employee.full_name || employee.email} da equipe?${redistributionNotice}\n\nO acesso será encerrado imediatamente e o cadastro sairá da lista de colaboradores. O histórico necessário para auditoria, comissões e operações será preservado sem os dados pessoais. Esta ação não pode ser desfeita.`,
+      `Desativar e remover ${employeeDisplayName(employee)} da equipe?${redistributionNotice}\n\nO acesso será encerrado imediatamente e o cadastro sairá da lista de colaboradores. O histórico necessário para auditoria, comissões e operações será preservado sem os dados pessoais. Esta ação não pode ser desfeita.`,
     );
     if (!confirmed) return;
     setDeletingId(employee.id);
@@ -370,7 +375,7 @@ export function TabColaboradores() {
           employee.id === photoEmployee.id ? { ...employee, avatar_url: avatarUrl } : employee,
         ),
       );
-      toast.success(`Foto de ${photoEmployee.full_name || "perfil"} atualizada em todo o sistema.`);
+      toast.success(`Foto de ${employeeDisplayName(photoEmployee)} atualizada em todo o sistema.`);
       setPhotoEmployee(null);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Não foi possível atualizar a foto.");
@@ -381,7 +386,7 @@ export function TabColaboradores() {
 
   const handleAvatarRemove = async () => {
     if (!photoEmployee || avatarAction) return;
-    if (!window.confirm(`Remover a foto de ${photoEmployee.full_name || "perfil"} e restaurar a foto original do sistema?`)) return;
+    if (!window.confirm(`Remover a foto de ${employeeDisplayName(photoEmployee)} e restaurar a foto original do sistema?`)) return;
     setAvatarAction("remove");
     try {
       const avatarUrl = await restoreAdminProfileAvatar(
@@ -440,7 +445,7 @@ export function TabColaboradores() {
               <div key={u.id} className="px-6 py-4 space-y-2">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="font-medium truncate">{u.full_name}</p>
+                    <p className="font-medium truncate">{employeeDisplayName(u)}</p>
                     <p className="text-xs text-muted-foreground truncate">{u.email}</p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
@@ -460,7 +465,7 @@ export function TabColaboradores() {
                       size="icon"
                       variant="outline"
                       className="h-8 w-8 rounded-full"
-                      aria-label={`Alterar foto de perfil de ${u.full_name || u.email}`}
+                      aria-label={`Alterar foto de perfil de ${employeeDisplayName(u)}`}
                       onClick={() => setPhotoEmployee(u)}
                     >
                       <Camera className="h-4 w-4" />
@@ -506,7 +511,7 @@ export function TabColaboradores() {
                       checked={!!u.time_clock_enabled}
                       disabled={!canManageClock || savingClockId === u.id || u.status !== "ativo"}
                       onCheckedChange={(checked) => void toggleTimeClock(u, checked)}
-                      aria-label={`Controle de ponto de ${u.full_name}`}
+                      aria-label={`Controle de ponto de ${employeeDisplayName(u)}`}
                     />
                   </div>
                 )}
@@ -556,7 +561,7 @@ export function TabColaboradores() {
               ) : (
                 visibleRows.map((u) => (
                   <TableRow key={u.id}>
-                    <TableCell className="font-medium">{u.full_name}</TableCell>
+                    <TableCell className="font-medium">{employeeDisplayName(u)}</TableCell>
                     <TableCell>{u.email}</TableCell>
                     <TableCell>
                       {u.role === "admin_master" ? (
@@ -597,7 +602,7 @@ export function TabColaboradores() {
                           size="icon"
                           variant="outline"
                           className="h-8 w-8 rounded-full"
-                          aria-label={`Alterar foto de perfil de ${u.full_name || u.email}`}
+                          aria-label={`Alterar foto de perfil de ${employeeDisplayName(u)}`}
                           onClick={() => setPhotoEmployee(u)}
                         >
                           <Camera className="h-4 w-4" />
@@ -613,7 +618,7 @@ export function TabColaboradores() {
                               !canManageClock || savingClockId === u.id || u.status !== "ativo"
                             }
                             onCheckedChange={(checked) => void toggleTimeClock(u, checked)}
-                            aria-label={`Controle de ponto de ${u.full_name}`}
+                            aria-label={`Controle de ponto de ${employeeDisplayName(u)}`}
                           />
                           <span className="text-[10px] font-bold text-muted-foreground">
                             {u.time_clock_enabled ? "Ativo" : "Inativo"}
@@ -666,11 +671,11 @@ export function TabColaboradores() {
               <div className="flex items-center gap-4 rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
                 <img
                   src={photoEmployee.avatar_url || defaultAvatarForName(photoEmployee.full_name)}
-                  alt={`Foto de ${photoEmployee.full_name || "colaborador"}`}
+                  alt={`Foto de ${employeeDisplayName(photoEmployee)}`}
                   className="h-16 w-16 rounded-full border-2 border-white object-cover shadow"
                 />
                 <div className="min-w-0">
-                  <p className="truncate font-bold text-neutral-900">{photoEmployee.full_name}</p>
+                  <p className="truncate font-bold text-neutral-900">{employeeDisplayName(photoEmployee)}</p>
                   <p className="truncate text-sm text-muted-foreground">{photoEmployee.email}</p>
                 </div>
               </div>
@@ -981,7 +986,7 @@ export function TabEquipeComercial() {
                     <span className="w-6 h-6 rounded-full bg-neutral-100 flex items-center justify-center text-xs font-bold shrink-0">
                       {i + 1}
                     </span>
-                    <p className="font-medium truncate">{v.full_name}</p>
+                    <p className="font-medium truncate">{employeeDisplayName(v)}</p>
                   </div>
                   <Badge
                     variant={v.status === "ativo" ? "default" : "secondary"}
@@ -1078,7 +1083,7 @@ export function TabEquipeComercial() {
                 sorted.map((v, i) => (
                   <TableRow key={v.id}>
                     <TableCell className="font-bold">{i + 1}</TableCell>
-                    <TableCell>{v.full_name}</TableCell>
+                    <TableCell>{employeeDisplayName(v)}</TableCell>
                     <TableCell>
                       <Badge variant={v.status === "ativo" ? "default" : "secondary"}>
                         {v.status}

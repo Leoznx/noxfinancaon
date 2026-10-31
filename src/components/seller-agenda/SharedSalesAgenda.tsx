@@ -511,16 +511,7 @@ function CloserCountdown({ sellerId, appointments, onRefresh }: Omit<Props, "sel
 
 function buildShortNameMap(members: Array<{ id: string; name: string }>) {
   const uniqueMembers = [...new Map(members.map((member) => [member.id, { ...member, name: normalizeName(member.name) }])).values()];
-  const firstNameCounts = new Map<string, number>();
-  for (const member of uniqueMembers) {
-    const key = firstNameOnly(member.name).toLocaleLowerCase("pt-BR");
-    firstNameCounts.set(key, (firstNameCounts.get(key) ?? 0) + 1);
-  }
-  return new Map(uniqueMembers.map((member) => {
-    const pieces = member.name.split(" ");
-    const duplicated = (firstNameCounts.get(pieces[0].toLocaleLowerCase("pt-BR")) ?? 0) > 1;
-    return [member.id, duplicated ? pieces.slice(0, 2).join(" ") : pieces[0]];
-  }));
+  return new Map(uniqueMembers.map((member) => [member.id, firstNameOnly(member.name)]));
 }
 
 function normalizeName(value: string) {

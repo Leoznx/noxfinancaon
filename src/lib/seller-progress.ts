@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { collaboratorDisplayName } from "@/lib/collaborator-name";
 
 export type SellerMonthlyProgress = {
   seller_id: string;
@@ -92,9 +93,13 @@ export async function fetchSellerTeamMonthlyProgress(month: number, year: number
     { p_month: month, p_year: year } as never,
   );
   if (error) throw error;
-  return (Array.isArray(data) ? data : []).map((row) =>
-    normalizeProgress(row as SellerTeamMonthlyProgress),
-  );
+  return (Array.isArray(data) ? data : []).map((row) => {
+    const normalized = normalizeProgress(row as SellerTeamMonthlyProgress);
+    return {
+      ...normalized,
+      seller_name: collaboratorDisplayName(normalized.seller_name, "Vendedor"),
+    };
+  });
 }
 
 export async function fetchMySellerGoalProgress(): Promise<SellerGoalProgress> {

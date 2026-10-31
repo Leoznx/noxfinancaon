@@ -1,16 +1,20 @@
 /**
- * Prepara, na área de transferência, um bloco para COLAR no terminal do navegador da Hostinger
- * (hPanel → VPS → Terminal). Não precisa de SSH no seu computador.
+ * Prepara, na área de transferência, um comando de UMA LINHA para COLAR no terminal do navegador
+ * da Hostinger (hPanel → VPS → Terminal). Não precisa de SSH no seu computador.
  *
  *   npm run automation:copy-vps-command -- deploy    atualiza o código e recria o worker
  *   npm run automation:copy-vps-command -- session   instala a sessão da Loft (login manual)
  *
- * O bloco "session" contém os cookies da sessão: ele vai SOMENTE para a área de transferência
- * (nunca é impresso aqui). Depois de colar, copie qualquer outro texto para limpá-la.
+ * Uma linha só, de propósito: colar várias linhas num terminal web é pouco confiável (cada
+ * quebra de linha vira um Enter), e o comando de uma linha é o formato que sabidamente funciona.
+ *
+ * O comando "session" contém os cookies da sessão (comprimidos): ele vai SOMENTE para a área de
+ * transferência (nunca é impresso aqui). Depois de colar, copie qualquer outro texto para limpá-la.
  * O arquivo vem de `npm run automation:interactive-login` (automation/data/credpago-session.json).
  */
 import { spawnSync } from "node:child_process";
 import crypto from "node:crypto";
+import zlib from "node:zlib";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -21,25 +25,13 @@ const mode = (process.argv[2] || "").toLowerCase();
 
 const CONTAINER = "nox-automacao-credpago";
 // O diretório do compose é descoberto pelo próprio Docker: não depende de onde o checkout está.
-const FIND_COMPOSE_DIR =
-  `"$(docker inspect ${CONTAINER} --format '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}')"`;
+const COMPOSE_DIR = `$(docker inspect ${CONTAINER} --format '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}')`;
 
-function deployBlock() {
-  return [
-    "bash <<'NOX_DEPLOY'",
-    "set -eu",
-    `AUTO_DIR=${FIND_COMPOSE_DIR}`,
-    '[ -d "$AUTO_DIR" ] || { echo "ERRO: pasta do compose nao encontrada" >&2; exit 1; }',
-    'cd "$AUTO_DIR"',
-    'echo "== pasta: $PWD"',
-    "git pull --ff-only </dev/null",
-    "bash ./deployVps.sh",
-    "NOX_DEPLOY",
-    "",
-  ].join("\n");
+function deployCommand() {
+  return `cd "${COMPOSE_DIR}" && git pull --ff-only && bash ./deployVps.sh`;
 }
 
-function sessionBlock(raw) {
+function sessionCommand(raw) {
   let parsed;
   try {
     parsed = JSON.parse(raw);
@@ -51,32 +43,36 @@ function sessionBlock(raw) {
   }
   const bytes = Buffer.from(raw, "utf8");
   const sha256 = crypto.createHash("sha256").update(bytes).digest("hex");
-  // Linhas curtas: o terminal limita cada linha digitada (~4 KB) e a colagem não pode ser truncada.
-  const wrapped = bytes.toString("base64").match(/.{1,76}/g).join("\n");
-  const block = [
-    // Sem histórico: o comando colado contém a sessão e não deve ir para ~/.bash_history.
-    "set +o history; HISTFILE=/dev/null",
-    "bash <<'NOX_INSTALL'",
-    "set -eu",
-    `CONTAINER=${CONTAINER}`,
-    `DATA_DIR=${FIND_COMPOSE_DIR}/data`,
-    '[ -d "$DATA_DIR" ] || { echo "ERRO: pasta data do compose nao encontrada: $DATA_DIR" >&2; exit 1; }',
-    'cd "$DATA_DIR"',
-    'if [ -f credpago-session.json ]; then cp -p credpago-session.json "credpago-session.json.pre-$(date +%Y%m%d-%H%M%S)"; fi',
-    "base64 -d > credpago-session.json.incoming <<'NOX_SESSION_EOF'",
-    wrapped,
-    "NOX_SESSION_EOF",
-    `echo "${sha256}  credpago-session.json.incoming" | sha256sum -c - >/dev/null || { echo "ERRO: a sessao colada esta incompleta; nada foi instalado" >&2; rm -f credpago-session.json.incoming; exit 1; }`,
-    "chmod 600 credpago-session.json.incoming",
-    // O dono é ajustado ANTES do rename: o worker observa o arquivo e não pode ver uma versão ilegível.
-    'docker exec -u root "$CONTAINER" chown nox:nox /app/data/credpago-session.json.incoming',
-    "mv -f credpago-session.json.incoming credpago-session.json",
-    'echo "SESSAO_INSTALADA em $DATA_DIR/credpago-session.json ($(stat -c %s credpago-session.json) bytes)"',
-    "NOX_INSTALL",
-    "set -o history",
-    "",
-  ].join("\n");
-  return { block, summary: { cookies: parsed.cookies.length, sha256: sha256.slice(0, 12), bytes: bytes.length } };
+  // Comprimido (~4x menor). O hash conferido na VPS é do arquivo já descomprimido, então uma colagem
+  // truncada ou alterada é recusada e nada é instalado.
+  const gz = zlib.gzipSync(bytes, { level: 9 });
+  const b64 = gz.toString("base64");
+  const incoming = '"$D/credpago-session.json.incoming"';
+  const command = [
+    `D="${COMPOSE_DIR}/data"`,
+    // Cada etapa só roda se a anterior deu certo; qualquer falha cai no `||` final, que limpa o
+    // arquivo parcial e avisa. O dono é ajustado ANTES do rename: o worker observa o arquivo e
+    // nunca pode ver uma versão que ele não consiga ler.
+    `[ -d "$D" ] && echo '${b64}' | base64 -d | gunzip > ${incoming}` +
+      ` && echo "${sha256}  $D/credpago-session.json.incoming" | sha256sum -c - >/dev/null` +
+      ` && chmod 600 ${incoming}` +
+      ` && docker exec -u root ${CONTAINER} chown nox:nox /app/data/credpago-session.json.incoming` +
+      ` && { [ ! -f "$D/credpago-session.json" ] || cp -p "$D/credpago-session.json" "$D/credpago-session.json.pre-$(date +%Y%m%d-%H%M%S)"; }` +
+      ` && mv -f ${incoming} "$D/credpago-session.json"` +
+      ` && echo "SESSAO_INSTALADA em $D/credpago-session.json"` +
+      ` || { rm -f ${incoming}; echo "FALHOU: a colagem veio incompleta ou algo deu errado; nada foi instalado"; }`,
+  ].join("; ");
+  // O espaço inicial mantém o comando fora do histórico (o Ubuntu usa HISTCONTROL=ignoreboth).
+  return {
+    command: ` ${command}`,
+    summary: {
+      cookies: parsed.cookies.length,
+      sha256: sha256.slice(0, 12),
+      bytes: bytes.length,
+      sent: gz.length,
+      line: command.length,
+    },
+  };
 }
 
 function copyToClipboard(text) {
@@ -109,32 +105,33 @@ if (mode !== "deploy" && mode !== "session") {
 let text;
 let summary = "";
 if (mode === "deploy") {
-  text = deployBlock();
-  summary = "bloco de implantação (sem segredos)";
+  text = deployCommand();
+  summary = "comando de implantação (sem segredos)";
 } else {
   if (!fs.existsSync(sessionFile)) fail(`Sessão não encontrada: ${sessionFile}. Rode automation:interactive-login.`);
   try {
-    const built = sessionBlock(fs.readFileSync(sessionFile, "utf8"));
-    text = built.block;
-    summary = `instalador da sessão (${built.summary.cookies} cookies, ${built.summary.bytes} bytes, sha256 ${built.summary.sha256}…)`;
+    const built = sessionCommand(fs.readFileSync(sessionFile, "utf8"));
+    text = built.command;
+    summary = `instalador da sessão em uma linha (${built.summary.cookies} cookies, ${built.summary.bytes} bytes → ${built.summary.sent} comprimidos, ${built.summary.line} caracteres, sha256 ${built.summary.sha256}…)`;
   } catch (error) {
     fail(error.message);
   }
 }
 
-if (!/^[\x09\x0a\x20-\x7e]*$/.test(text)) fail("O bloco gerado contém caracteres não ASCII; abortado.");
+if (!/^[\x20-\x7e]*$/.test(text)) fail("O comando gerado contém quebra de linha ou caracteres não ASCII; abortado.");
 
-// Alternativa sem área de transferência (e usada nos testes): grava o bloco em um arquivo 0600.
+// Alternativa sem área de transferência (e usada nos testes): grava o comando em um arquivo 0600.
 if (process.env.OUTPUT_FILE) {
   fs.writeFileSync(path.resolve(process.env.OUTPUT_FILE), text, { mode: 0o600 });
-  console.log(`✔ Bloco gravado em ${path.resolve(process.env.OUTPUT_FILE)}: ${summary}.`);
+  console.log(`✔ Comando gravado em ${path.resolve(process.env.OUTPUT_FILE)}: ${summary}.`);
   process.exit(0);
 }
 
 if (!copyToClipboard(text)) fail("Não foi possível usar a área de transferência deste computador.");
 
 console.log(`✔ Copiado para a área de transferência: ${summary}.`);
-console.log("  Cole no terminal da Hostinger (hPanel → VPS → Terminal) com Ctrl+V e aperte Enter se precisar.");
+console.log("  Cole no terminal da Hostinger (hPanel → VPS → Terminal) e aperte Enter.");
 if (mode === "session") {
+  console.log("  A linha é longa e o terminal mostra muito texto ao colar: é normal. O sucesso é a frase SESSAO_INSTALADA.");
   console.log("  Depois de colar, copie qualquer outro texto para limpar a área de transferência.");
 }

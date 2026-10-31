@@ -60,6 +60,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
+import { collaboratorDisplayName } from "@/lib/collaborator-name";
 import { validateWithdrawalReceiptFile } from "@/lib/withdrawal-pix";
 import {
   CONTRACT_BILLING_STATUS_LABELS,
@@ -412,7 +413,7 @@ function FinanceiroAdminPage() {
   const confirmPayrollPayment = async (row: SellerMonthlyPayroll) => {
     if (
       !window.confirm(
-        `Confirmar o pagamento de ${formatCents(row.payable_cents)} para ${row.seller_name}?`,
+        `Confirmar o pagamento de ${formatCents(row.payable_cents)} para ${collaboratorDisplayName(row.seller_name, "Vendedor")}?`,
       )
     ) {
       return;
@@ -1159,7 +1160,9 @@ function SellerPayrollTable({
             <article key={row.id} className="rounded-xl border border-neutral-200 p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="font-black text-neutral-950">{row.seller_name}</p>
+                  <p className="font-black text-neutral-950">
+                    {collaboratorDisplayName(row.seller_name, "Vendedor")}
+                  </p>
                   <p className="text-xs text-neutral-500">
                     {row.seller_type?.toUpperCase() || "Vendedor"} · {dateOnly(row.period_start)} a{" "}
                     {dateOnly(row.period_end)}
@@ -1209,7 +1212,7 @@ function SellerPayrollTable({
                 <TableRow key={row.id}>
                   <TableCell className="pl-5">
                     <PersonCell
-                      name={row.seller_name}
+                      name={collaboratorDisplayName(row.seller_name, "Vendedor")}
                       secondary={`${row.seller_type?.toUpperCase() || "Vendedor"} · ${row.seller_email}`}
                     />
                   </TableCell>

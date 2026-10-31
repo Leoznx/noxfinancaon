@@ -3,6 +3,7 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { collaboratorDisplayName } from "@/lib/collaborator-name";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -453,7 +454,10 @@ function MeusLeads() {
                 <Info label="Entrada" value={formatDateTime(detalhe.created_at)} />
                 <Info label="Última atualização" value={formatDateTime(detalhe.updated_at)} />
                 <Info label="Próximo follow-up" value={formatDateTime(detalhe.next_action_at) || "-"} />
-                <Info label="Responsável" value={detalhe.vendedor?.full_name || "-"} />
+                <Info
+                  label="Responsável"
+                  value={collaboratorDisplayName(detalhe.vendedor?.full_name, "-")}
+                />
                 <Info label="Cidade/interesse" value={detalhe.city || detalhe.interest || "-"} />
                 <div className="md:col-span-2">
                   <p className="text-xs font-black uppercase tracking-widest text-neutral-400">Observações</p>

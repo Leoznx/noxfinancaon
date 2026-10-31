@@ -13,6 +13,7 @@ import {
   UserRoundPlus,
 } from "lucide-react";
 import { toast } from "sonner";
+import { collaboratorDisplayName } from "@/lib/collaborator-name";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -380,7 +381,7 @@ function ClientLookupCard({
           </p>
           <p className="mt-1 text-xs leading-5 text-neutral-600">
             {linkedElsewhere
-              ? `Este cadastro já pertence a ${client.linked_seller_name ?? "outro vendedor"} nesta mesma função. Você pode adicioná-lo também à sua carteira sem remover o vínculo existente.`
+              ? `Este cadastro já pertence a ${collaboratorDisplayName(client.linked_seller_name, "outro vendedor")} nesta mesma função. Você pode adicioná-lo também à sua carteira sem remover o vínculo existente.`
               : mine
                 ? confirmedNow
                   ? "O vínculo foi confirmado e já entrou no seu ranking."
@@ -501,7 +502,7 @@ function PhoneClaimNotice({ claim }: { claim: SellerClientPhoneClaim }) {
   const registered = claim.contact_status === "cadastrado";
   const mine = claim.outcome === "owned_by_me";
   const title = conflict
-    ? `Esse número já está ${registered ? "cadastrado" : "em atendimento"} através do vendedor ${claim.seller_name}.`
+    ? `Esse número já está ${registered ? "cadastrado" : "em atendimento"} através do vendedor ${collaboratorDisplayName(claim.seller_name, "Vendedor")}.`
     : registered
       ? "Esse número já está cadastrado com você."
       : mine

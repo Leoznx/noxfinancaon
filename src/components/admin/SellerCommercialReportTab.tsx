@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { useEssentialLoading } from "@/components/GlobalLoading";
 import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
+import { collaboratorDisplayName } from "@/lib/collaborator-name";
 import {
   fetchAdminSellerControlReport,
   sellerLeadTargetForPeriod,
@@ -231,7 +232,9 @@ function SellerReportCard({ row }: { row: SellerControlDashboard }) {
           <p className="text-[10px] font-black uppercase tracking-[.14em] text-neutral-400">
             {row.seller_type === "closer" ? "Closer" : "Vendedor"}
           </p>
-          <h3 className="mt-1 text-lg font-black">{row.seller_name}</h3>
+          <h3 className="mt-1 text-lg font-black">
+            {collaboratorDisplayName(row.seller_name, "Vendedor")}
+          </h3>
         </div>
         <span className="rounded-full bg-neutral-950 px-3 py-1 text-[10px] font-black text-white">
           {row.registrations} cadastro(s)

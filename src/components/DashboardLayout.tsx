@@ -53,6 +53,7 @@ import { useState, useEffect } from "react";
 import { LogoNox } from "./LogoNox";
 import { Link, useLocation, useNavigate, useRouter } from "@tanstack/react-router";
 import { Button } from "./ui/button";
+import { collaboratorDisplayName } from "@/lib/collaborator-name";
 import { useAuth } from "./AuthProvider";
 import {
   getCachedHeaderProfile,
@@ -172,6 +173,13 @@ const adminItems: MenuItem[] = [
     label: "Equipe NOX",
     href: "/admin/equipe-nox",
     module: "equipe_nox",
+  },
+  {
+    icon: Target,
+    label: "Metas",
+    href: "/admin/metas",
+    module: "metas",
+    keywords: ["objetivos", "vendedores", "leads", "desempenho"],
   },
   {
     icon: Settings,
@@ -699,7 +707,21 @@ export function DashboardLayout({
     });
   };
 
-  const nomeTopo = nomeUsuario || user?.email?.split("@")[0] || "Usuário";
+  const nomeTopoCompleto = nomeUsuario || user?.email?.split("@")[0] || "Usuário";
+  const perfilInterno =
+    Boolean(user?.internalRole) ||
+    [
+      "admin",
+      "admin_master",
+      "juridico",
+      "financeiro",
+      "marketing",
+      "suporte",
+      "vendedor",
+    ].includes(user?.role ?? "");
+  const nomeTopo = perfilInterno
+    ? collaboratorDisplayName(nomeTopoCompleto, "Usuário")
+    : nomeTopoCompleto;
   const canSearchAdminMenu =
     user?.role === "admin" ||
     user?.role === "admin_master" ||

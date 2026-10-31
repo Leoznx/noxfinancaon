@@ -2,14 +2,15 @@ import { createFileRoute } from "@tanstack/react-router";
 import {
   AlertTriangle,
   CheckCircle2,
-  Clock3,
+  Crown,
+  Flame,
   LogOut,
   RefreshCw,
   ShieldCheck,
+  Sparkles,
+  Target,
   Trophy,
   Users,
-  Wifi,
-  WifiOff,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -22,9 +23,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { setRememberMe } from "@/lib/authStorage";
 import {
   fetchTvSalesDashboard,
-  goalForSeller,
-  sellerGoalPercentage,
-  type TvRankingSeller,
+  rankDailyCompetition,
+  summarizeDailyTeam,
+  type TvDailyCompetitionSeller,
+  type TvDailyTeamSummary,
   type TvSalesDashboardSnapshot,
   type TvSellerType,
 } from "@/lib/tv-sales-dashboard";
@@ -156,7 +158,7 @@ function TvRankingRoute() {
     );
   }
 
-  return <TvDashboard onLogout={logout} />;
+  return <TvDashboard />;
 }
 
 function TvLogin() {
@@ -196,11 +198,7 @@ function TvLogin() {
       setSubmitLabel("Validando acesso…");
       const [profileResult, internalUserResult] = await withTvLoginTimeout(
         Promise.all([
-          supabase
-            .from("profiles")
-            .select("role,status")
-            .eq("id", authData.user.id)
-            .maybeSingle(),
+          supabase.from("profiles").select("role,status").eq("id", authData.user.id).maybeSingle(),
           supabase
             .from("internal_users" as any)
             .select("role,status,seller_type,time_clock_enabled")
@@ -214,17 +212,14 @@ function TvLogin() {
       if (!profile?.role) throw new Error("tv_profile_missing");
       const internalUser = internalUserResult.error
         ? null
-        : (internalUserResult.data as
-            | {
-                role?: string | null;
-                status?: string | null;
-                seller_type?: string | null;
-                time_clock_enabled?: boolean | null;
-              }
-            | null);
+        : (internalUserResult.data as {
+            role?: string | null;
+            status?: string | null;
+            seller_type?: string | null;
+            time_clock_enabled?: boolean | null;
+          } | null);
       const internalRole =
-        internalUser?.status === "ativo" &&
-        INTERNAL_ROLES.has(internalUser.role as InternalRole)
+        internalUser?.status === "ativo" && INTERNAL_ROLES.has(internalUser.role as InternalRole)
           ? (internalUser.role as InternalRole)
           : !internalUser && INTERNAL_ROLES.has(profile.role as InternalRole)
             ? (profile.role as InternalRole)
@@ -262,9 +257,9 @@ function TvLogin() {
     <TvFrame>
       <main className="tv-login-shell">
         <section className="tv-login-brand" aria-label="NOX Fiança">
-          <img src="/brand/nox-fianca-header-amarelo.svg" alt="NOX Fiança" />
+          <img src="/brand/nox-fianca-tv.svg" alt="NOX Fiança" />
           <div className="tv-login-copy">
-            <span>PAINEL COMERCIAL PARA TV</span>
+            <span>ARENA DE RESULTADOS</span>
             <h1>Resultados que todo o time acompanha.</h1>
             <p>Ranking e metas sincronizados com o site e o aplicativo da NOX.</p>
           </div>
@@ -324,7 +319,7 @@ function TvLogin() {
   );
 }
 
-function TvDashboard({ onLogout }: { onLogout: () => Promise<void> }) {
+function TvDashboard() {
   const today = useMemo(() => new Date(), []);
   const month = today.getMonth() + 1;
   const year = today.getFullYear();
@@ -333,18 +328,13 @@ function TvDashboard({ onLogout }: { onLogout: () => Promise<void> }) {
   const [snapshot, setSnapshot] = useState<TvSalesDashboardSnapshot | null>(readCachedSnapshot);
   const hadInitialSnapshot = useRef(Boolean(snapshot));
   const [loading, setLoading] = useState(!snapshot);
-  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
-  const [online, setOnline] = useState(() => typeof navigator === "undefined" || navigator.onLine);
-  const [realtimeReady, setRealtimeReady] = useState(false);
-  const [clock, setClock] = useState(new Date());
   const [page, setPage] = useState(0);
 
   const load = useCallback(
     async (background = false) => {
       const sequence = ++requestSequence.current;
-      if (background) setRefreshing(true);
-      else setLoading(true);
+      if (!background) setLoading(true);
       try {
         const next = await fetchTvSalesDashboard(month, year);
         if (sequence !== requestSequence.current) return;
@@ -358,8 +348,7 @@ function TvDashboard({ onLogout }: { onLogout: () => Promise<void> }) {
         setError(cause instanceof Error ? cause.message : "Não foi possível sincronizar os dados.");
       } finally {
         if (sequence === requestSequence.current) {
-          setLoading(false);
-          setRefreshing(false);
+          if (!background) setLoading(false);
         }
       }
     },
@@ -369,27 +358,11 @@ function TvDashboard({ onLogout }: { onLogout: () => Promise<void> }) {
   useEffect(() => void load(hadInitialSnapshot.current), [load]);
 
   useEffect(() => {
-    const clockTimer = window.setInterval(() => setClock(new Date()), 1_000);
     const fallbackTimer = window.setInterval(() => void load(true), FALLBACK_REFRESH_MS);
     const fullSyncTimer = window.setInterval(() => void load(true), FULL_SYNC_MS);
     return () => {
-      window.clearInterval(clockTimer);
       window.clearInterval(fallbackTimer);
       window.clearInterval(fullSyncTimer);
-    };
-  }, [load]);
-
-  useEffect(() => {
-    const handleOnline = () => {
-      setOnline(true);
-      void load(true);
-    };
-    const handleOffline = () => setOnline(false);
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-    return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
     };
   }, [load]);
 
@@ -406,22 +379,33 @@ function TvDashboard({ onLogout }: { onLogout: () => Promise<void> }) {
         refreshAfterEvent,
       );
     }
-    channel.subscribe((status) => setRealtimeReady(status === "SUBSCRIBED"));
+    channel.subscribe();
     return () => {
       if (eventDebounce.current) window.clearTimeout(eventDebounce.current);
       void supabase.removeChannel(channel);
     };
   }, [load]);
 
-  const sdrs = useMemo(
-    () => snapshot?.ranking.filter((seller) => seller.sellerType === "sdr") ?? [],
+  const sdrCompetition = useMemo(
+    () =>
+      rankDailyCompetition(
+        snapshot?.ranking.filter((seller) => seller.sellerType === "sdr") ?? [],
+        snapshot?.goals ?? [],
+      ),
     [snapshot],
   );
-  const closers = useMemo(
-    () => snapshot?.ranking.filter((seller) => seller.sellerType === "closer") ?? [],
+  const closerCompetition = useMemo(
+    () =>
+      rankDailyCompetition(
+        snapshot?.ranking.filter((seller) => seller.sellerType === "closer") ?? [],
+        snapshot?.goals ?? [],
+      ),
     [snapshot],
   );
-  const pageCount = Math.max(1, Math.ceil(Math.max(sdrs.length, closers.length) / ROWS_PER_PAGE));
+  const pageCount = Math.max(
+    1,
+    Math.ceil(Math.max(sdrCompetition.length, closerCompetition.length) / ROWS_PER_PAGE),
+  );
 
   useEffect(() => {
     setPage((current) => Math.min(current, pageCount - 1));
@@ -435,77 +419,45 @@ function TvDashboard({ onLogout }: { onLogout: () => Promise<void> }) {
 
   if (loading && !snapshot) return <TvLoading message="Sincronizando ranking e metas…" />;
 
-  // Não soma as duas especialidades: o mesmo cliente pode aparecer na
-  // atribuição do SDR e no trabalho do Closer. Cadastros pertencem ao time SDR;
-  // contratos fechados pertencem ao time Closer, evitando contagem duplicada.
-  const totalRegistrations = sdrs.reduce((sum, row) => sum + row.registrations, 0);
-  const totalContracts = (closers.length ? closers : sdrs).reduce(
-    (sum, row) => sum + row.contracts,
-    0,
+  const sdrSummary = summarizeDailyTeam(
+    snapshot?.ranking.filter((seller) => seller.sellerType === "sdr") ?? [],
+    snapshot?.goals ?? [],
   );
-  const conversion =
-    totalRegistrations > 0 ? Math.round((totalContracts / totalRegistrations) * 100) : 0;
-  const generatedAt = snapshot ? new Date(snapshot.generatedAt) : null;
+  const closerSummary = summarizeDailyTeam(
+    snapshot?.ranking.filter((seller) => seller.sellerType === "closer") ?? [],
+    snapshot?.goals ?? [],
+  );
   const pageStart = page * ROWS_PER_PAGE;
 
   return (
     <TvFrame>
       <main className="tv-dashboard">
         <header className="tv-header">
-          <div className="tv-brand-row">
-            <img src="/brand/nox-fianca-header-amarelo.svg" alt="NOX Fiança" />
-            <span>PAINEL COMERCIAL</span>
-          </div>
-          <div className="tv-header-status">
-            <span className={`tv-live-pill ${online && realtimeReady ? "is-live" : ""}`}>
-              {online ? <Wifi size={18} /> : <WifiOff size={18} />}
-              {!online ? "Sem internet" : realtimeReady ? "Tempo real ativo" : "Reconectando"}
-            </span>
-            <span className="tv-clock">
-              <Clock3 size={18} /> {formatClock(clock)}
-            </span>
-            <button
-              className="tv-icon-button"
-              type="button"
-              aria-label="Atualizar painel"
-              title="Atualizar painel"
-              onClick={() => void load(true)}
-              disabled={refreshing}
-            >
-              <RefreshCw className={refreshing ? "tv-spin" : ""} />
-            </button>
-            <button
-              className="tv-icon-button"
-              type="button"
-              aria-label="Sair"
-              title="Sair"
-              onClick={() => void onLogout()}
-            >
-              <LogOut />
-            </button>
-          </div>
+          <img src="/brand/nox-fianca-tv.svg" alt="NOX Fiança" />
         </header>
 
-        <section className="tv-summary-grid" aria-label="Resumo do mês">
-          <SummaryCard
-            icon={<Users />}
-            label="Equipe comercial"
-            value={snapshot?.ranking.length ?? 0}
-            suffix="pessoas"
+        <div className="tv-arena-heading">
+          <span>
+            <Sparkles /> Desafio do dia
+          </span>
+          <strong>Quem acelera hoje, lidera amanhã.</strong>
+        </div>
+
+        <section className="tv-daily-grid" aria-label="Metas diárias da equipe">
+          <DailyChallengeCard
+            team="sdr"
+            title="Força SDR"
+            summary={sdrSummary}
+            primaryLabel="Cadastros"
+            secondaryLabel="Reuniões agendadas"
           />
-          <SummaryCard
-            icon={<Trophy />}
-            label="Cadastros no mês"
-            value={totalRegistrations}
-            suffix="novos"
+          <DailyChallengeCard
+            team="closer"
+            title="Força Closer"
+            summary={closerSummary}
+            primaryLabel="Reuniões concluídas"
+            secondaryLabel="Cadastros"
           />
-          <SummaryCard
-            icon={<CheckCircle2 />}
-            label="Contratos ativos"
-            value={totalContracts}
-            suffix="fechados"
-          />
-          <SummaryCard icon={<RefreshCw />} label="Conversão geral" value={conversion} suffix="%" />
         </section>
 
         {error ? (
@@ -516,59 +468,103 @@ function TvDashboard({ onLogout }: { onLogout: () => Promise<void> }) {
 
         <section className="tv-rankings" aria-label="Ranking da equipe">
           <RankingPanel
-            title="Ranking de vendedores"
-            subtitle="SDR · cadastros e reuniões agendadas"
+            title="Arena SDR"
+            subtitle="Cadastros + reuniões agendadas hoje"
             team="sdr"
-            rows={sdrs.slice(pageStart, pageStart + ROWS_PER_PAGE)}
-            goals={snapshot?.goals ?? []}
+            rows={sdrCompetition.slice(pageStart, pageStart + ROWS_PER_PAGE)}
           />
           <RankingPanel
-            title="Ranking de closers"
-            subtitle="Closer · contratos e reuniões concluídas"
+            title="Arena Closer"
+            subtitle="Reuniões concluídas + cadastros hoje"
             team="closer"
-            rows={closers.slice(pageStart, pageStart + ROWS_PER_PAGE)}
-            goals={snapshot?.goals ?? []}
+            rows={closerCompetition.slice(pageStart, pageStart + ROWS_PER_PAGE)}
           />
         </section>
-
-        <footer className="tv-footer">
-          <span>
-            {pageCount > 1
-              ? `Página ${page + 1} de ${pageCount} · troca automática`
-              : "Ranking mensal completo"}
-          </span>
-          <span>
-            {generatedAt
-              ? `Sincronizado às ${formatClock(generatedAt)}`
-              : "Aguardando sincronização"}
-            {refreshing ? " · atualizando…" : ""}
-          </span>
-        </footer>
       </main>
     </TvFrame>
   );
 }
 
-function SummaryCard({
-  icon,
-  label,
-  value,
-  suffix,
+function DailyChallengeCard({
+  team,
+  title,
+  summary,
+  primaryLabel,
+  secondaryLabel,
 }: {
-  icon: React.ReactNode;
-  label: string;
-  value: number;
-  suffix: string;
+  team: TvSellerType;
+  title: string;
+  summary: TvDailyTeamSummary;
+  primaryLabel: string;
+  secondaryLabel: string;
 }) {
+  const score = summary.score;
+  const message =
+    score == null
+      ? "Metas aguardando definição"
+      : score >= 100
+        ? "Meta batida. Agora é recorde!"
+        : score >= 70
+          ? "Reta final. Ninguém tira o pé."
+          : score >= 35
+            ? "O ritmo subiu. Vamos buscar."
+            : "A disputa começou. Bora acelerar!";
+
   return (
-    <article className="tv-summary-card">
-      <span className="tv-summary-icon">{icon}</span>
-      <div>
-        <span>{label}</span>
-        <strong>{value}</strong>
-        <small>{suffix}</small>
+    <article className={`tv-daily-card team-${team}`}>
+      <div className="tv-daily-score">
+        <span>
+          <Flame /> Meta diária
+        </span>
+        <strong>{score == null ? "—" : `${score}%`}</strong>
+      </div>
+      <div className="tv-daily-content">
+        <div className="tv-daily-title">
+          <div>
+            <span>{team === "sdr" ? "Time amarelo" : "Time azul"}</span>
+            <h2>{title}</h2>
+          </div>
+          <Target />
+        </div>
+        <div className="tv-daily-metrics">
+          <DailyMetric
+            label={primaryLabel}
+            current={summary.primaryCurrent}
+            target={summary.primaryTarget}
+          />
+          <DailyMetric
+            label={secondaryLabel}
+            current={summary.secondaryCurrent}
+            target={summary.secondaryTarget}
+          />
+        </div>
+        <p>{message}</p>
       </div>
     </article>
+  );
+}
+
+function DailyMetric({
+  label,
+  current,
+  target,
+}: {
+  label: string;
+  current: number;
+  target: number | null;
+}) {
+  const percentage = target && target > 0 ? Math.round((current / target) * 100) : 0;
+  return (
+    <div className="tv-daily-metric">
+      <span>{label}</span>
+      <strong>
+        {current}
+        <small>{target && target > 0 ? `/${target}` : "/—"}</small>
+      </strong>
+      <span className="tv-mini-progress">
+        <i style={{ width: `${Math.min(100, percentage)}%` }} />
+      </span>
+    </div>
   );
 }
 
@@ -577,13 +573,11 @@ function RankingPanel({
   subtitle,
   team,
   rows,
-  goals,
 }: {
   title: string;
   subtitle: string;
   team: TvSellerType;
-  rows: TvRankingSeller[];
-  goals: TvSalesDashboardSnapshot["goals"];
+  rows: TvDailyCompetitionSeller[];
 }) {
   return (
     <article className={`tv-ranking-panel team-${team}`}>
@@ -592,18 +586,16 @@ function RankingPanel({
           <h2>{title}</h2>
           <p>{subtitle}</p>
         </div>
-        <Trophy />
+        <Crown />
       </div>
       <div className="tv-ranking-columns" aria-hidden="true">
-        <span>Posição / integrante</span>
-        <span>Resultado</span>
-        <span>Meta mensal</span>
+        <span>Competidor</span>
+        <span>Hoje</span>
+        <span>Ritmo da meta</span>
       </div>
       <div className="tv-ranking-list">
         {rows.length ? (
-          rows.map((seller) => (
-            <RankingRow key={seller.id} seller={seller} goal={goalForSeller(seller, goals)} />
-          ))
+          rows.map((seller) => <RankingRow key={seller.id} seller={seller} />)
         ) : (
           <div className="tv-empty">
             <Users />
@@ -615,23 +607,10 @@ function RankingPanel({
   );
 }
 
-function RankingRow({
-  seller,
-  goal,
-}: {
-  seller: TvRankingSeller;
-  goal: TvSalesDashboardSnapshot["goals"][number] | null;
-}) {
+function RankingRow({ seller }: { seller: TvDailyCompetitionSeller }) {
   const isCloser = seller.sellerType === "closer";
-  const currentGoal = isCloser
-    ? (goal?.meetings_completed_monthly ?? seller.contracts)
-    : (goal?.clients_registered_monthly ?? seller.registrations);
-  const targetGoal = isCloser
-    ? (goal?.target_meetings_completed_monthly ?? null)
-    : (goal?.target_clients_monthly ?? null);
-  const percentage = sellerGoalPercentage(currentGoal, targetGoal);
-  const resultMain = isCloser ? seller.contracts : seller.registrations;
-  const resultLabel = isCloser ? "contratos" : "cadastros";
+  const resultLabel = isCloser ? "reuniões" : "cadastros";
+  const secondaryLabel = isCloser ? "cadastros" : "reuniões";
   const initials = seller.name
     .split(/\s+/)
     .filter(Boolean)
@@ -640,28 +619,34 @@ function RankingRow({
     .join("");
 
   return (
-    <div className={`tv-ranking-row position-${Math.min(4, seller.position)}`}>
+    <div className={`tv-ranking-row position-${Math.min(4, seller.dailyPosition)}`}>
       <div className="tv-person">
-        <span className="tv-position">{seller.position}º</span>
+        <span className="tv-position">{seller.dailyPosition}º</span>
         <span className="tv-avatar">
           {seller.avatarUrl ? <img src={seller.avatarUrl} alt="" /> : initials || "NOX"}
         </span>
         <div>
           <strong>{seller.name}</strong>
-          <small>{seller.openLeads} em atendimento</small>
+          <small>
+            {seller.secondaryCurrent} {secondaryLabel} hoje
+          </small>
         </div>
       </div>
       <div className="tv-result">
-        <strong>{resultMain}</strong>
+        <strong>{seller.primaryCurrent}</strong>
         <span>{resultLabel}</span>
       </div>
       <div className="tv-goal">
         <div>
-          <strong>{percentage == null ? "Sem meta" : `${percentage}%`}</strong>
-          <span>{targetGoal ? `${currentGoal}/${targetGoal}` : "não definida"}</span>
+          <strong>{seller.dailyScore == null ? "Sem meta" : `${seller.dailyScore}%`}</strong>
+          <span>
+            {seller.primaryTarget
+              ? `${seller.primaryCurrent}/${seller.primaryTarget}`
+              : "não definida"}
+          </span>
         </div>
         <span className="tv-progress">
-          <i style={{ width: `${Math.min(100, percentage ?? 0)}%` }} />
+          <i style={{ width: `${Math.min(100, seller.dailyScore ?? 0)}%` }} />
         </span>
       </div>
     </div>
@@ -680,22 +665,18 @@ function TvLoading({ message }: { message: string }) {
 }
 
 function TvFrame({ children }: { children: React.ReactNode }) {
+  const [isNativeApp, setIsNativeApp] = useState(false);
+
+  useEffect(() => {
+    setIsNativeApp(typeof window !== "undefined" && Boolean(window.NoxTvAndroid));
+  }, []);
+
   return (
-    <div className="tv-board">
+    <div className={`tv-board${isNativeApp ? " is-native-app" : ""}`}>
       {children}
       <style>{TV_STYLES}</style>
     </div>
   );
-}
-
-function formatClock(date: Date) {
-  return new Intl.DateTimeFormat("pt-BR", {
-    timeZone: "America/Sao_Paulo",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  }).format(date);
 }
 
 const TV_STYLES = `
@@ -705,8 +686,9 @@ const TV_STYLES = `
   .tv-board * { box-sizing: border-box; }
   .tv-board button, .tv-board input { font: inherit; }
   .tv-board button:focus-visible, .tv-board input:focus-visible { outline: 4px solid #ffd300; outline-offset: 4px; }
-  .tv-dashboard { width: 100vw; height: 100vh; padding: clamp(20px, 2.2vw, 42px) clamp(28px, 3vw, 58px) 24px; display: flex; flex-direction: column; gap: clamp(12px, 1.2vw, 22px); }
-  .tv-header { min-height: 62px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+  .tv-dashboard { width: 100vw; height: 100vh; padding: clamp(18px, 1.8vw, 34px) clamp(28px, 3vw, 58px) 24px; display: flex; flex-direction: column; gap: clamp(10px, 1vw, 18px); }
+  .tv-header { min-height: clamp(66px, 5vw, 92px); display: flex; align-items: center; justify-content: center; }
+  .tv-header > img { width: clamp(230px, 18vw, 350px); max-height: clamp(66px, 5vw, 92px); object-fit: contain; filter: drop-shadow(0 0 18px #ffd30055) drop-shadow(0 10px 24px #000); }
   .tv-brand-row { display: flex; align-items: center; gap: 22px; }
   .tv-brand-row img { width: clamp(190px, 15vw, 290px); max-height: 55px; object-fit: contain; object-position: left center; }
   .tv-brand-row > span { border-left: 1px solid #4c4c50; padding-left: 22px; color: #a5a5aa; font-size: clamp(14px, 1vw, 20px); font-weight: 800; letter-spacing: .18em; }
@@ -725,6 +707,34 @@ const TV_STYLES = `
   .tv-summary-card div > span { grid-column: 1 / -1; color: #9c9ca2; font-size: clamp(12px, .86vw, 17px); font-weight: 700; }
   .tv-summary-card strong { font-size: clamp(27px, 2.15vw, 42px); line-height: 1; }
   .tv-summary-card small { color: #85858b; font-size: clamp(11px, .75vw, 15px); }
+  .tv-arena-heading { min-height: 42px; display: flex; align-items: center; justify-content: center; gap: 16px; text-align: center; }
+  .tv-arena-heading span { border: 1px solid #6f5d16; border-radius: 999px; background: #2b260e; color: #ffd917; padding: 7px 13px; display: inline-flex; align-items: center; gap: 7px; font-size: clamp(10px, .72vw, 14px); font-weight: 950; letter-spacing: .13em; text-transform: uppercase; }
+  .tv-arena-heading span svg { width: 16px; height: 16px; }
+  .tv-arena-heading > strong { font-size: clamp(15px, 1.15vw, 23px); letter-spacing: -.02em; }
+  .tv-daily-grid { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(13px, 1.3vw, 25px); }
+  .tv-daily-card { min-height: clamp(118px, 10vw, 168px); border: 1px solid #3f3715; border-radius: 20px; background: linear-gradient(120deg, #30280a 0, #171612 42%, #111113 100%); display: grid; grid-template-columns: clamp(105px, 8vw, 150px) 1fr; overflow: hidden; box-shadow: 0 18px 42px #0008, inset 0 1px #ffd90020; }
+  .tv-daily-card.team-closer { border-color: #27417f; background: linear-gradient(120deg, #12265a 0, #151925 42%, #111113 100%); }
+  .tv-daily-score { position: relative; padding: 17px 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; background: #ffd300; color: #111; text-align: center; }
+  .team-closer .tv-daily-score { background: #5f8cff; color: #07102a; }
+  .tv-daily-score span { display: flex; align-items: center; gap: 5px; font-size: clamp(9px, .62vw, 12px); font-weight: 950; letter-spacing: .09em; text-transform: uppercase; }
+  .tv-daily-score span svg { width: 17px; height: 17px; }
+  .tv-daily-score strong { font-size: clamp(34px, 3vw, 56px); line-height: .95; letter-spacing: -.065em; }
+  .tv-daily-content { min-width: 0; padding: 14px clamp(15px, 1.25vw, 25px); display: flex; flex-direction: column; justify-content: center; }
+  .tv-daily-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .tv-daily-title span { color: #a2955f; font-size: clamp(9px, .58vw, 11px); font-weight: 900; letter-spacing: .13em; text-transform: uppercase; }
+  .team-closer .tv-daily-title span { color: #7e9eee; }
+  .tv-daily-title h2 { margin: 1px 0 0; font-size: clamp(17px, 1.25vw, 25px); line-height: 1; }
+  .tv-daily-title > svg { width: clamp(24px, 1.8vw, 35px); height: auto; color: #ffd300; }
+  .team-closer .tv-daily-title > svg { color: #7199ff; }
+  .tv-daily-metrics { margin-top: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .tv-daily-metric { min-width: 0; }
+  .tv-daily-metric > span:first-child { display: block; color: #9a9aa0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: clamp(9px, .65vw, 13px); font-weight: 800; }
+  .tv-daily-metric strong { display: block; margin-top: 2px; font-size: clamp(19px, 1.5vw, 29px); line-height: 1; }
+  .tv-daily-metric small { color: #77777e; font-size: 55%; }
+  .tv-mini-progress { display: block; height: 4px; margin-top: 5px; border-radius: 99px; overflow: hidden; background: #343438; }
+  .tv-mini-progress i { display: block; height: 100%; border-radius: inherit; background: #ffd300; }
+  .team-closer .tv-mini-progress i { background: #7199ff; }
+  .tv-daily-content > p { margin: 8px 0 0; color: #c8c8cc; font-size: clamp(9px, .66vw, 13px); font-weight: 750; }
   .tv-warning { min-height: 42px; border: 1px solid #684d08; border-radius: 12px; background: #2c2108; color: #ffe699; padding: 8px 16px; display: flex; align-items: center; gap: 10px; font-size: clamp(12px, .85vw, 17px); }
   .tv-warning svg { width: 20px; flex: 0 0 auto; }
   .tv-rankings { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; gap: clamp(13px, 1.3vw, 25px); }
@@ -740,12 +750,18 @@ const TV_STYLES = `
   .tv-ranking-columns span:not(:first-child) { text-align: right; }
   .tv-ranking-list { flex: 1; min-height: 0; padding: 0 clamp(10px, .85vw, 16px) 12px; display: flex; flex-direction: column; gap: clamp(5px, .45vw, 9px); }
   .tv-ranking-row { flex: 1; min-height: 64px; max-height: 96px; border: 1px solid #26262b; border-radius: 14px; background: #17171a; padding: 7px clamp(8px, .75vw, 14px); display: grid; grid-template-columns: minmax(0, 1fr) 100px 145px; align-items: center; gap: 10px; }
-  .tv-ranking-row.position-1 { border-color: #6f5d16; background: linear-gradient(90deg, #2b260e, #18181a 35%); }
+  .tv-ranking-row.position-1 { border-color: #9d7e08; background: linear-gradient(90deg, #3a3007, #1b1913 40%, #17171a); box-shadow: inset 4px 0 #ffd300, 0 0 26px #ffd30012; }
+  .tv-ranking-row.position-2 { border-color: #67676f; background: linear-gradient(90deg, #29292d, #18181a 38%); }
+  .tv-ranking-row.position-3 { border-color: #754a2e; background: linear-gradient(90deg, #302016, #18181a 38%); }
   .tv-person { min-width: 0; display: flex; align-items: center; gap: 10px; }
   .tv-position { width: 34px; flex: 0 0 34px; text-align: center; color: #b2b2b7; font-size: clamp(14px, 1vw, 20px); font-weight: 900; }
   .position-1 .tv-position { color: #ffd300; }
+  .position-2 .tv-position { color: #d8d8dd; }
+  .position-3 .tv-position { color: #db8f5d; }
   .tv-avatar { width: clamp(38px, 2.8vw, 54px); height: clamp(38px, 2.8vw, 54px); flex: 0 0 auto; border-radius: 50%; background: #303036; color: #fff; display: grid; place-items: center; overflow: hidden; font-size: clamp(11px, .75vw, 15px); font-weight: 900; }
-  .position-1 .tv-avatar { box-shadow: 0 0 0 2px #ffd300; }
+  .position-1 .tv-avatar { box-shadow: 0 0 0 3px #ffd300, 0 0 18px #ffd30055; }
+  .position-2 .tv-avatar { box-shadow: 0 0 0 2px #c8c8cf; }
+  .position-3 .tv-avatar { box-shadow: 0 0 0 2px #ba7044; }
   .tv-avatar img { width: 100%; height: 100%; object-fit: cover; }
   .tv-person div { min-width: 0; }
   .tv-person strong, .tv-person small { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -795,6 +811,13 @@ const TV_STYLES = `
   @keyframes tv-spin { to { transform: rotate(360deg); } }
   @supports not (width: clamp(1px, 2px, 3px)) {
     .tv-dashboard { padding: 24px 36px; gap: 16px; }
+    .tv-header > img { width: 290px; max-height: 76px; }
+    .tv-arena-heading > strong { font-size: 20px; }
+    .tv-daily-card { min-height: 145px; grid-template-columns: 130px 1fr; }
+    .tv-daily-score strong { font-size: 44px; }
+    .tv-daily-title h2 { font-size: 22px; }
+    .tv-daily-metric strong { font-size: 25px; }
+    .tv-daily-content > p { font-size: 12px; }
     .tv-brand-row img { width: 240px; }
     .tv-brand-row > span { font-size: 16px; }
     .tv-live-pill, .tv-clock { font-size: 15px; }
@@ -842,9 +865,8 @@ const TV_STYLES = `
     html, body { overflow: auto; }
     .tv-board { min-height: 100vh; }
     .tv-dashboard { height: auto; min-height: 100vh; }
-    .tv-header { align-items: flex-start; }
-    .tv-header-status { flex-wrap: wrap; justify-content: flex-end; }
-    .tv-clock { display: none; }
+    .tv-arena-heading { flex-direction: column; gap: 7px; }
+    .tv-daily-grid { grid-template-columns: 1fr; }
     .tv-summary-grid { grid-template-columns: 1fr 1fr; }
     .tv-rankings { grid-template-columns: 1fr; }
     .tv-ranking-row { min-height: 74px; }
@@ -852,4 +874,38 @@ const TV_STYLES = `
     .tv-login-brand { display: none; }
     .tv-login-card { margin: 40px auto; }
   }
+  .tv-board.is-native-app { min-height: 100vh; background: radial-gradient(circle at 50% -5%, #4c3f05 0, #11100a 16%, #070708 42%); }
+  .tv-board.is-native-app .tv-dashboard { width: 100vw; height: 100vh; min-height: 100vh; overflow: hidden; padding: 22px 24px 24px; gap: 12px; }
+  .tv-board.is-native-app .tv-header { min-height: 92px; }
+  .tv-board.is-native-app .tv-header > img { width: min(54vw, 430px); max-height: 92px; }
+  .tv-board.is-native-app .tv-arena-heading { min-height: 58px; flex-direction: column; gap: 5px; }
+  .tv-board.is-native-app .tv-arena-heading span { font-size: 13px; }
+  .tv-board.is-native-app .tv-arena-heading > strong { font-size: 22px; }
+  .tv-board.is-native-app .tv-daily-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
+  .tv-board.is-native-app .tv-daily-card { min-height: 205px; grid-template-columns: 112px 1fr; border-radius: 18px; }
+  .tv-board.is-native-app .tv-daily-score { padding: 14px 9px; }
+  .tv-board.is-native-app .tv-daily-score span { font-size: 10px; }
+  .tv-board.is-native-app .tv-daily-score strong { font-size: 43px; }
+  .tv-board.is-native-app .tv-daily-content { padding: 14px 16px; }
+  .tv-board.is-native-app .tv-daily-title h2 { font-size: 22px; }
+  .tv-board.is-native-app .tv-daily-title span { font-size: 10px; }
+  .tv-board.is-native-app .tv-daily-metrics { grid-template-columns: 1fr; gap: 8px; }
+  .tv-board.is-native-app .tv-daily-metric > span:first-child { font-size: 11px; }
+  .tv-board.is-native-app .tv-daily-metric strong { font-size: 24px; }
+  .tv-board.is-native-app .tv-daily-content > p { font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tv-board.is-native-app .tv-rankings { grid-template-columns: 1fr; grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .tv-board.is-native-app .tv-ranking-panel { border-radius: 18px; }
+  .tv-board.is-native-app .tv-ranking-title { min-height: 78px; padding: 12px 20px; }
+  .tv-board.is-native-app .tv-ranking-title h2 { font-size: 24px; }
+  .tv-board.is-native-app .tv-ranking-title p { font-size: 12px; }
+  .tv-board.is-native-app .tv-ranking-columns { min-height: 28px; grid-template-columns: 1fr 96px 142px; padding: 0 18px; font-size: 10px; }
+  .tv-board.is-native-app .tv-ranking-list { padding: 0 12px 10px; gap: 6px; }
+  .tv-board.is-native-app .tv-ranking-row { min-height: 62px; max-height: 74px; grid-template-columns: minmax(0, 1fr) 86px 135px; padding: 6px 10px; }
+  .tv-board.is-native-app .tv-person strong { font-size: 15px; }
+  .tv-board.is-native-app .tv-person small { font-size: 10px; }
+  .tv-board.is-native-app .tv-result strong { font-size: 23px; }
+  .tv-board.is-native-app .tv-goal strong { font-size: 15px; }
+  .tv-board.is-native-app .tv-login-shell { grid-template-columns: 1fr; }
+  .tv-board.is-native-app .tv-login-brand { display: none; }
+  .tv-board.is-native-app .tv-login-card { width: min(82%, 620px); margin: auto; }
 `;

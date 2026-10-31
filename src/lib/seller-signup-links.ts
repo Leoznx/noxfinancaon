@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { collaboratorDisplayName } from "@/lib/collaborator-name";
 
 export type SellerSignupRole = "proprietario" | "imobiliaria" | "corretor";
 export type SellerSignupSendChannel = "copy" | "whatsapp" | "share";
@@ -21,7 +22,9 @@ export async function fetchSellerSignupLinks(sourceSdrId: string | null) {
     profileRole: String(row.profile_role) as SellerSignupRole,
     token: String(row.token),
     sourceSdrId: row.source_sdr_id ? String(row.source_sdr_id) : null,
-    sourceSdrName: row.source_sdr_name ? String(row.source_sdr_name) : null,
+    sourceSdrName: row.source_sdr_name
+      ? collaboratorDisplayName(String(row.source_sdr_name), "Vendedor")
+      : null,
   })) satisfies SellerSignupLink[];
 }
 
@@ -38,7 +41,9 @@ export async function fetchMeetingSignupLinks(
     profileRole: String(row.profile_role) as SellerSignupRole,
     token: String(row.token),
     sourceSdrId: row.source_sdr_id ? String(row.source_sdr_id) : null,
-    sourceSdrName: row.source_sdr_name ? String(row.source_sdr_name) : null,
+    sourceSdrName: row.source_sdr_name
+      ? collaboratorDisplayName(String(row.source_sdr_name), "Vendedor")
+      : null,
   })) satisfies SellerSignupLink[];
 }
 
@@ -49,7 +54,7 @@ export async function fetchMeetingSourceSdrOptions(appointmentId: string) {
   if (error) throw error;
   return ((data as Record<string, unknown>[] | null) ?? []).map((row) => ({
     id: String(row.sdr_id),
-    name: String(row.sdr_name || "Vendedor"),
+    name: collaboratorDisplayName(String(row.sdr_name || ""), "Vendedor"),
   })) satisfies SignupLinkSdr[];
 }
 
@@ -58,7 +63,7 @@ export async function fetchSignupLinkSdrs() {
   if (error) throw error;
   return ((data as Record<string, unknown>[] | null) ?? []).map((row) => ({
     id: String(row.sdr_id),
-    name: String(row.sdr_name || "Vendedor"),
+    name: collaboratorDisplayName(String(row.sdr_name || ""), "Vendedor"),
   })) satisfies SignupLinkSdr[];
 }
 

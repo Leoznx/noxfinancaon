@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { defaultAvatarForName } from "@/lib/gender-avatar";
+import { collaboratorDisplayName } from "@/lib/collaborator-name";
 import { getSellerContext, type SellerType } from "@/lib/vendedor-portal";
 
 export const Route = createFileRoute("/vendedor/ranking")({
@@ -72,7 +73,7 @@ function Ranking() {
           .filter((row) => String(row.seller_type ?? "sdr") === effectiveType)
           .map((row) => ({
             id: String(row.vendedor_id),
-            name: String(row.nome || "Vendedor"),
+            name: collaboratorDisplayName(String(row.nome || ""), "Vendedor"),
             avatarUrl: row.avatar_url ? String(row.avatar_url) : null,
             registrations: Number(row.total_leads ?? 0),
             activeContracts: Number(row.contratos_fechados ?? 0),

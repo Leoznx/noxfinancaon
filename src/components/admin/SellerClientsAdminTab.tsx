@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useEssentialLoading } from "@/components/GlobalLoading";
 import { supabase } from "@/integrations/supabase/client";
+import { collaboratorDisplayName } from "@/lib/collaborator-name";
 import {
   fetchAdminSellerPortfolioClients,
   fetchAdminSellerPortfolios,
@@ -175,11 +176,11 @@ export function SellerClientsAdminTab() {
                     }`}
                   >
                     <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-neutral-950 text-sm font-black text-yellow-400">
-                      {initials(seller.seller_name)}
+                      {initials(collaboratorDisplayName(seller.seller_name, "Vendedor"))}
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-black text-neutral-950">
-                        {seller.seller_name}
+                        {collaboratorDisplayName(seller.seller_name, "Vendedor")}
                       </span>
                       <span className="mt-1 flex items-center gap-2 text-[11px] font-semibold text-neutral-500">
                         <Badge
@@ -213,7 +214,7 @@ export function SellerClientsAdminTab() {
                   <div>
                     <div className="flex items-center gap-2">
                       <h3 className="text-xl font-black text-neutral-950">
-                        {selected.seller_name}
+                        {collaboratorDisplayName(selected.seller_name, "Vendedor")}
                       </h3>
                       <Badge className="bg-neutral-950 uppercase text-yellow-400 hover:bg-neutral-950">
                         {selected.seller_type}
@@ -282,7 +283,7 @@ export function SellerClientsAdminTab() {
           <AlertDialogHeader>
             <AlertDialogTitle>Remover cliente da carteira?</AlertDialogTitle>
             <AlertDialogDescription>
-              {pendingRemoval?.client_name} deixará de aparecer para {selected?.seller_name} e não
+              {pendingRemoval?.client_name} deixará de aparecer para {collaboratorDisplayName(selected?.seller_name, "Vendedor")} e não
               contará mais nessa carteira. A conta, o login, as consultas e os contratos do cliente
               não serão excluídos.
             </AlertDialogDescription>

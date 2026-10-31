@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { collaboratorDisplayName } from "@/lib/collaborator-name";
 import { Badge } from "@/components/ui/badge";
 import { useEssentialLoading } from "@/components/GlobalLoading";
 import { Button } from "@/components/ui/button";
@@ -156,7 +157,7 @@ export function TimeClockHistoryTab() {
                 <SelectItem value="all">Todos os vendedores</SelectItem>
                 {sellers.map((seller) => (
                   <SelectItem value={seller.id} key={seller.id}>
-                    {seller.full_name || "Sem nome"} · {(seller.seller_type || "sdr").toUpperCase()}
+                    {collaboratorDisplayName(seller.full_name, "Sem nome")} · {(seller.seller_type || "sdr").toUpperCase()}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -204,7 +205,9 @@ export function TimeClockHistoryTab() {
             className={`rounded-xl border bg-white p-3 text-left transition ${employeeId === seller.id ? "border-yellow-400 bg-yellow-50" : "border-neutral-200 hover:border-yellow-300"}`}
           >
             <div className="flex items-center justify-between gap-2">
-              <strong className="truncate text-sm">{seller.full_name || "Sem nome"}</strong>
+              <strong className="truncate text-sm">
+                {collaboratorDisplayName(seller.full_name, "Sem nome")}
+              </strong>
               <Badge variant="outline" className="text-[9px]">
                 {(seller.seller_type || "sdr").toUpperCase()}
               </Badge>
@@ -220,7 +223,7 @@ export function TimeClockHistoryTab() {
         <Card className="border-yellow-200">
           <CardHeader>
             <CardTitle className="text-base">
-              Calendário de {selectedSeller?.full_name || "colaborador"}
+              Calendário de {collaboratorDisplayName(selectedSeller?.full_name, "colaborador")}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">

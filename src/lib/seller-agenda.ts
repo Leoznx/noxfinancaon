@@ -1,5 +1,6 @@
 import { addDays, endOfMonth, endOfWeek, startOfMonth, startOfWeek } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
+import { collaboratorDisplayName } from "@/lib/collaborator-name";
 import {
   fetchSellerClients,
   normalizeBrazilianPhone,
@@ -198,22 +199,13 @@ export function buildShortNameValueMap(names: Array<string | null>) {
   const normalizedNames = [
     ...new Set(names.filter(Boolean).map((name) => normalizePersonName(name!))),
   ];
-  const firstNameCounts = new Map<string, number>();
-  for (const name of normalizedNames) {
-    const key = firstNameOnly(name).toLocaleLowerCase("pt-BR");
-    firstNameCounts.set(key, (firstNameCounts.get(key) ?? 0) + 1);
-  }
   return new Map(
-    normalizedNames.map((name) => {
-      const pieces = name.split(" ");
-      const duplicated = (firstNameCounts.get(pieces[0].toLocaleLowerCase("pt-BR")) ?? 0) > 1;
-      return [name, duplicated ? pieces.slice(0, 2).join(" ") : pieces[0]];
-    }),
+    normalizedNames.map((name) => [name, collaboratorDisplayName(name, "Vendedor")]),
   );
 }
 
 export function firstNameOnly(value: string) {
-  return normalizePersonName(value).split(" ")[0];
+  return collaboratorDisplayName(normalizePersonName(value), "Vendedor");
 }
 
 function normalizePersonName(value: string) {

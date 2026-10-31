@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/table";
 import { parseLeadLines, readCsvFileAsText, readPdfFileAsText, type ParsedLeadRow } from "@/lib/lead-import";
 import { leadStatusClass, leadStatusLabel, formatDateTime } from "@/lib/vendedor-portal";
+import { collaboratorDisplayName } from "@/lib/collaborator-name";
 
 export const Route = createFileRoute("/admin/distribuicao-leads")({
   component: () => (
@@ -167,7 +168,10 @@ function DistribuicaoLeadsAdmin() {
     if (emailNorm) chaves.emails.add(emailNorm);
 
     const vendedorId = (data as any)?.assigned_seller_id;
-    const vendedorNome = fila.find((f) => f.vendedor?.id === vendedorId)?.vendedor?.full_name ?? "um vendedor";
+    const vendedorNome = collaboratorDisplayName(
+      fila.find((f) => f.vendedor?.id === vendedorId)?.vendedor?.full_name,
+      "um vendedor",
+    );
     return { ok: true, vendedor: vendedorNome };
   }
 
@@ -462,7 +466,9 @@ function DistribuicaoLeadsAdmin() {
               fila.map((item) => (
                 <div key={item.id} className="flex items-center justify-between gap-3 p-4">
                   <div className="min-w-0">
-                    <p className="font-bold text-neutral-950 truncate">{item.vendedor?.full_name ?? "—"}</p>
+                    <p className="font-bold text-neutral-950 truncate">
+                      {collaboratorDisplayName(item.vendedor?.full_name, "—")}
+                    </p>
                     <p className="text-xs text-neutral-500">
                       {item.total_leads_recebidos} recebido(s) · {formatDateTime(item.ultimo_recebimento) || "nunca recebeu"}
                     </p>
@@ -503,7 +509,9 @@ function DistribuicaoLeadsAdmin() {
                 ) : (
                   fila.map((item) => (
                     <TableRow key={item.id}>
-                      <TableCell className="font-bold text-neutral-950">{item.vendedor?.full_name ?? "—"}</TableCell>
+                      <TableCell className="font-bold text-neutral-950">
+                        {collaboratorDisplayName(item.vendedor?.full_name, "—")}
+                      </TableCell>
                       <TableCell>
                         <Badge
                           variant="outline"
@@ -552,7 +560,7 @@ function DistribuicaoLeadsAdmin() {
                     </Badge>
                   </div>
                   <div className="mt-2 flex items-center justify-between text-xs text-neutral-500">
-                    <span>{lead.vendedor?.full_name ?? "—"}</span>
+                    <span>{collaboratorDisplayName(lead.vendedor?.full_name, "—")}</span>
                     <span>{formatDateTime(lead.distributed_at)}</span>
                   </div>
                 </div>
@@ -586,7 +594,9 @@ function DistribuicaoLeadsAdmin() {
                       <TableCell className="text-xs text-neutral-600">
                         {lead.phone || lead.email || "—"}
                       </TableCell>
-                      <TableCell className="text-sm text-neutral-700">{lead.vendedor?.full_name ?? "—"}</TableCell>
+                      <TableCell className="text-sm text-neutral-700">
+                        {collaboratorDisplayName(lead.vendedor?.full_name, "—")}
+                      </TableCell>
                       <TableCell>
                         <Badge className={leadStatusClass(lead.status)}>{leadStatusLabel(lead.status)}</Badge>
                       </TableCell>

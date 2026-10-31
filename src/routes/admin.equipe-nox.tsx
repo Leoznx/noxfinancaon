@@ -3,6 +3,7 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { collaboratorDisplayName } from "@/lib/collaborator-name";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -30,7 +31,6 @@ import {
 import { toast } from "sonner";
 import {
   Users2,
-  Target,
   DollarSign,
   ChevronLeft,
   ChevronRight,
@@ -56,6 +56,7 @@ import { formatMoney, formatDateTime, toDatetimeLocal } from "@/lib/vendedor-por
 import {
   fetchTeamGoalConfigs,
   fetchTeamGoalProgress,
+  fetchAdminGoalDailyNotice,
   saveCompleteTeamGoals,
   type TeamGoalConfig,
   type TeamGoalProgress,
@@ -98,7 +99,7 @@ function EquipeNoxPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const search = useSearch({ from: "/admin/equipe-nox" });
-  const requestedTab: TabKey = (search.tab as TabKey) ?? "metas";
+  const requestedTab: TabKey = (search.tab as TabKey) ?? "reunioes";
   const normalizedTab: VisibleTabKey =
     requestedTab === "equipe-comercial"
       ? "comissoes"
@@ -114,8 +115,12 @@ function EquipeNoxPage() {
   const activeTab: VisibleTabKey =
     (normalizedTab === "clientes-vendedores" || normalizedTab === "relatorio-comercial") &&
     !canManageTimeClock
-      ? "metas"
+      ? "reunioes"
       : normalizedTab;
+
+  if (requestedTab === "metas") {
+    return <Navigate to="/admin/metas" replace />;
+  }
 
   return (
     <DashboardLayout>
@@ -129,8 +134,8 @@ function EquipeNoxPage() {
               </Badge>
               <h1 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl">Equipe NOX</h1>
               <p className="mt-2 max-w-xl text-sm leading-relaxed text-neutral-300 sm:text-base">
-                Controle colaboradores, metas, agenda, desempenho e jornada em uma experiência
-                única, clara e atualizada em tempo real.
+                Controle colaboradores, agenda, desempenho e jornada em uma experiência única, clara
+                e atualizada em tempo real.
               </p>
             </div>
             <div className="grid min-w-[240px] grid-cols-2 gap-2 text-xs font-bold">
@@ -159,10 +164,6 @@ function EquipeNoxPage() {
             <TabsTrigger value="reunioes">
               <CalendarDays className="mr-2 h-4 w-4" />
               Reunião com a equipe
-            </TabsTrigger>
-            <TabsTrigger value="metas">
-              <Target className="mr-2 h-4 w-4" />
-              Metas
             </TabsTrigger>
             <TabsTrigger value="recompensas">
               <Gift className="mr-2 h-4 w-4" />
@@ -195,9 +196,6 @@ function EquipeNoxPage() {
               </TabsTrigger>
             )}
           </TabsList>
-          <TabsContent value="metas" className="mt-4">
-            <TabMetas />
-          </TabsContent>
           <TabsContent value="recompensas" className="mt-4">
             <SellerRewardsTab />
           </TabsContent>
@@ -229,7 +227,7 @@ function EquipeNoxPage() {
             </TabsContent>
           )}
           <TabsContent value="auditoria" className="mt-4">
-            <Navigate to="/admin/equipe-nox" search={{ tab: "metas" } as any} replace />
+            <Navigate to="/admin/equipe-nox" search={{ tab: "reunioes" } as any} replace />
           </TabsContent>
         </Tabs>
       </div>
@@ -331,7 +329,7 @@ function sharedControlGoalsDiverge(configs: Partial<Record<"sdr" | "closer", Tea
   );
 }
 
-function TabMetas() {
+export function AdminTeamGoals() {
   const { user } = useAuth();
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
@@ -371,10 +369,56 @@ function TabMetas() {
     void carregar();
   }, [carregar]);
 
+  useEffect(() => {
+    let active = true;
+    const checkNotice = async () => {
+      try {
+        const notice = await fetchAdminGoalDailyNotice();
+        if (!active || !notice.show || !notice.sellers?.length) return;
+        const details = notice.sellers
+          .slice(0, 5)
+          .map((seller) => {
+            const pending = [
+              seller.leads_missing > 0
+                ? `${seller.leads_missing} lead${seller.leads_missing === 1 ? "" : "s"} em contato`
+                : null,
+              seller.meetings_missing > 0
+                ? `${seller.meetings_missing} reunião${seller.meetings_missing === 1 ? "" : "ões"}`
+                : null,
+              seller.clients_missing > 0
+                ? `${seller.clients_missing} cadastro${seller.clients_missing === 1 ? "" : "s"}`
+                : null,
+            ].filter(Boolean);
+            return `${seller.seller_name}: faltam ${pending.join(", ")}`;
+          })
+          .join(" · ");
+        toast.warning(notice.title ?? "Foco nas metas de hoje", {
+          description: `${details}. Mais foco e determinação para fechar o dia forte.`,
+          duration: 15_000,
+        });
+      } catch {
+        // O aviso e complementar e nunca interrompe o painel de metas.
+      }
+    };
+    void checkNotice();
+    const timer = window.setInterval(() => void checkNotice(), 60_000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, []);
+
   const teamRows = linhas.filter((linha) => linha.seller_type === team);
   const teamConfig = configs[team];
   const edit = edits[team] ?? initialGoalEdit(team, teamConfig, teamRows[0]);
   const hasDivergentSharedGoals = sharedControlGoalsDiverge(configs);
+  const leadsDone = teamRows.reduce((total, row) => total + row.leads_contacted_daily, 0);
+  const leadsTarget = teamRows.reduce(
+    (total, row) => total + (row.target_leads_contacted_daily ?? 0),
+    0,
+  );
+  const leadsProgress =
+    leadsTarget > 0 ? Math.min(100, Math.round((leadsDone / leadsTarget) * 100)) : 0;
 
   useEffect(() => {
     const refresh = () => void carregar();
@@ -497,7 +541,7 @@ function TabMetas() {
   };
 
   return (
-    <Card>
+    <Card className="overflow-hidden rounded-[1.75rem] border-neutral-200 shadow-sm">
       <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
         <div>
           <CardTitle>Metas da equipe</CardTitle>
@@ -505,6 +549,14 @@ function TabMetas() {
             Ligações e leads em contato são compartilhados por Vendedor e Closer. Reuniões e
             cadastros continuam configurados separadamente para cada equipe.
           </p>
+          <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold">
+            <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-800">
+              Próximo mês: todas as metas recebem +2 automaticamente
+            </Badge>
+            <Badge variant="outline" className="border-neutral-200 bg-white text-neutral-700">
+              Ajuste manual sempre disponível
+            </Badge>
+          </div>
         </div>
         <SeletorMes
           month={month}
@@ -534,6 +586,43 @@ function TabMetas() {
           <p className="py-6 text-center text-sm text-muted-foreground">Carregando…</p>
         ) : (
           <div className="space-y-5">
+            <div className="grid gap-3 lg:grid-cols-[1.25fr_0.75fr]">
+              <div className="rounded-2xl bg-neutral-950 p-5 text-white">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.18em] text-yellow-400">
+                      Leads em contato hoje
+                    </p>
+                    <p className="mt-2 text-3xl font-black">
+                      {leadsDone}{" "}
+                      <span className="text-base text-neutral-400">/ {leadsTarget || "—"}</span>
+                    </p>
+                    <p className="mt-1 text-xs text-neutral-400">
+                      Resultado somado dos {teamRows.length} integrantes da equipe selecionada.
+                    </p>
+                  </div>
+                  <Badge className="bg-yellow-400 text-neutral-950 hover:bg-yellow-400">
+                    {leadsTarget ? `${leadsProgress}%` : "Sem meta"}
+                  </Badge>
+                </div>
+                <Progress value={leadsProgress} className="mt-4 h-2 bg-white/15" />
+              </div>
+              <div className="rounded-2xl border border-neutral-200 bg-neutral-50 p-5">
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-neutral-500">
+                  Origem desta competência
+                </p>
+                <p className="mt-2 text-lg font-black text-neutral-950">
+                  {teamConfig?.generation_mode === "automatic"
+                    ? "Gerada automaticamente"
+                    : "Definida manualmente"}
+                </p>
+                <p className="mt-1 text-xs leading-5 text-neutral-600">
+                  {teamConfig?.generation_mode === "automatic" && teamConfig.generated_from_month
+                    ? "Copiada da competência anterior com acréscimo de 2 em cada meta."
+                    : "Você pode editar qualquer valor abaixo e salvar sem perder o controle mensal."}
+                </p>
+              </div>
+            </div>
             <div className="space-y-4 rounded-xl border border-neutral-100 p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -728,9 +817,45 @@ function TeamMemberProgress({ row }: { row: TeamGoalProgress }) {
     row.target_clients_weekly,
     row.target_clients_monthly,
   ];
+  const leadTarget = row.target_leads_contacted_daily;
+  const leadProgress = leadTarget
+    ? Math.min(100, Math.round((row.leads_contacted_daily / leadTarget) * 100))
+    : 0;
+  const leadsMissing = Math.max((leadTarget ?? 0) - row.leads_contacted_daily, 0);
   return (
     <div className="rounded-xl border border-neutral-200 bg-white p-4">
-      <p className="font-black text-neutral-950">{row.seller_name}</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="font-black text-neutral-950">
+            {collaboratorDisplayName(row.seller_name, "Vendedor")}
+          </p>
+          <p className="text-[11px] font-bold uppercase tracking-wide text-neutral-400">
+            {row.seller_type === "closer" ? "Closer" : "Vendedor"}
+          </p>
+        </div>
+        <Badge
+          className={
+            leadsMissing === 0 && leadTarget
+              ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-100"
+              : "bg-amber-100 text-amber-900 hover:bg-amber-100"
+          }
+        >
+          {leadTarget
+            ? leadsMissing === 0
+              ? "Meta diária batida"
+              : `Faltam ${leadsMissing}`
+            : "Sem meta diária"}
+        </Badge>
+      </div>
+      <div className="mt-3 rounded-xl border border-violet-100 bg-violet-50 p-3">
+        <div className="flex items-center justify-between text-xs font-bold text-violet-950">
+          <span>Leads em contato hoje</span>
+          <span>
+            {row.leads_contacted_daily}/{leadTarget ?? "—"}
+          </span>
+        </div>
+        <Progress value={leadProgress} className="mt-2 h-2" />
+      </div>
       <div className="mt-3 grid grid-cols-3 gap-2">
         {(["Dia", "Semana", "Mês"] as const).map((period, index) => (
           <div key={period} className="rounded-lg bg-neutral-50 p-2">
@@ -917,7 +1042,7 @@ function TabAgenda() {
     }
     if (busy.length > 0) {
       toast.error(
-        `Escolha outro horário. ${busy.map((row) => row.participant_name).join(", ")} já possui reunião.`,
+        `Escolha outro horário. ${busy.map((row) => collaboratorDisplayName(row.participant_name, "Colaborador")).join(", ")} já possui reunião.`,
       );
       setSalvando(false);
       return;
@@ -1035,7 +1160,7 @@ function TabAgenda() {
                     </span>
                     <span className="min-w-0">
                       <span className="block truncate text-sm font-bold">
-                        {v.full_name || "Vendedor"}
+                        {collaboratorDisplayName(v.full_name, "Vendedor")}
                       </span>
                       <span className="text-[10px] font-black uppercase tracking-wider text-neutral-400">
                         {v.seller_type || "comercial"}
@@ -1083,8 +1208,8 @@ function TabAgenda() {
                 </p>
                 {busy.map((row) => (
                   <p key={row.participant_id} className="mt-1 text-xs">
-                    {row.participant_name}: {row.conflict_title || "outra reunião"} às{" "}
-                    {formatDateTime(row.conflict_start)}
+                    {collaboratorDisplayName(row.participant_name, "Colaborador")}:{" "}
+                    {row.conflict_title || "outra reunião"} às {formatDateTime(row.conflict_start)}
                   </p>
                 ))}
               </div>
@@ -1127,7 +1252,7 @@ function TabAgenda() {
                 grupo.rows.length > 1 && grupo.rows.length === vendedores.length
                   ? `Todos os vendedores (${grupo.rows.length})`
                   : grupo.rows
-                      .map((r) => r.internal_users?.full_name)
+                      .map((r) => collaboratorDisplayName(r.internal_users?.full_name, ""))
                       .filter(Boolean)
                       .join(", ");
               return (
@@ -1296,7 +1421,9 @@ function TabComissoes() {
               className="rounded-xl border border-neutral-200 bg-white p-4 text-left transition hover:border-yellow-400 hover:shadow-sm"
             >
               <div className="flex items-center justify-between gap-2">
-                <strong className="truncate text-sm">{vendedor.full_name}</strong>
+                <strong className="truncate text-sm">
+                  {collaboratorDisplayName(vendedor.full_name, "Vendedor")}
+                </strong>
                 <Badge variant="outline">{(vendedor.seller_type || "sdr").toUpperCase()}</Badge>
               </div>
               <p className="mt-3 text-2xl font-black">{formatMoney(total)}</p>
@@ -1340,7 +1467,9 @@ function TabComissoes() {
               linhas.map((l) => (
                 <div key={l.id} className="py-3">
                   <div className="flex items-start justify-between gap-3">
-                    <p className="font-medium">{l.internal_users?.full_name ?? "—"}</p>
+                    <p className="font-medium">
+                      {collaboratorDisplayName(l.internal_users?.full_name, "—")}
+                    </p>
                     <Badge variant="outline" className="shrink-0">
                       {STATUS_COMISSAO.find((s) => s.v === l.status)?.l ?? l.status}
                     </Badge>
@@ -1388,7 +1517,7 @@ function TabComissoes() {
                   linhas.map((l) => (
                     <TableRow key={l.id}>
                       <TableCell className="font-medium">
-                        {l.internal_users?.full_name ?? "—"}
+                        {collaboratorDisplayName(l.internal_users?.full_name, "—")}
                       </TableCell>
                       <TableCell>{l.client_name || "—"}</TableCell>
                       <TableCell>{l.contract_sequence ? `${l.contract_sequence}º` : "—"}</TableCell>
@@ -1418,7 +1547,10 @@ function TabComissoes() {
           <DialogHeader>
             <DialogTitle>
               Histórico detalhado ·{" "}
-              {vendedores.find((item) => item.id === detalheSellerId)?.full_name}
+              {collaboratorDisplayName(
+                vendedores.find((item) => item.id === detalheSellerId)?.full_name,
+                "Vendedor",
+              )}
             </DialogTitle>
           </DialogHeader>
           <div className="max-h-[60vh] space-y-2 overflow-y-auto">

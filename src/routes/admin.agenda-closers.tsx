@@ -34,6 +34,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
+import { collaboratorDisplayName } from "@/lib/collaborator-name";
 
 type Closer = { id: string; full_name: string | null; email: string | null };
 type Sdr = Closer;
@@ -272,7 +273,7 @@ function CloserAgendaPage() {
                 <SelectItem value="all">Todos os Closers</SelectItem>
                 {closers.map((closer) => (
                   <SelectItem key={closer.id} value={closer.id}>
-                    {closer.full_name || closer.email || "Closer"}
+                    {collaboratorDisplayName(closer.full_name, closer.email || "Closer")}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -295,7 +296,9 @@ function CloserAgendaPage() {
                     className={`rounded-xl border p-4 text-left transition ${selected === closer.id ? "border-yellow-400 bg-yellow-50" : "border-neutral-200 hover:border-yellow-300"}`}
                   >
                     <div className="flex items-center justify-between">
-                      <strong className="truncate text-sm">{closer.full_name || "Closer"}</strong>
+                      <strong className="truncate text-sm">
+                        {collaboratorDisplayName(closer.full_name, "Closer")}
+                      </strong>
                       <Badge variant="outline">Closer</Badge>
                     </div>
                     <div className="mt-3 flex gap-4 text-xs text-neutral-500">
@@ -349,7 +352,10 @@ function CloserAgendaPage() {
                 >
                   <div className="flex items-center justify-between gap-2">
                     <strong className="truncate text-sm">
-                      {item.sdr.full_name || item.sdr.email || "Vendedor"}
+                      {collaboratorDisplayName(
+                        item.sdr.full_name,
+                        item.sdr.email || "Vendedor",
+                      )}
                     </strong>
                     <Badge variant="outline">Vendedor</Badge>
                   </div>
@@ -375,7 +381,10 @@ function CloserAgendaPage() {
                       Detalhamento individual
                     </p>
                     <h3 className="mt-1 text-lg font-black">
-                      {selectedSdr.sdr.full_name || selectedSdr.sdr.email || "Vendedor"}
+                      {collaboratorDisplayName(
+                        selectedSdr.sdr.full_name,
+                        selectedSdr.sdr.email || "Vendedor",
+                      )}
                     </h3>
                   </div>
                   <Button variant="outline" size="sm" onClick={() => setSelectedSdrId(null)}>
@@ -389,7 +398,7 @@ function CloserAgendaPage() {
                     rows={selectedSdr.meetings.map((meeting) => ({
                       id: meeting.id,
                       title: meeting.contact_name || meeting.title || "Reunião",
-                      detail: `${format(new Date(meeting.scheduled_at), "dd/MM 'às' HH:mm")} · ${closers.find((closer) => closer.id === ownerId(meeting))?.full_name || "Closer"}`,
+                      detail: `${format(new Date(meeting.scheduled_at), "dd/MM 'às' HH:mm")} · ${collaboratorDisplayName(closers.find((closer) => closer.id === ownerId(meeting))?.full_name, "Closer")}`,
                     }))}
                   />
                   <SdrDetailColumn
@@ -493,7 +502,7 @@ function CloserAgendaPage() {
                           {item.contact_name || item.title || "Reunião"}
                         </p>
                         <p className="mt-1 text-xs text-neutral-500">
-                          {closer?.full_name || "Closer"} · {item.contact_phone || "Sem telefone"}
+                          {collaboratorDisplayName(closer?.full_name, "Closer")} · {item.contact_phone || "Sem telefone"}
                         </p>
                       </div>
                     );
@@ -530,7 +539,7 @@ function CloserAgendaPage() {
                                 <b>{format(new Date(item.scheduled_at), "HH:mm")}</b>{" "}
                                 {item.contact_name || item.title || "Reunião"}
                                 <span className="block truncate text-emerald-700">
-                                  {closer?.full_name || "Closer"}
+                                  {collaboratorDisplayName(closer?.full_name, "Closer")}
                                 </span>
                               </div>
                             );
@@ -573,7 +582,9 @@ function CloserAgendaPage() {
                         {item.contact_phone || "Telefone não informado"}
                       </p>
                     </div>
-                    <Badge variant="outline">{closer?.full_name || "Closer"}</Badge>
+                    <Badge variant="outline">
+                      {collaboratorDisplayName(closer?.full_name, "Closer")}
+                    </Badge>
                   </div>
                 );
               })}

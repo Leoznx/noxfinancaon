@@ -79,6 +79,7 @@ import { Route as AdminFinanceiroRouteImport } from './routes/admin.financeiro'
 import { Route as AdminIndicacoesRouteImport } from './routes/admin.indicacoes'
 import { Route as AdminLeadsRouteImport } from './routes/admin.leads'
 import { Route as AdminMateriaisVendaRouteImport } from './routes/admin.materiais-venda'
+import { Route as AdminMetasRouteImport } from './routes/admin.metas'
 import { Route as AdminPermissoesRouteImport } from './routes/admin.permissoes'
 import { Route as AdminPermissoesInternasRouteImport } from './routes/admin.permissoes-internas'
 import { Route as AdminSaquesRouteImport } from './routes/admin.saques'
@@ -493,6 +494,11 @@ const AdminMateriaisVendaRoute = AdminMateriaisVendaRouteImport.update({
   path: '/admin/materiais-venda',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminMetasRoute = AdminMetasRouteImport.update({
+  id: '/admin/metas',
+  path: '/admin/metas',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminPermissoesRoute = AdminPermissoesRouteImport.update({
   id: '/admin/permissoes',
   path: '/admin/permissoes',
@@ -858,6 +864,7 @@ export interface FileRoutesByFullPath {
   '/admin/indicacoes': typeof AdminIndicacoesRoute
   '/admin/leads': typeof AdminLeadsRoute
   '/admin/materiais-venda': typeof AdminMateriaisVendaRoute
+  '/admin/metas': typeof AdminMetasRoute
   '/admin/permissoes': typeof AdminPermissoesRoute
   '/admin/permissoes-internas': typeof AdminPermissoesInternasRoute
   '/admin/saques': typeof AdminSaquesRoute
@@ -981,6 +988,7 @@ export interface FileRoutesByTo {
   '/admin/indicacoes': typeof AdminIndicacoesRoute
   '/admin/leads': typeof AdminLeadsRoute
   '/admin/materiais-venda': typeof AdminMateriaisVendaRoute
+  '/admin/metas': typeof AdminMetasRoute
   '/admin/permissoes': typeof AdminPermissoesRoute
   '/admin/permissoes-internas': typeof AdminPermissoesInternasRoute
   '/admin/saques': typeof AdminSaquesRoute
@@ -1109,6 +1117,7 @@ export interface FileRoutesById {
   '/admin/indicacoes': typeof AdminIndicacoesRoute
   '/admin/leads': typeof AdminLeadsRoute
   '/admin/materiais-venda': typeof AdminMateriaisVendaRoute
+  '/admin/metas': typeof AdminMetasRoute
   '/admin/permissoes': typeof AdminPermissoesRoute
   '/admin/permissoes-internas': typeof AdminPermissoesInternasRoute
   '/admin/saques': typeof AdminSaquesRoute
@@ -1238,6 +1247,7 @@ export interface FileRouteTypes {
     | '/admin/indicacoes'
     | '/admin/leads'
     | '/admin/materiais-venda'
+    | '/admin/metas'
     | '/admin/permissoes'
     | '/admin/permissoes-internas'
     | '/admin/saques'
@@ -1361,6 +1371,7 @@ export interface FileRouteTypes {
     | '/admin/indicacoes'
     | '/admin/leads'
     | '/admin/materiais-venda'
+    | '/admin/metas'
     | '/admin/permissoes'
     | '/admin/permissoes-internas'
     | '/admin/saques'
@@ -1488,6 +1499,7 @@ export interface FileRouteTypes {
     | '/admin/indicacoes'
     | '/admin/leads'
     | '/admin/materiais-venda'
+    | '/admin/metas'
     | '/admin/permissoes'
     | '/admin/permissoes-internas'
     | '/admin/saques'
@@ -1616,6 +1628,7 @@ export interface RootRouteChildren {
   AdminIndicacoesRoute: typeof AdminIndicacoesRoute
   AdminLeadsRoute: typeof AdminLeadsRoute
   AdminMateriaisVendaRoute: typeof AdminMateriaisVendaRoute
+  AdminMetasRoute: typeof AdminMetasRoute
   AdminPermissoesRoute: typeof AdminPermissoesRoute
   AdminPermissoesInternasRoute: typeof AdminPermissoesInternasRoute
   AdminSaquesRoute: typeof AdminSaquesRoute
@@ -2134,6 +2147,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/materiais-venda'
       fullPath: '/admin/materiais-venda'
       preLoaderRoute: typeof AdminMateriaisVendaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/metas': {
+      id: '/admin/metas'
+      path: '/admin/metas'
+      fullPath: '/admin/metas'
+      preLoaderRoute: typeof AdminMetasRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/permissoes': {
@@ -2702,6 +2722,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminIndicacoesRoute: AdminIndicacoesRoute,
   AdminLeadsRoute: AdminLeadsRoute,
   AdminMateriaisVendaRoute: AdminMateriaisVendaRoute,
+  AdminMetasRoute: AdminMetasRoute,
   AdminPermissoesRoute: AdminPermissoesRoute,
   AdminPermissoesInternasRoute: AdminPermissoesInternasRoute,
   AdminSaquesRoute: AdminSaquesRoute,

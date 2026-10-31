@@ -20,6 +20,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { fetchMySellerControlDashboard, type SellerControlDashboard } from "@/lib/seller-control";
 import { fetchMySellerMonthlyProgress, type SellerMonthlyProgress } from "@/lib/seller-progress";
 import { fetchMyRoleGoalProgress, type TeamGoalProgress } from "@/lib/admin-team-goals";
+import { collaboratorDisplayName } from "@/lib/collaborator-name";
 
 export const Route = createFileRoute("/vendedor/metas")({
   component: () => (
@@ -66,7 +67,7 @@ function Goals() {
         ((rankingResponse.data as Record<string, unknown>[] | null) ?? [])
           .map((row) => ({
             id: String(row.vendedor_id),
-            name: String(row.nome || "Vendedor"),
+            name: collaboratorDisplayName(String(row.nome || ""), "Vendedor"),
             registrations: Number(row.total_leads ?? 0),
             position: Number(row.posicao ?? 0),
           }))

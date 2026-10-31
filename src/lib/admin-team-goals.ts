@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { collaboratorDisplayName } from "@/lib/collaborator-name";
 
 export type TeamGoalProgress = {
   seller_id: string;
@@ -18,6 +19,7 @@ export type TeamGoalProgress = {
   clients_registered_daily: number;
   clients_registered_weekly: number;
   clients_registered_monthly: number;
+  leads_contacted_daily: number;
   meetings_scheduled_daily: number;
   meetings_scheduled_weekly: number;
   meetings_scheduled_monthly: number;
@@ -38,6 +40,30 @@ export type TeamGoalConfig = {
   target_clients_monthly: number | null;
   target_calls_daily: number | null;
   target_leads_contacted_daily: number | null;
+  generation_mode: "manual" | "automatic";
+  generated_from_month: string | null;
+  generated_at: string | null;
+};
+
+export type AdminGoalDailyNoticeSeller = {
+  seller_id: string;
+  seller_name: string;
+  seller_type: "sdr" | "closer";
+  leads_done: number;
+  leads_target: number;
+  leads_missing: number;
+  clients_missing: number;
+  meetings_missing: number;
+};
+
+export type AdminGoalDailyNotice = {
+  show: boolean;
+  reason?: string;
+  notice_date?: string;
+  scheduled_at?: string;
+  title?: string;
+  message?: string;
+  sellers?: AdminGoalDailyNoticeSeller[];
 };
 
 function numberOrNull(value: unknown) {
@@ -47,6 +73,7 @@ function numberOrNull(value: unknown) {
 function normalize(row: Record<string, unknown>): TeamGoalProgress {
   return {
     ...(row as unknown as TeamGoalProgress),
+    seller_name: collaboratorDisplayName(String(row.seller_name ?? ""), "Vendedor"),
     seller_type: row.seller_type === "closer" ? "closer" : "sdr",
     target_clients_daily: numberOrNull(row.target_clients_daily),
     target_clients_weekly: numberOrNull(row.target_clients_weekly),
@@ -62,6 +89,7 @@ function normalize(row: Record<string, unknown>): TeamGoalProgress {
     clients_registered_daily: Number(row.clients_registered_daily ?? 0),
     clients_registered_weekly: Number(row.clients_registered_weekly ?? 0),
     clients_registered_monthly: Number(row.clients_registered_monthly ?? 0),
+    leads_contacted_daily: Number(row.leads_contacted_daily ?? 0),
     meetings_scheduled_daily: Number(row.meetings_scheduled_daily ?? 0),
     meetings_scheduled_weekly: Number(row.meetings_scheduled_weekly ?? 0),
     meetings_scheduled_monthly: Number(row.meetings_scheduled_monthly ?? 0),
@@ -81,12 +109,10 @@ export async function fetchTeamGoalProgress(month: number, year: number) {
 }
 
 export async function fetchTeamGoalConfigs(month: number, year: number) {
-  const { data, error } = await (supabase.from("seller_team_goals" as any) as any)
-    .select(
-      "seller_type,month,year,target_meetings_daily,target_meetings_weekly,target_meetings_monthly,target_clients_daily,target_clients_weekly,target_clients_monthly,target_calls_daily,target_leads_contacted_daily",
-    )
-    .eq("month", month)
-    .eq("year", year);
+  const { data, error } = await (supabase.rpc as any)("get_seller_team_goal_configs", {
+    p_month: month,
+    p_year: year,
+  });
   if (error) throw error;
   return ((data as Record<string, unknown>[] | null) ?? []).map((row): TeamGoalConfig => ({
     seller_type: row.seller_type === "closer" ? "closer" : "sdr",
@@ -100,7 +126,29 @@ export async function fetchTeamGoalConfigs(month: number, year: number) {
     target_clients_monthly: numberOrNull(row.target_clients_monthly),
     target_calls_daily: numberOrNull(row.target_calls_daily),
     target_leads_contacted_daily: numberOrNull(row.target_leads_contacted_daily),
+    generation_mode: row.generation_mode === "automatic" ? "automatic" : "manual",
+    generated_from_month: row.generated_from_month ? String(row.generated_from_month) : null,
+    generated_at: row.generated_at ? String(row.generated_at) : null,
   }));
+}
+
+export async function fetchAdminGoalDailyNotice(): Promise<AdminGoalDailyNotice> {
+  const { data, error } = await (supabase.rpc as any)("get_admin_goal_daily_notice");
+  if (error) throw error;
+  const notice = (data ?? { show: false }) as AdminGoalDailyNotice;
+  return {
+    ...notice,
+    show: notice.show === true,
+    sellers: (notice.sellers ?? []).map((seller) => ({
+      ...seller,
+      seller_type: seller.seller_type === "closer" ? "closer" : "sdr",
+      leads_done: Number(seller.leads_done ?? 0),
+      leads_target: Number(seller.leads_target ?? 0),
+      leads_missing: Number(seller.leads_missing ?? 0),
+      clients_missing: Number(seller.clients_missing ?? 0),
+      meetings_missing: Number(seller.meetings_missing ?? 0),
+    })),
+  };
 }
 
 export async function fetchMyRoleGoalProgress() {

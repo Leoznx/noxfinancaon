@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 108" role="img" aria-labelledby="title desc">
+  <title id="title">NOX Fiança</title>
+  <desc id="desc">Símbolo amarelo da NOX com nome em alto contraste.</desc>
+  <defs>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feColorMatrix in="blur" values="1 0 0 0 0.2 0 1 0 0 0.15 0 0 1 0 0 0 0 0 .7 0"/>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <g filter="url(#glow)" transform="translate(10 17)">
+    <rect width="74" height="74" rx="18" fill="#FFD60A"/>
+    <circle cx="40" cy="40" r="21" fill="#080808"/>
+    <circle cx="31" cy="36" r="17" fill="#FFD60A"/>
+    <circle cx="56" cy="22" r="2.7" fill="#080808"/>
+  </g>
+  <text x="105" y="62" fill="#FFFFFF" font-family="Inter, Arial, sans-serif" font-size="46" font-weight="800" letter-spacing="5">NOX</text>
+  <text x="108" y="84" fill="#FFD60A" font-family="Inter, Arial, sans-serif" font-size="12" font-weight="800" letter-spacing="5.3">FIANÇA</text>
+  <path d="M105 92H342" stroke="#FFD60A" stroke-width="2" stroke-linecap="round" opacity=".72"/>
+</svg>

@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { collaboratorDisplayName } from "@/lib/collaborator-name";
 
 export type SellerDashboardMonth = {
   month: number;
@@ -124,7 +125,7 @@ export async function fetchSellerDashboard(): Promise<SellerDashboardData> {
     generatedAt: String(payload.generated_at ?? new Date().toISOString()),
     seller: {
       id: sellerId,
-      name: String(seller.name ?? "Vendedor"),
+      name: collaboratorDisplayName(String(seller.name ?? ""), "Vendedor"),
       avatarUrl: seller.avatar_url ? String(seller.avatar_url) : null,
     },
     metrics: {
@@ -174,7 +175,7 @@ export async function fetchSellerDashboard(): Promise<SellerDashboardData> {
     })),
     ranking: rankingRows.map((row) => ({
       sellerId: String(row.vendedor_id ?? ""),
-      name: String(row.nome ?? "Vendedor"),
+      name: collaboratorDisplayName(String(row.nome ?? ""), "Vendedor"),
       avatarUrl: row.avatar_url ? String(row.avatar_url) : null,
       registrations: numberValue(row.total_leads),
       position: numberValue(row.posicao),

@@ -49,6 +49,7 @@ import {
   type SellerLeadOutcome,
 } from "@/lib/seller-control";
 import { formatBrazilianPhoneInput, normalizeBrazilianPhone } from "@/lib/seller-clients";
+import { collaboratorDisplayName } from "@/lib/collaborator-name";
 
 const JOURNEY_COPY = {
   registration_pending: {
@@ -401,7 +402,9 @@ export function AppointmentDetailsDialog({
                         </time>
                       </div>
                       {entry.seller_name && (
-                        <p className="mt-1 text-neutral-500">Vendedor: {entry.seller_name}</p>
+                        <p className="mt-1 text-neutral-500">
+                          Vendedor: {collaboratorDisplayName(entry.seller_name, "Vendedor")}
+                        </p>
                       )}
                     </li>
                   ))}

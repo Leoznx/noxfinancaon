@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { collaboratorDisplayName } from "@/lib/collaborator-name";
 import { loadSessionResource, peekSessionResource } from "@/lib/session-resource-cache";
 
 const SELLER_DASHBOARD_MAX_AGE_MS = 60_000;
@@ -212,8 +213,11 @@ function normalizeDashboard(
       : {};
   return {
     seller_id: stringValue(pick({ ...row, ...seller }, ["seller_id", "id", "vendedor_id"])),
-    seller_name: stringValue(
-      pick({ ...row, ...seller }, ["seller_name", "name", "nome", "vendedor_nome"]),
+    seller_name: collaboratorDisplayName(
+      stringValue(
+        pick({ ...row, ...seller }, ["seller_name", "name", "nome", "vendedor_nome"]),
+        "Vendedor",
+      ),
       "Vendedor",
     ),
     seller_type: sellerType(pick({ ...row, ...seller }, ["seller_type", "type", "tipo"])),
@@ -240,7 +244,10 @@ function normalizeHistory(value: unknown): SellerContactLeadHistory[] {
       pick(row, ["label", "title", "description", "event_label", "outcome_label"]),
       "Atualização do lead",
     ),
-    seller_name: nullableString(pick(row, ["seller_name", "vendedor_nome", "actor_name"])),
+    seller_name: collaboratorDisplayName(
+      nullableString(pick(row, ["seller_name", "vendedor_nome", "actor_name"])),
+      "",
+    ) || null,
     details: nullableString(pick(row, ["details", "notes", "description", "observations"])),
   }));
 }
@@ -264,9 +271,11 @@ export function normalizeSellerContactLead(value: unknown): SellerContactLead {
     ),
     next_follow_up_at: nullableString(pick(source, ["next_task_at", "next_follow_up_at"])),
     current_seller_id: nullableString(pick(source, ["current_seller_id", "seller_id", "vendedor_id"])),
-    current_seller_name: nullableString(
-      pick(source, ["current_seller_name", "seller_name", "vendedor_nome"]),
-    ),
+    current_seller_name:
+      collaboratorDisplayName(
+        nullableString(pick(source, ["current_seller_name", "seller_name", "vendedor_nome"])),
+        "",
+      ) || null,
     attempts_in_cycle: numberValue(
       pick(source, ["no_response_count", "attempts_in_cycle", "attempt_count", "tentativas"]),
     ),
