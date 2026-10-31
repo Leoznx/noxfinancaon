@@ -338,10 +338,6 @@ function TabPerfil() {
       toast.error("Formato inválido. Envie um JPG, PNG ou WEBP.");
       return;
     }
-    if (file.size > 2 * 1024 * 1024) {
-      toast.error("A imagem deve ter até 2MB.");
-      return;
-    }
     setSalvando(true);
     const fileExt = file.name.split(".").pop();
     const fileName = `${profile.id}-${Date.now()}.${fileExt}`;
@@ -473,7 +469,7 @@ function TabPerfil() {
             {usuario.role}
           </p>
           <p className="text-xs text-neutral-400 mt-4 max-w-sm font-medium">
-            Formato recomendado: JPG ou PNG de até 2MB. Dimensões sugeridas: 400x400px.
+            Formatos aceitos: JPG, PNG ou WEBP. Dimensões sugeridas: 400x400px.
           </p>
         </div>
       </div>

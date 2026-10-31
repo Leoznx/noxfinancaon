@@ -1,7 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { defaultAvatarForName } from "@/lib/gender-avatar";
 
-const MAX_AVATAR_SIZE = 2 * 1024 * 1024;
 const MIME_TO_EXTENSION: Record<string, string> = {
   "image/jpeg": "jpg",
   "image/jpg": "jpg",
@@ -19,10 +18,6 @@ export async function uploadAdminProfileAvatar(targetUserId: string, file: File)
   if (!extension) {
     throw new Error("Formato inválido. Envie um JPG, PNG ou WEBP.");
   }
-  if (file.size > MAX_AVATAR_SIZE) {
-    throw new Error("A imagem deve ter até 2MB.");
-  }
-
   const { data: authData, error: authError } = await supabase.auth.getUser();
   if (authError || !authData.user) {
     throw new Error("Sessão expirada. Entre novamente para atualizar a foto.");

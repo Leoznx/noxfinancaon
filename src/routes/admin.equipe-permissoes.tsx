@@ -675,7 +675,7 @@ export function TabColaboradores() {
                 </div>
               </div>
               <p className="text-sm text-muted-foreground">
-                Envie uma imagem JPG, PNG ou WEBP de até 2MB. A alteração será usada no login e em todas as áreas que exibem este usuário.
+                Envie uma imagem JPG, PNG ou WEBP. A alteração será usada no login e em todas as áreas que exibem este usuário.
               </p>
               <input
                 ref={fileInputRef}
