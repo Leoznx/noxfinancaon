@@ -157,14 +157,6 @@ const adminItems: MenuItem[] = [
     label: "Usuários",
     href: "/admin/usuarios",
     module: "usuarios",
-    children: [
-      { label: "Todos os usuários", href: "/admin/usuarios?tab=todos" },
-      { label: "Proprietários", href: "/admin/usuarios?tab=proprietario" },
-      { label: "Imobiliárias", href: "/admin/usuarios?tab=imobiliaria" },
-      { label: "Inquilinos", href: "/admin/usuarios?tab=inquilino" },
-      { label: "Corretores", href: "/admin/usuarios?tab=corretor" },
-      { label: "Equipe e administradores", href: "/admin/usuarios?tab=equipe" },
-    ],
   },
   {
     icon: DollarSign,
@@ -173,16 +165,6 @@ const adminItems: MenuItem[] = [
     module: "financeiro",
     modules: ["financeiro", "faturamento"],
     keywords: ["faturamento", "receitas", "cobranças"],
-    children: [
-      { label: "Visão financeira", href: "/admin/financeiro" },
-      { label: "Faturamento", href: "/admin/faturamento" },
-      { label: "Saques", href: "/admin/financeiro?tab=withdrawals" },
-      { label: "Comissões", href: "/admin/financeiro?tab=commissions" },
-      { label: "Pagamentos", href: "/admin/financeiro?tab=payments" },
-      { label: "A receber", href: "/admin/faturamento?tab=receber" },
-      { label: "Vencidos", href: "/admin/faturamento?tab=vencidos" },
-      { label: "Pagos", href: "/admin/faturamento?tab=pagos" },
-    ],
   },
   { icon: ShieldAlert, label: "Sinistros", href: "/sinistros", module: "sinistros" },
   {
