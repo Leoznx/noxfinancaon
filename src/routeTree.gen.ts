@@ -22,6 +22,7 @@ import { Route as CadastroInquilinoRouteImport } from './routes/cadastro-inquili
 import { Route as CadastroProprietarioRouteImport } from './routes/cadastro-proprietario'
 import { Route as CarreirasRouteImport } from './routes/carreiras'
 import { Route as CarteiraCobrancasRouteImport } from './routes/carteira-cobrancas'
+import { Route as ClausulasContratoRouteImport } from './routes/clausulas-contrato'
 import { Route as CompletarAcessoInquilinoRouteImport } from './routes/completar-acesso-inquilino'
 import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
 import { Route as ConfirmarVinculoCorretorRouteImport } from './routes/confirmar-vinculo-corretor'
@@ -197,6 +198,11 @@ const CarreirasRoute = CarreirasRouteImport.update({
 const CarteiraCobrancasRoute = CarteiraCobrancasRouteImport.update({
   id: '/carteira-cobrancas',
   path: '/carteira-cobrancas',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ClausulasContratoRoute = ClausulasContratoRouteImport.update({
+  id: '/clausulas-contrato',
+  path: '/clausulas-contrato',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CompletarAcessoInquilinoRoute =
@@ -795,6 +801,7 @@ export interface FileRoutesByFullPath {
   '/cadastro-proprietario': typeof CadastroProprietarioRoute
   '/carreiras': typeof CarreirasRoute
   '/carteira-cobrancas': typeof CarteiraCobrancasRoute
+  '/clausulas-contrato': typeof ClausulasContratoRoute
   '/completar-acesso-inquilino': typeof CompletarAcessoInquilinoRoute
   '/configuracoes': typeof ConfiguracoesRouteWithChildren
   '/confirmar-vinculo-corretor': typeof ConfirmarVinculoCorretorRoute
@@ -920,6 +927,7 @@ export interface FileRoutesByTo {
   '/cadastro-proprietario': typeof CadastroProprietarioRoute
   '/carreiras': typeof CarreirasRoute
   '/carteira-cobrancas': typeof CarteiraCobrancasRoute
+  '/clausulas-contrato': typeof ClausulasContratoRoute
   '/completar-acesso-inquilino': typeof CompletarAcessoInquilinoRoute
   '/configuracoes': typeof ConfiguracoesRouteWithChildren
   '/confirmar-vinculo-corretor': typeof ConfirmarVinculoCorretorRoute
@@ -1044,6 +1052,7 @@ export interface FileRoutesById {
   '/cadastro-proprietario': typeof CadastroProprietarioRoute
   '/carreiras': typeof CarreirasRoute
   '/carteira-cobrancas': typeof CarteiraCobrancasRoute
+  '/clausulas-contrato': typeof ClausulasContratoRoute
   '/completar-acesso-inquilino': typeof CompletarAcessoInquilinoRoute
   '/configuracoes': typeof ConfiguracoesRouteWithChildren
   '/confirmar-vinculo-corretor': typeof ConfirmarVinculoCorretorRoute
@@ -1172,6 +1181,7 @@ export interface FileRouteTypes {
     | '/cadastro-proprietario'
     | '/carreiras'
     | '/carteira-cobrancas'
+    | '/clausulas-contrato'
     | '/completar-acesso-inquilino'
     | '/configuracoes'
     | '/confirmar-vinculo-corretor'
@@ -1297,6 +1307,7 @@ export interface FileRouteTypes {
     | '/cadastro-proprietario'
     | '/carreiras'
     | '/carteira-cobrancas'
+    | '/clausulas-contrato'
     | '/completar-acesso-inquilino'
     | '/configuracoes'
     | '/confirmar-vinculo-corretor'
@@ -1420,6 +1431,7 @@ export interface FileRouteTypes {
     | '/cadastro-proprietario'
     | '/carreiras'
     | '/carteira-cobrancas'
+    | '/clausulas-contrato'
     | '/completar-acesso-inquilino'
     | '/configuracoes'
     | '/confirmar-vinculo-corretor'
@@ -1547,6 +1559,7 @@ export interface RootRouteChildren {
   CadastroProprietarioRoute: typeof CadastroProprietarioRoute
   CarreirasRoute: typeof CarreirasRoute
   CarteiraCobrancasRoute: typeof CarteiraCobrancasRoute
+  ClausulasContratoRoute: typeof ClausulasContratoRoute
   CompletarAcessoInquilinoRoute: typeof CompletarAcessoInquilinoRoute
   ConfiguracoesRoute: typeof ConfiguracoesRouteWithChildren
   ConfirmarVinculoCorretorRoute: typeof ConfirmarVinculoCorretorRoute
@@ -1722,6 +1735,13 @@ declare module '@tanstack/react-router' {
       path: '/carteira-cobrancas'
       fullPath: '/carteira-cobrancas'
       preLoaderRoute: typeof CarteiraCobrancasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/clausulas-contrato': {
+      id: '/clausulas-contrato'
+      path: '/clausulas-contrato'
+      fullPath: '/clausulas-contrato'
+      preLoaderRoute: typeof ClausulasContratoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/completar-acesso-inquilino': {
@@ -2625,6 +2645,7 @@ const rootRouteChildren: RootRouteChildren = {
   CadastroProprietarioRoute: CadastroProprietarioRoute,
   CarreirasRoute: CarreirasRoute,
   CarteiraCobrancasRoute: CarteiraCobrancasRoute,
+  ClausulasContratoRoute: ClausulasContratoRoute,
   CompletarAcessoInquilinoRoute: CompletarAcessoInquilinoRoute,
   ConfiguracoesRoute: ConfiguracoesRouteWithChildren,
   ConfirmarVinculoCorretorRoute: ConfirmarVinculoCorretorRoute,
