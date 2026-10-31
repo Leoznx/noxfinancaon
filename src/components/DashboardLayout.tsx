@@ -178,6 +178,13 @@ const adminItems: MenuItem[] = [
     label: "Configurações",
     href: "/configuracoes",
   },
+  {
+    icon: MonitorPlay,
+    label: "Vitrine",
+    href: "/tv/ranking",
+    adminOnly: true,
+    keywords: ["ranking", "metas", "vendedores", "tv"],
+  },
 ];
 
 // Catálogo completo usado só pra filtrar o menu dos cargos internos (juridico/
