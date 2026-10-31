@@ -1,10 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import {
   AlertTriangle,
+  Bell,
   CheckCircle2,
   Crown,
   Flame,
   LogOut,
+  PartyPopper,
   RefreshCw,
   ShieldCheck,
   Sparkles,
@@ -22,12 +24,14 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { setRememberMe } from "@/lib/authStorage";
 import {
+  fetchTvRegistrationCelebration,
   fetchTvSalesDashboard,
   rankDailyCompetition,
   summarizeDailyTeam,
   type TvDailyCompetitionSeller,
   type TvDailyTeamSummary,
   type TvSalesDashboardSnapshot,
+  type TvRegistrationCelebration,
   type TvSellerType,
 } from "@/lib/tv-sales-dashboard";
 
@@ -40,14 +44,45 @@ const ROWS_PER_PAGE = 5;
 const FALLBACK_REFRESH_MS = 60_000;
 const FULL_SYNC_MS = 60 * 60_000;
 const PAGE_ROTATION_MS = 18_000;
+const REGISTRATION_CELEBRATION_MS = 15_000;
 const TV_LOGIN_TIMEOUT_MS = 25_000;
 const LIVE_TABLES = [
-  "seller_signup_attributions",
   "seller_client_partnerships",
   "seller_commissions",
   "seller_team_goals",
   "seller_appointments",
 ] as const;
+
+function playRegistrationBell() {
+  if (typeof window === "undefined" || typeof window.AudioContext === "undefined") return;
+  try {
+    const context = new window.AudioContext();
+    void context.resume();
+    const start = context.currentTime + 0.03;
+    const strikes = [0, 0.24, 0.52];
+
+    for (const [strikeIndex, delay] of strikes.entries()) {
+      for (const [partialIndex, frequency] of [880, 1320, 1760].entries()) {
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+        const strikeAt = start + delay;
+        oscillator.type = partialIndex === 0 ? "sine" : "triangle";
+        oscillator.frequency.setValueAtTime(frequency + strikeIndex * 22, strikeAt);
+        gain.gain.setValueAtTime(0.0001, strikeAt);
+        gain.gain.exponentialRampToValueAtTime(0.16 / (partialIndex + 1), strikeAt + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.0001, strikeAt + 0.72);
+        oscillator.connect(gain);
+        gain.connect(context.destination);
+        oscillator.start(strikeAt);
+        oscillator.stop(strikeAt + 0.75);
+      }
+    }
+
+    window.setTimeout(() => void context.close(), 1_600);
+  } catch {
+    // Alguns navegadores bloqueiam áudio automático; a celebração visual permanece ativa.
+  }
+}
 
 const INTERNAL_ROLES = new Set<InternalRole>([
   "admin_master",
@@ -326,6 +361,9 @@ function TvDashboard() {
   const requestSequence = useRef(0);
   const eventDebounce = useRef<number | null>(null);
   const [snapshot, setSnapshot] = useState<TvSalesDashboardSnapshot | null>(readCachedSnapshot);
+  const snapshotRef = useRef(snapshot);
+  const seenCelebrations = useRef(new Set<string>());
+  const [celebrationQueue, setCelebrationQueue] = useState<TvRegistrationCelebration[]>([]);
   const hadInitialSnapshot = useRef(Boolean(snapshot));
   const [loading, setLoading] = useState(!snapshot);
   const [error, setError] = useState("");
@@ -338,6 +376,7 @@ function TvDashboard() {
       try {
         const next = await fetchTvSalesDashboard(month, year);
         if (sequence !== requestSequence.current) return;
+        snapshotRef.current = next;
         setSnapshot(next);
         setError("");
         try {
@@ -353,6 +392,42 @@ function TvDashboard() {
       }
     },
     [month, year],
+  );
+
+  const enqueueRegistrationCelebration = useCallback(
+    async (row: Record<string, unknown>) => {
+      const attributionId = String(row.id ?? "");
+      const sellerId = String(row.seller_id ?? "");
+      if (!attributionId || !sellerId || seenCelebrations.current.has(attributionId)) return;
+      seenCelebrations.current.add(attributionId);
+
+      let celebration: TvRegistrationCelebration | null = null;
+      try {
+        celebration = await fetchTvRegistrationCelebration(attributionId);
+      } catch {
+        const seller = snapshotRef.current?.ranking.find((item) => item.id === sellerId);
+        if (seller) {
+          celebration = {
+            attributionId,
+            sellerId,
+            sellerName: seller.name,
+            sellerType: seller.sellerType,
+            avatarUrl: seller.avatarUrl,
+            createdAt: String(row.created_at ?? new Date().toISOString()),
+          };
+        }
+      }
+
+      if (!celebration) return;
+      const nextCelebration = celebration;
+      setCelebrationQueue((current) =>
+        current.some((item) => item.attributionId === nextCelebration.attributionId) ||
+        current.length >= 8
+          ? current
+          : [...current, nextCelebration],
+      );
+    },
+    [],
   );
 
   useEffect(() => void load(hadInitialSnapshot.current), [load]);
@@ -372,6 +447,14 @@ function TvDashboard() {
       eventDebounce.current = window.setTimeout(() => void load(true), 700);
     };
     let channel = supabase.channel("nox-tv-commercial-live");
+    channel = channel.on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "seller_signup_attributions" },
+      (payload: { new: Record<string, unknown> }) => {
+        refreshAfterEvent();
+        void enqueueRegistrationCelebration(payload.new);
+      },
+    );
     for (const table of LIVE_TABLES) {
       channel = channel.on(
         "postgres_changes",
@@ -384,7 +467,19 @@ function TvDashboard() {
       if (eventDebounce.current) window.clearTimeout(eventDebounce.current);
       void supabase.removeChannel(channel);
     };
-  }, [load]);
+  }, [enqueueRegistrationCelebration, load]);
+
+  const activeCelebration = celebrationQueue[0] ?? null;
+
+  useEffect(() => {
+    if (!activeCelebration) return;
+    playRegistrationBell();
+    const timer = window.setTimeout(
+      () => setCelebrationQueue((current) => current.slice(1)),
+      REGISTRATION_CELEBRATION_MS,
+    );
+    return () => window.clearTimeout(timer);
+  }, [activeCelebration]);
 
   const sdrCompetition = useMemo(
     () =>
@@ -450,6 +545,7 @@ function TvDashboard() {
             summary={sdrSummary}
             primaryLabel="Cadastros"
             secondaryLabel="Reuniões agendadas"
+            contactedLabel="Leads em contato"
           />
           <DailyChallengeCard
             team="closer"
@@ -469,7 +565,7 @@ function TvDashboard() {
         <section className="tv-rankings" aria-label="Ranking da equipe">
           <RankingPanel
             title="Arena SDR"
-            subtitle="Cadastros + reuniões agendadas hoje"
+            subtitle="Cadastros + leads em contato + reuniões agendadas hoje"
             team="sdr"
             rows={sdrCompetition.slice(pageStart, pageStart + ROWS_PER_PAGE)}
           />
@@ -481,6 +577,9 @@ function TvDashboard() {
           />
         </section>
       </main>
+      {activeCelebration ? (
+        <RegistrationCelebration celebration={activeCelebration} />
+      ) : null}
     </TvFrame>
   );
 }
@@ -491,12 +590,14 @@ function DailyChallengeCard({
   summary,
   primaryLabel,
   secondaryLabel,
+  contactedLabel,
 }: {
   team: TvSellerType;
   title: string;
   summary: TvDailyTeamSummary;
   primaryLabel: string;
   secondaryLabel: string;
+  contactedLabel?: string;
 }) {
   const score = summary.score;
   const message =
@@ -526,7 +627,7 @@ function DailyChallengeCard({
           </div>
           <Target />
         </div>
-        <div className="tv-daily-metrics">
+        <div className={`tv-daily-metrics${contactedLabel ? " has-contacted" : ""}`}>
           <DailyMetric
             label={primaryLabel}
             current={summary.primaryCurrent}
@@ -537,6 +638,13 @@ function DailyChallengeCard({
             current={summary.secondaryCurrent}
             target={summary.secondaryTarget}
           />
+          {contactedLabel ? (
+            <DailyMetric
+              label={contactedLabel}
+              current={summary.contactedCurrent}
+              target={summary.contactedTarget}
+            />
+          ) : null}
         </div>
         <p>{message}</p>
       </div>
@@ -610,7 +718,6 @@ function RankingPanel({
 function RankingRow({ seller }: { seller: TvDailyCompetitionSeller }) {
   const isCloser = seller.sellerType === "closer";
   const resultLabel = isCloser ? "reuniões" : "cadastros";
-  const secondaryLabel = isCloser ? "cadastros" : "reuniões";
   const initials = seller.name
     .split(/\s+/)
     .filter(Boolean)
@@ -628,7 +735,9 @@ function RankingRow({ seller }: { seller: TvDailyCompetitionSeller }) {
         <div>
           <strong>{seller.name}</strong>
           <small>
-            {seller.secondaryCurrent} {secondaryLabel} hoje
+            {isCloser
+              ? `${seller.secondaryCurrent} cadastros hoje`
+              : `${seller.contactedCurrent} contatos · ${seller.secondaryCurrent} reuniões hoje`}
           </small>
         </div>
       </div>
@@ -650,6 +759,65 @@ function RankingRow({ seller }: { seller: TvDailyCompetitionSeller }) {
         </span>
       </div>
     </div>
+  );
+}
+
+const CELEBRATION_COLORS = ["#ffd300", "#ffffff", "#5f8cff", "#ff8a3d", "#35d07f"];
+
+function RegistrationCelebration({
+  celebration,
+}: {
+  celebration: TvRegistrationCelebration;
+}) {
+  const initials = celebration.sellerName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
+
+  return (
+    <section className="tv-celebration" role="status" aria-live="assertive" aria-atomic="true">
+      <div className="tv-celebration-glow" aria-hidden="true" />
+      <div className="tv-confetti" aria-hidden="true">
+        {Array.from({ length: 48 }, (_, index) => (
+          <i
+            key={index}
+            style={{
+              left: `${(index * 37) % 100}%`,
+              width: `${7 + (index % 4) * 2}px`,
+              height: `${13 + (index % 5) * 3}px`,
+              backgroundColor: CELEBRATION_COLORS[index % CELEBRATION_COLORS.length],
+              animationDelay: `${(index % 16) * 0.09}s`,
+              animationDuration: `${2.5 + (index % 7) * 0.24}s`,
+            }}
+          />
+        ))}
+      </div>
+      <div className="tv-celebration-card">
+        <div className="tv-celebration-bell" aria-hidden="true">
+          <Bell />
+        </div>
+        <span className="tv-celebration-kicker">
+          <PartyPopper /> Novo cadastro confirmado!
+        </span>
+        <div className="tv-celebration-avatar">
+          {celebration.avatarUrl ? (
+            <img src={celebration.avatarUrl} alt={`Foto de ${celebration.sellerName}`} />
+          ) : (
+            <strong>{initials || "NOX"}</strong>
+          )}
+        </div>
+        <h2>Parabéns, {celebration.sellerName}!</h2>
+        <p>Você conquistou um novo cadastro. Continue brilhando!</p>
+        <span className={`tv-celebration-team team-${celebration.sellerType}`}>
+          {celebration.sellerType === "closer" ? "Força Closer" : "Força SDR"}
+        </span>
+        <span className="tv-celebration-timer" aria-hidden="true">
+          <i />
+        </span>
+      </div>
+    </section>
   );
 }
 
@@ -688,7 +856,7 @@ const TV_STYLES = `
   .tv-board button:focus-visible, .tv-board input:focus-visible { outline: 4px solid #ffd300; outline-offset: 4px; }
   .tv-dashboard { width: 100vw; height: 100vh; padding: clamp(18px, 1.8vw, 34px) clamp(28px, 3vw, 58px) 24px; display: flex; flex-direction: column; gap: clamp(10px, 1vw, 18px); }
   .tv-header { min-height: clamp(66px, 5vw, 92px); display: flex; align-items: center; justify-content: center; }
-  .tv-header > img { width: clamp(230px, 18vw, 350px); max-height: clamp(66px, 5vw, 92px); object-fit: contain; filter: drop-shadow(0 0 18px #ffd30055) drop-shadow(0 10px 24px #000); }
+  .tv-header > img { width: clamp(190px, 14vw, 270px); max-height: clamp(66px, 5vw, 92px); object-fit: contain; filter: drop-shadow(0 0 18px #ffd30055) drop-shadow(0 10px 24px #000); }
   .tv-brand-row { display: flex; align-items: center; gap: 22px; }
   .tv-brand-row img { width: clamp(190px, 15vw, 290px); max-height: 55px; object-fit: contain; object-position: left center; }
   .tv-brand-row > span { border-left: 1px solid #4c4c50; padding-left: 22px; color: #a5a5aa; font-size: clamp(14px, 1vw, 20px); font-weight: 800; letter-spacing: .18em; }
@@ -727,6 +895,7 @@ const TV_STYLES = `
   .tv-daily-title > svg { width: clamp(24px, 1.8vw, 35px); height: auto; color: #ffd300; }
   .team-closer .tv-daily-title > svg { color: #7199ff; }
   .tv-daily-metrics { margin-top: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .tv-daily-metrics.has-contacted { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .tv-daily-metric { min-width: 0; }
   .tv-daily-metric > span:first-child { display: block; color: #9a9aa0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: clamp(9px, .65vw, 13px); font-weight: 800; }
   .tv-daily-metric strong { display: block; margin-top: 2px; font-size: clamp(19px, 1.5vw, 29px); line-height: 1; }
@@ -735,6 +904,31 @@ const TV_STYLES = `
   .tv-mini-progress i { display: block; height: 100%; border-radius: inherit; background: #ffd300; }
   .team-closer .tv-mini-progress i { background: #7199ff; }
   .tv-daily-content > p { margin: 8px 0 0; color: #c8c8cc; font-size: clamp(9px, .66vw, 13px); font-weight: 750; }
+  .tv-celebration { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; overflow: hidden; padding: 5vh 5vw; background: radial-gradient(circle at 50% 42%, #5a4805ee 0, #17130af2 28%, #060608f7 70%); animation: tv-celebration-stage 15s ease both; }
+  .tv-celebration-glow { position: absolute; width: min(72vw, 980px); height: min(72vw, 980px); border-radius: 50%; background: repeating-conic-gradient(from 0deg, #ffd30000 0 10deg, #ffd30020 10deg 17deg); animation: tv-celebration-rays 18s linear infinite; }
+  .tv-celebration-card { position: relative; z-index: 2; width: min(720px, 76vw); min-height: min(690px, 82vh); border: 2px solid #ffd300; border-radius: 38px; background: linear-gradient(160deg, #2b2408f5, #111114 46%, #09090bf7); box-shadow: 0 0 0 10px #ffd30012, 0 0 90px #ffd30055, 0 36px 100px #000; padding: clamp(28px, 3.2vw, 54px); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; animation: tv-celebration-card-in .75s cubic-bezier(.17,.9,.23,1.35) both; }
+  .tv-celebration-bell { position: absolute; top: clamp(20px, 2vw, 34px); right: clamp(20px, 2vw, 34px); width: clamp(54px, 4.5vw, 82px); height: clamp(54px, 4.5vw, 82px); border-radius: 50%; background: #ffd300; color: #111; display: grid; place-items: center; box-shadow: 0 0 30px #ffd30077; animation: tv-bell-ring 1.35s ease-in-out infinite; transform-origin: 50% 8%; }
+  .tv-celebration-bell svg { width: 52%; height: 52%; fill: currentColor; }
+  .tv-celebration-kicker { display: inline-flex; align-items: center; gap: 10px; color: #ffe057; font-size: clamp(15px, 1.2vw, 23px); font-weight: 950; letter-spacing: .09em; text-transform: uppercase; }
+  .tv-celebration-kicker svg { width: 1.25em; height: 1.25em; }
+  .tv-celebration-avatar { width: clamp(150px, 14vw, 230px); height: clamp(150px, 14vw, 230px); margin-top: clamp(20px, 2vw, 34px); border: 7px solid #ffd300; border-radius: 50%; overflow: hidden; display: grid; place-items: center; background: #252529; color: #fff; box-shadow: 0 0 0 13px #ffd3001d, 0 0 70px #ffd30066; animation: tv-avatar-party 1.6s ease-in-out infinite; }
+  .tv-celebration-avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .tv-celebration-avatar strong { font-size: clamp(34px, 4vw, 64px); }
+  .tv-celebration-card h2 { margin: clamp(20px, 2vw, 34px) 0 0; color: #fff; font-size: clamp(34px, 4vw, 68px); line-height: 1.02; letter-spacing: -.045em; text-shadow: 0 4px 26px #000; }
+  .tv-celebration-card p { margin: 14px 0 0; color: #d8d8dc; font-size: clamp(17px, 1.35vw, 27px); font-weight: 700; }
+  .tv-celebration-team { margin-top: 22px; border: 1px solid #6d5c11; border-radius: 999px; background: #332b0c; color: #ffe16b; padding: 9px 18px; font-size: clamp(12px, .85vw, 17px); font-weight: 950; letter-spacing: .12em; text-transform: uppercase; }
+  .tv-celebration-team.team-closer { border-color: #395aa8; background: #17264e; color: #8eb0ff; }
+  .tv-celebration-timer { position: absolute; right: 34px; bottom: 24px; left: 34px; height: 6px; border-radius: 99px; overflow: hidden; background: #ffffff1c; }
+  .tv-celebration-timer i { display: block; width: 100%; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #ffd300, #fff29a); transform-origin: left; animation: tv-celebration-timer 15s linear forwards; }
+  .tv-confetti { position: absolute; inset: 0; z-index: 3; overflow: hidden; pointer-events: none; }
+  .tv-confetti i { position: absolute; top: -12%; border-radius: 2px; opacity: .95; animation-name: tv-confetti-fall; animation-timing-function: linear; animation-iteration-count: infinite; }
+  @keyframes tv-celebration-stage { 0% { opacity: 0; } 4%, 94% { opacity: 1; } 100% { opacity: 0; } }
+  @keyframes tv-celebration-card-in { from { opacity: 0; transform: translateY(60px) scale(.72) rotate(-2deg); } to { opacity: 1; transform: translateY(0) scale(1) rotate(0); } }
+  @keyframes tv-celebration-rays { to { transform: rotate(360deg); } }
+  @keyframes tv-bell-ring { 0%, 44%, 100% { transform: rotate(0); } 8% { transform: rotate(19deg); } 18% { transform: rotate(-17deg); } 28% { transform: rotate(12deg); } 36% { transform: rotate(-8deg); } }
+  @keyframes tv-avatar-party { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.045); } }
+  @keyframes tv-confetti-fall { 0% { transform: translate3d(0, -8vh, 0) rotate(0); } 100% { transform: translate3d(8vw, 125vh, 0) rotate(820deg); } }
+  @keyframes tv-celebration-timer { to { transform: scaleX(0); } }
   .tv-warning { min-height: 42px; border: 1px solid #684d08; border-radius: 12px; background: #2c2108; color: #ffe699; padding: 8px 16px; display: flex; align-items: center; gap: 10px; font-size: clamp(12px, .85vw, 17px); }
   .tv-warning svg { width: 20px; flex: 0 0 auto; }
   .tv-rankings { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; gap: clamp(13px, 1.3vw, 25px); }
@@ -873,12 +1067,13 @@ const TV_STYLES = `
     .tv-login-shell { grid-template-columns: 1fr; }
     .tv-login-brand { display: none; }
     .tv-login-card { margin: 40px auto; }
+    .tv-celebration-card { width: min(88vw, 720px); min-height: min(720px, 84vh); }
   }
   @media (orientation: portrait) {
     .tv-board.is-native-app { min-height: 100vh; background: radial-gradient(circle at 50% -5%, #4c3f05 0, #11100a 16%, #070708 42%); }
     .tv-board.is-native-app .tv-dashboard { width: 100vw; height: 100vh; min-height: 100vh; overflow: hidden; padding: 22px 24px 24px; gap: 12px; }
     .tv-board.is-native-app .tv-header { min-height: 92px; }
-    .tv-board.is-native-app .tv-header > img { width: min(54vw, 430px); max-height: 92px; }
+    .tv-board.is-native-app .tv-header > img { width: min(46vw, 330px); max-height: 92px; }
     .tv-board.is-native-app .tv-arena-heading { min-height: 58px; flex-direction: column; gap: 5px; }
     .tv-board.is-native-app .tv-arena-heading span { font-size: 13px; }
     .tv-board.is-native-app .tv-arena-heading > strong { font-size: 22px; }
@@ -891,6 +1086,7 @@ const TV_STYLES = `
     .tv-board.is-native-app .tv-daily-title h2 { font-size: 22px; }
     .tv-board.is-native-app .tv-daily-title span { font-size: 10px; }
     .tv-board.is-native-app .tv-daily-metrics { grid-template-columns: 1fr; gap: 8px; }
+    .tv-board.is-native-app .tv-daily-metrics.has-contacted { grid-template-columns: 1fr 1fr; gap: 7px 10px; }
     .tv-board.is-native-app .tv-daily-metric > span:first-child { font-size: 11px; }
     .tv-board.is-native-app .tv-daily-metric strong { font-size: 24px; }
     .tv-board.is-native-app .tv-daily-content > p { font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -909,5 +1105,7 @@ const TV_STYLES = `
     .tv-board.is-native-app .tv-login-shell { grid-template-columns: 1fr; }
     .tv-board.is-native-app .tv-login-brand { display: none; }
     .tv-board.is-native-app .tv-login-card { width: min(82%, 620px); margin: auto; }
+    .tv-board.is-native-app .tv-celebration-card { width: min(82vw, 700px); min-height: min(720px, 76vh); }
+    .tv-board.is-native-app .tv-celebration-avatar { width: min(30vw, 220px); height: min(30vw, 220px); }
   }
 `;

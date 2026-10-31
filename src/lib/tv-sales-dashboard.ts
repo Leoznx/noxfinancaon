@@ -30,6 +30,8 @@ export type TvDailyCompetitionSeller = TvRankingSeller & {
   primaryTarget: number | null;
   secondaryCurrent: number;
   secondaryTarget: number | null;
+  contactedCurrent: number;
+  contactedTarget: number | null;
 };
 
 export type TvDailyTeamSummary = {
@@ -37,7 +39,18 @@ export type TvDailyTeamSummary = {
   primaryTarget: number | null;
   secondaryCurrent: number;
   secondaryTarget: number | null;
+  contactedCurrent: number;
+  contactedTarget: number | null;
   score: number | null;
+};
+
+export type TvRegistrationCelebration = {
+  attributionId: string;
+  sellerId: string;
+  sellerName: string;
+  sellerType: TvSellerType;
+  avatarUrl: string | null;
+  createdAt: string;
 };
 
 const REQUEST_TIMEOUT_MS = 15_000;
@@ -97,9 +110,12 @@ function dailyMetricsForSeller(
   const secondaryTarget = isCloser
     ? (goal?.target_clients_daily ?? null)
     : (goal?.target_meetings_scheduled_daily ?? null);
+  const contactedCurrent = goal?.leads_contacted_daily ?? 0;
+  const contactedTarget = goal?.target_leads_contacted_daily ?? null;
   const percentages = [
     sellerGoalPercentage(primaryCurrent, primaryTarget),
     sellerGoalPercentage(secondaryCurrent, secondaryTarget),
+    isCloser ? null : sellerGoalPercentage(contactedCurrent, contactedTarget),
   ].filter((percentage): percentage is number => percentage != null);
 
   return {
@@ -112,6 +128,8 @@ function dailyMetricsForSeller(
     primaryTarget,
     secondaryCurrent,
     secondaryTarget,
+    contactedCurrent,
+    contactedTarget,
   };
 }
 
@@ -152,15 +170,24 @@ export function summarizeDailyTeam(
   const secondaryTargets = dailyRows
     .map((row) => row.secondaryTarget)
     .filter((target): target is number => target != null && target > 0);
+  const contactedCurrent = dailyRows.reduce((sum, row) => sum + row.contactedCurrent, 0);
+  const contactedTargets = dailyRows
+    .map((row) => row.contactedTarget)
+    .filter((target): target is number => target != null && target > 0);
   const primaryTarget = primaryTargets.length
     ? primaryTargets.reduce((sum, target) => sum + target, 0)
     : null;
   const secondaryTarget = secondaryTargets.length
     ? secondaryTargets.reduce((sum, target) => sum + target, 0)
     : null;
+  const contactedTarget = contactedTargets.length
+    ? contactedTargets.reduce((sum, target) => sum + target, 0)
+    : null;
+  const tracksLeadContact = sellers.some((seller) => seller.sellerType === "sdr");
   const percentages = [
     sellerGoalPercentage(primaryCurrent, primaryTarget),
     sellerGoalPercentage(secondaryCurrent, secondaryTarget),
+    tracksLeadContact ? sellerGoalPercentage(contactedCurrent, contactedTarget) : null,
   ].filter((percentage): percentage is number => percentage != null);
 
   return {
@@ -168,12 +195,42 @@ export function summarizeDailyTeam(
     primaryTarget,
     secondaryCurrent,
     secondaryTarget,
+    contactedCurrent,
+    contactedTarget,
     score: percentages.length
       ? Math.round(
           percentages.reduce((sum, percentage) => sum + percentage, 0) / percentages.length,
         )
       : null,
   };
+}
+
+export function normalizeTvRegistrationCelebration(
+  row: Record<string, unknown>,
+): TvRegistrationCelebration | null {
+  const attributionId = String(row.attribution_id ?? "");
+  const sellerId = String(row.seller_id ?? "");
+  if (!attributionId || !sellerId) return null;
+
+  return {
+    attributionId,
+    sellerId,
+    sellerName: collaboratorDisplayName(String(row.seller_name ?? ""), "Time NOX"),
+    sellerType: row.seller_type === "closer" ? "closer" : "sdr",
+    avatarUrl: row.avatar_url ? String(row.avatar_url) : null,
+    createdAt: String(row.created_at ?? new Date().toISOString()),
+  };
+}
+
+export async function fetchTvRegistrationCelebration(
+  attributionId: string,
+): Promise<TvRegistrationCelebration | null> {
+  const { data, error } = await (supabase.rpc as any)("get_tv_registration_celebration", {
+    p_attribution_id: attributionId,
+  });
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  return row ? normalizeTvRegistrationCelebration(row as Record<string, unknown>) : null;
 }
 
 async function withTimeout<T>(promise: Promise<T>, message: string): Promise<T> {

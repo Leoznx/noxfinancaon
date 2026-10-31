@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  normalizeTvRegistrationCelebration,
   normalizeTvRanking,
   rankDailyCompetition,
   sellerGoalPercentage,
@@ -68,6 +69,7 @@ const emptyGoal = {
   clients_registered_daily: 0,
   clients_registered_weekly: 0,
   clients_registered_monthly: 0,
+  leads_contacted_daily: 0,
   meetings_scheduled_daily: 0,
   meetings_scheduled_weekly: 0,
   meetings_scheduled_monthly: 0,
@@ -163,6 +165,74 @@ test("soma as metas individuais para mostrar a corrida diária da equipe", () =>
     primaryTarget: 4,
     secondaryCurrent: 1,
     secondaryTarget: 2,
+    contactedCurrent: 0,
+    contactedTarget: null,
     score: 63,
   });
+});
+
+test("inclui leads em contato na meta diária do time SDR", () => {
+  const sellers = normalizeTvRanking([
+    { vendedor_id: "s1", nome: "Simone SDR", seller_type: "sdr", posicao: 1 },
+    { vendedor_id: "s2", nome: "Lucas SDR", seller_type: "sdr", posicao: 2 },
+  ]);
+  const goals: TeamGoalProgress[] = [
+    {
+      ...emptyGoal,
+      seller_id: "s1",
+      seller_name: "Simone SDR",
+      seller_type: "sdr",
+      target_clients_daily: 2,
+      target_meetings_scheduled_daily: 2,
+      target_leads_contacted_daily: 5,
+      clients_registered_daily: 2,
+      meetings_scheduled_daily: 1,
+      leads_contacted_daily: 5,
+    },
+    {
+      ...emptyGoal,
+      seller_id: "s2",
+      seller_name: "Lucas SDR",
+      seller_type: "sdr",
+      target_clients_daily: 2,
+      target_meetings_scheduled_daily: 2,
+      target_leads_contacted_daily: 5,
+      clients_registered_daily: 1,
+      meetings_scheduled_daily: 1,
+      leads_contacted_daily: 3,
+    },
+  ];
+
+  assert.deepEqual(summarizeDailyTeam(sellers, goals), {
+    primaryCurrent: 3,
+    primaryTarget: 4,
+    secondaryCurrent: 2,
+    secondaryTarget: 4,
+    contactedCurrent: 8,
+    contactedTarget: 10,
+    score: 68,
+  });
+  assert.equal(rankDailyCompetition(sellers, goals)[0]?.contactedCurrent, 5);
+});
+
+test("normaliza os dados seguros usados na comemoração de cadastro", () => {
+  assert.deepEqual(
+    normalizeTvRegistrationCelebration({
+      attribution_id: "credit-1",
+      seller_id: "seller-1",
+      seller_name: "Simone Bitencourte Soares",
+      seller_type: "sdr",
+      avatar_url: "https://cdn.example/avatar.jpg",
+      created_at: "2026-10-31T10:00:00.000Z",
+    }),
+    {
+      attributionId: "credit-1",
+      sellerId: "seller-1",
+      sellerName: "Simone Bitencourte",
+      sellerType: "sdr",
+      avatarUrl: "https://cdn.example/avatar.jpg",
+      createdAt: "2026-10-31T10:00:00.000Z",
+    },
+  );
+  assert.equal(normalizeTvRegistrationCelebration({ seller_id: "seller-1" }), null);
 });
