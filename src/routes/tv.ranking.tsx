@@ -874,38 +874,40 @@ const TV_STYLES = `
     .tv-login-brand { display: none; }
     .tv-login-card { margin: 40px auto; }
   }
-  .tv-board.is-native-app { min-height: 100vh; background: radial-gradient(circle at 50% -5%, #4c3f05 0, #11100a 16%, #070708 42%); }
-  .tv-board.is-native-app .tv-dashboard { width: 100vw; height: 100vh; min-height: 100vh; overflow: hidden; padding: 22px 24px 24px; gap: 12px; }
-  .tv-board.is-native-app .tv-header { min-height: 92px; }
-  .tv-board.is-native-app .tv-header > img { width: min(54vw, 430px); max-height: 92px; }
-  .tv-board.is-native-app .tv-arena-heading { min-height: 58px; flex-direction: column; gap: 5px; }
-  .tv-board.is-native-app .tv-arena-heading span { font-size: 13px; }
-  .tv-board.is-native-app .tv-arena-heading > strong { font-size: 22px; }
-  .tv-board.is-native-app .tv-daily-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
-  .tv-board.is-native-app .tv-daily-card { min-height: 205px; grid-template-columns: 112px 1fr; border-radius: 18px; }
-  .tv-board.is-native-app .tv-daily-score { padding: 14px 9px; }
-  .tv-board.is-native-app .tv-daily-score span { font-size: 10px; }
-  .tv-board.is-native-app .tv-daily-score strong { font-size: 43px; }
-  .tv-board.is-native-app .tv-daily-content { padding: 14px 16px; }
-  .tv-board.is-native-app .tv-daily-title h2 { font-size: 22px; }
-  .tv-board.is-native-app .tv-daily-title span { font-size: 10px; }
-  .tv-board.is-native-app .tv-daily-metrics { grid-template-columns: 1fr; gap: 8px; }
-  .tv-board.is-native-app .tv-daily-metric > span:first-child { font-size: 11px; }
-  .tv-board.is-native-app .tv-daily-metric strong { font-size: 24px; }
-  .tv-board.is-native-app .tv-daily-content > p { font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .tv-board.is-native-app .tv-rankings { grid-template-columns: 1fr; grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 12px; }
-  .tv-board.is-native-app .tv-ranking-panel { border-radius: 18px; }
-  .tv-board.is-native-app .tv-ranking-title { min-height: 78px; padding: 12px 20px; }
-  .tv-board.is-native-app .tv-ranking-title h2 { font-size: 24px; }
-  .tv-board.is-native-app .tv-ranking-title p { font-size: 12px; }
-  .tv-board.is-native-app .tv-ranking-columns { min-height: 28px; grid-template-columns: 1fr 96px 142px; padding: 0 18px; font-size: 10px; }
-  .tv-board.is-native-app .tv-ranking-list { padding: 0 12px 10px; gap: 6px; }
-  .tv-board.is-native-app .tv-ranking-row { min-height: 62px; max-height: 74px; grid-template-columns: minmax(0, 1fr) 86px 135px; padding: 6px 10px; }
-  .tv-board.is-native-app .tv-person strong { font-size: 15px; }
-  .tv-board.is-native-app .tv-person small { font-size: 10px; }
-  .tv-board.is-native-app .tv-result strong { font-size: 23px; }
-  .tv-board.is-native-app .tv-goal strong { font-size: 15px; }
-  .tv-board.is-native-app .tv-login-shell { grid-template-columns: 1fr; }
-  .tv-board.is-native-app .tv-login-brand { display: none; }
-  .tv-board.is-native-app .tv-login-card { width: min(82%, 620px); margin: auto; }
+  @media (orientation: portrait) {
+    .tv-board.is-native-app { min-height: 100vh; background: radial-gradient(circle at 50% -5%, #4c3f05 0, #11100a 16%, #070708 42%); }
+    .tv-board.is-native-app .tv-dashboard { width: 100vw; height: 100vh; min-height: 100vh; overflow: hidden; padding: 22px 24px 24px; gap: 12px; }
+    .tv-board.is-native-app .tv-header { min-height: 92px; }
+    .tv-board.is-native-app .tv-header > img { width: min(54vw, 430px); max-height: 92px; }
+    .tv-board.is-native-app .tv-arena-heading { min-height: 58px; flex-direction: column; gap: 5px; }
+    .tv-board.is-native-app .tv-arena-heading span { font-size: 13px; }
+    .tv-board.is-native-app .tv-arena-heading > strong { font-size: 22px; }
+    .tv-board.is-native-app .tv-daily-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
+    .tv-board.is-native-app .tv-daily-card { min-height: 205px; grid-template-columns: 112px 1fr; border-radius: 18px; }
+    .tv-board.is-native-app .tv-daily-score { padding: 14px 9px; }
+    .tv-board.is-native-app .tv-daily-score span { font-size: 10px; }
+    .tv-board.is-native-app .tv-daily-score strong { font-size: 43px; }
+    .tv-board.is-native-app .tv-daily-content { padding: 14px 16px; }
+    .tv-board.is-native-app .tv-daily-title h2 { font-size: 22px; }
+    .tv-board.is-native-app .tv-daily-title span { font-size: 10px; }
+    .tv-board.is-native-app .tv-daily-metrics { grid-template-columns: 1fr; gap: 8px; }
+    .tv-board.is-native-app .tv-daily-metric > span:first-child { font-size: 11px; }
+    .tv-board.is-native-app .tv-daily-metric strong { font-size: 24px; }
+    .tv-board.is-native-app .tv-daily-content > p { font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tv-board.is-native-app .tv-rankings { grid-template-columns: 1fr; grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .tv-board.is-native-app .tv-ranking-panel { border-radius: 18px; }
+    .tv-board.is-native-app .tv-ranking-title { min-height: 78px; padding: 12px 20px; }
+    .tv-board.is-native-app .tv-ranking-title h2 { font-size: 24px; }
+    .tv-board.is-native-app .tv-ranking-title p { font-size: 12px; }
+    .tv-board.is-native-app .tv-ranking-columns { min-height: 28px; grid-template-columns: 1fr 96px 142px; padding: 0 18px; font-size: 10px; }
+    .tv-board.is-native-app .tv-ranking-list { padding: 0 12px 10px; gap: 6px; }
+    .tv-board.is-native-app .tv-ranking-row { min-height: 62px; max-height: 74px; grid-template-columns: minmax(0, 1fr) 86px 135px; padding: 6px 10px; }
+    .tv-board.is-native-app .tv-person strong { font-size: 15px; }
+    .tv-board.is-native-app .tv-person small { font-size: 10px; }
+    .tv-board.is-native-app .tv-result strong { font-size: 23px; }
+    .tv-board.is-native-app .tv-goal strong { font-size: 15px; }
+    .tv-board.is-native-app .tv-login-shell { grid-template-columns: 1fr; }
+    .tv-board.is-native-app .tv-login-brand { display: none; }
+    .tv-board.is-native-app .tv-login-card { width: min(82%, 620px); margin: auto; }
+  }
 `;
