@@ -25,6 +25,7 @@ import type {
   TenantInvoiceSource,
   TenantPaymentSource,
 } from "@/lib/tenant-billing";
+import { contractBrokerLabel } from "@/lib/contract-broker-label";
 
 export const Route = createLazyFileRoute("/apolices/$id")({
   component: () => (
@@ -155,8 +156,10 @@ function ApoliceDetalhe() {
           .from("apolices")
           .select(`
             id, consulta_id, numero, status, vigencia_inicio, vigencia_fim, valor_premio, created_at,
+            imobiliaria_profile_id, corretor_profile_id,
             consulta:consultas_credito(
               id, status, resultado, created_at, approved_at, dados_complementares_em, proposta_enviada_em,
+              profile_id_solicitante, role_solicitante,
               payment_status, payment_type, payment_confirmed_at, insurance_payment_method, insurance_payment_method_label, contract_period_months, documentos,
               base_calculo, valor_aluguel, valor_condominio, valor_taxas, valor_premio_mensal, valor_anual,
               selected_exit_cost, insurance_assistance, insurance_coverages, plano_id,
@@ -173,7 +176,7 @@ function ApoliceDetalhe() {
                 valor_aluguel, valor_condominio, valor_taxas, valor_iptu, valor_fundo_reserva, valor_taxa_lixo
               ),
               plano:planos(nome, taxa_premio, cobertura_multiplicador, custo_saida),
-              solicitante:profiles!consultas_credito_profile_id_solicitante_fkey(nome, email, telefone)
+              solicitante:profiles!consultas_credito_profile_id_solicitante_fkey(id, nome, email, telefone, role)
             ),
             imobiliaria:profiles!apolices_imobiliaria_profile_id_fkey(nome, email),
             corretor:profiles!apolices_corretor_profile_id_fkey(nome, email),
@@ -342,6 +345,14 @@ function ApoliceDetalhe() {
   const inquilino = consulta?.inquilino;
   const imovel = consulta?.imovel;
   const plano = consulta?.plano;
+  const corretorResponsavel = contractBrokerLabel({
+    directBrokerName: apolice.corretor?.nome,
+    requesterName: consulta?.solicitante?.nome,
+    requesterRole: consulta?.role_solicitante || consulta?.solicitante?.role,
+    requesterProfileId:
+      consulta?.solicitante?.id || consulta?.profile_id_solicitante,
+    agencyProfileId: apolice.imobiliaria_profile_id,
+  });
 
   const formatBRL = (v: number) => (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
   const formatDate = (d?: string | null) => (d ? new Date(d).toLocaleDateString("pt-BR") : "—");
@@ -616,7 +627,7 @@ function ApoliceDetalhe() {
               <ResumoItem icone={FileText} label="Documento" valor={inquilino?.cpf || inquilino?.cnpj || "Não informado"} />
               <ResumoItem icone={User} label="Telefone" valor={inquilino?.profile?.telefone || "Telefone não informado"} />
               <ResumoItem icone={Building2} label="Imobiliária" valor={apolice.imobiliaria?.nome || "Imobiliária não informada"} />
-              <ResumoItem icone={User} label="Corretor" valor={apolice.corretor?.nome || "Corretor não informado"} />
+              <ResumoItem icone={User} label="Corretor" valor={corretorResponsavel} />
               <ResumoItem icone={Wallet} label="Aluguel" valor={formatBRL(Number(imovel?.valor_aluguel || 0))} />
               <ResumoItem icone={FileText} label="Plano" valor={plano?.nome || "Plano padrão"} />
                <ResumoItem icone={Wallet} label="Prêmio" valor={formatBRL(Number(apolice.valor_premio || 0))} />

@@ -28,6 +28,7 @@ import {
   tenantInvoiceKindLabel,
   type TenantInvoiceDisplayRow,
 } from "@/lib/tenant-invoice-display";
+import { contractBrokerLabel } from "@/lib/contract-broker-label";
 
 export const Route = createLazyFileRoute("/faturas-inquilinos/$id")({
   component: () => (
@@ -61,8 +62,10 @@ function FaturasInquilinoDetalhe() {
         .from("apolices")
         .select(
           `
-          id, numero, status, vigencia_inicio, vigencia_fim,
+          id, numero, status, vigencia_inicio, vigencia_fim, imobiliaria_profile_id,
           consulta:consultas_credito(
+            profile_id_solicitante, role_solicitante,
+            solicitante:profiles!consultas_credito_profile_id_solicitante_fkey(id, nome, role),
             inquilino:inquilinos(nome, cpf, cnpj, razao_social),
             imovel:imoveis(endereco, logradouro, numero, bairro, cidade, estado, valor_aluguel)
           ),
@@ -148,6 +151,14 @@ function FaturasInquilinoDetalhe() {
   const consulta = apolice.consulta;
   const inquilino = consulta?.inquilino;
   const imovel = consulta?.imovel;
+  const corretorResponsavel = contractBrokerLabel({
+    directBrokerName: apolice.corretor?.nome,
+    requesterName: consulta?.solicitante?.nome,
+    requesterRole: consulta?.role_solicitante || consulta?.solicitante?.role,
+    requesterProfileId:
+      consulta?.solicitante?.id || consulta?.profile_id_solicitante,
+    agencyProfileId: apolice.imobiliaria_profile_id,
+  });
   const endereco = imovel
     ? [
         imovel.logradouro || imovel.endereco,
@@ -217,7 +228,7 @@ function FaturasInquilinoDetalhe() {
               <DarkItem label="Contrato" valor={`#${apolice.numero}`} />
               <DarkItem label="Status" valor={apolice.status} />
               <DarkItem label="Imobiliária" valor={apolice.imobiliaria?.nome || "—"} />
-              <DarkItem label="Corretor" valor={apolice.corretor?.nome || "—"} />
+              <DarkItem label="Corretor" valor={corretorResponsavel} />
               <DarkItem label="Proprietário" valor={apolice.proprietario?.nome || "—"} />
               <DarkItem label="Aluguel" valor={formatBRL(Number(imovel?.valor_aluguel || 0))} />
             </div>
