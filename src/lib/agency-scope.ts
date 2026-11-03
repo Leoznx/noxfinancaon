@@ -68,7 +68,7 @@ async function fetchAgencyScope(user: AgencyScopeUser): Promise<AgencyScope> {
     return { agencyId: null, agencyName: "Sua imobiliária", profileIds: [user.id] };
   }
 
-  const [agencyResult, brokersResult] = await Promise.all([
+  const [agencyResult, brokerProfilesResult] = await Promise.all([
     executeSupabaseQuery((signal) =>
       supabase
         .from("imobiliarias")
@@ -77,18 +77,21 @@ async function fetchAgencyScope(user: AgencyScopeUser): Promise<AgencyScope> {
         .abortSignal(signal)
         .maybeSingle(),
     ),
-    executeSupabaseQuery(
-      supabase.from("corretores").select("profile_id").eq("imobiliaria_id", agencyId),
-    ),
+    // corretores possui RLS de cadastro próprio. Uma leitura direta feita
+    // pela imobiliária retorna uma lista vazia e removia as consultas da
+    // equipe no filtro do cliente. A RPC resolve os IDs no servidor usando a
+    // imobiliária autenticada, sem aceitar um agencyId informado pelo cliente.
+    executeSupabaseQuery(supabase.rpc("current_agency_broker_profile_ids")),
   ]);
-  if (brokersResult.error) throw brokersResult.error;
+  if (brokerProfilesResult.error) throw brokerProfilesResult.error;
 
   const agency = agencyResult.error ? null : agencyResult.data;
   const profileIds = Array.from(
     new Set([
       user.id,
-      ...(brokersResult.data ?? []).flatMap((broker) =>
-        broker.profile_id ? [broker.profile_id] : [],
+      ...(brokerProfilesResult.data ?? []).filter(
+        (profileId): profileId is string =>
+          typeof profileId === "string" && profileId.length > 0,
       ),
     ]),
   );

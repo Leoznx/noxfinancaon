@@ -7,6 +7,7 @@ const migrationUrl = new URL(
   import.meta.url,
 );
 const webLoaderUrl = new URL("../src/lib/dashboard-navigation-data.ts", import.meta.url);
+const agencyScopeUrl = new URL("../src/lib/agency-scope.ts", import.meta.url);
 
 test("autoriza somente consultas dos corretores cadastrados na imobiliaria logada", async () => {
   const migration = await readFile(migrationUrl, "utf8");
@@ -27,5 +28,19 @@ test("a listagem web aplica os ids da imobiliaria e dos corretores vinculados", 
   assert.match(
     loader,
     /query = query\.in\("profile_id_solicitante", scope\.profileIds\)/,
+  );
+});
+
+test("o escopo da imobiliaria resolve corretores pela RPC autorizada", async () => {
+  const agencyScope = await readFile(agencyScopeUrl, "utf8");
+
+  assert.match(
+    agencyScope,
+    /supabase\.rpc\("current_agency_broker_profile_ids"\)/,
+  );
+  assert.doesNotMatch(agencyScope, /\.from\("corretores"\)/);
+  assert.match(
+    agencyScope,
+    /if \(brokerProfilesResult\.error\) throw brokerProfilesResult\.error/,
   );
 });

@@ -3364,6 +3364,7 @@ export type Database = {
         Args: { contratos: number }
         Returns: number
       }
+      current_agency_broker_profile_ids: { Args: never; Returns: string[] }
       current_imobiliaria_id: { Args: never; Returns: string }
       get_or_create_my_broker_agency_signup_link: {
         Args: Record<PropertyKey, never>
