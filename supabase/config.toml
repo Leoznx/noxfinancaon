@@ -96,6 +96,9 @@ verify_jwt = false
 [functions.process-scheduled-invoice-notifications]
 verify_jwt = false
 
+[functions.process-d4sign-retries]
+verify_jwt = false
+
 [functions.process-weekly-user-followups]
 verify_jwt = false
 

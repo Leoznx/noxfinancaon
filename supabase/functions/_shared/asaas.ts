@@ -7,6 +7,7 @@ import {
 import { sendZApiButtonActions, sendZApiText } from "./zapi.ts";
 import { corsHeaders as secureCorsHeaders } from "./http-security.ts";
 import { calculateFireInsuranceAmounts, shouldAttemptNotification } from "./billing-state.ts";
+import { resendProviderMessageId } from "./resend-response.ts";
 
 export type PaymentMethod = "pix" | "boleto" | "credit_card";
 export type FireMode = "avista" | "embutido";
@@ -694,7 +695,11 @@ export async function sendPaymentEmail(params: {
       });
       return { sent: false, reason: "provider_error" };
     }
-    return { sent: true };
+    const data = await res.json().catch(() => null);
+    return {
+      sent: true,
+      providerMessageId: resendProviderMessageId(data),
+    };
   } catch (error) {
     console.error("[asaas] erro ao enviar e-mail de pagamento", {
       message: error instanceof Error ? error.message : String(error),

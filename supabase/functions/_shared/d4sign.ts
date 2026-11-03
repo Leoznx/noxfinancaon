@@ -14,6 +14,11 @@ import {
   contractActivationDecision,
   recurringSetupAllowsContractActivation,
 } from "./billing-state.ts";
+import {
+  D4SIGN_PROVIDER_LIMIT_ERROR_CODE,
+  isD4SignProviderLimitError,
+  nextD4SignRetryAt,
+} from "./d4sign-retry.ts";
 
 const D4SIGN_API_DEFAULT = "https://secure.d4sign.com.br/api/v1";
 const SIGNED_CONTRACTS_BUCKET = "contratos-assinados";
@@ -1470,6 +1475,9 @@ export async function dispatchD4SignContract(
         sent_at: now,
         error_code: null,
         error_message: null,
+        retry_count: 0,
+        next_retry_at: null,
+        retry_locked_at: null,
       })
       .eq("id", signature.id);
     await supabase
@@ -1507,12 +1515,19 @@ export async function dispatchD4SignContract(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (signature?.id) {
+      const providerLimitReached = isD4SignProviderLimitError(error);
+      const retryCount = providerLimitReached ? Number(signature.retry_count || 0) + 1 : 0;
       await supabase
         .from("contract_signatures")
         .update({
           status: "error",
-          error_code: message.split(":")[0],
+          error_code: providerLimitReached
+            ? D4SIGN_PROVIDER_LIMIT_ERROR_CODE
+            : message.split(":")[0],
           error_message: message.slice(0, 1000),
+          retry_count: retryCount,
+          next_retry_at: providerLimitReached ? nextD4SignRetryAt(retryCount) : null,
+          retry_locked_at: null,
         })
         .eq("id", signature.id);
     }
