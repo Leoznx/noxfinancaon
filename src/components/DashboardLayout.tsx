@@ -77,6 +77,7 @@ import { useAdminAttention } from "@/hooks/useAdminAttention";
 import { useDashboardLoadingScope } from "@/components/GlobalLoading";
 import { isNavigationScopeCurrent, warmNavigationRoutes } from "@/lib/navigation-warmup";
 import { loadAgencyScope } from "@/lib/agency-scope";
+import { menuRouteKey, resolveActiveMenuRouteKey } from "@/lib/menu-route-matching";
 
 const CARGOS_INTERNOS_GATEADOS = [
   "juridico",
@@ -784,6 +785,11 @@ export function DashboardLayout({
       .map((parte) => parte[0])
       .join("")
       .toUpperCase() || "US";
+  const activeMenuRouteKey = resolveActiveMenuRouteKey(
+    visibleMenuItems,
+    location.pathname,
+    location.searchStr,
+  );
 
   const openHeaderSearchResult = (value: string, exact = false) => {
     const query = normalizeMenuSearch(value);
@@ -883,19 +889,8 @@ export function DashboardLayout({
           )}
           {!menuPermissionsLoading &&
             visibleMenuItems.map((item) => {
-              const [itemPath, itemSearch = ""] = item.href.split("?");
-              const expectedParams = new URLSearchParams(itemSearch);
-              const currentParams = new URLSearchParams(location.searchStr);
-              const matchesExpectedParams = Array.from(expectedParams.entries()).every(
-                ([key, value]) => currentParams.get(key) === value,
-              );
-              const isActive =
-                location.pathname === itemPath &&
-                (itemSearch
-                  ? matchesExpectedParams
-                  : item.parentLabel
-                    ? !currentParams.has("tab")
-                    : true);
+              const [itemPath] = item.href.split("?");
+              const isActive = activeMenuRouteKey === menuRouteKey(item);
               const isHighlight = item.highlight;
               const isDarkHighlight = item.darkHighlight;
               const attentionCount = item.href.startsWith("/admin/verificacoes")
