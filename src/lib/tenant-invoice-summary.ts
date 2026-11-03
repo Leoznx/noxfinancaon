@@ -40,6 +40,33 @@ export function peekTenantInvoiceSummaries(userId: string) {
 }
 
 async function fetchTenantInvoiceSummaries(): Promise<TenantInvoiceSummary[]> {
+  const rpcResult = await supabase.rpc(
+    "get_visible_active_tenant_invoice_summaries" as any,
+  );
+  if (!rpcResult.error) {
+    return ((rpcResult.data as unknown as any[]) ?? []).map((row) => ({
+      apolice_id: String(row.apolice_id),
+      numero: String(row.numero || ""),
+      inquilino_nome: String(row.inquilino_nome || "Inquilino não informado"),
+      inquilino_doc: String(row.inquilino_doc || ""),
+      cidade: String(row.cidade || "Cidade não informada"),
+      valor_parcela: Number(row.valor_parcela || 0),
+      proximo_venc: row.proximo_venc ? String(row.proximo_venc) : null,
+      status: ["em_dia", "a_vencer", "vencido"].includes(String(row.status))
+        ? (row.status as TenantInvoiceSummary["status"])
+        : "em_dia",
+    }));
+  }
+  const rpcUnavailable =
+    ["PGRST202", "42883"].includes(rpcResult.error.code || "") ||
+    /get_visible_active_tenant_invoice_summaries.*(schema cache|does not exist|not find)/i.test(
+      rpcResult.error.message || "",
+    );
+  if (!rpcUnavailable) throw rpcResult.error;
+
+  // Compatibilidade durante a janela entre o deploy do cliente e a aplicacao
+  // da migration. Assim que a RPC entra no schema cache, este caminho deixa
+  // de percorrer colecoes grandes e o timeout desaparece.
   const { data, error } = await supabase
     .from("apolices")
     .select(

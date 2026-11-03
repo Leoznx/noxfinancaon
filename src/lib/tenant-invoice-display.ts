@@ -3,6 +3,9 @@ export type TenantInvoiceDisplayStatus =
 
 export type TenantInvoiceDisplayRow = {
   id: string;
+  invoiceId: string | null;
+  consultationId: string | null;
+  paymentMethod: string | null;
   installmentNumber: number;
   installmentTotal: number | null;
   dueDate: string | null;
@@ -20,6 +23,8 @@ export type TenantInvoiceDisplayRow = {
 
 type CanonicalInvoiceRow = {
   id: string;
+  consulta_id?: string | null;
+  payment_method?: string | null;
   numero_parcela?: number | null;
   installment_total?: number | null;
   vencimento?: string | null;
@@ -79,6 +84,9 @@ export function normalizeCanonicalTenantInvoices(
   return rows
     .map((row, index) => ({
       id: row.id,
+      invoiceId: row.id,
+      consultationId: row.consulta_id || null,
+      paymentMethod: row.payment_method || null,
       installmentNumber: Number(row.numero_parcela || index + 1),
       installmentTotal: row.installment_total ? Number(row.installment_total) : null,
       dueDate: row.vencimento || null,
@@ -105,6 +113,9 @@ export function normalizeLegacyTenantInvoices(
       const installmentNumber = Number(row.numero_parcela || index + 1);
       return {
         id: row.id,
+        invoiceId: null,
+        consultationId: null,
+        paymentMethod: null,
         installmentNumber,
         installmentTotal: null,
         dueDate: row.data_vencimento || null,

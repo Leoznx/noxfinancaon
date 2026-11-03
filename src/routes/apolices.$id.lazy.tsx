@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
+import { BillingReconfigurationDialog } from "@/components/BillingReconfigurationDialog";
 import { useAuth } from "@/components/AuthProvider";
 import {
   buildContractBillingRows,
@@ -142,6 +143,7 @@ function ApoliceDetalhe() {
   const [replacingDocument, setReplacingDocument] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [attachingDocumentType, setAttachingDocumentType] = useState<DeferredDocumentType | null>(null);
+  const [billingRefreshKey, setBillingRefreshKey] = useState(0);
   const deferredFileInputRef = useRef<HTMLInputElement>(null);
   const deferredDocumentTypeRef = useRef<DeferredDocumentType | null>(null);
 
@@ -312,7 +314,7 @@ function ApoliceDetalhe() {
     }
     load();
     return () => { cancelled = true; };
-  }, [id]);
+  }, [id, billingRefreshKey]);
 
   if (loading) {
     return (
@@ -858,7 +860,11 @@ function ApoliceDetalhe() {
 
         <div className="pt-2">
           <h2 className="mb-4 text-lg font-black text-neutral-900">Faturamento do contrato</h2>
-          <FaturasView faturas={faturas} apolice={apolice} />
+          <FaturasView
+            faturas={faturas}
+            apolice={apolice}
+            onUpdated={() => setBillingRefreshKey((current) => current + 1)}
+          />
         </div>
 
       </div>
@@ -1035,7 +1041,15 @@ function DetalheLinha({
   );
 }
 
-function FaturasView({ faturas, apolice }: { faturas: ContractBillingRow[]; apolice: any }) {
+function FaturasView({
+  faturas,
+  apolice,
+  onUpdated,
+}: {
+  faturas: ContractBillingRow[];
+  apolice: any;
+  onUpdated: () => void;
+}) {
   const formatBRL = (v: number) => (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
   const formatDate = (d?: string | null) => (d ? new Date(d).toLocaleDateString("pt-BR") : "—");
 
@@ -1138,6 +1152,14 @@ function FaturasView({ faturas, apolice }: { faturas: ContractBillingRow[]; apol
                           <FileCheck size={12} />
                         </Button>
                       )}
+                      <BillingReconfigurationDialog
+                        invoiceId={f.invoice_id}
+                        status={f.status}
+                        method={f.payment_method}
+                        dueDate={f.data_vencimento}
+                        onUpdated={onUpdated}
+                        compact
+                      />
                       {!f.boleto_url && !f.linha_digitavel && (
                         <span className="text-[10px] text-neutral-400 italic">Sem boleto disponível</span>
                       )}

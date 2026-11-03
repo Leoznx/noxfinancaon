@@ -21,6 +21,9 @@ export type LegacyContractInstallment = {
 
 export type ContractBillingRow = {
   id: string;
+  invoice_id: string | null;
+  consultation_id: string | null;
+  payment_method: string | null;
   numero_parcela: number;
   installment_total: number;
   data_vencimento: string | null;
@@ -60,6 +63,9 @@ export function buildContractBillingRows({
     { includeAgencyBilling: true },
   ).map<ContractBillingRow>((item) => ({
     id: item.id,
+    invoice_id: item.invoiceId,
+    consultation_id: item.consultationId,
+    payment_method: item.method,
     numero_parcela: item.installmentNumber,
     installment_total: item.installmentTotal,
     data_vencimento: item.dueDate,
@@ -79,6 +85,9 @@ export function buildContractBillingRows({
   return legacyInstallments
     .map<ContractBillingRow>((installment, index) => ({
       id: `legacy:${installment.id}`,
+      invoice_id: null,
+      consultation_id: consultation.id,
+      payment_method: null,
       numero_parcela: Number(installment.numero_parcela || index + 1),
       installment_total: legacyInstallments.length,
       data_vencimento: installment.data_vencimento,

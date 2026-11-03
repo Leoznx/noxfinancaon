@@ -18,6 +18,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { BillingReconfigurationDialog } from "@/components/BillingReconfigurationDialog";
 import { toast } from "sonner";
 import {
   isTenantInvoiceOpen,
@@ -82,7 +83,7 @@ function FaturasInquilinoDetalhe() {
       const { data: faturas, error: faturasErr } = await (supabase as any)
         .from("faturas_inquilino")
         .select(
-          "id, numero_parcela, installment_total, vencimento, valor, status, pago_em, confirmed_at, boleto_url, linha_digitavel, payment_url, charge_kind, components",
+          "id, consulta_id, payment_method, numero_parcela, installment_total, vencimento, valor, status, pago_em, confirmed_at, boleto_url, linha_digitavel, payment_url, charge_kind, components",
         )
         .eq("apolice_id", id)
         .order("numero_parcela", { ascending: true });
@@ -361,6 +362,14 @@ function FaturasInquilinoDetalhe() {
                           Comprovante não enviado
                         </span>
                       ) : null}
+                      <BillingReconfigurationDialog
+                        invoiceId={f.invoiceId}
+                        status={f.rawStatus}
+                        method={f.paymentMethod}
+                        dueDate={f.dueDate}
+                        onUpdated={load}
+                        compact
+                      />
                     </div>
                   </div>
                 );
@@ -489,6 +498,14 @@ function FaturasInquilinoDetalhe() {
                                 Comprovante não enviado
                               </span>
                             ) : null}
+                            <BillingReconfigurationDialog
+                              invoiceId={f.invoiceId}
+                              status={f.rawStatus}
+                              method={f.paymentMethod}
+                              dueDate={f.dueDate}
+                              onUpdated={load}
+                              compact
+                            />
                           </div>
                         </td>
                       </tr>

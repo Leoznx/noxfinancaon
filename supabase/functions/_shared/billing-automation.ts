@@ -146,6 +146,27 @@ export function nextContractBillingDueDate(today: string, dueDay: number) {
   );
 }
 
+/**
+ * Reagenda uma cobranca aberta para um dos dias contratuais permitidos.
+ * Mantem a competencia original quando ela ainda esta no futuro; para uma
+ * cobranca vencida, usa a proxima ocorrencia valida a partir de hoje.
+ */
+export function reissuedInvoiceDueDate(
+  currentDueDate: string | null | undefined,
+  dueDay: number,
+  today = saoPauloClock().date,
+) {
+  const normalizedDueDay = normalizeContractBillingDueDay(dueDay);
+  if (normalizedDueDay === null) return null;
+  const current = String(currentDueDate || "").slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(current)) {
+    const [year, month] = current.split("-").map(Number);
+    const sameCompetence = monthlyDueDate(year, month, normalizedDueDay);
+    if (sameCompetence >= today) return sameCompetence;
+  }
+  return nextContractBillingDueDate(today, normalizedDueDay);
+}
+
 function addBusinessDaysFrom(isoDate: string, days: number) {
   const [year, month, day] = isoDate.split("-").map(Number);
   const date = new Date(Date.UTC(year, month - 1, day));

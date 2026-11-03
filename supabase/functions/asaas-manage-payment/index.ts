@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import {
+  AsaasApiError,
   addBusinessDays,
   asaasFetch,
   corsHeaders,
@@ -25,7 +26,13 @@ import {
   reducePaymentStatus,
   shouldApplyConsolidatedEvent,
 } from "../_shared/billing-state.ts";
-import { asaasLateFeePayload, isCollectableStatus } from "../_shared/billing-automation.ts";
+import {
+  asaasLateFeePayload,
+  isCollectableStatus,
+  normalizeContractBillingDueDay,
+  reissuedInvoiceDueDate,
+  saoPauloClock,
+} from "../_shared/billing-automation.ts";
 import {
   getInvoiceNotificationSummary,
   publicRecipient,
@@ -42,6 +49,7 @@ type Body = {
   requestId?: string;
   action?: "refresh" | "resend_email" | "resend_whatsapp" | "reissue";
   paymentMethod?: "pix" | "boleto";
+  billingDueDay?: number;
 };
 
 function reduceReissueStatus(
@@ -57,6 +65,87 @@ function reduceReissueStatus(
     return normalizedCurrent;
   }
   return isCollectableStatus(normalizedCurrent) ? incomingStatus : normalizedCurrent;
+}
+
+async function cancelObsoleteInstallmentCharges(
+  supabase: any,
+  invoice: any,
+  currentPaymentId: string | null | undefined,
+) {
+  if (!invoice?.numero_parcela || !invoice?.charge_kind) return 0;
+  const { data: duplicates, error } = await supabase
+    .from("faturas_inquilino")
+    .select("id, asaas_payment_id, status, charge_kind, numero_parcela")
+    .eq("consulta_id", invoice.consulta_id)
+    .eq("numero_parcela", invoice.numero_parcela)
+    .eq("charge_kind", invoice.charge_kind)
+    .neq("id", invoice.id);
+  if (error) throw error;
+
+  let cancelled = 0;
+  for (const duplicate of duplicates || []) {
+    const duplicateStatus = normalizePaymentStatus(duplicate.status);
+    const locallyOpen =
+      isCollectableStatus(duplicateStatus) ||
+      ["scheduled", "processing"].includes(String(duplicate.status || "").toLowerCase());
+    if (!locallyOpen) continue;
+
+    let duplicatePayment: any = null;
+    if (duplicate.asaas_payment_id && duplicate.asaas_payment_id !== currentPaymentId) {
+      const result = await supabase
+        .from("asaas_payments")
+        .select("id, asaas_payment_id, status")
+        .eq("id", duplicate.asaas_payment_id)
+        .maybeSingle();
+      if (result.error) throw result.error;
+      duplicatePayment = result.data;
+    }
+
+    if (
+      duplicatePayment?.asaas_payment_id &&
+      isCollectableStatus(duplicatePayment.status)
+    ) {
+      try {
+        await asaasFetch(`/payments/${duplicatePayment.asaas_payment_id}`, {
+          method: "DELETE",
+        });
+      } catch (providerError) {
+        if (!(providerError instanceof AsaasApiError) || providerError.status !== 404) {
+          throw providerError;
+        }
+      }
+    }
+
+    if (duplicatePayment?.id) {
+      const paymentUpdate = await supabase
+        .from("asaas_payments")
+        .update({
+          status: "cancelled",
+          boleto_url: null,
+          boleto_barcode: null,
+          pix_qr_code: null,
+          pix_copy_paste: null,
+          pix_expires_at: null,
+          provider_event_at: new Date().toISOString(),
+        })
+        .eq("id", duplicatePayment.id);
+      if (paymentUpdate.error) throw paymentUpdate.error;
+    }
+
+    const invoiceUpdate = await supabase
+      .from("faturas_inquilino")
+      .update({
+        status: "cancelled",
+        payment_url: null,
+        boleto_url: null,
+        linha_digitavel: null,
+        provider_event_at: new Date().toISOString(),
+      })
+      .eq("id", duplicate.id);
+    if (invoiceUpdate.error) throw invoiceUpdate.error;
+    cancelled += 1;
+  }
+  return cancelled;
 }
 
 async function manageBatch(supabase: any, userId: string, body: Body) {
@@ -483,6 +572,20 @@ serve(async (req) => {
       });
     } else {
       const method = body.paymentMethod || (invoice.payment_method === "pix" ? "pix" : "boleto");
+      const requestedDueDay =
+        body.billingDueDay === undefined
+          ? null
+          : normalizeContractBillingDueDay(body.billingDueDay);
+      if (body.billingDueDay !== undefined && requestedDueDay === null) {
+        return jsonResponse(
+          req,
+          {
+            ok: false,
+            error: "Escolha o vencimento entre os dias 5, 10, 15, 20, 25 ou 28.",
+          },
+          400,
+        );
+      }
       if (!payment?.asaas_payment_id) {
         return jsonResponse(
           req,
@@ -503,8 +606,17 @@ serve(async (req) => {
           409,
         );
       }
-      const newDueDate = addBusinessDays(3);
-      const dueDateError = billingDueDateError(newDueDate, new Date().toISOString().slice(0, 10));
+      const newDueDate = requestedDueDay
+        ? reissuedInvoiceDueDate(
+            payment?.due_date || invoice.vencimento,
+            requestedDueDay,
+            saoPauloClock().date,
+          )
+        : addBusinessDays(3);
+      if (!newDueDate) {
+        return jsonResponse(req, { ok: false, error: "Vencimento invalido." }, 400);
+      }
+      const dueDateError = billingDueDateError(newDueDate, saoPauloClock().date);
       if (dueDateError) throw new Error(`invalid_reissue_due_date:${dueDateError}`);
       const { data: audit } = await supabase
         .from("payment_reissue_requests")
@@ -613,7 +725,18 @@ serve(async (req) => {
               completed_at: new Date().toISOString(),
             })
             .eq("id", audit.id);
+        let obsoleteChargesCancelled = 0;
         if (invoiceReissueApplied) {
+          obsoleteChargesCancelled = await cancelObsoleteInstallmentCharges(
+            supabase,
+            invoice,
+            payment?.id,
+          );
+          await supabase.from("proposta_historico").insert({
+            consulta_id: invoice.consulta_id,
+            tipo_evento: "cobranca_reconfigurada",
+            descricao: `Cobranca atualizada para ${method === "pix" ? "Pix" : "boleto"}, vencimento ${newDueDate}. ${obsoleteChargesCancelled} cobranca(s) obsoleta(s) cancelada(s).`,
+          });
           await sendInvoiceNotifications(supabase, {
             invoice,
             recipient,
@@ -627,6 +750,10 @@ serve(async (req) => {
             notificationType: "payment_reissued",
           });
         }
+        invoice = {
+          ...invoice,
+          obsolete_charges_cancelled: obsoleteChargesCancelled,
+        };
       } catch (error) {
         if (audit?.id)
           await supabase
@@ -677,6 +804,7 @@ serve(async (req) => {
         dueDate: invoice.vencimento,
         confirmedAt: invoice.confirmed_at || invoice.pago_em || null,
         paymentUrl: invoice.payment_url || invoice.boleto_url || null,
+        obsoleteChargesCancelled: Number(invoice.obsolete_charges_cancelled || 0),
       },
       recipient: publicRecipient(recipient),
       notifications: { ...summary, history: history || [] },
