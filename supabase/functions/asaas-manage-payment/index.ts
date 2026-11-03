@@ -772,6 +772,11 @@ serve(async (req) => {
             },
           });
           invoice = invoiceTransition.row;
+          const invoiceReissueApplied =
+            reissueApplied &&
+            !invoiceTransition.staleEvent &&
+            isCollectableStatus(invoiceTransition.current.status) &&
+            normalizePaymentStatus(invoice.status) === status;
           if (audit?.id)
             await supabase
               .from("payment_reissue_requests")

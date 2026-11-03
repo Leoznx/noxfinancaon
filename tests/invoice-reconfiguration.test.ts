@@ -44,6 +44,10 @@ test("backend valida vencimento, substitui a cobranca e cancela duplicadas", () 
   assert.match(source, /pix_copy_paste: method === "pix"[\s\S]*: null/);
   assert.match(source, /request_key: requestKey/);
   assert.match(source, /notificationType: `payment_reissued:\$\{audit\.id\}`/);
+  assert.match(
+    source,
+    /invoice = invoiceTransition\.row;\s+const invoiceReissueApplied =[\s\S]+if \(invoiceReissueApplied\)/,
+  );
 });
 
 test("migracao libera cartao e protege a reemissao contra repeticao", () => {
