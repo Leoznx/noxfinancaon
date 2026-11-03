@@ -108,7 +108,7 @@ export function BillingReconfigurationDialog({
           variant="outline"
           className={compact ? "h-8 rounded-lg gap-1 px-2" : "rounded-lg gap-2 font-bold"}
         >
-          <RefreshCw size={12} /> {compact ? "Alterar" : "Alterar cobrança"}
+          <RefreshCw size={12} /> Alterar o vencimento
         </Button>
       </DialogTrigger>
       <DialogContent className="max-h-[92dvh] w-[calc(100%-1rem)] max-w-lg overflow-y-auto rounded-2xl sm:w-full">
