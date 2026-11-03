@@ -2,7 +2,19 @@ import { supabase } from "@/integrations/supabase/client";
 import { getEdgeFunctionErrorMessage } from "@/lib/asaas-payment";
 import type { PaymentDueDay } from "@/lib/payment-due-date";
 
-export type ReconfigurablePaymentMethod = "boleto" | "pix";
+export type ReconfigurablePaymentMethod = "boleto" | "pix" | "credit_card";
+
+export const RECONFIGURABLE_PAYMENT_METHODS = [
+  "boleto",
+  "pix",
+  "credit_card",
+] as const satisfies readonly ReconfigurablePaymentMethod[];
+
+export function reconfigurablePaymentMethodLabel(method: ReconfigurablePaymentMethod) {
+  if (method === "pix") return "Pix";
+  if (method === "credit_card") return "Cartão de crédito";
+  return "Boleto";
+}
 
 export type InvoiceReconfigurationResult = {
   invoice?: {
@@ -18,10 +30,8 @@ export const RECONFIGURABLE_INVOICE_STATUSES = new Set([
   "pending",
   "created",
   "waiting_payment",
-  "processing",
   "risk_analysis",
   "approved",
-  "confirmed",
   "overdue",
   "pendente",
   "vencido",
@@ -35,8 +45,10 @@ export function canReconfigureInvoice(params: {
 }) {
   return Boolean(
     params.invoiceId &&
-      RECONFIGURABLE_INVOICE_STATUSES.has(String(params.status || "").toLowerCase()) &&
-      ["boleto", "pix"].includes(String(params.method || "").toLowerCase()),
+    RECONFIGURABLE_INVOICE_STATUSES.has(String(params.status || "").toLowerCase()) &&
+    RECONFIGURABLE_PAYMENT_METHODS.includes(
+      String(params.method || "").toLowerCase() as ReconfigurablePaymentMethod,
+    ),
   );
 }
 
@@ -45,6 +57,10 @@ export async function reconfigureInvoice(params: {
   paymentMethod: ReconfigurablePaymentMethod;
   billingDueDay: PaymentDueDay;
 }) {
+  const requestId =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `billing-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
   const { data, error } = await supabase.functions.invoke<InvoiceReconfigurationResult>(
     "asaas-manage-payment",
     {
@@ -53,15 +69,13 @@ export async function reconfigureInvoice(params: {
         action: "reissue",
         paymentMethod: params.paymentMethod,
         billingDueDay: params.billingDueDay,
+        requestId,
       },
     },
   );
   if (error) {
     throw new Error(
-      await getEdgeFunctionErrorMessage(
-        error,
-        "Não foi possível alterar esta cobrança.",
-      ),
+      await getEdgeFunctionErrorMessage(error, "Não foi possível alterar esta cobrança."),
     );
   }
   return data;

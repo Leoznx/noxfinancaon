@@ -27,11 +27,15 @@ import {
   shouldApplyConsolidatedEvent,
 } from "../_shared/billing-state.ts";
 import {
+  asaasBillingTypeForReissue,
   asaasLateFeePayload,
   isCollectableStatus,
   normalizeContractBillingDueDay,
+  normalizeReissuablePaymentMethod,
+  reissuablePaymentMethodLabel,
   reissuedInvoiceDueDate,
   saoPauloClock,
+  type ReissuablePaymentMethod,
 } from "../_shared/billing-automation.ts";
 import {
   getInvoiceNotificationSummary,
@@ -48,9 +52,17 @@ type Body = {
   batchId?: string;
   requestId?: string;
   action?: "refresh" | "resend_email" | "resend_whatsapp" | "reissue";
-  paymentMethod?: "pix" | "boleto";
+  paymentMethod?: ReissuablePaymentMethod;
   billingDueDay?: number;
 };
+
+function normalizeRequestKey(value: unknown) {
+  const normalized = String(value || "")
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]/g, "")
+    .slice(0, 80);
+  return normalized || null;
+}
 
 function reduceReissueStatus(
   currentStatus: unknown,
@@ -101,10 +113,7 @@ async function cancelObsoleteInstallmentCharges(
       duplicatePayment = result.data;
     }
 
-    if (
-      duplicatePayment?.asaas_payment_id &&
-      isCollectableStatus(duplicatePayment.status)
-    ) {
+    if (duplicatePayment?.asaas_payment_id && isCollectableStatus(duplicatePayment.status)) {
       try {
         await asaasFetch(`/payments/${duplicatePayment.asaas_payment_id}`, {
           method: "DELETE",
@@ -220,10 +229,7 @@ async function manageBatch(supabase: any, userId: string, body: Body) {
     currentBatch = batchTransition.row;
   } else {
     const channel = body.action === "resend_email" ? "email" : "whatsapp";
-    const explicitRequestId = String(body.requestId || "")
-      .trim()
-      .replace(/[^a-zA-Z0-9_-]/g, "")
-      .slice(0, 80);
+    const explicitRequestId = normalizeRequestKey(body.requestId) || "";
     const requestKey = explicitRequestId || new Date().toISOString().slice(0, 10);
     const notificationType = `consolidated_manual_resend:${requestKey}`;
     const alreadySent = await wasNotificationSent(supabase, {
@@ -571,7 +577,19 @@ serve(async (req) => {
         forceChannel: body.action === "resend_email" ? "email" : "whatsapp",
       });
     } else {
-      const method = body.paymentMethod || (invoice.payment_method === "pix" ? "pix" : "boleto");
+      const requestedMethod =
+        body.paymentMethod === undefined
+          ? null
+          : normalizeReissuablePaymentMethod(body.paymentMethod);
+      if (body.paymentMethod !== undefined && requestedMethod === null) {
+        return jsonResponse(
+          req,
+          { ok: false, error: "Forma de pagamento invalida para esta cobranca." },
+          400,
+        );
+      }
+      const method =
+        requestedMethod || normalizeReissuablePaymentMethod(invoice.payment_method) || "boleto";
       const requestedDueDay =
         body.billingDueDay === undefined
           ? null
@@ -618,7 +636,8 @@ serve(async (req) => {
       }
       const dueDateError = billingDueDateError(newDueDate, saoPauloClock().date);
       if (dueDateError) throw new Error(`invalid_reissue_due_date:${dueDateError}`);
-      const { data: audit } = await supabase
+      const requestKey = normalizeRequestKey(body.requestId) || crypto.randomUUID();
+      const auditInsert = await supabase
         .from("payment_reissue_requests")
         .insert({
           requested_by: user.id,
@@ -627,144 +646,182 @@ serve(async (req) => {
           requested_method: method,
           amount: Number(invoice.valor),
           due_date: newDueDate,
+          request_key: requestKey,
         })
-        .select("id")
+        .select("id, status")
         .maybeSingle();
-      try {
-        const raw = await asaasFetch(`/payments/${payment.asaas_payment_id}`, {
-          method: "PUT",
-          body: JSON.stringify({
-            billingType: method === "pix" ? "PIX" : "BOLETO",
-            value: Number(invoice.valor),
-            dueDate: newDueDate,
-            ...asaasLateFeePayload(),
-          }),
-        });
-        let pix: any = null;
-        if (method === "pix")
-          pix = await asaasFetch(`/payments/${payment.asaas_payment_id}/pixQrCode`);
-        const incomingStatus = normalizePaymentStatus(mapAsaasStatus(raw?.status));
-        const providerEventAt = new Date().toISOString();
-        const safeRaw = sanitizeAsaasResponse(raw);
-        const paymentTransition = await persistProviderTransition({
-          supabase,
-          table: "asaas_payments",
-          rowId: payment.id,
-          current: payment,
-          incomingEventAt: providerEventAt,
-          reduce: (currentStatus, currentEventAt, incomingEventAt) =>
-            reduceReissueStatus(currentStatus, incomingStatus, currentEventAt, incomingEventAt),
-          buildPatch: ({ current, nextStatus, staleEvent }) => {
-            const reissueApplied =
-              !staleEvent &&
-              isCollectableStatus(current.status) &&
-              normalizePaymentStatus(nextStatus) === incomingStatus;
-            return reissueApplied
-              ? {
-                  payment_method: method,
-                  due_date: newDueDate,
-                  raw_response: safeRaw,
-                  boleto_url:
-                    method === "boleto" ? raw?.bankSlipUrl || raw?.invoiceUrl || null : null,
-                  boleto_barcode: method === "boleto" ? raw?.identificationField || null : null,
-                  pix_qr_code: method === "pix" ? pix?.encodedImage || null : null,
-                  pix_copy_paste: method === "pix" ? pix?.payload || null : null,
-                  pix_expires_at: method === "pix" ? pix?.expirationDate || null : null,
-                }
-              : {
-                  raw_response: current.raw_response,
-                };
-          },
-        });
-        payment = paymentTransition.row;
-        const status = normalizePaymentStatus(payment.status);
-        const reissueApplied =
-          !paymentTransition.staleEvent &&
-          isCollectableStatus(paymentTransition.current.status) &&
-          status === incomingStatus;
-        const invoiceTransition = await persistProviderTransition({
-          supabase,
-          table: "faturas_inquilino",
-          rowId: invoice.id,
-          current: invoice,
-          incomingEventAt: providerEventAt,
-          reduce: (currentStatus, currentEventAt, incomingEventAt) =>
-            reissueApplied
-              ? reduceReissueStatus(currentStatus, status, currentEventAt, incomingEventAt)
-              : reducePaymentStatus(
-                  currentStatus as string,
-                  status,
-                  currentEventAt,
-                  incomingEventAt,
-                ),
-          buildPatch: ({ current, nextStatus, staleEvent }) => {
-            const invoiceReissueApplied =
-              reissueApplied &&
-              !staleEvent &&
-              isCollectableStatus(current.status) &&
-              normalizePaymentStatus(nextStatus) === status;
-            return invoiceReissueApplied
-              ? {
-                  payment_method: method,
-                  vencimento: newDueDate,
-                  payment_url: raw?.invoiceUrl || raw?.bankSlipUrl || null,
-                  boleto_url:
-                    method === "boleto" ? raw?.bankSlipUrl || raw?.invoiceUrl || null : null,
-                  linha_digitavel: method === "boleto" ? raw?.identificationField || null : null,
-                }
-              : {};
-          },
-        });
-        invoice = invoiceTransition.row;
-        if (audit?.id)
-          await supabase
-            .from("payment_reissue_requests")
-            .update({
-              status: "completed",
-              provider_status: status,
-              completed_at: new Date().toISOString(),
-            })
-            .eq("id", audit.id);
-        let obsoleteChargesCancelled = 0;
-        if (invoiceReissueApplied) {
-          obsoleteChargesCancelled = await cancelObsoleteInstallmentCharges(
-            supabase,
-            invoice,
-            payment?.id,
+      let audit = auditInsert.data;
+      const auditError = auditInsert.error;
+      let reissueAlreadyCompleted = false;
+      if (auditError?.code === "23505") {
+        const existing = await supabase
+          .from("payment_reissue_requests")
+          .select("id, status")
+          .eq("request_key", requestKey)
+          .maybeSingle();
+        if (existing.error) throw existing.error;
+        audit = existing.data;
+        if (audit?.status === "completed") {
+          reissueAlreadyCompleted = true;
+        } else {
+          return jsonResponse(
+            req,
+            {
+              ok: false,
+              error:
+                audit?.status === "requested"
+                  ? "Esta alteracao ja esta sendo processada. Aguarde alguns instantes."
+                  : "Esta tentativa anterior nao foi concluida. Tente novamente.",
+            },
+            409,
           );
-          await supabase.from("proposta_historico").insert({
-            consulta_id: invoice.consulta_id,
-            tipo_evento: "cobranca_reconfigurada",
-            descricao: `Cobranca atualizada para ${method === "pix" ? "Pix" : "boleto"}, vencimento ${newDueDate}. ${obsoleteChargesCancelled} cobranca(s) obsoleta(s) cancelada(s).`,
-          });
-          await sendInvoiceNotifications(supabase, {
-            invoice,
-            recipient,
-            paymentMethod: method,
-            amount: Number(invoice.valor),
-            dueDate: newDueDate,
-            paymentUrl: invoice.payment_url || invoice.boleto_url,
-            pixCopyPaste: payment?.pix_copy_paste,
-            boletoBarcode: payment?.boleto_barcode || invoice.linha_digitavel,
-            contractRef: String(invoice.consulta_id).slice(0, 8).toUpperCase(),
-            notificationType: "payment_reissued",
-          });
         }
+      } else if (auditError) {
+        throw auditError;
+      }
+      if (!audit?.id) throw new Error("payment_reissue_audit_not_created");
+      if (reissueAlreadyCompleted) {
         invoice = {
           ...invoice,
-          obsolete_charges_cancelled: obsoleteChargesCancelled,
+          obsolete_charges_cancelled: 0,
         };
-      } catch (error) {
-        if (audit?.id)
-          await supabase
-            .from("payment_reissue_requests")
-            .update({
-              status: "failed",
-              error_code: error instanceof Error ? error.message.slice(0, 100) : "provider_error",
-              completed_at: new Date().toISOString(),
-            })
-            .eq("id", audit.id);
-        throw error;
+      } else {
+        try {
+          const raw = await asaasFetch(`/payments/${payment.asaas_payment_id}`, {
+            method: "PUT",
+            body: JSON.stringify({
+              billingType: asaasBillingTypeForReissue(method),
+              value: Number(invoice.valor),
+              dueDate: newDueDate,
+              ...asaasLateFeePayload(),
+            }),
+          });
+          let pix: any = null;
+          if (method === "pix")
+            pix = await asaasFetch(`/payments/${payment.asaas_payment_id}/pixQrCode`);
+          const incomingStatus = normalizePaymentStatus(mapAsaasStatus(raw?.status));
+          const providerEventAt = new Date().toISOString();
+          const safeRaw = sanitizeAsaasResponse(raw);
+          const paymentTransition = await persistProviderTransition({
+            supabase,
+            table: "asaas_payments",
+            rowId: payment.id,
+            current: payment,
+            incomingEventAt: providerEventAt,
+            reduce: (currentStatus, currentEventAt, incomingEventAt) =>
+              reduceReissueStatus(currentStatus, incomingStatus, currentEventAt, incomingEventAt),
+            buildPatch: ({ current, nextStatus, staleEvent }) => {
+              const reissueApplied =
+                !staleEvent &&
+                isCollectableStatus(current.status) &&
+                normalizePaymentStatus(nextStatus) === incomingStatus;
+              return reissueApplied
+                ? {
+                    payment_method: method,
+                    due_date: newDueDate,
+                    raw_response: safeRaw,
+                    boleto_url:
+                      method === "boleto" ? raw?.bankSlipUrl || raw?.invoiceUrl || null : null,
+                    boleto_barcode: method === "boleto" ? raw?.identificationField || null : null,
+                    pix_qr_code: method === "pix" ? pix?.encodedImage || null : null,
+                    pix_copy_paste: method === "pix" ? pix?.payload || null : null,
+                    pix_expires_at: method === "pix" ? pix?.expirationDate || null : null,
+                  }
+                : {
+                    raw_response: current.raw_response,
+                  };
+            },
+          });
+          payment = paymentTransition.row;
+          const status = normalizePaymentStatus(payment.status);
+          const reissueApplied =
+            !paymentTransition.staleEvent &&
+            isCollectableStatus(paymentTransition.current.status) &&
+            status === incomingStatus;
+          const invoiceTransition = await persistProviderTransition({
+            supabase,
+            table: "faturas_inquilino",
+            rowId: invoice.id,
+            current: invoice,
+            incomingEventAt: providerEventAt,
+            reduce: (currentStatus, currentEventAt, incomingEventAt) =>
+              reissueApplied
+                ? reduceReissueStatus(currentStatus, status, currentEventAt, incomingEventAt)
+                : reducePaymentStatus(
+                    currentStatus as string,
+                    status,
+                    currentEventAt,
+                    incomingEventAt,
+                  ),
+            buildPatch: ({ current, nextStatus, staleEvent }) => {
+              const invoiceReissueApplied =
+                reissueApplied &&
+                !staleEvent &&
+                isCollectableStatus(current.status) &&
+                normalizePaymentStatus(nextStatus) === status;
+              return invoiceReissueApplied
+                ? {
+                    payment_method: method,
+                    vencimento: newDueDate,
+                    payment_url: raw?.invoiceUrl || raw?.bankSlipUrl || null,
+                    boleto_url:
+                      method === "boleto" ? raw?.bankSlipUrl || raw?.invoiceUrl || null : null,
+                    linha_digitavel: method === "boleto" ? raw?.identificationField || null : null,
+                  }
+                : {};
+            },
+          });
+          invoice = invoiceTransition.row;
+          if (audit?.id)
+            await supabase
+              .from("payment_reissue_requests")
+              .update({
+                status: "completed",
+                provider_status: status,
+                completed_at: new Date().toISOString(),
+              })
+              .eq("id", audit.id);
+          let obsoleteChargesCancelled = 0;
+          if (invoiceReissueApplied) {
+            obsoleteChargesCancelled = await cancelObsoleteInstallmentCharges(
+              supabase,
+              invoice,
+              payment?.id,
+            );
+            await supabase.from("proposta_historico").insert({
+              consulta_id: invoice.consulta_id,
+              tipo_evento: "cobranca_reconfigurada",
+              descricao: `Cobranca atualizada para ${reissuablePaymentMethodLabel(method)}, vencimento ${newDueDate}. ${obsoleteChargesCancelled} cobranca(s) obsoleta(s) cancelada(s).`,
+            });
+            await sendInvoiceNotifications(supabase, {
+              invoice,
+              recipient,
+              paymentMethod: method,
+              amount: Number(invoice.valor),
+              dueDate: newDueDate,
+              paymentUrl: invoice.payment_url || invoice.boleto_url,
+              pixCopyPaste: payment?.pix_copy_paste,
+              boletoBarcode: payment?.boleto_barcode || invoice.linha_digitavel,
+              contractRef: String(invoice.consulta_id).slice(0, 8).toUpperCase(),
+              notificationType: `payment_reissued:${audit.id}`,
+            });
+          }
+          invoice = {
+            ...invoice,
+            obsolete_charges_cancelled: obsoleteChargesCancelled,
+          };
+        } catch (error) {
+          if (audit?.id)
+            await supabase
+              .from("payment_reissue_requests")
+              .update({
+                status: "failed",
+                error_code: error instanceof Error ? error.message.slice(0, 100) : "provider_error",
+                completed_at: new Date().toISOString(),
+              })
+              .eq("id", audit.id);
+          throw error;
+        }
       }
     }
 

@@ -5,6 +5,8 @@ export const BILLING_FINE_PERCENT = 2;
 export const BILLING_MONTHLY_INTEREST_PERCENT = 1;
 export const BOLETO_ISSUANCE_LEAD_DAYS = 7;
 export const DEFERRED_INITIAL_PAYMENT_DAYS = 3;
+export const REISSUABLE_PAYMENT_METHODS = ["boleto", "pix", "credit_card"] as const;
+export type ReissuablePaymentMethod = (typeof REISSUABLE_PAYMENT_METHODS)[number];
 export const CONSOLIDATABLE_INVOICE_STATUSES = [
   "awaiting_consolidation",
   "pending",
@@ -28,11 +30,30 @@ export function normalizeBillingDueDay(value: unknown, fallback = BILLING_DUE_DA
 
 export function normalizeContractBillingDueDay(value: unknown) {
   const parsed = Number(value);
-  return CONTRACT_BILLING_DUE_DAYS.includes(
-    parsed as (typeof CONTRACT_BILLING_DUE_DAYS)[number],
-  )
+  return CONTRACT_BILLING_DUE_DAYS.includes(parsed as (typeof CONTRACT_BILLING_DUE_DAYS)[number])
     ? parsed
     : null;
+}
+
+export function normalizeReissuablePaymentMethod(value: unknown): ReissuablePaymentMethod | null {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
+  return REISSUABLE_PAYMENT_METHODS.includes(normalized as ReissuablePaymentMethod)
+    ? (normalized as ReissuablePaymentMethod)
+    : null;
+}
+
+export function asaasBillingTypeForReissue(method: ReissuablePaymentMethod) {
+  if (method === "pix") return "PIX" as const;
+  if (method === "credit_card") return "CREDIT_CARD" as const;
+  return "BOLETO" as const;
+}
+
+export function reissuablePaymentMethodLabel(method: ReissuablePaymentMethod) {
+  if (method === "pix") return "Pix";
+  if (method === "credit_card") return "cartao de credito";
+  return "boleto";
 }
 
 /**
@@ -140,11 +161,7 @@ export function nextContractBillingDueDate(today: string, dueDay: number) {
   const sameMonth = monthlyDueDate(year, month, dueDay);
   if (sameMonth >= today) return sameMonth;
   const nextMonthIndex = month;
-  return monthlyDueDate(
-    year + Math.floor(nextMonthIndex / 12),
-    (nextMonthIndex % 12) + 1,
-    dueDay,
-  );
+  return monthlyDueDate(year + Math.floor(nextMonthIndex / 12), (nextMonthIndex % 12) + 1, dueDay);
 }
 
 /**
