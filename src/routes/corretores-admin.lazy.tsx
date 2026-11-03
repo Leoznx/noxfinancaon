@@ -36,7 +36,7 @@ import {
 } from "@/lib/broker-agency-invitations";
 import { buildBrokerAgencySignupUrl, getOrCreateMyBrokerAgencySignupLink } from "@/lib/broker-agency-signup-links";
 import { isDemoSession } from "@/lib/demo-session";
-import { getDemoBrokers } from "@/lib/demo-portal-data";
+import { getDemoBrokers, getDemoPolicies } from "@/lib/demo-portal-data";
 
 export const Route = createLazyFileRoute("/corretores-admin")({
   component: () => (
@@ -409,6 +409,13 @@ function CorretoresAdmin() {
       setDetailApolices([]);
       return;
     }
+    if (demoSession) {
+      setDetailApolices(
+        getDemoPolicies().slice(0, Math.min(Number(detailOf.contracts_count || 0), 6)),
+      );
+      setLoadingDetailApolices(false);
+      return;
+    }
     let cancelled = false;
     (async () => {
       setLoadingDetailApolices(true);
@@ -446,7 +453,7 @@ function CorretoresAdmin() {
     return () => {
       cancelled = true;
     };
-  }, [detailOf]);
+  }, [demoSession, detailOf]);
 
   return (
     <DashboardLayout>

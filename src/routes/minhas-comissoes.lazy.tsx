@@ -126,6 +126,17 @@ function CommissionsPage() {
   const [requestOpen, setRequestOpen] = useState(false);
   const [detailsId, setDetailsId] = useState<string | null>(null);
 
+  const openWithdrawalDetails = useCallback(
+    (withdrawalId: string) => {
+      if (demoSession) {
+        toast.info("Saque demonstrativo: nenhum dado financeiro real foi consultado.");
+        return;
+      }
+      setDetailsId(withdrawalId);
+    },
+    [demoSession],
+  );
+
   const load = useCallback(
     async (background = false) => {
       if (!user) return;
@@ -382,10 +393,10 @@ function CommissionsPage() {
             <ContractsList contracts={activeContracts} />
           </TabsContent>
           <TabsContent value="commissions" className="mt-5">
-            <CommissionsList commissions={commissions} onOpenWithdrawal={setDetailsId} />
+            <CommissionsList commissions={commissions} onOpenWithdrawal={openWithdrawalDetails} />
           </TabsContent>
           <TabsContent value="withdrawals" className="mt-5">
-            <WithdrawalsList withdrawals={withdrawals} onOpen={setDetailsId} />
+            <WithdrawalsList withdrawals={withdrawals} onOpen={openWithdrawalDetails} />
           </TabsContent>
         </Tabs>
       </div>

@@ -23,6 +23,18 @@ test("a apresentação possui históricos variados sem usar identificadores reai
   assert.equal(summaries.length, 6);
   assert.equal(collections.length, 18);
   assert.ok(consultations.every((row) => isDemoRecordId(row.id)));
+  assert.ok(policies.every((row) => isDemoRecordId(row.id)));
+  assert.ok(summaries.every((row) => isDemoRecordId(row.apolice_id)));
+  assert.ok(
+    collections.every(
+      (row) =>
+        isDemoRecordId(row.id) &&
+        isDemoRecordId(row.consulta_id) &&
+        row.asaas_payment_id === null &&
+        row.payment_url === null &&
+        row.boleto_url === null,
+    ),
+  );
   assert.deepEqual(
     new Set(consultations.map((row) => row.status)),
     new Set(["aprovado", "em_analise", "recusado", "falta_documentos", "processando"]),
@@ -63,5 +75,3 @@ test("o inquilino demo recebe vários contratos e faturas sem referências de co
     ),
   );
 });
-
-
