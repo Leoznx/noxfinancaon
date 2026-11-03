@@ -44,6 +44,7 @@ import {
   type UserWithdrawal,
   type WithdrawalStatus,
 } from "@/lib/withdrawals";
+import { isDemoSession } from "@/lib/demo-session";
 
 export const Route = createLazyFileRoute("/minhas-comissoes")({
   component: () => (
@@ -100,6 +101,7 @@ const financialTone: Record<string, string> = {
 
 function CommissionsPage() {
   const { user } = useAuth();
+  const demoSession = isDemoSession();
   const cachedDashboard = user ? peekCommissionDashboard(user) : undefined;
   const [summary, setSummary] = useState<UserFinancialSummary>(
     () => cachedDashboard?.summary ?? emptySummary,
@@ -153,7 +155,7 @@ function CommissionsPage() {
   }, [load]);
 
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id || demoSession) return;
     let refreshTimer: ReturnType<typeof setTimeout> | null = null;
     const refresh = () => {
       if (refreshTimer) clearTimeout(refreshTimer);
@@ -186,7 +188,7 @@ function CommissionsPage() {
       if (refreshTimer) clearTimeout(refreshTimer);
       supabase.removeChannel(channel);
     };
-  }, [load, user?.id]);
+  }, [demoSession, load, user?.id]);
 
   const activeContracts = useMemo(
     () =>

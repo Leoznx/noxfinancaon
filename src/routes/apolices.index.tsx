@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FileText, ArrowRight, AlertCircle, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
+import { isDemoRecordId } from "@/lib/demo-portal-data";
 
 export const Route = createFileRoute("/apolices/")({
   component: () => (
@@ -155,7 +157,15 @@ function ApolicesList() {
                   size="sm"
                   className="bg-neutral-900 hover:bg-neutral-800 text-white rounded-lg gap-1.5 font-bold text-xs h-9 px-3"
                 >
-                  <Link to="/apolices/$id" params={{ id: a.id }}>
+                  <Link
+                    to="/apolices/$id"
+                    params={{ id: a.id }}
+                    onClick={(event) => {
+                      if (!isDemoRecordId(a.id)) return;
+                      event.preventDefault();
+                      toast.info("Contrato demonstrativo: os dados reais permanecem intactos.");
+                    }}
+                  >
                     Ver contrato <ArrowRight size={14} />
                   </Link>
                 </Button>
@@ -236,7 +246,15 @@ function ApolicesList() {
                         size="sm"
                         className="bg-neutral-900 hover:bg-neutral-800 text-white rounded-lg gap-2 font-bold"
                       >
-                        <Link to="/apolices/$id" params={{ id: a.id }}>
+                        <Link
+                          to="/apolices/$id"
+                          params={{ id: a.id }}
+                          onClick={(event) => {
+                            if (!isDemoRecordId(a.id)) return;
+                            event.preventDefault();
+                            toast.info("Contrato demonstrativo: os dados reais permanecem intactos.");
+                          }}
+                        >
                           Ver contrato <ArrowRight size={14} />
                         </Link>
                       </Button>

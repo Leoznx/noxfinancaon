@@ -13,6 +13,12 @@ import {
 import { loadSessionResource, peekSessionResource } from "@/lib/session-resource-cache";
 import { loadAgencyScope } from "@/lib/agency-scope";
 import { executeSupabaseQuery } from "@/lib/supabase-query";
+import { isDemoSession } from "@/lib/demo-session";
+import {
+  getDemoCommissionDashboard,
+  getDemoConsultations,
+  getDemoPolicies,
+} from "@/lib/demo-portal-data";
 
 const ROUTE_DATA_MAX_AGE_MS = 120_000;
 const LIST_LIMIT = 100;
@@ -40,6 +46,7 @@ const consultationKey = (user: DashboardNavigationUser) => `dashboard-route:${us
 const policyKey = (user: DashboardNavigationUser) => `dashboard-route:${user.id}:apolices`;
 const commissionKey = (user: DashboardNavigationUser) => `dashboard-route:${user.id}:comissoes`;
 export function peekDashboardConsultations(user: DashboardNavigationUser) {
+  if (isDemoSession()) return getDemoConsultations();
   return peekSessionResource<DashboardConsultationRow[]>(consultationKey(user));
 }
 
@@ -47,6 +54,7 @@ export async function loadDashboardConsultations(
   user: DashboardNavigationUser,
   force = false,
 ): Promise<DashboardConsultationRow[]> {
+  if (isDemoSession()) return getDemoConsultations();
   return loadSessionResource(
     consultationKey(user),
     async () => {
@@ -110,6 +118,7 @@ export async function loadDashboardConsultations(
 }
 
 export function peekDashboardPolicies(user: DashboardNavigationUser) {
+  if (isDemoSession()) return getDemoPolicies();
   return peekSessionResource<DashboardPolicyRow[]>(policyKey(user));
 }
 
@@ -117,6 +126,7 @@ export async function loadDashboardPolicies(
   user: DashboardNavigationUser,
   force = false,
 ): Promise<DashboardPolicyRow[]> {
+  if (isDemoSession()) return getDemoPolicies();
   return loadSessionResource(
     policyKey(user),
     async () => {
@@ -154,6 +164,7 @@ export async function loadDashboardPolicies(
 }
 
 export function peekCommissionDashboard(user: DashboardNavigationUser) {
+  if (isDemoSession()) return getDemoCommissionDashboard();
   return peekSessionResource<CommissionDashboardData>(commissionKey(user));
 }
 
@@ -161,6 +172,7 @@ export async function loadCommissionDashboard(
   user: DashboardNavigationUser,
   force = false,
 ): Promise<CommissionDashboardData> {
+  if (isDemoSession()) return getDemoCommissionDashboard();
   return loadSessionResource(
     commissionKey(user),
     async () => {

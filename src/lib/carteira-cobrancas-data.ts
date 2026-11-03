@@ -4,6 +4,8 @@ import {
   type ConsolidatedBillingBatch,
 } from "@/lib/automated-billing";
 import { loadSessionResource, peekSessionResource } from "@/lib/session-resource-cache";
+import { isDemoSession } from "@/lib/demo-session";
+import { getDemoCollectionInvoices } from "@/lib/demo-portal-data";
 
 export type CarteiraCobrancasData = {
   faturas: any[];
@@ -15,6 +17,7 @@ const keyFor = (userId: string, isAgency: boolean) =>
 const invoiceRowsKeyFor = (userId: string) => `dashboard-route:${userId}:billing-invoice-rows`;
 
 export function loadCarteiraInvoiceRows(user: BillingScopeUser, force = false) {
+  if (isDemoSession()) return Promise.resolve(getDemoCollectionInvoices());
   return loadSessionResource(
     invoiceRowsKeyFor(user.id),
     async () => {
@@ -41,10 +44,14 @@ export function loadCarteiraInvoiceRows(user: BillingScopeUser, force = false) {
 }
 
 export function peekCarteiraCobrancas(userId: string, isAgency: boolean) {
+  if (isDemoSession()) return { faturas: getDemoCollectionInvoices(), batches: [] };
   return peekSessionResource<CarteiraCobrancasData>(keyFor(userId, isAgency));
 }
 
 export function loadCarteiraCobrancas(user: BillingScopeUser, force = false) {
+  if (isDemoSession()) {
+    return Promise.resolve({ faturas: getDemoCollectionInvoices(), batches: [] });
+  }
   return loadSessionResource(
     keyFor(user.id, user.role === "imobiliaria"),
     async (): Promise<CarteiraCobrancasData> => {

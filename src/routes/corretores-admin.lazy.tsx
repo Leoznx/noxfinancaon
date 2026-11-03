@@ -35,6 +35,8 @@ import {
   loadMyBrokerAgencyMembers,
 } from "@/lib/broker-agency-invitations";
 import { buildBrokerAgencySignupUrl, getOrCreateMyBrokerAgencySignupLink } from "@/lib/broker-agency-signup-links";
+import { isDemoSession } from "@/lib/demo-session";
+import { getDemoBrokers } from "@/lib/demo-portal-data";
 
 export const Route = createLazyFileRoute("/corretores-admin")({
   component: () => (
@@ -100,9 +102,15 @@ function CorretoresAdmin() {
   const [signupLinkUsageCount, setSignupLinkUsageCount] = useState(0);
 
   const isImobiliaria = user?.role === "imobiliaria";
+  const demoSession = isDemoSession();
 
   const fetchLinkedCorretores = useCallback(async (imobId: string, silent = false, force = false) => {
     if (!user?.id) return;
+    if (demoSession) {
+      setCorretores(getDemoBrokers());
+      setLoading(false);
+      return;
+    }
     if (!silent) setLoading(true);
     const { data, error } = await loadMyBrokerAgencyMembers(user.id, imobId, force);
     if (error) toast.error("Erro ao carregar corretores: " + error);
@@ -119,7 +127,7 @@ function CorretoresAdmin() {
       })),
     );
     if (!silent) setLoading(false);
-  }, [user?.id]);
+  }, [demoSession, user?.id]);
 
   const fetchAllCorretores = useCallback(async () => {
     setLoading(true);
@@ -135,6 +143,12 @@ function CorretoresAdmin() {
       setLoading(false);
       return;
     }
+    if (demoSession) {
+      const demoAgencyId = "d3000000-0000-4000-8000-000000000800";
+      setImobiliariaId(demoAgencyId);
+      await fetchLinkedCorretores(demoAgencyId);
+      return;
+    }
     const agency = await loadAgencyScope(user);
     if (agency.agencyId) {
       setImobiliariaId(agency.agencyId);
@@ -142,7 +156,7 @@ function CorretoresAdmin() {
     } else {
       setLoading(false);
     }
-  }, [user, fetchLinkedCorretores]);
+  }, [demoSession, user, fetchLinkedCorretores]);
 
   useEffect(() => {
     if (!user) return;
@@ -151,7 +165,7 @@ function CorretoresAdmin() {
   }, [user, isImobiliaria, resolveImobiliariaId, fetchAllCorretores]);
 
   useEffect(() => {
-    if (!isImobiliaria || !imobiliariaId) return;
+    if (!isImobiliaria || !imobiliariaId || demoSession) return;
     let refreshTimer: number | undefined;
     const refresh = () => {
       if (user?.id) invalidateAgencyScope(user.id);
@@ -180,7 +194,7 @@ function CorretoresAdmin() {
       window.removeEventListener("focus", onFocus);
       void supabase.removeChannel(channel);
     };
-  }, [fetchLinkedCorretores, imobiliariaId, isImobiliaria, user?.id]);
+  }, [demoSession, fetchLinkedCorretores, imobiliariaId, isImobiliaria, user?.id]);
 
   const resetModal = () => {
     setSearchInput("");
@@ -193,6 +207,10 @@ function CorretoresAdmin() {
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (demoSession) {
+      toast.info("A busca é apenas ilustrativa nesta conta de demonstração.");
+      return;
+    }
     setIsSearching(true);
     setFoundCorretor(null);
     try {
@@ -262,6 +280,12 @@ function CorretoresAdmin() {
 
   const handleConfirmLink = async () => {
     if (!foundCorretor) return;
+    if (demoSession) {
+      toast.success("Convite demonstrativo registrado apenas nesta apresentação.");
+      setOpen(false);
+      resetModal();
+      return;
+    }
     setIsLinking(true);
     try {
       const result = await createBrokerAgencyInvitation(foundCorretor.id, commissionMode);
@@ -284,6 +308,13 @@ function CorretoresAdmin() {
   };
 
   const handleOpenSignupLink = async () => {
+    if (demoSession) {
+      setSignupLink("https://noxfianca.com/cadastro-corretor?demo=1");
+      setSignupLinkAgencyName("Vértice Imobiliária");
+      setSignupLinkUsageCount(6);
+      setSignupLinkOpen(true);
+      return;
+    }
     setSignupLinkLoading(true);
     try {
       const result = await getOrCreateMyBrokerAgencySignupLink();
@@ -321,6 +352,18 @@ function CorretoresAdmin() {
 
   const handleUpdateCommissionMode = async () => {
     if (!editingCommissionOf) return;
+    if (demoSession) {
+      setCorretores((current) =>
+        current.map((broker) =>
+          broker.id === editingCommissionOf.id
+            ? { ...broker, commission_allocation_mode: commissionMode }
+            : broker,
+        ),
+      );
+      toast.success("Regra alterada somente nesta demonstração.");
+      setEditingCommissionOf(null);
+      return;
+    }
     setSavingCommissionMode(true);
     try {
       const { error } = await supabase.rpc("update_my_corretor_commission_allocation", {
@@ -342,6 +385,12 @@ function CorretoresAdmin() {
 
   const handleUnlink = async () => {
     if (!toUnlink) return;
+    if (demoSession) {
+      setCorretores((current) => current.filter((broker) => broker.id !== toUnlink.id));
+      setToUnlink(null);
+      toast.success("Corretor removido somente desta demonstração.");
+      return;
+    }
     const { error } = await supabase.rpc("unlink_my_corretor", {
       p_corretor_id: toUnlink.id,
     });

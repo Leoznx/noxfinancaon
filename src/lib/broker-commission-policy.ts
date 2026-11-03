@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { isDemoSession } from "@/lib/demo-session";
 
 export type BrokerCommissionAllocationMode = "broker_full" | "split_50" | "agency_full";
 
@@ -66,6 +67,15 @@ export function loadBrokerCommissionAccess(
   userId: string,
   forceRefresh = false,
 ): Promise<BrokerCommissionAccess> {
+  if (isDemoSession()) {
+    const access: BrokerCommissionAccess = {
+      commissionAllocationMode: "broker_full",
+      canAccessFinancialModules: true,
+      agencyProfileId: null,
+    };
+    resolvedAccessCache.set(userId, access);
+    return Promise.resolve(access);
+  }
   if (forceRefresh) accessCache.delete(userId);
   const cached = accessCache.get(userId);
   if (cached) return cached;

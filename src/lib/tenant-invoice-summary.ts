@@ -7,6 +7,8 @@ import {
   pickRecurringInvoiceValue,
 } from "@/lib/tenant-invoice-display";
 import { readBillingRows } from "@/lib/billing-scope";
+import { isDemoSession } from "@/lib/demo-session";
+import { getDemoTenantInvoiceSummaries } from "@/lib/demo-portal-data";
 
 export type TenantInvoiceSummary = {
   apolice_id: string;
@@ -36,6 +38,7 @@ function cityOf(property: any): string {
 }
 
 export function peekTenantInvoiceSummaries(userId: string) {
+  if (isDemoSession()) return getDemoTenantInvoiceSummaries();
   return peekSessionResource<TenantInvoiceSummary[]>(keyFor(userId));
 }
 
@@ -121,6 +124,7 @@ async function fetchTenantInvoiceSummaries(): Promise<TenantInvoiceSummary[]> {
 }
 
 export function loadTenantInvoiceSummaries(userId: string, force = false) {
+  if (isDemoSession()) return Promise.resolve(getDemoTenantInvoiceSummaries());
   return loadSessionResource(keyFor(userId), fetchTenantInvoiceSummaries, {
     force,
     maxAgeMs: 60_000,

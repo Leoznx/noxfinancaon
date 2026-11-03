@@ -48,6 +48,7 @@ import {
   statusPagamentoLabel,
   subscriptionStatusLabel,
 } from "@/lib/asaas-payment";
+import { isDemoSession } from "@/lib/demo-session";
 import { manageAsaasSubscription, managePersistedAsaasPayment } from "@/lib/asaas-checkout";
 import {
   reissuePayment,
@@ -103,6 +104,7 @@ type Contrato = {
 
 function CarteiraCobrancas() {
   const { user } = useAuth();
+  const demoSession = isDemoSession();
   const userId = user?.id;
   const userEmail = user?.email;
   const userRole = user?.role;
@@ -143,6 +145,7 @@ function CarteiraCobrancas() {
   useEffect(() => {
     if (!userId) return;
     void carregar(false).catch(() => toast.error("Não foi possível carregar a carteira de cobranças."));
+    if (demoSession) return;
     let refreshTimer: number | undefined;
     const scheduleRefresh = () => {
       if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
@@ -177,9 +180,13 @@ function CarteiraCobrancas() {
       if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
       supabase.removeChannel(channel);
     };
-  }, [carregar, userId]);
+  }, [carregar, demoSession, userId]);
 
   async function atualizarStatus(fatura: any) {
+    if (demoSession) {
+      toast.info("A atualização foi simulada. Nenhuma cobrança real foi consultada.");
+      return;
+    }
     const method = fatura.payment_method || fatura.asaas_payment?.payment_method;
     if (method === "credit_card") {
       setAtualizandoId(fatura.id);
@@ -219,6 +226,10 @@ function CarteiraCobrancas() {
     fatura: any,
     action: "resend_email" | "resend_whatsapp" | "reissue" | "reissue_initial" | "reissue_checkout",
   ) {
+    if (demoSession) {
+      toast.info("A ação foi simulada e não enviou nenhuma cobrança real.");
+      return;
+    }
     const key = `${fatura.id}:${action}`;
     setAcaoId(key);
     try {
@@ -389,6 +400,12 @@ function CarteiraCobrancas() {
 
   async function gerarConsolidado() {
     if (!selecionadas.size) return;
+    if (demoSession) {
+      toast.success("Boleto consolidado simulado. Nenhuma cobrança real foi criada.");
+      setConfirmandoAberto(false);
+      setSelecionadas(new Set());
+      return;
+    }
     setGerando(true);
     try {
       const { data, error } = await supabase.functions.invoke("asaas-create-consolidated-invoice", {
@@ -411,6 +428,10 @@ function CarteiraCobrancas() {
   }
 
   async function gerarSegundaViaLote(batch: ConsolidatedBillingBatch, method: "boleto" | "pix") {
+    if (demoSession) {
+      toast.info("Segunda via simulada. Nenhum pagamento real foi alterado.");
+      return;
+    }
     setReissuingBatch(`${batch.id}:${method}`);
     try {
       const payment = await reissuePayment({ batchId: batch.id, method });

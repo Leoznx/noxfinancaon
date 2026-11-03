@@ -44,6 +44,8 @@ import {
   type TenantPaymentSource,
   type TenantSubscriptionSource,
 } from "@/lib/tenant-billing";
+import { isDemoSession } from "@/lib/demo-session";
+import { getDemoTenantBilling } from "@/lib/demo-portal-data";
 
 export const Route = createFileRoute("/inquilino/faturas")({
   component: () => (
@@ -90,6 +92,7 @@ function statusInfo(item: TenantBillingItem, actionableId?: string) {
 
 function FaturasInquilino() {
   const { user } = useAuth();
+  const demoSession = isDemoSession();
   const [consultations, setConsultations] = useState<TenantBillingConsultation[]>([]);
   const [items, setItems] = useState<TenantBillingItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -101,6 +104,13 @@ function FaturasInquilino() {
   const loadBilling = useCallback(async () => {
     if (!user?.id) return;
     setErrorMessage(null);
+
+    if (demoSession) {
+      const demo = getDemoTenantBilling();
+      setConsultations(demo.consultations);
+      setItems(demo.items);
+      return;
+    }
 
     try {
       const consultationSelect =
@@ -172,12 +182,14 @@ function FaturasInquilino() {
           : "Não foi possível carregar suas faturas agora.",
       );
     }
-  }, [user?.email, user?.id]);
+  }, [demoSession, user?.email, user?.id]);
 
   useEffect(() => {
     if (!user?.id) return;
     setLoading(true);
     loadBilling().finally(() => setLoading(false));
+
+    if (demoSession) return;
 
     const channel = supabase
       .channel(`tenant-billing-${user.id}`)
@@ -215,7 +227,7 @@ function FaturasInquilino() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [loadBilling, user?.id]);
+  }, [demoSession, loadBilling, user?.id]);
 
   const contracts = useMemo<BillingContract[]>(
     () =>
@@ -275,6 +287,10 @@ function FaturasInquilino() {
   }
 
   async function refreshStatus(item: TenantBillingItem) {
+    if (demoSession) {
+      toast.info("Status demonstrativo: nenhuma cobrança real foi consultada.");
+      return;
+    }
     if (item.method !== "credit_card" && !item.providerPaymentId) return;
     setRefreshingId(item.id);
     try {
@@ -302,6 +318,10 @@ function FaturasInquilino() {
   }
 
   async function reissue(item: TenantBillingItem, method: "boleto" | "pix") {
+    if (demoSession) {
+      toast.info("Segunda via simulada. Nenhuma cobrança real foi criada.");
+      return;
+    }
     if (!item.invoiceId) {
       toast.error("Esta cobrança avulsa não possui uma mensalidade atualizável.");
       return;
@@ -331,6 +351,10 @@ function FaturasInquilino() {
   }
 
   async function reissueInitialCheckout(item: TenantBillingItem) {
+    if (demoSession) {
+      toast.info("Link demonstrativo: nenhum checkout real foi gerado.");
+      return;
+    }
     const key = `${item.id}:initial-checkout`;
     setReissuingId(key);
     try {
@@ -347,6 +371,10 @@ function FaturasInquilino() {
   }
 
   async function reissueRecurringCheckout(item: TenantBillingItem) {
+    if (demoSession) {
+      toast.info("Link demonstrativo: nenhum checkout real foi gerado.");
+      return;
+    }
     const key = `${item.id}:recurring-checkout`;
     setReissuingId(key);
     try {
@@ -363,6 +391,10 @@ function FaturasInquilino() {
   }
 
   async function resend(item: TenantBillingItem, channel: "email" | "whatsapp") {
+    if (demoSession) {
+      toast.info("Envio simulado. Nenhuma mensagem real foi disparada.");
+      return;
+    }
     const key = `${item.id}:${channel}`;
     setNotifyingId(key);
     try {

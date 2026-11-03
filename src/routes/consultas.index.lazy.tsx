@@ -36,6 +36,7 @@ import {
   getClosedContractPolicyId,
   isClosedContractConsultation,
 } from "@/lib/credit-status-presentation";
+import { isDemoRecordId } from "@/lib/demo-portal-data";
 
 export const Route = createLazyFileRoute("/consultas/")({
   component: () => (
@@ -377,7 +378,15 @@ function Consultas() {
                       })}
                     </span>
                   </div>
-                  <Link to={detailsHref as any} className="shrink-0">
+                  <Link
+                    to={detailsHref as any}
+                    className="shrink-0"
+                    onClick={(event) => {
+                      if (!isDemoRecordId(c.id)) return;
+                      event.preventDefault();
+                      toast.info("Consulta demonstrativa: este histórico não altera dados reais.");
+                    }}
+                  >
                     <Button
                       variant="ghost"
                       size="sm"
@@ -531,7 +540,14 @@ function Consultas() {
                         </div>
                       </td>
                       <td className="px-8 py-6 text-right">
-                        <Link to={detailsHref as any}>
+                        <Link
+                          to={detailsHref as any}
+                          onClick={(event) => {
+                            if (!isDemoRecordId(c.id)) return;
+                            event.preventDefault();
+                            toast.info("Consulta demonstrativa: este histórico não altera dados reais.");
+                          }}
+                        >
                           <Button
                             variant="ghost"
                             size="sm"
