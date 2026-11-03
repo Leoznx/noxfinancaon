@@ -30,6 +30,8 @@ import {
 
 import {
   BOLETO_ISSUANCE_LEAD_DAYS,
+  DEFERRED_INITIAL_PAYMENT_DAYS,
+  initialContractPaymentDueDate,
   initialBoletoDueDate,
   monthlyDueDate,
   normalizeBillingDueDay,
@@ -186,6 +188,53 @@ test("vencimento escolhido aceita somente as seis opcoes e usa a proxima ocorren
   assert.equal(nextContractBillingDueDate("2026-10-20", 20), "2026-10-20");
   assert.equal(nextContractBillingDueDate("2026-10-21", 20), "2026-11-20");
   assert.equal(nextContractBillingDueDate("2026-12-29", 5), "2027-01-05");
+});
+
+test("primeira parcela vence no ato ou em ate 72 horas e as demais usam o dia escolhido", () => {
+  assert.equal(DEFERRED_INITIAL_PAYMENT_DAYS, 3);
+  assert.equal(initialContractPaymentDueDate("2026-11-03", false), "2026-11-03");
+  assert.equal(initialContractPaymentDueDate("2026-11-03", true), "2026-11-06");
+  assert.equal(initialContractPaymentDueDate("2026-12-30", true), "2027-01-02");
+  assert.deepEqual(
+    buildBillingSchedule({
+      consultationId: "consulta-ciclo-72h",
+      months: 3,
+      initialDueDate: "2026-11-06",
+      monthlyDueDay: 25,
+    }).map((item) => [item.installmentNumber, item.dueDate]),
+    [
+      [1, "2026-11-06"],
+      [2, "2026-12-25"],
+      [3, "2027-01-25"],
+    ],
+  );
+});
+
+test("endpoints separam a primeira parcela da ancora mensal sem alterar cobrancas existentes", () => {
+  const createPayment = readFileSync(
+    new URL("../supabase/functions/asaas-create-payment/index.ts", import.meta.url),
+    "utf8",
+  );
+  const installmentPlan = readFileSync(
+    new URL("../supabase/functions/asaas-create-installment-plan/index.ts", import.meta.url),
+    "utf8",
+  );
+  const subscription = readFileSync(
+    new URL("../supabase/functions/asaas-create-subscription/index.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(createPayment, /initialContractPaymentDueDate\(billingToday, deferred\)/);
+  assert.match(createPayment, /daysAfterDueDateToRegistrationCancellation = 0/);
+  assert.doesNotMatch(
+    installmentPlan,
+    /Number\(String\(initialInvoice\.vencimento \|\| ""\)\.slice\(-2\)\)/,
+  );
+  assert.match(
+    subscription,
+    /initialContractPaymentDueDate\(saoPauloClock\(\)\.date, mode === "checkout"\)/,
+  );
+  assert.match(subscription, /existing\?\.initial_invoice\?\.vencimento/);
 });
 
 test("valores separam mensal, taxa inicial e seguro incendio", () => {

@@ -121,13 +121,17 @@ serve(async (req) => {
         400,
       );
     }
+    const frozenBillingDueDay = normalizeContractBillingDueDay(
+      initialInvoice.components?.billingDueDay ?? consulta.billing_due_day,
+    );
     if (
       requestedBillingDueDay &&
-      Number(String(initialInvoice.vencimento || "").slice(-2)) !== requestedBillingDueDay
+      frozenBillingDueDay &&
+      frozenBillingDueDay !== requestedBillingDueDay
     ) {
       return jsonResponse(
         req,
-        { ok: false, error: "O vencimento da cobrança inicial não corresponde ao dia escolhido." },
+        { ok: false, error: "O vencimento mensal do contrato não corresponde ao dia escolhido." },
         409,
       );
     }

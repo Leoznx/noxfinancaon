@@ -4,6 +4,7 @@ export const CONTRACT_BILLING_DUE_DAYS = [5, 10, 15, 20, 25, 28] as const;
 export const BILLING_FINE_PERCENT = 2;
 export const BILLING_MONTHLY_INTEREST_PERCENT = 1;
 export const BOLETO_ISSUANCE_LEAD_DAYS = 7;
+export const DEFERRED_INITIAL_PAYMENT_DAYS = 3;
 export const CONSOLIDATABLE_INVOICE_STATUSES = [
   "awaiting_consolidation",
   "pending",
@@ -144,6 +145,15 @@ export function nextContractBillingDueDate(today: string, dueDay: number) {
     (nextMonthIndex % 12) + 1,
     dueDay,
   );
+}
+
+/**
+ * A primeira parcela nao usa a ancora mensal do contrato. Pagamento imediato
+ * vence no ato; quando o usuario escolhe pagar depois, o prazo maximo e de
+ * tres dias corridos (72 horas na granularidade de data aceita pelo Asaas).
+ */
+export function initialContractPaymentDueDate(today: string, deferPayment: boolean) {
+  return deferPayment ? addIsoDays(today, DEFERRED_INITIAL_PAYMENT_DAYS) : today;
 }
 
 /**

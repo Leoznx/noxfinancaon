@@ -17,7 +17,6 @@ import {
   resolvePaymentRecipientFromContract,
   sanitizeAsaasResponse,
   supabaseAdmin,
-  todayDate,
   toMoney,
 } from "../_shared/asaas.ts";
 import { ensureAsaasCustomer } from "../_shared/asaas-customer.ts";
@@ -54,9 +53,11 @@ import {
 } from "../_shared/contract-billing.ts";
 import { ensurePendingPolicy } from "../_shared/d4sign.ts";
 import {
-  nextContractBillingDueDate,
+  DEFERRED_INITIAL_PAYMENT_DAYS,
+  initialContractPaymentDueDate,
   normalizeContractBillingDueDay,
   resolveBillingDueDay,
+  saoPauloClock,
 } from "../_shared/billing-automation.ts";
 
 type Action = "create" | "refresh" | "resend_email" | "resend_whatsapp";
@@ -390,16 +391,22 @@ serve(async (req) => {
     } else if (action !== "create" && existingInvoice && isInactiveInvoice(existingInvoice)) {
       existingInvoice = null;
     }
+    const frozenInitialBillingDueDay = existingInvoice
+      ? normalizeContractBillingDueDay(
+          existingInvoice.components?.billingDueDay ?? storedBillingDueDay,
+        )
+      : null;
     if (
       existingInvoice &&
       requestedBillingDueDay &&
-      Number(String(existingInvoice.vencimento || "").slice(-2)) !== requestedBillingDueDay
+      frozenInitialBillingDueDay &&
+      frozenInitialBillingDueDay !== requestedBillingDueDay
     ) {
       return jsonResponse(
         req,
         {
           ok: false,
-          error: "O vencimento desta cobrança já foi definido e não pode ser alterado.",
+          error: "O vencimento mensal deste contrato já foi definido e não pode ser alterado.",
         },
         409,
       );
@@ -578,18 +585,25 @@ serve(async (req) => {
       );
     }
 
+    const billingToday = saoPauloClock().date;
+    const expectedInitialDueDate = initialContractPaymentDueDate(billingToday, deferred);
     if (body.dueDate) {
-      const dueDateError = billingDueDateError(body.dueDate, todayDate());
+      const dueDateError = billingDueDateError(body.dueDate, billingToday);
       if (dueDateError) return jsonResponse(req, { ok: false, error: dueDateError }, 400);
+      if (body.dueDate !== expectedInitialDueDate) {
+        return jsonResponse(
+          req,
+          {
+            ok: false,
+            error: deferred
+              ? "A primeira parcela adiada deve vencer em ate 72 horas."
+              : "A primeira parcela de pagamento imediato deve vencer hoje.",
+          },
+          400,
+        );
+      }
     }
-    const dueDate = body.dueDate || nextContractBillingDueDate(todayDate(), billingDueDay);
-    if (Number(dueDate.slice(-2)) !== billingDueDay) {
-      return jsonResponse(
-        req,
-        { ok: false, error: "A data informada não corresponde ao dia de vencimento escolhido." },
-        400,
-      );
-    }
+    const dueDate = body.dueDate || expectedInitialDueDate;
     if (requestedBillingDueDay || storedBillingDueDay) {
       const { error: billingDueDayError } = await supabaseAdmin()
         .from("consultas_credito")
@@ -668,6 +682,9 @@ serve(async (req) => {
     const components = {
       deferred,
       fireMode,
+      billingDueDay,
+      initialPaymentDeadlineDays: deferred ? DEFERRED_INITIAL_PAYMENT_DAYS : 0,
+      initialPaymentIntent: deferred ? "pay_later" : "pay_now",
       initialAmount: expectedAmount,
       monthlyAmount,
       includesFirstMonthlyPayment: true,
@@ -751,6 +768,9 @@ serve(async (req) => {
       description: `NOX Fianca - inicial ${String(proposalId).slice(0, 8).toUpperCase()}`,
       externalReference,
     };
+    if (paymentMethod === "boleto") {
+      providerPayload.daysAfterDueDateToRegistrationCancellation = 0;
+    }
 
     if (paymentMethod === "credit_card" && !raw) {
       const card = body.creditCard || {};

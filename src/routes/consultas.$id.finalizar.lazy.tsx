@@ -1840,11 +1840,11 @@ function ResumoPropostaLoft(p: any) {
                     <Clock size={20} className="mt-0.5 shrink-0 text-neutral-800" />
                     <div>
                       <h4 className="text-sm font-bold text-neutral-950">
-                        Escolha o dia do vencimento
+                        Escolha o dia das próximas parcelas
                       </h4>
                       <p className="mt-1 text-xs leading-relaxed text-slate-600">
-                        A primeira cobrança e as mensalidades seguintes usarão o mesmo dia. Se o dia
-                        deste mês já passou, o primeiro vencimento será no mês seguinte.
+                        A primeira parcela vence hoje em &quot;Pagar agora&quot; ou em até 72 horas em
+                        &quot;Pagar depois&quot;. A partir da segunda parcela, o contrato usa o dia escolhido.
                       </p>
                     </div>
                   </div>
@@ -1877,8 +1877,8 @@ function ResumoPropostaLoft(p: any) {
                     <strong>
                       A cobertura só fica ativa após a confirmação do primeiro pagamento.
                     </strong>{" "}
-                    Em &quot;Pagar agora&quot;, o pagamento pode ser antecipado; o dia escolhido
-                    continua sendo a referência dos vencimentos do contrato.
+                    A primeira parcela deve ser paga no ato ou em até 72 horas. O dia escolhido
+                    passa a valer a partir da segunda parcela.
                   </p>
                 </div>
 
@@ -2112,7 +2112,7 @@ function ResumoPropostaLoft(p: any) {
                       )}
                       {billingDueDay && (
                         <p className="mt-1 text-xs text-neutral-300">
-                          Vencimento escolhido: dia {billingDueDay}.
+                          Próximas parcelas: todo dia {billingDueDay}.
                         </p>
                       )}
                     </div>

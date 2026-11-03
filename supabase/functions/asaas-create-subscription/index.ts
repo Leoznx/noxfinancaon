@@ -50,9 +50,11 @@ import {
   subscriptionStatusFromEvent,
 } from "../_shared/billing-state.ts";
 import {
-  nextContractBillingDueDate,
+  DEFERRED_INITIAL_PAYMENT_DAYS,
+  initialContractPaymentDueDate,
   normalizeContractBillingDueDay,
   resolveBillingDueDay,
+  saoPauloClock,
 } from "../_shared/billing-automation.ts";
 import {
   claimBillingOperation,
@@ -1173,7 +1175,9 @@ serve(async (req) => {
     // Cada criacao/tentativa direta exige que o navegador envie novamente os
     // dados do cartao; PAN/CVV nunca sao recuperados de banco, log ou resposta.
     const directSensitive = mode === "direct" ? directCardPayload(body, req) : null;
-    const initialDueDate = nextContractBillingDueDate(todayDate(), dueDay);
+    const initialDueDate =
+      existing?.initial_invoice?.vencimento ||
+      initialContractPaymentDueDate(saoPauloClock().date, mode === "checkout");
     const computedRecurrenceStart = addCalendarMonths(initialDueDate, 1, dueDay);
     const recurrenceStartDate = existing?.recurrence_start_date || computedRecurrenceStart;
     const recurrenceEndDate =
@@ -1411,16 +1415,20 @@ serve(async (req) => {
         .select("*, asaas_payment:asaas_payments(*)")
         .eq("billing_key", initialKey)
         .maybeSingle();
+      const frozenInitialBillingDueDay = normalizeContractBillingDueDay(
+        existingInitial?.components?.billingDueDay ?? storedBillingDueDay,
+      );
       if (
         existingInitial &&
         requestedBillingDueDay &&
-        Number(String(existingInitial.vencimento || "").slice(-2)) !== requestedBillingDueDay
+        frozenInitialBillingDueDay &&
+        frozenInitialBillingDueDay !== requestedBillingDueDay
       ) {
         return jsonResponse(
           req,
           {
             ok: false,
-            error: "O vencimento da cobrança inicial já foi definido e não pode ser alterado.",
+            error: "O vencimento mensal deste contrato já foi definido e não pode ser alterado.",
           },
           409,
         );
@@ -1755,6 +1763,8 @@ serve(async (req) => {
             fireMode,
             billingDueDay: dueDay,
             initialDueDate,
+            initialPaymentDeadlineDays: 0,
+            initialPaymentIntent: "pay_now",
             initialAmount: expectedInitial,
             monthlyAmount: expectedMonthly,
             includesFirstMonthlyPayment: true,
@@ -2074,6 +2084,8 @@ serve(async (req) => {
               fireMode,
               billingDueDay: dueDay,
               initialDueDate,
+              initialPaymentDeadlineDays: DEFERRED_INITIAL_PAYMENT_DAYS,
+              initialPaymentIntent: "pay_later",
               initialAmount: expectedInitial,
               monthlyAmount: expectedMonthly,
               includesFirstMonthlyPayment: true,
@@ -2101,7 +2113,7 @@ serve(async (req) => {
             .from("faturas_inquilino")
             .update({
               installment_total: contractMonths,
-              vencimento: todayDate(),
+              vencimento: invoice.vencimento || initialDueDate,
               valor: expectedInitial,
               status: "pending",
               payment_method: "credit_card",
@@ -2111,6 +2123,10 @@ serve(async (req) => {
               components: {
                 ...(invoice.components || {}),
                 fireMode,
+                billingDueDay: dueDay,
+                initialDueDate: invoice.vencimento || initialDueDate,
+                initialPaymentDeadlineDays: DEFERRED_INITIAL_PAYMENT_DAYS,
+                initialPaymentIntent: "pay_later",
                 initialAmount: expectedInitial,
                 monthlyAmount: expectedMonthly,
                 includesFirstMonthlyPayment: true,
