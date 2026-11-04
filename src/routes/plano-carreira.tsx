@@ -4,6 +4,8 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useState, useEffect } from 'react';
 import { useAuth } from "@/components/AuthProvider";
 import { loadCareerContractCount, peekCareerContractCount } from "@/lib/career-progress";
+import { getDemoCareer } from "@/lib/demo-career";
+import { isDemoSession } from "@/lib/demo-session";
 import { Medal, Award, Trophy, Gem, AlertCircle, Check, RefreshCw, ChevronRight } from 'lucide-react';
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -162,7 +164,7 @@ function CardProgresso({ nivelAtual, proximoNivel, contratosAtivos, faltam, tipo
       </div>
 
       <div className="space-y-3">
-        <div className="relative h-4 bg-white/5 rounded-full overflow-hidden p-0.5 border border-white/5">
+        <div role="progressbar" aria-label="Progresso para o próximo nível" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progresso} className="relative h-4 bg-white/5 rounded-full overflow-hidden p-0.5 border border-white/5">
           <div 
             className="h-full bg-gradient-to-r from-yellow-500 to-yellow-300 rounded-full transition-all duration-1000 shadow-[0_0_20px_rgba(250,214,10,0.4)]"
             style={{ width: `${progresso}%` }}
@@ -298,11 +300,13 @@ function PlanoCarreiraPage() {
   const tipoPerfil = (user?.role || 'corretor') as 'corretor' | 'imobiliaria' | 'proprietario';
   const textos = textosPorPerfil[tipoPerfil] || textosPorPerfil.corretor;
   
-  const cachedCount = user?.id ? peekCareerContractCount(user.id, tipoPerfil) : undefined;
+  const demoCareer = getDemoCareer(user, isDemoSession());
+  const cachedCount = !demoCareer && user?.id ? peekCareerContractCount(user.id, tipoPerfil) : undefined;
   const [contratosAtivos, setContratosAtivos] = useState<number | null>(() => cachedCount ?? null);
   const [erro, setErro] = useState(false);
   
   useEffect(() => {
+    if (demoCareer) return;
     let cancelado = false;
     
     async function carregar(force = false) {
@@ -327,10 +331,16 @@ function PlanoCarreiraPage() {
       cancelado = true;
       window.removeEventListener('focus', onFocus);
     };
-  }, [user?.id, tipoPerfil]);
+  }, [user?.id, tipoPerfil, demoCareer]);
   
-  const niveis = NIVEIS_FALLBACK[tipoPerfil] || NIVEIS_FALLBACK.corretor;
-  const count = contratosAtivos ?? 0;
+  const niveis = demoCareer
+    ? demoCareer.levels.map(nivel => ({
+        nome: nivel.nome_nivel, min: nivel.min_contratos, max: nivel.max_contratos,
+        percentual: nivel.percentual_comissao, bonusRenovacao: nivel.bonus_renovacao,
+      }))
+    : NIVEIS_FALLBACK[tipoPerfil] || NIVEIS_FALLBACK.corretor;
+  const displayedCount = demoCareer?.activeContracts ?? contratosAtivos;
+  const count = displayedCount ?? 0;
   const nivelAtual = niveis.find(n => 
     count >= n.min && (n.max === null || count <= n.max)
   ) || niveis[0];
@@ -348,9 +358,9 @@ function PlanoCarreiraPage() {
               {textos.subtitulo}
             </p>
           </div>
-          {contratosAtivos !== null && <BadgeNivelAtual nivel={nivelAtual.nome} contratos={contratosAtivos} />}
+          {displayedCount !== null && <BadgeNivelAtual nivel={nivelAtual.nome} contratos={displayedCount} />}
         </header>
-        {contratosAtivos === null ? (
+        {displayedCount === null ? (
           <div className="rounded-2xl bg-neutral-900 p-6 text-white">
             <h2 className="text-xl font-black">Seu progresso</h2>
             <p className="mt-2 text-sm text-neutral-300">
@@ -361,7 +371,7 @@ function PlanoCarreiraPage() {
           <CardProgresso
             nivelAtual={nivelAtual}
             proximoNivel={proximoNivel}
-            contratosAtivos={contratosAtivos}
+            contratosAtivos={displayedCount}
             faltam={faltam}
             tipoPerfil={tipoPerfil}
           />
@@ -372,7 +382,7 @@ function PlanoCarreiraPage() {
             <CardNivel
               key={nivel.nome}
               nivel={nivel}
-              atual={contratosAtivos !== null && nivel.nome === nivelAtual.nome}
+              atual={displayedCount !== null && nivel.nome === nivelAtual.nome}
               tipoPerfil={tipoPerfil}
             />
           ))}

@@ -14,6 +14,7 @@ import { loadSessionResource, peekSessionResource } from "@/lib/session-resource
 import { loadAgencyScope } from "@/lib/agency-scope";
 import { executeSupabaseQuery } from "@/lib/supabase-query";
 import { isDemoSession } from "@/lib/demo-session";
+import { getDemoCareer } from "@/lib/demo-career";
 import {
   getDemoCommissionDashboard,
   getDemoConsultations,
@@ -246,6 +247,7 @@ export async function prefetchDashboardDataForHref(
     const { loadCobrancasAvulsas } = await import("@/lib/cobrancas-avulsas-data");
     await Promise.all([loadCarteiraCobrancas(user), loadCobrancasAvulsas(user)]);
   } else if (pathname === "/plano-carreira") {
+    if (getDemoCareer(user, isDemoSession())) return;
     const { loadCareerContractCount } = await import("@/lib/career-progress");
     await loadCareerContractCount(user.id, user.role);
   } else if (
