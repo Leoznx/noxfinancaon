@@ -22,6 +22,10 @@ import { useEssentialLoading } from "@/components/GlobalLoading";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { WithdrawalDetailsDialog } from "@/components/comissoes/WithdrawalDetailsDialog";
+import {
+  DemoWithdrawalRequestDialog,
+  type DemoWithdrawalData,
+} from "@/components/comissoes/DemoWithdrawalRequestDialog";
 import { WithdrawalRequestDialog } from "@/components/comissoes/WithdrawalRequestDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -45,6 +49,7 @@ import {
   type WithdrawalStatus,
 } from "@/lib/withdrawals";
 import { isDemoSession } from "@/lib/demo-session";
+import { maskDemoPixKey } from "@/lib/demo-withdrawal";
 
 export const Route = createLazyFileRoute("/minhas-comissoes")({
   component: () => (
@@ -216,10 +221,61 @@ function CommissionsPage() {
       return { label: "Saque em análise", disabled: true };
     }
     if (summary.withdrawal_action === "AVAILABLE" && summary.available_cents > 0) {
-      return { label: "Solicitar saque", disabled: false };
+      return { label: demoSession ? "Simular saque" : "Solicitar saque", disabled: false };
     }
     return { label: "Saldo indisponível", disabled: true };
-  }, [refreshing, summary.available_cents, summary.withdrawal_action]);
+  }, [demoSession, refreshing, summary.available_cents, summary.withdrawal_action]);
+
+  const completeDemoWithdrawal = useCallback(
+    (data: DemoWithdrawalData) => {
+      const withdrawalId = `demo-withdrawal-${Date.now()}`;
+      const amountCents = summary.available_cents;
+      const requestedAt = new Date().toISOString();
+      const simulatedWithdrawal: UserWithdrawal = {
+        id: withdrawalId,
+        amount_cents: amountCents,
+        fee_cents: 0,
+        net_amount_cents: amountCents,
+        status: "PENDING_REVIEW",
+        bank_name: data.bankName,
+        holder_name: data.holderName,
+        pix_key_type: data.pixKeyType,
+        pix_key_masked: maskDemoPixKey(data.pixKey),
+        requested_at: requestedAt,
+        approved_at: null,
+        paid_at: null,
+        rejected_at: null,
+        rejection_reason: null,
+        receipt_available: false,
+        contract_count: activeContracts.length,
+      };
+
+      setWithdrawals((current) => [simulatedWithdrawal, ...current]);
+      setCommissions((current) =>
+        current.map((commission) =>
+          commission.status === "AVAILABLE"
+            ? {
+                ...commission,
+                status: "RESERVED",
+                withdrawal_id: withdrawalId,
+                withdrawal_status: "PENDING_REVIEW",
+              }
+            : commission,
+        ),
+      );
+      setSummary((current) => ({
+        ...current,
+        available_cents: 0,
+        reserved_cents: current.reserved_cents + amountCents,
+        active_withdrawal_id: withdrawalId,
+        active_withdrawal_status: "PENDING_REVIEW",
+        withdrawal_action: "UNDER_REVIEW",
+      }));
+      setActiveTab("withdrawals");
+      toast.success("Saque simulado com sucesso. Nenhuma movimentação real foi criada.");
+    },
+    [activeContracts.length, summary.available_cents],
+  );
 
   if (loading) {
     return (
@@ -401,15 +457,24 @@ function CommissionsPage() {
         </Tabs>
       </div>
 
-      <WithdrawalRequestDialog
-        open={requestOpen}
-        onOpenChange={setRequestOpen}
-        availableCents={summary.available_cents}
-        onSuccess={async () => {
-          setActiveTab("withdrawals");
-          await load(true);
-        }}
-      />
+      {demoSession ? (
+        <DemoWithdrawalRequestDialog
+          open={requestOpen}
+          onOpenChange={setRequestOpen}
+          availableCents={summary.available_cents}
+          onSuccess={completeDemoWithdrawal}
+        />
+      ) : (
+        <WithdrawalRequestDialog
+          open={requestOpen}
+          onOpenChange={setRequestOpen}
+          availableCents={summary.available_cents}
+          onSuccess={async () => {
+            setActiveTab("withdrawals");
+            await load(true);
+          }}
+        />
+      )}
       <WithdrawalDetailsDialog
         withdrawalId={detailsId}
         open={Boolean(detailsId)}

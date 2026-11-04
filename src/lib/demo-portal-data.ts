@@ -11,6 +11,18 @@ export const DEMO_RECORD_PREFIX = "d3000000-0000-4000-8000-";
 
 const id = (value: number) => `${DEMO_RECORD_PREFIX}${String(value).padStart(12, "0")}`;
 
+export const DEMO_CONTRACT_NUMBERS = [
+  "2026-004812",
+  "2026-004967",
+  "2026-005103",
+  "2026-005284",
+  "2026-005419",
+  "2026-005588",
+] as const;
+
+const demoContractNumber = (index: number) =>
+  DEMO_CONTRACT_NUMBERS[index] ?? `2026-${String(6000 + index).padStart(6, "0")}`;
+
 function shiftedDate(days: number, dateOnly = false) {
   const value = new Date();
   value.setHours(12, 0, 0, 0);
@@ -94,7 +106,7 @@ export function getDemoPolicies() {
   return people.slice(0, 6).map((person, index) => ({
     id: id(101 + index),
     demo_record: true,
-    numero: `NOX-DEMO-${String(index + 1).padStart(4, "0")}`,
+    numero: demoContractNumber(index),
     status: index === 4 ? "emitida_pendente" : "ativa",
     vigencia_inicio: shiftedDate(-(35 + index * 12)),
     vigencia_fim: shiftedDate(330 - index * 12),
@@ -121,7 +133,7 @@ export function getDemoTenantInvoiceSummaries(): TenantInvoiceSummary[] {
   ];
   return people.slice(0, 6).map((person, index) => ({
     apolice_id: id(101 + index),
-    numero: `NOX-DEMO-${String(index + 1).padStart(4, "0")}`,
+    numero: demoContractNumber(index),
     inquilino_nome: person[0],
     inquilino_doc: person[1],
     cidade: `${person[2]}, ${person[3]}`,
@@ -269,9 +281,29 @@ export function getDemoCommissionDashboard() {
     active_contracts: contracts.filter((contract) => contract.status === "ativa").length,
     active_withdrawal_id: null,
     active_withdrawal_status: null,
-    withdrawal_action: "UNAVAILABLE",
+    withdrawal_action: "AVAILABLE",
   };
-  return { summary, commissions, withdrawals, contracts, level: null };
+  return {
+    summary,
+    commissions,
+    withdrawals,
+    contracts,
+    level: {
+      nivelAtual: {
+        id: id(990),
+        nome_nivel: "Bronze",
+        percentual_comissao: 1,
+        min_contratos: 0,
+      },
+      proximoNivel: {
+        id: id(991),
+        nome_nivel: "Prata",
+        percentual_comissao: 2,
+        min_contratos: 11,
+      },
+      contratosAtivos: summary.active_contracts,
+    },
+  };
 }
 
 function demoBillingItem(
@@ -350,5 +382,3 @@ export function getDemoTenantBilling(): {
     ),
   };
 }
-
-

@@ -55,7 +55,10 @@ test("corretores e comissões demonstram estados comerciais diferentes", () => {
   assert.ok(dashboard.commissions.length >= 5);
   assert.ok(dashboard.commissions.some((commission) => commission.status === "AVAILABLE"));
   assert.ok(dashboard.commissions.some((commission) => commission.status === "PAID"));
-  assert.equal(dashboard.summary.withdrawal_action, "UNAVAILABLE");
+  assert.equal(dashboard.summary.withdrawal_action, "AVAILABLE");
+  assert.equal(dashboard.summary.active_contracts, 5);
+  assert.equal(dashboard.level?.contratosAtivos, 5);
+  assert.ok(dashboard.contracts.every((contract) => /^2026-\d{6}$/.test(contract.number)));
 });
 
 test("o inquilino demo recebe vários contratos e faturas sem referências de cobrança externa", () => {
