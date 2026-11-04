@@ -1,5 +1,9 @@
 import { supabase } from "@/integrations/supabase/client";
-import { fetchTeamGoalProgress, type TeamGoalProgress } from "@/lib/admin-team-goals";
+import {
+  fetchTeamGoalProgress,
+  normalizeTeamGoalProgress,
+  type TeamGoalProgress,
+} from "@/lib/admin-team-goals";
 import { collaboratorDisplayName } from "@/lib/collaborator-name";
 
 export type TvSellerType = "sdr" | "closer";
@@ -54,6 +58,21 @@ export type TvRegistrationCelebration = {
 };
 
 const REQUEST_TIMEOUT_MS = 15_000;
+
+type NativeTvSnapshotResponse = {
+  ok?: boolean;
+  generatedAt?: string;
+  month?: number;
+  year?: number;
+  ranking?: Record<string, unknown>[];
+  goals?: Record<string, unknown>[];
+};
+
+type NativeTvCelebrationsResponse = {
+  ok?: boolean;
+  checkedAt?: string;
+  celebrations?: Record<string, unknown>[];
+};
 
 function finiteNumber(value: unknown): number {
   const parsed = Number(value ?? 0);
@@ -233,6 +252,26 @@ export async function fetchTvRegistrationCelebration(
   return row ? normalizeTvRegistrationCelebration(row as Record<string, unknown>) : null;
 }
 
+export async function fetchNativeTvRegistrationCelebrations(since: string): Promise<{
+  checkedAt: string;
+  celebrations: TvRegistrationCelebration[];
+}> {
+  const { data, error } = await supabase.functions.invoke("tv-display-data", {
+    body: { action: "celebrations", since },
+  });
+  if (error) throw error;
+  const response = (data ?? {}) as NativeTvCelebrationsResponse;
+  if (!response.ok || !response.checkedAt) {
+    throw new Error("Não foi possível sincronizar as comemorações da TV.");
+  }
+  return {
+    checkedAt: response.checkedAt,
+    celebrations: (response.celebrations ?? [])
+      .map(normalizeTvRegistrationCelebration)
+      .filter((item): item is TvRegistrationCelebration => Boolean(item)),
+  };
+}
+
 async function withTimeout<T>(promise: Promise<T>, message: string): Promise<T> {
   let timeout: ReturnType<typeof setTimeout> | undefined;
   const timeoutPromise = new Promise<never>((_, reject) => {
@@ -249,7 +288,29 @@ async function withTimeout<T>(promise: Promise<T>, message: string): Promise<T> 
 export async function fetchTvSalesDashboard(
   month: number,
   year: number,
+  options: { nativeApp?: boolean } = {},
 ): Promise<TvSalesDashboardSnapshot> {
+  if (options.nativeApp) {
+    const { data, error } = await withTimeout(
+      supabase.functions.invoke("tv-display-data", {
+        body: { action: "snapshot", month, year },
+      }),
+      "A sincronização da TV demorou mais que o esperado.",
+    );
+    if (error) throw error;
+    const response = (data ?? {}) as NativeTvSnapshotResponse;
+    if (!response.ok || !Array.isArray(response.ranking) || !Array.isArray(response.goals)) {
+      throw new Error("O painel da TV não devolveu um resultado válido.");
+    }
+    return {
+      generatedAt: response.generatedAt ?? new Date().toISOString(),
+      month: Number(response.month ?? month),
+      year: Number(response.year ?? year),
+      ranking: normalizeTvRanking(response.ranking),
+      goals: response.goals.map(normalizeTeamGoalProgress),
+    };
+  }
+
   const rankingPromise = (supabase as any)
     .rpc("ranking_vendedores", { p_month: month, p_year: year })
     .then((response: { data: Record<string, unknown>[] | null; error: Error | null }) => {
