@@ -1,3 +1,4 @@
+import { DemoSimulationBoundary } from "@/components/DemoSimulationBoundary";
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -50,7 +51,7 @@ import { getDemoTenantBilling } from "@/lib/demo-portal-data";
 export const Route = createFileRoute("/inquilino/faturas")({
   component: () => (
     <ProtectedRoute roles={["inquilino"]}>
-      <FaturasInquilino />
+      <DemoSimulationBoundary><FaturasInquilino /></DemoSimulationBoundary>
     </ProtectedRoute>
   ),
 });

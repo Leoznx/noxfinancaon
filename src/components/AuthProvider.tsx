@@ -1,3 +1,4 @@
+import { isDemoSimulationEmail } from "@/lib/demo-simulation";
 import React, { createContext, useContext, useState, useEffect, useRef } from "react";
 import { setCachedHeaderProfile } from "@/lib/profile-cache";
 import {
@@ -255,7 +256,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // contratos por CPF e gravar o telefone (bloqueados por RLS no signUp, já que
           // não há sessão até o e-mail ser confirmado).
           const cpf = authUser?.user_metadata?.cpf as string | undefined;
-          if (isFreshSignIn && role === "inquilino" && cpf) {
+          if (isFreshSignIn && role === "inquilino" && cpf && !isDemoSimulationEmail(email)) {
             import("@/lib/inquilino-signup.functions")
               .then(({ linkTenantByCpf }) =>
                 (linkTenantByCpf as any)({

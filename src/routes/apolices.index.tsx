@@ -1,3 +1,4 @@
+import { DemoSimulationBoundary } from "@/components/DemoSimulationBoundary";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useEssentialLoading } from "@/components/GlobalLoading";
@@ -18,7 +19,7 @@ export const Route = createFileRoute("/apolices/")({
   component: () => (
     <ProtectedRoute>
       <ErrorBoundary nome="apólices">
-        <ApolicesList />
+        <DemoSimulationBoundary><ApolicesList /></DemoSimulationBoundary>
       </ErrorBoundary>
     </ProtectedRoute>
   ),
