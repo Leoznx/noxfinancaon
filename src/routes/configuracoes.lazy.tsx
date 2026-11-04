@@ -9,7 +9,6 @@ import {
   Lock,
   Bell,
   Award,
-  FlaskConical,
   Camera,
   Monitor,
   Info,
@@ -52,6 +51,14 @@ export const Route = createLazyFileRoute("/configuracoes")({
 // visível porque é onde mora a verificação de documento (frente/verso/segurando
 // o documento), que todo perfil precisa preencher.
 const TABS_OCULTAS_PARA_INQUILINO = new Set(["financeiro", "comissoes"]);
+const TABS_CONFIGURACOES = new Set([
+  "perfil",
+  "conta",
+  "financeiro",
+  "seguranca",
+  "notificacoes",
+  "comissoes",
+]);
 
 function ConfiguracoesPage() {
   const search = useSearch({ from: "/configuracoes" });
@@ -73,7 +80,8 @@ function ConfiguracoesPage() {
   // Defesa extra contra deep-link direto (?tab=financeiro) numa aba que não existe
   // pra esse papel — evita renderizar um Tab* pensado pra corretor/imobiliária.
   useEffect(() => {
-    if (isInquilino && TABS_OCULTAS_PARA_INQUILINO.has(abaAtiva)) setAbaAtiva("perfil");
+    if (!TABS_CONFIGURACOES.has(abaAtiva)) setAbaAtiva("perfil");
+    else if (isInquilino && TABS_OCULTAS_PARA_INQUILINO.has(abaAtiva)) setAbaAtiva("perfil");
     else if (ocultarFinanceiro && abaAtiva === "financeiro") setAbaAtiva("perfil");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isInquilino, ocultarFinanceiro, abaAtiva]);
@@ -143,13 +151,6 @@ function ConfiguracoesPage() {
                   descricao="Regras de carreira"
                 />
               )}
-              <NavItemConfig
-                ativo={abaAtiva === "teste"}
-                onClick={() => setAbaAtiva("teste")}
-                icon={FlaskConical}
-                titulo="Teste"
-                descricao="Área de testes"
-              />
             </nav>
           </aside>
 
@@ -161,7 +162,6 @@ function ConfiguracoesPage() {
             {abaAtiva === "seguranca" && <TabSeguranca />}
             {abaAtiva === "notificacoes" && <TabNotificacoes />}
             {!isInquilino && abaAtiva === "comissoes" && <TabComissoesNivel />}
-            {abaAtiva === "teste" && <TabTeste />}
           </main>
         </div>
       </div>
@@ -209,14 +209,6 @@ function CardSecao({ titulo, descricao, children }: any) {
       </div>
       <div className="p-8">{children}</div>
     </Card>
-  );
-}
-
-function TabTeste() {
-  return (
-    <CardSecao titulo="Teste" descricao="Área reservada para testes.">
-      <p className="text-sm text-neutral-500 font-medium">Esta é a aba de teste.</p>
-    </CardSecao>
   );
 }
 
