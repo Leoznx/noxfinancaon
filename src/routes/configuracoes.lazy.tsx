@@ -9,6 +9,7 @@ import {
   Lock,
   Bell,
   Award,
+  FlaskConical,
   Camera,
   Monitor,
   Info,
@@ -142,6 +143,13 @@ function ConfiguracoesPage() {
                   descricao="Regras de carreira"
                 />
               )}
+              <NavItemConfig
+                ativo={abaAtiva === "teste"}
+                onClick={() => setAbaAtiva("teste")}
+                icon={FlaskConical}
+                titulo="Teste"
+                descricao="Área de testes"
+              />
             </nav>
           </aside>
 
@@ -153,6 +161,7 @@ function ConfiguracoesPage() {
             {abaAtiva === "seguranca" && <TabSeguranca />}
             {abaAtiva === "notificacoes" && <TabNotificacoes />}
             {!isInquilino && abaAtiva === "comissoes" && <TabComissoesNivel />}
+            {abaAtiva === "teste" && <TabTeste />}
           </main>
         </div>
       </div>
@@ -200,6 +209,14 @@ function CardSecao({ titulo, descricao, children }: any) {
       </div>
       <div className="p-8">{children}</div>
     </Card>
+  );
+}
+
+function TabTeste() {
+  return (
+    <CardSecao titulo="Teste" descricao="Área reservada para testes.">
+      <p className="text-sm text-neutral-500 font-medium">Esta é a aba de teste.</p>
+    </CardSecao>
   );
 }
 
