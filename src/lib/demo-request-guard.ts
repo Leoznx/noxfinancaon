@@ -1,5 +1,18 @@
 import { isDemoSimulationEmail } from "./demo-simulation";
 
+// Financial/contract lookups can continue after a real-to-demo session switch.
+// Deny them at dispatch as well as at the route/loader boundary.
+const demoBlockedReadTables = new Set([
+  "niveis_perfil",
+  "consultas_credito",
+  "proprietarios",
+  "imoveis",
+  "imobiliarias",
+  "apolices",
+  "faturas_inquilino",
+  "asaas_payments",
+]);
+
 export const DEMO_OPERATION_BLOCKED =
   "Operação real bloqueada para conta demonstrativa. Use o simulador local.";
 
@@ -52,7 +65,8 @@ export function createDemoRequestGuard(upstream: typeof fetch) {
       const tableRead =
         ["GET", "HEAD"].includes(method) &&
         /^\/rest\/v1\/[^/]+$/.test(url.pathname) &&
-        !url.pathname.endsWith("/rpc");
+        !url.pathname.endsWith("/rpc") &&
+        !demoBlockedReadTables.has(url.pathname.split("/").pop() ?? "");
       if (!authRead && !authLifecycle && !tableRead) {
         return new Response(
           JSON.stringify({ message: DEMO_OPERATION_BLOCKED, code: "DEMO_OPERATION_BLOCKED" }),

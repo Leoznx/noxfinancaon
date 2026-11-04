@@ -41,12 +41,22 @@ if (Platform.OS === 'web' && typeof window !== 'undefined') {
 }
 `,
 );
+const sdk = resolve(root, "src/lib/supabase.ts");
+writeFileSync(
+  sdk,
+  readFileSync(sdk, "utf8") +
+    `
+// TEST ONLY: controlled session transitions against the intercepted fixture.
+if (typeof window !== 'undefined') (globalThis as any).__NOX_DEMO_TEST_AUTH__ = supabase;
+`,
+);
 console.log("Disposable instrumented checkout:", root);
 execFileSync(
   process.execPath,
   [
     resolve(root, "node_modules/expo/bin/cli"),
     "export",
+    "--clear",
     "--platform",
     "web",
     "--output-dir",

@@ -5,6 +5,43 @@ import assert from "node:assert/strict";
 import { validateFixtureOrigin } from "./demo-browser-fixture-origin.mjs";
 import { serveFixtureResponse } from "./demo-browser-fixture-response.mjs";
 const mobile = process.env.NOX_DEMO_SURFACE === "mobile";
+const commissions = process.env.NOX_DEMO_FLOW === "commissions";
+if (process.env.NOX_DEMO_FLOW && !commissions) throw new Error("Unknown NOX_DEMO_FLOW");
+async function completeCommissionWithdrawal(page) {
+  await page
+    .getByText("Comissões demonstrativas", { exact: true })
+    .waitFor({ timeout: 60000 })
+    .catch(async (error) => {
+      console.error(await page.locator("body").innerText());
+      throw error;
+    });
+  assert.equal(await page.getByText(/^DEMO-2026-/).count(), 15);
+  await page.getByRole("button", { name: "Sacar (simulação)", exact: true }).click();
+  await page.getByText("Saque fictício", { exact: true }).waitFor();
+  assert.equal(await page.locator("input,textarea").count(), 0, "no personal-data inputs");
+  assert.equal(
+    await page.getByRole("button", { name: "Confirmar saque fictício", exact: true }).isDisabled(),
+    true,
+  );
+  await page.getByRole("button", { name: "Cancelar", exact: true }).click();
+  await page.getByRole("button", { name: "Sacar (simulação)", exact: true }).click();
+  for (const label of ["Chave Pix fictícia", "Titular fictício", "Banco fictício"]) {
+    if (mobile) await page.getByRole("button", { name: label, exact: true }).click();
+    else await page.getByLabel(label, { exact: true }).selectOption({ index: 1 });
+  }
+  await page.getByRole("button", { name: "Confirmar saque fictício", exact: true }).click();
+  await page.getByText(/Saque simulado concluído/).waitFor();
+  assert.equal(
+    await page.getByRole("button", { name: "Sacar (simulação)", exact: true }).isDisabled(),
+    true,
+  );
+  await page.getByRole("button", { name: "Reiniciar demonstração", exact: true }).click();
+  assert.equal(await page.getByText(/Saque simulado concluído/).count(), 0);
+  assert.equal(
+    await page.getByRole("button", { name: "Sacar (simulação)", exact: true }).isEnabled(),
+    true,
+  );
+}
 const transitionProbe = process.env.NOX_TEST_TRANSITION_PROBE || "";
 const supportedTransitionProbes = [
   "local-mutation",
@@ -19,7 +56,7 @@ const supportedTransitionProbes = [
 ];
 if (mobile && transitionProbe)
   throw new Error(
-    "NOX_TEST_TRANSITION_PROBE is unsupported for mobile: no mobile transition scenarios exist.",
+    "NOX_TEST_TRANSITION_PROBE is unsupported for mobile: mobile transition probes are not implemented.",
   );
 if (transitionProbe && !supportedTransitionProbes.includes(transitionProbe))
   throw new Error("Unknown NOX_TEST_TRANSITION_PROBE: refusing an unexecuted negative control.");
@@ -35,14 +72,16 @@ for (const role of ["proprietario", "corretor", "imobiliaria", "inquilino"])
   for (const marker of [false, true]) scenarios.push({ role, marker });
 scenarios.push(
   { role: "proprietario", marker: true, real: true },
-  { role: "inquilino", marker: true, real: true },
+  { role: commissions ? "imobiliaria" : "inquilino", marker: true, real: true },
   { role: "inquilino", marker: true, denied: true },
   ...(!mobile
     ? [
         { role: "proprietario", marker: false, real: true, consent: true },
         { role: "proprietario", marker: false, real: true, transition: true },
       ]
-    : []),
+    : commissions
+      ? [{ role: "proprietario", marker: false, real: true, transition: true }]
+      : []),
 );
 const selectedScenarios = scenarios.filter((item) =>
   transitionProbe ? item.transition : !process.env.NOX_TEST_REAL_ONLY || item.real,
@@ -205,6 +244,15 @@ try {
         [
           "/rest/v1/rpc/get_my_owner_dashboard",
           "/rest/v1/rpc/get_visible_active_tenant_invoice_summaries",
+          ...(commissions
+            ? [
+                "/rest/v1/rpc/get_user_financial_summary",
+                "/rest/v1/rpc/get_my_commissions",
+                "/rest/v1/rpc/get_my_withdrawals",
+                "/rest/v1/rpc/get_my_commission_contracts",
+                "/rest/v1/rpc/current_imobiliaria_id",
+              ]
+            : []),
         ].includes(url.pathname);
       if (
         effectiveReal &&
@@ -217,6 +265,19 @@ try {
       }
       reads.push(url.pathname);
       let body = [];
+      if (url.pathname === "/rest/v1/rpc/current_imobiliaria_id") body = null;
+      if (commissions && url.pathname === "/rest/v1/rpc/get_user_financial_summary")
+        body = {
+          pending_cents: 0,
+          available_cents: 76543,
+          reserved_cents: 0,
+          total_accumulated_cents: 76543,
+          total_withdrawn_cents: 0,
+          active_contracts: 1,
+          active_withdrawal_id: null,
+          active_withdrawal_status: null,
+          withdrawal_action: "UNAVAILABLE",
+        };
       if (url.pathname === "/auth/v1/user") body = scenario.denied ? null : fixtureUser;
       else if (url.pathname === "/rest/v1/profiles")
         body = {
@@ -234,9 +295,11 @@ try {
         body: JSON.stringify(body),
       });
     });
-    const paths = scenario.real
-      ? [scenario.role === "inquilino" ? "/inquilino/dashboard" : "/carteira-cobrancas"]
-      : ["/inquilino/dashboard", "/carteira-cobrancas"];
+    const paths = commissions
+      ? ["/minhas-comissoes"]
+      : scenario.real
+        ? [scenario.role === "inquilino" ? "/inquilino/dashboard" : "/carteira-cobrancas"]
+        : ["/inquilino/dashboard", "/carteira-cobrancas"];
     try {
       for (const path of paths) {
         reads.length = 0;
@@ -248,7 +311,13 @@ try {
         } else if (scenario.real) {
           await page
             .getByText(
-              path === "/carteira-cobrancas" ? "Carteira de Cobranças" : "Minhas faturas",
+              commissions
+                ? mobile
+                  ? "Minhas Comissões"
+                  : "Saldo disponível para saque"
+                : path === "/carteira-cobrancas"
+                  ? "Carteira de Cobranças"
+                  : "Minhas faturas",
               {
                 exact: true,
               },
@@ -263,10 +332,35 @@ try {
           await page.waitForFunction(() => !document.body.innerText.includes("Verificando sessão"));
           assert.ok(
             reads.some((path) =>
-              ["/rest/v1/consultas_credito", "/rest/v1/faturas_inquilino"].includes(path),
+              (commissions
+                ? ["/rest/v1/rpc/get_user_financial_summary"]
+                : ["/rest/v1/consultas_credito", "/rest/v1/faturas_inquilino"]
+              ).includes(path),
             ),
             "real account must load its normal data, not marker fixtures",
           );
+          if (commissions) {
+            await page
+              .getByText(/765,43/)
+              .first()
+              .waitFor();
+            assert.equal(
+              await page.getByText("Comissões demonstrativas", { exact: true }).count(),
+              0,
+            );
+          }
+        } else if (commissions) {
+          if (scenario.role === "inquilino") {
+            await page
+              .getByText("Comissões não disponíveis para este perfil demonstrativo.", {
+                exact: true,
+              })
+              .waitFor();
+            assert.equal(
+              await page.getByRole("button", { name: "Sacar (simulação)", exact: true }).count(),
+              0,
+            );
+          } else await completeCommissionWithdrawal(page);
         } else {
           await page.getByText("Simulação completa", { exact: true }).waitFor({ timeout: 60000 });
           for (const name of [
@@ -334,12 +428,15 @@ try {
           // not retroactively classified as demo. The policy never waits for UI.
           let transitionReadStart;
           await page.exposeBinding("__noxDemoSessionObserved", (_source, email) => {
-            assert.equal(email, "inquilino@nox.com");
+            assert.equal(email, commissions ? "proprietario@nox.com" : "inquilino@nox.com");
             effectiveReal = false;
             transitionReadStart = reads.length;
           });
-          fixtureUser = { ...user, email: "inquilino@nox.com" };
-          fixtureRole = "inquilino";
+          fixtureUser = {
+            ...user,
+            email: commissions ? "proprietario@nox.com" : "inquilino@nox.com",
+          };
+          fixtureRole = commissions ? "proprietario" : "inquilino";
           const token = [
             { alg: "HS256", typ: "JWT" },
             { sub: id, email: fixtureUser.email, exp: Math.floor(Date.now() / 1000) + 3600 },
@@ -352,7 +449,7 @@ try {
             )
             .join(".");
           await page.evaluate(
-            async ({ token, user, probe }) => {
+            async ({ token, user, probe, mobile }) => {
               sessionStorage.setItem(
                 "nox-test-transition-session",
                 JSON.stringify({
@@ -367,22 +464,31 @@ try {
               if (probe === "before-reload-popup")
                 window.open("https://unexpected.invalid/before-reload");
               window.noxOldTrackingDocument = true;
-              const { supabase } = await import("/src/integrations/supabase/client.ts");
+              const supabase = mobile
+                ? window.__NOX_DEMO_TEST_AUTH__
+                : (await import("/src/integrations/supabase/client.ts")).supabase;
+              if (!supabase) throw new Error("Missing instrumented auth SDK");
               supabase.auth.onAuthStateChange((_event, session) => {
-                if (session?.user.email === "inquilino@nox.com")
+                if (session?.user.email === user.email)
                   return window.__noxDemoSessionObserved(session.user.email);
               });
               void supabase.auth.setSession({ access_token: token, refresh_token: "test" });
             },
-            { token, user: fixtureUser, probe: process.env.NOX_TEST_TRANSITION_PROBE },
+            { token, user: fixtureUser, probe: process.env.NOX_TEST_TRANSITION_PROBE, mobile },
           );
-          await page.getByText("Simulação completa", { exact: true }).waitFor({ timeout: 60000 });
+          await page
+            .getByText(commissions ? "Comissões demonstrativas" : "Simulação completa", {
+              exact: true,
+            })
+            .waitFor({ timeout: 60000 });
           assert.equal(effectiveReal, false, "SDK demo session event must switch network policy");
           assert.equal(typeof transitionReadStart, "number");
           assert.equal(
             await page.evaluate(() => window.noxOldTrackingDocument),
-            undefined,
-            "demo must use a fresh document",
+            mobile ? true : undefined,
+            mobile
+              ? "native view switches identity without a document reload"
+              : "demo must use a fresh document",
           );
           assert.equal(
             trackingRequests.length,
@@ -395,15 +501,18 @@ try {
               .count(),
             0,
           );
-          for (const name of [
-            "Simular análise",
-            "Simular conferência",
-            "Simular ativação sem assinatura",
-            "Simular pagamento",
-          ]) {
-            await page.getByRole("button", { name, exact: true }).click();
+          if (commissions) await completeCommissionWithdrawal(page);
+          else {
+            for (const name of [
+              "Simular análise",
+              "Simular conferência",
+              "Simular ativação sem assinatura",
+              "Simular pagamento",
+            ]) {
+              await page.getByRole("button", { name, exact: true }).click();
+            }
+            await page.getByText("Recibo demonstrativo", { exact: true }).waitFor();
           }
-          await page.getByText("Recibo demonstrativo", { exact: true }).waitFor();
           if (process.env.NOX_TEST_TRANSITION_PROBE) {
             await page.evaluate(async (probe) => {
               if (probe === "local-mutation")

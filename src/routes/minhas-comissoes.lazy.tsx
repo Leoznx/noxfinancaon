@@ -1,3 +1,4 @@
+import { DemoCommissionBoundary } from "@/components/DemoCommissionBoundary";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createLazyFileRoute } from "@tanstack/react-router";
 import {
@@ -44,18 +45,20 @@ import {
   type UserWithdrawal,
   type WithdrawalStatus,
 } from "@/lib/withdrawals";
-import { isDemoSession } from "@/lib/demo-session";
+import { isDemoSimulationEmail } from "@/lib/demo-simulation";
 
 export const Route = createLazyFileRoute("/minhas-comissoes")({
   component: () => (
-    <ProtectedRoute
-      roles={["corretor", "imobiliaria", "proprietario"]}
-      requiresBrokerFinancialAccess
-    >
-      <ErrorBoundary nome="comissões">
-        <CommissionsPage />
-      </ErrorBoundary>
-    </ProtectedRoute>
+    <DemoCommissionBoundary>
+      <ProtectedRoute
+        roles={["corretor", "imobiliaria", "proprietario"]}
+        requiresBrokerFinancialAccess
+      >
+        <ErrorBoundary nome="comissões">
+          <CommissionsPage />
+        </ErrorBoundary>
+      </ProtectedRoute>
+    </DemoCommissionBoundary>
   ),
 });
 
@@ -101,7 +104,7 @@ const financialTone: Record<string, string> = {
 
 function CommissionsPage() {
   const { user } = useAuth();
-  const demoSession = isDemoSession();
+  const demoSession = isDemoSimulationEmail(user?.email);
   const cachedDashboard = user ? peekCommissionDashboard(user) : undefined;
   const [summary, setSummary] = useState<UserFinancialSummary>(
     () => cachedDashboard?.summary ?? emptySummary,

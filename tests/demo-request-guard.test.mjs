@@ -152,3 +152,28 @@ test("server-function client veto never grants authorization using decoded beare
     assert.throws(() => assertNonDemoOperation(`${role}@nox.com`), /bloqueada/);
   assert.doesNotThrow(() => assertNonDemoOperation("real@example.invalid"));
 });
+
+test("late financial GETs from a real screen are blocked after switching to demo", async () => {
+  const context = setup("real@example.invalid");
+  await context.signIn();
+  const query = context.client.from("niveis_perfil").select("*");
+  await context.signIn("corretor@nox.com");
+  assert.ok((await query).error);
+  assert.equal(context.calls.length, 0);
+  for (const table of [
+    "niveis_perfil",
+    "consultas_credito",
+    "proprietarios",
+    "imoveis",
+    "imobiliarias",
+    "apolices",
+    "faturas_inquilino",
+    "asaas_payments",
+  ]) {
+    assert.ok((await context.client.from(table).select("*")).error);
+    assert.equal(context.calls.length, 0);
+  }
+  await context.signIn("real@example.invalid");
+  assert.equal((await context.client.from("niveis_perfil").select("*")).error, null);
+  assert.equal(context.calls.length, 1);
+});
