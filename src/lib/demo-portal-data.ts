@@ -6,6 +6,7 @@ import type {
 } from "@/lib/withdrawals";
 import type { TenantBillingConsultation, TenantBillingItem } from "@/lib/tenant-billing";
 import type { TenantInvoiceSummary } from "@/lib/tenant-invoice-summary";
+import { getDemoCareerScenario } from "@/lib/demo-career";
 
 export const DEMO_RECORD_PREFIX = "d3000000-0000-4000-8000-";
 
@@ -18,6 +19,15 @@ export const DEMO_CONTRACT_NUMBERS = [
   "2026-005284",
   "2026-005419",
   "2026-005588",
+  "2026-005731",
+  "2026-005906",
+  "2026-006044",
+  "2026-006218",
+  "2026-006395",
+  "2026-006527",
+  "2026-006684",
+  "2026-006843",
+  "2026-007012",
 ] as const;
 
 const demoContractNumber = (index: number) =>
@@ -48,6 +58,19 @@ const people = [
     "Avenida Prefeito Cirino Adolfo Cabral, 410",
   ],
   ["Beatriz Oliveira", "216.598.430-84", "São José", "SC", "Rua Koesa, 233"],
+] as const;
+
+const commissionTenantNames = [
+  ...people.slice(0, 6).map((person) => person[0]),
+  "Beatriz Oliveira",
+  "Felipe Santos",
+  "Larissa Moreira",
+  "André Carvalho",
+  "Patrícia Gomes",
+  "Rodrigo Vieira",
+  "Natália Rocha",
+  "Marcelo Teixeira",
+  "Isabela Freitas",
 ] as const;
 
 export function getDemoConsultations() {
@@ -223,14 +246,14 @@ export function getDemoBrokers() {
 }
 
 export function getDemoCommissionDashboard() {
-  const contracts: CommissionContract[] = getDemoPolicies().map((policy, index) => ({
-    id: policy.id,
-    number: policy.numero,
-    status: policy.status === "ativa" ? "ativa" : "pendente",
-    start_date: policy.vigencia_inicio,
-    end_date: policy.vigencia_fim,
-    premium_cents: Math.round(policy.valor_premio * 100),
-    tenant_name: policy.consulta.inquilino.nome,
+  const contracts: CommissionContract[] = commissionTenantNames.map((tenantName, index) => ({
+    id: id(101 + index),
+    number: demoContractNumber(index),
+    status: "ativa",
+    start_date: shiftedDate(-(35 + index * 12)),
+    end_date: shiftedDate(330 - index * 12),
+    premium_cents: Math.round((1260 + index * 285) * 100),
+    tenant_name: tenantName,
     financial_status: index === 2 ? "OVERDUE" : index === 4 ? "PAYMENT_PENDING" : "ON_TIME",
     commission_status:
       index < 2 ? "AVAILABLE" : index === 2 ? "PENDING" : index === 3 ? "PAID" : null,
@@ -278,7 +301,9 @@ export function getDemoCommissionDashboard() {
     reserved_cents: 47900,
     total_accumulated_cents: 159750,
     total_withdrawn_cents: 33400,
-    active_contracts: contracts.filter((contract) => contract.status === "ativa").length,
+    active_contracts:
+      getDemoCareerScenario("imobiliaria")?.activeContracts ??
+      contracts.filter((contract) => contract.status === "ativa").length,
     active_withdrawal_id: null,
     active_withdrawal_status: null,
     withdrawal_action: "AVAILABLE",
@@ -288,21 +313,16 @@ export function getDemoCommissionDashboard() {
     commissions,
     withdrawals,
     contracts,
-    level: {
-      nivelAtual: {
-        id: id(990),
-        nome_nivel: "Bronze",
-        percentual_comissao: 1,
-        min_contratos: 0,
-      },
-      proximoNivel: {
-        id: id(991),
-        nome_nivel: "Prata",
-        percentual_comissao: 2,
-        min_contratos: 11,
-      },
-      contratosAtivos: summary.active_contracts,
-    },
+    level: (() => {
+      const career = getDemoCareerScenario("imobiliaria");
+      return career
+        ? {
+            nivelAtual: career.currentLevel,
+            proximoNivel: career.nextLevel,
+            contratosAtivos: career.activeContracts,
+          }
+        : null;
+    })(),
   };
 }
 

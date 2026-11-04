@@ -247,7 +247,7 @@ function CommissionsPage() {
         rejected_at: null,
         rejection_reason: null,
         receipt_available: false,
-        contract_count: activeContracts.length,
+        contract_count: summary.active_contracts,
       };
 
       setWithdrawals((current) => [simulatedWithdrawal, ...current]);
@@ -274,7 +274,7 @@ function CommissionsPage() {
       setActiveTab("withdrawals");
       toast.success("Saque simulado com sucesso. Nenhuma movimentação real foi criada.");
     },
-    [activeContracts.length, summary.available_cents],
+    [summary.active_contracts, summary.available_cents],
   );
 
   if (loading) {
