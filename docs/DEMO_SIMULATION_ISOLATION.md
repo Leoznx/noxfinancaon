@@ -48,3 +48,17 @@ Regressão: `node --test tests/collection-demo-isolation.test.mjs` executa os m�
 Permanecem os limites de servidor, tokens antigos e outras leituras legadas descritos acima. Não publicar estes rascunhos.
 
 No dashboard mobile, cada montagem usa um canal realtime distinto, pois a remoção assíncrona pode manter o canal anterior inscrito. O callback de carregamento depende de id/e-mail, não da referência do perfil. A regressão de conta real detectou a reutilização do canal durante hidratação; a correção é local ao ciclo de vida, sem mudança de filtros ou autorização. O teste intercepta também WebSockets e os encerra sem conexão externa.
+
+## Correção da evidência de isolamento (revisão de instrumentação)
+
+A execução Expo web anterior gravava apenas `sessionStorage.nox_demo_session`; isso **não comprovava marcador residual mobile**, pois o app usa `demoStorageActive` em memória. A evidência anterior foi substituída: no checkout web, `node scripts/build-demo-mobile-test-export.mjs` cria uma cópia descartável do app e acrescenta apenas nessa cópia uma ponte de teste que chama `beginDemoAuthStorage()` e semeia `dynamicAuthStorage` antes de inicializar o SDK. Nenhuma ponte entra no app de produção. Sirva o diretório exportado localmente e execute `NOX_DEMO_SURFACE=mobile NOX_TEST_ORIGIN=<origem-local> node scripts/test-demo-boleto-isolation-browser.mjs`. O teste exige a ponte e confere `isDemoAuthStorageActive()` e a sessão real do adapter em cada URL. `NOX_MOBILE_CHECKOUT` permite usar a combinação com #19; `NOX_MOBILE_TEST_EXPORT` escolhe o destino.
+
+Resultado corrigido: 20 cenários mobile passaram na branch e 20 com #19, incluindo `active=true` junto de `real@example.invalid` nos dois perfis reais. O export sem instrumentação falha por ponte ausente. O controle `NOX_TEST_EXTERNAL_PROBE=http` injeta uma imagem em `https://unexpected.invalid/probe`: o interceptador aborta a requisição e o teste termina com erro, como esperado.
+
+Todas as origens HTTP externas não permitidas agora causam falha; não basta abortá-las. O único backend permitido é uma fixture Supabase totalmente respondida localmente: GET de identidade nas demos e leituras nas contas reais; WebSockets dessa fixture só são admitidos para contas reais e são encerrados sem conexão. Também são observadas violações CSP; service workers são bloqueados. A rede de desenvolvimento local é permitida.
+
+**Novo impedimento concreto no web:** o teste estrito falhou ao detectar `www.googletagmanager.com/gtag/js` e `connect.facebook.net/en_US/fbevents.js` na primeira identidade demo, na branch e na combinação com #42. Essas requisições foram abortadas antes de sair. A afirmação anterior de ausência de acessos externos não é válida; os testes anteriores ignoravam esses domínios. Não foi criada exceção para esconder o resultado nem alterado o tracking nesta revisão. Manter rascunhos, sem publicação.
+
+## Cache do dashboard web
+
+`loadTenantDashboard` e `peekTenantDashboard` agora exigem id/e-mail e vetam demo **antes** do acesso ao cache, inclusive promessa em andamento. A chave incorpora ambos, com e-mail normalizado; chaves legadas não são reutilizadas. Seis regressões executam os módulos reais de dashboard/cache com consultas fictícias: quatro perfis demo contra cache real, troca de id/e-mail, cache legado e identidade ausente, e promessa pendente invalidada sem repopulação. No app não existe esse loader/cache: `fetchTenantDashboard` já recebe e-mail e aplica veto antes das consultas; por isso essa correção de cache é específica do web.

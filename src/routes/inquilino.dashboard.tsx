@@ -41,7 +41,7 @@ function TenantDashboardPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
-  const cached = user?.id ? peekTenantDashboard(user.id) : undefined;
+  const cached = user?.id ? peekTenantDashboard(user.id, user.email) : undefined;
   const [data, setData] = useState<TenantDashboardData | null>(() => cached ?? null);
   const [loading, setLoading] = useState(cached === undefined);
   const [uploading, setUploading] = useState(false);

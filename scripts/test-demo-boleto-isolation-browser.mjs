@@ -20,7 +20,7 @@ scenarios.push(
 );
 try {
   for (const scenario of scenarios.filter((item) => !process.env.NOX_TEST_REAL_ONLY || item.real)) {
-    const context = await browser.newContext();
+    const context = await browser.newContext({ serviceWorkers: "block" });
     const page = await context.newPage();
     const id = "11111111-1111-4111-8111-111111111111";
     const user = {
@@ -41,11 +41,28 @@ try {
     await context.addInitScript(
       ({ scenario, user, jwt, mobile }) => {
         window.demoLinkAttempts = [];
+        window.demoCspAttempts = [];
+        document.addEventListener("securitypolicyviolation", (event) => {
+          if (/^https?:|^wss?:/.test(event.blockedURI))
+            window.demoCspAttempts.push(event.blockedURI);
+        });
         window.open = (...args) => {
           window.demoLinkAttempts.push(args[0]);
           return null;
         };
-        if (scenario.marker) sessionStorage.setItem("nox_demo_session", scenario.role);
+        if (!mobile && scenario.marker) sessionStorage.setItem("nox_demo_session", scenario.role);
+        if (mobile)
+          globalThis.__NOX_DEMO_TEST_BOOTSTRAP__ = {
+            marker: scenario.marker,
+            session: JSON.stringify({
+              access_token: jwt,
+              refresh_token: "test",
+              expires_in: 3600,
+              expires_at: Math.floor(Date.now() / 1000) + 3600,
+              token_type: "bearer",
+              user,
+            }),
+          };
         const storage = mobile || !scenario.marker ? localStorage : sessionStorage;
         storage.setItem(
           "sb-nox-demo-test-auth-token",
@@ -68,7 +85,12 @@ try {
         socket.connectToServer();
         return;
       }
-      if (!scenario.real) unexpected.push("unexpected demo websocket");
+      if (
+        !scenario.real ||
+        new URL(socket.url()).hostname !== "nox-demo-test.supabase.co" ||
+        new URL(socket.url()).pathname !== "/realtime/v1/websocket"
+      )
+        unexpected.push(`unexpected websocket ${socket.url()}`);
       socket.close();
     });
     await context.route("**/*", async (route) => {
@@ -76,7 +98,7 @@ try {
         url = new URL(req.url());
       if (url.origin === origin) return route.continue();
       if (url.hostname !== "nox-demo-test.supabase.co") {
-        if (url.hostname === "real-boleto.invalid") unexpected.push("payment link");
+        unexpected.push(`external ${req.method()} ${url.href}`);
         return route.abort();
       }
       if (
@@ -87,6 +109,14 @@ try {
           req.method() !== "GET")
       ) {
         unexpected.push(`${req.method()} ${url.pathname}`);
+        return route.abort();
+      }
+      if (
+        scenario.real &&
+        (req.method() !== "GET" ||
+          !(url.pathname === "/auth/v1/user" || url.pathname.startsWith("/rest/v1/")))
+      ) {
+        unexpected.push(`unapproved fixture ${req.method()} ${url.href}`);
         return route.abort();
       }
       reads.push(url.pathname);
@@ -149,7 +179,37 @@ try {
         await page.getByText("Recibo demonstrativo", { exact: true }).waitFor();
         assert.equal(await page.locator('a[href^="http"]').count(), 0);
       }
+      if (process.env.NOX_TEST_EXTERNAL_PROBE === "http") {
+        await page.evaluate(
+          () =>
+            new Promise((resolve) => {
+              const probe = new Image();
+              probe.onload = probe.onerror = resolve;
+              probe.src = "https://unexpected.invalid/probe";
+            }),
+        );
+      }
+      if (mobile) {
+        const actual = await page.evaluate(async () => {
+          const bridge = globalThis.__NOX_DEMO_TEST_STORAGE__;
+          if (!bridge)
+            throw new Error(
+              "Missing instrumented auth-storage; use build-demo-mobile-test-export.mjs",
+            );
+          return {
+            active: bridge.isActive(),
+            email: JSON.parse(await bridge.readSession())?.user?.email,
+          };
+        });
+        assert.deepEqual(
+          actual,
+          { active: scenario.marker, email: user.email },
+          "actual mobile storage marker and authenticated session",
+        );
+        console.log(`STORAGE active=${actual.active} email=${actual.email}`);
+      }
       assert.deepEqual(await page.evaluate(() => window.demoLinkAttempts), []);
+      assert.deepEqual(await page.evaluate(() => window.demoCspAttempts), []);
       assert.deepEqual(unexpected, []);
       console.log(`PASS ${mobile ? "mobile" : "web"} ${JSON.stringify(scenario)} ${path}`);
     }

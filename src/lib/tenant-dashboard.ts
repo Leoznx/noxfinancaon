@@ -10,7 +10,11 @@ import {
 } from "@/lib/tenant-billing";
 
 const TENANT_DASHBOARD_MAX_AGE_MS = 2 * 60_000;
-const tenantDashboardKey = (userId: string) => `dashboard:inquilino:${userId}`;
+const tenantDashboardKey = (userId: string, email?: string | null) => {
+  assertNonDemoOperation(email ?? undefined);
+  if (!userId || !email?.trim()) throw new Error("Identidade necessária para acessar o dashboard.");
+  return `dashboard:inquilino:${JSON.stringify([userId, email.trim().toLowerCase()])}`;
+};
 
 export type TenantContractSignature = {
   id: string;
@@ -215,8 +219,8 @@ export async function fetchTenantDashboard(
   };
 }
 
-export const peekTenantDashboard = (userId: string) =>
-  peekSessionResource<TenantDashboardData>(tenantDashboardKey(userId));
+export const peekTenantDashboard = (userId: string, email?: string | null) =>
+  peekSessionResource<TenantDashboardData>(tenantDashboardKey(userId, email));
 
 export const loadTenantDashboard = (
   userId: string,
@@ -224,7 +228,7 @@ export const loadTenantDashboard = (
   force = false,
 ) =>
   loadSessionResource(
-    tenantDashboardKey(userId),
+    tenantDashboardKey(userId, email),
     () => fetchTenantDashboard(userId, email),
     { force, maxAgeMs: TENANT_DASHBOARD_MAX_AGE_MS },
   );
