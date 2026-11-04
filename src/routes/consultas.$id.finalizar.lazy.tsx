@@ -1,3 +1,4 @@
+import { DemoSimulationBoundary } from "@/components/DemoSimulationBoundary";
 import { createLazyFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
@@ -98,7 +99,7 @@ import { loadFinalizationSnapshot } from "@/lib/finalization-snapshot";
 export const Route = createLazyFileRoute("/consultas/$id/finalizar")({
   component: () => (
     <ProtectedRoute>
-      <FinalizarPage />
+      <DemoSimulationBoundary><FinalizarPage /></DemoSimulationBoundary>
     </ProtectedRoute>
   ),
 });

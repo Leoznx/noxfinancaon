@@ -1,3 +1,4 @@
+import { DemoSimulationBoundary } from "@/components/DemoSimulationBoundary";
 import { createLazyFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -40,7 +41,7 @@ import { VerificacaoDocumento } from "@/components/configuracoes/VerificacaoDocu
 export const Route = createLazyFileRoute("/configuracoes")({
   component: () => (
     <ProtectedRoute>
-      <ConfiguracoesPage />
+      <DemoSimulationBoundary><ConfiguracoesPage /></DemoSimulationBoundary>
     </ProtectedRoute>
   ),
 });

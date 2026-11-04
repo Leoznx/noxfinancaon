@@ -1,3 +1,4 @@
+import { DemoSimulationBoundary } from "@/components/DemoSimulationBoundary";
 import { createLazyFileRoute, Link } from "@tanstack/react-router";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -35,7 +36,7 @@ export const Route = createLazyFileRoute("/faturas-inquilinos/$id")({
   component: () => (
     <ProtectedRoute>
       <ErrorBoundary nome="faturas-inquilino-detalhe">
-        <FaturasInquilinoDetalhe />
+        <DemoSimulationBoundary><FaturasInquilinoDetalhe /></DemoSimulationBoundary>
       </ErrorBoundary>
     </ProtectedRoute>
   ),

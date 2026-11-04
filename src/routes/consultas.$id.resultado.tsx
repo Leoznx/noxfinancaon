@@ -1,3 +1,4 @@
+import { DemoSimulationBoundary } from "@/components/DemoSimulationBoundary";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
@@ -18,7 +19,7 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/consultas/$id/resultado")({
   component: () => (
     <ProtectedRoute>
-      <ConsultaResultado />
+      <DemoSimulationBoundary><ConsultaResultado /></DemoSimulationBoundary>
     </ProtectedRoute>
   ),
 });

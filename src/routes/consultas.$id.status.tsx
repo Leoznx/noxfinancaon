@@ -1,3 +1,4 @@
+import { DemoSimulationBoundary } from "@/components/DemoSimulationBoundary";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
@@ -34,7 +35,7 @@ import { updateContractPeriodSafely } from "@/lib/contract-period-update";
 export const Route = createFileRoute("/consultas/$id/status")({
   component: () => (
     <ProtectedRoute>
-      <StatusConsulta />
+      <DemoSimulationBoundary><StatusConsulta /></DemoSimulationBoundary>
     </ProtectedRoute>
   ),
 });

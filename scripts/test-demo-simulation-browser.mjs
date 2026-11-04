@@ -41,6 +41,8 @@ stubs["@/lib/supabase"] = stubs["@/integrations/supabase/client"];
 // Native primitives are adapted to DOM for interaction tests; this is not a device test.
 stubs["react-native"] =
   `import React from 'react';export const StyleSheet={create:x=>x};export function Text({children}){return <div>{children}</div>} export const View=Text;export const ScrollView=Text;export function Pressable({children,onPress}){return <button onClick={onPress}>{children}</button>}`;
+stubs["expo-router"] =
+  `import React from 'react';export function useFocusEffect(callback){React.useEffect(()=>{const cleanup=callback();const blur=()=>cleanup?.();window.addEventListener('demo-test-blur',blur);return ()=>{window.removeEventListener('demo-test-blur',blur);cleanup?.();}},[callback]);}`;
 const component = path.join(
   root,
   mobile
@@ -62,7 +64,7 @@ const bundle = await build({
     {
       name: "test-adapters",
       setup(b) {
-        b.onResolve({ filter: /^@\/|^react-native$/ }, (args) => {
+        b.onResolve({ filter: /^@\/|^react-native$|^expo-router$/ }, (args) => {
           if (stubs[args.path]) return { path: args.path, namespace: "stub" };
           const file = path.join(root, "src", args.path.slice(2));
           return { path: [".ts", ".tsx"].map((ext) => file + ext).find(existsSync) };
@@ -142,6 +144,10 @@ try {
       assert.equal(await page.evaluate(() => window.operationalMounts), 0);
       assert.equal(await page.evaluate(() => window.identityReads), 1);
       assert.equal(await page.evaluate(() => window.profileReads), 1);
+      if (mobile) {
+        await page.evaluate(() => window.dispatchEvent(new Event("demo-test-blur")));
+        await page.getByText("Análise de crédito", { exact: true }).waitFor();
+      }
       await page.getByRole("button", { name: "Reiniciar simulação" }).click();
       await page.getByText("Análise de crédito", { exact: true }).waitFor();
       for (const name of ["Recusado", "Em análise"]) {

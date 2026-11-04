@@ -1,3 +1,4 @@
+import { DemoSimulationBoundary } from "@/components/DemoSimulationBoundary";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { motion, useReducedMotion } from "framer-motion";
 import {
@@ -36,7 +37,7 @@ export const Route = createFileRoute("/consultas/$id/contrato-realizado")({
   }),
   component: () => (
     <ProtectedRoute>
-      <ContratoRealizadoPage />
+      <DemoSimulationBoundary><ContratoRealizadoPage /></DemoSimulationBoundary>
     </ProtectedRoute>
   ),
 });

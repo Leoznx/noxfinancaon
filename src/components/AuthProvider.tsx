@@ -372,7 +372,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // os dados do painel. A navegação continua livre; ao entrar no dashboard o
   // primeiro frame já encontra o bundle e o snapshot da sessão em memória.
   useEffect(() => {
-    if (isLoading || !user || isDemoSession()) return;
+    if (isLoading || !user || isDemoSession() || isDemoSimulationEmail(user.email)) return;
     const target = redirectPathForRole(user.internalRole || user.role);
     void import("@/lib/dashboard-navigation-data")
       .then(({ prefetchDashboardDataForHref }) => prefetchDashboardDataForHref(target, user))

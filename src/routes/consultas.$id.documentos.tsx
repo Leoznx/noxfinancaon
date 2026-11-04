@@ -1,3 +1,4 @@
+import { DemoSimulationBoundary } from "@/components/DemoSimulationBoundary";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -9,7 +10,7 @@ import { motion, AnimatePresence } from "framer-motion";
 export const Route = createFileRoute("/consultas/$id/documentos")({
   component: () => (
     <ProtectedRoute>
-      <DocumentosUpload />
+      <DemoSimulationBoundary><DocumentosUpload /></DemoSimulationBoundary>
     </ProtectedRoute>
   ),
 });
