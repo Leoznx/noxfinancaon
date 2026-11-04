@@ -70,7 +70,7 @@ function numberOrNull(value: unknown) {
   return value == null ? null : Number(value);
 }
 
-function normalize(row: Record<string, unknown>): TeamGoalProgress {
+export function normalizeTeamGoalProgress(row: Record<string, unknown>): TeamGoalProgress {
   return {
     ...(row as unknown as TeamGoalProgress),
     seller_name: collaboratorDisplayName(String(row.seller_name ?? ""), "Vendedor"),
@@ -105,7 +105,7 @@ export async function fetchTeamGoalProgress(month: number, year: number) {
     p_year: year,
   });
   if (error) throw error;
-  return ((data as Record<string, unknown>[] | null) ?? []).map(normalize);
+  return ((data as Record<string, unknown>[] | null) ?? []).map(normalizeTeamGoalProgress);
 }
 
 export async function fetchTeamGoalConfigs(month: number, year: number) {
@@ -156,7 +156,7 @@ export async function fetchMyRoleGoalProgress() {
   if (error) throw error;
   const row = Array.isArray(data) ? data[0] : data;
   if (!row) throw new Error("Não foi possível localizar suas metas.");
-  return normalize(row as Record<string, unknown>);
+  return normalizeTeamGoalProgress(row as Record<string, unknown>);
 }
 
 export async function saveCompleteTeamGoals(

@@ -25,6 +25,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { setRememberMe } from "@/lib/authStorage";
 import {
   fetchTvRegistrationCelebration,
+  fetchNativeTvRegistrationCelebrations,
   fetchTvSalesDashboard,
   rankDailyCompetition,
   summarizeDailyTeam,
@@ -45,6 +46,7 @@ const FALLBACK_REFRESH_MS = 60_000;
 const FULL_SYNC_MS = 60 * 60_000;
 const PAGE_ROTATION_MS = 18_000;
 const REGISTRATION_CELEBRATION_MS = 15_000;
+const NATIVE_CELEBRATION_POLL_MS = 10_000;
 const TV_LOGIN_TIMEOUT_MS = 25_000;
 const LIVE_TABLES = [
   "seller_client_partnerships",
@@ -161,18 +163,31 @@ function readCachedSnapshot(): TvSalesDashboardSnapshot | null {
 
 function TvRankingRoute() {
   const { user, isLoading, logout } = useAuth();
+  const [clientMode, setClientMode] = useState<"checking" | "native" | "browser">("checking");
 
   useEffect(() => {
-    if (isLoading || typeof window === "undefined") return;
+    setClientMode(window.NoxTvAndroid ? "native" : "browser");
+  }, []);
+
+  useEffect(() => {
+    if (
+      clientMode === "checking" ||
+      (clientMode === "browser" && isLoading) ||
+      typeof window === "undefined"
+    )
+      return;
     document.documentElement.dataset.noxTvReady = "true";
     try {
       window.NoxTvAndroid?.markReady();
     } catch {
       // O mesmo painel continua funcionando normalmente fora do aplicativo da TV.
     }
-  }, [isLoading, user]);
+  }, [clientMode, isLoading, user]);
 
-  if (isLoading) return <TvLoading message="Preparando o painel comercial…" />;
+  if (clientMode === "checking" || (clientMode === "browser" && isLoading)) {
+    return <TvLoading message="Preparando o painel comercial…" />;
+  }
+  if (clientMode === "native") return <TvDashboard nativeApp />;
   if (!user) return <TvLogin />;
 
   const authorized =
@@ -354,7 +369,7 @@ function TvLogin() {
   );
 }
 
-function TvDashboard() {
+function TvDashboard({ nativeApp = false }: { nativeApp?: boolean }) {
   const today = useMemo(() => new Date(), []);
   const month = today.getMonth() + 1;
   const year = today.getFullYear();
@@ -363,6 +378,7 @@ function TvDashboard() {
   const [snapshot, setSnapshot] = useState<TvSalesDashboardSnapshot | null>(readCachedSnapshot);
   const snapshotRef = useRef(snapshot);
   const seenCelebrations = useRef(new Set<string>());
+  const nativeCelebrationCursor = useRef(new Date().toISOString());
   const [celebrationQueue, setCelebrationQueue] = useState<TvRegistrationCelebration[]>([]);
   const hadInitialSnapshot = useRef(Boolean(snapshot));
   const [loading, setLoading] = useState(!snapshot);
@@ -374,7 +390,7 @@ function TvDashboard() {
       const sequence = ++requestSequence.current;
       if (!background) setLoading(true);
       try {
-        const next = await fetchTvSalesDashboard(month, year);
+        const next = await fetchTvSalesDashboard(month, year, { nativeApp });
         if (sequence !== requestSequence.current) return;
         snapshotRef.current = next;
         setSnapshot(next);
@@ -391,15 +407,25 @@ function TvDashboard() {
         }
       }
     },
-    [month, year],
+    [month, nativeApp, year],
   );
+
+  const enqueueResolvedCelebration = useCallback((celebration: TvRegistrationCelebration) => {
+    if (seenCelebrations.current.has(celebration.attributionId)) return;
+    seenCelebrations.current.add(celebration.attributionId);
+    setCelebrationQueue((current) =>
+      current.some((item) => item.attributionId === celebration.attributionId) ||
+      current.length >= 8
+        ? current
+        : [...current, celebration],
+    );
+  }, []);
 
   const enqueueRegistrationCelebration = useCallback(
     async (row: Record<string, unknown>) => {
       const attributionId = String(row.id ?? "");
       const sellerId = String(row.seller_id ?? "");
       if (!attributionId || !sellerId || seenCelebrations.current.has(attributionId)) return;
-      seenCelebrations.current.add(attributionId);
 
       let celebration: TvRegistrationCelebration | null = null;
       try {
@@ -418,16 +444,9 @@ function TvDashboard() {
         }
       }
 
-      if (!celebration) return;
-      const nextCelebration = celebration;
-      setCelebrationQueue((current) =>
-        current.some((item) => item.attributionId === nextCelebration.attributionId) ||
-        current.length >= 8
-          ? current
-          : [...current, nextCelebration],
-      );
+      if (celebration) enqueueResolvedCelebration(celebration);
     },
-    [],
+    [enqueueResolvedCelebration],
   );
 
   useEffect(() => void load(hadInitialSnapshot.current), [load]);
@@ -442,6 +461,7 @@ function TvDashboard() {
   }, [load]);
 
   useEffect(() => {
+    if (nativeApp) return;
     const refreshAfterEvent = () => {
       if (eventDebounce.current) window.clearTimeout(eventDebounce.current);
       eventDebounce.current = window.setTimeout(() => void load(true), 700);
@@ -467,7 +487,28 @@ function TvDashboard() {
       if (eventDebounce.current) window.clearTimeout(eventDebounce.current);
       void supabase.removeChannel(channel);
     };
-  }, [enqueueRegistrationCelebration, load]);
+  }, [enqueueRegistrationCelebration, load, nativeApp]);
+
+  useEffect(() => {
+    if (!nativeApp) return;
+    let active = true;
+    const poll = async () => {
+      try {
+        const result = await fetchNativeTvRegistrationCelebrations(nativeCelebrationCursor.current);
+        if (!active) return;
+        nativeCelebrationCursor.current = result.checkedAt;
+        result.celebrations.forEach(enqueueResolvedCelebration);
+      } catch {
+        // O ranking continua atualizando pelo fallback. A próxima janela tenta
+        // recuperar novamente as comemorações ainda dentro do limite temporal.
+      }
+    };
+    const timer = window.setInterval(() => void poll(), NATIVE_CELEBRATION_POLL_MS);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [enqueueResolvedCelebration, nativeApp]);
 
   const activeCelebration = celebrationQueue[0] ?? null;
 
@@ -577,9 +618,7 @@ function TvDashboard() {
           />
         </section>
       </main>
-      {activeCelebration ? (
-        <RegistrationCelebration celebration={activeCelebration} />
-      ) : null}
+      {activeCelebration ? <RegistrationCelebration celebration={activeCelebration} /> : null}
     </TvFrame>
   );
 }
@@ -764,11 +803,7 @@ function RankingRow({ seller }: { seller: TvDailyCompetitionSeller }) {
 
 const CELEBRATION_COLORS = ["#ffd300", "#ffffff", "#5f8cff", "#ff8a3d", "#35d07f"];
 
-function RegistrationCelebration({
-  celebration,
-}: {
-  celebration: TvRegistrationCelebration;
-}) {
+function RegistrationCelebration({ celebration }: { celebration: TvRegistrationCelebration }) {
   const initials = celebration.sellerName
     .split(/\s+/)
     .filter(Boolean)
