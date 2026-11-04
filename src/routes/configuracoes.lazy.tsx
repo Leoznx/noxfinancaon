@@ -25,6 +25,8 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { setCachedHeaderProfile } from "@/lib/profile-cache";
 import { buildAppUrl } from "@/lib/app-url";
+import { getDemoCareerScenario } from "@/lib/demo-career";
+import { isDemoSession } from "@/lib/demo-session";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -1574,38 +1576,52 @@ function TabComissoesNivel() {
     setErro(null);
     (async () => {
       try {
+        const demoCareer = isDemoSession() ? getDemoCareerScenario(usuario.role) : null;
         const [niveisRes, apolicesRes, saldoRes] = await Promise.all([
-          supabase
-            .from("niveis_perfil" as any)
-            .select("*")
-            .eq("tipo_perfil", usuario.role)
-            .eq("ativo", true)
-            .order("ordem", { ascending: true }),
-          supabase
-            .from("apolices")
-            .select("id, status")
-            .eq(coluna as any, usuario.profileId),
-          supabase
-            .from("saldos_comissao" as any)
-            .select("*")
-            .eq("profile_id", usuario.profileId)
-            .maybeSingle(),
+          demoCareer
+            ? Promise.resolve({ data: demoCareer.levels, error: null })
+            : supabase
+                .from("niveis_perfil" as any)
+                .select("*")
+                .eq("tipo_perfil", usuario.role)
+                .eq("ativo", true)
+                .order("ordem", { ascending: true }),
+          demoCareer
+            ? Promise.resolve({ data: [], error: null })
+            : supabase
+                .from("apolices")
+                .select("id, status")
+                .eq(coluna as any, usuario.profileId),
+          demoCareer
+            ? Promise.resolve({ data: null, error: null })
+            : supabase
+                .from("saldos_comissao" as any)
+                .select("*")
+                .eq("profile_id", usuario.profileId)
+                .maybeSingle(),
         ]);
         if (niveisRes.error) throw niveisRes.error;
         if (apolicesRes.error) throw apolicesRes.error;
         if (saldoRes.error) throw saldoRes.error;
         if (!ativo) return;
 
-        const count = (apolicesRes.data || []).filter((a: any) => a.status === "ativa").length;
+        const count =
+          demoCareer?.activeContracts ??
+          (apolicesRes.data || []).filter((a: any) => a.status === "ativa").length;
         setContratosAtivos(count);
 
         const niveis = (niveisRes.data || []) as any[];
         if (niveis.length > 0) {
-          const decrescente = [...niveis].reverse();
-          const atual = decrescente.find((n: any) => count >= n.min_contratos) || niveis[0];
-          const idxAtual = niveis.findIndex((n: any) => n.id === atual.id);
-          setNivelAtual(atual);
-          setProximoNivel(niveis[idxAtual + 1] || null);
+          if (demoCareer) {
+            setNivelAtual(demoCareer.currentLevel);
+            setProximoNivel(demoCareer.nextLevel);
+          } else {
+            const decrescente = [...niveis].reverse();
+            const atual = decrescente.find((n: any) => count >= n.min_contratos) || niveis[0];
+            const idxAtual = niveis.findIndex((n: any) => n.id === atual.id);
+            setNivelAtual(atual);
+            setProximoNivel(niveis[idxAtual + 1] || null);
+          }
         }
 
         const s = saldoRes.data as any;

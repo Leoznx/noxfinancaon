@@ -1,5 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { loadAgencyScope } from "@/lib/agency-scope";
+import { getDemoCareerScenario } from "@/lib/demo-career";
+import { isDemoSession } from "@/lib/demo-session";
 
 export type NivelInfo = {
   nivelAtual: any;
@@ -16,6 +18,15 @@ export type NivelInfo = {
  * elas sempre dava 0 mesmo com contratos reais vinculados ao profile.
  */
 export async function fetchNivelInfo(profileId: string, role: string): Promise<NivelInfo | null> {
+  const demoCareer = isDemoSession() ? getDemoCareerScenario(role) : null;
+  if (demoCareer) {
+    return {
+      nivelAtual: demoCareer.currentLevel,
+      proximoNivel: demoCareer.nextLevel,
+      contratosAtivos: demoCareer.activeContracts,
+    };
+  }
+
   let profileIds = [profileId];
   if (role === "imobiliaria") {
     profileIds = (await loadAgencyScope({ id: profileId })).profileIds;
