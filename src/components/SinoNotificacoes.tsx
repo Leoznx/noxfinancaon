@@ -1,3 +1,4 @@
+import { isDemoSimulationEmail } from "@/lib/demo-simulation";
 import { useCallback, useEffect, useState } from "react";
 import {
   AlertTriangle,
@@ -79,6 +80,12 @@ const CORES_NOTIFICACAO: Record<string, { fundo: string; icone: string }> = {
 };
 
 export function SinoNotificacoes() {
+  const { user } = useAuth();
+  if (isDemoSimulationEmail(user?.email)) return null;
+  return <LiveSinoNotificacoes />;
+}
+
+function LiveSinoNotificacoes() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const cachedNotifications = notificationCache;

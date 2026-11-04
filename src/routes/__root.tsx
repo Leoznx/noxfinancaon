@@ -18,7 +18,8 @@ import {
   isRecoverableNavigationError,
   reloadCurrentDocumentForNavigationError,
 } from "@/lib/navigation-recovery";
-import { GOOGLE_ADS_TAG_ID, META_PIXEL_ID, trackPageView } from "@/lib/tracking";
+import { initializeTracking, prepareDemoTrackingDocument, trackPageView } from "@/lib/tracking";
+import { isDemoSimulationEmail } from "@/lib/demo-simulation";
 import { ROTA_CADASTRO_CONCLUIDO, precisaMostrarCadastroConcluido } from "@/lib/primeiroAcesso";
 
 import appCss from "../styles.css?url";
@@ -174,18 +175,18 @@ const LEGACY_BROWSER_POLYFILLS = `
  */
 function PageViewTracker() {
   const locationHref = useRouterState({ select: (state) => state.location.href });
-  const isInitialPageView = React.useRef(true);
+  const { user, isLoading } = useAuth();
+  const lastTrackedHref = React.useRef<string | null>(null);
 
   React.useEffect(() => {
-    // O `config` do gtag e o `fbq('track','PageView')` do código-base já contam
-    // o carregamento inicial — repetir aqui duplicaria a primeira visualização.
-    if (isInitialPageView.current) {
-      isInitialPageView.current = false;
+    if (isDemoSimulationEmail(user?.email) || window.location.pathname.startsWith("/demo/")) {
+      prepareDemoTrackingDocument();
       return;
     }
-
-    trackPageView();
-  }, [locationHref]);
+    if (isLoading || lastTrackedHref.current === locationHref) return;
+    const initializedNow = initializeTracking();
+    if (initializedNow || trackPageView()) lastTrackedHref.current = locationHref;
+  }, [locationHref, isLoading, user?.email]);
 
   return null;
 }
@@ -396,45 +397,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "icon", type: "image/png", sizes: "32x32", href: "/favicon-32.png" },
       { rel: "icon", type: "image/png", sizes: "512x512", href: "/favicon-512.png" },
       { rel: "apple-touch-icon", sizes: "180x180", href: "/apple-touch-icon.png" },
-      { rel: "preconnect", href: "https://connect.facebook.net", crossOrigin: "anonymous" },
-      { rel: "preconnect", href: "https://images.unsplash.com", crossOrigin: "anonymous" },
-      { rel: "dns-prefetch", href: "https://images.unsplash.com" },
-      {
-        rel: "preconnect",
-        href: "https://njheoytyidsghittjilr.supabase.co",
-        crossOrigin: "anonymous",
-      },
     ],
     scripts: [
-      {
-        async: true,
-        src: `https://www.googletagmanager.com/gtag/js?id=${GOOGLE_ADS_TAG_ID}`,
-      },
-      {
-        children: `
-          window.dataLayer = window.dataLayer || [];
-          function gtag(){dataLayer.push(arguments);}
-          gtag('js', new Date());
-          gtag('config', '${GOOGLE_ADS_TAG_ID}');
-        `,
-      },
-      // Meta Pixel Code — código-base oficial. Registra o PageView do
-      // carregamento inicial; as trocas de rota da SPA passam pelo
-      // PageViewTracker acima.
-      {
-        children: `
-          !function(f,b,e,v,n,t,s)
-          {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-          n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-          if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-          n.queue=[];t=b.createElement(e);t.async=!0;
-          t.src=v;s=b.getElementsByTagName(e)[0];
-          s.parentNode.insertBefore(t,s)}(window, document,'script',
-          'https://connect.facebook.net/en_US/fbevents.js');
-          fbq('init', '${META_PIXEL_ID}');
-          fbq('track', 'PageView');
-        `,
-      },
       {
         type: "application/ld+json",
         children: JSON.stringify({
@@ -472,16 +436,6 @@ function RootShell({ children }: { children: React.ReactNode }) {
         <HeadContent />
       </head>
       <body>
-        {/* Meta Pixel — fallback para navegadores com JavaScript desativado. */}
-        <noscript>
-          <img
-            height="1"
-            width="1"
-            style={{ display: "none" }}
-            alt=""
-            src={`https://www.facebook.com/tr?id=${META_PIXEL_ID}&ev=PageView&noscript=1`}
-          />
-        </noscript>
         {children}
         <script dangerouslySetInnerHTML={{ __html: LEGACY_BROWSER_POLYFILLS }} />
         <Scripts />

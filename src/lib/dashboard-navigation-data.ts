@@ -1,3 +1,4 @@
+import { assertNonDemoOperation } from "@/lib/demo-request-guard";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchNivelInfo, type NivelInfo } from "@/lib/niveis-parceria";
 import {
@@ -14,11 +15,7 @@ import { loadSessionResource, peekSessionResource } from "@/lib/session-resource
 import { loadAgencyScope } from "@/lib/agency-scope";
 import { executeSupabaseQuery } from "@/lib/supabase-query";
 import { isDemoSession } from "@/lib/demo-session";
-import {
-  getDemoCommissionDashboard,
-  getDemoConsultations,
-  getDemoPolicies,
-} from "@/lib/demo-portal-data";
+import { getDemoConsultations, getDemoPolicies } from "@/lib/demo-portal-data";
 
 const ROUTE_DATA_MAX_AGE_MS = 120_000;
 const LIST_LIMIT = 100;
@@ -44,7 +41,8 @@ export type CommissionDashboardData = {
 
 const consultationKey = (user: DashboardNavigationUser) => `dashboard-route:${user.id}:consultas`;
 const policyKey = (user: DashboardNavigationUser) => `dashboard-route:${user.id}:apolices`;
-const commissionKey = (user: DashboardNavigationUser) => `dashboard-route:${user.id}:comissoes`;
+const commissionKey = (user: DashboardNavigationUser) =>
+  `dashboard-route:${user.id}:comissoes:${user.email.toLowerCase()}:${user.role}`;
 export function peekDashboardConsultations(user: DashboardNavigationUser) {
   if (isDemoSession()) return getDemoConsultations();
   return peekSessionResource<DashboardConsultationRow[]>(consultationKey(user));
@@ -164,7 +162,7 @@ export async function loadDashboardPolicies(
 }
 
 export function peekCommissionDashboard(user: DashboardNavigationUser) {
-  if (isDemoSession()) return getDemoCommissionDashboard();
+  assertNonDemoOperation(user.email);
   return peekSessionResource<CommissionDashboardData>(commissionKey(user));
 }
 
@@ -172,7 +170,7 @@ export async function loadCommissionDashboard(
   user: DashboardNavigationUser,
   force = false,
 ): Promise<CommissionDashboardData> {
-  if (isDemoSession()) return getDemoCommissionDashboard();
+  assertNonDemoOperation(user.email);
   return loadSessionResource(
     commissionKey(user),
     async () => {

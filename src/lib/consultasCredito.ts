@@ -3,7 +3,6 @@ import { normalizeDocumento } from "@/utils/documento";
 import { upsertConsultaCredito } from "@/lib/consultas";
 import type { DadosSimulacao } from "@/components/simulacao/FormularioSimulacao";
 import type { RealtimeChannel } from "@supabase/supabase-js";
-import { getDemoDecision } from "@/lib/demo-accounts";
 import { createSimulationCorrelationId } from "@/lib/correlation-id";
 import { selectOperationalCreditSimulationCep } from "@/lib/creditSimulationCep";
 import { getCreditSimulationOperationKey } from "@/lib/credit-simulation-idempotency";
@@ -225,63 +224,9 @@ export async function executarConsultaOficial(id: string): Promise<void> {
   }
 }
 
-/**
- * Usa exatamente o mesmo cadastro e as mesmas telas da consulta oficial, mas
- * conclui internamente os três documentos reservados ao modo demo. A origem
- * nunca é `nox_financa`, portanto o worker CredPago não reivindica a linha.
- */
-export async function criarConsultaDemonstrativa({
-  dados,
-  userEmail,
-  userRole,
-}: CriarConsultaParams): Promise<string> {
-  const rawDoc = dados.tipoInquilino === "PF" ? dados.inquilinos[0]?.cpf || "" : dados.cnpj || "";
-  const decision = getDemoDecision(rawDoc);
-  if (!decision) throw new Error("Use um dos documentos de demonstração disponíveis.");
-
-  const consultaId = await upsertConsultaCredito({
-    dados,
-    userEmail,
-    userRole,
-    deferQueue: true,
-  });
-  const documento = normalizeDocumento(rawDoc);
-  const status = decision === "pendente" ? "em_analise" : decision;
-  const mensagem =
-    decision === "aprovado"
-      ? "Crédito aprovado."
-      : decision === "recusado"
-        ? "Crédito recusado."
-        : "Sua simulação está em análise.";
-
-  const { error } = await supabase
-    .from("consultas_credito")
-    .update({
-      tipo_pessoa: dados.tipoInquilino,
-      documento,
-      documento_masked: maskDocumento(documento),
-      tenant_name:
-        dados.tipoInquilino === "PF"
-          ? dados.inquilinos[0]?.nome || "João da Silva"
-          : dados.razaoSocial,
-      tipo_imovel: dados.tipoImovel,
-      cep: dados.cep,
-      valor_aluguel: dados.valores.aluguel,
-      valor_condominio: dados.valores.condominio,
-      valor_taxas: dados.valores.taxas,
-      status,
-      resultado: status,
-      mensagem,
-      origem: "demo",
-      automation_step: "demonstracao",
-      automation_started_at: new Date().toISOString(),
-      automation_finished_at: new Date().toISOString(),
-      error_message: null,
-      raw_response: { demo: true, decision },
-    } as any)
-    .eq("id", consultaId);
-  if (error) throw error;
-  return consultaId;
+/** Legacy API retained to fail closed: demonstrations must never persist shared records. */
+export async function criarConsultaDemonstrativa(_params: CriarConsultaParams): Promise<string> {
+  throw new Error("A demonstração com gravação foi desativada. Use o simulador local em Nova consulta, Contratos ou Faturas.");
 }
 
 export async function getConsultaCredito(

@@ -1,3 +1,4 @@
+import { DemoSimulationBoundary } from "@/components/DemoSimulationBoundary";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
@@ -18,7 +19,7 @@ import { Button } from "@/components/ui/button";
 export const Route = createFileRoute("/inquilino/documentos")({
   component: () => (
     <ProtectedRoute roles={["inquilino"]}>
-      <DocumentosInquilino />
+      <DemoSimulationBoundary><DocumentosInquilino /></DemoSimulationBoundary>
     </ProtectedRoute>
   ),
 });

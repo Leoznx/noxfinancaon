@@ -1,3 +1,4 @@
+import { DemoSimulationBoundary } from "@/components/DemoSimulationBoundary";
 import { createLazyFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
@@ -18,7 +19,7 @@ import { Upload, X, FileText, ClipboardCheck, IdCard, Receipt, CheckCircle2, Ale
 export const Route = createLazyFileRoute("/consultas/$id/dados-complementares")({
   component: () => (
     <ProtectedRoute>
-      <DadosComplementaresPage />
+      <DemoSimulationBoundary><DadosComplementaresPage /></DemoSimulationBoundary>
     </ProtectedRoute>
   ),
 });

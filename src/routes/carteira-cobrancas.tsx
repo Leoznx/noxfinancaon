@@ -1,3 +1,4 @@
+import { DemoSimulationBoundary } from "@/components/DemoSimulationBoundary";
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
@@ -48,7 +49,7 @@ import {
   statusPagamentoLabel,
   subscriptionStatusLabel,
 } from "@/lib/asaas-payment";
-import { isDemoSession } from "@/lib/demo-session";
+import { isDemoSimulationEmail } from "@/lib/demo-simulation";
 import { manageAsaasSubscription, managePersistedAsaasPayment } from "@/lib/asaas-checkout";
 import {
   reissuePayment,
@@ -57,12 +58,14 @@ import {
 
 export const Route = createFileRoute("/carteira-cobrancas")({
   component: () => (
-    <ProtectedRoute
-      roles={["corretor", "imobiliaria", "proprietario"]}
-      requiresBrokerFinancialAccess
-    >
-      <CarteiraCobrancas />
-    </ProtectedRoute>
+    <DemoSimulationBoundary>
+      <ProtectedRoute
+        roles={["corretor", "imobiliaria", "proprietario"]}
+        requiresBrokerFinancialAccess
+      >
+        <CarteiraCobrancas />
+      </ProtectedRoute>
+    </DemoSimulationBoundary>
   ),
 });
 
@@ -104,7 +107,7 @@ type Contrato = {
 
 function CarteiraCobrancas() {
   const { user } = useAuth();
-  const demoSession = isDemoSession();
+  const demoSession = isDemoSimulationEmail(user?.email);
   const userId = user?.id;
   const userEmail = user?.email;
   const userRole = user?.role;
