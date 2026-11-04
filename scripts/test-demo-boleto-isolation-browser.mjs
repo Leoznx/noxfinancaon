@@ -2,9 +2,11 @@
 // external requests are blocked, and backend responses contain only synthetic fixtures.
 import { chromium } from "playwright";
 import assert from "node:assert/strict";
+import { validateFixtureOrigin } from "./demo-browser-fixture-origin.mjs";
 const mobile = process.env.NOX_DEMO_SURFACE === "mobile";
-const origin =
-  process.env.NOX_TEST_ORIGIN || (mobile ? "http://127.0.0.1:4374" : "http://127.0.0.1:4173");
+const origin = validateFixtureOrigin(
+  process.env.NOX_TEST_ORIGIN || (mobile ? "http://127.0.0.1:4374" : "http://127.0.0.1:4173"),
+);
 const browser = await chromium.launch({
   executablePath: "/usr/bin/chromium",
   headless: true,
@@ -29,7 +31,11 @@ scenarios.push(
     : []),
 );
 try {
-  for (const scenario of scenarios.filter((item) => !process.env.NOX_TEST_REAL_ONLY || item.real)) {
+  for (const scenario of scenarios.filter((item) =>
+    process.env.NOX_TEST_TRANSITION_PROBE
+      ? item.transition
+      : !process.env.NOX_TEST_REAL_ONLY || item.real,
+  )) {
     const context = await browser.newContext({ serviceWorkers: "block" });
     const page = await context.newPage();
     const id = "11111111-1111-4111-8111-111111111111";
@@ -41,6 +47,7 @@ try {
       user_metadata: {},
       app_metadata: {},
     };
+    let effectiveReal = !!scenario.real;
     let fixtureUser = user;
     let fixtureRole = scenario.role;
     const jwt = [
@@ -52,7 +59,9 @@ try {
       .join(".");
     await context.addInitScript(
       ({ scenario, user, jwt, mobile }) => {
-        window.demoLinkAttempts = [];
+        window.demoLinkAttempts = JSON.parse(
+          sessionStorage.getItem("nox-test-popup-audit") || "[]",
+        );
         if (scenario.consent) {
           const pixel = (...args) => pixel.queue.push(args);
           pixel.queue = [["consent", "revoke"]];
@@ -62,13 +71,14 @@ try {
           window.dataLayer = [
             ["consent", "default", { ad_storage: "denied", analytics_storage: "denied" }],
           ];
-        window.demoCspAttempts = [];
+        window.demoCspAttempts = JSON.parse(sessionStorage.getItem("nox-test-csp-audit") || "[]");
         document.addEventListener("securitypolicyviolation", (event) => {
-          if (/^https?:|^wss?:/.test(event.blockedURI))
-            window.demoCspAttempts.push(event.blockedURI);
+          window.demoCspAttempts.push(event.blockedURI || event.violatedDirective);
+          sessionStorage.setItem("nox-test-csp-audit", JSON.stringify(window.demoCspAttempts));
         });
         window.open = (...args) => {
           window.demoLinkAttempts.push(args[0]);
+          sessionStorage.setItem("nox-test-popup-audit", JSON.stringify(window.demoLinkAttempts));
           return null;
         };
         if (!mobile && scenario.marker) sessionStorage.setItem("nox_demo_session", scenario.role);
@@ -102,15 +112,23 @@ try {
       { scenario, user, jwt, mobile },
     );
     const unexpected = [];
+    context.on("page", (popup) => {
+      unexpected.push("unexpected popup created");
+      void popup.close();
+    });
     const reads = [];
     const trackingRequests = [];
     await context.routeWebSocket("**/*", (socket) => {
       if (new URL(socket.url()).host === new URL(origin).host) {
-        socket.connectToServer();
+        // Development sockets are not needed for these full-document tests.
+        // Never connect even a local websocket to a server.
+        if (!["/", "/hot"].includes(new URL(socket.url()).pathname))
+          unexpected.push(`unexpected local websocket ${socket.url()}`);
+        socket.close();
         return;
       }
       if (
-        !scenario.real ||
+        !effectiveReal ||
         new URL(socket.url()).hostname !== "nox-demo-test.supabase.co" ||
         new URL(socket.url()).pathname !== "/realtime/v1/websocket"
       )
@@ -120,10 +138,16 @@ try {
     await context.route("**/*", async (route) => {
       const req = route.request(),
         url = new URL(req.url());
-      if (url.origin === origin) return route.continue();
+      if (url.origin === origin) {
+        if (!["GET", "HEAD"].includes(req.method())) {
+          unexpected.push(`unexpected local mutation ${req.method()} ${url.pathname}`);
+          return route.abort();
+        }
+        return route.continue();
+      }
       if (
         !mobile &&
-        scenario.real &&
+        effectiveReal &&
         req.method() === "GET" &&
         trackingScripts.includes(url.href)
       ) {
@@ -139,7 +163,7 @@ try {
         return route.abort();
       }
       if (
-        !scenario.real &&
+        !effectiveReal &&
         (!["/auth/v1/user", "/rest/v1/profiles", "/rest/v1/internal_users"].includes(
           url.pathname,
         ) ||
@@ -155,7 +179,7 @@ try {
           "/rest/v1/rpc/get_visible_active_tenant_invoice_summaries",
         ].includes(url.pathname);
       if (
-        scenario.real &&
+        effectiveReal &&
         !allowedRealReadRpc &&
         (req.method() !== "GET" ||
           !(url.pathname === "/auth/v1/user" || url.pathname.startsWith("/rest/v1/")))
@@ -274,6 +298,14 @@ try {
       assert.deepEqual(unexpected, []);
       if (scenario.transition) {
         const previousRequests = trackingRequests.length;
+        // The SDK event is the boundary: requests started while still real are
+        // not retroactively classified as demo. The policy never waits for UI.
+        let transitionReadStart;
+        await page.exposeBinding("__noxDemoSessionObserved", (_source, email) => {
+          assert.equal(email, "inquilino@nox.com");
+          effectiveReal = false;
+          transitionReadStart = reads.length;
+        });
         fixtureUser = { ...user, email: "inquilino@nox.com" };
         fixtureRole = "inquilino";
         const token = [
@@ -288,7 +320,7 @@ try {
           )
           .join(".");
         await page.evaluate(
-          async ({ token, user }) => {
+          async ({ token, user, probe }) => {
             sessionStorage.setItem(
               "nox-test-transition-session",
               JSON.stringify({
@@ -300,13 +332,21 @@ try {
                 user,
               }),
             );
+            if (probe === "before-reload-popup")
+              window.open("https://unexpected.invalid/before-reload");
             window.noxOldTrackingDocument = true;
             const { supabase } = await import("/src/integrations/supabase/client.ts");
+            supabase.auth.onAuthStateChange((_event, session) => {
+              if (session?.user.email === "inquilino@nox.com")
+                return window.__noxDemoSessionObserved(session.user.email);
+            });
             void supabase.auth.setSession({ access_token: token, refresh_token: "test" });
           },
-          { token, user: fixtureUser },
+          { token, user: fixtureUser, probe: process.env.NOX_TEST_TRANSITION_PROBE },
         );
         await page.getByText("Simulação completa", { exact: true }).waitFor({ timeout: 60000 });
+        assert.equal(effectiveReal, false, "SDK demo session event must switch network policy");
+        assert.equal(typeof transitionReadStart, "number");
         assert.equal(
           await page.evaluate(() => window.noxOldTrackingDocument),
           undefined,
@@ -323,8 +363,81 @@ try {
             .count(),
           0,
         );
-        assert.deepEqual(unexpected, []);
-        console.log("PASS real-to-demo SDK transition: fresh document, no tracking");
+        for (const name of [
+          "Simular análise",
+          "Simular conferência",
+          "Simular ativação sem assinatura",
+          "Simular pagamento",
+        ]) {
+          await page.getByRole("button", { name, exact: true }).click();
+        }
+        await page.getByText("Recibo demonstrativo", { exact: true }).waitFor();
+        if (process.env.NOX_TEST_TRANSITION_PROBE) {
+          await page.evaluate(async (probe) => {
+            if (probe === "local-mutation")
+              await fetch("/must-not-run", { method: "POST" }).catch(() => {});
+            if (probe === "local-websocket")
+              await new Promise((resolve) => {
+                const socket = new WebSocket(
+                  window.location.origin.replace("http:", "ws:") + "/forbidden-socket",
+                );
+                socket.onclose = socket.onerror = resolve;
+              });
+            if (probe === "rest")
+              await fetch("https://nox-demo-test.supabase.co/rest/v1/faturas_inquilino").catch(
+                () => {},
+              );
+            if (probe === "rpc")
+              await fetch("https://nox-demo-test.supabase.co/rest/v1/rpc/get_my_owner_dashboard", {
+                method: "POST",
+              }).catch(() => {});
+            if (probe === "realtime")
+              await new Promise((resolve) => {
+                const socket = new WebSocket(
+                  "wss://nox-demo-test.supabase.co/realtime/v1/websocket",
+                );
+                socket.onclose = socket.onerror = resolve;
+              });
+            if (probe === "popup") window.open("https://unexpected.invalid/popup");
+            if (probe === "tracking")
+              await new Promise((resolve) => {
+                const script = document.createElement("script");
+                script.onload = script.onerror = resolve;
+                script.src = "https://connect.facebook.net/en_US/fbevents.js";
+                document.head.appendChild(script);
+              });
+            if (probe === "csp")
+              await new Promise((resolve) => {
+                document.addEventListener("securitypolicyviolation", resolve, { once: true });
+                const script = document.createElement("script");
+                script.src = "https://unexpected.invalid/csp-script";
+                document.head.appendChild(script);
+              });
+          }, process.env.NOX_TEST_TRANSITION_PROBE);
+        }
+        // These audits survive reload: a forbidden operation in either document fails.
+        assert.deepEqual(
+          await page.evaluate(() => window.demoLinkAttempts),
+          [],
+          "no popups across transition",
+        );
+        assert.deepEqual(
+          await page.evaluate(() => window.demoCspAttempts),
+          [],
+          "no CSP violations across transition",
+        );
+        assert.deepEqual(unexpected, [], "demo network policy active throughout transition");
+        assert.ok(
+          reads
+            .slice(transitionReadStart)
+            .every((path) =>
+              ["/auth/v1/user", "/rest/v1/profiles", "/rest/v1/internal_users"].includes(path),
+            ),
+          "only identity reads after transition starts",
+        );
+        console.log(
+          "PASS real-to-demo SDK transition: demo network policy, persistent CSP/popup audit",
+        );
       }
       console.log(`PASS ${mobile ? "mobile" : "web"} ${JSON.stringify(scenario)} ${path}`);
     }
