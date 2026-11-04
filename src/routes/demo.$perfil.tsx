@@ -1,3 +1,4 @@
+import { prepareDemoTrackingDocument } from "@/lib/tracking";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { DEMO_PROFILES, isDemoProfileKey } from "@/lib/demo-accounts";
@@ -12,6 +13,7 @@ function DemoAccountBootstrap() {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (prepareDemoTrackingDocument()) return;
     if (!isDemoProfileKey(perfil)) {
       setError("Conta de demonstração inválida.");
       return;

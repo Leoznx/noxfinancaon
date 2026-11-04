@@ -4,6 +4,7 @@ import {
   GOOGLE_ADS_SIGNUP_DESTINATION,
   GOOGLE_ADS_TAG_ID,
   trackCadastroConcluido,
+  syncTrackingSession,
 } from "../src/lib/tracking";
 
 test("envia a conversão de inscrição configurada no Google Ads", () => {
@@ -14,12 +15,14 @@ test("envia a conversão de inscrição configurada no Google Ads", () => {
   Object.defineProperty(globalThis, "window", {
     configurable: true,
     value: {
+      location: { pathname: "/cadastro-concluido" },
       gtag: (...args: unknown[]) => gtagCalls.push(args),
       fbq: (...args: unknown[]) => fbqCalls.push(args),
     },
   });
 
   try {
+    syncTrackingSession("real@example.invalid");
     trackCadastroConcluido();
 
     assert.deepEqual(gtagCalls, [

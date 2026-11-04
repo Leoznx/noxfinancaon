@@ -11,12 +11,22 @@ const browser = await chromium.launch({
   args: ["--no-sandbox"],
 });
 const scenarios = [];
+const trackingScripts = [
+  "https://www.googletagmanager.com/gtag/js?id=AW-18391707457",
+  "https://connect.facebook.net/en_US/fbevents.js",
+];
 for (const role of ["proprietario", "corretor", "imobiliaria", "inquilino"])
   for (const marker of [false, true]) scenarios.push({ role, marker });
 scenarios.push(
   { role: "proprietario", marker: true, real: true },
   { role: "inquilino", marker: true, real: true },
   { role: "inquilino", marker: true, denied: true },
+  ...(!mobile
+    ? [
+        { role: "proprietario", marker: false, real: true, consent: true },
+        { role: "proprietario", marker: false, real: true, transition: true },
+      ]
+    : []),
 );
 try {
   for (const scenario of scenarios.filter((item) => !process.env.NOX_TEST_REAL_ONLY || item.real)) {
@@ -31,6 +41,8 @@ try {
       user_metadata: {},
       app_metadata: {},
     };
+    let fixtureUser = user;
+    let fixtureRole = scenario.role;
     const jwt = [
       { alg: "HS256", typ: "JWT" },
       { sub: id, email: user.email, exp: Math.floor(Date.now() / 1000) + 3600 },
@@ -41,6 +53,15 @@ try {
     await context.addInitScript(
       ({ scenario, user, jwt, mobile }) => {
         window.demoLinkAttempts = [];
+        if (scenario.consent) {
+          const pixel = (...args) => pixel.queue.push(args);
+          pixel.queue = [["consent", "revoke"]];
+          window.fbq = pixel;
+        }
+        if (scenario.consent)
+          window.dataLayer = [
+            ["consent", "default", { ad_storage: "denied", analytics_storage: "denied" }],
+          ];
         window.demoCspAttempts = [];
         document.addEventListener("securitypolicyviolation", (event) => {
           if (/^https?:|^wss?:/.test(event.blockedURI))
@@ -75,11 +96,14 @@ try {
             user,
           }),
         );
+        const transition = sessionStorage.getItem("nox-test-transition-session");
+        if (transition) localStorage.setItem("sb-nox-demo-test-auth-token", transition);
       },
       { scenario, user, jwt, mobile },
     );
     const unexpected = [];
     const reads = [];
+    const trackingRequests = [];
     await context.routeWebSocket("**/*", (socket) => {
       if (new URL(socket.url()).host === new URL(origin).host) {
         socket.connectToServer();
@@ -97,6 +121,19 @@ try {
       const req = route.request(),
         url = new URL(req.url());
       if (url.origin === origin) return route.continue();
+      if (
+        !mobile &&
+        scenario.real &&
+        req.method() === "GET" &&
+        trackingScripts.includes(url.href)
+      ) {
+        trackingRequests.push(url.href);
+        return route.fulfill({
+          status: 200,
+          contentType: "application/javascript",
+          body: "/* intercepted vendor fixture: no external SDK execution */",
+        });
+      }
       if (url.hostname !== "nox-demo-test.supabase.co") {
         unexpected.push(`external ${req.method()} ${url.href}`);
         return route.abort();
@@ -111,8 +148,15 @@ try {
         unexpected.push(`${req.method()} ${url.pathname}`);
         return route.abort();
       }
+      const allowedRealReadRpc =
+        req.method() === "POST" &&
+        [
+          "/rest/v1/rpc/get_my_owner_dashboard",
+          "/rest/v1/rpc/get_visible_active_tenant_invoice_summaries",
+        ].includes(url.pathname);
       if (
         scenario.real &&
+        !allowedRealReadRpc &&
         (req.method() !== "GET" ||
           !(url.pathname === "/auth/v1/user" || url.pathname.startsWith("/rest/v1/")))
       ) {
@@ -121,12 +165,12 @@ try {
       }
       reads.push(url.pathname);
       let body = [];
-      if (url.pathname === "/auth/v1/user") body = scenario.denied ? null : user;
+      if (url.pathname === "/auth/v1/user") body = scenario.denied ? null : fixtureUser;
       else if (url.pathname === "/rest/v1/profiles")
         body = {
           id,
-          email: user.email,
-          role: scenario.role,
+          email: fixtureUser.email,
+          role: fixtureRole,
           nome: "Fixture seguro",
           status: "ativo",
           cadastro_concluido_em: "2026-01-01",
@@ -179,6 +223,23 @@ try {
         await page.getByText("Recibo demonstrativo", { exact: true }).waitFor();
         assert.equal(await page.locator('a[href^="http"]').count(), 0);
       }
+      if (!mobile && scenario.real) {
+        await page.waitForFunction(() => !!window.fbq && !!window.gtag);
+        assert.deepEqual([...new Set(trackingRequests)].sort(), [...trackingScripts].sort());
+        if (scenario.consent) {
+          const commands = await page.evaluate(() =>
+            window.dataLayer.map((value) => Array.from(value)),
+          );
+          assert.deepEqual(
+            await page.evaluate(() => window.fbq.queue.filter((value) => value[0] === "consent")),
+            [["consent", "revoke"]],
+          );
+          assert.deepEqual(
+            commands.filter((value) => value[0] === "consent"),
+            [["consent", "default", { ad_storage: "denied", analytics_storage: "denied" }]],
+          );
+        }
+      }
       if (process.env.NOX_TEST_EXTERNAL_PROBE === "http") {
         await page.evaluate(
           () =>
@@ -211,6 +272,60 @@ try {
       assert.deepEqual(await page.evaluate(() => window.demoLinkAttempts), []);
       assert.deepEqual(await page.evaluate(() => window.demoCspAttempts), []);
       assert.deepEqual(unexpected, []);
+      if (scenario.transition) {
+        const previousRequests = trackingRequests.length;
+        fixtureUser = { ...user, email: "inquilino@nox.com" };
+        fixtureRole = "inquilino";
+        const token = [
+          { alg: "HS256", typ: "JWT" },
+          { sub: id, email: fixtureUser.email, exp: Math.floor(Date.now() / 1000) + 3600 },
+          "test",
+        ]
+          .map((value) =>
+            Buffer.from(typeof value === "string" ? value : JSON.stringify(value)).toString(
+              "base64url",
+            ),
+          )
+          .join(".");
+        await page.evaluate(
+          async ({ token, user }) => {
+            sessionStorage.setItem(
+              "nox-test-transition-session",
+              JSON.stringify({
+                access_token: token,
+                refresh_token: "test",
+                expires_in: 3600,
+                expires_at: Math.floor(Date.now() / 1000) + 3600,
+                token_type: "bearer",
+                user,
+              }),
+            );
+            window.noxOldTrackingDocument = true;
+            const { supabase } = await import("/src/integrations/supabase/client.ts");
+            void supabase.auth.setSession({ access_token: token, refresh_token: "test" });
+          },
+          { token, user: fixtureUser },
+        );
+        await page.getByText("Simulação completa", { exact: true }).waitFor({ timeout: 60000 });
+        assert.equal(
+          await page.evaluate(() => window.noxOldTrackingDocument),
+          undefined,
+          "demo must use a fresh document",
+        );
+        assert.equal(
+          trackingRequests.length,
+          previousRequests,
+          "no tracking after switching to demo",
+        );
+        assert.equal(
+          await page
+            .locator('script[src*="googletagmanager"],script[src*="connect.facebook"]')
+            .count(),
+          0,
+        );
+        assert.deepEqual(unexpected, []);
+        console.log("PASS real-to-demo SDK transition: fresh document, no tracking");
+      }
       console.log(`PASS ${mobile ? "mobile" : "web"} ${JSON.stringify(scenario)} ${path}`);
     }
     await context.close();
