@@ -1,3 +1,4 @@
+import { assertNonDemoOperation } from "@/lib/demo-request-guard";
 import { supabase } from "@/integrations/supabase/client";
 import { loadSessionResource, peekSessionResource } from "@/lib/session-resource-cache";
 import {
@@ -98,6 +99,7 @@ export async function fetchTenantDashboard(
   userId: string,
   email?: string | null,
 ): Promise<TenantDashboardData> {
+  assertNonDemoOperation(email ?? undefined);
   const [byUser, byEmail, profileResult] = await Promise.all([
     supabase.from("consultas_credito").select(CONSULTATION_SELECT).eq("tenant_user_id", userId),
     email

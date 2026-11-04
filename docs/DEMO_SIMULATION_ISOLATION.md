@@ -16,7 +16,7 @@ Não há garantia de isolamento global nem proteção nova no servidor contra cl
 
 ## Coordenação
 
-Branch independente `codex/isolated-demo-simulations`, baseada em main. Nenhum arquivo dos PRs de carreira web #42 e mobile #19 foi editado. Rever integração funcional depois do merge desses trabalhos, especialmente cache e identificação demo. Sem alteração de comissão/carreira.
+Branch independente `codex/isolated-demo-simulations`, baseada em main. A revisão de boletos toca também `dashboard-navigation-data.ts` no app, somente nas funções de faturas/lotes; o PR de carreira #19 altera outra região do mesmo arquivo. A integração é verificada em checkout separado, sem alterar o PR de carreira. Rever integração funcional depois do merge desses trabalhos, especialmente cache e identificação demo. Sem alteração de comissão/carreira.
 
 ## Verificação reproduzível
 
@@ -38,3 +38,11 @@ Testes adicionais usam as versões reais do SDK de cada repositório com fetch s
 **Limite que permanece:** isto é defesa do cliente. `billing-auth`, `d4sign-create-contract`, `contract-document`, RLS e autorização de servidor não receberam veto novo para demo. Tokens antigos NÃO foram revogados; versões antigas e clientes que ignorem estas barreiras ainda podem alcançar integrações autorizadas pelo backend. Não aplicar alterações críticas de autorização ou migrações implicitamente. Não publicar/mesclar antes de uma decisão específica sobre enforcement de servidor e validação nativa. Outras leituras legadas podem continuar mostrando dados do backend; não afirmar isolamento global/sintético de todo o produto.
 
 Para testes web completos, iniciar Vite na porta 4173 com `VITE_SUPABASE_URL=https://nox-demo-test.supabase.co`, `VITE_SUPABASE_PUBLISHABLE_KEY=test-public-key` e equivalentes `SUPABASE_*`; executar `node scripts/test-demo-deep-links-browser.mjs`. Para Expo web, iniciar o app na porta 4174 com `EXPO_PUBLIC_SUPABASE_URL=https://nox-demo-test.supabase.co`, `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=test-public-key`, `EXPO_NO_TELEMETRY=1`, `EXPO_OFFLINE=1`; executar no web `node scripts/test-demo-mobile-app-browser.mjs`. `NOX_TEST_ORIGIN` permite portas diferentes. Testes de transporte: `tsx --test tests/demo-request-guard.test.mjs` (no mobile sem #19, usar o executável tsx do checkout web companheiro).
+
+## Terceira revisão: dashboard do inquilino e carteira de cobranças
+
+As URLs diretas `/inquilino/dashboard` e `/carteira-cobrancas` passam pela verificação Auth/perfil antes de montar consultas, controles operacionais ou links de boleto. Os quatro perfis demo recebem a simulação local com ou sem marcador de storage. A identidade recusada não monta o conteúdo operacional. Os loaders de dashboard/carteira negam e-mails demo antes das leituras; os leitores de faturas/lotes deixam de escolher dados sintéticos pelo marcador residual. Contas reais mantêm seus controles de acesso existentes.
+
+Regressão: `node --test tests/collection-demo-isolation.test.mjs` executa os módulos reais de dados/cache com backend fictício (5 casos por superfície). No checkout web, `node scripts/test-demo-boleto-isolation-browser.mjs` e `NOX_DEMO_SURFACE=mobile NOX_TEST_ORIGIN=http://localhost:4374 node scripts/test-demo-boleto-isolation-browser.mjs` exercitam as aplicações completas locais: 20 casos por superfície, quatro perfis com/sem marcador, duas contas reais com marcador e identidade recusada nas duas URLs. Todas as chamadas externas são interceptadas; qualquer leitura de cobrança demo ou abertura de janela causa falha. O app é executado em Expo web, sem evidência adicional em aparelho nativo.
+
+Permanecem os limites de servidor, tokens antigos e outras leituras legadas descritos acima. Não publicar estes rascunhos.

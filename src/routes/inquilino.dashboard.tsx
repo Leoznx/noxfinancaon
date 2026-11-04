@@ -1,3 +1,4 @@
+import { DemoSimulationBoundary } from "@/components/DemoSimulationBoundary";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { AlertCircle, Loader2 } from "lucide-react";
@@ -25,9 +26,11 @@ import {
 
 export const Route = createFileRoute("/inquilino/dashboard")({
   component: () => (
-    <ProtectedRoute roles={["inquilino"]}>
-      <TenantDashboardPage />
-    </ProtectedRoute>
+    <DemoSimulationBoundary>
+      <ProtectedRoute roles={["inquilino"]}>
+        <TenantDashboardPage />
+      </ProtectedRoute>
+    </DemoSimulationBoundary>
   ),
 });
 
