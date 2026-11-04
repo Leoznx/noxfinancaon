@@ -1,3 +1,4 @@
+import { DemoCareerBoundary } from "@/components/DemoCareerBoundary";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -10,9 +11,11 @@ import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/plano-carreira")({
   component: () => (
-    <ProtectedRoute roles={["corretor", "imobiliaria", "proprietario"]} requiresBrokerFinancialAccess>
-      <PlanoCarreiraPage />
-    </ProtectedRoute>
+    <DemoCareerBoundary>
+      <ProtectedRoute roles={["corretor", "imobiliaria", "proprietario"]} requiresBrokerFinancialAccess>
+        <PlanoCarreiraPage />
+      </ProtectedRoute>
+    </DemoCareerBoundary>
   ),
 });
 

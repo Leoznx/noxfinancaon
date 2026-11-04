@@ -5,8 +5,23 @@ import assert from "node:assert/strict";
 import { validateFixtureOrigin } from "./demo-browser-fixture-origin.mjs";
 import { serveFixtureResponse } from "./demo-browser-fixture-response.mjs";
 const mobile = process.env.NOX_DEMO_SURFACE === "mobile";
+const career = process.env.NOX_DEMO_FLOW === "career";
 const commissions = process.env.NOX_DEMO_FLOW === "commissions";
-if (process.env.NOX_DEMO_FLOW && !commissions) throw new Error("Unknown NOX_DEMO_FLOW");
+if (process.env.NOX_DEMO_FLOW && !commissions && !career) throw new Error("Unknown NOX_DEMO_FLOW");
+async function verifyDemoCareer(page) {
+  await page
+    .getByText("Plano de Carreira demonstrativo", { exact: true })
+    .waitFor({ timeout: 60000 });
+  await page.getByText("PRATA • 15 contratos", { exact: true }).waitFor();
+  await page.getByText("Faltam 6 contratos para OURO", { exact: true }).waitFor();
+  assert.equal(
+    await page
+      .getByRole("progressbar", { name: "Progresso para o próximo nível" })
+      .getAttribute("aria-valuenow"),
+    "40",
+  );
+  assert.equal(await page.locator('a[href^="http"]').count(), 0);
+}
 async function completeCommissionWithdrawal(page) {
   await page
     .getByText("Comissões demonstrativas", { exact: true })
@@ -72,14 +87,14 @@ for (const role of ["proprietario", "corretor", "imobiliaria", "inquilino"])
   for (const marker of [false, true]) scenarios.push({ role, marker });
 scenarios.push(
   { role: "proprietario", marker: true, real: true },
-  { role: commissions ? "imobiliaria" : "inquilino", marker: true, real: true },
+  { role: commissions || career ? "imobiliaria" : "inquilino", marker: true, real: true },
   { role: "inquilino", marker: true, denied: true },
   ...(!mobile
     ? [
         { role: "proprietario", marker: false, real: true, consent: true },
         { role: "proprietario", marker: false, real: true, transition: true },
       ]
-    : commissions
+    : commissions || career
       ? [{ role: "proprietario", marker: false, real: true, transition: true }]
       : []),
 );
@@ -244,7 +259,7 @@ try {
         [
           "/rest/v1/rpc/get_my_owner_dashboard",
           "/rest/v1/rpc/get_visible_active_tenant_invoice_summaries",
-          ...(commissions
+          ...(commissions || career
             ? [
                 "/rest/v1/rpc/get_user_financial_summary",
                 "/rest/v1/rpc/get_my_commissions",
@@ -257,7 +272,7 @@ try {
       if (
         effectiveReal &&
         !allowedRealReadRpc &&
-        (req.method() !== "GET" ||
+        (!["GET", ...(career ? ["HEAD"] : [])].includes(req.method()) ||
           !(url.pathname === "/auth/v1/user" || url.pathname.startsWith("/rest/v1/")))
       ) {
         unexpected.push(`unapproved fixture ${req.method()} ${url.href}`);
@@ -278,6 +293,33 @@ try {
           active_withdrawal_status: null,
           withdrawal_action: "UNAVAILABLE",
         };
+      if (career && url.pathname === "/rest/v1/niveis_perfil")
+        body = [
+          {
+            nome_nivel: "BRONZE",
+            min_contratos: 0,
+            max_contratos: 10,
+            percentual_comissao: 1,
+            bonus_renovacao: 0,
+            ordem: 1,
+          },
+          {
+            nome_nivel: "PRATA",
+            min_contratos: 11,
+            max_contratos: 20,
+            percentual_comissao: 1.5,
+            bonus_renovacao: 0,
+            ordem: 2,
+          },
+          {
+            nome_nivel: "OURO",
+            min_contratos: 21,
+            max_contratos: 30,
+            percentual_comissao: 2,
+            bonus_renovacao: 0,
+            ordem: 3,
+          },
+        ];
       if (url.pathname === "/auth/v1/user") body = scenario.denied ? null : fixtureUser;
       else if (url.pathname === "/rest/v1/profiles")
         body = {
@@ -291,15 +333,22 @@ try {
       else if (url.pathname === "/rest/v1/internal_users") body = null;
       await route.fulfill({
         status: 200,
-        headers: { "content-type": "application/json", "access-control-allow-origin": "*" },
+        headers: {
+          "content-type": "application/json",
+          "access-control-allow-origin": "*",
+          "access-control-expose-headers": "content-range",
+          ...(career && url.pathname === "/rest/v1/apolices" ? { "content-range": "0-6/7" } : {}),
+        },
         body: JSON.stringify(body),
       });
     });
-    const paths = commissions
-      ? ["/minhas-comissoes"]
-      : scenario.real
-        ? [scenario.role === "inquilino" ? "/inquilino/dashboard" : "/carteira-cobrancas"]
-        : ["/inquilino/dashboard", "/carteira-cobrancas"];
+    const paths = career
+      ? ["/plano-carreira"]
+      : commissions
+        ? ["/minhas-comissoes"]
+        : scenario.real
+          ? [scenario.role === "inquilino" ? "/inquilino/dashboard" : "/carteira-cobrancas"]
+          : ["/inquilino/dashboard", "/carteira-cobrancas"];
     try {
       for (const path of paths) {
         reads.length = 0;
@@ -311,13 +360,19 @@ try {
         } else if (scenario.real) {
           await page
             .getByText(
-              commissions
+              career
                 ? mobile
-                  ? "Minhas Comissões"
-                  : "Saldo disponível para saque"
-                : path === "/carteira-cobrancas"
-                  ? "Carteira de Cobranças"
-                  : "Minhas faturas",
+                  ? "Plano de Carreira"
+                  : scenario.role === "proprietario"
+                    ? "Plano de Fidelidade"
+                    : "Plano de Parceria"
+                : commissions
+                  ? mobile
+                    ? "Minhas Comissões"
+                    : "Saldo disponível para saque"
+                  : path === "/carteira-cobrancas"
+                    ? "Carteira de Cobranças"
+                    : "Minhas faturas",
               {
                 exact: true,
               },
@@ -332,13 +387,25 @@ try {
           await page.waitForFunction(() => !document.body.innerText.includes("Verificando sessão"));
           assert.ok(
             reads.some((path) =>
-              (commissions
-                ? ["/rest/v1/rpc/get_user_financial_summary"]
-                : ["/rest/v1/consultas_credito", "/rest/v1/faturas_inquilino"]
+              (career
+                ? ["/rest/v1/apolices", "/rest/v1/niveis_perfil"]
+                : commissions
+                  ? ["/rest/v1/rpc/get_user_financial_summary"]
+                  : ["/rest/v1/consultas_credito", "/rest/v1/faturas_inquilino"]
               ).includes(path),
             ),
             "real account must load its normal data, not marker fixtures",
           );
+          if (career) {
+            assert.equal(
+              await page.getByText("Plano de Carreira demonstrativo", { exact: true }).count(),
+              0,
+            );
+            await page
+              .getByText(mobile ? "0 contratos ativos" : "BRONZE • 7 contratos", { exact: true })
+              .waitFor();
+            assert.equal(await page.getByText("PRATA • 15 contratos", { exact: true }).count(), 0);
+          }
           if (commissions) {
             await page
               .getByText(/765,43/)
@@ -349,6 +416,12 @@ try {
               0,
             );
           }
+        } else if (career) {
+          if (scenario.role === "inquilino")
+            await page
+              .getByText("Carreira não disponível para este perfil demonstrativo.", { exact: true })
+              .waitFor();
+          else await verifyDemoCareer(page);
         } else if (commissions) {
           if (scenario.role === "inquilino") {
             await page
@@ -428,15 +501,18 @@ try {
           // not retroactively classified as demo. The policy never waits for UI.
           let transitionReadStart;
           await page.exposeBinding("__noxDemoSessionObserved", (_source, email) => {
-            assert.equal(email, commissions ? "proprietario@nox.com" : "inquilino@nox.com");
+            assert.equal(
+              email,
+              commissions || career ? "proprietario@nox.com" : "inquilino@nox.com",
+            );
             effectiveReal = false;
             transitionReadStart = reads.length;
           });
           fixtureUser = {
             ...user,
-            email: commissions ? "proprietario@nox.com" : "inquilino@nox.com",
+            email: commissions || career ? "proprietario@nox.com" : "inquilino@nox.com",
           };
-          fixtureRole = commissions ? "proprietario" : "inquilino";
+          fixtureRole = commissions || career ? "proprietario" : "inquilino";
           const token = [
             { alg: "HS256", typ: "JWT" },
             { sub: id, email: fixtureUser.email, exp: Math.floor(Date.now() / 1000) + 3600 },
@@ -477,9 +553,16 @@ try {
             { token, user: fixtureUser, probe: process.env.NOX_TEST_TRANSITION_PROBE, mobile },
           );
           await page
-            .getByText(commissions ? "Comissões demonstrativas" : "Simulação completa", {
-              exact: true,
-            })
+            .getByText(
+              career
+                ? "Plano de Carreira demonstrativo"
+                : commissions
+                  ? "Comissões demonstrativas"
+                  : "Simulação completa",
+              {
+                exact: true,
+              },
+            )
             .waitFor({ timeout: 60000 });
           assert.equal(effectiveReal, false, "SDK demo session event must switch network policy");
           assert.equal(typeof transitionReadStart, "number");
@@ -501,7 +584,8 @@ try {
               .count(),
             0,
           );
-          if (commissions) await completeCommissionWithdrawal(page);
+          if (career) await verifyDemoCareer(page);
+          else if (commissions) await completeCommissionWithdrawal(page);
           else {
             for (const name of [
               "Simular análise",
