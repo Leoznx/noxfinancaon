@@ -63,6 +63,14 @@ try {
     );
     const unexpected = [];
     const reads = [];
+    await context.routeWebSocket("**/*", (socket) => {
+      if (new URL(socket.url()).host === new URL(origin).host) {
+        socket.connectToServer();
+        return;
+      }
+      if (!scenario.real) unexpected.push("unexpected demo websocket");
+      socket.close();
+    });
     await context.route("**/*", async (route) => {
       const req = route.request(),
         url = new URL(req.url());
