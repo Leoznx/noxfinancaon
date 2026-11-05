@@ -46,11 +46,11 @@ export interface NormalizedDirectDResult {
   message: string;
 }
 
-export const DIRECTD_DECISION_RULE = "score_descricao_compromisso_v2";
+export const DIRECTD_DECISION_RULE = "score_descricao_compromisso_v3";
 
-const MINIMUM_APPROVAL_SCORE = 651;
+const MINIMUM_APPROVAL_SCORE = 600;
 const MINIMUM_REVIEW_SCORE = 541;
-const MAXIMUM_AUTOMATIC_REJECTION_SCORE = 538;
+const AUTOMATIC_REJECTION_SCORE_CUTOFF = 540;
 const MINIMUM_COMMITMENT_PAYMENT_PERCENTAGE = 48;
 
 export function extractCommitmentPaymentPercentage(value: unknown): number | null {
@@ -199,7 +199,7 @@ export function normalizeDirectDResult(
     }
 
     if (
-      score <= MAXIMUM_AUTOMATIC_REJECTION_SCORE &&
+      score < AUTOMATIC_REJECTION_SCORE_CUTOFF &&
       commitmentPaymentPercentage < MINIMUM_COMMITMENT_PAYMENT_PERCENTAGE
     ) {
       return {
