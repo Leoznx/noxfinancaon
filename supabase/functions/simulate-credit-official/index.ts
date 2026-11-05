@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 import {
+  DIRECTD_DECISION_RULE,
   normalizeDirectDResult,
   sanitizeDirectDResponse,
   type DirectDScoreResponse,
@@ -603,7 +604,11 @@ serve(async (req) => {
       new_value: {
         provider: "directd_quod",
         decision: result.decision,
+        score: result.score,
         scoreBand: result.faixaScore,
+        commitmentPaymentPercentage: result.commitmentPaymentPercentage,
+        commitmentPaymentDescription: result.commitmentPaymentDescription,
+        decisionRule: DIRECTD_DECISION_RULE,
         customerNameSource: identityUnavailableCode
           ? identityUnavailableCode === "DIRECTD_IDENTITY_NOT_FOUND"
             ? "directd_cadastro_not_found"
@@ -621,6 +626,8 @@ serve(async (req) => {
         status: result.decision,
         faixaScore: result.faixaScore,
         score: result.score,
+        percentualCompromissoPagamento: result.commitmentPaymentPercentage,
+        descricaoCompromissoPagamento: result.commitmentPaymentDescription,
         nome: identity?.customerName ?? null,
       },
     });
