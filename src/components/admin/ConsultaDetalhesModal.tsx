@@ -20,6 +20,7 @@ import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { InternalCreditAnalysisCard } from "@/components/admin/InternalCreditAnalysisCard";
 import {
   Dialog,
   DialogContent,
@@ -340,6 +341,8 @@ export function ConsultaDetalhesModal({ consulta, open, onOpenChange }: Props) {
             {criadaEm ? `Solicitada em ${criadaEm.toLocaleString("pt-BR")}` : "Data não registrada"}
           </span>
         </div>
+
+        <InternalCreditAnalysisCard consultationId={consulta.id} />
 
         <Secao titulo="Quem fez a consulta">
           <Campo icone={UserRound} rotulo="Nome do usuário" valor={nomeSolicitante} />

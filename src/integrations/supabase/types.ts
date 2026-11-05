@@ -3487,6 +3487,17 @@ export type Database = {
         Args: { _uid: string }
         Returns: Database["public"]["Enums"]["internal_role"]
       }
+      get_internal_credit_analyses: {
+        Args: { p_consultation_ids: string[] }
+        Returns: {
+          consultation_id: string
+          decision: string | null
+          payment_commitment_description: string | null
+          payment_commitment_percentage: number | null
+          score: number | null
+          score_band: string | null
+        }[]
+      }
       get_nivel_corretor_info: {
         Args: { p_corretor_id: string }
         Returns: {

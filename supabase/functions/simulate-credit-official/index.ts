@@ -577,7 +577,7 @@ serve(async (req) => {
         : { status: "found" },
     };
     const { data: finished, error: finishError } = await supabaseAdmin.rpc(
-      "finish_official_credit_simulation",
+      "finish_official_credit_simulation_v2",
       {
         p_consultation_id: consultaId,
         p_worker_id: workerId,
@@ -586,6 +586,8 @@ serve(async (req) => {
         p_message: result.message,
         p_score: result.score,
         p_score_band: result.faixaScore,
+        p_commitment_payment_percentage: result.commitmentPaymentPercentage,
+        p_commitment_payment_description: result.commitmentPaymentDescription,
         p_provider_external_id: parsed.metaDados?.consultaUid ?? null,
         p_sanitized_response: sanitizedResponse,
         p_provider_http_status: providerResponse.status,
@@ -625,9 +627,6 @@ serve(async (req) => {
       resultado: {
         status: result.decision,
         faixaScore: result.faixaScore,
-        score: result.score,
-        percentualCompromissoPagamento: result.commitmentPaymentPercentage,
-        descricaoCompromissoPagamento: result.commitmentPaymentDescription,
         nome: identity?.customerName ?? null,
       },
     });

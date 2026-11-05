@@ -143,7 +143,7 @@ test("seleciona pessoa jurídica para CNPJ", () => {
   });
 });
 
-test("resposta persistida remove documento, usuário e IP do provedor", () => {
+test("resposta publica remove documento, usuário, IP e análise interna", () => {
   const raw = {
     ...responseFor("Baixo índice de inadimplência"),
     metaDados: {
@@ -152,12 +152,18 @@ test("resposta persistida remove documento, usuário e IP do provedor", () => {
       ip: "127.0.0.1",
     },
   } as DirectDScoreResponse & { metaDados: Record<string, unknown> };
-  const sanitized = JSON.stringify(sanitizeDirectDResponse(raw, 11));
+  const sanitizedObject = sanitizeDirectDResponse(raw, 11) as {
+    retorno: Record<string, unknown>;
+  };
+  const sanitized = JSON.stringify(sanitizedObject);
   assert.equal(sanitized.includes("00000000000"), false);
   assert.equal(sanitized.includes("usuario-sensivel"), false);
   assert.equal(sanitized.includes("127.0.0.1"), false);
-  assert.equal(sanitized.includes(FULL_COMMITMENT), true);
-  assert.equal(sanitized.includes(DIRECTD_DECISION_RULE), true);
+  assert.equal("score" in sanitizedObject.retorno, false);
+  assert.equal("scoreCompromissoPagamento" in sanitizedObject.retorno, false);
+  assert.equal("descricaoCompromissoPagamento" in sanitizedObject.retorno, false);
+  assert.equal("percentualCompromissoPagamento" in sanitizedObject.retorno, false);
+  assert.equal(sanitizedObject.retorno.regraDecisao, DIRECTD_DECISION_RULE);
 });
 
 test("migração desliga o claim antigo e registra o custo de R$ 1,98", () => {
@@ -260,4 +266,36 @@ test("migração reutiliza somente resultados calculados com os dois critérios"
     migration,
     /UPDATE public\.consultas_credito\s+SET\s+status[\s\S]+FROM scored/,
   );
+});
+
+test("análise interna fica protegida e fora do retorno legível pelo solicitante", () => {
+  const migration = readFileSync(
+    new URL(
+      "../supabase/migrations/20261105173000_admin_internal_credit_analysis.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+
+  assert.match(migration, /ADD COLUMN IF NOT EXISTS commitment_payment_percentage numeric/);
+  assert.match(migration, /CREATE OR REPLACE FUNCTION public\.get_internal_credit_analyses/);
+  assert.match(migration, /profile\.role::text IN \('admin', 'admin_master'\)/);
+  assert.match(migration, /public\.has_internal_role\([\s\S]+?'admin_master'/);
+  assert.match(migration, /REVOKE ALL ON FUNCTION public\.get_internal_credit_analyses\(uuid\[\]\)/);
+  assert.match(migration, /public\.strip_internal_credit_analysis\(raw_response\)/);
+  assert.match(migration, /automacao_credpago_resultado[\s\S]+?- 'score'/);
+  assert.match(migration, /CREATE OR REPLACE FUNCTION public\.finish_official_credit_simulation_v2/);
+
+  const edgeFunction = readFileSync(
+    new URL("../supabase/functions/simulate-credit-official/index.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(edgeFunction, /"finish_official_credit_simulation_v2"/);
+  const publicResultStart = edgeFunction.indexOf("return json({\n      ok: true");
+  const publicResultEnd = edgeFunction.indexOf("\n  } catch", publicResultStart);
+  assert.notEqual(publicResultStart, -1);
+  assert.notEqual(publicResultEnd, -1);
+  const publicResult = edgeFunction.slice(publicResultStart, publicResultEnd);
+  assert.doesNotMatch(publicResult, /score:\s*result\.score/);
+  assert.doesNotMatch(publicResult, /percentualCompromissoPagamento/);
 });
