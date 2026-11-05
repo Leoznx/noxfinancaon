@@ -1,8 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 import {
+  canRetryDirectDScoreFailure,
+  hasDirectDScoreSuccessPayload,
   normalizeDirectDResult,
   sanitizeDirectDResponse,
+  shouldAutomaticallyRetryDirectDScoreFailure,
   type DirectDScoreResponse,
 } from "../_shared/directd-credit.ts";
 import {
@@ -20,6 +23,8 @@ const DIRECTD_SCORE_URL = "https://apiv3.directd.com.br/api/Score";
 const DIRECTD_PF_IDENTITY_URL = "https://apiv3.directd.com.br/api/CadastroPessoaFisica";
 const DIRECTD_PJ_IDENTITY_URL = "https://apiv3.directd.com.br/api/CadastroPessoaJuridica";
 const REQUEST_TIMEOUT_MS = 30_000;
+const DIRECTD_SCORE_MAX_HTTP_ATTEMPTS = 3;
+const DIRECTD_SCORE_RETRY_DELAYS_MS = [500, 1_200] as const;
 
 type ClaimedConsultation = {
   id: string;
@@ -52,6 +57,10 @@ function safeJson(text: string): unknown {
   } catch {
     return null;
   }
+}
+
+function wait(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 serve(async (req) => {
@@ -494,40 +503,61 @@ serve(async (req) => {
     const url = new URL(DIRECTD_SCORE_URL);
     url.searchParams.set(document.length === 11 ? "CPF" : "CNPJ", document);
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-    let providerResponse: Response;
-    try {
-      providerResponse = await fetch(url, {
-        method: "GET",
-        headers: { Accept: "application/json", Authorization: `Bearer ${directDToken}` },
-        signal: controller.signal,
+    let providerResponse: Response | null = null;
+    let parsed: DirectDScoreResponse | null = null;
+    for (let attempt = 1; attempt <= DIRECTD_SCORE_MAX_HTTP_ATTEMPTS; attempt += 1) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+      try {
+        providerResponse = await fetch(url, {
+          method: "GET",
+          headers: { Accept: "application/json", Authorization: `Bearer ${directDToken}` },
+          signal: controller.signal,
+        });
+        parsed = safeJson(await providerResponse.text()) as DirectDScoreResponse | null;
+      } catch (error) {
+        await supabaseAdmin.rpc("fail_official_credit_simulation", {
+          p_consultation_id: consultaId,
+          p_worker_id: workerId,
+          p_execution_version: claimed.execution_version,
+          p_error_code:
+            error instanceof DOMException && error.name === "AbortError"
+              ? "DIRECTD_TIMEOUT"
+              : "DIRECTD_NETWORK_ERROR",
+          p_user_message:
+            "A resposta da API oficial ficou inconclusiva. O suporte precisa conferir antes de um novo envio.",
+          p_ambiguous_charge: true,
+          p_provider_http_status: null,
+          p_charge_confirmed: false,
+        });
+        return json({
+          ok: false,
+          error:
+            "A resposta da API oficial ficou inconclusiva e não será reenviada automaticamente.",
+        });
+      } finally {
+        clearTimeout(timeout);
+      }
+
+      const hasUsablePayload = hasDirectDScoreSuccessPayload(parsed, document.length);
+      const shouldRetry =
+        !providerResponse.ok &&
+        !hasUsablePayload &&
+        shouldAutomaticallyRetryDirectDScoreFailure(providerResponse.status, parsed) &&
+        attempt < DIRECTD_SCORE_MAX_HTTP_ATTEMPTS;
+      if (!shouldRetry) break;
+
+      console.warn("Falha transitória no Score Direct Data; repetindo sem recibo do provedor.", {
+        consultationId: consultaId,
+        status: providerResponse.status,
+        attempt,
       });
-    } catch (error) {
-      await supabaseAdmin.rpc("fail_official_credit_simulation", {
-        p_consultation_id: consultaId,
-        p_worker_id: workerId,
-        p_execution_version: claimed.execution_version,
-        p_error_code:
-          error instanceof DOMException && error.name === "AbortError"
-            ? "DIRECTD_TIMEOUT"
-            : "DIRECTD_NETWORK_ERROR",
-        p_user_message:
-          "A resposta da API oficial ficou inconclusiva. O suporte precisa conferir antes de um novo envio.",
-        p_ambiguous_charge: true,
-        p_provider_http_status: null,
-        p_charge_confirmed: false,
-      });
-      return json({
-        ok: false,
-        error: "A resposta da API oficial ficou inconclusiva e não será reenviada automaticamente.",
-      });
-    } finally {
-      clearTimeout(timeout);
+      await wait(DIRECTD_SCORE_RETRY_DELAYS_MS[attempt - 1] ?? 1_200);
     }
 
-    const responseText = await providerResponse.text();
-    const parsed = safeJson(responseText) as DirectDScoreResponse | null;
+    if (!providerResponse) {
+      throw new Error("A consulta de score terminou sem resposta do provedor.");
+    }
 
     if (providerResponse.status === 201 || providerResponse.status === 202) {
       await supabaseAdmin.rpc("fail_official_credit_simulation", {
@@ -544,8 +574,12 @@ serve(async (req) => {
       return json({ ok: false, error: "Consulta aceita pelo provedor e aguardando conferência." });
     }
 
-    if (!providerResponse.ok || !parsed) {
-      const safeToRetry = [400, 401, 403, 404, 503].includes(providerResponse.status);
+    const hasUsablePayload = hasDirectDScoreSuccessPayload(parsed, document.length);
+    if ((!providerResponse.ok && !hasUsablePayload) || !parsed) {
+      const safeToRetry = canRetryDirectDScoreFailure(providerResponse.status, parsed);
+      const isTransientProviderFailure = [408, 429, 500, 502, 503, 504].includes(
+        providerResponse.status,
+      );
       await supabaseAdmin.rpc("fail_official_credit_simulation", {
         p_consultation_id: consultaId,
         p_worker_id: workerId,
@@ -554,12 +588,20 @@ serve(async (req) => {
         p_user_message:
           providerResponse.status === 403
             ? "Saldo indisponível na Direct Data. Recarregue a conta antes de tentar novamente."
-            : "A API oficial não conseguiu concluir a consulta.",
+            : isTransientProviderFailure && safeToRetry
+              ? "O provedor de score ficou temporariamente indisponível. Tente novamente."
+              : "A API oficial não conseguiu concluir a consulta.",
         p_ambiguous_charge: !safeToRetry,
         p_provider_http_status: providerResponse.status,
         p_charge_confirmed: false,
       });
-      return json({ ok: false, error: "A API oficial não conseguiu concluir a consulta." });
+      return json({
+        ok: false,
+        error:
+          isTransientProviderFailure && safeToRetry
+            ? "O provedor de score ficou temporariamente indisponível. Tente novamente."
+            : "A API oficial não conseguiu concluir a consulta.",
+      });
     }
 
     const result = normalizeDirectDResult(parsed, document.length);

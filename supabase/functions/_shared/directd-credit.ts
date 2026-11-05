@@ -47,6 +47,11 @@ export interface NormalizedDirectDResult {
   message: string;
 }
 
+const RETRYABLE_DIRECTD_SCORE_HTTP_STATUSES = new Set([
+  400, 401, 403, 404, 408, 429, 500, 502, 503, 504,
+]);
+const TRANSIENT_DIRECTD_SCORE_HTTP_STATUSES = new Set([408, 429, 500, 502, 503, 504]);
+
 function numberInRange(value: unknown, minimum: number, maximum: number): number | null {
   if (value === null || value === undefined || value === "") return null;
   const numeric = Number(value);
@@ -69,6 +74,46 @@ export function subjectForDocument(
   return null;
 }
 
+export function hasDirectDScoreSuccessPayload(
+  response: DirectDScoreResponse | null,
+  documentLength: number,
+): boolean {
+  if (!response || !subjectForDocument(response, documentLength)) return false;
+
+  const resultId = Number(response.metaDados?.resultadoId);
+  const result = String(response.metaDados?.resultado ?? "")
+    .trim()
+    .toLocaleLowerCase("pt-BR");
+  const message = String(response.metaDados?.mensagem ?? "")
+    .trim()
+    .toLocaleLowerCase("pt-BR");
+
+  return resultId === 1 || result.includes("sucesso") || message.includes("sucesso");
+}
+
+/**
+ * A Direct Data documenta estes códigos como falha sem resultado. Só repetimos
+ * quando a resposta também não contém `consultaUid`, que é o recibo usado para
+ * distinguir uma falha explícita de um envio possivelmente processado/cobrado.
+ */
+export function canRetryDirectDScoreFailure(
+  status: number,
+  response: DirectDScoreResponse | null,
+): boolean {
+  const providerReceipt = String(response?.metaDados?.consultaUid ?? "").trim();
+  return RETRYABLE_DIRECTD_SCORE_HTTP_STATUSES.has(status) && !providerReceipt;
+}
+
+export function shouldAutomaticallyRetryDirectDScoreFailure(
+  status: number,
+  response: DirectDScoreResponse | null,
+): boolean {
+  return (
+    TRANSIENT_DIRECTD_SCORE_HTTP_STATUSES.has(status) &&
+    canRetryDirectDScoreFailure(status, response)
+  );
+}
+
 /**
  * Regra comercial da NOX para o Score QUOD e o compromisso de pagamento.
  * A descrição textual é preservada para auditoria, mas os limites usam o
@@ -81,11 +126,7 @@ export function normalizeDirectDResult(
   const subject = subjectForDocument(response, documentLength);
   const providerBand = String(subject?.faixaScore ?? "").trim();
   const score = numberInRange(subject?.score, 0, 1000);
-  const scoreCompromissoPagamento = numberInRange(
-    subject?.scoreCompromissoPagamento,
-    0,
-    100,
-  );
+  const scoreCompromissoPagamento = numberInRange(subject?.scoreCompromissoPagamento, 0, 100);
   const descricaoCompromissoPagamento =
     String(subject?.descricaoCompromissoPagamento ?? "").trim() || null;
   const faixaScore = scoreBand(score, providerBand);

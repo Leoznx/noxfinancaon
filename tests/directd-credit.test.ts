@@ -2,9 +2,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
+  canRetryDirectDScoreFailure,
   DIRECTD_CREDIT_RULE_VERSION,
+  hasDirectDScoreSuccessPayload,
   normalizeDirectDResult,
   sanitizeDirectDResponse,
+  shouldAutomaticallyRetryDirectDScoreFailure,
   type DirectDScoreResponse,
 } from "../supabase/functions/_shared/directd-credit.ts";
 
@@ -18,6 +21,8 @@ function responseFor(
     metaDados: {
       consultaUid: "consulta-teste",
       apiVersao: "v3",
+      resultadoId: 1,
+      resultado: "Sucesso",
     },
     retorno: {
       documentoConsultado: "00000000000",
@@ -30,6 +35,33 @@ function responseFor(
     },
   };
 }
+
+test("reconhece payload de score concluído independentemente do status HTTP", () => {
+  assert.equal(hasDirectDScoreSuccessPayload(responseFor("", 700, 85), 11), true);
+  assert.equal(
+    hasDirectDScoreSuccessPayload({ metaDados: { resultadoId: 1, resultado: "Sucesso" } }, 11),
+    false,
+  );
+  assert.equal(
+    hasDirectDScoreSuccessPayload(
+      { ...responseFor("", 700, 85), metaDados: { resultadoId: 0, resultado: "Falha" } },
+      11,
+    ),
+    false,
+  );
+});
+
+test("só repete falha transitória de score quando não há recibo do provedor", () => {
+  const withoutReceipt = {
+    metaDados: { resultadoId: 0, resultado: "Falha" },
+  } satisfies DirectDScoreResponse;
+  assert.equal(canRetryDirectDScoreFailure(500, withoutReceipt), true);
+  assert.equal(canRetryDirectDScoreFailure(503, withoutReceipt), true);
+  assert.equal(canRetryDirectDScoreFailure(422, withoutReceipt), false);
+  assert.equal(canRetryDirectDScoreFailure(500, responseFor("", 700, 85)), false);
+  assert.equal(shouldAutomaticallyRetryDirectDScoreFailure(500, withoutReceipt), true);
+  assert.equal(shouldAutomaticallyRetryDirectDScoreFailure(403, withoutReceipt), false);
+});
 
 test("não decide automaticamente apenas pelos textos do provedor", () => {
   for (const faixa of [
@@ -65,10 +97,7 @@ test("aplica os limites combinados e contínuos definidos pela NOX", () => {
 });
 
 test("os números prevalecem quando o texto do provedor diverge da regra NOX", () => {
-  const medio = normalizeDirectDResult(
-    responseFor("Alto índice de inadimplência", 551, 71),
-    11,
-  );
+  const medio = normalizeDirectDResult(responseFor("Alto índice de inadimplência", 551, 71), 11);
   assert.equal(medio.decision, "em_analise");
   assert.equal(medio.faixaScore, "Médio índice de inadimplência");
 
@@ -148,6 +177,27 @@ test("migração invalida cache antigo e audita compromisso de pagamento", () =>
   assert.match(migration, /score_compromisso_v1/);
   assert.match(migration, /DIRECTD_LEGACY_RULE_NO_COMMITMENT/);
   assert.match(migration, /trg_enforce_directd_score_commitment_rule/);
+});
+
+test("falha HTTP 500 sem recibo é recuperável e preserva a identificação paga", () => {
+  const migration = readFileSync(
+    new URL(
+      "../supabase/migrations/20261105150000_directd_transient_score_recovery.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  const edgeFunction = readFileSync(
+    new URL("../supabase/functions/simulate-credit-official/index.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(migration, /request\.provider_consulta_uid IS NULL/);
+  assert.match(migration, /request\.billed_cents IS NULL/);
+  assert.match(migration, /status = 'failed_no_charge'/);
+  assert.doesNotMatch(migration, /identity_status\s*=/);
+  assert.match(edgeFunction, /DIRECTD_SCORE_MAX_HTTP_ATTEMPTS = 3/);
+  assert.match(edgeFunction, /shouldAutomaticallyRetryDirectDScoreFailure/);
 });
 
 test("migração desliga o claim antigo e registra o custo de R$ 1,98", () => {
