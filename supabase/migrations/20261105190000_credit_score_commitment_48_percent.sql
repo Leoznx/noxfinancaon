@@ -16,15 +16,14 @@ BEGIN
   SELECT pg_get_functiondef(v_signature)
   INTO v_definition;
 
-  IF position(v_previous_rule IN v_definition) = 0 THEN
+  IF position(v_previous_rule IN v_definition) > 0
+     AND position(v_current_rule IN v_definition) > 0 THEN
+    RAISE EXCEPTION 'Marcador da regra v2 já existe junto da regra anterior';
+  ELSIF position(v_previous_rule IN v_definition) > 0 THEN
+    v_definition := replace(v_definition, v_previous_rule, v_current_rule);
+    EXECUTE v_definition;
+  ELSIF position(v_current_rule IN v_definition) = 0 THEN
     RAISE EXCEPTION 'Marcador da regra anterior não encontrado no claim oficial';
   END IF;
-
-  IF position(v_current_rule IN v_definition) > 0 THEN
-    RAISE EXCEPTION 'Marcador da regra v2 já existe junto da regra anterior';
-  END IF;
-
-  v_definition := replace(v_definition, v_previous_rule, v_current_rule);
-  EXECUTE v_definition;
 END;
 $migration$;
