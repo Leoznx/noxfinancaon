@@ -105,6 +105,9 @@ verify_jwt = false
 [functions.process-weekly-user-followups]
 verify_jwt = false
 
+[functions.process-whatsapp-contract-automations]
+verify_jwt = false
+
 [functions.process-sales-meeting-reminders]
 verify_jwt = false
 

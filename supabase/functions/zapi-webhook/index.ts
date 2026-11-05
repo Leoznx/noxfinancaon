@@ -12,6 +12,7 @@ import {
   type WhatsappBillingCandidate,
 } from "../_shared/whatsapp-billing.ts";
 import { hasOversizedBody } from "../_shared/http-security.ts";
+import { parseAdminCreditReviewAction } from "../_shared/whatsapp-contract-automations.ts";
 
 const OPEN_STATUSES = [
   "pending",
@@ -42,16 +43,11 @@ function messageIds(payload: Record<string, unknown>) {
     payload.id,
     ...(Array.isArray(payload.ids) ? payload.ids : []),
   ];
-  return Array.from(
-    new Set(values.map((value) => String(value || "").trim()).filter(Boolean)),
-  );
+  return Array.from(new Set(values.map((value) => String(value || "").trim()).filter(Boolean)));
 }
 
 async function sha256(value: string) {
-  const bytes = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(value),
-  );
+  const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return Array.from(new Uint8Array(bytes))
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
@@ -76,9 +72,7 @@ async function sendSafeReply(phone: string, message: string, paymentUrl?: string
     paymentUrl,
     buttonLabel: "Pagar",
   });
-  return result.sent
-    ? { sent: true }
-    : { sent: false, reason: result.reason || "send_failed" };
+  return result.sent ? { sent: true } : { sent: false, reason: result.reason || "send_failed" };
 }
 
 async function handleBillingCommand(
@@ -117,8 +111,7 @@ async function handleBillingCommand(
   }
 
   const ids = messageIds(payload);
-  const providerMessageId = ids[0] ||
-    `payload:${await hashWebhookPayload(payload)}`;
+  const providerMessageId = ids[0] || `payload:${await hashWebhookPayload(payload)}`;
   const phoneHash = await sha256(phone);
   const { data: audit, error: auditError } = await admin
     .from("whatsapp_billing_requests")
@@ -134,11 +127,7 @@ async function handleBillingCommand(
     return jsonResponse(request, { ok: true, duplicate: true });
   }
   if (auditError || !audit?.id) {
-    return jsonResponse(
-      request,
-      { ok: false, error: "audit_unavailable" },
-      503,
-    );
+    return jsonResponse(request, { ok: false, error: "audit_unavailable" }, 503);
   }
 
   const [{ data: batches }, { data: invoices }] = await Promise.all([
@@ -159,9 +148,7 @@ async function handleBillingCommand(
 
   const candidates: WhatsappBillingCandidate[] = [];
   for (const batch of batches ?? []) {
-    const profile = Array.isArray(batch.profile)
-      ? batch.profile[0]
-      : batch.profile;
+    const profile = Array.isArray(batch.profile) ? batch.profile[0] : batch.profile;
     if (normalizeWhatsappPhone(profile?.telefone) !== phone) continue;
     candidates.push({
       actorId: batch.agency_user_id,
@@ -176,9 +163,8 @@ async function handleBillingCommand(
     if (!payment || normalizeWhatsappPhone(payment.recipient_phone) !== phone) {
       continue;
     }
-    const actorId = invoice.recipient_user_id ||
-      invoice.tenant_user_id ||
-      payment.recipient_user_id;
+    const actorId =
+      invoice.recipient_user_id || invoice.tenant_user_id || payment.recipient_user_id;
     if (!actorId) continue;
     candidates.push({
       actorId,
@@ -189,16 +175,15 @@ async function handleBillingCommand(
 
   const selection = selectWhatsappBillingCandidate(candidates);
   if (!selection.candidate) {
-    const status = selection.reason === "ambiguous_phone"
-      ? "ambiguous_phone"
-      : "not_found";
+    const status = selection.reason === "ambiguous_phone" ? "ambiguous_phone" : "not_found";
     await admin
       .from("whatsapp_billing_requests")
       .update({ status, completed_at: new Date().toISOString() })
       .eq("id", audit.id);
-    const message = selection.reason === "ambiguous_phone"
-      ? "Por segurança, este número está associado a mais de um cadastro. Acesse sua conta NOX para emitir a cobrança atualizada."
-      : "Não localizei uma cobrança em aberto para este número. Confira o telefone do cadastro ou acesse sua conta NOX.";
+    const message =
+      selection.reason === "ambiguous_phone"
+        ? "Por segurança, este número está associado a mais de um cadastro. Acesse sua conta NOX para emitir a cobrança atualizada."
+        : "Não localizei uma cobrança em aberto para este número. Confira o telefone do cadastro ou acesse sua conta NOX.";
     const reply = await sendSafeReply(phone, message);
     return jsonResponse(request, { ok: true, handled: true, status, reply });
   }
@@ -306,6 +291,46 @@ async function handleBillingCommand(
   });
 }
 
+async function handleAdminCreditReview(request: Request, payload: Record<string, unknown>) {
+  const action = parseAdminCreditReviewAction(payload);
+  if (!action) {
+    return jsonResponse(request, { ok: true, ignored: true, reason: "invalid_review_action" });
+  }
+  const senderPhone = normalizeWhatsappPhone(String(payload.phone || ""));
+  if (!senderPhone) {
+    return jsonResponse(request, { ok: false, error: "invalid_sender" }, 403);
+  }
+  const providerMessageId =
+    action.providerMessageId || `payload:${await hashWebhookPayload(payload)}`;
+  const admin = supabaseAdmin();
+  const { data, error } = await admin.rpc("resolve_admin_credit_review_via_whatsapp", {
+    p_consultation_id: action.consultationId,
+    p_decision: action.decision,
+    p_sender_phone: senderPhone,
+    p_provider_message_id: providerMessageId,
+    p_reference_message_id: action.referenceMessageId,
+  });
+  if (error) {
+    const denied = error.code === "42501";
+    console.error("[zapi-webhook] falha ao resolver avaliacao administrativa", {
+      consultationId: action.consultationId,
+      decision: action.decision,
+      code: error.code,
+    });
+    return jsonResponse(
+      request,
+      { ok: false, error: denied ? "unauthorized_review_action" : "review_action_failed" },
+      denied ? 403 : 409,
+    );
+  }
+  return jsonResponse(request, {
+    ok: true,
+    handled: true,
+    type: "admin_credit_review",
+    decision: data,
+  });
+}
+
 const DELIVERY_RANK: Record<string, number> = {
   not_configured: 0,
   failed: 0,
@@ -318,9 +343,7 @@ const DELIVERY_RANK: Record<string, number> = {
 
 function canAdvanceDelivery(current: unknown, next: ZApiDeliveryStatus) {
   if (next === "failed") return true;
-  return (
-    (DELIVERY_RANK[next] || 0) >= (DELIVERY_RANK[String(current || "")] || 0)
-  );
+  return (DELIVERY_RANK[next] || 0) >= (DELIVERY_RANK[String(current || "")] || 0);
 }
 
 function deliveryUpdate(status: ZApiDeliveryStatus, error: string | null) {
@@ -328,12 +351,8 @@ function deliveryUpdate(status: ZApiDeliveryStatus, error: string | null) {
   return {
     status,
     last_error: error ? `zapi_delivery:${error}`.slice(0, 500) : null,
-    ...(status === "sent" || status === "delivered" || status === "read"
-      ? { sent_at: now }
-      : {}),
-    ...(status === "delivered" || status === "read"
-      ? { delivered_at: now }
-      : {}),
+    ...(status === "sent" || status === "delivered" || status === "read" ? { sent_at: now } : {}),
+    ...(status === "delivered" || status === "read" ? { delivered_at: now } : {}),
     ...(status === "read" ? { read_at: now } : {}),
   };
 }
@@ -359,7 +378,7 @@ async function findContractDelivery(supabase: any, ids: string[]) {
     .order("created_at", { ascending: false })
     .limit(500);
   const matched = (sentEvents || []).find((event: any) =>
-    ids.includes(String(event?.payload?.provider_message_id || ""))
+    ids.includes(String(event?.payload?.provider_message_id || "")),
   );
   if (!matched?.contract_signature_id) return null;
   const notificationType = String(
@@ -407,18 +426,10 @@ async function findWeeklyFollowupDelivery(supabase: any, ids: string[]) {
 
 Deno.serve(async (request) => {
   if (request.method !== "POST") {
-    return jsonResponse(
-      request,
-      { ok: false, error: "method_not_allowed" },
-      405,
-    );
+    return jsonResponse(request, { ok: false, error: "method_not_allowed" }, 405);
   }
   if (hasOversizedBody(request)) {
-    return jsonResponse(
-      request,
-      { ok: false, error: "payload_too_large" },
-      413,
-    );
+    return jsonResponse(request, { ok: false, error: "payload_too_large" }, 413);
   }
   const expectedSecret = Deno.env.get("ZAPI_WEBHOOK_SECRET")?.trim() || "";
   const receivedSecret = new URL(request.url).searchParams.get("secret") || "";
@@ -431,6 +442,10 @@ Deno.serve(async (request) => {
     return jsonResponse(request, { ok: false, error: "invalid_payload" }, 400);
   }
   const record = payload as Record<string, unknown>;
+  const adminReviewAction = parseAdminCreditReviewAction(record);
+  if (adminReviewAction) {
+    return handleAdminCreditReview(request, record);
+  }
   const receivedText = receivedWhatsappText(record);
   const method = parseWhatsappBillingCommand(receivedText);
   if (String(record.type || "") === "ReceivedCallback" && method) {
@@ -464,17 +479,12 @@ Deno.serve(async (request) => {
   const providerStatus = String(record.status || "")
     .trim()
     .toUpperCase();
-  if (
-    contractDelivery &&
-    canAdvanceDelivery(contractDelivery.status, resolved.status)
-  ) {
+  if (contractDelivery && canAdvanceDelivery(contractDelivery.status, resolved.status)) {
     const payloadHash = await hashWebhookPayload(payload);
     await supabase.from("contract_signature_events").upsert(
       {
         contract_signature_id: contractDelivery.contract_signature_id,
-        event_key: `zapi:status:${contractDelivery.providerMessageId}:${
-          providerStatus || "DELIVERY"
-        }:${payloadHash}`,
+        event_key: `zapi:status:${contractDelivery.providerMessageId}:${providerStatus || "DELIVERY"}:${payloadHash}`,
         event_type: `zapi_${resolved.status}`,
         message: resolved.error || `WhatsApp: ${resolved.status}`,
         payload,
@@ -486,10 +496,7 @@ Deno.serve(async (request) => {
       .update(deliveryUpdate(resolved.status, resolved.error))
       .eq("id", contractDelivery.id);
   }
-  if (
-    financialDelivery &&
-    canAdvanceDelivery(financialDelivery.status, resolved.status)
-  ) {
+  if (financialDelivery && canAdvanceDelivery(financialDelivery.status, resolved.status)) {
     await supabase
       .from("financial_notifications")
       .update(deliveryUpdate(resolved.status, resolved.error))

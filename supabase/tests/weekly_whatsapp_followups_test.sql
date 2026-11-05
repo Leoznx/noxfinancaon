@@ -1,9 +1,10 @@
 BEGIN;
-SELECT plan(28);
+SELECT plan(32);
 
 SELECT has_table('public', 'weekly_whatsapp_followups', 'fila semanal existe');
 SELECT has_table('public', 'weekly_whatsapp_followup_opt_outs', 'opt-out existe');
 SELECT has_table('public', 'weekly_whatsapp_followup_settings', 'configuração existe');
+SELECT has_table('public', 'platform_user_activity', 'atividade real da plataforma existe');
 SELECT has_table(
   'public',
   'weekly_whatsapp_followup_excluded_phones',
@@ -38,6 +39,12 @@ SELECT has_function(
   'resolve_weekly_whatsapp_followup_recipients',
   ARRAY[]::text[],
   'resolvedor canônico de destinatários existe'
+);
+SELECT has_function(
+  'public',
+  'record_platform_activity',
+  ARRAY['text'],
+  'site e aplicativo podem registrar atividade autenticada'
 );
 
 SELECT function_privs_are(
@@ -76,8 +83,8 @@ SELECT like(
 );
 SELECT like(
   pg_get_functiondef('public.resolve_weekly_whatsapp_followup_recipients()'::regprocedure),
-  '%last_sign_in_at DESC NULLS LAST%',
-  'nome vem da conta que acessou o site mais recentemente'
+  '%activity.last_activity_at%',
+  'resolvedor considera atividade real no site e no aplicativo'
 );
 SELECT like(
   pg_get_functiondef('public.plan_weekly_whatsapp_followups(timestamp with time zone)'::regprocedure),
@@ -85,9 +92,19 @@ SELECT like(
   'duas mensagens para o mesmo número ficam separadas por sete dias'
 );
 SELECT like(
+  pg_get_functiondef('public.plan_weekly_whatsapp_followups(timestamp with time zone)'::regprocedure),
+  '%interval ''3 days''%',
+  'planejador seleciona apenas contas sem uso há mais de três dias'
+);
+SELECT like(
   pg_get_functiondef('public.claim_due_weekly_whatsapp_followups(integer,timestamp with time zone)'::regprocedure),
   '%delivery_uncertain_not_retried%',
   'reserva abandonada não é reenviada automaticamente'
+);
+SELECT like(
+  pg_get_functiondef('public.claim_due_weekly_whatsapp_followups(integer,timestamp with time zone)'::regprocedure),
+  '%user_active_again%',
+  'claim cancela mensagens se o usuário voltar antes do disparo'
 );
 SELECT like(
   pg_get_functiondef('public.claim_due_weekly_whatsapp_followups(integer,timestamp with time zone)'::regprocedure),

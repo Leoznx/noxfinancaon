@@ -1,23 +1,23 @@
 export const WEEKLY_FOLLOWUP_MESSAGES = [
-  "Olá, {nome}! 😊 Tá conseguindo fazer as simulações certinho? Se precisar de ajuda, chama a gente por aqui! 💛",
-  "Olá, {nome}! 👋 Tudo bem por aí? Conseguiu fazer suas simulações direitinho? A equipe NOX está por aqui se precisar. 😊",
-  "Olá, {nome}! 🚀 Passando pra saber como estão as simulações. Tá conseguindo fazer tudo certinho? Conta com a NOX! 💛",
-  "Olá, {nome}! 😄 Como estão as simulações esta semana? Se surgir qualquer dúvida, pode falar com a gente! 🤝",
-  "Olá, {nome}! 💛 Só passando pra acompanhar você. As simulações estão saindo certinho? Estamos aqui pra ajudar! 😊",
-  "Olá, {nome}! 👋 Tá tudo certo com suas simulações? Se travar em alguma etapa, chama a NOX que a gente ajuda. 🚀",
-  "Olá, {nome}! 😊 Como você está? Conseguiu avançar nas simulações? Pode contar com a gente pra deixar tudo mais simples! 💛",
-  "Olá, {nome}! 😄 Passando com aquele lembrete amigo. Tá conseguindo simular certinho? Qualquer coisa, chama a NOX! 🤝",
+  "Olá, {nome}! 😊 Faz alguns dias que você não acessa a NOX. Está tudo bem? Se precisar de ajuda com o sistema, estamos aqui para você avançar e fechar mais contratos! 💛",
+  "Olá, {nome}! 👋 Sentimos sua falta na plataforma. Precisa de ajuda para retomar suas simulações e transformar oportunidades em novos contratos? Conte com a NOX! 😊",
+  "Olá, {nome}! 🚀 Percebemos que você está há alguns dias sem acessar. Podemos ajudar em alguma etapa para você voltar a simular e fechar mais contratos? 💛",
+  "Olá, {nome}! 😄 Está tudo bem por aí? Se alguma dúvida no sistema impediu seu avanço, fale com a NOX. Vamos ajudar você a concluir mais contratos! 🤝",
+  "Olá, {nome}! 💛 Passando para saber se está tudo bem. Nossa equipe pode ajudar você a usar a plataforma e aproveitar mais oportunidades de contrato. 😊",
+  "Olá, {nome}! 👋 Faz alguns dias que não vemos você na NOX. Se travou em alguma etapa, conte com nossa ajuda para voltar e fechar mais contratos. 🚀",
+  "Olá, {nome}! 😊 Como você está? Podemos ajudar na retomada das simulações para deixar o processo mais simples e gerar novos contratos. 💛",
+  "Olá, {nome}! 😄 Sentimos sua falta! Se precisar de suporte com o sistema, a equipe NOX está pronta para ajudar você a avançar e fechar contratos. 🤝",
 ] as const;
 
-export const WEEKLY_FOLLOWUP_SITE_URL = "https://noxfianca.com/login";
-export const WEEKLY_FOLLOWUP_SIMULATION_URL = "https://noxfianca.com/simular";
-export const WEEKLY_FOLLOWUP_TITLE = "NOX Fiança • Acompanhamento semanal";
+export const WEEKLY_FOLLOWUP_SITE_URL = "https://www.noxfianca.com";
+export const WEEKLY_FOLLOWUP_TITLE = "NOX Fiança • Podemos ajudar?";
 
 function accountFirstName(value: string | null | undefined) {
-  const firstName = String(value || "")
-    .trim()
-    .split(/\s+/u)[0]
-    .slice(0, 80) || "Cliente";
+  const firstName =
+    String(value || "")
+      .trim()
+      .split(/\s+/u)[0]
+      .slice(0, 80) || "Cliente";
   const normalized = firstName.toLocaleLowerCase("pt-BR");
   return `${normalized.charAt(0).toLocaleUpperCase("pt-BR")}${normalized.slice(1)}`;
 }
@@ -42,14 +42,8 @@ export function buildWeeklyFollowupInteractiveContent(params: {
       {
         id: "acessar-site-nox",
         type: "URL" as const,
-        label: "Acessar o site",
+        label: "Acessar a NOX",
         url: WEEKLY_FOLLOWUP_SITE_URL,
-      },
-      {
-        id: "fazer-simulacao-nox",
-        type: "URL" as const,
-        label: "Fazer simulação",
-        url: WEEKLY_FOLLOWUP_SIMULATION_URL,
       },
     ],
   };

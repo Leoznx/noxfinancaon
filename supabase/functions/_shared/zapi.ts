@@ -121,9 +121,7 @@ async function updateZApiWebhook(kind: ZApiWebhookKind, value: string) {
   };
   try {
     const response = await zApiFetch(
-      `https://api.z-api.io/instances/${auth.instanceId}/token/${auth.instanceToken}/${
-        WEBHOOK_ENDPOINTS[kind]
-      }`,
+      `https://api.z-api.io/instances/${auth.instanceId}/token/${auth.instanceToken}/${WEBHOOK_ENDPOINTS[kind]}`,
       { method: "PUT", headers, body: JSON.stringify({ value }) },
       auth.clientToken,
     );
@@ -237,6 +235,72 @@ export async function sendZApiText(params: { to: string; message: string }): Pro
     return { sent: true, providerMessageId: String(providerMessageId) };
   } catch {
     return { sent: false, reason: "provider_unavailable" };
+  }
+}
+
+export async function sendZApiDocument(params: {
+  to: string;
+  document: string;
+  fileName: string;
+  caption?: string;
+}): Promise<ZApiResult> {
+  const auth = credentials();
+  if (!auth) return { sent: false, reason: "not_configured" };
+  const phone = normalizeWhatsappPhone(params.to);
+  if (!phone) return { sent: false, reason: "invalid_phone" };
+  const document = String(params.document || "").trim();
+  if (!document.startsWith("data:application/pdf;base64,") && !/^https:\/\//i.test(document)) {
+    return { sent: false, reason: "invalid_pdf_document" };
+  }
+  const fileName = String(params.fileName || "")
+    .replace(/[\\/\r\n]/g, "-")
+    .trim()
+    .slice(0, 120);
+  if (!fileName || !fileName.toLowerCase().endsWith(".pdf")) {
+    return { sent: false, reason: "invalid_pdf_file_name" };
+  }
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  try {
+    const response = await zApiFetch(
+      `https://api.z-api.io/instances/${auth.instanceId}/token/${auth.instanceToken}/send-document/pdf`,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          phone,
+          document,
+          fileName,
+          ...(params.caption?.trim() ? { caption: params.caption.trim().slice(0, 250) } : {}),
+        }),
+      },
+      auth.clientToken,
+    );
+    const data = await response.json().catch(() => ({}));
+    if (response.ok) {
+      const providerMessageId = data?.messageId || data?.zaapId || data?.id;
+      if (providerMessageId) {
+        return { sent: true, providerMessageId: String(providerMessageId) };
+      }
+      return {
+        sent: false,
+        reason: "provider_invalid_response",
+        deliveryUncertain: true,
+      };
+    }
+    return {
+      sent: false,
+      reason: providerReason(data, response.status),
+      deliveryUncertain: response.status >= 500,
+    };
+  } catch {
+    return {
+      sent: false,
+      reason: "provider_unavailable",
+      deliveryUncertain: true,
+    };
   }
 }
 

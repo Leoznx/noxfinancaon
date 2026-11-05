@@ -184,11 +184,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const syncVersion = authVersionRef.current;
         try {
           const [profileResult, internalUserResult] = await Promise.all([
-            supabase
-              .from("profiles")
-              .select("role,nome,avatar_url")
-              .eq("id", userId)
-              .maybeSingle(),
+            supabase.from("profiles").select("role,nome,avatar_url").eq("id", userId).maybeSingle(),
             supabase
               .from("internal_users" as any)
               .select("role,status,seller_type,time_clock_enabled")
@@ -201,14 +197,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             return false;
           const role = (profile as any)?.role as Role | undefined;
           if (!role) return; // profile ainda não existe (ex.: trigger em voo) — não força estado incompleto
-          const internalUser = internalUserResult.data as
-            | {
-                role?: string | null;
-                status?: string | null;
-                seller_type?: string | null;
-                time_clock_enabled?: boolean | null;
-              }
-            | null;
+          const internalUser = internalUserResult.data as {
+            role?: string | null;
+            status?: string | null;
+            seller_type?: string | null;
+            time_clock_enabled?: boolean | null;
+          } | null;
           const internalRole = internalUser
             ? internalUser.status === "ativo" &&
               INTERNAL_ROLES.includes(internalUser.role as InternalRole)
@@ -345,7 +339,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           internalRole:
             (data as any).status === "ativo" ? ((data as any).role as InternalRole) : null,
           sellerType:
-            (data as any).status === "ativo" && ["sdr", "closer"].includes((data as any).seller_type)
+            (data as any).status === "ativo" &&
+            ["sdr", "closer"].includes((data as any).seller_type)
               ? ((data as any).seller_type as SellerType)
               : null,
           timeClockEnabled:
@@ -376,6 +371,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     void import("@/lib/dashboard-navigation-data")
       .then(({ prefetchDashboardDataForHref }) => prefetchDashboardDataForHref(target, user))
       .catch((error) => console.warn("[Auth] dashboard warmup failed", error));
+  }, [isLoading, user]);
+
+  // O acompanhamento de inatividade precisa refletir uso real, inclusive com
+  // uma sessão que ficou autenticada por vários dias. A RPC limita as escritas
+  // no servidor; aqui sinalizamos somente ao abrir/retomar a aba e a cada dez
+  // minutos enquanto ela permanece visível.
+  useEffect(() => {
+    if (isLoading || !user || isDemoSession()) return;
+    let active = true;
+    const recordActivity = () => {
+      if (!active || document.visibilityState !== "visible") return;
+      void import("@/integrations/supabase/client")
+        .then(({ supabase }) =>
+          (supabase.rpc as any)("record_platform_activity", { p_source: "web" }),
+        )
+        .catch(() => undefined);
+    };
+    const onVisibilityChange = () => recordActivity();
+    recordActivity();
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("pageshow", recordActivity);
+    const interval = window.setInterval(recordActivity, 10 * 60_000);
+    return () => {
+      active = false;
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("pageshow", recordActivity);
+      window.clearInterval(interval);
+    };
   }, [isLoading, user]);
 
   const login = (

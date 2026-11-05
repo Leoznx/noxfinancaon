@@ -1,7 +1,7 @@
 import { decodeBase64, encodeBase64 } from "https://deno.land/std@0.224.0/encoding/base64.ts";
 import { strFromU8, strToU8, unzipSync, zipSync } from "https://esm.sh/fflate@0.8.2";
 import { escapeEmailHtml, renderNoxEmail } from "./email-branding.ts";
-import { sendZApiText } from "./zapi.ts";
+import { sendZApiDocument, sendZApiText } from "./zapi.ts";
 import { buildStyledContractPdf } from "./contract-pdf.ts";
 import {
   addUtcMonthsClamped,
@@ -317,9 +317,7 @@ function personalizeDocumentXml(xml: string, consulta: any, contractNumber: stri
     else if (current === "INSCRITO NO CPF:") {
       next = `INSCRITO NO CPF/CNPJ: ${formatCpfCnpj(tenantDocument)}`;
     } else if (current === "DATA NASCIMENTO:") {
-      next = `${current} ${formatDate(
-        consulta?.tenant_data_nascimento || inquilino.data_nascimento,
-      )}`;
+      next = `${current} ${formatDate(consulta?.tenant_data_nascimento || inquilino.data_nascimento)}`;
     } else if (current === "TELEFONE:") {
       const occurrence = count("telefone");
       if (occurrence === 1) next = `${current} ${tenantPhone}`;
@@ -390,9 +388,7 @@ function personalizeDocumentXml(xml: string, consulta: any, contractNumber: stri
         ? `TAXA DE ADESÃO (SETUP) – ${formatCurrency(activationValue)}.`
         : "TAXA DE ADESÃO (SETUP) – NÃO CONTRATADA.";
     } else if (current.startsWith("OBSERVAÇÕES –")) {
-      next = `OBSERVAÇÕES – ${
-        observations.length ? observations.join("; ") : "Sem serviços extras."
-      }`;
+      next = `OBSERVAÇÕES – ${observations.length ? observations.join("; ") : "Sem serviços extras."}`;
     } else if (current.startsWith("CONTRATO ATIVADO PELA NOX FIANÇA LTDA EM")) {
       const now = new Date();
       next = `CONTRATO EMITIDO PELA NOX FIANÇA LTDA EM ${now.toLocaleDateString("pt-BR", {
@@ -523,9 +519,9 @@ export async function supersedePendingD4SignDocument(
   const isSigned = (signature: any) =>
     Boolean(
       signature?.signed_at ||
-        signature?.activated_at ||
-        ["signed", "active"].includes(String(signature?.status || "").toLowerCase()) ||
-        String(signature?.signature_status || "").toLowerCase() === "signed",
+      signature?.activated_at ||
+      ["signed", "active"].includes(String(signature?.status || "").toLowerCase()) ||
+      String(signature?.signature_status || "").toLowerCase() === "signed",
     );
   if (isSigned(initialSignature)) throw new Error("contract_signature_already_signed");
 
@@ -717,10 +713,7 @@ function buildWebhookUrl() {
 }
 
 function contractNumber(consultationId: string) {
-  return `NOX-${new Date().getUTCFullYear()}-${consultationId
-    .replace(/-/g, "")
-    .slice(0, 10)
-    .toUpperCase()}`;
+  return `NOX-${new Date().getUTCFullYear()}-${consultationId.replace(/-/g, "").slice(0, 10).toUpperCase()}`;
 }
 
 async function ensureTenantAccount(supabase: any, consulta: any) {
@@ -1165,15 +1158,12 @@ async function persistPreparedContractDocument(
 
   // Um webhook pode concluir a assinatura enquanto esta rotina ainda está em
   // andamento. Nunca substitua o PDF final por uma versão sem assinatura.
-  if (
-    existingDoc?.id &&
-    existingDoc.document_subtype === SIGNED_CONTRACTS_BUCKET
-  ) {
+  if (existingDoc?.id && existingDoc.document_subtype === SIGNED_CONTRACTS_BUCKET) {
     return existingDoc;
   }
 
-  const built = params.built ||
-    (await buildContractPdf(templateKey, consulta, contractNumber(consulta.id)));
+  const built =
+    params.built || (await buildContractPdf(templateKey, consulta, contractNumber(consulta.id)));
   const path = `${tenantUserId}/${consulta.id}/${documentUuid}-pendente.pdf`;
   const { error: uploadError } = await supabase.storage
     .from(SIGNED_CONTRACTS_BUCKET)
@@ -1237,10 +1227,7 @@ async function persistPreparedContractDocument(
  * preparada para a D4Sign. É usada pela tela de detalhes para recuperar fluxos
  * antigos que foram enviados antes de o PDF pendente passar a ser persistido.
  */
-export async function materializeD4SignContractDocument(
-  supabase: any,
-  consultationId: string,
-) {
+export async function materializeD4SignContractDocument(supabase: any, consultationId: string) {
   const consulta = await getConsultation(supabase, consultationId);
   const { data: signature, error } = await supabase
     .from("contract_signatures")
@@ -1335,9 +1322,7 @@ export async function dispatchD4SignContract(
         await supabase
           .from("consultas_credito")
           .update(
-            contractAwaitingSignatureProjection(
-              consulta.payment_state || consulta.payment_status,
-            ),
+            contractAwaitingSignatureProjection(consulta.payment_state || consulta.payment_status),
           )
           .eq("id", consultationId);
       }
@@ -1483,9 +1468,7 @@ export async function dispatchD4SignContract(
     await supabase
       .from("consultas_credito")
       .update({
-        ...contractAwaitingSignatureProjection(
-          consulta.payment_state || consulta.payment_status,
-        ),
+        ...contractAwaitingSignatureProjection(consulta.payment_state || consulta.payment_status),
         proposta_enviada_em: now,
       })
       .eq("id", consultationId);
@@ -1933,7 +1916,8 @@ export function buildInsuranceActiveZApiPayload(params: {
   return {
     phone: phone.replace(/^\+/, ""),
     message:
-      "🎉 Parabéns,seu contrato está ativo!  🌙\n\n" +
+      `🎉 Pagamento e assinatura confirmados! Seu plano *${params.planName}* está ativo. 🌙\n\n` +
+      "• A apólice assinada segue em PDF nesta conversa.\n" +
       "• Para visualizar seus documentos, acesse a *NOX FIANÇA*:\n" +
       `${dashboardUrl.toString()}\n\n` +
       "• Pelo aplicativo, use este acesso:\n" +
@@ -2007,9 +1991,11 @@ async function sendSignatureInviteWhatsapp(params: {
       ? fallback
       : {
           sent: false,
-          reason: `zapi_${response.status}_${errorCode}_fallback_${
-            fallback.reason || "failed"
-          }`.slice(0, 160),
+          reason:
+            `zapi_${response.status}_${errorCode}_fallback_${fallback.reason || "failed"}`.slice(
+              0,
+              160,
+            ),
         };
   }
   const body = await response.json().catch(() => ({}));
@@ -2087,9 +2073,11 @@ async function sendActiveWhatsapp(params: {
       ? fallback
       : {
           sent: false,
-          reason: `zapi_${response.status}_${errorCode}_fallback_${
-            fallback.reason || "failed"
-          }`.slice(0, 160),
+          reason:
+            `zapi_${response.status}_${errorCode}_fallback_${fallback.reason || "failed"}`.slice(
+              0,
+              160,
+            ),
         };
   }
   const body = await response.json().catch(() => ({}));
@@ -2107,6 +2095,52 @@ async function sendActiveWhatsapp(params: {
         };
   }
   return { sent: true, providerMessageId: String(providerMessageId) };
+}
+
+async function sendSignedPolicyPdfWhatsapp(
+  supabase: any,
+  params: {
+    to: string;
+    name: string;
+    signatureId: string;
+  },
+) {
+  const { data: document, error: documentError } = await supabase
+    .from("documentos_proposta")
+    .select("file_url, file_name, document_subtype")
+    .eq("contract_signature_id", params.signatureId)
+    .maybeSingle();
+  if (documentError || !document?.file_url) {
+    return { sent: false, reason: "signed_policy_document_not_found" };
+  }
+  const bucket = String(document.document_subtype || "");
+  if (bucket !== SIGNED_CONTRACTS_BUCKET) {
+    return { sent: false, reason: "signed_policy_document_invalid_bucket" };
+  }
+  const { data: file, error: downloadError } = await supabase.storage
+    .from(bucket)
+    .download(document.file_url);
+  if (downloadError || !file) {
+    return { sent: false, reason: "signed_policy_document_download_failed" };
+  }
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  if (!(bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46)) {
+    return { sent: false, reason: "signed_policy_document_not_pdf" };
+  }
+  const tenant =
+    String(params.name || "Inquilino")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zA-Z0-9 ]/g, "")
+      .trim()
+      .replace(/\s+/g, "-")
+      .slice(0, 70) || "Inquilino";
+  return sendZApiDocument({
+    to: params.to,
+    document: `data:application/pdf;base64,${encodeBase64(bytes)}`,
+    fileName: `Apolice-NOX-assinada-${tenant}.pdf`,
+    caption: "Apólice assinada do inquilino — plano ativo.",
+  });
 }
 
 async function ensureSignatureInviteWhatsapp(supabase: any, signature: any, consulta: any) {
@@ -2163,10 +2197,7 @@ async function notifyInsuranceActive(
     .trim()
     .toLowerCase();
   const name = consulta.tenant_name || consulta?.inquilinos?.nome || "cliente";
-  let dashboardUrl = `${(Deno.env.get("FRONTEND_URL") || "https://noxfianca.com").replace(
-    /\/$/,
-    "",
-  )}/login`;
+  let dashboardUrl = `${(Deno.env.get("FRONTEND_URL") || "https://noxfianca.com").replace(/\/$/, "")}/login`;
   const emailWasSent = await notificationWasSent(supabase, signature.id, "email");
   const whatsappWasSent = await notificationWasSent(supabase, signature.id, "whatsapp");
   const documentsAccessUrl =
@@ -2199,6 +2230,18 @@ async function notifyInsuranceActive(
       reason: error instanceof Error ? error.message : "provider_error",
     }));
     await logNotification(supabase, signature.id, "whatsapp", result);
+  }
+
+  if (!(await notificationWasSent(supabase, signature.id, "whatsapp", "insurance_active_pdf"))) {
+    const result = await sendSignedPolicyPdfWhatsapp(supabase, {
+      to: consulta.tenant_telefone || consulta?.inquilinos?.telefone || "",
+      name,
+      signatureId: signature.id,
+    }).catch((error) => ({
+      sent: false,
+      reason: error instanceof Error ? error.message : "provider_error",
+    }));
+    await logNotification(supabase, signature.id, "whatsapp", result, "insurance_active_pdf");
   }
 
   if (!(await notificationWasSent(supabase, signature.id, "push"))) {
