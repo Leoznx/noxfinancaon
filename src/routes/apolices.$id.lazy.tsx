@@ -28,6 +28,15 @@ import type {
 } from "@/lib/tenant-billing";
 import { contractBrokerLabel } from "@/lib/contract-broker-label";
 import { getDemoPolicyDetail } from "@/lib/demo-portal-data";
+import {
+  canReplacePolicyDocumentOnce,
+  policyDocumentHasFile,
+  policyDocumentLabel as policyDocumentCanonicalLabel,
+  policyDocumentReplacementButtonLabel,
+  policyDocumentReplacementPrefix,
+  policyDocumentStatus,
+  type PolicyDocumentStatus,
+} from "@/lib/policy-document-presentation";
 
 export const Route = createLazyFileRoute("/apolices/$id")({
   component: () => (
@@ -56,6 +65,9 @@ type ContractDocument = {
   document_type?: string | null;
   document_subtype?: string | null;
   contract_signature_id?: string | null;
+  replacement_count?: number | null;
+  replaced_at?: string | null;
+  replaced_by?: string | null;
 };
 
 type ProposalHistory = {
@@ -91,19 +103,16 @@ function humanize(value?: string | null) {
 }
 
 function documentLabel(document: ContractDocument) {
-  if (document.contract_signature_id) {
-    return document.document_subtype === "contratos-assinados"
-      ? "Contrato NOX assinado"
-      : "Apólice para assinatura";
-  }
+  const canonicalLabel = policyDocumentCanonicalLabel(document);
+  if (canonicalLabel) return canonicalLabel;
   const type = document.document_type || document.tipo || "outro";
   return DOCUMENT_LABELS[type] || humanize(type);
 }
 
 function documentDescription(document: ContractDocument) {
   if (document.contract_signature_id) {
-    return document.document_subtype === "contratos-assinados"
-      ? "Documento final assinado pelo inquilino."
+    return ["contratos-assinados", "assinado_manual"].includes(document.document_subtype || "")
+      ? "Apólice assinada e pronta para consulta."
       : "Documento gerado pela NOX e enviado para assinatura.";
   }
   if (document.document_type === "contrato_locacao") {
@@ -141,8 +150,9 @@ function ApoliceDetalhe() {
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
-  const [replacingDocument, setReplacingDocument] = useState(false);
+  const [replacingDocumentId, setReplacingDocumentId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const replacementDocumentRef = useRef<ContractDocument | null>(null);
   const [attachingDocumentType, setAttachingDocumentType] = useState<DeferredDocumentType | null>(null);
   const [billingRefreshKey, setBillingRefreshKey] = useState(0);
   const deferredFileInputRef = useRef<HTMLInputElement>(null);
@@ -214,7 +224,7 @@ function ApoliceDetalhe() {
         ] = await Promise.all([
           supabase.from("documentos_contrato").select("*").eq("apolice_id", id),
           (supabase.from("documentos_proposta") as any)
-            .select("id, file_name, file_url, file_type, document_type, document_subtype, contract_signature_id, created_at, updated_at")
+            .select("id, file_name, file_url, file_type, document_type, document_subtype, contract_signature_id, replacement_count, replaced_at, replaced_by, created_at, updated_at")
             .or(`consulta_id.eq.${ap.consulta_id},apolice_id.eq.${id}`)
             .order("updated_at", { ascending: false }),
           (supabase as any).from("contract_signatures")
@@ -277,7 +287,7 @@ function ApoliceDetalhe() {
           });
           if (materialized?.ok) {
             const refreshed = await (supabase.from("documentos_proposta") as any)
-              .select("id, file_name, file_url, file_type, document_type, document_subtype, contract_signature_id, created_at, updated_at")
+              .select("id, file_name, file_url, file_type, document_type, document_subtype, contract_signature_id, replacement_count, replaced_at, replaced_by, created_at, updated_at")
               .or(`consulta_id.eq.${ap.consulta_id},apolice_id.eq.${id}`)
               .order("updated_at", { ascending: false });
             if (!refreshed.error) proposalDocs = (refreshed.data || []) as ContractDocument[];
@@ -400,13 +410,7 @@ function ApoliceDetalhe() {
     ["signed", "active"].includes(String(assinatura?.status || "")) ||
     assinatura?.signature_status === "signed" ||
     Boolean(assinatura?.signed_at) ||
-    documentoD4Sign?.document_subtype === "contratos-assinados";
-  // O envio da via assinada so pode acontecer uma vez: assim que o upload
-  // conclui, o document_subtype passa a "assinado_imobiliaria" e o botao
-  // some automaticamente na proxima renderizacao.
-  const podeEditarContrato =
-    Boolean(contratoLocacao?.id) &&
-    contratoLocacao?.document_subtype === "pendente_assinatura";
+    ["contratos-assinados", "assinado_manual"].includes(documentoD4Sign?.document_subtype || "");
   const allDocuments = [
     ...documentosProposta.map((document) => ({ document, source: "proposal" as const })),
     ...documentos.map((document) => ({ document: document as ContractDocument, source: "contract" as const })),
@@ -431,7 +435,7 @@ function ApoliceDetalhe() {
     const second = new Date(b.document.updated_at || b.document.uploaded_at || b.document.created_at || 0).getTime();
     return second - first;
   });
-  const attachedDocumentsCount = allDocuments.filter(({ document }) => Boolean(document.file_url || document.storage_path)).length;
+  const attachedDocumentsCount = allDocuments.filter(({ document }) => policyDocumentHasFile(document)).length;
 
   async function resolveDocumentUrl(document: ContractDocument) {
     const path = document.storage_path || document.file_url;
@@ -472,12 +476,27 @@ function ApoliceDetalhe() {
     anchor.remove();
   }
 
-  async function replaceUnsignedContract(event: ChangeEvent<HTMLInputElement>) {
+  function chooseReplacement(document: ContractDocument) {
+    replacementDocumentRef.current = document;
+    fileInputRef.current?.click();
+  }
+
+  async function replaceProposalDocumentOnce(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
-    if (!file || !contratoLocacao?.id || !podeEditarContrato) return;
+    const currentDocument = replacementDocumentRef.current;
+    replacementDocumentRef.current = null;
+    if (
+      !file ||
+      !currentDocument?.id ||
+      !canReplacePolicyDocumentOnce(currentDocument, assinaturaConcluida)
+    ) return;
     if (!ACCEPTED_CONTRACT_TYPES.includes(file.type)) {
       toast.error("Envie um arquivo PDF, JPG, PNG ou WEBP.");
+      return;
+    }
+    if (currentDocument.contract_signature_id && file.type !== "application/pdf") {
+      toast.error("A Apólice - NOX assinada deve ser enviada em PDF.");
       return;
     }
     if (file.size > 10 * 1024 * 1024) {
@@ -485,7 +504,7 @@ function ApoliceDetalhe() {
       return;
     }
 
-    setReplacingDocument(true);
+    setReplacingDocumentId(currentDocument.id);
     try {
       const { data: authData } = await supabase.auth.getUser();
       const userId = authData.user?.id;
@@ -495,8 +514,10 @@ function ApoliceDetalhe() {
         .replace(/[\u0300-\u036f]/g, "")
         .replace(/[^a-zA-Z0-9._-]/g, "-")
         .replace(/-+/g, "-");
-      const path = `${userId}/${apolice.consulta_id}/contrato_locacao-${Date.now()}-${safeName}`;
+      const prefix = policyDocumentReplacementPrefix(currentDocument);
+      const path = `${userId}/${apolice.consulta_id}/${prefix}-${Date.now()}-${safeName}`;
       let uploadError: any = null;
+      let uploadedBucket: string | null = null;
       for (const bucket of ["approval-documents", "anexos", "documentos-proposta"]) {
         const { error } = await supabase.storage.from(bucket).upload(path, file, {
           cacheControl: "3600",
@@ -505,6 +526,7 @@ function ApoliceDetalhe() {
         });
         if (!error) {
           uploadError = null;
+          uploadedBucket = bucket;
           break;
         }
         uploadError = error;
@@ -513,31 +535,61 @@ function ApoliceDetalhe() {
       if (uploadError) throw uploadError;
 
       const { data: replacedData, error: updateError } = await (supabase as any).rpc(
-        "replace_unsigned_lease_document",
+        "replace_proposal_document_once",
         {
-          p_document_id: contratoLocacao.id,
+          p_document_id: currentDocument.id,
           p_file_name: file.name,
           p_file_url: path,
           p_file_type: file.type,
         },
       );
-      if (updateError) throw updateError;
+      if (updateError) {
+        if (uploadedBucket) await supabase.storage.from(uploadedBucket).remove([path]);
+        throw updateError;
+      }
 
       const replacedDocument = (Array.isArray(replacedData) ? replacedData[0] : replacedData) as
         | ContractDocument
         | null;
-      if (!replacedDocument?.id) throw new Error("O contrato foi enviado, mas não pôde ser confirmado.");
+      if (!replacedDocument?.id) {
+        if (uploadedBucket) await supabase.storage.from(uploadedBucket).remove([path]);
+        throw new Error("O arquivo foi enviado, mas não pôde ser confirmado.");
+      }
 
       setDocumentosProposta((current) => current.map((document) => (
         document.id === replacedDocument.id
           ? { ...document, ...replacedDocument }
           : document
       )));
-      toast.success("Contrato assinado enviado e atualizado.");
+      if (currentDocument.contract_signature_id) {
+        const finalized = await supabase.functions.invoke("contract-document", {
+          body: { policyId: apolice.id, action: "finalize_manual_signature" },
+        });
+        if (finalized.error || finalized.data?.ok === false) {
+          toast.warning(
+            "A Apólice foi salva como assinada. A ativação será retomada automaticamente após a validação dos requisitos.",
+          );
+        }
+      }
+      toast.success(
+        currentDocument.contract_signature_id
+          ? "Apólice - NOX assinada e atualizada."
+          : "Documento substituído com sucesso.",
+      );
+      setBillingRefreshKey((current) => current + 1);
     } catch (error: any) {
-      toast.error(error?.message || "Não foi possível atualizar o contrato.");
+      const message = String(error?.message || "");
+      toast.error(
+        message.includes("DOCUMENT_ALREADY_REPLACED")
+          ? "Este documento já utilizou a única substituição permitida."
+          : message.includes("POLICY_DOCUMENT_ALREADY_SIGNED")
+            ? "A Apólice - NOX já está assinada."
+            : message.includes("POLICY_DOCUMENT_CANCELLED")
+              ? "Uma apólice cancelada não pode receber uma nova via assinada."
+            : error?.message || "Não foi possível substituir o documento.",
+      );
     } finally {
-      setReplacingDocument(false);
+      setReplacingDocumentId(null);
     }
   }
 
@@ -736,7 +788,7 @@ function ApoliceDetalhe() {
           type="file"
           accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
           className="hidden"
-          onChange={replaceUnsignedContract}
+          onChange={replaceProposalDocumentOnce}
         />
         <input
           ref={deferredFileInputRef}
@@ -754,13 +806,14 @@ function ApoliceDetalhe() {
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {allDocuments.map(({ document: doc, source }) => {
             const Icon = documentIcon(doc);
-            const available = Boolean(doc?.file_url || doc?.storage_path);
-            const pending = doc.document_subtype === "pendente_assinatura" ||
-              doc.document_subtype === "pendente_envio" ||
-              (Boolean(doc.contract_signature_id) && !assinaturaConcluida);
-            const editable = source === "proposal" && doc.id === contratoLocacao?.id && podeEditarContrato;
+            const available = policyDocumentHasFile(doc);
+            const documentStatus = policyDocumentStatus(doc, assinaturaConcluida);
+            const pending = ["aguardando_assinatura", "pendente"].includes(documentStatus);
+            const replaceable = source === "proposal" &&
+              canReplacePolicyDocumentOnce(doc, assinaturaConcluida);
             const deferredType = source === "deferred" ? doc.document_type as DeferredDocumentType : null;
             const attaching = deferredType === attachingDocumentType;
+            const replacing = replacingDocumentId === doc.id;
             const uploadedAt = doc?.uploaded_at || doc?.updated_at || doc?.created_at;
             return (
               <Card
@@ -779,7 +832,7 @@ function ApoliceDetalhe() {
                   >
                     <Icon className={`w-5 h-5 ${pending ? "text-red-600" : "text-yellow-700"}`} />
                   </div>
-                  <DocStatusBadge status={pending ? "pendente_envio" : available ? "disponivel" : "nao_enviado"} />
+                  <DocStatusBadge status={documentStatus} />
                 </div>
 
                 <div className="mt-4 space-y-1.5 flex-1">
@@ -795,11 +848,13 @@ function ApoliceDetalhe() {
                   )}
                 </div>
 
-                {editable && (
-                  <div className="mt-3 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
-                    <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                {replaceable && (
+                  <div className="mt-3 flex items-start gap-2 rounded-xl border border-yellow-300 bg-yellow-50 px-3 py-2 text-xs font-bold text-yellow-900">
+                    <PenLine size={14} className="mt-0.5 shrink-0" />
                     <span>
-                      Contrato marcado como não pronto. Envie a versão final nesta área — este envio só pode ser feito uma vez.
+                      {doc.contract_signature_id
+                        ? "Anexe aqui a via assinada da Apólice - NOX. Esta substituição só pode ser feita uma vez."
+                        : "Se precisar corrigir este arquivo, ele pode ser substituído uma única vez."}
                     </span>
                   </div>
                 )}
@@ -830,15 +885,15 @@ function ApoliceDetalhe() {
                       <Download size={14} /> Baixar
                     </Button>
                   </div>
-                  {editable && (
+                  {replaceable && (
                     <Button
                       size="sm"
-                      className="w-full rounded-lg gap-1.5 font-black bg-red-600 hover:bg-red-700 text-white"
-                      disabled={replacingDocument}
-                      onClick={() => fileInputRef.current?.click()}
+                      className="w-full rounded-lg gap-1.5 font-black bg-yellow-400 hover:bg-yellow-500 text-neutral-950"
+                      disabled={Boolean(replacingDocumentId)}
+                      onClick={() => chooseReplacement(doc)}
                     >
-                      {replacingDocument ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-                      {replacingDocument ? "Enviando..." : "Anexar contrato pronto"}
+                      {replacing ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                      {replacing ? "Enviando..." : policyDocumentReplacementButtonLabel(doc)}
                     </Button>
                   )}
                   {deferredType && (
@@ -1220,15 +1275,16 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function DocStatusBadge({ status }: { status: string }) {
-  const map: Record<string, { label: string; cls: string }> = {
-    disponivel:  { label: "Disponível",   cls: "bg-green-50 text-green-700 border-green-200" },
-    pendente:    { label: "Pendente",     cls: "bg-amber-50 text-amber-700 border-amber-200" },
-    pendente_assinatura: { label: "Pendente", cls: "bg-amber-50 text-amber-700 border-amber-200" },
-    pendente_envio: { label: "Pendente", cls: "bg-amber-50 text-amber-700 border-amber-200" },
-    nao_enviado: { label: "Não enviado",  cls: "bg-neutral-100 text-neutral-500 border-neutral-200" },
+function DocStatusBadge({ status }: { status: PolicyDocumentStatus }) {
+  const map: Record<PolicyDocumentStatus, { label: string; cls: string }> = {
+    assinado: { label: "Assinado", cls: "bg-green-50 text-green-700 border-green-200" },
+    disponivel: { label: "Disponível", cls: "bg-green-50 text-green-700 border-green-200" },
+    enviado: { label: "Enviado", cls: "bg-blue-50 text-blue-700 border-blue-200" },
+    aguardando_assinatura: { label: "Aguardando assinatura", cls: "bg-amber-50 text-amber-700 border-amber-200" },
+    pendente: { label: "Pendente", cls: "bg-amber-50 text-amber-700 border-amber-200" },
+    nao_enviado: { label: "Não enviado", cls: "bg-neutral-100 text-neutral-500 border-neutral-200" },
   };
-  const cfg = map[status] || map.nao_enviado;
+  const cfg = map[status];
   return <Badge className={`${cfg.cls} border text-[9px] uppercase font-black px-2 py-0.5`}>{cfg.label}</Badge>;
 }
 

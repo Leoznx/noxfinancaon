@@ -659,7 +659,7 @@ function EmptyPanel({ icon: Icon, text }: { icon: typeof ReceiptText; text: stri
 
 function documentTitle(document: TenantDashboardDocument) {
   const type = String(document.document_type || "").toLocaleLowerCase("pt-BR");
-  if (type === "contrato") return "Contrato de locação";
+  if (type === "contrato") return "Apólice - NOX";
   if (type === "apolice") return "Apólice do seguro";
   if (type === "garantia") return "Condições gerais";
   if (type === "comprovante_residencia") return "Comprovante de residência";
