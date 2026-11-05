@@ -19,6 +19,7 @@ type DocumentRow = {
   uploaded_at: string | null;
   policyNumber: string;
   propertyName: string;
+  displayName: string;
 };
 
 export const Route = createFileRoute("/documentos")({
@@ -59,7 +60,7 @@ function OwnerDocumentsPage() {
         supabase
           .from("documentos_proposta")
           .select(
-            "id, apolice_id, document_type, document_subtype, file_name, file_url, created_at",
+            "id, apolice_id, document_type, document_subtype, contract_signature_id, file_name, file_url, created_at",
           )
           .in("apolice_id", policyIds)
           .order("created_at", { ascending: false }),
@@ -80,6 +81,7 @@ function OwnerDocumentsPage() {
             bucket: null,
             status: document.status,
             uploaded_at: document.uploaded_at,
+            displayName: document.file_name || document.tipo,
           })),
           ...(signedResult.data ?? []).map((document) => ({
             id: document.id,
@@ -94,6 +96,9 @@ function OwnerDocumentsPage() {
                 ? "pendente_assinatura"
                 : "disponivel",
             uploaded_at: document.created_at,
+            displayName: document.contract_signature_id
+              ? "Apólice - NOX"
+              : document.file_name || document.document_type || "Documento",
           })),
         ].map((document) => {
           const policy: any = byId.get(document.apolice_id);
@@ -198,7 +203,7 @@ function DocumentCard({ document }: { document: DocumentRow }) {
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-sm font-bold capitalize text-neutral-900">
-            {document.file_name || document.tipo}
+            {document.displayName}
           </h2>
           <span
             className={`rounded-full px-2.5 py-1 text-[9px] font-bold ${available ? "bg-emerald-50 text-emerald-700" : "bg-neutral-100 text-neutral-500"}`}
@@ -234,7 +239,12 @@ async function resolveDocumentUrl(document: DocumentRow) {
   const path = document.storagePath || document.file_url;
   if (!path) return null;
   if (/^https?:\/\//i.test(path)) return path;
-  const knownBuckets = ["contratos-assinados", "anexos", "approval-documents"];
+  const knownBuckets = [
+    "contratos-assinados",
+    "anexos",
+    "approval-documents",
+    "documentos-proposta",
+  ];
   const buckets = document.bucket
     ? [document.bucket, ...knownBuckets.filter((bucket) => bucket !== document.bucket)]
     : knownBuckets;

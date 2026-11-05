@@ -24,7 +24,7 @@ export const Route = createFileRoute("/inquilino/documentos")({
 });
 
 const TIPO_META: Record<string, { label: string; icon: any; tint: string }> = {
-  contrato: { label: "Contrato", icon: FileSignature, tint: "bg-blue-50 text-blue-700" },
+  contrato: { label: "Apólice - NOX", icon: FileSignature, tint: "bg-blue-50 text-blue-700" },
   vistoria: { label: "Vistoria", icon: ClipboardCheck, tint: "bg-purple-50 text-purple-700" },
   apolice: { label: "Apólice", icon: ShieldCheck, tint: "bg-emerald-50 text-emerald-700" },
   garantia: { label: "Garantia", icon: FileBadge, tint: "bg-amber-50 text-amber-700" },

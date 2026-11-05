@@ -1565,6 +1565,28 @@ async function downloadSignedPdf(documentUuid: string) {
   };
 }
 
+async function downloadManualSignedPdf(supabase: any, signature: any) {
+  const bucket = String(signature.manual_signed_file_bucket || "");
+  const path = String(signature.manual_signed_file_url || "");
+  if (!bucket || !path) throw new Error("manual_signed_contract_missing_path");
+  if (!["approval-documents", "anexos", "documentos-proposta"].includes(bucket)) {
+    throw new Error("manual_signed_contract_invalid_bucket");
+  }
+
+  const { data, error } = await supabase.storage.from(bucket).download(path);
+  if (error || !data) {
+    throw new Error(`manual_signed_contract_download_error:${error?.message || "unknown"}`);
+  }
+  const bytes = new Uint8Array(await data.arrayBuffer());
+  if (!(bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46)) {
+    throw new Error("manual_signed_contract_not_pdf");
+  }
+  return {
+    bytes,
+    name: signature.manual_signed_file_name || "Apolice-NOX-assinada.pdf",
+  };
+}
+
 async function ensurePendingPolicyForConsultation(supabase: any, consulta: any) {
   const contractPeriodMonths = resolveContractPeriodMonths(consulta);
   await lockContractPeriod(supabase, consulta.id, contractPeriodMonths);
@@ -2208,7 +2230,10 @@ export async function finalizeD4SignContract(supabase: any, signature: any) {
       dashboardUrl,
     };
   }
-  if (!signature.d4sign_document_uuid) {
+  const hasManualSignedDocument = Boolean(
+    signature.manual_signed_file_url && signature.manual_signed_file_bucket,
+  );
+  if (!signature.d4sign_document_uuid && !hasManualSignedDocument) {
     throw new Error("missing_d4sign_document_uuid");
   }
 
@@ -2218,7 +2243,31 @@ export async function finalizeD4SignContract(supabase: any, signature: any) {
     signatureStatus: signature.signature_status || signature.status,
     policyStatus: consulta.policy_status,
   });
-  if (!activationDecision.activate) throw new Error(activationDecision.reason);
+  if (!activationDecision.activate) {
+    if (hasManualSignedDocument && activationDecision.reason === "payment_not_confirmed") {
+      const signedAt = signature.signed_at || new Date().toISOString();
+      await supabase
+        .from("consultas_credito")
+        .update({
+          status: "aguardando_ativacao",
+          substatus: "assinatura_concluida_aguardando_pagamento",
+          activation_status: "aguardando_pagamento",
+          contract_accepted: true,
+          contract_accepted_at: signedAt,
+          signature_status: "signed",
+          policy_status: "issued_pending",
+        })
+        .eq("id", consulta.id)
+        .not("status", "in", "(ativado,ativada,active)");
+      return {
+        ok: true,
+        signed: true,
+        activated: false,
+        waitingPayment: true,
+      };
+    }
+    throw new Error(activationDecision.reason);
+  }
   if (consulta.card_setup_mode || consulta.payment_method === "credit_card") {
     const { data: recurringSetup, error: recurringSetupError } = await supabase
       .from("asaas_subscriptions")
@@ -2246,8 +2295,13 @@ export async function finalizeD4SignContract(supabase: any, signature: any) {
     }
   }
   const tenantUserId = signature.tenant_user_id || (await ensureTenantAccount(supabase, consulta));
-  const downloaded = await downloadSignedPdf(signature.d4sign_document_uuid);
-  const path = `${tenantUserId}/${consulta.id}/${signature.d4sign_document_uuid}.pdf`;
+  const downloaded = hasManualSignedDocument
+    ? await downloadManualSignedPdf(supabase, signature)
+    : await downloadSignedPdf(signature.d4sign_document_uuid);
+  const signedFileKey = hasManualSignedDocument
+    ? `manual-${signature.id}`
+    : signature.d4sign_document_uuid;
+  const path = `${tenantUserId}/${consulta.id}/${signedFileKey}.pdf`;
   const { error: uploadError } = await supabase.storage
     .from(SIGNED_CONTRACTS_BUCKET)
     .upload(path, downloaded.bytes, {
@@ -2315,8 +2369,12 @@ export async function finalizeD4SignContract(supabase: any, signature: any) {
     .eq("id", signature.id);
   await supabase.from("proposta_historico").insert({
     consulta_id: consulta.id,
-    tipo_evento: "contrato_d4sign_assinado",
-    descricao: `Contrato ${signature.plan_name} assinado na D4Sign e seguro ativado.`,
+    tipo_evento: hasManualSignedDocument
+      ? "apolice_nox_ativada_manual"
+      : "contrato_d4sign_assinado",
+    descricao: hasManualSignedDocument
+      ? "Apólice - NOX assinada anexada manualmente e seguro ativado."
+      : `Contrato ${signature.plan_name} assinado na D4Sign e seguro ativado.`,
   });
 
   const dashboardUrl = await notifyInsuranceActive(supabase, signature, consulta, tenantUserId);

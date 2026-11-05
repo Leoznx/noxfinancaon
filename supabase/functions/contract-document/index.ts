@@ -8,7 +8,10 @@ import {
   requireUser,
   supabaseAdmin,
 } from "../_shared/asaas.ts";
-import { materializeD4SignContractDocument } from "../_shared/d4sign.ts";
+import {
+  finalizeD4SignContract,
+  materializeD4SignContractDocument,
+} from "../_shared/d4sign.ts";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders(req) });
@@ -20,6 +23,7 @@ serve(async (req) => {
     const { user } = await requireUser(req);
     const body = await req.json();
     const policyId = String(body?.policyId || "");
+    const action = String(body?.action || "materialize");
     if (!/^[0-9a-f-]{36}$/i.test(policyId)) {
       return jsonResponse(req, { ok: false, error: "Contrato invalido." }, 400);
     }
@@ -45,6 +49,32 @@ serve(async (req) => {
     });
     if (accessError || allowed !== true) {
       return jsonResponse(req, { ok: false, error: "Sem permissao para este contrato." }, 403);
+    }
+
+    if (action === "finalize_manual_signature") {
+      const { data: signature, error: signatureError } = await admin
+        .from("contract_signatures")
+        .select("*")
+        .eq("consultation_id", policy.consulta_id)
+        .maybeSingle();
+      if (
+        signatureError ||
+        !signature?.manual_signed_file_url ||
+        !signature?.manual_signed_file_bucket ||
+        signature?.signature_status !== "signed"
+      ) {
+        return jsonResponse(
+          req,
+          { ok: false, error: "A via assinada ainda nao foi confirmada." },
+          409,
+        );
+      }
+      const result = await finalizeD4SignContract(admin, signature);
+      return jsonResponse(req, result as Record<string, unknown>);
+    }
+
+    if (action !== "materialize") {
+      return jsonResponse(req, { ok: false, error: "Acao invalida." }, 400);
     }
 
     const result = await materializeD4SignContractDocument(

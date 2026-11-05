@@ -1177,6 +1177,7 @@ export type Database = {
         Row: {
           apolice_id: string | null
           consulta_id: string | null
+          contract_signature_id: string | null
           created_at: string
           document_subtype: string | null
           document_type: string | null
@@ -1184,6 +1185,9 @@ export type Database = {
           file_type: string | null
           file_url: string
           id: string
+          replaced_at: string | null
+          replaced_by: string | null
+          replacement_count: number
           tenant_user_id: string | null
           updated_at: string
           uploaded_by: string | null
@@ -1191,6 +1195,7 @@ export type Database = {
         Insert: {
           apolice_id?: string | null
           consulta_id?: string | null
+          contract_signature_id?: string | null
           created_at?: string
           document_subtype?: string | null
           document_type?: string | null
@@ -1198,6 +1203,9 @@ export type Database = {
           file_type?: string | null
           file_url: string
           id?: string
+          replaced_at?: string | null
+          replaced_by?: string | null
+          replacement_count?: number
           tenant_user_id?: string | null
           updated_at?: string
           uploaded_by?: string | null
@@ -1205,6 +1213,7 @@ export type Database = {
         Update: {
           apolice_id?: string | null
           consulta_id?: string | null
+          contract_signature_id?: string | null
           created_at?: string
           document_subtype?: string | null
           document_type?: string | null
@@ -1212,6 +1221,9 @@ export type Database = {
           file_type?: string | null
           file_url?: string
           id?: string
+          replaced_at?: string | null
+          replaced_by?: string | null
+          replacement_count?: number
           tenant_user_id?: string | null
           updated_at?: string
           uploaded_by?: string | null
