@@ -171,13 +171,7 @@ export function sanitizeDirectDResponse(
     },
     retorno: {
       dataConsulta: response.retorno?.dataConsulta ?? null,
-      score: subject?.score ?? null,
       faixaScore: subject?.faixaScore ?? null,
-      scoreCompromissoPagamento: subject?.scoreCompromissoPagamento ?? null,
-      descricaoCompromissoPagamento: subject?.descricaoCompromissoPagamento ?? null,
-      percentualCompromissoPagamento: extractCommitmentPaymentPercentage(
-        subject?.descricaoCompromissoPagamento,
-      ),
       regraDecisao: DIRECTD_DECISION_RULE,
       motivos: subject?.motivos ?? [],
       indicadoresNegocio: subject?.indicadoresNegocio ?? [],

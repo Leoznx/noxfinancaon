@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { useAuth } from "@/components/AuthProvider";
+import { InternalCreditAnalysisCard } from "@/components/admin/InternalCreditAnalysisCard";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
@@ -32,6 +34,7 @@ const estaNaFilaManual = (c: any) =>
   docsEnviados(c) || (c.status === "em_analise" && !suspensaPorFaltaDeDocumentos(c));
 
 function AprovacoesPage() {
+  const { user } = useAuth();
   const { consulta: consultaSearchId } = Route.useSearch();
   const openedSearchDetailRef = useRef<string | null>(null);
   const [linhas, setLinhas] = useState<any[]>([]);
@@ -47,6 +50,10 @@ function AprovacoesPage() {
   const [loadingDetalhe, setLoadingDetalhe] = useState(false);
   const [processandoId, setProcessandoId] = useState<string | null>(null);
   const processandoRef = useRef(false);
+  const canViewInternalAnalysis =
+    user?.role === "admin" ||
+    user?.role === "admin_master" ||
+    user?.internalRole === "admin_master";
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -385,6 +392,10 @@ function AprovacoesPage() {
 
           {detalhe && (
             <div className="space-y-5 py-2">
+              {canViewInternalAnalysis && (
+                <InternalCreditAnalysisCard consultationId={detalhe.id} />
+              )}
+
               <div className="grid grid-cols-1 gap-3 rounded-2xl border border-neutral-200 bg-neutral-50 p-4 text-sm sm:grid-cols-2">
                 <Info label="Cliente" value={detalhe.tenant_name ?? "—"} />
                 <Info label="CPF/CNPJ" value={detalhe.tenant_document ?? "—"} />
