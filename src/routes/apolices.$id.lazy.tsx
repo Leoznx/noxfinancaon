@@ -27,6 +27,7 @@ import type {
   TenantPaymentSource,
 } from "@/lib/tenant-billing";
 import { contractBrokerLabel } from "@/lib/contract-broker-label";
+import { getDemoPolicyDetail } from "@/lib/demo-portal-data";
 
 export const Route = createLazyFileRoute("/apolices/$id")({
   component: () => (
@@ -154,6 +155,19 @@ function ApoliceDetalhe() {
       setErro(null);
       setAviso(null);
       try {
+        const demoDetail = getDemoPolicyDetail(id);
+        if (demoDetail) {
+          if (!cancelled) {
+            setApolice(demoDetail.apolice);
+            setDocumentos(demoDetail.documentosContrato);
+            setDocumentosProposta(demoDetail.documentosProposta);
+            setAssinatura(demoDetail.assinatura);
+            setHistorico(demoDetail.historico);
+            setFaturas(demoDetail.faturas);
+          }
+          return;
+        }
+
         const { data: ap, error: apErr } = await supabase
           .from("apolices")
           .select(`
