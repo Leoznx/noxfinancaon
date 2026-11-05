@@ -2,10 +2,14 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
+  canRetryDirectDScoreFailure,
   DIRECTD_DECISION_RULE,
   extractCommitmentPaymentPercentage,
+  hasAdversePaymentHistory,
+  hasDirectDScoreSuccessPayload,
   normalizeDirectDResult,
   sanitizeDirectDResponse,
+  shouldAutomaticallyRetryDirectDScoreFailure,
   type DirectDScoreResponse,
 } from "../supabase/functions/_shared/directd-credit.ts";
 
@@ -33,6 +37,41 @@ function responseFor(
   };
 }
 
+test("reconhece payload de score concluído independentemente do status HTTP", () => {
+  const successResponse = {
+    ...responseFor("", 700),
+    metaDados: {
+      consultaUid: "consulta-teste",
+      resultadoId: 1,
+      resultado: "Sucesso",
+    },
+  } satisfies DirectDScoreResponse;
+  assert.equal(hasDirectDScoreSuccessPayload(successResponse, 11), true);
+  assert.equal(
+    hasDirectDScoreSuccessPayload({ metaDados: { resultadoId: 1, resultado: "Sucesso" } }, 11),
+    false,
+  );
+  assert.equal(
+    hasDirectDScoreSuccessPayload(
+      { ...successResponse, metaDados: { resultadoId: 0, resultado: "Falha" } },
+      11,
+    ),
+    false,
+  );
+});
+
+test("só repete falha transitória de score quando não há recibo do provedor", () => {
+  const withoutReceipt = {
+    metaDados: { resultadoId: 0, resultado: "Falha" },
+  } satisfies DirectDScoreResponse;
+  assert.equal(canRetryDirectDScoreFailure(500, withoutReceipt), true);
+  assert.equal(canRetryDirectDScoreFailure(503, withoutReceipt), true);
+  assert.equal(canRetryDirectDScoreFailure(422, withoutReceipt), false);
+  assert.equal(canRetryDirectDScoreFailure(500, responseFor("", 700)), false);
+  assert.equal(shouldAutomaticallyRetryDirectDScoreFailure(500, withoutReceipt), true);
+  assert.equal(shouldAutomaticallyRetryDirectDScoreFailure(403, withoutReceipt), false);
+});
+
 test("não decide automaticamente apenas pelo texto da faixa QUOD", () => {
   for (const faixaScore of [
     "Alto índice de inadimplência",
@@ -55,39 +94,101 @@ test("envia faixa sem regra para análise complementar", () => {
   });
 });
 
-test("aplica os limites comerciais contínuos definidos pela NOX", () => {
-  assert.equal(normalizeDirectDResult(responseFor("", 0), 11).decision, "recusado");
-  assert.equal(normalizeDirectDResult(responseFor("", 539), 11).decision, "recusado");
-  assert.equal(normalizeDirectDResult(responseFor("", 540), 11).decision, "em_analise");
-  assert.equal(normalizeDirectDResult(responseFor("", 650), 11).decision, "em_analise");
+test("aplica exatamente os limites de score e compromisso definidos pela NOX", () => {
   assert.equal(
-    normalizeDirectDResult(responseFor("", 651, "O consumidor paga 80% das contas em dia"), 11)
+    normalizeDirectDResult(responseFor("", 538, "O consumidor paga 47% das contas em dia"), 11)
+      .decision,
+    "recusado",
+  );
+  assert.equal(
+    normalizeDirectDResult(
+      responseFor("", 538.99, "O consumidor paga 47,99% das contas em dia"),
+      11,
+    ).decision,
+    "recusado",
+  );
+  assert.equal(
+    normalizeDirectDResult(responseFor("", 539, "O consumidor paga 47% das contas em dia"), 11)
+      .decision,
+    "em_analise",
+  );
+  assert.equal(normalizeDirectDResult(responseFor("", 540), 11).decision, "em_analise");
+  assert.equal(
+    normalizeDirectDResult(responseFor("", 541, "O consumidor paga 48% das contas em dia"), 11)
+      .decision,
+    "em_analise",
+  );
+  assert.equal(
+    normalizeDirectDResult(responseFor("", 650, "O consumidor paga 48% das contas em dia"), 11)
+      .decision,
+    "em_analise",
+  );
+  assert.equal(
+    normalizeDirectDResult(responseFor("", 651, "O consumidor paga 48% das contas em dia"), 11)
       .decision,
     "aprovado",
   );
   assert.equal(normalizeDirectDResult(responseFor("", 1000), 11).decision, "aprovado");
 });
 
-test("exige os dois critérios e usa o pior resultado da análise conjunta", () => {
+test("envia combinações mistas para análise manual", () => {
   assert.equal(
-    normalizeDirectDResult(responseFor("", 900, "O consumidor paga 59% das contas em dia"), 11)
-      .decision,
-    "recusado",
-  );
-  assert.equal(
-    normalizeDirectDResult(responseFor("", 539, "O consumidor paga 100% das contas em dia"), 11)
-      .decision,
-    "recusado",
-  );
-  assert.equal(
-    normalizeDirectDResult(responseFor("", 900, "O consumidor paga 60% das contas em dia"), 11)
+    normalizeDirectDResult(responseFor("", 900, "O consumidor paga 47% das contas em dia"), 11)
       .decision,
     "em_analise",
   );
   assert.equal(
-    normalizeDirectDResult(responseFor("", 650, "O consumidor paga 100% das contas em dia"), 11)
+    normalizeDirectDResult(responseFor("", 538, "O consumidor paga 100% das contas em dia"), 11)
       .decision,
     "em_analise",
+  );
+  assert.equal(
+    normalizeDirectDResult(responseFor("", 541, "O consumidor paga 47% das contas em dia"), 11)
+      .decision,
+    "em_analise",
+  );
+});
+
+test("reprova automaticamente relatos adversos mesmo com score e percentual altos", () => {
+  const exactDescription =
+    "O consumidor apresenta ou apresentou alguns atrasos de pagamentos ou pendências financeiras na média dos últimos 12 meses.";
+
+  assert.equal(hasAdversePaymentHistory(exactDescription), true);
+  assert.equal(
+    normalizeDirectDResult(responseFor("", 900, exactDescription), 11).decision,
+    "recusado",
+  );
+  assert.equal(
+    normalizeDirectDResult(
+      responseFor("", 900, "Foram identificadas pendências financeiras recentes."),
+      11,
+    ).decision,
+    "recusado",
+  );
+  assert.equal(
+    normalizeDirectDResult(
+      responseFor("", 900, "O consumidor apresentou atrasos nos pagamentos."),
+      11,
+    ).decision,
+    "recusado",
+  );
+});
+
+test("não confunde negação explícita com histórico adverso", () => {
+  const positiveDescription =
+    "O consumidor não apresenta atrasos de pagamentos nem pendências financeiras e paga 48% das contas em dia.";
+
+  assert.equal(hasAdversePaymentHistory(positiveDescription), false);
+  assert.equal(
+    normalizeDirectDResult(responseFor("", 651, positiveDescription), 11)
+      .decision,
+    "aprovado",
+  );
+  assert.equal(
+    hasAdversePaymentHistory(
+      "Não apresenta atrasos de pagamento, mas apresentou pendências financeiras recentes.",
+    ),
+    true,
   );
 });
 
@@ -129,7 +230,7 @@ test("seleciona pessoa jurídica para CNPJ", () => {
       pessoaJuridica: {
         faixaScore: "Baixo índice de inadimplência",
         score: 900,
-        descricaoCompromissoPagamento: "A empresa paga 80% das contas em dia",
+        descricaoCompromissoPagamento: "A empresa paga 48% das contas em dia",
       },
     },
   };
@@ -137,8 +238,8 @@ test("seleciona pessoa jurídica para CNPJ", () => {
     decision: "aprovado",
     faixaScore: "Baixo índice de inadimplência",
     score: 900,
-    commitmentPaymentDescription: "A empresa paga 80% das contas em dia",
-    commitmentPaymentPercentage: 80,
+    commitmentPaymentDescription: "A empresa paga 48% das contas em dia",
+    commitmentPaymentPercentage: 48,
     message: "Crédito aprovado pela análise conjunta de score e compromisso de pagamento.",
   });
 });
@@ -268,6 +369,42 @@ test("migração reutiliza somente resultados calculados com os dois critérios"
   );
 });
 
+test("nova regra invalida o cache anterior e mantém a recuperação de falhas transitórias", () => {
+  const migration = readFileSync(
+    new URL(
+      "../supabase/migrations/20261105190000_credit_score_commitment_48_percent.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  const recoveryMigration = readFileSync(
+    new URL(
+      "../supabase/migrations/20261105170000_directd_transient_score_recovery.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  const edgeFunction = readFileSync(
+    new URL("../supabase/functions/simulate-credit-official/index.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.equal(DIRECTD_DECISION_RULE, "score_descricao_compromisso_v2");
+  assert.match(migration, /v_previous_rule constant text := 'score_descricao_compromisso_v1'/);
+  assert.match(migration, /v_current_rule constant text := 'score_descricao_compromisso_v2'/);
+  assert.match(migration, /pg_get_functiondef\(v_signature\)/);
+  assert.match(migration, /EXECUTE v_definition/);
+  assert.doesNotMatch(
+    migration,
+    /UPDATE public\.consultas_credito\s+SET\s+status[\s\S]+FROM scored/,
+  );
+  assert.match(recoveryMigration, /request\.provider_consulta_uid IS NULL/);
+  assert.match(recoveryMigration, /request\.billed_cents IS NULL/);
+  assert.match(edgeFunction, /DIRECTD_SCORE_MAX_HTTP_ATTEMPTS = 3/);
+  assert.match(edgeFunction, /shouldAutomaticallyRetryDirectDScoreFailure/);
+  assert.match(edgeFunction, /"finish_official_credit_simulation_v2"/);
+});
+
 test("análise interna fica protegida e fora do retorno legível pelo solicitante", () => {
   const migration = readFileSync(
     new URL(
@@ -291,7 +428,10 @@ test("análise interna fica protegida e fora do retorno legível pelo solicitant
     "utf8",
   );
   assert.match(edgeFunction, /"finish_official_credit_simulation_v2"/);
-  const publicResultStart = edgeFunction.indexOf("return json({\n      ok: true");
+  const publicResultStart = edgeFunction.indexOf(
+    "return json({",
+    edgeFunction.indexOf("simulacao_credito_quod_concluida"),
+  );
   const publicResultEnd = edgeFunction.indexOf("\n  } catch", publicResultStart);
   assert.notEqual(publicResultStart, -1);
   assert.notEqual(publicResultEnd, -1);
