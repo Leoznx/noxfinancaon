@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   DIRECTD_DECISION_RULE,
   extractCommitmentPaymentPercentage,
+  hasAdversePaymentHistory,
   normalizeDirectDResult,
   sanitizeDirectDResponse,
   type DirectDScoreResponse,
@@ -55,39 +56,107 @@ test("envia faixa sem regra para análise complementar", () => {
   });
 });
 
-test("aplica os limites comerciais contínuos definidos pela NOX", () => {
-  assert.equal(normalizeDirectDResult(responseFor("", 0), 11).decision, "recusado");
-  assert.equal(normalizeDirectDResult(responseFor("", 539), 11).decision, "recusado");
-  assert.equal(normalizeDirectDResult(responseFor("", 540), 11).decision, "em_analise");
-  assert.equal(normalizeDirectDResult(responseFor("", 650), 11).decision, "em_analise");
+test("aprova a partir de 651 e envia para análise a partir de 541 com compromisso de 48%", () => {
   assert.equal(
-    normalizeDirectDResult(responseFor("", 651, "O consumidor paga 80% das contas em dia"), 11)
+    normalizeDirectDResult(responseFor("", 651, "O consumidor paga 48% das contas em dia"), 11)
       .decision,
     "aprovado",
   );
-  assert.equal(normalizeDirectDResult(responseFor("", 1000), 11).decision, "aprovado");
+  assert.equal(
+    normalizeDirectDResult(responseFor("", 1000, "O consumidor paga 48% das contas em dia"), 11)
+      .decision,
+    "aprovado",
+  );
+  assert.equal(
+    normalizeDirectDResult(responseFor("", 541, "O consumidor paga 48% das contas em dia"), 11)
+      .decision,
+    "em_analise",
+  );
+  assert.equal(
+    normalizeDirectDResult(responseFor("", 650, "O consumidor paga 48% das contas em dia"), 11)
+      .decision,
+    "em_analise",
+  );
 });
 
-test("exige os dois critérios e usa o pior resultado da análise conjunta", () => {
+test("reprova numericamente somente quando score e compromisso ficam abaixo dos dois pisos", () => {
   assert.equal(
-    normalizeDirectDResult(responseFor("", 900, "O consumidor paga 59% das contas em dia"), 11)
+    normalizeDirectDResult(responseFor("", 538, "O consumidor paga 47% das contas em dia"), 11)
       .decision,
     "recusado",
   );
   assert.equal(
-    normalizeDirectDResult(responseFor("", 539, "O consumidor paga 100% das contas em dia"), 11)
+    normalizeDirectDResult(responseFor("", 0, "O consumidor paga 0% das contas em dia"), 11)
       .decision,
     "recusado",
   );
+
+  // Os limites 539 e 540 e os critérios divergentes não receberam uma decisão
+  // automática na regra comercial; seguem para conferência humana.
   assert.equal(
-    normalizeDirectDResult(responseFor("", 900, "O consumidor paga 60% das contas em dia"), 11)
+    normalizeDirectDResult(responseFor("", 539, "O consumidor paga 47% das contas em dia"), 11)
       .decision,
     "em_analise",
   );
   assert.equal(
-    normalizeDirectDResult(responseFor("", 650, "O consumidor paga 100% das contas em dia"), 11)
+    normalizeDirectDResult(responseFor("", 540, "O consumidor paga 47% das contas em dia"), 11)
       .decision,
     "em_analise",
+  );
+  assert.equal(
+    normalizeDirectDResult(responseFor("", 538, "O consumidor paga 48% das contas em dia"), 11)
+      .decision,
+    "em_analise",
+  );
+  assert.equal(
+    normalizeDirectDResult(responseFor("", 900, "O consumidor paga 47% das contas em dia"), 11)
+      .decision,
+    "em_analise",
+  );
+});
+
+test("reprova automaticamente descrições de atrasos ou pendências mesmo com score alto", () => {
+  const exactDescription =
+    "O consumidor apresenta ou apresentou alguns atrasos de pagamentos ou pendências financeiras na média dos últimos 12 meses.";
+
+  assert.equal(hasAdversePaymentHistory(exactDescription), true);
+  assert.equal(
+    normalizeDirectDResult(responseFor("", 900, exactDescription), 11).decision,
+    "recusado",
+  );
+  assert.equal(
+    normalizeDirectDResult(
+      responseFor("", 700, "O consumidor teve atrasos recorrentes nos pagamentos no último ano."),
+      11,
+    ).decision,
+    "recusado",
+  );
+  assert.equal(
+    normalizeDirectDResult(
+      responseFor("", 800, "Pendências financeiras foram identificadas recentemente."),
+      11,
+    ).decision,
+    "recusado",
+  );
+});
+
+test("não confunde negação explícita de atraso com alerta adverso", () => {
+  for (const description of [
+    "O consumidor não apresenta atrasos de pagamentos ou pendências financeiras.",
+    "Consumidor sem histórico de atrasos nos pagamentos.",
+  ]) {
+    assert.equal(hasAdversePaymentHistory(description), false);
+    assert.equal(
+      normalizeDirectDResult(responseFor("", 900, description), 11).decision,
+      "em_analise",
+    );
+  }
+
+  assert.equal(
+    hasAdversePaymentHistory(
+      "O consumidor não apresenta atrasos de pagamentos, mas possui pendências financeiras.",
+    ),
+    true,
   );
 });
 
@@ -266,6 +335,20 @@ test("migração reutiliza somente resultados calculados com os dois critérios"
     migration,
     /UPDATE public\.consultas_credito\s+SET\s+status[\s\S]+FROM scored/,
   );
+});
+
+test("migração da regra v2 impede reutilizar decisões calculadas com limites antigos", () => {
+  const migration = readFileSync(
+    new URL(
+      "../supabase/migrations/20261105174500_credit_decision_rule_v2.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+
+  assert.match(migration, /CREATE OR REPLACE FUNCTION public\.claim_official_credit_simulation/);
+  assert.match(migration, /score_descricao_compromisso_v2/);
+  assert.doesNotMatch(migration, /score_descricao_compromisso_v1/);
 });
 
 test("análise interna fica protegida e fora do retorno legível pelo solicitante", () => {
