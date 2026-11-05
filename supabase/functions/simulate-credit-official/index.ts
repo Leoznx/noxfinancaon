@@ -604,6 +604,10 @@ serve(async (req) => {
         provider: "directd_quod",
         decision: result.decision,
         scoreBand: result.faixaScore,
+        score: result.score,
+        paymentCommitmentScore: result.scoreCompromissoPagamento,
+        paymentCommitmentDescription: result.descricaoCompromissoPagamento,
+        decisionRule: result.regraDecisao,
         customerNameSource: identityUnavailableCode
           ? identityUnavailableCode === "DIRECTD_IDENTITY_NOT_FOUND"
             ? "directd_cadastro_not_found"
@@ -621,6 +625,9 @@ serve(async (req) => {
         status: result.decision,
         faixaScore: result.faixaScore,
         score: result.score,
+        scoreCompromissoPagamento: result.scoreCompromissoPagamento,
+        descricaoCompromissoPagamento: result.descricaoCompromissoPagamento,
+        regraDecisao: result.regraDecisao,
         nome: identity?.customerName ?? null,
       },
     });

@@ -2,12 +2,18 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
+  DIRECTD_CREDIT_RULE_VERSION,
   normalizeDirectDResult,
   sanitizeDirectDResponse,
   type DirectDScoreResponse,
 } from "../supabase/functions/_shared/directd-credit.ts";
 
-function responseFor(faixaScore: string, score: number | null = null): DirectDScoreResponse {
+function responseFor(
+  faixaScore: string,
+  score: number | null = null,
+  scoreCompromissoPagamento: number | null = null,
+  descricaoCompromissoPagamento = "Histórico de pagamentos informado pelo provedor",
+): DirectDScoreResponse {
   return {
     metaDados: {
       consultaUid: "consulta-teste",
@@ -15,24 +21,24 @@ function responseFor(faixaScore: string, score: number | null = null): DirectDSc
     },
     retorno: {
       documentoConsultado: "00000000000",
-      pessoaFisica: { faixaScore, score },
+      pessoaFisica: {
+        faixaScore,
+        score,
+        scoreCompromissoPagamento,
+        descricaoCompromissoPagamento,
+      },
     },
   };
 }
 
-test("mapeia as três faixas QUOD para a regra comercial da NOX", () => {
-  assert.equal(
-    normalizeDirectDResult(responseFor("Alto índice de inadimplência"), 11)?.decision,
-    "recusado",
-  );
-  assert.equal(
-    normalizeDirectDResult(responseFor("Médio índice de inadimplência"), 11)?.decision,
-    "em_analise",
-  );
-  assert.equal(
-    normalizeDirectDResult(responseFor("Baixo índice de inadimplência"), 11)?.decision,
-    "aprovado",
-  );
+test("não decide automaticamente apenas pelos textos do provedor", () => {
+  for (const faixa of [
+    "Alto índice de inadimplência",
+    "Médio índice de inadimplência",
+    "Baixo índice de inadimplência",
+  ]) {
+    assert.equal(normalizeDirectDResult(responseFor(faixa), 11).decision, "em_analise");
+  }
 });
 
 test("envia faixa sem regra para análise complementar", () => {
@@ -40,27 +46,43 @@ test("envia faixa sem regra para análise complementar", () => {
     decision: "em_analise",
     faixaScore: "Faixa experimental",
     score: null,
-    message: "A análise oficial precisa de conferência complementar.",
+    scoreCompromissoPagamento: null,
+    descricaoCompromissoPagamento: "Histórico de pagamentos informado pelo provedor",
+    regraDecisao: DIRECTD_CREDIT_RULE_VERSION,
+    message: "A análise oficial precisa de conferência complementar dos dois indicadores.",
   });
 });
 
-test("aplica os limites comerciais contínuos definidos pela NOX", () => {
-  assert.equal(normalizeDirectDResult(responseFor("", 0), 11).decision, "recusado");
-  assert.equal(normalizeDirectDResult(responseFor("", 540), 11).decision, "recusado");
-  assert.equal(normalizeDirectDResult(responseFor("", 541), 11).decision, "em_analise");
-  assert.equal(normalizeDirectDResult(responseFor("", 650), 11).decision, "em_analise");
-  assert.equal(normalizeDirectDResult(responseFor("", 651), 11).decision, "aprovado");
-  assert.equal(normalizeDirectDResult(responseFor("", 1000), 11).decision, "aprovado");
+test("aplica os limites combinados e contínuos definidos pela NOX", () => {
+  assert.equal(normalizeDirectDResult(responseFor("", 539, 59), 11).decision, "recusado");
+  assert.equal(normalizeDirectDResult(responseFor("", 540, 60), 11).decision, "em_analise");
+  assert.equal(normalizeDirectDResult(responseFor("", 595, 71), 11).decision, "em_analise");
+  assert.equal(normalizeDirectDResult(responseFor("", 650, 79), 11).decision, "em_analise");
+  assert.equal(normalizeDirectDResult(responseFor("", 650, 100), 11).decision, "em_analise");
+  assert.equal(normalizeDirectDResult(responseFor("", 651, 79), 11).decision, "em_analise");
+  assert.equal(normalizeDirectDResult(responseFor("", 651, 80), 11).decision, "aprovado");
+  assert.equal(normalizeDirectDResult(responseFor("", 1000, 100), 11).decision, "aprovado");
 });
 
-test("o score prevalece quando o texto do provedor diverge da regra NOX", () => {
-  const medio = normalizeDirectDResult(responseFor("Alto índice de inadimplência", 551), 11);
+test("os números prevalecem quando o texto do provedor diverge da regra NOX", () => {
+  const medio = normalizeDirectDResult(
+    responseFor("Alto índice de inadimplência", 551, 71),
+    11,
+  );
   assert.equal(medio.decision, "em_analise");
   assert.equal(medio.faixaScore, "Médio índice de inadimplência");
 
-  const aprovado = normalizeDirectDResult(responseFor("Médio índice de inadimplência", 698), 11);
+  const aprovado = normalizeDirectDResult(
+    responseFor("Médio índice de inadimplência", 698, 80),
+    11,
+  );
   assert.equal(aprovado.decision, "aprovado");
   assert.equal(aprovado.faixaScore, "Baixo índice de inadimplência");
+});
+
+test("reprova quando qualquer requisito mínimo falha", () => {
+  assert.equal(normalizeDirectDResult(responseFor("", 900, 59), 11).decision, "recusado");
+  assert.equal(normalizeDirectDResult(responseFor("", 539, 100), 11).decision, "recusado");
 });
 
 test("preserva score ausente como nulo", () => {
@@ -73,21 +95,32 @@ test("preserva score ausente como nulo", () => {
 test("seleciona pessoa jurídica para CNPJ", () => {
   const response: DirectDScoreResponse = {
     retorno: {
-      pessoaFisica: { faixaScore: "Alto índice de inadimplência", score: 1 },
-      pessoaJuridica: { faixaScore: "Baixo índice de inadimplência", score: 900 },
+      pessoaFisica: {
+        faixaScore: "Alto índice de inadimplência",
+        score: 1,
+        scoreCompromissoPagamento: 20,
+      },
+      pessoaJuridica: {
+        faixaScore: "Baixo índice de inadimplência",
+        score: 900,
+        scoreCompromissoPagamento: 95,
+      },
     },
   };
   assert.deepEqual(normalizeDirectDResult(response, 14), {
     decision: "aprovado",
     faixaScore: "Baixo índice de inadimplência",
     score: 900,
-    message: "Crédito aprovado pela análise oficial de risco.",
+    scoreCompromissoPagamento: 95,
+    descricaoCompromissoPagamento: null,
+    regraDecisao: DIRECTD_CREDIT_RULE_VERSION,
+    message: "Crédito aprovado pelos critérios de score e compromisso de pagamento.",
   });
 });
 
 test("resposta persistida remove documento, usuário e IP do provedor", () => {
   const raw = {
-    ...responseFor("Baixo índice de inadimplência"),
+    ...responseFor("Baixo índice de inadimplência", 700, 81),
     metaDados: {
       consultaUid: "consulta-teste",
       usuario: "usuario-sensivel",
@@ -98,6 +131,23 @@ test("resposta persistida remove documento, usuário e IP do provedor", () => {
   assert.equal(sanitized.includes("00000000000"), false);
   assert.equal(sanitized.includes("usuario-sensivel"), false);
   assert.equal(sanitized.includes("127.0.0.1"), false);
+  assert.equal(sanitized.includes('"scoreCompromissoPagamento":81'), true);
+  assert.equal(sanitized.includes(DIRECTD_CREDIT_RULE_VERSION), true);
+});
+
+test("migração invalida cache antigo e audita compromisso de pagamento", () => {
+  const migration = readFileSync(
+    new URL(
+      "../supabase/migrations/20261105130000_directd_score_payment_commitment_rule.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+
+  assert.match(migration, /payment_commitment_score numeric\(5,2\)/);
+  assert.match(migration, /score_compromisso_v1/);
+  assert.match(migration, /DIRECTD_LEGACY_RULE_NO_COMMITMENT/);
+  assert.match(migration, /trg_enforce_directd_score_commitment_rule/);
 });
 
 test("migração desliga o claim antigo e registra o custo de R$ 1,98", () => {

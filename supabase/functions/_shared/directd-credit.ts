@@ -1,8 +1,12 @@
 export type DirectDCreditDecision = "aprovado" | "recusado" | "em_analise";
 
+export const DIRECTD_CREDIT_RULE_VERSION = "score_compromisso_v1";
+
 export interface DirectDScoreSubject {
   score?: number | null;
   faixaScore?: string | null;
+  scoreCompromissoPagamento?: number | string | null;
+  descricaoCompromissoPagamento?: string | null;
   motivos?: string[] | null;
   indicadoresNegocio?: Array<{
     indicador?: string | null;
@@ -37,15 +41,23 @@ export interface NormalizedDirectDResult {
   decision: DirectDCreditDecision;
   faixaScore: string;
   score: number | null;
+  scoreCompromissoPagamento: number | null;
+  descricaoCompromissoPagamento: string | null;
+  regraDecisao: typeof DIRECTD_CREDIT_RULE_VERSION;
   message: string;
 }
 
-function normalizeText(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim()
-    .toLowerCase();
+function numberInRange(value: unknown, minimum: number, maximum: number): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric >= minimum && numeric <= maximum ? numeric : null;
+}
+
+function scoreBand(score: number | null, providerBand: string): string {
+  if (score !== null && score <= 539) return "Alto índice de inadimplência";
+  if (score !== null && score <= 650) return "Médio índice de inadimplência";
+  if (score !== null) return "Baixo índice de inadimplência";
+  return providerBand || "Faixa não informada";
 }
 
 export function subjectForDocument(
@@ -58,97 +70,64 @@ export function subjectForDocument(
 }
 
 /**
- * Regra comercial fornecida pela NOX para a faixa oficial da QUOD.
- * Faixas desconhecidas nunca recebem aprovação ou recusa automática.
+ * Regra comercial da NOX para o Score QUOD e o compromisso de pagamento.
+ * A descrição textual é preservada para auditoria, mas os limites usam o
+ * `scoreCompromissoPagamento` numérico retornado pelo provedor.
  */
 export function normalizeDirectDResult(
   response: DirectDScoreResponse,
   documentLength: number,
 ): NormalizedDirectDResult {
   const subject = subjectForDocument(response, documentLength);
-  const faixaScore = String(subject?.faixaScore ?? "").trim();
-  const normalized = normalizeText(faixaScore);
-  const rawScore = subject?.score;
-  const score =
-    rawScore === null || rawScore === undefined
-      ? null
-      : Number.isFinite(Number(rawScore))
-        ? Number(rawScore)
-        : null;
-
-  // O score numérico é a fonte da decisão comercial da NOX. Ele vem antes do
-  // texto do provedor porque a descrição da faixa pode divergir dos limites
-  // vigentes. Os intervalos são contínuos para que 540 e 651 não fiquem sem
-  // uma decisão.
-  if (score !== null && score >= 0 && score <= 540) {
-    return {
-      decision: "recusado",
-      faixaScore: "Alto índice de inadimplência",
-      score,
-      message: "Crédito reprovado pela análise oficial de risco.",
-    };
-  }
-  if (score !== null && score >= 541 && score <= 650) {
-    return {
-      decision: "em_analise",
-      faixaScore: "Médio índice de inadimplência",
-      score,
-      message: "Análise pendente. Envie o comprovante de renda para continuar.",
-    };
-  }
-  if (score !== null && score >= 651 && score <= 1000) {
-    return {
-      decision: "aprovado",
-      faixaScore: "Baixo índice de inadimplência",
-      score,
-      message: "Crédito aprovado pela análise oficial de risco.",
-    };
-  }
-
-  // O texto só é usado como fallback quando o provedor não devolve um score
-  // numérico utilizável.
-  if (
-    normalized.includes("alto") &&
-    (normalized.includes("inadimpl") || normalized.includes("risco"))
-  ) {
-    return {
-      decision: "recusado",
-      faixaScore,
-      score,
-      message: "Crédito reprovado pela análise oficial de risco.",
-    };
-  }
-  if (
-    normalized.includes("medio") &&
-    (normalized.includes("inadimpl") || normalized.includes("risco"))
-  ) {
-    return {
-      decision: "em_analise",
-      faixaScore,
-      score,
-      message: "Análise pendente. Envie o comprovante de renda para continuar.",
-    };
-  }
-  if (
-    normalized.includes("baixo") &&
-    (normalized.includes("inadimpl") || normalized.includes("risco"))
-  ) {
-    return {
-      decision: "aprovado",
-      faixaScore,
-      score,
-      message: "Crédito aprovado pela análise oficial de risco.",
-    };
-  }
-
-  // Uma resposta HTTP 200 já consumiu a consulta. Sem faixa/score conclusivo,
-  // o estado correto é análise complementar — nunca uma fila sem fim e nunca
-  // um novo envio automático que poderia cobrar novamente.
-  return {
-    decision: "em_analise",
-    faixaScore: faixaScore || "Faixa não informada",
+  const providerBand = String(subject?.faixaScore ?? "").trim();
+  const score = numberInRange(subject?.score, 0, 1000);
+  const scoreCompromissoPagamento = numberInRange(
+    subject?.scoreCompromissoPagamento,
+    0,
+    100,
+  );
+  const descricaoCompromissoPagamento =
+    String(subject?.descricaoCompromissoPagamento ?? "").trim() || null;
+  const faixaScore = scoreBand(score, providerBand);
+  const common = {
+    faixaScore,
     score,
-    message: "A análise oficial precisa de conferência complementar.",
+    scoreCompromissoPagamento,
+    descricaoCompromissoPagamento,
+    regraDecisao: DIRECTD_CREDIT_RULE_VERSION,
+  } as const;
+
+  if (score !== null && scoreCompromissoPagamento !== null) {
+    if (score >= 651 && scoreCompromissoPagamento >= 80) {
+      return {
+        ...common,
+        decision: "aprovado",
+        message: "Crédito aprovado pelos critérios de score e compromisso de pagamento.",
+      };
+    }
+
+    if (score >= 540 && scoreCompromissoPagamento >= 60) {
+      return {
+        ...common,
+        decision: "em_analise",
+        message: "Análise pendente. Envie o comprovante de renda para continuar.",
+      };
+    }
+
+    return {
+      ...common,
+      decision: "recusado",
+      message: "Crédito reprovado pelos critérios de score e compromisso de pagamento.",
+    };
+  }
+
+  // Uma resposta paga sem um dos dois números não pode ser aprovada ou
+  // recusada automaticamente. Ela termina em análise complementar e não gera
+  // uma segunda chamada ao provedor.
+  return {
+    ...common,
+    decision: "em_analise",
+    message: "A análise oficial precisa de conferência complementar dos dois indicadores.",
   };
 }
 
@@ -173,6 +152,9 @@ export function sanitizeDirectDResponse(
       dataConsulta: response.retorno?.dataConsulta ?? null,
       score: subject?.score ?? null,
       faixaScore: subject?.faixaScore ?? null,
+      scoreCompromissoPagamento: subject?.scoreCompromissoPagamento ?? null,
+      descricaoCompromissoPagamento: subject?.descricaoCompromissoPagamento ?? null,
+      regraDecisao: DIRECTD_CREDIT_RULE_VERSION,
       motivos: subject?.motivos ?? [],
       indicadoresNegocio: subject?.indicadoresNegocio ?? [],
       observacao: response.retorno?.observacao ?? null,
