@@ -7,7 +7,6 @@ import {
   buildWeeklyFollowupMessage,
   saoPauloBusinessClock,
   WEEKLY_FOLLOWUP_MESSAGES,
-  WEEKLY_FOLLOWUP_SIMULATION_URL,
   WEEKLY_FOLLOWUP_SITE_URL,
 } from "../supabase/functions/_shared/weekly-user-followups";
 
@@ -17,22 +16,20 @@ test("mantém oito mensagens emocionais diferentes com emoji", () => {
   for (let variant = 0; variant < WEEKLY_FOLLOWUP_MESSAGES.length; variant += 1) {
     const message = buildWeeklyFollowupMessage({ name: "Leonardo Silva", variant });
     assert.match(message, /^Olá, Leonardo!/);
-    assert.match(message, /simula/i);
+    assert.match(message, /ajud|suporte|conte com a NOX/i);
+    assert.match(message, /contrat/i);
     assert.match(message, /[😊💛👋🚀😄🤝]/u);
     assert.doesNotMatch(message, /E aí|responda SAIR/i);
   }
 });
 
-test("monta CTA interativo com acesso ao site e simulacao", () => {
+test("monta um único CTA interativo com o site solicitado", () => {
   const content = buildWeeklyFollowupInteractiveContent({ name: "Leo", variant: 0 });
-  assert.equal(content.title, "NOX Fiança • Acompanhamento semanal");
+  assert.equal(content.title, "NOX Fiança • Podemos ajudar?");
   assert.equal("footer" in content, false);
   assert.deepEqual(
     content.buttonActions.map((button) => [button.type, button.label, button.url]),
-    [
-      ["URL", "Acessar o site", WEEKLY_FOLLOWUP_SITE_URL],
-      ["URL", "Fazer simulação", WEEKLY_FOLLOWUP_SIMULATION_URL],
-    ],
+    [["URL", "Acessar a NOX", WEEKLY_FOLLOWUP_SITE_URL]],
   );
 });
 

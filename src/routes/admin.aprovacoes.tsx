@@ -30,8 +30,7 @@ type FiltroDocs = "todos" | "enviados" | "aguardando";
 
 const docsEnviados = (c: any) => c.substatus === "documentacao_complementar_enviada";
 const suspensaPorFaltaDeDocumentos = (c: any) => c.substatus === "falta_documentos";
-const estaNaFilaManual = (c: any) =>
-  docsEnviados(c) || (c.status === "em_analise" && !suspensaPorFaltaDeDocumentos(c));
+const estaNaFilaManual = (c: any) => docsEnviados(c) || (c.status === "em_analise" && !suspensaPorFaltaDeDocumentos(c));
 
 function AprovacoesPage() {
   const { user } = useAuth();
@@ -50,10 +49,7 @@ function AprovacoesPage() {
   const [loadingDetalhe, setLoadingDetalhe] = useState(false);
   const [processandoId, setProcessandoId] = useState<string | null>(null);
   const processandoRef = useRef(false);
-  const canViewInternalAnalysis =
-    user?.role === "admin" ||
-    user?.role === "admin_master" ||
-    user?.internalRole === "admin_master";
+  const canViewInternalAnalysis = user?.role === "admin" || user?.role === "admin_master" || user?.internalRole === "admin_master";
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -63,7 +59,9 @@ function AprovacoesPage() {
     // (status pendente sem substatus) apareceria como pendência do jurídico.
     const { data, error } = await supabase
       .from("consultas_credito")
-      .select("id, profile_id_solicitante, tenant_name, tenant_document, tenant_email, tenant_telefone, property_address, rent_value, role_solicitante, created_at, status, substatus, documentos, dados_complementares_em, documentos_prazo_limite_em, plano:planos(nome), solicitante:profiles!consultas_credito_profile_id_solicitante_fkey(nome, email)")
+      .select(
+        "id, profile_id_solicitante, tenant_name, tenant_document, tenant_email, tenant_telefone, property_address, rent_value, role_solicitante, created_at, status, substatus, documentos, dados_complementares_em, documentos_prazo_limite_em, plano:planos(nome), solicitante:profiles!consultas_credito_profile_id_solicitante_fkey(nome, email)",
+      )
       .in("status", ["pendente", "em_analise"])
       .order("created_at", { ascending: false });
     if (error) toast.error("Erro ao carregar pendências");
@@ -93,11 +91,7 @@ function AprovacoesPage() {
       if (filtroDocs === "enviados" && !docsEnviados(c)) return false;
       if (filtroDocs === "aguardando" && docsEnviados(c)) return false;
       if (!q) return true;
-      return (
-        (c.tenant_name ?? "").toLowerCase().includes(q) ||
-        (c.tenant_document ?? "").toLowerCase().includes(q) ||
-        (c.solicitante?.nome ?? "").toLowerCase().includes(q)
-      );
+      return (c.tenant_name ?? "").toLowerCase().includes(q) || (c.tenant_document ?? "").toLowerCase().includes(q) || (c.solicitante?.nome ?? "").toLowerCase().includes(q);
     });
   }, [linhas, busca, filtroDocs]);
 
@@ -105,27 +99,6 @@ function AprovacoesPage() {
     const enviados = linhas.filter(docsEnviados).length;
     return { todos: linhas.length, enviados, aguardando: linhas.length - enviados };
   }, [linhas]);
-
-  // Avisa o corretor/imobiliária/proprietário que pediu a consulta — o sino já
-  // escuta INSERT em notificacoes via Realtime (ver SinoNotificacoes.tsx).
-  const notificarSolicitante = async (consulta: any, opts: { titulo: string; mensagem: string; tipo: string; cor: string }) => {
-    if (!consulta?.profile_id_solicitante) return;
-    // Link e tipo sao calculados a partir do id da consulta - nunca
-    // aceita strings do caller (defesa contra alguem no mesmo cargo
-    // enviar notificacao com link externo). Mensagem/titulo tambem
-    // sao fixos aqui no site, nao vem de input de usuario.
-    const consultaId = String(consulta.id || "");
-    if (!/^[0-9a-f-]{36}$/i.test(consultaId)) return;
-    const { error } = await supabase.from("notificacoes").insert({
-      user_id: consulta.profile_id_solicitante,
-      titulo: opts.titulo,
-      mensagem: opts.mensagem,
-      tipo: opts.tipo,
-      cor_destaque: opts.cor,
-      link: `/consultas/${consultaId}/resultado`,
-    } as any);
-    if (error) console.error("[admin.aprovacoes] falha ao notificar solicitante:", error);
-  };
 
   const aprovar = async (id: string) => {
     if (processandoRef.current) return;
@@ -136,19 +109,22 @@ function AprovacoesPage() {
     processandoRef.current = true;
     setProcessandoId(id);
     try {
-      const consulta = linhas.find((l) => l.id === id);
-      const { error } = await supabase.from("consultas_credito").update({
-        status: "aprovado", resultado: "aprovado", approved_by: adminId, approved_at: new Date().toISOString()
-      }).eq("id", id).eq("status", "em_analise"); // guard contra re-aprovar algo que ja saiu da fila
-      if (error) { toast.error("Erro ao aprovar"); return; }
-      toast.success("Consulta aprovada");
-      await notificarSolicitante(consulta, {
-        titulo: "Consulta aprovada",
-        mensagem: `A consulta de ${consulta?.tenant_name ?? "cliente"} (${consulta?.tenant_document ?? "—"}) foi aprovada.`,
-        tipo: "contrato_aprovado",
-        cor: "verde",
+      const { data, error } = await (supabase.rpc as any)("resolve_admin_credit_review", {
+        p_consultation_id: id,
+        p_decision: "aprovado",
+        p_rejection_reason: null,
       });
-      load();
+      if (error) {
+        toast.error("Erro ao aprovar");
+        return;
+      }
+      if (data === "already_resolved") {
+        toast.info("Esta consulta já foi resolvida por outro canal.");
+        await load();
+        return;
+      }
+      toast.success("Consulta aprovada");
+      await load();
     } finally {
       processandoRef.current = false;
       setProcessandoId(null);
@@ -157,7 +133,10 @@ function AprovacoesPage() {
 
   const reprovar = async () => {
     if (!rejectingId) return;
-    if (!motivo.trim()) { toast.error("Informe o motivo"); return; }
+    if (!motivo.trim()) {
+      toast.error("Informe o motivo");
+      return;
+    }
     if (processandoRef.current) return;
     if (!adminId) {
       toast.error("Sessao ainda carregando, aguarde um instante.");
@@ -166,19 +145,26 @@ function AprovacoesPage() {
     processandoRef.current = true;
     setProcessandoId(rejectingId);
     try {
-      const consulta = linhas.find((l) => l.id === rejectingId);
-      const { error } = await supabase.from("consultas_credito").update({
-        status: "reprovado", resultado: "recusado", rejected_by: adminId, rejected_at: new Date().toISOString(), rejection_reason: motivo
-      }).eq("id", rejectingId).eq("status", "em_analise");
-      if (error) { toast.error("Erro ao reprovar"); return; }
-      toast.success("Consulta reprovada");
-      await notificarSolicitante(consulta, {
-        titulo: "Consulta recusada",
-        mensagem: `A consulta de ${consulta?.tenant_name ?? "cliente"} (${consulta?.tenant_document ?? "—"}) foi recusada. Motivo: ${motivo}`,
-        tipo: "contrato_reprovado",
-        cor: "vermelho",
+      const { data, error } = await (supabase.rpc as any)("resolve_admin_credit_review", {
+        p_consultation_id: rejectingId,
+        p_decision: "recusado",
+        p_rejection_reason: motivo.trim(),
       });
-      setRejectingId(null); setMotivo(""); load();
+      if (error) {
+        toast.error("Erro ao reprovar");
+        return;
+      }
+      if (data === "already_resolved") {
+        toast.info("Esta consulta já foi resolvida por outro canal.");
+        setRejectingId(null);
+        setMotivo("");
+        await load();
+        return;
+      }
+      toast.success("Consulta reprovada");
+      setRejectingId(null);
+      setMotivo("");
+      await load();
     } finally {
       processandoRef.current = false;
       setProcessandoId(null);
@@ -203,21 +189,17 @@ function AprovacoesPage() {
       // documentos_proposta com um bucket arbitrario forcaria o admin a assinar
       // URL em qualquer bucket que o token dele enxergue (ex. withdrawals,
       // contratos-assinados, time-clock-photos).
-      const BUCKETS_PERMITIDOS = new Set([
-        "approval-documents",
-        "documentos-proposta",
-        "documentos-complementares",
-      ]);
-      const docs = await Promise.all((data ?? []).map(async (doc: any) => {
-        if (!doc.file_url || /^https?:\/\//i.test(doc.file_url)) return { ...doc, signedUrl: doc.file_url };
-        const bucketCandidato = String(doc.document_subtype || "approval-documents");
-        const bucket = BUCKETS_PERMITIDOS.has(bucketCandidato) ? bucketCandidato : "approval-documents";
-        const { data: signed, error: signedError } = await supabase.storage
-          .from(bucket)
-          .createSignedUrl(doc.file_url, 600);
-        if (signedError) console.error("Erro ao gerar signed URL:", signedError);
-        return { ...doc, signedUrl: signed?.signedUrl ?? null };
-      }));
+      const BUCKETS_PERMITIDOS = new Set(["approval-documents", "documentos-proposta", "documentos-complementares"]);
+      const docs = await Promise.all(
+        (data ?? []).map(async (doc: any) => {
+          if (!doc.file_url || /^https?:\/\//i.test(doc.file_url)) return { ...doc, signedUrl: doc.file_url };
+          const bucketCandidato = String(doc.document_subtype || "approval-documents");
+          const bucket = BUCKETS_PERMITIDOS.has(bucketCandidato) ? bucketCandidato : "approval-documents";
+          const { data: signed, error: signedError } = await supabase.storage.from(bucket).createSignedUrl(doc.file_url, 600);
+          if (signedError) console.error("Erro ao gerar signed URL:", signedError);
+          return { ...doc, signedUrl: signed?.signedUrl ?? null };
+        }),
+      );
       setDocsDetalhe(docs);
     } catch (error: any) {
       toast.error("Erro ao carregar documentos: " + (error?.message || "desconhecido"));
@@ -246,9 +228,7 @@ function AprovacoesPage() {
       <div className="space-y-8">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Aprovações</h1>
-          <p className="text-neutral-500 mt-2">
-            Consultas em análise ficam disponíveis por até 5 horas no expediente. Sem documentos, são pausadas e retornam assim que o solicitante concluir o envio.
-          </p>
+          <p className="text-neutral-500 mt-2">Consultas em análise ficam disponíveis por até 5 horas no expediente. Sem documentos, são pausadas e retornam assim que o solicitante concluir o envio.</p>
         </div>
 
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -258,19 +238,17 @@ function AprovacoesPage() {
           </div>
 
           <div className="flex w-fit rounded-xl border border-neutral-200 bg-white p-1 shadow-sm">
-            {([
-              { key: "todos", label: "Todos", total: totais.todos },
-              { key: "enviados", label: "Docs enviados", total: totais.enviados },
-              { key: "aguardando", label: "Aguardando docs", total: totais.aguardando },
-            ] as { key: FiltroDocs; label: string; total: number }[]).map((op) => (
+            {(
+              [
+                { key: "todos", label: "Todos", total: totais.todos },
+                { key: "enviados", label: "Docs enviados", total: totais.enviados },
+                { key: "aguardando", label: "Aguardando docs", total: totais.aguardando },
+              ] as { key: FiltroDocs; label: string; total: number }[]
+            ).map((op) => (
               <button
                 key={op.key}
                 onClick={() => setFiltroDocs(op.key)}
-                className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
-                  filtroDocs === op.key
-                    ? "bg-yellow-400 text-neutral-950"
-                    : "text-neutral-500 hover:text-neutral-900"
-                }`}
+                className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${filtroDocs === op.key ? "bg-yellow-400 text-neutral-950" : "text-neutral-500 hover:text-neutral-900"}`}
               >
                 {op.label} ({op.total})
               </button>
@@ -295,9 +273,7 @@ function AprovacoesPage() {
                       <p className="font-semibold truncate">{c.tenant_name ?? "—"}</p>
                       <p className="text-xs text-neutral-500">{c.tenant_document ?? "—"}</p>
                     </div>
-                    <span className="shrink-0 text-sm font-semibold">
-                      {c.rent_value ? `R$ ${Number(c.rent_value).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "—"}
-                    </span>
+                    <span className="shrink-0 text-sm font-semibold">{c.rent_value ? `R$ ${Number(c.rent_value).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "—"}</span>
                   </div>
                   <p className="mt-1 text-xs text-neutral-500 truncate">{c.property_address ?? "—"}</p>
                   <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -310,14 +286,27 @@ function AprovacoesPage() {
                     <span className="text-xs text-neutral-400">{c.plano?.nome ?? "—"}</span>
                   </div>
                   <div className="mt-2 text-xs text-neutral-500">
-                    <span className="font-semibold text-neutral-700">{c.solicitante?.nome ?? "—"}</span>{" "}
-                    <span className="uppercase">({c.role_solicitante})</span> ·{" "}
-                    {new Date(c.created_at).toLocaleDateString("pt-BR")}
+                    <span className="font-semibold text-neutral-700">{c.solicitante?.nome ?? "—"}</span> <span className="uppercase">({c.role_solicitante})</span> · {new Date(c.created_at).toLocaleDateString("pt-BR")}
                   </div>
                   <div className="mt-3 flex items-center gap-1 border-t border-neutral-100 pt-3">
-                    <Button size="sm" variant="ghost" className="gap-1" onClick={() => abrirDetalhes(c)}><Eye size={14} /></Button>
-                    <Button size="sm" variant="ghost" className="gap-1 text-emerald-700" disabled={processandoId === c.id || !adminId} onClick={() => aprovar(c.id)}><CheckCircle2 size={14} /></Button>
-                    <Button size="sm" variant="ghost" className="gap-1 text-red-700" disabled={processandoId === c.id || !adminId} onClick={() => { setRejectingId(c.id); setMotivo(""); }}><XCircle size={14} /></Button>
+                    <Button size="sm" variant="ghost" className="gap-1" onClick={() => abrirDetalhes(c)}>
+                      <Eye size={14} />
+                    </Button>
+                    <Button size="sm" variant="ghost" className="gap-1 text-emerald-700" disabled={processandoId === c.id || !adminId} onClick={() => aprovar(c.id)}>
+                      <CheckCircle2 size={14} />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="gap-1 text-red-700"
+                      disabled={processandoId === c.id || !adminId}
+                      onClick={() => {
+                        setRejectingId(c.id);
+                        setMotivo("");
+                      }}
+                    >
+                      <XCircle size={14} />
+                    </Button>
                   </div>
                 </div>
               ))
@@ -326,59 +315,82 @@ function AprovacoesPage() {
 
           {/* Tablet/desktop (md:+): tabela completa. */}
           <div className="hidden md:block overflow-x-auto">
-          <Table>
-            <TableHeader className="bg-neutral-50">
-              <TableRow>
-                <TableHead className="px-6">Inquilino</TableHead>
-                <TableHead>Documento</TableHead>
-                <TableHead>Imóvel</TableHead>
-                <TableHead>Aluguel</TableHead>
-                <TableHead>Plano</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Docs complementares</TableHead>
-                <TableHead>Solicitante</TableHead>
-                <TableHead>Data</TableHead>
-                <TableHead className="text-right pr-6">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <TableRow><TableCell colSpan={10} className="text-center py-16 text-neutral-400">Carregando...</TableCell></TableRow>
-              ) : !filtradas.length ? (
-                <TableRow><TableCell colSpan={10} className="text-center py-16 text-neutral-500">
-                  {filtroDocs === "enviados" ? "Nenhuma consulta com documentos enviados." : filtroDocs === "aguardando" ? "Nenhuma consulta aguardando documentos." : "Nenhuma consulta pendente."}
-                </TableCell></TableRow>
-              ) : filtradas.map((c) => (
-                <TableRow key={c.id} className="hover:bg-neutral-50/50">
-                  <TableCell className="px-6 font-semibold">{c.tenant_name ?? "—"}</TableCell>
-                  <TableCell className="text-xs text-neutral-500">{c.tenant_document ?? "—"}</TableCell>
-                  <TableCell className="text-xs text-neutral-500 max-w-[200px] truncate">{c.property_address ?? "—"}</TableCell>
-                  <TableCell>{c.rent_value ? `R$ ${Number(c.rent_value).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "—"}</TableCell>
-                  <TableCell className="text-xs">{c.plano?.nome ?? "—"}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className={c.status === "em_analise" ? "bg-yellow-50 text-yellow-800 border-yellow-200" : "bg-amber-50 text-amber-700 border-amber-200"}>
-                      {c.status === "em_analise" ? "Em análise" : "Pendente"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className={c.substatus === "documentacao_complementar_enviada" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-neutral-50 text-neutral-500 border-neutral-200"}>
-                      {c.substatus === "documentacao_complementar_enviada" ? "Enviados" : "Aguardando"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-xs">
-                    <p className="font-semibold">{c.solicitante?.nome ?? "—"}</p>
-                    <p className="text-neutral-400 uppercase">{c.role_solicitante}</p>
-                  </TableCell>
-                  <TableCell className="text-xs text-neutral-400">{new Date(c.created_at).toLocaleDateString("pt-BR")}</TableCell>
-                  <TableCell className="text-right pr-6 space-x-1">
-                    <Button size="sm" variant="ghost" className="gap-1" onClick={() => abrirDetalhes(c)}><Eye size={14} /></Button>
-                    <Button size="sm" variant="ghost" className="gap-1 text-emerald-700" disabled={processandoId === c.id || !adminId} onClick={() => aprovar(c.id)}><CheckCircle2 size={14} /></Button>
-                    <Button size="sm" variant="ghost" className="gap-1 text-red-700" disabled={processandoId === c.id || !adminId} onClick={() => { setRejectingId(c.id); setMotivo(""); }}><XCircle size={14} /></Button>
-                  </TableCell>
+            <Table>
+              <TableHeader className="bg-neutral-50">
+                <TableRow>
+                  <TableHead className="px-6">Inquilino</TableHead>
+                  <TableHead>Documento</TableHead>
+                  <TableHead>Imóvel</TableHead>
+                  <TableHead>Aluguel</TableHead>
+                  <TableHead>Plano</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Docs complementares</TableHead>
+                  <TableHead>Solicitante</TableHead>
+                  <TableHead>Data</TableHead>
+                  <TableHead className="text-right pr-6">Ações</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={10} className="text-center py-16 text-neutral-400">
+                      Carregando...
+                    </TableCell>
+                  </TableRow>
+                ) : !filtradas.length ? (
+                  <TableRow>
+                    <TableCell colSpan={10} className="text-center py-16 text-neutral-500">
+                      {filtroDocs === "enviados" ? "Nenhuma consulta com documentos enviados." : filtroDocs === "aguardando" ? "Nenhuma consulta aguardando documentos." : "Nenhuma consulta pendente."}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filtradas.map((c) => (
+                    <TableRow key={c.id} className="hover:bg-neutral-50/50">
+                      <TableCell className="px-6 font-semibold">{c.tenant_name ?? "—"}</TableCell>
+                      <TableCell className="text-xs text-neutral-500">{c.tenant_document ?? "—"}</TableCell>
+                      <TableCell className="text-xs text-neutral-500 max-w-[200px] truncate">{c.property_address ?? "—"}</TableCell>
+                      <TableCell>{c.rent_value ? `R$ ${Number(c.rent_value).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "—"}</TableCell>
+                      <TableCell className="text-xs">{c.plano?.nome ?? "—"}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={c.status === "em_analise" ? "bg-yellow-50 text-yellow-800 border-yellow-200" : "bg-amber-50 text-amber-700 border-amber-200"}>
+                          {c.status === "em_analise" ? "Em análise" : "Pendente"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={c.substatus === "documentacao_complementar_enviada" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-neutral-50 text-neutral-500 border-neutral-200"}>
+                          {c.substatus === "documentacao_complementar_enviada" ? "Enviados" : "Aguardando"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        <p className="font-semibold">{c.solicitante?.nome ?? "—"}</p>
+                        <p className="text-neutral-400 uppercase">{c.role_solicitante}</p>
+                      </TableCell>
+                      <TableCell className="text-xs text-neutral-400">{new Date(c.created_at).toLocaleDateString("pt-BR")}</TableCell>
+                      <TableCell className="text-right pr-6 space-x-1">
+                        <Button size="sm" variant="ghost" className="gap-1" onClick={() => abrirDetalhes(c)}>
+                          <Eye size={14} />
+                        </Button>
+                        <Button size="sm" variant="ghost" className="gap-1 text-emerald-700" disabled={processandoId === c.id || !adminId} onClick={() => aprovar(c.id)}>
+                          <CheckCircle2 size={14} />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="gap-1 text-red-700"
+                          disabled={processandoId === c.id || !adminId}
+                          onClick={() => {
+                            setRejectingId(c.id);
+                            setMotivo("");
+                          }}
+                        >
+                          <XCircle size={14} />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
           </div>
         </div>
       </div>
@@ -392,9 +404,7 @@ function AprovacoesPage() {
 
           {detalhe && (
             <div className="space-y-5 py-2">
-              {canViewInternalAnalysis && (
-                <InternalCreditAnalysisCard consultationId={detalhe.id} />
-              )}
+              {canViewInternalAnalysis && <InternalCreditAnalysisCard consultationId={detalhe.id} />}
 
               <div className="grid grid-cols-1 gap-3 rounded-2xl border border-neutral-200 bg-neutral-50 p-4 text-sm sm:grid-cols-2">
                 <Info label="Cliente" value={detalhe.tenant_name ?? "—"} />
@@ -456,8 +466,12 @@ function AprovacoesPage() {
             <Textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={4} placeholder="Ex.: documentação incompleta, score insuficiente..." />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRejectingId(null)}>Cancelar</Button>
-            <Button className="bg-red-600 hover:bg-red-700" disabled={processandoId === rejectingId || !adminId} onClick={reprovar}>Reprovar</Button>
+            <Button variant="outline" onClick={() => setRejectingId(null)}>
+              Cancelar
+            </Button>
+            <Button className="bg-red-600 hover:bg-red-700" disabled={processandoId === rejectingId || !adminId} onClick={reprovar}>
+              Reprovar
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
