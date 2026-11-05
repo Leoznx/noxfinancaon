@@ -46,7 +46,12 @@ export interface NormalizedDirectDResult {
   message: string;
 }
 
-export const DIRECTD_DECISION_RULE = "score_descricao_compromisso_v1";
+export const DIRECTD_DECISION_RULE = "score_descricao_compromisso_v2";
+
+const MINIMUM_APPROVAL_SCORE = 651;
+const MINIMUM_REVIEW_SCORE = 541;
+const MAXIMUM_AUTOMATIC_REJECTION_SCORE = 538;
+const MINIMUM_COMMITMENT_PAYMENT_PERCENTAGE = 48;
 
 export function extractCommitmentPaymentPercentage(value: unknown): number | null {
   if (typeof value !== "string") return null;
@@ -60,10 +65,56 @@ export function extractCommitmentPaymentPercentage(value: unknown): number | nul
   return percentages.length > 0 ? Math.min(...percentages) : null;
 }
 
+function normalizeProviderText(value: unknown): string {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9%]+/g, " ")
+    .trim();
+}
+
+/**
+ * Identifica descrições equivalentes ao alerta da DirectD sobre atrasos ou
+ * pendências financeiras. Negativas explícitas não são tratadas como alerta.
+ */
+export function hasAdversePaymentHistory(value: unknown): boolean {
+  const normalized = normalizeProviderText(value);
+  if (!normalized) return false;
+
+  const paymentIssue =
+    "(?:atrasos?(?: [a-z0-9]+){0,3} (?:de|nos?) pagamentos?|pendencias? financeiras?)";
+  const explicitDenial = new RegExp(
+    `\\b(?:nao|sem)(?: [a-z0-9]+){0,5} ${paymentIssue}\\b`,
+    "g",
+  );
+  const affirmativeCandidate = normalized.replace(explicitDenial, " ");
+
+  const affirmativeContext = new RegExp(
+    `\\b(?:apresenta(?: ou apresentou)?|apresentou|possui|teve|tem|registra(?:do)?|constam?)(?: [a-z0-9]+){0,12} ${paymentIssue}\\b`,
+  );
+  const qualifiedIssue = new RegExp(
+    `\\b(?:alguns?|diversos?|recorrentes?|frequentes?) ${paymentIssue}\\b`,
+  );
+  const identifiedIssue = new RegExp(
+    `\\b${paymentIssue}(?: [a-z0-9]+){0,4} (?:identificad[ao]s?|constatad[ao]s?|registrad[ao]s?)\\b`,
+  );
+
+  return (
+    affirmativeContext.test(affirmativeCandidate) ||
+    qualifiedIssue.test(affirmativeCandidate) ||
+    identifiedIssue.test(affirmativeCandidate)
+  );
+}
+
 function scoreBandFor(score: number | null, providerBand: string): string {
-  if (score !== null && score >= 0 && score < 540) return "Alto índice de inadimplência";
-  if (score !== null && score >= 540 && score < 651) return "Médio índice de inadimplência";
-  if (score !== null && score >= 651 && score <= 1000) {
+  if (score !== null && score >= 0 && score < MINIMUM_REVIEW_SCORE) {
+    return "Alto índice de inadimplência";
+  }
+  if (score !== null && score >= MINIMUM_REVIEW_SCORE && score < MINIMUM_APPROVAL_SCORE) {
+    return "Médio índice de inadimplência";
+  }
+  if (score !== null && score >= MINIMUM_APPROVAL_SCORE && score <= 1000) {
     return "Baixo índice de inadimplência";
   }
   return providerBand || "Faixa não informada";
@@ -81,7 +132,8 @@ export function subjectForDocument(
 /**
  * Regra comercial conjunta fornecida pela NOX para o Score QUOD e o percentual
  * presente em descricaoCompromissoPagamento. Dados ausentes ou ilegíveis nunca
- * recebem aprovação ou recusa automática.
+ * recebem aprovação automática; a descrição adversa explícita é a única
+ * reprovação que não depende de percentual legível.
  */
 export function normalizeDirectDResult(
   response: DirectDScoreResponse,
@@ -104,8 +156,23 @@ export function normalizeDirectDResult(
     parsedScore !== null && parsedScore >= 0 && parsedScore <= 1000 ? parsedScore : null;
   const faixaScore = scoreBandFor(score, providerBand);
 
+  if (hasAdversePaymentHistory(commitmentPaymentDescription)) {
+    return {
+      decision: "recusado",
+      faixaScore,
+      score,
+      commitmentPaymentDescription,
+      commitmentPaymentPercentage,
+      message:
+        "Crédito reprovado porque o histórico de compromisso de pagamento indica atrasos ou pendências financeiras.",
+    };
+  }
+
   if (score !== null && commitmentPaymentPercentage !== null) {
-    if (score >= 651 && commitmentPaymentPercentage >= 80) {
+    if (
+      score >= MINIMUM_APPROVAL_SCORE &&
+      commitmentPaymentPercentage >= MINIMUM_COMMITMENT_PAYMENT_PERCENTAGE
+    ) {
       return {
         decision: "aprovado",
         faixaScore,
@@ -116,7 +183,10 @@ export function normalizeDirectDResult(
       };
     }
 
-    if (score >= 540 && commitmentPaymentPercentage >= 60) {
+    if (
+      score >= MINIMUM_REVIEW_SCORE &&
+      commitmentPaymentPercentage >= MINIMUM_COMMITMENT_PAYMENT_PERCENTAGE
+    ) {
       return {
         decision: "em_analise",
         faixaScore,
@@ -128,13 +198,28 @@ export function normalizeDirectDResult(
       };
     }
 
+    if (
+      score <= MAXIMUM_AUTOMATIC_REJECTION_SCORE &&
+      commitmentPaymentPercentage < MINIMUM_COMMITMENT_PAYMENT_PERCENTAGE
+    ) {
+      return {
+        decision: "recusado",
+        faixaScore,
+        score,
+        commitmentPaymentDescription,
+        commitmentPaymentPercentage,
+        message: "Crédito reprovado pela análise conjunta de score e compromisso de pagamento.",
+      };
+    }
+
     return {
-      decision: "recusado",
+      decision: "em_analise",
       faixaScore,
       score,
       commitmentPaymentDescription,
       commitmentPaymentPercentage,
-      message: "Crédito reprovado pela análise conjunta de score e compromisso de pagamento.",
+      message:
+        "A análise oficial precisa de conferência complementar porque os critérios de score e compromisso de pagamento não convergiram.",
     };
   }
 
