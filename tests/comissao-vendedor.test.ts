@@ -7,26 +7,39 @@ import {
   getNivelComissaoVendedor,
 } from "../src/lib/comissao-vendedor";
 
-test("aplica as três faixas progressivas por contrato", () => {
-  assert.equal(calcularComissaoContratos(0), 0);
-  assert.equal(calcularComissaoContratos(1), 35);
-  assert.equal(calcularComissaoContratos(15), 525);
-  assert.equal(calcularComissaoContratos(16), 580);
-  assert.equal(calcularComissaoContratos(25), 1_075);
-  assert.equal(calcularComissaoContratos(26), 1_150);
-  assert.equal(calcularComissaoContratos(46), 2_650);
+// Regra registrada em bc26aba e em 20261006170000_seller_monthly_payroll_commissions.sql.
+test("aplica as faixas mensais de R$ 25, R$ 35 e R$ 45 por contrato", () => {
+  for (const [contracts, expected] of [
+    [0, 0],
+    [1, 25],
+    [14, 350],
+    [15, 375],
+    [16, 410],
+    [25, 725],
+    [26, 770],
+    [46, 1670],
+  ]) {
+    assert.equal(calcularComissaoContratos(contracts), expected, `${contracts} contratos`);
+  }
 });
 
-test("soma os bônus nos marcos 15, 30 e acima de 45", () => {
-  assert.equal(calcularBonus(14), 0);
-  assert.equal(calcularBonus(15), 400);
-  assert.equal(calcularBonus(30), 1_000);
-  assert.equal(calcularBonus(45), 1_000);
-  assert.equal(calcularBonus(46), 2_200);
+test("soma os bônus cumulativos exatamente nos marcos 15, 30 e 45", () => {
+  for (const [contracts, expected] of [
+    [14, 0],
+    [15, 400],
+    [29, 400],
+    [30, 1000],
+    [44, 1000],
+    [45, 2200],
+    [46, 2200],
+  ]) {
+    assert.equal(calcularBonus(contracts), expected, `${contracts} contratos`);
+  }
 });
 
 test("o total não inclui valor fixo", () => {
-  assert.deepEqual(calcularGanhoTotal(15), { comissao: 525, bonus: 400, total: 925 });
+  assert.deepEqual(calcularGanhoTotal(0), { comissao: 0, bonus: 0, total: 0 });
+  assert.deepEqual(calcularGanhoTotal(15), { comissao: 375, bonus: 400, total: 775 });
 });
 
 test("indica o próximo nível e o nível máximo", () => {
