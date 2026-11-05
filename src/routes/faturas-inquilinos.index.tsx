@@ -13,8 +13,6 @@ import { Receipt, Eye, AlertCircle, RefreshCw } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { toast } from "sonner";
-import { isDemoRecordId } from "@/lib/demo-portal-data";
 
 export const Route = createFileRoute("/faturas-inquilinos/")({
   component: () => (
@@ -148,11 +146,6 @@ function FaturasInquilinosLista() {
                             <Link
                               to="/faturas-inquilinos/$id"
                               params={{ id: l.apolice_id }}
-                              onClick={(event) => {
-                                if (!isDemoRecordId(l.apolice_id)) return;
-                                event.preventDefault();
-                                toast.info("Fatura demonstrativa: nenhum registro real será aberto.");
-                              }}
                             >
                               <Eye size={12} /> Ver faturas
                             </Link>
@@ -205,11 +198,6 @@ function FaturasInquilinosLista() {
                     <Link
                       to="/faturas-inquilinos/$id"
                       params={{ id: l.apolice_id }}
-                      onClick={(event) => {
-                        if (!isDemoRecordId(l.apolice_id)) return;
-                        event.preventDefault();
-                        toast.info("Fatura demonstrativa: nenhum registro real será aberto.");
-                      }}
                     >
                       <Eye size={12} /> Ver faturas
                     </Link>

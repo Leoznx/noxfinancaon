@@ -6,6 +6,8 @@ import type {
 } from "@/lib/withdrawals";
 import type { TenantBillingConsultation, TenantBillingItem } from "@/lib/tenant-billing";
 import type { TenantInvoiceSummary } from "@/lib/tenant-invoice-summary";
+import type { ContractBillingRow } from "@/lib/contract-billing";
+import type { TenantInvoiceDisplayRow } from "@/lib/tenant-invoice-display";
 import { getDemoCareerScenario } from "@/lib/demo-career";
 
 export const DEMO_RECORD_PREFIX = "d3000000-0000-4000-8000-";
@@ -164,6 +166,257 @@ export function getDemoTenantInvoiceSummaries(): TenantInvoiceSummary[] {
     proximo_venc: shiftedDate(index === 2 || index === 5 ? -(4 + index) : 5 + index * 3, true),
     status: statuses[index],
   }));
+}
+
+function getDemoPolicyIndex(policyId: string) {
+  if (!isDemoRecordId(policyId)) return -1;
+  const index = Number(policyId.slice(-12)) - 101;
+  return Number.isInteger(index) && index >= 0 && index < 6 ? index : -1;
+}
+
+function getDemoPolicyInvoices(policyIndex: number): TenantInvoiceDisplayRow[] {
+  const consultationId = id(policyIndex + 1);
+  const amount = 189.9 + policyIndex * 47.5;
+  const overdueContract = policyIndex === 2 || policyIndex === 5;
+
+  return Array.from({ length: 12 }, (_, index) => {
+    const installmentNumber = index + 1;
+    const dueInDays = (index - 3) * 30 + 5 + policyIndex * 3;
+    const paid = index < 3 || (!overdueContract && index === 3 && policyIndex % 3 === 1);
+    const overdue = overdueContract && index === 3;
+    const rawStatus = paid ? "paid" : overdue ? "overdue" : index === 3 ? "pending" : "scheduled";
+    const dueDate = shiftedDate(overdue ? -(4 + policyIndex) : dueInDays, true);
+
+    return {
+      id: id(1300 + policyIndex * 20 + installmentNumber),
+      invoiceId: null,
+      consultationId,
+      paymentMethod: policyIndex % 3 === 1 ? "pix" : "boleto",
+      installmentNumber,
+      installmentTotal: 12,
+      dueDate,
+      amount,
+      status: paid ? "paid" : overdue ? "overdue" : "pending",
+      rawStatus,
+      paidAt: paid ? shiftedDate(dueInDays - 2) : null,
+      boletoUrl: null,
+      barcode:
+        !paid && index === 3
+          ? `00190.00009 01234.56789 01234.56789 ${policyIndex + 1} 000000${String(Math.round(amount * 100)).padStart(6, "0")}`
+          : null,
+      receiptUrl: null,
+      paymentUrl: null,
+      chargeKind: installmentNumber === 1 ? "initial" : "monthly",
+      components:
+        installmentNumber === 1
+          ? { monthlyAmount: amount, initialExtrasAmount: 0 }
+          : null,
+    };
+  });
+}
+
+export function getDemoPolicyDetail(policyId: string) {
+  const policyIndex = getDemoPolicyIndex(policyId);
+  if (policyIndex < 0) return null;
+
+  const policy = getDemoPolicies()[policyIndex];
+  const person = people[policyIndex];
+  const consultationId = id(policyIndex + 1);
+  const [street, number = "100"] = person[4].split(",").map((value) => value.trim());
+  const rent = 2200 + policyIndex * 310;
+  const condominium = 480 + policyIndex * 35;
+  const fees = 120 + policyIndex * 15;
+  const monthlyPremium = 189.9 + policyIndex * 47.5;
+  const requesterIsAgency = policyIndex % 2 === 0;
+  const createdAt = shiftedDate(-(95 + policyIndex * 12));
+  const approvedAt = shiftedDate(-(93 + policyIndex * 12));
+  const completedAt = shiftedDate(-(90 + policyIndex * 12));
+  const signedAt = shiftedDate(-(82 + policyIndex * 12));
+  const awaitingSignature = policy.status === "emitida_pendente";
+
+  const apolice = {
+    ...policy,
+    consulta_id: consultationId,
+    created_at: completedAt,
+    imobiliaria_profile_id: id(800),
+    corretor_profile_id: requesterIsAgency ? id(700 + policyIndex) : id(900 + policyIndex),
+    consulta: {
+      id: consultationId,
+      status: "aprovado",
+      resultado: "aprovado",
+      created_at: createdAt,
+      approved_at: approvedAt,
+      dados_complementares_em: completedAt,
+      proposta_enviada_em: shiftedDate(-(86 + policyIndex * 12)),
+      profile_id_solicitante: requesterIsAgency ? id(800) : id(900 + policyIndex),
+      role_solicitante: requesterIsAgency ? "imobiliaria" : "corretor",
+      payment_status: "paid",
+      payment_type: policyIndex % 2 === 0 ? "imobiliaria" : "inquilino",
+      payment_confirmed_at: shiftedDate(-(84 + policyIndex * 12)),
+      insurance_payment_method: policyIndex % 3 === 1 ? "pix" : "boleto",
+      insurance_payment_method_label: policyIndex % 3 === 1 ? "Pix" : "Boleto bancário",
+      contract_period_months: 12,
+      documentos: { dados_complementares: {} },
+      base_calculo: rent + condominium + fees,
+      valor_aluguel: rent,
+      valor_condominio: condominium,
+      valor_taxas: fees,
+      valor_premio_mensal: monthlyPremium,
+      valor_anual: policy.valor_premio,
+      selected_exit_cost: 180,
+      insurance_assistance: "assistencia_residencial_24h",
+      insurance_coverages: ["aluguel", "condominio", "iptu", "danos_ao_imovel"],
+      plano_id: id(1500 + (policyIndex % 2)),
+      terms_accepted_at: completedAt,
+      contract_accepted_at: completedAt,
+      tenant_name: person[0],
+      tenant_document: person[1],
+      tenant_email: `${person[0].toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, ".")}@email.com`,
+      tenant_telefone: `(47) 9999${String(2100 + policyIndex)}`,
+      tenant_data_nascimento: `${1988 + policyIndex}-0${(policyIndex % 9) + 1}-15`,
+      imovel_subtipo: "Apartamento",
+      imovel_cep: `88${300 + policyIndex * 7}-0${10 + policyIndex}`,
+      imovel_endereco: street,
+      imovel_numero: number,
+      imovel_complemento: policyIndex % 2 === 0 ? `Apto ${201 + policyIndex}` : null,
+      imovel_bairro: "Centro",
+      imovel_cidade: person[2],
+      imovel_estado: person[3],
+      inquilino: {
+        nome: person[0],
+        cpf: person[1],
+        cnpj: null,
+        razao_social: null,
+        tipo: "pf",
+        data_nascimento: `${1988 + policyIndex}-0${(policyIndex % 9) + 1}-15`,
+        estado_civil: policyIndex % 2 === 0 ? "casado" : "solteiro",
+        profissao: ["Arquiteta", "Engenheiro", "Administradora", "Analista", "Designer", "Empresário"][policyIndex],
+        renda: 7800 + policyIndex * 950,
+        rg: `${4 + policyIndex}.${String(321456 + policyIndex * 137)}-${policyIndex}`,
+        score: 742 - policyIndex * 18,
+        profile: {
+          nome: person[0],
+          email: `${person[0].toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, ".")}@email.com`,
+          telefone: `(47) 9999${String(2100 + policyIndex)}`,
+        },
+      },
+      imovel: {
+        endereco: person[4],
+        logradouro: street,
+        numero: number,
+        complemento: policyIndex % 2 === 0 ? `Apto ${201 + policyIndex}` : null,
+        bairro: "Centro",
+        cidade: person[2],
+        estado: person[3],
+        cep: `88${300 + policyIndex * 7}-0${10 + policyIndex}`,
+        tipo: "Apartamento",
+        valor_aluguel: rent,
+        valor_condominio: condominium,
+        valor_taxas: fees,
+        valor_iptu: 145 + policyIndex * 12,
+        valor_fundo_reserva: 65 + policyIndex * 8,
+        valor_taxa_lixo: 24.9,
+      },
+      plano: {
+        nome: policyIndex % 2 === 0 ? "Plano Essencial" : "Plano Completo",
+        taxa_premio: 8.5 + policyIndex * 0.2,
+        cobertura_multiplicador: policyIndex % 2 === 0 ? 12 : 18,
+        custo_saida: 180,
+      },
+      solicitante: {
+        id: requesterIsAgency ? id(800) : id(900 + policyIndex),
+        nome: requesterIsAgency ? "Vértice Imobiliária" : "João Corretor",
+        email: requesterIsAgency ? "contato@verticeimobiliaria.com.br" : "joao.corretor@email.com",
+        telefone: requesterIsAgency ? "(47) 3344-9080" : "(47) 99912-4545",
+        role: requesterIsAgency ? "imobiliaria" : "corretor",
+      },
+    },
+    imobiliaria: { nome: "Vértice Imobiliária", email: "contato@verticeimobiliaria.com.br" },
+    corretor: { nome: requesterIsAgency ? "Ana Paula Ribeiro" : "João Corretor", email: "corretor@email.com" },
+    proprietario: { nome: "Carlos Henrique Souza", email: "carlos.souza@email.com" },
+  };
+
+  const invoiceRows = getDemoPolicyInvoices(policyIndex);
+  const faturas: ContractBillingRow[] = invoiceRows.map((invoice) => ({
+    id: invoice.id,
+    invoice_id: null,
+    consultation_id: consultationId,
+    payment_method: invoice.paymentMethod,
+    numero_parcela: invoice.installmentNumber,
+    installment_total: invoice.installmentTotal || 12,
+    data_vencimento: invoice.dueDate,
+    valor: invoice.amount,
+    status: invoice.rawStatus,
+    data_pagamento: invoice.paidAt,
+    boleto_url: null,
+    linha_digitavel: invoice.barcode,
+    comprovante_url: null,
+    source: "invoice",
+  }));
+
+  const signedPolicyDocument = {
+    id: id(1600 + policyIndex * 10 + 3),
+    file_name: `apolice-nox-${policy.numero}.pdf`,
+    file_url: null,
+    file_type: "application/pdf",
+    document_type: "apolice",
+    document_subtype: awaitingSignature ? "pendente_assinatura_d4sign" : "contratos-assinados",
+    contract_signature_id: id(1700 + policyIndex),
+    created_at: awaitingSignature ? completedAt : signedAt,
+    updated_at: awaitingSignature ? completedAt : signedAt,
+  };
+
+  return {
+    apolice,
+    documentosContrato: [],
+    documentosProposta: [
+      {
+        id: id(1600 + policyIndex * 10 + 1),
+        file_name: `contrato-locacao-${policy.numero}.pdf`,
+        file_url: null,
+        file_type: "application/pdf",
+        document_type: "contrato_locacao",
+        document_subtype: "assinado_imobiliaria",
+        created_at: completedAt,
+        updated_at: signedAt,
+      },
+      {
+        id: id(1600 + policyIndex * 10 + 2),
+        file_name: `vistoria-imovel-${policy.numero}.pdf`,
+        file_url: null,
+        file_type: "application/pdf",
+        document_type: "vistoria_imovel",
+        document_subtype: "enviado",
+        created_at: completedAt,
+        updated_at: completedAt,
+      },
+      signedPolicyDocument,
+    ],
+    assinatura: {
+      id: id(1700 + policyIndex),
+      status: awaitingSignature ? "sent" : "signed",
+      signature_status: awaitingSignature ? "pending" : "signed",
+      sent_at: shiftedDate(-(85 + policyIndex * 12)),
+      signed_at: awaitingSignature ? null : signedAt,
+    },
+    historico: [
+      {
+        id: id(1800 + policyIndex * 10 + 1),
+        tipo_evento: awaitingSignature ? "assinatura_enviada" : "apolice_emitida",
+        descricao: awaitingSignature
+          ? "Contrato enviado para assinatura das partes"
+          : "Apólice emitida e contrato ativado",
+        created_at: awaitingSignature ? shiftedDate(-(85 + policyIndex * 12)) : signedAt,
+      },
+      ...(!awaitingSignature
+        ? [{ id: id(1800 + policyIndex * 10 + 2), tipo_evento: "contrato_assinado", descricao: "Contrato assinado por todas as partes", created_at: shiftedDate(-(83 + policyIndex * 12)) }]
+        : []),
+      { id: id(1800 + policyIndex * 10 + 3), tipo_evento: "pagamento_confirmado", descricao: "Primeiro pagamento confirmado", created_at: shiftedDate(-(84 + policyIndex * 12)) },
+      { id: id(1800 + policyIndex * 10 + 4), tipo_evento: "analise_aprovada", descricao: "Análise de crédito aprovada", created_at: approvedAt },
+    ],
+    faturas,
+    invoiceRows,
+  };
 }
 
 export function getDemoCollectionInvoices() {

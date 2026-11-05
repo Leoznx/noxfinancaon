@@ -30,6 +30,7 @@ import {
   type TenantInvoiceDisplayRow,
 } from "@/lib/tenant-invoice-display";
 import { contractBrokerLabel } from "@/lib/contract-broker-label";
+import { getDemoPolicyDetail } from "@/lib/demo-portal-data";
 
 export const Route = createLazyFileRoute("/faturas-inquilinos/$id")({
   component: () => (
@@ -59,6 +60,13 @@ function FaturasInquilinoDetalhe() {
     setLoading(true);
     setErro(null);
     try {
+      const demoDetail = getDemoPolicyDetail(id);
+      if (demoDetail) {
+        setApolice(demoDetail.apolice);
+        setParcelas(demoDetail.invoiceRows);
+        return;
+      }
+
       const { data: ap, error: apErr } = await supabase
         .from("apolices")
         .select(

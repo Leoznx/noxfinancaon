@@ -11,8 +11,6 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FileText, ArrowRight, AlertCircle, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { toast } from "sonner";
-import { isDemoRecordId } from "@/lib/demo-portal-data";
 
 export const Route = createFileRoute("/apolices/")({
   component: () => (
@@ -160,11 +158,6 @@ function ApolicesList() {
                   <Link
                     to="/apolices/$id"
                     params={{ id: a.id }}
-                    onClick={(event) => {
-                      if (!isDemoRecordId(a.id)) return;
-                      event.preventDefault();
-                      toast.info("Contrato demonstrativo: os dados reais permanecem intactos.");
-                    }}
                   >
                     Ver contrato <ArrowRight size={14} />
                   </Link>
@@ -249,11 +242,6 @@ function ApolicesList() {
                         <Link
                           to="/apolices/$id"
                           params={{ id: a.id }}
-                          onClick={(event) => {
-                            if (!isDemoRecordId(a.id)) return;
-                            event.preventDefault();
-                            toast.info("Contrato demonstrativo: os dados reais permanecem intactos.");
-                          }}
                         >
                           Ver contrato <ArrowRight size={14} />
                         </Link>
