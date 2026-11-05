@@ -46,6 +46,11 @@ export interface NormalizedDirectDResult {
   message: string;
 }
 
+const RETRYABLE_DIRECTD_SCORE_HTTP_STATUSES = new Set([
+  400, 401, 403, 404, 408, 429, 500, 502, 503, 504,
+]);
+const TRANSIENT_DIRECTD_SCORE_HTTP_STATUSES = new Set([408, 429, 500, 502, 503, 504]);
+
 export const DIRECTD_DECISION_RULE = "score_descricao_compromisso_v1";
 
 export function extractCommitmentPaymentPercentage(value: unknown): number | null {
@@ -76,6 +81,46 @@ export function subjectForDocument(
   if (documentLength === 11) return response.retorno?.pessoaFisica ?? null;
   if (documentLength === 14) return response.retorno?.pessoaJuridica ?? null;
   return null;
+}
+
+export function hasDirectDScoreSuccessPayload(
+  response: DirectDScoreResponse | null,
+  documentLength: number,
+): boolean {
+  if (!response || !subjectForDocument(response, documentLength)) return false;
+
+  const resultId = Number(response.metaDados?.resultadoId);
+  const result = String(response.metaDados?.resultado ?? "")
+    .trim()
+    .toLocaleLowerCase("pt-BR");
+  const message = String(response.metaDados?.mensagem ?? "")
+    .trim()
+    .toLocaleLowerCase("pt-BR");
+
+  return resultId === 1 || result.includes("sucesso") || message.includes("sucesso");
+}
+
+/**
+ * A Direct Data documenta estes códigos como falha sem resultado. Só repetimos
+ * quando a resposta também não contém `consultaUid`, que é o recibo usado para
+ * distinguir uma falha explícita de um envio possivelmente processado/cobrado.
+ */
+export function canRetryDirectDScoreFailure(
+  status: number,
+  response: DirectDScoreResponse | null,
+): boolean {
+  const providerReceipt = String(response?.metaDados?.consultaUid ?? "").trim();
+  return RETRYABLE_DIRECTD_SCORE_HTTP_STATUSES.has(status) && !providerReceipt;
+}
+
+export function shouldAutomaticallyRetryDirectDScoreFailure(
+  status: number,
+  response: DirectDScoreResponse | null,
+): boolean {
+  return (
+    TRANSIENT_DIRECTD_SCORE_HTTP_STATUSES.has(status) &&
+    canRetryDirectDScoreFailure(status, response)
+  );
 }
 
 /**
