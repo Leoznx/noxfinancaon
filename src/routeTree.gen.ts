@@ -35,6 +35,7 @@ import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as DicasPerformanceRouteImport } from './routes/dicas-performance'
 import { Route as DocumentosRouteImport } from './routes/documentos'
 import { Route as EmailVerificadoRouteImport } from './routes/email-verificado'
+import { Route as ExcluirContaRouteImport } from './routes/excluir-conta'
 import { Route as FinanceiroRouteImport } from './routes/financeiro'
 import { Route as ImobiliariaRouteImport } from './routes/imobiliaria'
 import { Route as ImobiliariasAdminRouteImport } from './routes/imobiliarias-admin'
@@ -268,6 +269,11 @@ const DocumentosRoute = DocumentosRouteImport.update({
 const EmailVerificadoRoute = EmailVerificadoRouteImport.update({
   id: '/email-verificado',
   path: '/email-verificado',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ExcluirContaRoute = ExcluirContaRouteImport.update({
+  id: '/excluir-conta',
+  path: '/excluir-conta',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FinanceiroRoute = FinanceiroRouteImport.update({
@@ -820,6 +826,7 @@ export interface FileRoutesByFullPath {
   '/dicas-performance': typeof DicasPerformanceRoute
   '/documentos': typeof DocumentosRoute
   '/email-verificado': typeof EmailVerificadoRoute
+  '/excluir-conta': typeof ExcluirContaRoute
   '/financeiro': typeof FinanceiroRoute
   '/imobiliaria': typeof ImobiliariaRoute
   '/imobiliarias-admin': typeof ImobiliariasAdminRoute
@@ -946,6 +953,7 @@ export interface FileRoutesByTo {
   '/dicas-performance': typeof DicasPerformanceRoute
   '/documentos': typeof DocumentosRoute
   '/email-verificado': typeof EmailVerificadoRoute
+  '/excluir-conta': typeof ExcluirContaRoute
   '/financeiro': typeof FinanceiroRoute
   '/imobiliaria': typeof ImobiliariaRoute
   '/imobiliarias-admin': typeof ImobiliariasAdminRoute
@@ -1073,6 +1081,7 @@ export interface FileRoutesById {
   '/dicas-performance': typeof DicasPerformanceRoute
   '/documentos': typeof DocumentosRoute
   '/email-verificado': typeof EmailVerificadoRoute
+  '/excluir-conta': typeof ExcluirContaRoute
   '/financeiro': typeof FinanceiroRoute
   '/imobiliaria': typeof ImobiliariaRoute
   '/imobiliarias-admin': typeof ImobiliariasAdminRoute
@@ -1203,6 +1212,7 @@ export interface FileRouteTypes {
     | '/dicas-performance'
     | '/documentos'
     | '/email-verificado'
+    | '/excluir-conta'
     | '/financeiro'
     | '/imobiliaria'
     | '/imobiliarias-admin'
@@ -1329,6 +1339,7 @@ export interface FileRouteTypes {
     | '/dicas-performance'
     | '/documentos'
     | '/email-verificado'
+    | '/excluir-conta'
     | '/financeiro'
     | '/imobiliaria'
     | '/imobiliarias-admin'
@@ -1455,6 +1466,7 @@ export interface FileRouteTypes {
     | '/dicas-performance'
     | '/documentos'
     | '/email-verificado'
+    | '/excluir-conta'
     | '/financeiro'
     | '/imobiliaria'
     | '/imobiliarias-admin'
@@ -1584,6 +1596,7 @@ export interface RootRouteChildren {
   DicasPerformanceRoute: typeof DicasPerformanceRoute
   DocumentosRoute: typeof DocumentosRoute
   EmailVerificadoRoute: typeof EmailVerificadoRoute
+  ExcluirContaRoute: typeof ExcluirContaRoute
   FinanceiroRoute: typeof FinanceiroRoute
   ImobiliariaRoute: typeof ImobiliariaRoute
   ImobiliariasAdminRoute: typeof ImobiliariasAdminRoute
@@ -1839,6 +1852,13 @@ declare module '@tanstack/react-router' {
       path: '/email-verificado'
       fullPath: '/email-verificado'
       preLoaderRoute: typeof EmailVerificadoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/excluir-conta': {
+      id: '/excluir-conta'
+      path: '/excluir-conta'
+      fullPath: '/excluir-conta'
+      preLoaderRoute: typeof ExcluirContaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/financeiro': {
@@ -2678,6 +2698,7 @@ const rootRouteChildren: RootRouteChildren = {
   DicasPerformanceRoute: DicasPerformanceRoute,
   DocumentosRoute: DocumentosRoute,
   EmailVerificadoRoute: EmailVerificadoRoute,
+  ExcluirContaRoute: ExcluirContaRoute,
   FinanceiroRoute: FinanceiroRoute,
   ImobiliariaRoute: ImobiliariaRoute,
   ImobiliariasAdminRoute: ImobiliariasAdminRoute,
