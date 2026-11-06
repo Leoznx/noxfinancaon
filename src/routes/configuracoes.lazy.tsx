@@ -5,7 +5,6 @@ import { useState, useEffect } from "react";
 import {
   User,
   Building2,
-  Wallet,
   Lock,
   Bell,
   Award,
@@ -47,51 +46,39 @@ export const Route = createLazyFileRoute("/configuracoes")({
   ),
 });
 
-// Inquilino não tem comissão nem PIX — essas abas não se aplicam. "Conta" fica
-// visível porque é onde mora a verificação de documento (frente/verso/segurando
-// o documento), que todo perfil precisa preencher.
-const TABS_OCULTAS_PARA_INQUILINO = new Set(["pix", "comissoes"]);
+// Inquilino não tem Plano e Nível. "Conta" fica visível porque é onde mora a
+// verificação de documento (frente/verso/segurando o documento), que todo perfil
+// precisa preencher.
+const TABS_OCULTAS_PARA_INQUILINO = new Set(["comissoes"]);
 const TABS_CONFIGURACOES = new Set([
   "perfil",
   "conta",
   "seguranca",
   "notificacoes",
   "comissoes",
-  "pix",
 ]);
-
-function normalizarAbaConfiguracoes(tab?: string) {
-  return tab === "financeiro" ? "pix" : tab;
-}
 
 function ConfiguracoesPage() {
   const search = useSearch({ from: "/configuracoes" });
   const navigate = useNavigate();
-  const [abaAtiva, setAbaAtivaState] = useState<string>(
-    normalizarAbaConfiguracoes(search.tab) ?? "perfil",
-  );
+  const [abaAtiva, setAbaAtivaState] = useState<string>(search.tab ?? "perfil");
   const { user } = useAuth();
   const isInquilino = user?.role === "inquilino";
-  // Admin não recebe comissão/Pix — a aba não se aplica a esse papel.
-  const isAdminGeral = user?.role === "admin" || user?.internalRole === "admin_master";
-  const ocultarPix = isInquilino || isAdminGeral;
 
   // Mantém a URL em sincronia com a aba ativa — permite deep-link (ex.: um dropdown
   // externo linkando direto pra /configuracoes?tab=seguranca) e sobrevive a um reload.
   useEffect(() => {
-    const abaDaUrl = normalizarAbaConfiguracoes(search.tab);
+    const abaDaUrl = search.tab;
     if (abaDaUrl && abaDaUrl !== abaAtiva) setAbaAtivaState(abaDaUrl);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search.tab]);
 
-  // Defesa extra contra deep-link direto (?tab=pix) numa aba que não existe
-  // pra esse papel — evita renderizar um Tab* pensado pra corretor/imobiliária.
+  // Defesa extra contra uma aba inexistente ou indisponível para o papel atual.
   useEffect(() => {
     if (!TABS_CONFIGURACOES.has(abaAtiva)) setAbaAtiva("perfil");
     else if (isInquilino && TABS_OCULTAS_PARA_INQUILINO.has(abaAtiva)) setAbaAtiva("perfil");
-    else if (ocultarPix && abaAtiva === "pix") setAbaAtiva("perfil");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isInquilino, ocultarPix, abaAtiva]);
+  }, [isInquilino, abaAtiva]);
 
   const setAbaAtiva = (aba: string) => {
     setAbaAtivaState(aba);
@@ -149,15 +136,6 @@ function ConfiguracoesPage() {
                   descricao="Regras de carreira"
                 />
               )}
-              {!ocultarPix && (
-                <NavItemConfig
-                  ativo={abaAtiva === "pix"}
-                  onClick={() => setAbaAtiva("pix")}
-                  icon={Wallet}
-                  titulo="PIX"
-                  descricao="Chave PIX e bancários"
-                />
-              )}
             </nav>
           </aside>
 
@@ -168,7 +146,6 @@ function ConfiguracoesPage() {
             {abaAtiva === "seguranca" && <TabSeguranca />}
             {abaAtiva === "notificacoes" && <TabNotificacoes />}
             {!isInquilino && abaAtiva === "comissoes" && <TabComissoesNivel />}
-            {!ocultarPix && abaAtiva === "pix" && <TabFinanceiro />}
           </main>
         </div>
       </div>

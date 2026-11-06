@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { LogoNox } from '../LogoNox';
 import {
   UserRound, Building2, Home, KeyRound, Menu, X,
-  User, Wallet, Lock, Bell, Award, LayoutDashboard, LogOut,
+  User, Lock, Bell, Award, LayoutDashboard, LogOut,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
@@ -37,26 +37,16 @@ function PerfilTab({ to, label }: { to: string; label: string }) {
 const PERFIL_MENU_ITEMS = [
   { tab: 'perfil', label: 'Perfil', icon: User },
   { tab: 'conta', label: 'Conta', icon: Building2 },
-  { tab: 'financeiro', label: 'Financeiro', icon: Wallet },
   { tab: 'seguranca', label: 'Segurança', icon: Lock },
   { tab: 'notificacoes', label: 'Notificações', icon: Bell },
   { tab: 'comissoes', label: 'Plano e Nível', icon: Award },
 ] as const;
 
-// Inquilino não tem comissão nem PIX — essas 2 abas não se aplicam. "Conta"
-// fica visível porque é onde mora a verificação de documento.
-const TABS_OCULTAS_PARA_INQUILINO = new Set(['financeiro', 'comissoes']);
-// Admin não recebe comissão/Pix — mesma regra de src/routes/configuracoes.lazy.tsx.
-const TABS_OCULTAS_PARA_ADMIN = new Set(["financeiro"]);
+// Inquilino não tem Plano e Nível. "Conta" fica visível porque é onde mora a
+// verificação de documento.
+const TABS_OCULTAS_PARA_INQUILINO = new Set(['comissoes']);
 
-function menuItemsParaRole(
-  role: string | null | undefined,
-  internalRole: string | null | undefined,
-) {
-  const isAdminGeral = role === "admin" || internalRole === "admin_master";
-  if (isAdminGeral) {
-    return PERFIL_MENU_ITEMS.filter((item) => !TABS_OCULTAS_PARA_ADMIN.has(item.tab));
-  }
+function menuItemsParaRole(role: string | null | undefined) {
   if (role !== 'inquilino') return PERFIL_MENU_ITEMS;
   return PERFIL_MENU_ITEMS.filter((item) => !TABS_OCULTAS_PARA_INQUILINO.has(item.tab));
 }
@@ -164,7 +154,7 @@ function HeaderUserMenu({ align }: { align: 'desktop' | 'mobile' }) {
             </div>
           </div>
           <nav className="flex flex-col divide-y divide-neutral-100">
-            {menuItemsParaRole(user.role, user.internalRole).map(({ tab, label, icon: Icon }) => (
+            {menuItemsParaRole(user.role).map(({ tab, label, icon: Icon }) => (
               <Link
                 key={tab}
                 to="/configuracoes"
@@ -207,7 +197,7 @@ function HeaderUserMenu({ align }: { align: 'desktop' | 'mobile' }) {
             <p className="text-xs text-neutral-500 truncate">{user.email}</p>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
-          {menuItemsParaRole(user.role, user.internalRole).map(({ tab, label, icon: Icon }) => (
+          {menuItemsParaRole(user.role).map(({ tab, label, icon: Icon }) => (
             <DropdownMenuItem key={tab} asChild>
               <Link to="/configuracoes" search={{ tab } as any} className="flex items-center gap-2 cursor-pointer">
                 <Icon className="w-4 h-4 text-neutral-900" strokeWidth={2.2} /> {label}
