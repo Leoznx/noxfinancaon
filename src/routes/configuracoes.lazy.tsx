@@ -50,41 +50,48 @@ export const Route = createLazyFileRoute("/configuracoes")({
 // Inquilino não tem comissão nem PIX — essas abas não se aplicam. "Conta" fica
 // visível porque é onde mora a verificação de documento (frente/verso/segurando
 // o documento), que todo perfil precisa preencher.
-const TABS_OCULTAS_PARA_INQUILINO = new Set(["financeiro", "comissoes"]);
+const TABS_OCULTAS_PARA_INQUILINO = new Set(["pix", "comissoes"]);
 const TABS_CONFIGURACOES = new Set([
   "perfil",
   "conta",
-  "financeiro",
   "seguranca",
   "notificacoes",
   "comissoes",
+  "pix",
 ]);
+
+function normalizarAbaConfiguracoes(tab?: string) {
+  return tab === "financeiro" ? "pix" : tab;
+}
 
 function ConfiguracoesPage() {
   const search = useSearch({ from: "/configuracoes" });
   const navigate = useNavigate();
-  const [abaAtiva, setAbaAtivaState] = useState<string>(search.tab ?? "perfil");
+  const [abaAtiva, setAbaAtivaState] = useState<string>(
+    normalizarAbaConfiguracoes(search.tab) ?? "perfil",
+  );
   const { user } = useAuth();
   const isInquilino = user?.role === "inquilino";
   // Admin não recebe comissão/Pix — a aba não se aplica a esse papel.
   const isAdminGeral = user?.role === "admin" || user?.internalRole === "admin_master";
-  const ocultarFinanceiro = isInquilino || isAdminGeral;
+  const ocultarPix = isInquilino || isAdminGeral;
 
   // Mantém a URL em sincronia com a aba ativa — permite deep-link (ex.: um dropdown
   // externo linkando direto pra /configuracoes?tab=seguranca) e sobrevive a um reload.
   useEffect(() => {
-    if (search.tab && search.tab !== abaAtiva) setAbaAtivaState(search.tab);
+    const abaDaUrl = normalizarAbaConfiguracoes(search.tab);
+    if (abaDaUrl && abaDaUrl !== abaAtiva) setAbaAtivaState(abaDaUrl);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search.tab]);
 
-  // Defesa extra contra deep-link direto (?tab=financeiro) numa aba que não existe
+  // Defesa extra contra deep-link direto (?tab=pix) numa aba que não existe
   // pra esse papel — evita renderizar um Tab* pensado pra corretor/imobiliária.
   useEffect(() => {
     if (!TABS_CONFIGURACOES.has(abaAtiva)) setAbaAtiva("perfil");
     else if (isInquilino && TABS_OCULTAS_PARA_INQUILINO.has(abaAtiva)) setAbaAtiva("perfil");
-    else if (ocultarFinanceiro && abaAtiva === "financeiro") setAbaAtiva("perfil");
+    else if (ocultarPix && abaAtiva === "pix") setAbaAtiva("perfil");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isInquilino, ocultarFinanceiro, abaAtiva]);
+  }, [isInquilino, ocultarPix, abaAtiva]);
 
   const setAbaAtiva = (aba: string) => {
     setAbaAtivaState(aba);
@@ -119,15 +126,6 @@ function ConfiguracoesPage() {
                 titulo="Conta"
                 descricao="Documentos e profissional"
               />
-              {!ocultarFinanceiro && (
-                <NavItemConfig
-                  ativo={abaAtiva === "financeiro"}
-                  onClick={() => setAbaAtiva("financeiro")}
-                  icon={Wallet}
-                  titulo="Financeiro"
-                  descricao="Chave PIX e bancários"
-                />
-              )}
               <NavItemConfig
                 ativo={abaAtiva === "seguranca"}
                 onClick={() => setAbaAtiva("seguranca")}
@@ -151,6 +149,15 @@ function ConfiguracoesPage() {
                   descricao="Regras de carreira"
                 />
               )}
+              {!ocultarPix && (
+                <NavItemConfig
+                  ativo={abaAtiva === "pix"}
+                  onClick={() => setAbaAtiva("pix")}
+                  icon={Wallet}
+                  titulo="PIX"
+                  descricao="Chave PIX e bancários"
+                />
+              )}
             </nav>
           </aside>
 
@@ -158,10 +165,10 @@ function ConfiguracoesPage() {
           <main className="col-span-12 lg:col-span-9 animate-in fade-in slide-in-from-right-4 duration-500">
             {abaAtiva === "perfil" && <TabPerfil />}
             {abaAtiva === "conta" && <TabConta />}
-            {!ocultarFinanceiro && abaAtiva === "financeiro" && <TabFinanceiro />}
             {abaAtiva === "seguranca" && <TabSeguranca />}
             {abaAtiva === "notificacoes" && <TabNotificacoes />}
             {!isInquilino && abaAtiva === "comissoes" && <TabComissoesNivel />}
+            {!ocultarPix && abaAtiva === "pix" && <TabFinanceiro />}
           </main>
         </div>
       </div>
