@@ -16,7 +16,17 @@ import {
 } from "../_shared/directd-identity.ts";
 import { corsHeaders, hasOversizedBody, rejectDisallowedOrigin } from "../_shared/http-security.ts";
 
-const ALLOWED_ROLES = new Set(["corretor", "imobiliaria", "admin", "analista"]);
+// Os mesmos perfis que recebem "Nova Consulta" no site e no aplicativo devem
+// conseguir executar a chamada oficial. A fila já vincula e protege a consulta
+// pelo profile_id_solicitante; esta barreira evita apenas perfis sem o produto.
+const ALLOWED_ROLES = new Set([
+  "corretor",
+  "imobiliaria",
+  "proprietario",
+  "admin",
+  "admin_master",
+  "analista",
+]);
 const DIRECTD_SCORE_URL = "https://apiv3.directd.com.br/api/Score";
 const DIRECTD_PF_IDENTITY_URL = "https://apiv3.directd.com.br/api/CadastroPessoaFisica";
 const DIRECTD_PJ_IDENTITY_URL = "https://apiv3.directd.com.br/api/CadastroPessoaJuridica";

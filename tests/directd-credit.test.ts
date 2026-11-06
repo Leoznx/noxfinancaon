@@ -56,9 +56,9 @@ test("envia faixa sem regra para análise complementar", () => {
   });
 });
 
-test("aprova a partir de 600 e envia scores de 541 a 599 para análise com compromisso de 48%", () => {
+test("aprova a partir de 651 e envia scores de 541 a 650 para análise com compromisso de 48%", () => {
   assert.equal(
-    normalizeDirectDResult(responseFor("", 600, "O consumidor paga 48% das contas em dia"), 11)
+    normalizeDirectDResult(responseFor("", 651, "O consumidor paga 48% das contas em dia"), 11)
       .decision,
     "aprovado",
   );
@@ -73,7 +73,12 @@ test("aprova a partir de 600 e envia scores de 541 a 599 para análise com compr
     "em_analise",
   );
   assert.equal(
-    normalizeDirectDResult(responseFor("", 599, "O consumidor paga 48% das contas em dia"), 11)
+    normalizeDirectDResult(responseFor("", 650, "O consumidor paga 48% das contas em dia"), 11)
+      .decision,
+    "em_analise",
+  );
+  assert.equal(
+    normalizeDirectDResult(responseFor("", 600, "O consumidor paga 48% das contas em dia"), 11)
       .decision,
     "em_analise",
   );
@@ -81,13 +86,13 @@ test("aprova a partir de 600 e envia scores de 541 a 599 para análise com compr
 
 test("reprova numericamente somente quando score e compromisso ficam abaixo dos dois pisos", () => {
   assert.equal(
-    normalizeDirectDResult(responseFor("", 539, "O consumidor paga 47% das contas em dia"), 11)
+    normalizeDirectDResult(responseFor("", 538, "O consumidor paga 47% das contas em dia"), 11)
       .decision,
     "recusado",
   );
   assert.equal(
     normalizeDirectDResult(
-      responseFor("", 539.99, "O consumidor paga 47,99% das contas em dia"),
+      responseFor("", 538.99, "O consumidor paga 47,99% das contas em dia"),
       11,
     ).decision,
     "recusado",
@@ -98,8 +103,13 @@ test("reprova numericamente somente quando score e compromisso ficam abaixo dos 
     "recusado",
   );
 
-  // O limite 540 e os critérios divergentes não receberam uma decisão
+  // Os limites 539/540 e os critérios divergentes não receberam uma decisão
   // automática na regra comercial; seguem para conferência humana.
+  assert.equal(
+    normalizeDirectDResult(responseFor("", 539, "O consumidor paga 47% das contas em dia"), 11)
+      .decision,
+    "em_analise",
+  );
   assert.equal(
     normalizeDirectDResult(responseFor("", 540, "O consumidor paga 47% das contas em dia"), 11)
       .decision,
@@ -174,7 +184,7 @@ test("o score prevalece quando o texto do provedor diverge da regra NOX", () => 
   assert.equal(medio.decision, "em_analise");
   assert.equal(medio.faixaScore, "Médio índice de inadimplência");
 
-  const aprovado = normalizeDirectDResult(responseFor("Médio índice de inadimplência", 600), 11);
+  const aprovado = normalizeDirectDResult(responseFor("Médio índice de inadimplência", 651), 11);
   assert.equal(aprovado.decision, "aprovado");
   assert.equal(aprovado.faixaScore, "Baixo índice de inadimplência");
 });
@@ -368,6 +378,32 @@ test("migração da regra v3 impede reutilizar decisões calculadas com aprovaç
   assert.match(migration, /replace\(v_definition, v_previous_rule, v_current_rule\)/);
 });
 
+test("migração da regra v4 invalida decisões produzidas pela implementação divergente", () => {
+  const migration = readFileSync(
+    new URL(
+      "../supabase/migrations/20261106140000_credit_decision_rule_v4.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+
+  assert.match(migration, /claim_official_credit_simulation\(uuid,text\)/);
+  assert.match(migration, /v_previous_rule constant text := 'score_descricao_compromisso_v3'/);
+  assert.match(migration, /v_current_rule constant text := 'score_descricao_compromisso_v4'/);
+  assert.match(migration, /replace\(v_definition, v_previous_rule, v_current_rule\)/);
+});
+
+test("função oficial aceita todos os perfis que recebem Nova Consulta", () => {
+  const edgeFunction = readFileSync(
+    new URL("../supabase/functions/simulate-credit-official/index.ts", import.meta.url),
+    "utf8",
+  );
+
+  for (const role of ["corretor", "imobiliaria", "proprietario", "admin", "analista"]) {
+    assert.match(edgeFunction, new RegExp(`"${role}"`));
+  }
+});
+
 test("análise interna fica protegida e fora do retorno legível pelo solicitante", () => {
   const migration = readFileSync(
     new URL(
@@ -391,8 +427,8 @@ test("análise interna fica protegida e fora do retorno legível pelo solicitant
     "utf8",
   );
   assert.match(edgeFunction, /"finish_official_credit_simulation_v2"/);
-  const publicResultStart = edgeFunction.indexOf("return json({\n      ok: true");
-  const publicResultEnd = edgeFunction.indexOf("\n  } catch", publicResultStart);
+  const publicResultStart = edgeFunction.search(/return json\(\{\r?\n\s+ok: true/);
+  const publicResultEnd = edgeFunction.slice(publicResultStart).search(/\r?\n\s*\} catch/) + publicResultStart;
   assert.notEqual(publicResultStart, -1);
   assert.notEqual(publicResultEnd, -1);
   const publicResult = edgeFunction.slice(publicResultStart, publicResultEnd);
