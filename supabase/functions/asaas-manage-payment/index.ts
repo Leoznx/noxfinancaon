@@ -44,6 +44,7 @@ import {
 } from "../_shared/contract-billing.ts";
 import { buildPaymentRequestWhatsappContent } from "../_shared/payment-notification-content.ts";
 import { dispatchD4SignContract, finalizeD4SignContract } from "../_shared/d4sign.ts";
+import { resolveInvoicePaymentLink } from "../_shared/invoice-payment-link.ts";
 
 type Body = {
   invoiceId?: string;
@@ -339,48 +340,104 @@ function isUuid(value: string) {
 async function resolveTarget(supabase: any, body: Body) {
   let payment: any = null;
   let invoice: any = null;
+  let recoveredPaymentLink: "billing_key" | "installment" | "due_date" | null = null;
+  let ambiguousPaymentLink = false;
   if (body.invoiceId) {
-    invoice = (
-      await supabase.from("faturas_inquilino").select("*").eq("id", body.invoiceId).maybeSingle()
-    ).data;
+    const result = await supabase
+      .from("faturas_inquilino")
+      .select("*")
+      .eq("id", body.invoiceId)
+      .maybeSingle();
+    if (result.error) throw result.error;
+    invoice = result.data;
   } else if (body.paymentId) {
     let query = supabase.from("asaas_payments").select("*");
     query = isUuid(body.paymentId)
       ? query.or(`id.eq.${body.paymentId},asaas_payment_id.eq.${body.paymentId}`)
       : query.eq("asaas_payment_id", body.paymentId);
-    payment = (await query.maybeSingle()).data;
+    const paymentResult = await query.maybeSingle();
+    if (paymentResult.error) throw paymentResult.error;
+    payment = paymentResult.data;
     if (payment) {
-      invoice = (
-        await supabase
-          .from("faturas_inquilino")
-          .select("*")
-          .eq("asaas_payment_id", payment.id)
-          .maybeSingle()
-      ).data;
-    }
-  } else if (body.consultationId) {
-    invoice = (
-      await supabase
+      const invoiceResult = await supabase
         .from("faturas_inquilino")
         .select("*")
-        .eq("consulta_id", body.consultationId)
-        .eq("charge_kind", "initial")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle()
-    ).data;
+        .eq("asaas_payment_id", payment.id)
+        .maybeSingle();
+      if (invoiceResult.error) throw invoiceResult.error;
+      invoice = invoiceResult.data;
+    }
+  } else if (body.consultationId) {
+    const result = await supabase
+      .from("faturas_inquilino")
+      .select("*")
+      .eq("consulta_id", body.consultationId)
+      .eq("charge_kind", "initial")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (result.error) throw result.error;
+    invoice = result.data;
   }
-  if (!invoice) return { invoice: null, payment };
+  if (!invoice) {
+    return { invoice: null, payment, recoveredPaymentLink, ambiguousPaymentLink };
+  }
   if (!payment && invoice.asaas_payment_id) {
-    payment = (
-      await supabase
-        .from("asaas_payments")
-        .select("*")
-        .eq("id", invoice.asaas_payment_id)
-        .maybeSingle()
-    ).data;
+    const result = await supabase
+      .from("asaas_payments")
+      .select("*")
+      .eq("id", invoice.asaas_payment_id)
+      .maybeSingle();
+    if (result.error) throw result.error;
+    payment = result.data;
   }
-  return { invoice, payment };
+  if (!payment && invoice.consulta_id) {
+    const candidatesResult = await supabase
+      .from("asaas_payments")
+      .select("*")
+      .eq("consultation_id", invoice.consulta_id);
+    if (candidatesResult.error) throw candidatesResult.error;
+    const resolution = resolveInvoicePaymentLink(invoice, candidatesResult.data || [], {
+      preferCandidate: (candidate) => isCollectableStatus(candidate.status),
+    });
+    payment = resolution.payment;
+    recoveredPaymentLink = resolution.payment ? resolution.strategy : null;
+    ambiguousPaymentLink = resolution.ambiguous;
+  }
+  return { invoice, payment, recoveredPaymentLink, ambiguousPaymentLink };
+}
+
+async function persistRecoveredPaymentLink(supabase: any, invoice: any, payment: any) {
+  let update = supabase
+    .from("faturas_inquilino")
+    .update({ asaas_payment_id: payment.id })
+    .eq("id", invoice.id);
+  update = invoice.asaas_payment_id
+    ? update.eq("asaas_payment_id", invoice.asaas_payment_id)
+    : update.is("asaas_payment_id", null);
+  const result = await update.select("*").maybeSingle();
+  if (result.error) throw result.error;
+  if (result.data) return { invoice: result.data, payment };
+
+  // Another request may have repaired the same legacy link first. Reload the
+  // winning relationship instead of overwriting it or creating a duplicate.
+  const currentResult = await supabase
+    .from("faturas_inquilino")
+    .select("*")
+    .eq("id", invoice.id)
+    .maybeSingle();
+  if (currentResult.error) throw currentResult.error;
+  const currentInvoice = currentResult.data;
+  if (!currentInvoice?.asaas_payment_id) throw new Error("invoice_payment_link_not_persisted");
+  const paymentResult = await supabase
+    .from("asaas_payments")
+    .select("*")
+    .eq("id", currentInvoice.asaas_payment_id)
+    .maybeSingle();
+  if (paymentResult.error || !paymentResult.data) {
+    throw paymentResult.error || new Error("invoice_payment_link_not_found");
+  }
+  return { invoice: currentInvoice, payment: paymentResult.data };
 }
 
 async function reconcileContractAfterPayment(
@@ -495,6 +552,28 @@ serve(async (req) => {
         },
         409,
       );
+    }
+
+    if (target.ambiguousPaymentLink) {
+      return jsonResponse(
+        req,
+        {
+          ok: false,
+          error:
+            "Mais de uma cobranca Asaas corresponde a esta parcela. A conciliacao requer revisao financeira.",
+        },
+        409,
+      );
+    }
+    if (target.recoveredPaymentLink && payment?.id) {
+      const recovered = await persistRecoveredPaymentLink(supabase, invoice, payment);
+      invoice = recovered.invoice;
+      payment = recovered.payment;
+      console.info("[asaas-manage-payment] vinculo legado conciliado", {
+        invoiceId: invoice.id,
+        paymentId: payment.id,
+        strategy: target.recoveredPaymentLink,
+      });
     }
 
     if (body.action === "refresh") {
