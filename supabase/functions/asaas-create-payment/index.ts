@@ -366,15 +366,12 @@ serve(async (req) => {
     }
 
     const recipient = await resolvePaymentRecipientFromContract(supabase, consulta);
-    const initialDecision =
-      paymentMethod === "credit_card"
-        ? null
-        : planInitialBilling({
-            paymentMethod,
-            deferPayment: deferred,
-            payer: recipient.paymentResponsible,
-            fireMode,
-          });
+    const initialDecision = planInitialBilling({
+      paymentMethod,
+      deferPayment: deferred,
+      payer: recipient.paymentResponsible,
+      fireMode,
+    });
 
     let existingInvoice = await loadExistingInitial(supabase, proposalId);
     // Fatura inicial em status terminal (cancelada, estornada, recusada,
@@ -758,8 +755,7 @@ serve(async (req) => {
       throw error;
     }
 
-    const billingType =
-      paymentMethod === "pix" ? "PIX" : paymentMethod === "boleto" ? "BOLETO" : "CREDIT_CARD";
+    const billingType = paymentMethod === "pix" ? "PIX" : "BOLETO";
     const providerPayload: Record<string, unknown> = {
       customer: customerId,
       billingType,
@@ -770,53 +766,6 @@ serve(async (req) => {
     };
     if (paymentMethod === "boleto") {
       providerPayload.daysAfterDueDateToRegistrationCancellation = 0;
-    }
-
-    if (paymentMethod === "credit_card" && !raw) {
-      const card = body.creditCard || {};
-      const holder = body.creditCardHolderInfo || {};
-      if (!card.holderName || !card.number || !card.expiryMonth || !card.expiryYear || !card.ccv) {
-        await updateBillingOperation(supabase, operation.id, {
-          state: "failed",
-          last_error: "missing_card",
-        });
-        return jsonResponse(req, { ok: false, error: "Preencha todos os dados do cartao." }, 400);
-      }
-      if (
-        !holder.name ||
-        !holder.email ||
-        !holder.cpfCnpj ||
-        !holder.postalCode ||
-        !holder.addressNumber ||
-        !holder.phone
-      ) {
-        await updateBillingOperation(supabase, operation.id, {
-          state: "failed",
-          last_error: "missing_holder",
-        });
-        return jsonResponse(
-          req,
-          { ok: false, error: "Preencha os dados do titular do cartao." },
-          400,
-        );
-      }
-      providerPayload.creditCard = {
-        holderName: card.holderName,
-        number: String(card.number).replace(/\s/g, ""),
-        expiryMonth: card.expiryMonth,
-        expiryYear: card.expiryYear,
-        ccv: card.ccv,
-      };
-      providerPayload.creditCardHolderInfo = {
-        name: holder.name,
-        email: holder.email,
-        cpfCnpj: String(holder.cpfCnpj).replace(/\D/g, ""),
-        postalCode: String(holder.postalCode).replace(/\D/g, ""),
-        addressNumber: holder.addressNumber,
-        phone: String(holder.phone).replace(/\D/g, ""),
-      };
-      providerPayload.remoteIp =
-        req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "127.0.0.1";
     }
 
     if (!raw) {

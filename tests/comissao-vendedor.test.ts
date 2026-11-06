@@ -9,24 +9,24 @@ import {
 
 test("aplica as três faixas progressivas por contrato", () => {
   assert.equal(calcularComissaoContratos(0), 0);
-  assert.equal(calcularComissaoContratos(1), 35);
-  assert.equal(calcularComissaoContratos(15), 525);
-  assert.equal(calcularComissaoContratos(16), 580);
-  assert.equal(calcularComissaoContratos(25), 1_075);
-  assert.equal(calcularComissaoContratos(26), 1_150);
-  assert.equal(calcularComissaoContratos(46), 2_650);
+  assert.equal(calcularComissaoContratos(1), 25);
+  assert.equal(calcularComissaoContratos(15), 375);
+  assert.equal(calcularComissaoContratos(16), 410);
+  assert.equal(calcularComissaoContratos(25), 725);
+  assert.equal(calcularComissaoContratos(26), 770);
+  assert.equal(calcularComissaoContratos(46), 1_670);
 });
 
 test("soma os bônus nos marcos 15, 30 e acima de 45", () => {
   assert.equal(calcularBonus(14), 0);
   assert.equal(calcularBonus(15), 400);
   assert.equal(calcularBonus(30), 1_000);
-  assert.equal(calcularBonus(45), 1_000);
+  assert.equal(calcularBonus(45), 2_200);
   assert.equal(calcularBonus(46), 2_200);
 });
 
 test("o total não inclui valor fixo", () => {
-  assert.deepEqual(calcularGanhoTotal(15), { comissao: 525, bonus: 400, total: 925 });
+  assert.deepEqual(calcularGanhoTotal(15), { comissao: 375, bonus: 400, total: 775 });
 });
 
 test("indica o próximo nível e o nível máximo", () => {

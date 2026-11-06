@@ -18,8 +18,8 @@ const progress: SellerMonthlyProgress = {
   contracts_closed: 1,
 };
 
-test("progresso geral calcula a média das três metas e limita cada uma a 100%", () => {
-  assert.equal(sellerOverallProgress(progress), 57);
+test("progresso geral acompanha a meta principal de clientes e limita em 100%", () => {
+  assert.equal(sellerOverallProgress(progress), 100);
   assert.equal(sellerGoalPercentage(12, 10), 100);
   assert.equal(sellerGoalPercentage(0, null), 0);
 });

@@ -44,7 +44,7 @@ function somenteDigitos(value: unknown): string | null {
 }
 
 async function persistirResultado(
-  supabaseAdmin: ReturnType<typeof createClient>,
+  supabaseAdmin: any,
   consultaId: string,
   consultaAtual: any,
   resultado: ResultadoSimulacaoCredito,
@@ -107,7 +107,7 @@ async function persistirResultado(
 }
 
 async function registrarAuditoria(
-  supabaseAdmin: ReturnType<typeof createClient>,
+  supabaseAdmin: any,
   performedBy: string,
   action: string,
   targetId: string,

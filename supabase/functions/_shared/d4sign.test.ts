@@ -344,7 +344,8 @@ Deno.test("monta mensagem da Z-API com botões para site e aplicativo", () => {
   assertEquals(payload.phone, "5511999998888");
   assertEquals(
     payload.message,
-    "🎉 Parabéns,seu contrato está ativo!  🌙\n\n" +
+    "🎉 Pagamento e assinatura confirmados! Seu plano *NOX Up* está ativo. 🌙\n\n" +
+      "• A apólice assinada segue em PDF nesta conversa.\n" +
       "• Para visualizar seus documentos, acesse a *NOX FIANÇA*:\n" +
       "https://noxfianca.com/acesso-inquilino?type=magiclink&token_hash=hash-seguro-ativo&returnTo=%2Finquilino%2Fdocumentos\n\n" +
       "• Pelo aplicativo, use este acesso:\n" +

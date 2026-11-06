@@ -18,7 +18,7 @@ test("cargos com portal próprio não caem no dashboard compartilhado", () => {
 });
 
 test("cadastros internos usam o mesmo destino dos redirects de autenticação", () => {
-  for (const [role, account] of Object.entries(noxInternalAccounts)) {
-    assert.equal(account.dashboardRoute, redirectPathForRole(role));
+  for (const account of Object.values(noxInternalAccounts)) {
+    assert.equal(account.dashboardRoute, redirectPathForRole(account.internalRole));
   }
 });

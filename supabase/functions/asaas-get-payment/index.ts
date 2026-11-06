@@ -21,7 +21,7 @@ async function persistConsultationPayment(
   consultationId: string,
   incomingStatus: ReturnType<typeof normalizePaymentStatus>,
   providerEventAt: string,
-  paymentData: Record<string, unknown>,
+  paymentData: unknown,
 ) {
   const { data: consultation, error } = await supabase
     .from("consultas_credito")

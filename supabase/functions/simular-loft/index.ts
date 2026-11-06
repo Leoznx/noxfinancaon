@@ -149,7 +149,10 @@ serve(async (req) => {
     });
   } catch (error) {
     console.error("Erro na simulação:", error);
-    return new Response(JSON.stringify({ ok: false, error: error.message ?? "Erro inesperado" }), {
+    return new Response(JSON.stringify({
+      ok: false,
+      error: error instanceof Error ? error.message : "Erro inesperado",
+    }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

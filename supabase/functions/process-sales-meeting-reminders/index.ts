@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.110.0";
 import { escapeEmailHtml, renderNoxEmail } from "../_shared/email-branding.ts";
 import { hasOversizedBody, safeEqualSecret } from "../_shared/http-security.ts";
 
@@ -72,7 +72,7 @@ function motivationalBlock(phrase: string) {
 }
 
 async function deliverEmail(
-  admin: ReturnType<typeof createClient>,
+  admin: any,
   resendKey: string,
   from: string,
   appointment: Appointment,
